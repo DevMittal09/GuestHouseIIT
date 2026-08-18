@@ -1,0 +1,250 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  createGuestHouseAction,
+  createRoomAction,
+  deleteGuestHouseAction,
+  deleteRoomAction,
+  renameGuestHouseAction,
+  setRoomActiveAction,
+} from "@/app/actions/admin";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
+import { cn } from "@/lib/utils";
+import type { GuestHouse, Room, RoomType } from "@/lib/types";
+import type { ActionResult } from "@/app/actions/bookings";
+
+export function GuestHousesManager({
+  guestHouses,
+  roomsByGh,
+}: {
+  guestHouses: GuestHouse[];
+  roomsByGh: Record<string, Room[]>;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [newGhName, setNewGhName] = useState("");
+
+  const run = (fn: () => Promise<ActionResult>, successMessage: string) =>
+    startTransition(async () => {
+      const result = await fn();
+      if (result.ok) {
+        toast.success(successMessage);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Add a guest house</CardTitle>
+          <CardDescription>
+            New guest houses appear in the manager console and in booking-form guest house
+            permissions immediately.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="new-gh">Name</Label>
+            <Input
+              id="new-gh"
+              placeholder="e.g. Kalyani"
+              className="w-56"
+              value={newGhName}
+              onChange={(e) => setNewGhName(e.target.value)}
+            />
+          </div>
+          <Button
+            disabled={isPending || newGhName.trim().length < 2}
+            onClick={() =>
+              run(async () => {
+                const result = await createGuestHouseAction(newGhName);
+                if (result.ok) setNewGhName("");
+                return result;
+              }, "Guest house created")
+            }
+          >
+            + Add guest house
+          </Button>
+        </CardContent>
+      </Card>
+
+      {guestHouses.map((gh) => (
+        <GuestHouseCard
+          key={gh.id}
+          gh={gh}
+          rooms={roomsByGh[gh.id] ?? []}
+          isPending={isPending}
+          run={run}
+        />
+      ))}
+    </div>
+  );
+}
+
+function GuestHouseCard({
+  gh,
+  rooms,
+  isPending,
+  run,
+}: {
+  gh: GuestHouse;
+  rooms: Room[];
+  isPending: boolean;
+  run: (fn: () => Promise<ActionResult>, successMessage: string) => void;
+}) {
+  const [name, setName] = useState(gh.name);
+  const [roomNumber, setRoomNumber] = useState("");
+  const [roomType, setRoomType] = useState<RoomType>("double_sharing");
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-56 font-semibold"
+              aria-label={`Rename ${gh.name}`}
+            />
+            {name.trim() !== gh.name && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => run(() => renameGuestHouseAction(gh.id, name), "Renamed")}
+              >
+                Save name
+              </Button>
+            )}
+            <Badge variant="secondary">{gh.total_rooms} active rooms</Badge>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={isPending}
+            onClick={() => {
+              if (window.confirm(`Delete guest house ${gh.name} and all its rooms?`)) {
+                run(() => deleteGuestHouseAction(gh.id), "Guest house deleted");
+              }
+            }}
+          >
+            Delete guest house
+          </Button>
+        </div>
+        <CardDescription>
+          Deactivated rooms stay in the system but disappear from the manager&apos;s allocation
+          grid.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-2">
+            <Label>Room number</Label>
+            <Input
+              placeholder="e.g. B-301"
+              className="w-36"
+              value={roomNumber}
+              onChange={(e) => setRoomNumber(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Type</Label>
+            <NativeSelect
+              className="w-44"
+              value={roomType}
+              onChange={(e) => setRoomType(e.target.value as RoomType)}
+            >
+              <option value="double_sharing">Double sharing</option>
+              <option value="single">Single</option>
+            </NativeSelect>
+          </div>
+          <Button
+            variant="outline"
+            disabled={isPending || !roomNumber.trim()}
+            onClick={() =>
+              run(async () => {
+                const result = await createRoomAction(gh.id, roomNumber, roomType);
+                if (result.ok) setRoomNumber("");
+                return result;
+              }, `Room ${roomNumber.trim()} added`)
+            }
+          >
+            + Add room
+          </Button>
+        </div>
+
+        {rooms.length === 0 ? (
+          <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+            No rooms yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {rooms.map((room) => (
+              <div
+                key={room.id}
+                className={cn(
+                  "flex items-center justify-between gap-2 rounded-md border p-2 text-sm",
+                  !room.is_active && "opacity-60"
+                )}
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{room.room_number}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {room.room_type === "single" ? "Single" : "Double"}
+                    {!room.is_active && " · inactive"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() =>
+                      run(
+                        () => setRoomActiveAction(room.id, !room.is_active),
+                        room.is_active ? "Room deactivated" : "Room activated"
+                      )
+                    }
+                  >
+                    {room.is_active ? "Disable" : "Enable"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={isPending}
+                    className="text-destructive"
+                    onClick={() => {
+                      if (window.confirm(`Delete room ${room.room_number}?`)) {
+                        run(() => deleteRoomAction(room.id), "Room deleted");
+                      }
+                    }}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
