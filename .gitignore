@@ -44,3 +44,4 @@ next-env.d.ts
 # local mock data layer
 .local-db.json
 /public/uploads/
+.memories/
