@@ -13,6 +13,8 @@ import type {
   Room,
 } from "@/lib/types";
 import type { Role, RoomType } from "@/lib/types";
+import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
+import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
 import type { DataStore, NewLogInput, NewProfileInput, StatusUpdate } from "./types";
 import {
@@ -182,6 +184,14 @@ export class MockStore implements DataStore {
       .filter((b) => b.user_id === userId)
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .map((b) => this.hydrate(db, b));
+  }
+
+  async searchBookings(criteria: BookingSearchCriteria): Promise<BookingSearchResult> {
+    const db = loadDb();
+    // The whole file is in memory already, so there is nothing to push down —
+    // hydrate everything and let the shared matcher do the work.
+    const candidates = db.bookings.map((b) => this.hydrate(db, b));
+    return runBookingSearch(candidates, criteria);
   }
 
   async updateBookingStatus(id: string, update: StatusUpdate, log: NewLogInput): Promise<void> {

@@ -1,7 +1,14 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+
+/**
+ * Routes where polling is more harmful than useful: the approval log is
+ * historical data behind a search, so re-fetching it every few seconds only
+ * re-runs a full archive scan and churns the results under the reader.
+ */
+const NO_POLL_PREFIXES = ["/history"];
 
 /**
  * Poll-based "realtime": re-fetches server data so reviewer queues and
@@ -10,7 +17,11 @@ import { useEffect } from "react";
  */
 export function AutoRefresh({ intervalMs = 5000 }: { intervalMs?: number }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const paused = NO_POLL_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+
   useEffect(() => {
+    if (paused) return;
     const tick = () => {
       if (document.visibilityState === "visible") router.refresh();
     };
@@ -20,6 +31,6 @@ export function AutoRefresh({ intervalMs = 5000 }: { intervalMs?: number }) {
       clearInterval(id);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [router, intervalMs]);
+  }, [router, intervalMs, paused]);
   return null;
 }

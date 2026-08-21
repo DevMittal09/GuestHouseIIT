@@ -1,0 +1,110 @@
+"use server";
+
+import { requireUser } from "@/lib/auth";
+import {
+  HISTORY_EXPORT_LIMIT,
+  criteriaFromParams,
+  latestReviewerActionOn,
+  parseHistoryParams,
+} from "@/lib/booking-search";
+import { getStore } from "@/lib/store";
+import { ROLE_LABELS, STATUS_LABELS, type BookingWithDetails } from "@/lib/types";
+import { canViewHistory, historyScope } from "@/lib/workflow";
+import { formatDateTime } from "@/lib/format";
+
+export type ExportResult =
+  | { ok: true; csv: string; filename: string; rows: number }
+  | { ok: false; error: string };
+
+const COLUMNS = [
+  "Reference",
+  "Status",
+  "Requester",
+  "Email",
+  "Category",
+  "Hostel / Club",
+  "Guest House",
+  "Check-in",
+  "Check-out",
+  "Rooms requested",
+  "Assigned rooms",
+  "Guests",
+  "Purpose",
+  "Submitted",
+  "My action",
+  "My action on",
+  "My remarks",
+  "Rejection reason",
+];
+
+/**
+ * Spreadsheets execute cells that begin with a formula character, and every
+ * text field here is user-supplied. Neutralise those, then quote everything.
+ */
+function csvCell(value: string | number | null | undefined): string {
+  const text = String(value ?? "").replace(/[\r\n]+/g, " ");
+  const safe = /^[=+\-@\t]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+function csvRow(booking: BookingWithDetails, userId: string): string {
+  const action = latestReviewerActionOn(booking, userId);
+  return [
+    booking.booking_reference_id,
+    STATUS_LABELS[booking.status],
+    booking.requester?.full_name,
+    booking.requester?.email,
+    ROLE_LABELS[booking.user_role],
+    booking.requester?.hostel_name ?? booking.requester?.department_or_club ?? "",
+    booking.guest_house?.name,
+    formatDateTime(booking.check_in),
+    formatDateTime(booking.check_out),
+    booking.rooms_requested,
+    booking.assigned_rooms.map((r) => r.room_number).join(" / "),
+    booking.guests.map((g) => g.name).join(" / "),
+    booking.purpose_of_visit,
+    formatDateTime(booking.created_at),
+    action ? STATUS_LABELS[action.log.new_status] : "",
+    action ? formatDateTime(action.log.timestamp) : "",
+    action?.log.remarks ?? "",
+    booking.rejection_reason ?? "",
+  ]
+    .map(csvCell)
+    .join(",");
+}
+
+/**
+ * Export the current approval-log view as CSV. The query string is re-parsed
+ * and re-scoped server-side, so a hand-edited URL cannot widen the export
+ * beyond what the caller is allowed to see.
+ */
+export async function exportHistoryCsv(queryString: string): Promise<ExportResult> {
+  try {
+    const user = await requireUser();
+    if (!canViewHistory(user.role)) {
+      return { ok: false, error: "Your role does not have an approval log" };
+    }
+    const scope = historyScope(user);
+    if (!scope.ok) return { ok: false, error: scope.reason };
+
+    const raw = Object.fromEntries(new URLSearchParams(queryString ?? "").entries());
+    const params = parseHistoryParams(raw, user.role === "developer" ? "all" : "me");
+    const criteria = criteriaFromParams(params, scope.criteria, user.id, {
+      offset: 0,
+      limit: HISTORY_EXPORT_LIMIT,
+    });
+
+    const { rows } = await getStore().searchBookings(criteria);
+    const csv = [COLUMNS.map(csvCell).join(","), ...rows.map((b) => csvRow(b, user.id))].join("\r\n");
+    const stamp = new Date().toISOString().slice(0, 10);
+    return {
+      ok: true,
+      csv,
+      filename: `approval-log-${stamp}.csv`,
+      rows: rows.length,
+    };
+  } catch (e) {
+    console.error("exportHistoryCsv failed", e);
+    return { ok: false, error: "Something went wrong while preparing the export" };
+  }
+}

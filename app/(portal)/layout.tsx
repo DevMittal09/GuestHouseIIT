@@ -7,6 +7,7 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { logout } from "@/app/actions/auth";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
+import { canViewHistory } from "@/lib/workflow";
 import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
@@ -48,6 +49,7 @@ export default async function PortalLayout({ children }: { children: React.React
             {user.role === "iar_cell" && <NavLink href="/iar">IAR Queue</NavLink>}
             {user.role === "gh_manager" && <NavLink href="/manager">Manager Console</NavLink>}
             {user.role === "developer" && <NavLink href="/admin">Developer Console</NavLink>}
+            {canViewHistory(user.role) && <NavLink href="/history">Approval Log</NavLink>}
           </nav>
 
           <div className="ml-auto flex items-center gap-3">
