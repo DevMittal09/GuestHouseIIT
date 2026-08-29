@@ -9,7 +9,7 @@ import {
 } from "@/lib/booking-search";
 import { getStore } from "@/lib/store";
 import { ROLE_LABELS, STATUS_LABELS, type BookingWithDetails } from "@/lib/types";
-import { canViewHistory, historyScope } from "@/lib/workflow";
+import { historyScope, isRequesterHistory } from "@/lib/workflow";
 import { formatDateTime } from "@/lib/format";
 
 export type ExportResult =
@@ -81,14 +81,13 @@ function csvRow(booking: BookingWithDetails, userId: string): string {
 export async function exportHistoryCsv(queryString: string): Promise<ExportResult> {
   try {
     const user = await requireUser();
-    if (!canViewHistory(user.role)) {
-      return { ok: false, error: "Your role does not have an approval log" };
-    }
     const scope = historyScope(user);
     if (!scope.ok) return { ok: false, error: scope.reason };
 
+    const isRequester = isRequesterHistory(user.role);
+    const defaultActor = scope.isOwnBookings ? "all" : user.role === "developer" ? "all" : "me";
     const raw = Object.fromEntries(new URLSearchParams(queryString ?? "").entries());
-    const params = parseHistoryParams(raw, user.role === "developer" ? "all" : "me");
+    const params = parseHistoryParams(raw, defaultActor);
     const criteria = criteriaFromParams(params, scope.criteria, user.id, {
       offset: 0,
       limit: HISTORY_EXPORT_LIMIT,
@@ -97,10 +96,11 @@ export async function exportHistoryCsv(queryString: string): Promise<ExportResul
     const { rows } = await getStore().searchBookings(criteria);
     const csv = [COLUMNS.map(csvCell).join(","), ...rows.map((b) => csvRow(b, user.id))].join("\r\n");
     const stamp = new Date().toISOString().slice(0, 10);
+    const prefix = isRequester ? "booking-history" : "approval-log";
     return {
       ok: true,
       csv,
-      filename: `approval-log-${stamp}.csv`,
+      filename: `${prefix}-${stamp}.csv`,
       rows: rows.length,
     };
   } catch (e) {

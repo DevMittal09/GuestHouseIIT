@@ -13,6 +13,7 @@ import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-s
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
 import { getSupabase } from "@/lib/supabase/client";
+import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
 import type { DataStore, NewLogInput, NewProfileInput, StatusUpdate } from "./types";
 
 const BOOKING_SELECT = `*,
@@ -175,6 +176,7 @@ export class SupabaseStore implements DataStore {
       .limit(SEARCH_SCAN_LIMIT);
     if (criteria.guestHouseId) query = query.eq("guest_house_id", criteria.guestHouseId);
     if (criteria.userRole) query = query.eq("user_role", criteria.userRole);
+    if (criteria.userId) query = query.eq("user_id", criteria.userId);
     if (criteria.checkInFrom) query = query.gte("check_in", criteria.checkInFrom);
     if (criteria.checkInTo) query = query.lte("check_in", criteria.checkInTo);
 
@@ -225,7 +227,7 @@ export class SupabaseStore implements DataStore {
       .from("bookings")
       .select("id, assigned_room_ids")
       .eq("guest_house_id", guestHouseId)
-      .eq("status", "APPROVED")
+      .in("status", ROOM_HOLDING_STATUSES)
       .lt("check_in", checkOut)
       .gt("check_out", checkIn);
     if (excludeBookingId) query = query.neq("id", excludeBookingId);

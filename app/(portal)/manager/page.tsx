@@ -28,13 +28,17 @@ export default async function ManagerPage({
   const current =
     guestHouses.find((g) => g.name.toLowerCase() === (gh ?? "").toLowerCase()) ?? guestHouses[0];
 
-  const [pending, allApproved, rooms] = await Promise.all([
+  const [pending, allApproved, allOccupied, cancellationRequests, rooms] = await Promise.all([
     store.listBookings({ status: "PENDING_GH_MANAGER", guestHouseId: current.id }),
     store.listBookings({ status: "APPROVED", guestHouseId: current.id }),
+    store.listBookings({ status: "OCCUPIED", guestHouseId: current.id }),
+    store.listBookings({ status: "CANCELLATION_REQUESTED", guestHouseId: current.id }),
     store.listRooms(current.id),
   ]);
   const nowIso = new Date().toISOString();
-  const approved = allApproved
+
+  // Merge approved + occupied bookings for the stays table, filter to current/future.
+  const stays = [...allApproved, ...allOccupied]
     .filter((b) => b.check_out >= nowIso)
     .sort((a, b) => a.check_in.localeCompare(b.check_in));
 
@@ -66,7 +70,12 @@ export default async function ManagerPage({
         ))}
       </div>
 
-      <ManagerQueue pending={pending} approved={approved} rooms={rooms} />
+      <ManagerQueue
+        pending={pending}
+        approved={stays}
+        cancellationRequests={cancellationRequests}
+        rooms={rooms}
+      />
     </div>
   );
 }

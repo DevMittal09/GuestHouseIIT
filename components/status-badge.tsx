@@ -10,6 +10,10 @@ const STATUS_CLASSES: Record<BookingStatus, string> = {
   APPROVED: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 border-transparent",
   REJECTED: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200 border-transparent",
   CANCELLED: "bg-muted text-muted-foreground border-transparent",
+  OCCUPIED: "bg-indigo-100 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-200 border-transparent",
+  VACATED: "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-200 border-transparent",
+  CANCELLATION_REQUESTED: "bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200 border-transparent",
+  CANCELLATION_APPROVED: "bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200 border-transparent",
 };
 
 export function StatusBadge({ status }: { status: BookingStatus }) {

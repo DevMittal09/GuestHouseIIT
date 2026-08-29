@@ -9,7 +9,7 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
 import { getStore } from "@/lib/store";
-import { canViewHistory, historyScope } from "@/lib/workflow";
+import { canExportPdf, canViewHistory, historyScope, isRequesterHistory } from "@/lib/workflow";
 
 export default async function HistoryPage({
   searchParams,
@@ -25,7 +25,7 @@ export default async function HistoryPage({
   if (!scope.ok) {
     return (
       <div className="space-y-6">
-        <Heading scopeLabel={null} />
+        <Heading scopeLabel={null} isRequester={false} />
         <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
           {scope.reason}
         </p>
@@ -33,9 +33,11 @@ export default async function HistoryPage({
     );
   }
 
-  // The developer has acted on almost nothing, so their default view is the
-  // whole archive; a reviewer's default is their own approval log.
-  const defaultActor = user.role === "developer" ? "all" : "me";
+  const isRequester = isRequesterHistory(user.role);
+
+  // Requesters always see "all" of their own bookings (no "Handled by me" toggle).
+  // Developer defaults to "all"; reviewers default to "me" (their own decisions).
+  const defaultActor = scope.isOwnBookings ? "all" : user.role === "developer" ? "all" : "me";
   const params = parseHistoryParams(await searchParams, defaultActor);
 
   const store = getStore();
@@ -51,7 +53,7 @@ export default async function HistoryPage({
 
   return (
     <div className="space-y-6">
-      <Heading scopeLabel={scope.label} />
+      <Heading scopeLabel={scope.label} isRequester={isRequester} />
       <BookingHistory
         rows={result.rows}
         total={result.total}
@@ -65,17 +67,23 @@ export default async function HistoryPage({
         currentUserName={user.full_name}
         showAlumniCard={user.role === "iar_cell" || user.role === "developer"}
         pageSize={HISTORY_PAGE_SIZE}
+        isOwnBookings={scope.isOwnBookings}
+        canExportPdf={canExportPdf(user.role)}
       />
     </div>
   );
 }
 
-function Heading({ scopeLabel }: { scopeLabel: string | null }) {
+function Heading({ scopeLabel, isRequester }: { scopeLabel: string | null; isRequester: boolean }) {
   return (
     <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Approval Log</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">
+        {isRequester ? "Booking History" : "Approval Log"}
+      </h1>
       <p className="text-muted-foreground">
-        Every request you have approved or rejected, and a searchable archive of past bookings.
+        {isRequester
+          ? "A complete record of all your guest house booking requests and their status."
+          : "Every request you have approved or rejected, and a searchable archive of past bookings."}
         {scopeLabel && <span className="ml-1 font-medium text-foreground">{scopeLabel}.</span>}
       </p>
     </div>

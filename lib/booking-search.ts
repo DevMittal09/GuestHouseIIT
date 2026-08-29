@@ -39,6 +39,8 @@ export interface BookingSearchCriteria {
   club?: string;
   /** Keep only bookings this profile id has acted on (an approval-log view). */
   actedBy?: string;
+  /** Keep only bookings owned by this user id (requester's own log view). */
+  userId?: string;
   /** ISO instants bounding `check_in`. */
   checkInFrom?: string;
   checkInTo?: string;
@@ -192,6 +194,7 @@ function matchesExceptStatus(
   if (c.hostelName && b.requester?.hostel_name !== c.hostelName) return false;
   if (c.club && b.requester?.department_or_club !== c.club) return false;
   if (c.actedBy && !reviewerActionsOn(b, c.actedBy).length) return false;
+  if (c.userId && b.user_id !== c.userId) return false;
 
   if (c.checkInFrom || c.checkInTo) {
     const checkIn = toMillis(b.check_in);
@@ -239,6 +242,10 @@ export function emptyStatusCounts(): Record<BookingStatus, number> {
     APPROVED: 0,
     REJECTED: 0,
     CANCELLED: 0,
+    OCCUPIED: 0,
+    VACATED: 0,
+    CANCELLATION_REQUESTED: 0,
+    CANCELLATION_APPROVED: 0,
   };
 }
 
@@ -287,7 +294,7 @@ function actionKind(status: BookingStatus): ReviewerActionKind {
   // approval (via room allocation) lands on APPROVED.
   if (status === "APPROVED" || status === "PENDING_GH_MANAGER") return "approved";
   if (status === "REJECTED") return "rejected";
-  if (status === "CANCELLED") return "cancelled";
+  if (status === "CANCELLED" || status === "CANCELLATION_APPROVED") return "cancelled";
   return "other";
 }
 
@@ -401,7 +408,7 @@ export function dayEndIso(day: string): string {
  */
 export function criteriaFromParams(
   params: HistoryParams,
-  scope: Pick<BookingSearchCriteria, "hostelName" | "club" | "userRole">,
+  scope: Pick<BookingSearchCriteria, "hostelName" | "club" | "userRole" | "userId">,
   currentUserId: string,
   paging?: { offset?: number; limit?: number }
 ): BookingSearchCriteria {

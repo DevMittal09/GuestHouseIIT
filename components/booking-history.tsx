@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { exportHistoryCsv } from "@/app/actions/history";
+import { exportHistoryPdf } from "@/app/actions/history-pdf";
 import { BookingDetails } from "@/components/booking-details";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -56,10 +57,10 @@ interface Tile {
 /** Headline counts, which double as one-click status filters. */
 const TILES: Tile[] = [
   { key: "all", label: "Total", statuses: [], tone: "text-foreground" },
-  { key: "approved", label: "Approved", statuses: ["APPROVED"], tone: "text-emerald-600 dark:text-emerald-400" },
+  { key: "approved", label: "Approved", statuses: ["APPROVED", "OCCUPIED", "VACATED"], tone: "text-emerald-600 dark:text-emerald-400" },
   { key: "rejected", label: "Rejected", statuses: ["REJECTED"], tone: "text-red-600 dark:text-red-400" },
   { key: "pending", label: "In progress", statuses: ACTIVE_STATUSES, tone: "text-amber-600 dark:text-amber-400" },
-  { key: "cancelled", label: "Cancelled", statuses: ["CANCELLED"], tone: "text-muted-foreground" },
+  { key: "cancelled", label: "Cancelled", statuses: ["CANCELLED", "CANCELLATION_REQUESTED", "CANCELLATION_APPROVED"], tone: "text-muted-foreground" },
 ];
 
 function sameStatusSet(a: BookingStatus[], b: BookingStatus[]): boolean {
@@ -81,6 +82,27 @@ function toQueryString(params: HistoryParams, defaultActor: HistoryActor): strin
   return sp.toString();
 }
 
+/** Quick-pick date range presets. */
+function getDatePreset(
+  key: "today" | "week" | "month"
+): { from: string; to: string } {
+  const today = new Date();
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  switch (key) {
+    case "today":
+      return { from: fmt(today), to: fmt(today) };
+    case "week": {
+      const weekAgo = new Date(today);
+      weekAgo.setDate(today.getDate() - 7);
+      return { from: fmt(weekAgo), to: fmt(today) };
+    }
+    case "month": {
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { from: fmt(monthStart), to: fmt(today) };
+    }
+  }
+}
+
 export function BookingHistory({
   rows,
   total,
@@ -94,6 +116,8 @@ export function BookingHistory({
   currentUserName,
   showAlumniCard,
   pageSize,
+  isOwnBookings = false,
+  canExportPdf: showPdfExport = false,
 }: {
   rows: BookingWithDetails[];
   total: number;
@@ -107,11 +131,16 @@ export function BookingHistory({
   currentUserName: string;
   showAlumniCard: boolean;
   pageSize: number;
+  /** True for requester roles — hides the "Handled by me / Everything" toggle. */
+  isOwnBookings?: boolean;
+  /** True for gh_manager / developer — shows PDF export controls. */
+  canExportPdf?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
   const [isExporting, startExport] = useTransition();
+  const [isPdfExporting, startPdfExport] = useTransition();
 
   /** Navigate with a patched set of params. Any change resets to page 1. */
   const apply = (patch: Partial<HistoryParams>) => {
@@ -140,7 +169,7 @@ export function BookingHistory({
         return;
       }
       // Prefixed with a BOM so Excel reads the UTF-8 correctly.
-      const blob = new Blob([`﻿${result.csv}`], { type: "text/csv;charset=utf-8;" });
+      const blob = new Blob([`\ufeff${result.csv}`], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -150,6 +179,49 @@ export function BookingHistory({
       link.remove();
       URL.revokeObjectURL(url);
       toast.success(`Exported ${result.rows} booking${result.rows === 1 ? "" : "s"}`);
+    });
+
+  const handlePdfExport = (preset?: "today" | "week" | "month") =>
+    startPdfExport(async () => {
+      // When a preset is clicked, first apply its dates to the current params
+      // so the exported range matches. Otherwise use current filters.
+      const effectiveParams = preset
+        ? { ...params, ...getDatePreset(preset) }
+        : params;
+      const qs = toQueryString(effectiveParams, defaultActor);
+      const result = await exportHistoryPdf(qs);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.rows === 0) {
+        toast.error("No bookings found for the selected range");
+        return;
+      }
+      // Decode the base64 HTML and open in a print window
+      const html = atob(result.pdfBase64);
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        // Small delay to ensure styles load before print dialog
+        setTimeout(() => {
+          printWindow.print();
+        }, 300);
+        toast.success(`Report ready — ${result.rows} booking${result.rows === 1 ? "" : "s"}. Use "Save as PDF" in the print dialog.`);
+      } else {
+        // Popup blocked — fall back to download
+        const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = result.filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        toast.success(`Report downloaded — open the file and print to PDF.`);
+      }
     });
 
   const filtersActive = hasActiveFilters(params, defaultActor);
@@ -242,26 +314,29 @@ export function BookingHistory({
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Filter label="Show">
-            <div className="flex h-9 rounded-md border p-0.5">
-              {(["me", "all"] as HistoryActor[]).map((actor) => (
-                <button
-                  key={actor}
-                  type="button"
-                  aria-pressed={params.actor === actor}
-                  onClick={() => apply({ actor })}
-                  className={cn(
-                    "flex-1 rounded-[5px] px-2 text-xs font-medium transition-colors",
-                    params.actor === actor
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  )}
-                >
-                  {actor === "me" ? "Handled by me" : "Everything in scope"}
-                </button>
-              ))}
-            </div>
-          </Filter>
+          {/* Handled by me / Everything — only for approver roles. */}
+          {!isOwnBookings && (
+            <Filter label="Show">
+              <div className="flex h-9 rounded-md border p-0.5">
+                {(["me", "all"] as HistoryActor[]).map((actor) => (
+                  <button
+                    key={actor}
+                    type="button"
+                    aria-pressed={params.actor === actor}
+                    onClick={() => apply({ actor })}
+                    className={cn(
+                      "flex-1 rounded-[5px] px-2 text-xs font-medium transition-colors",
+                      params.actor === actor
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    )}
+                  >
+                    {actor === "me" ? "Handled by me" : "Everything in scope"}
+                  </button>
+                ))}
+              </div>
+            </Filter>
+          )}
 
           <Filter label="Guest house">
             <NativeSelect
@@ -339,20 +414,72 @@ export function BookingHistory({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           {total === 0 ? "No matching bookings" : `Showing ${firstRow}–${lastRow} of ${total}`}
-          {params.actor === "me" && (
+          {!isOwnBookings && params.actor === "me" && (
             <span> handled by {currentUserName.split(" ")[0]}</span>
           )}
         </p>
-        <Button variant="outline" size="sm" onClick={exportCsv} disabled={isExporting || total === 0}>
-          {isExporting ? "Preparing…" : "Export CSV"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={isExporting || total === 0}>
+            {isExporting ? "Preparing…" : "Export CSV"}
+          </Button>
+        </div>
       </div>
+
+      {/* PDF Export panel — only for gh_manager and developer. */}
+      {showPdfExport && (
+        <div className="rounded-xl border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">PDF Report</p>
+              <p className="text-xs text-muted-foreground">
+                Generate a PDF report of the currently filtered logs, or use a quick date preset.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isPdfExporting}
+              onClick={() => handlePdfExport("today")}
+            >
+              Today
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isPdfExporting}
+              onClick={() => handlePdfExport("week")}
+            >
+              Last 7 days
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isPdfExporting}
+              onClick={() => handlePdfExport("month")}
+            >
+              This month
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              disabled={isPdfExporting || total === 0}
+              onClick={() => handlePdfExport()}
+            >
+              {isPdfExporting ? "Generating PDF…" : "Current filters"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {total === 0 ? (
         <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
-          {params.actor === "me"
-            ? "You have not acted on any request matching these filters yet. Switch to “Everything in scope” to search the full archive."
-            : "No bookings match these filters."}
+          {isOwnBookings
+            ? "You have not submitted any booking requests yet."
+            : params.actor === "me"
+              ? "You have not acted on any request matching these filters yet. Switch to \u201cEverything in scope\u201d to search the full archive."
+              : "No bookings match these filters."}
         </p>
       ) : (
         <div
@@ -365,11 +492,11 @@ export function BookingHistory({
             <TableHeader>
               <TableRow>
                 <TableHead>Reference</TableHead>
-                <TableHead>Requester</TableHead>
+                {!isOwnBookings && <TableHead>Requester</TableHead>}
                 <TableHead>Guest House</TableHead>
                 <TableHead>Stay</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>My decision</TableHead>
+                {!isOwnBookings && <TableHead>My decision</TableHead>}
                 <TableHead className="text-right">Details</TableHead>
               </TableRow>
             </TableHeader>
@@ -380,6 +507,7 @@ export function BookingHistory({
                   booking={booking}
                   currentUserId={currentUserId}
                   showAlumniCard={showAlumniCard}
+                  isOwnBookings={isOwnBookings}
                 />
               ))}
             </TableBody>
@@ -443,10 +571,12 @@ function HistoryRow({
   booking,
   currentUserId,
   showAlumniCard,
+  isOwnBookings,
 }: {
   booking: BookingWithDetails;
   currentUserId: string;
   showAlumniCard: boolean;
+  isOwnBookings: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const action = latestReviewerActionOn(booking, currentUserId);
@@ -454,14 +584,16 @@ function HistoryRow({
   return (
     <TableRow>
       <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
-      <TableCell>
-        <span className="font-medium">{booking.requester?.full_name ?? "—"}</span>
-        <span className="block text-xs text-muted-foreground">
-          {ROLE_LABELS[booking.user_role]}
-          {booking.requester?.hostel_name && ` · ${booking.requester.hostel_name}`}
-          {booking.requester?.department_or_club && ` · ${booking.requester.department_or_club}`}
-        </span>
-      </TableCell>
+      {!isOwnBookings && (
+        <TableCell>
+          <span className="font-medium">{booking.requester?.full_name ?? "—"}</span>
+          <span className="block text-xs text-muted-foreground">
+            {ROLE_LABELS[booking.user_role]}
+            {booking.requester?.hostel_name && ` · ${booking.requester.hostel_name}`}
+            {booking.requester?.department_or_club && ` · ${booking.requester.department_or_club}`}
+          </span>
+        </TableCell>
+      )}
       <TableCell>{booking.guest_house?.name ?? "—"}</TableCell>
       <TableCell className="whitespace-nowrap">
         {formatDate(booking.check_in)}
@@ -472,20 +604,22 @@ function HistoryRow({
       <TableCell>
         <StatusBadge status={booking.status} />
       </TableCell>
-      <TableCell>
-        {action ? (
-          <>
-            <Badge className={cn("whitespace-nowrap border-transparent", DECISION_CLASSES[action.kind])}>
-              {DECISION_LABELS[action.kind]}
-            </Badge>
-            <span className="mt-1 block text-xs text-muted-foreground">
-              {formatDateTime(action.log.timestamp)}
-            </span>
-          </>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </TableCell>
+      {!isOwnBookings && (
+        <TableCell>
+          {action ? (
+            <>
+              <Badge className={cn("whitespace-nowrap border-transparent", DECISION_CLASSES[action.kind])}>
+                {DECISION_LABELS[action.kind]}
+              </Badge>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {formatDateTime(action.log.timestamp)}
+              </span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+      )}
       <TableCell className="text-right">
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -497,12 +631,13 @@ function HistoryRow({
             <DialogHeader>
               <DialogTitle>{booking.booking_reference_id}</DialogTitle>
               <DialogDescription>
-                Read-only record, including the full approval trail. Status changes are made from
-                the review queue.
+                {isOwnBookings
+                  ? "Full details and approval trail for your booking request."
+                  : "Read-only record, including the full approval trail. Status changes are made from the review queue."}
               </DialogDescription>
             </DialogHeader>
             <BookingDetails booking={booking} showAlumniCard={showAlumniCard} />
-            {action?.log.remarks && (
+            {action?.log.remarks && !isOwnBookings && (
               <div className="rounded-md border bg-muted/40 p-3 text-sm">
                 <p className="font-medium">Your remark</p>
                 <p className="text-muted-foreground">{action.log.remarks}</p>
