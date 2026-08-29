@@ -10,6 +10,7 @@ import type {
   Room,
   RoomType,
 } from "@/lib/types";
+import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
 import type { Role } from "@/lib/types";
 
@@ -39,6 +40,13 @@ export interface DataStore {
   getBooking(id: string): Promise<BookingWithDetails | null>;
   listBookings(filter: BookingFilter): Promise<BookingWithDetails[]>;
   listBookingsForUser(userId: string): Promise<BookingWithDetails[]>;
+
+  /**
+   * Keyword + filter search across the booking archive, used by the approval
+   * log at `/history`. Authorization is the caller's job: pass the reviewer's
+   * `historyScope()` criteria (see lib/workflow.ts) so results stay inside it.
+   */
+  searchBookings(criteria: BookingSearchCriteria): Promise<BookingSearchResult>;
   updateBookingStatus(id: string, update: StatusUpdate, log: NewLogInput): Promise<void>;
 
   /** Room ids held by APPROVED bookings overlapping [checkIn, checkOut). */

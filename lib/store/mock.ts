@@ -13,7 +13,10 @@ import type {
   Room,
 } from "@/lib/types";
 import type { Role, RoomType } from "@/lib/types";
+import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
+import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
+import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
 import type { DataStore, NewLogInput, NewProfileInput, StatusUpdate } from "./types";
 import {
   seedBookings,
@@ -184,6 +187,14 @@ export class MockStore implements DataStore {
       .map((b) => this.hydrate(db, b));
   }
 
+  async searchBookings(criteria: BookingSearchCriteria): Promise<BookingSearchResult> {
+    const db = loadDb();
+    // The whole file is in memory already, so there is nothing to push down —
+    // hydrate everything and let the shared matcher do the work.
+    const candidates = db.bookings.map((b) => this.hydrate(db, b));
+    return runBookingSearch(candidates, criteria);
+  }
+
   async updateBookingStatus(id: string, update: StatusUpdate, log: NewLogInput): Promise<void> {
     const db = loadDb();
     const b = db.bookings.find((x) => x.id === id);
@@ -213,7 +224,7 @@ export class MockStore implements DataStore {
     const occupied = new Set<string>();
     for (const b of db.bookings) {
       if (b.guest_house_id !== guestHouseId) continue;
-      if (b.status !== "APPROVED") continue;
+      if (!ROOM_HOLDING_STATUSES.includes(b.status)) continue;
       if (b.id === excludeBookingId) continue;
       if (!overlaps(b, checkIn, checkOut)) continue;
       for (const roomId of b.assigned_room_ids) occupied.add(roomId);

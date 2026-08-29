@@ -48,6 +48,9 @@ export default async function PortalLayout({ children }: { children: React.React
             {user.role === "iar_cell" && <NavLink href="/iar">IAR Queue</NavLink>}
             {user.role === "gh_manager" && <NavLink href="/manager">Manager Console</NavLink>}
             {user.role === "developer" && <NavLink href="/admin">Developer Console</NavLink>}
+            <NavLink href="/history">
+              {isRequester ? "Booking History" : "Approval Log"}
+            </NavLink>
           </nav>
 
           <div className="ml-auto flex items-center gap-3">

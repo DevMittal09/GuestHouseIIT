@@ -9,8 +9,11 @@ import type {
   Room,
   RoomType,
 } from "@/lib/types";
+import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
+import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
 import { getSupabase } from "@/lib/supabase/client";
+import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
 import type { DataStore, NewLogInput, NewProfileInput, StatusUpdate } from "./types";
 
 const BOOKING_SELECT = `*,
@@ -18,6 +21,14 @@ const BOOKING_SELECT = `*,
   guest_house:guest_houses(*),
   guests:booking_guests(*),
   logs:booking_logs(*)`;
+
+/**
+ * Ceiling on rows pulled for one archive search. Keyword matching spans joined
+ * tables (guests, rooms, logs), which PostgREST cannot express, so the coarse
+ * filters below run in SQL and the rest runs in JS over the result. If a scan
+ * hits this cap the result is flagged `truncated` and the UI says so.
+ */
+const SEARCH_SCAN_LIMIT = 1000;
 
 type BookingRow = Booking & {
   requester: Profile;
@@ -153,6 +164,29 @@ export class SupabaseStore implements DataStore {
     return this.hydrate(data as unknown as BookingRow[]);
   }
 
+  async searchBookings(criteria: BookingSearchCriteria): Promise<BookingSearchResult> {
+    // Push down what SQL can do cheaply; the shared matcher handles the rest.
+    // `statuses` is deliberately NOT pushed down: `runBookingSearch` reports
+    // per-status facet counts computed *before* the status filter, so the
+    // candidate set has to still contain the other statuses.
+    let query = this.db
+      .from("bookings")
+      .select(BOOKING_SELECT)
+      .order("created_at", { ascending: false })
+      .limit(SEARCH_SCAN_LIMIT);
+    if (criteria.guestHouseId) query = query.eq("guest_house_id", criteria.guestHouseId);
+    if (criteria.userRole) query = query.eq("user_role", criteria.userRole);
+    if (criteria.userId) query = query.eq("user_id", criteria.userId);
+    if (criteria.checkInFrom) query = query.gte("check_in", criteria.checkInFrom);
+    if (criteria.checkInTo) query = query.lte("check_in", criteria.checkInTo);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    const scanned = data as unknown as BookingRow[];
+    const candidates = await this.hydrate(scanned);
+    return runBookingSearch(candidates, criteria, scanned.length >= SEARCH_SCAN_LIMIT);
+  }
+
   async updateBookingStatus(id: string, update: StatusUpdate, log: NewLogInput): Promise<void> {
     const { data: current, error: readError } = await this.db
       .from("bookings")
@@ -193,7 +227,7 @@ export class SupabaseStore implements DataStore {
       .from("bookings")
       .select("id, assigned_room_ids")
       .eq("guest_house_id", guestHouseId)
-      .eq("status", "APPROVED")
+      .in("status", ROOM_HOLDING_STATUSES)
       .lt("check_in", checkOut)
       .gt("check_out", checkIn);
     if (excludeBookingId) query = query.neq("id", excludeBookingId);

@@ -17,7 +17,11 @@ export type BookingStatus =
   | "PENDING_GH_MANAGER"
   | "APPROVED"
   | "REJECTED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "OCCUPIED"
+  | "VACATED"
+  | "CANCELLATION_REQUESTED"
+  | "CANCELLATION_APPROVED";
 
 export type RoomType = "single" | "double_sharing";
 export type Gender = "male" | "female" | "other";
@@ -144,6 +148,10 @@ export const STATUS_LABELS: Record<BookingStatus, string> = {
   APPROVED: "Approved",
   REJECTED: "Rejected",
   CANCELLED: "Cancelled",
+  OCCUPIED: "Occupied",
+  VACATED: "Vacated",
+  CANCELLATION_REQUESTED: "Cancellation Requested",
+  CANCELLATION_APPROVED: "Cancellation Approved",
 };
 
 export const ROLE_LABELS: Record<Role, string> = {

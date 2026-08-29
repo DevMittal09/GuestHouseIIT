@@ -7,7 +7,7 @@ import { validateCustomValue } from "@/lib/form-config";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import { OFFICIAL_EMAIL_WHITELIST } from "@/lib/routes";
 import { getStore } from "@/lib/store";
-import type { BookingGuest, CustomFieldValue, Gender } from "@/lib/types";
+import type { BookingGuest, BookingStatus, CustomFieldValue, Gender } from "@/lib/types";
 import { REQUESTER_ROLES } from "@/lib/types";
 import { canReview, initialStatusForRole, nextStatusOnApprove } from "@/lib/workflow";
 
@@ -55,6 +55,30 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     if (!guestHouse) return { ok: false, error: "Unknown guest house" };
     if (!config.allowed_guest_house_ids.includes(guestHouse.id)) {
       return { ok: false, error: `Your role cannot book ${guestHouse.name}` };
+    }
+
+    // Room limit enforcement: check against total active rooms and date-range availability.
+    const activeRooms = await store.listRooms(payload.guest_house_id);
+    if (payload.rooms_requested > activeRooms.length) {
+      return {
+        ok: false,
+        error: `${guestHouse.name} only has ${activeRooms.length} room(s) available. You requested ${payload.rooms_requested}.`,
+      };
+    }
+
+    const checkInIso = toIso(payload.check_in);
+    const checkOutIso = toIso(payload.check_out);
+    const occupiedIds = await store.getOccupiedRoomIds(
+      payload.guest_house_id,
+      checkInIso,
+      checkOutIso
+    );
+    const freeRoomCount = activeRooms.length - occupiedIds.length;
+    if (payload.rooms_requested > freeRoomCount) {
+      return {
+        ok: false,
+        error: `Only ${freeRoomCount} room(s) are available at ${guestHouse.name} for the requested dates. You requested ${payload.rooms_requested}.`,
+      };
     }
 
     // Admin-defined custom fields.
@@ -107,8 +131,8 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       user_role: user.role,
       status: initialStatusForRole(user.role),
       purpose_of_visit: payload.purpose_of_visit,
-      check_in: toIso(payload.check_in),
-      check_out: toIso(payload.check_out),
+      check_in: checkInIso,
+      check_out: checkOutIso,
       rooms_requested: payload.rooms_requested,
       alumni_id_url: alumniIdUrl,
       custom_fields: customValues.length > 0 ? customValues : null,
@@ -234,31 +258,168 @@ export async function allocateRooms(bookingId: string, roomIds: string[]): Promi
   }
 }
 
-/** Requester cancels their own booking while it is still in the pipeline. */
-export async function cancelBooking(bookingId: string): Promise<ActionResult> {
+/**
+ * Requester cancels their own booking.
+ * - Pending bookings are cancelled directly.
+ * - Approved or Occupied bookings become CANCELLATION_REQUESTED (needs manager approval).
+ * A reason is always required.
+ */
+export async function cancelBooking(bookingId: string, reason: string): Promise<ActionResult> {
   try {
     const user = await requireUser();
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking || booking.user_id !== user.id) return { ok: false, error: "Booking not found" };
-    if (booking.status === "REJECTED" || booking.status === "CANCELLED") {
-      return { ok: false, error: "This booking is already closed" };
+    if (!reason?.trim()) return { ok: false, error: "A cancellation reason is required" };
+
+    const TERMINAL_STATUSES: BookingStatus[] = [
+      "REJECTED", "CANCELLED", "VACATED", "CANCELLATION_REQUESTED", "CANCELLATION_APPROVED",
+    ];
+    if (TERMINAL_STATUSES.includes(booking.status)) {
+      return { ok: false, error: "This booking is already closed or has a pending cancellation" };
     }
-    await store.updateBookingStatus(
-      bookingId,
-      { status: "CANCELLED" },
-      {
-        action_by: user.id,
-        action_by_name: user.full_name,
-        new_status: "CANCELLED",
-        remarks: "Cancelled by requester",
-      }
-    );
+
+    // Approved or Occupied bookings need manager approval for cancellation.
+    const NEEDS_APPROVAL: BookingStatus[] = ["APPROVED", "OCCUPIED"];
+    if (NEEDS_APPROVAL.includes(booking.status)) {
+      await store.updateBookingStatus(
+        bookingId,
+        { status: "CANCELLATION_REQUESTED", rejection_reason: reason.trim() },
+        {
+          action_by: user.id,
+          action_by_name: user.full_name,
+          new_status: "CANCELLATION_REQUESTED",
+          remarks: `Cancellation requested: ${reason.trim()}`,
+        }
+      );
+    } else {
+      // Pending bookings can be cancelled directly.
+      await store.updateBookingStatus(
+        bookingId,
+        { status: "CANCELLED", rejection_reason: reason.trim() },
+        {
+          action_by: user.id,
+          action_by_name: user.full_name,
+          new_status: "CANCELLED",
+          remarks: `Cancelled by requester: ${reason.trim()}`,
+        }
+      );
+    }
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
     console.error("cancelBooking failed", e);
     return { ok: false, error: "Something went wrong while cancelling" };
+  }
+}
+
+/** Valid lifecycle transitions for the GH Manager. */
+const LIFECYCLE_TRANSITIONS: Partial<Record<BookingStatus, BookingStatus>> = {
+  APPROVED: "OCCUPIED",
+  OCCUPIED: "VACATED",
+};
+
+/** GH Manager: advance a booking through its lifecycle (Approved → Occupied → Vacated). */
+export async function updateBookingLifecycle(bookingId: string, targetStatus: BookingStatus): Promise<ActionResult> {
+  try {
+    const user = await requireUser();
+    if (user.role !== "gh_manager") return { ok: false, error: "Only the GH Manager can update booking status" };
+    const store = getStore();
+    const booking = await store.getBooking(bookingId);
+    if (!booking) return { ok: false, error: "Booking not found" };
+
+    const expected = LIFECYCLE_TRANSITIONS[booking.status];
+    if (!expected || expected !== targetStatus) {
+      return { ok: false, error: `Cannot change status from ${booking.status} to ${targetStatus}` };
+    }
+
+    const remarkMap: Record<string, string> = {
+      OCCUPIED: "Guest checked in — marked as Occupied",
+      VACATED: "Guest checked out — marked as Vacated",
+    };
+
+    await store.updateBookingStatus(
+      bookingId,
+      { status: targetStatus },
+      {
+        action_by: user.id,
+        action_by_name: user.full_name,
+        new_status: targetStatus,
+        remarks: remarkMap[targetStatus] ?? `Status updated to ${targetStatus}`,
+      }
+    );
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) {
+    console.error("updateBookingLifecycle failed", e);
+    return { ok: false, error: "Something went wrong while updating the booking" };
+  }
+}
+
+/** GH Manager: approve a cancellation request — releases rooms and finalises cancellation. */
+export async function approveCancellation(bookingId: string): Promise<ActionResult> {
+  try {
+    const user = await requireUser();
+    if (user.role !== "gh_manager") return { ok: false, error: "Only the GH Manager can approve cancellations" };
+    const store = getStore();
+    const booking = await store.getBooking(bookingId);
+    if (!booking) return { ok: false, error: "Booking not found" };
+    if (booking.status !== "CANCELLATION_REQUESTED") {
+      return { ok: false, error: "This booking does not have a pending cancellation request" };
+    }
+
+    await store.updateBookingStatus(
+      bookingId,
+      { status: "CANCELLATION_APPROVED", assigned_room_ids: [] },
+      {
+        action_by: user.id,
+        action_by_name: user.full_name,
+        new_status: "CANCELLATION_APPROVED",
+        remarks: "Cancellation approved — rooms released",
+      }
+    );
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) {
+    console.error("approveCancellation failed", e);
+    return { ok: false, error: "Something went wrong while approving cancellation" };
+  }
+}
+
+/** GH Manager: reject a cancellation request — booking returns to its previous state. */
+export async function rejectCancellation(bookingId: string, reason: string): Promise<ActionResult> {
+  try {
+    const user = await requireUser();
+    if (user.role !== "gh_manager") return { ok: false, error: "Only the GH Manager can reject cancellations" };
+    if (!reason?.trim()) return { ok: false, error: "A reason for rejecting the cancellation is required" };
+    const store = getStore();
+    const booking = await store.getBooking(bookingId);
+    if (!booking) return { ok: false, error: "Booking not found" };
+    if (booking.status !== "CANCELLATION_REQUESTED") {
+      return { ok: false, error: "This booking does not have a pending cancellation request" };
+    }
+
+    // Find the status before the cancellation request to restore it.
+    const previousLog = [...booking.logs]
+      .reverse()
+      .find((l) => l.new_status === "CANCELLATION_REQUESTED");
+    const restoreStatus: BookingStatus = previousLog?.previous_status ?? "APPROVED";
+
+    await store.updateBookingStatus(
+      bookingId,
+      { status: restoreStatus },
+      {
+        action_by: user.id,
+        action_by_name: user.full_name,
+        new_status: restoreStatus,
+        remarks: `Cancellation rejected: ${reason.trim()}`,
+      }
+    );
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) {
+    console.error("rejectCancellation failed", e);
+    return { ok: false, error: "Something went wrong while rejecting cancellation" };
   }
 }
 

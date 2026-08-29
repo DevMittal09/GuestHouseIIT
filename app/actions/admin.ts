@@ -233,6 +233,7 @@ export async function adminDeleteBookingAction(id: string): Promise<ActionResult
 const OVERRIDABLE: BookingStatus[] = [
   "PENDING_WARDEN", "PENDING_FA", "PENDING_IAR", "PENDING_GH_MANAGER",
   "APPROVED", "REJECTED", "CANCELLED",
+  "OCCUPIED", "VACATED", "CANCELLATION_REQUESTED", "CANCELLATION_APPROVED",
 ];
 
 /** Force a booking into any status (audit-logged) — for unsticking workflows. */

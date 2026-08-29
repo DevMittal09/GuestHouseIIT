@@ -62,7 +62,8 @@ port 3000 before launching your own.
 | otherwise | `lib/store/mock.ts` | `.local-db.json`, `public/uploads/` |
 
 **Any new data operation must be added to the interface and to both
-implementations**, or one backend silently breaks.
+implementations**, or one backend silently breaks. `searchBookings` is the
+newest one — see the approval-log section below for the trap it already hit.
 
 - The mock store rewrites the whole JSON file on every mutation. It is
   single-process and not concurrency-safe — fine for dev, never for production.
@@ -143,6 +144,30 @@ Current defaults worth knowing: students are Bageshri-only and see the "double
 shared rooms will get first preference" banner; employee and official use
 free-text relationship; **club and official hide the relationship field**;
 club ID uploads are optional; alumni ID card is mandatory.
+
+## Approval log & archive search (`/history`)
+
+One page for every approver role (`HISTORY_ROLES` in `lib/workflow.ts`): warden,
+faculty advisor, IAR cell, GH manager, developer. Default view is the reviewer's
+own decisions; toggling "Show" turns it into a searchable archive.
+
+- **Matching rules live in `lib/booking-search.ts`, not in the stores.** Both
+  stores fetch candidates and call the same `runBookingSearch()`. Add search
+  behaviour there, not twice.
+- **Scoping is `historyScope(user)`** — the archive counterpart to `canReview()`.
+  `criteriaFromParams()` spreads it **last**, so a hand-edited query string can
+  only narrow, never widen. Do not reorder that spread.
+- **Never push `criteria.statuses` down to SQL.** Facet counts are computed
+  before the status filter, so the candidate set must still contain the other
+  statuses. Doing this broke the Supabase tiles once while the mock store stayed
+  correct.
+- Supabase caps a scan at `SEARCH_SCAN_LIMIT` (1000) and returns `truncated`;
+  the UI surfaces it. Keyword matching spans joined tables, so it cannot be
+  expressed in PostgREST.
+- `exportHistoryCsv` (`app/actions/history.ts`) takes only a query string and
+  re-derives user + scope + params server-side. Keep it that way.
+- `/history` is excluded from the 5 s polling (`NO_POLL_PREFIXES` in
+  `components/auto-refresh.tsx`).
 
 ## Room allocation
 
