@@ -30,9 +30,13 @@ import {
 } from "@/components/ui/table";
 import {
   BOOKING_SORT_KEYS,
+  DATE_PRESET_GROUPS,
+  DATE_PRESET_LABELS,
   SORT_LABELS,
   hasActiveFilters,
   latestReviewerActionOn,
+  matchDatePreset,
+  resolveDatePreset,
   type BookingSortKey,
   type HistoryActor,
   type HistoryParams,
@@ -82,27 +86,6 @@ function toQueryString(params: HistoryParams, defaultActor: HistoryActor): strin
   return sp.toString();
 }
 
-/** Quick-pick date range presets. */
-function getDatePreset(
-  key: "today" | "week" | "month"
-): { from: string; to: string } {
-  const today = new Date();
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  switch (key) {
-    case "today":
-      return { from: fmt(today), to: fmt(today) };
-    case "week": {
-      const weekAgo = new Date(today);
-      weekAgo.setDate(today.getDate() - 7);
-      return { from: fmt(weekAgo), to: fmt(today) };
-    }
-    case "month": {
-      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { from: fmt(monthStart), to: fmt(today) };
-    }
-  }
-}
-
 export function BookingHistory({
   rows,
   total,
@@ -141,6 +124,11 @@ export function BookingHistory({
   const [isPending, startTransition] = useTransition();
   const [isExporting, startExport] = useTransition();
   const [isPdfExporting, startPdfExport] = useTransition();
+
+  // One timestamp for the whole mount, so every chip is compared against the
+  // same "today" and the highlight cannot flicker mid-render.
+  const [presetNow] = useState(() => new Date());
+  const activePreset = matchDatePreset(params.from, params.to, presetNow);
 
   /** Navigate with a patched set of params. Any change resets to page 1. */
   const apply = (patch: Partial<HistoryParams>) => {
@@ -181,22 +169,19 @@ export function BookingHistory({
       toast.success(`Exported ${result.rows} booking${result.rows === 1 ? "" : "s"}`);
     });
 
-  const handlePdfExport = (preset?: "today" | "week" | "month") =>
+  const handlePdfExport = () =>
     startPdfExport(async () => {
-      // When a preset is clicked, first apply its dates to the current params
-      // so the exported range matches. Otherwise use current filters.
-      const effectiveParams = preset
-        ? { ...params, ...getDatePreset(preset) }
-        : params;
-      const qs = toQueryString(effectiveParams, defaultActor);
-      const result = await exportHistoryPdf(qs);
+      // Same query string the CSV export uses: whatever the filters currently
+      // select. The date presets that used to live here only duplicated the
+      // check-in range filter, and let the two disagree.
+      const result = await exportHistoryPdf(toQueryString(params, defaultActor));
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
       const count = result.report.rows.length;
       if (count === 0) {
-        toast.error("No bookings found for the selected range");
+        toast.error("No bookings match the current filters");
         return;
       }
       try {
@@ -356,23 +341,79 @@ export function BookingHistory({
             </Filter>
           )}
 
-          <Filter label="Check-in from">
-            <Input
-              type="date"
-              value={params.from ?? ""}
-              max={params.to}
-              onChange={(e) => apply({ from: e.target.value || undefined })}
-            />
-          </Filter>
+          <div className="space-y-2 sm:col-span-2 lg:col-span-3">
+            <div className="flex items-center gap-3">
+              <p className="text-xs font-medium text-muted-foreground">Check-in range</p>
+              {(params.from || params.to) && (
+                <button
+                  type="button"
+                  onClick={() => apply({ from: undefined, to: undefined })}
+                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  Clear · any date
+                </button>
+              )}
+            </div>
 
-          <Filter label="Check-in until">
-            <Input
-              type="date"
-              value={params.to ?? ""}
-              min={params.from}
-              onChange={(e) => apply({ to: e.target.value || undefined })}
-            />
-          </Filter>
+            {/* Rolling windows and whole calendar periods are different
+                questions — "last 30 days" is not "last month" — so they are
+                grouped rather than mixed into one undifferentiated row. */}
+            {DATE_PRESET_GROUPS.map((group) => (
+              <div key={group.label} className="flex flex-wrap items-center gap-1.5">
+                <span className="w-14 shrink-0 text-[11px] text-muted-foreground">
+                  {group.label}
+                </span>
+                {group.presets.map((preset) => {
+                  const active = activePreset === preset;
+                  const range = resolveDatePreset(preset, presetNow);
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      aria-pressed={active}
+                      title={`${formatDate(range.from)} — ${formatDate(range.to)}`}
+                      onClick={() =>
+                        // Clicking the lit chip clears it, so the row is also
+                        // the way back to "any date".
+                        apply(
+                          active
+                            ? { from: undefined, to: undefined }
+                            : resolveDatePreset(preset)
+                        )
+                      }
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      )}
+                    >
+                      {DATE_PRESET_LABELS[preset]}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Filter label="From">
+                <Input
+                  type="date"
+                  value={params.from ?? ""}
+                  max={params.to}
+                  onChange={(e) => apply({ from: e.target.value || undefined })}
+                />
+              </Filter>
+              <Filter label="Until">
+                <Input
+                  type="date"
+                  value={params.to ?? ""}
+                  min={params.from}
+                  onChange={(e) => apply({ to: e.target.value || undefined })}
+                />
+              </Filter>
+            </div>
+          </div>
 
           <Filter label="Sort by">
             <NativeSelect
@@ -404,60 +445,30 @@ export function BookingHistory({
             <span> handled by {currentUserName.split(" ")[0]}</span>
           )}
         </p>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={isExporting || total === 0}>
-            {isExporting ? "Preparing…" : "Export CSV"}
+        {/* Both formats export exactly what the filters above have selected,
+            so the only choice left here is the file type. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Export as</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={isExporting || isPdfExporting || total === 0}
+          >
+            {isExporting ? "Preparing…" : "CSV"}
           </Button>
+          {showPdfExport && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePdfExport}
+              disabled={isExporting || isPdfExporting || total === 0}
+            >
+              {isPdfExporting ? "Generating…" : "PDF"}
+            </Button>
+          )}
         </div>
       </div>
-
-      {/* PDF Export panel — only for gh_manager and developer. */}
-      {showPdfExport && (
-        <div className="rounded-xl border bg-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">PDF Report</p>
-              <p className="text-xs text-muted-foreground">
-                Generate a PDF report of the currently filtered logs, or use a quick date preset.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isPdfExporting}
-              onClick={() => handlePdfExport("today")}
-            >
-              Today
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isPdfExporting}
-              onClick={() => handlePdfExport("week")}
-            >
-              Last 7 days
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isPdfExporting}
-              onClick={() => handlePdfExport("month")}
-            >
-              This month
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              disabled={isPdfExporting || total === 0}
-              onClick={() => handlePdfExport()}
-            >
-              {isPdfExporting ? "Generating PDF…" : "Current filters"}
-            </Button>
-          </div>
-        </div>
-      )}
 
       {total === 0 ? (
         <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">

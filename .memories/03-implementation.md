@@ -202,6 +202,24 @@ Alongside the box: status tiles, guest house, requester category (only where the
 scope does not fix it), a check-in date range, and sort. All of it lives in the
 query string, so a search is bookmarkable and shareable.
 
+**Check-in range** pairs two chip rows with the two date inputs, from
+`DATE_PRESET_GROUPS` in `lib/booking-search.ts`:
+
+| Group | Chips |
+| --- | --- |
+| Rolling | Today · Next 7 days · Next 30 days · Last 7 days · Last 30 days · Last 90 days |
+| Calendar | This week · Last week · This month · Last month · This quarter · Last quarter · This year · Last year |
+
+`resolveDatePreset` turns a chip into a `from`/`to` pair and `matchDatePreset`
+lights up whichever chip the current params equal, so picking dates by hand and
+picking a preset are the same piece of state. Clicking the lit chip clears the
+range, and each chip's `title` shows the dates it resolves to — which is what
+makes "Last 30 days" and "Last month" distinguishable at a glance.
+
+Forward-looking ranges exist because a guest house cares about arrivals that
+have not happened yet, not only the archive; calendar periods run to the end of
+the period for the same reason.
+
 **Status tiles** — Total / Approved / Rejected / In progress / Cancelled. They
 are also the status filter (click to apply). Their counts are *facet counts*:
 computed while ignoring the status filter but honouring every other filter, so
@@ -229,8 +247,12 @@ field is user-supplied and spreadsheets execute formula cells.
   actually clicks Export.
 
 `pdfSafe()` maps typographic punctuation to ASCII and drops anything outside
-Latin-1, because jsPDF's built-in fonts are WinAnsi. Quick date presets: Today,
-Last 7 days, This month, or the current filter state.
+Latin-1, because jsPDF's built-in fonts are WinAnsi.
+
+Both exports read the **current filters** — they sit together as an "Export as
+CSV / PDF" pair next to the result count, so once the filters are set the only
+remaining choice is the file format. The PDF button appears for GH Manager and
+Developer only; everyone else sees CSV alone.
 
 Polling is deliberately **off** on this route (`NO_POLL_PREFIXES` in
 `components/auto-refresh.tsx`): the archive is historical, and a 5-second

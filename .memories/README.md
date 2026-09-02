@@ -341,6 +341,12 @@ There is **no test framework**. Both of these are proven to work:
 Always finish with `npm run build` (runs the typecheck) and `npm run lint`.
 `next dev` refuses to start if port 3000 is already in use.
 
+> **Do not build while a dev server is running.** `next build` and `next dev`
+> share `.next/`, so the build yanks the directory out from under the running
+> server and it exits 1 — the app goes down for anyone using it in a browser,
+> while the build reports success. Build before starting the server, or restart
+> the server afterwards.
+
 If a test touches the mock store, back up and restore `.local-db.json` — it is
 the developer's working data.
 

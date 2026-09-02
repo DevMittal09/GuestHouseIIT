@@ -320,6 +320,198 @@ export function latestReviewerActionOn(
 // ---- query-string handling -------------------------------------------
 
 export const HISTORY_PAGE_SIZE = 20;
+
+/**
+ * Quick check-in ranges for the filter bar.
+ *
+ * Two kinds, because they are genuinely different questions and conflating
+ * them loses one of the answers:
+ *
+ * - **Rolling** — a window measured from today. "Last 30 days" on 15 September
+ *   is 16 August to 15 September.
+ * - **Calendar** — a whole named period. "Last month" on 15 September is the
+ *   entirety of August, 1st to 31st, regardless of today's date.
+ *
+ * Calendar ranges cover the *whole* period including days still to come, so
+ * "This month" reaches the end of the month and catches upcoming arrivals.
+ *
+ * These are a *filter*, deliberately not an export option: the exports read
+ * whatever the filters select, and a second date control on the export button
+ * let the two disagree about what was exported.
+ */
+export const DATE_PRESET_GROUPS = [
+  {
+    label: "Rolling",
+    presets: ["today", "next7", "next30", "last7", "last30", "last90"],
+  },
+  {
+    label: "Calendar",
+    presets: [
+      "thisWeek",
+      "lastWeek",
+      "thisMonth",
+      "lastMonth",
+      "thisQuarter",
+      "lastQuarter",
+      "thisYear",
+      "lastYear",
+    ],
+  },
+] as const;
+
+export const DATE_PRESETS = DATE_PRESET_GROUPS.flatMap(
+  (g) => g.presets
+) as readonly DatePreset[];
+
+export type DatePreset =
+  | "today"
+  | "next7"
+  | "next30"
+  | "last7"
+  | "last30"
+  | "last90"
+  | "thisWeek"
+  | "lastWeek"
+  | "thisMonth"
+  | "lastMonth"
+  | "thisQuarter"
+  | "lastQuarter"
+  | "thisYear"
+  | "lastYear";
+
+export const DATE_PRESET_LABELS: Record<DatePreset, string> = {
+  today: "Today",
+  next7: "Next 7 days",
+  next30: "Next 30 days",
+  last7: "Last 7 days",
+  last30: "Last 30 days",
+  last90: "Last 90 days",
+  thisWeek: "This week",
+  lastWeek: "Last week",
+  thisMonth: "This month",
+  lastMonth: "Last month",
+  thisQuarter: "This quarter",
+  lastQuarter: "Last quarter",
+  thisYear: "This year",
+  lastYear: "Last year",
+};
+
+/** Weeks run Monday to Sunday. */
+const WEEK_STARTS_ON = 1;
+
+/**
+ * Local-time yyyy-MM-dd, matching what `<input type="date">` expects.
+ * Never `toISOString().slice(0, 10)` — that is UTC, and in IST (UTC+5:30) it
+ * reports the previous day until 05:30.
+ */
+function isoDay(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function shiftDays(from: Date, days: number): Date {
+  const d = new Date(from);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function startOfWeek(d: Date): Date {
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = (start.getDay() - WEEK_STARTS_ON + 7) % 7;
+  start.setDate(start.getDate() - diff);
+  return start;
+}
+
+/** Day `n` months from the 1st of `d`'s month, clamped to that month's length. */
+function startOfMonth(d: Date, monthOffset = 0): Date {
+  return new Date(d.getFullYear(), d.getMonth() + monthOffset, 1);
+}
+
+function endOfMonth(d: Date, monthOffset = 0): Date {
+  // Day 0 of the next month is the last day of this one.
+  return new Date(d.getFullYear(), d.getMonth() + monthOffset + 1, 0);
+}
+
+function startOfQuarter(d: Date, quarterOffset = 0): Date {
+  const firstMonth = Math.floor(d.getMonth() / 3) * 3;
+  return new Date(d.getFullYear(), firstMonth + quarterOffset * 3, 1);
+}
+
+function endOfQuarter(d: Date, quarterOffset = 0): Date {
+  const firstMonth = Math.floor(d.getMonth() / 3) * 3;
+  return new Date(d.getFullYear(), firstMonth + quarterOffset * 3 + 3, 0);
+}
+
+/** The `from`/`to` a preset resolves to, inclusive of both ends. */
+export function resolveDatePreset(
+  preset: DatePreset,
+  now: Date = new Date()
+): { from: string; to: string } {
+  const today = isoDay(now);
+  const range = (from: Date, to: Date) => ({ from: isoDay(from), to: isoDay(to) });
+
+  switch (preset) {
+    // ---- rolling windows, measured from today ----
+    case "today":
+      return { from: today, to: today };
+    case "next7":
+      return { from: today, to: isoDay(shiftDays(now, 7)) };
+    case "next30":
+      return { from: today, to: isoDay(shiftDays(now, 30)) };
+    case "last7":
+      return { from: isoDay(shiftDays(now, -7)), to: today };
+    case "last30":
+      return { from: isoDay(shiftDays(now, -30)), to: today };
+    case "last90":
+      return { from: isoDay(shiftDays(now, -90)), to: today };
+
+    // ---- whole calendar periods ----
+    case "thisWeek": {
+      const start = startOfWeek(now);
+      return range(start, shiftDays(start, 6));
+    }
+    case "lastWeek": {
+      const start = shiftDays(startOfWeek(now), -7);
+      return range(start, shiftDays(start, 6));
+    }
+    case "thisMonth":
+      return range(startOfMonth(now), endOfMonth(now));
+    case "lastMonth":
+      return range(startOfMonth(now, -1), endOfMonth(now, -1));
+    case "thisQuarter":
+      return range(startOfQuarter(now), endOfQuarter(now));
+    case "lastQuarter":
+      return range(startOfQuarter(now, -1), endOfQuarter(now, -1));
+    case "thisYear":
+      return range(new Date(now.getFullYear(), 0, 1), new Date(now.getFullYear(), 11, 31));
+    case "lastYear":
+      return range(
+        new Date(now.getFullYear() - 1, 0, 1),
+        new Date(now.getFullYear() - 1, 11, 31)
+      );
+  }
+}
+
+/**
+ * Which preset, if any, the current from/to exactly matches.
+ *
+ * Two presets can resolve to the same range — on 31 January, "Last 30 days"
+ * and "This month" are both 1–31 January — so this returns the first match in
+ * `DATE_PRESETS` order, which is the order the chips are displayed in.
+ */
+export function matchDatePreset(
+  from: string | undefined,
+  to: string | undefined,
+  now: Date = new Date()
+): DatePreset | null {
+  if (!from || !to) return null;
+  return (
+    DATE_PRESETS.find((preset) => {
+      const range = resolveDatePreset(preset, now);
+      return range.from === from && range.to === to;
+    }) ?? null
+  );
+}
 /** Hard ceiling on a CSV export, so one click cannot pull the whole archive. */
 export const HISTORY_EXPORT_LIMIT = 5000;
 

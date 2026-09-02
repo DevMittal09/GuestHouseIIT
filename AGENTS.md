@@ -51,6 +51,13 @@ you should do the same rather than assuming:
 `next dev` refuses to start if another dev server is already running — check
 port 3000 before launching your own.
 
+> **`npm run build` kills a running `next dev`.** Both write to `.next/`, so
+> building while a dev server is up pulls the directory out from under it and
+> the dev process exits 1 — taking the app down for whoever is using it in a
+> browser. If someone is on `localhost:3000`, either build first and start the
+> server after, or expect to restart it. This is easy to miss because the build
+> itself succeeds and says nothing.
+
 ## Two backends, one interface
 
 `lib/store/types.ts` defines `DataStore`. Two implementations satisfy it and
@@ -225,8 +232,26 @@ Everything" toggle and the "My decision" column are shown.
 - `exportHistoryPdf` (`app/actions/history-pdf.ts`) — GH Manager and Developer
   only. Returns **report data, not markup**; `lib/report-pdf.ts` draws a real
   A4-landscape PDF client-side with jsPDF (dynamically imported) and saves it.
-  Keep the scope re-derivation server-side. Date presets: Today / Last 7 days /
-  This month / Current filters.
+  Keep the scope re-derivation server-side. Both exports take the **current
+  filters** and nothing else — CSV and PDF sit side by side as an "Export as"
+  choice, so format is the only decision at that point.
+- **Date presets are a filter, not an export option.** `DATE_PRESET_GROUPS` /
+  `resolveDatePreset()` / `matchDatePreset()` in `lib/booking-search.ts` back
+  the chip rows in the filter bar; clicking the lit chip clears it. They belong
+  there because a second date control on the export button let the two disagree
+  about what was exported.
+
+  Two groups, because they answer different questions and merging them loses
+  one: **Rolling** windows measured from today (Today, Next 7/30 days, Last
+  7/30/90 days) and whole **Calendar** periods (This/Last week, month, quarter,
+  year). On 15 Sep, "Last 30 days" is 16 Aug–15 Sep but "Last month" is all of
+  August. Calendar periods cover the *whole* period including days still to
+  come, so "This month" catches upcoming arrivals.
+
+  Build the day string from **local** date parts, never
+  `toISOString().slice(0,10)` — in IST that reports the previous day until
+  05:30. Two presets can resolve to the same range (31 Jan: "Last 30 days" and
+  "This month"), so `matchDatePreset` returns the first in display order.
 - `/history` is excluded from the 5 s polling (`NO_POLL_PREFIXES` in
   `components/auto-refresh.tsx`).
 

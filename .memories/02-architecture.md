@@ -303,14 +303,55 @@ Authorization is the caller's job, not the store's: `historyScope(user)` in
 `lib/workflow.ts` returns the criteria a role is confined to, and
 `criteriaFromParams()` spreads it last so the query string can only narrow.
 
-### PDF report export
+### Exporting
 
-GH Manager and Developer roles can generate printable PDF reports from `/history`.
-The server action `exportHistoryPdf` in `app/actions/history-pdf.ts` generates a
-print-optimized HTML document with IIT Palakkad branding, status summary, and a
-full booking table. The client opens it in a new window and triggers
-`window.print()` for the browser's "Save as PDF" dialog. Date presets (Today,
-Last 7 days, This month) and current-filter export are available.
+Both exports read exactly what the filters currently select, and they sit
+together next to the result count as an "Export as CSV / PDF" pair — once the
+filters are set, the only decision left is the file format.
+
+That was not the first design: the PDF had its own Today / Last 7 days / This
+month buttons, which duplicated the check-in range filter and — worse — silently
+overwrote it, so a range chosen in the filter bar and a range chosen on the
+export button could disagree about what came out.
+
+The presets themselves were worth keeping; they were just in the wrong place.
+They now live in the filter bar as two chip rows (`DATE_PRESET_GROUPS` in
+`lib/booking-search.ts`). Clicking the lit chip clears it, and
+`matchDatePreset()` highlights whichever chip the current `from`/`to` equals, so
+a hand-picked range and a preset are the same state rather than two competing
+ones. Each chip's tooltip shows the dates it resolves to.
+
+**Rolling and calendar ranges are separate groups**, because they are different
+questions and the first version conflated them:
+
+| Group | On 15 Sep 2026 | |
+| --- | --- | --- |
+| Rolling | Last 30 days | 16 Aug – 15 Sep |
+| Calendar | Last month | 1 Aug – 31 Aug |
+| Calendar | This month | 1 Sep – **30 Sep** |
+
+Rolling windows are measured from today; calendar periods are whole named
+periods and deliberately cover the **entire** period including days still to
+come, so "This month" catches arrivals that have not happened yet. Weeks run
+Monday to Sunday.
+
+Two presets can legitimately resolve to the same range — on 31 January, "Last
+30 days" and "This month" are both 1–31 January — so `matchDatePreset` returns
+the first in display order.
+
+> **Trap.** Build the `yyyy-MM-dd` from local date parts. The original preset
+> code used `toISOString().slice(0, 10)`, which in IST (UTC+5:30) reports the
+> *previous* day for any time before 05:30 — "Today" would have quietly meant
+> yesterday for the first five and a half hours of every day.
+
+- **CSV** — `exportHistoryCsv` (`app/actions/history.ts`), open to every role.
+- **PDF** — `exportHistoryPdf` (`app/actions/history-pdf.ts`), GH Manager and
+  Developer only. The action returns **report data, not markup**;
+  `lib/report-pdf.ts` draws a real A4-landscape PDF in the browser with jsPDF
+  (dynamically imported) and saves it.
+
+Both take only a query string and re-derive the user, scope and params
+server-side, so an export can never exceed what the caller may see.
 
 ## Audit trail
 
