@@ -17,6 +17,11 @@ export const metadata: Metadata = {
   title: "IIT Palakkad Guest House Portal",
   description:
     "Booking and approval portal for the Bageshri and Hamsanandi guest houses at IIT Palakkad",
+  icons: {
+    icon: "/iitpkd-logo.png",
+    shortcut: "/iitpkd-logo.png",
+    apple: "/iitpkd-logo.png",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
