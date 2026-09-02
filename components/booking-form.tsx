@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFieldArray, useForm, useWatch, type FieldPath } from "react-hook-form";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import { createBooking } from "@/app/actions/bookings";
 import { Button } from "@/components/ui/button";
@@ -16,10 +17,27 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { QuantityInput } from "@/components/ui/quantity-input";
 import { TimeSelect } from "@/components/ui/time-select";
 import { Textarea } from "@/components/ui/textarea";
-import { bookingPayloadSchema } from "@/lib/booking-schema";
-import { validateCustomValue, type CustomField, type RoleFormConfig } from "@/lib/form-config";
+import {
+  countInfants,
+  DEFAULT_ROOM_MAX,
+  DEFAULT_ROOM_STANDARD,
+  extraBedsNeeded,
+  INFANT_AGE_LIMIT,
+  maxGuestsFor,
+  roomsNeededFor,
+} from "@/lib/occupancy";
+import { advanceWindowMessage, bookingPayloadSchema } from "@/lib/booking-schema";
+import {
+  hasQualifyingParent,
+  parentDependencyHint,
+  validateCustomValue,
+  type CustomField,
+  type RoleFormConfig,
+} from "@/lib/form-config";
+import { latestCheckIn } from "@/lib/workflow";
 import { ROLE_LABELS, type GuestHouse, type Profile } from "@/lib/types";
 
 interface GuestFields {
@@ -28,6 +46,7 @@ interface GuestFields {
   gender: "" | "male" | "female" | "other";
   relationship: string;
   id_number: string;
+  is_infant: boolean;
 }
 
 interface FormValues {
@@ -42,7 +61,17 @@ interface FormValues {
   custom: Record<string, string | boolean>;
 }
 
-const EMPTY_GUEST: GuestFields = { name: "", age: "", gender: "", relationship: "", id_number: "" };
+const EMPTY_GUEST: GuestFields = {
+  name: "",
+  age: "",
+  gender: "",
+  relationship: "",
+  id_number: "",
+  is_infant: false,
+};
+
+/** Hard ceiling regardless of rooms, so the form cannot grow unbounded. */
+const MAX_GUESTS = 15;
 
 export function BookingForm({
   user,
@@ -81,9 +110,49 @@ export function BookingForm({
   const { fields, append, remove } = useFieldArray({ control, name: "guests" });
   const checkInTime = useWatch({ control, name: "check_in_time" });
   const checkOutTime = useWatch({ control, name: "check_out_time" });
+  const roomsRequested = useWatch({ control, name: "rooms_requested" });
+
+  // Siblings / grandparents stay locked until a parent is on the request.
+  const watchedGuests = useWatch({ control, name: "guests" });
+  const parentPresent = hasQualifyingParent(
+    config,
+    (watchedGuests ?? []).map((g) => g?.relationship)
+  );
+  const dependencyHint = parentDependencyHint(config);
+  const isLockedRelationship = (option: string) =>
+    !parentPresent && config.dependent_relationships.includes(option);
+
+  // Infants share a guardian's bed, so only the others count against the rooms.
+  const guestRows = watchedGuests ?? [];
+  const infantCount = countInfants(guestRows);
+  const bedGuests = Math.max(fields.length - infantCount, 0);
+  const roomsNeeded = roomsNeededFor(bedGuests);
+  const roomsPicked = Number(roomsRequested) || 0;
+  const bedsAvailable = maxGuestsFor(roomsPicked);
+  const extraBeds = extraBedsNeeded(bedGuests, roomsPicked);
+  // "In accordance with the rooms": the beds those rooms provide, plus infants,
+  // who need none. Marking a guest as an infant frees a bed slot immediately.
+  const guestCeiling = Math.min(bedsAvailable + infantCount, MAX_GUESTS);
+  const overCapacity = roomsPicked > 0 && bedGuests > bedsAvailable;
+
+  // Advance-booking window: officials are exempt, so the cap can be absent.
+  const [checkInLimits] = useState(() => {
+    const limit = latestCheckIn(config.role);
+    return {
+      min: format(new Date(), "yyyy-MM-dd"),
+      max: limit ? format(limit, "yyyy-MM-dd") : undefined,
+      note: advanceWindowMessage(config.role),
+    };
+  });
+
+  // The guest count is its own text state rather than being read off
+  // `fields.length`, so the box can be cleared and retyped. The field array is
+  // only resized once a valid number is in it.
+  const [guestCountRaw, setGuestCountRaw] = useState("1");
+  const [guestCountError, setGuestCountError] = useState<string | null>(null);
 
   const setGuestCount = (count: number) => {
-    const target = Math.min(Math.max(count, 1), 15);
+    const target = Math.min(Math.max(count, 1), MAX_GUESTS);
     if (target > fields.length) {
       for (let i = fields.length; i < target; i++) append({ ...EMPTY_GUEST }, { shouldFocus: false });
     } else {
@@ -92,6 +161,41 @@ export function BookingForm({
         remove(i);
       }
     }
+  };
+
+  const onGuestCountChange = (raw: string) => {
+    setGuestCountRaw(raw);
+    if (raw.trim() === "") {
+      setGuestCountError("Number of guests is required");
+      return;
+    }
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1) {
+      setGuestCountError("At least 1 guest");
+      return;
+    }
+    if (n > MAX_GUESTS) {
+      setGuestCountError(`Maximum ${MAX_GUESTS} guests per request`);
+      return;
+    }
+    // The rooms already chosen decide how many guests can be added. Infants
+    // are exempt, so the ceiling rises as guests are marked as infants.
+    if (n > guestCeiling) {
+      setGuestCountError(
+        `${roomsPicked} room${roomsPicked === 1 ? "" : "s"} sleep ${bedsAvailable}. Add another room, or mark under-${INFANT_AGE_LIMIT}s as infants — they share a bed.`
+      );
+      return;
+    }
+    setGuestCountError(null);
+    setGuestCount(n);
+  };
+
+  /** Keep the box in step when a guest row is removed with its own button. */
+  const removeGuestAt = (index: number, fieldId: string) => {
+    guestFiles.delete(fieldId);
+    remove(index);
+    setGuestCountRaw(String(fields.length - 1));
+    setGuestCountError(null);
   };
 
   const onSubmit = handleSubmit((values) => {
@@ -110,12 +214,17 @@ export function BookingForm({
         gender: g.gender === "" ? undefined : g.gender,
         relationship: g.relationship === "" ? undefined : g.relationship,
         id_number: g.id_number === "" ? undefined : g.id_number,
+        is_infant: g.is_infant,
       })),
       custom: values.custom,
     };
 
     const parsed = bookingPayloadSchema(config).safeParse(payload);
     let hasError = false;
+    if (guestCountRaw.trim() === "") {
+      hasError = true;
+      setGuestCountError("Number of guests is required");
+    }
     if (!parsed.success) {
       hasError = true;
       for (const issue of parsed.error.issues) {
@@ -123,9 +232,10 @@ export function BookingForm({
       }
     }
 
-    // File + custom-field requirements are enforced outside zod.
+    // File + custom-field requirements are enforced outside zod. Infants are
+    // exempt from the ID upload, matching the server-side check.
     fields.forEach((f, i) => {
-      if (idDocRequired && !guestFiles.get(f.id)) {
+      if (idDocRequired && !values.guests[i]?.is_infant && !guestFiles.get(f.id)) {
         hasError = true;
         setError(`guests.${i}.name` as FieldPath<FormValues>, {
           type: "file",
@@ -230,13 +340,24 @@ export function BookingForm({
 
           <div className="space-y-2">
             <Label htmlFor="rooms_requested">Number of rooms *</Label>
-            <Input
+            <QuantityInput
               id="rooms_requested"
-              type="number"
+              aria-label="Number of rooms"
               min={1}
               max={10}
-              {...register("rooms_requested")}
+              value={roomsRequested}
+              onChange={(raw) => setValue("rooms_requested", raw, { shouldValidate: false })}
             />
+            <p className="text-xs text-muted-foreground">
+              A double sharing room sleeps {DEFAULT_ROOM_STANDARD}, or{" "}
+              {DEFAULT_ROOM_MAX} with one extra bed.{" "}
+              {roomsPicked > 0 && (
+                <>
+                  {roomsPicked} room{roomsPicked === 1 ? "" : "s"} = {bedsAvailable} bed
+                  {bedsAvailable === 1 ? "" : "s"}.
+                </>
+              )}
+            </p>
             <FieldError message={err("rooms_requested")} />
             {config.banner_text && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
@@ -247,17 +368,31 @@ export function BookingForm({
 
           <div className="space-y-2">
             <Label htmlFor="check_in_date">Check-in date &amp; time *</Label>
-            <Input id="check_in_date" type="date" {...register("check_in_date")} />
+            <Input
+              id="check_in_date"
+              type="date"
+              min={checkInLimits.min}
+              max={checkInLimits.max}
+              {...register("check_in_date")}
+            />
             <TimeSelect
               label="Check-in"
               value={checkInTime}
               onChange={(v) => setValue("check_in_time", v)}
             />
+            {checkInLimits.note && (
+              <p className="text-xs text-muted-foreground">{checkInLimits.note}.</p>
+            )}
             <FieldError message={err("check_in")} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="check_out_date">Check-out date &amp; time *</Label>
-            <Input id="check_out_date" type="date" {...register("check_out_date")} />
+            <Input
+              id="check_out_date"
+              type="date"
+              min={checkInLimits.min}
+              {...register("check_out_date")}
+            />
             <TimeSelect
               label="Check-out"
               value={checkOutTime}
@@ -289,29 +424,97 @@ export function BookingForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-end gap-3">
+          <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-2">
-              <Label htmlFor="num_guests">Number of guests</Label>
-              <Input
+              <Label htmlFor="num_guests">Number of guests *</Label>
+              <QuantityInput
                 id="num_guests"
-                type="number"
+                aria-label="Number of guests"
                 min={1}
-                max={15}
-                value={fields.length}
-                onChange={(e) => setGuestCount(Number(e.target.value) || 1)}
-                className="w-28"
+                max={guestCeiling}
+                value={guestCountRaw}
+                onChange={onGuestCountChange}
               />
+              <FieldError message={guestCountError ?? undefined} />
             </div>
-            <Button type="button" variant="outline" onClick={() => setGuestCount(fields.length + 1)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={fields.length >= guestCeiling}
+              onClick={() => onGuestCountChange(String(fields.length + 1))}
+            >
               + Add guest
             </Button>
           </div>
 
-          {fields.map((field, i) => (
+          <div
+            className={
+              overCapacity
+                ? "rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                : "rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+            }
+          >
+            <span className="font-medium text-foreground">{bedGuests}</span> needing a bed
+            {infantCount > 0 && (
+              <>
+                {" "}
+                and <span className="font-medium text-foreground">{infantCount}</span> infant
+                {infantCount === 1 ? "" : "s"} sharing
+              </>
+            )}
+            {roomsPicked > 0 && (
+              <>
+                {" "}
+                · <span className="font-medium text-foreground">{roomsPicked}</span> room
+                {roomsPicked === 1 ? "" : "s"} sleep{" "}
+                <span className="font-medium text-foreground">{bedsAvailable}</span>
+                {extraBeds > 0 && !overCapacity && (
+                  <>
+                    {" "}
+                    ({extraBeds} extra bed{extraBeds === 1 ? "" : "s"} needed)
+                  </>
+                )}
+              </>
+            )}
+            {overCapacity && (
+              <>
+                {" "}
+                — add {roomsNeeded - roomsPicked} more room
+                {roomsNeeded - roomsPicked === 1 ? "" : "s"}.
+              </>
+            )}
+          </div>
+
+          {dependencyHint && (
+            <p
+              className={
+                parentPresent
+                  ? "rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+                  : "rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+              }
+            >
+              {dependencyHint}
+            </p>
+          )}
+
+          {fields.map((field, i) => {
+            const isInfant = guestRows[i]?.is_infant ?? false;
+            return (
             <fieldset key={field.id} className="rounded-lg border p-4">
               <legend className="px-1 text-sm font-medium text-muted-foreground">
                 Guest {i + 1}
+                {isInfant && <span className="text-primary"> · infant</span>}
               </legend>
+
+              <label className="mb-4 flex w-fit items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  {...register(`guests.${i}.is_infant`)}
+                />
+                Infant — under {INFANT_AGE_LIMIT}, shares a bed
+              </label>
+
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {gf.name !== "hidden" && (
                   <div className="space-y-2">
@@ -345,11 +548,19 @@ export function BookingForm({
                     {config.relationship_style === "dropdown" ? (
                       <NativeSelect {...register(`guests.${i}.relationship`)}>
                         <option value="">Select…</option>
-                        {config.relationship_options.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
-                        ))}
+                        {config.relationship_options.map((r) => {
+                          const locked = isLockedRelationship(r);
+                          return (
+                            <option
+                              key={r}
+                              value={r}
+                              disabled={locked}
+                              className={locked ? "text-muted-foreground opacity-50" : undefined}
+                            >
+                              {locked ? `${r} — needs a parent on this request` : r}
+                            </option>
+                          );
+                        })}
                       </NativeSelect>
                     ) : (
                       <Input
@@ -360,14 +571,14 @@ export function BookingForm({
                     <FieldError message={err(`guests.${i}.relationship`)} />
                   </div>
                 )}
-                {gf.id_number !== "hidden" && (
+                {gf.id_number !== "hidden" && !isInfant && (
                   <div className="space-y-2">
                     <Label>Aadhaar / ID number{star(gf.id_number)}</Label>
                     <Input placeholder="XXXX-XXXX-XXXX" {...register(`guests.${i}.id_number`)} />
                     <FieldError message={err(`guests.${i}.id_number`)} />
                   </div>
                 )}
-                {gf.id_document !== "hidden" && (
+                {gf.id_document !== "hidden" && !isInfant && (
                   <div className="space-y-2">
                     <Label>ID document{idDocRequired ? " *" : " (optional)"}</Label>
                     <Input
@@ -382,18 +593,27 @@ export function BookingForm({
                   </div>
                 )}
               </div>
+              {isInfant && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  No ID is needed for an infant, and they do not take up a bed — but their name,
+                  age and gender still go on the guest house register.
+                </p>
+              )}
               {fields.length > 1 && (
                 <div className="mt-3 flex justify-end">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => {
-                    guestFiles.delete(field.id);
-                    remove(i);
-                  }}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeGuestAt(i, field.id)}
+                  >
                     Remove guest
                   </Button>
                 </div>
               )}
             </fieldset>
-          ))}
+            );
+          })}
           <FieldError message={err("guests")} />
         </CardContent>
       </Card>

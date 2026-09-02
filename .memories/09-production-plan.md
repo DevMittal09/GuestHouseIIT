@@ -44,11 +44,14 @@ UI:
 1. **Identity is fake.** Anyone can be anyone with a cookie.
 2. **Nothing tells anyone anything.** No email means the portal only works if
    people remember to check it. In practice that means it dies in month two.
-3. **Room holds are enforced in application code, not in the database.**
-   `allocateRooms()` re-checks clashes server-side before writing, which narrows
-   the race window to near-zero for a single-manager deployment. But with two
-   managers (or double-clicks), a check-then-act gap remains. The `room_holds`
-   exclusion constraint in Phase 3 closes it at the database level.
+3. ~~**Room holds are enforced in application code, not in the database.**~~
+   ✅ **Done (2026-09-03).** `room_holds` with a `btree_gist` exclusion
+   constraint is live — migration
+   `00000000000003_room_holds_and_infants.sql`. `bookings.assigned_room_ids` is
+   dropped and derived from holds on read; `allocateRooms()` no longer
+   pre-checks (that was the race) and surfaces `RoomClashError` to the loser.
+   See Phase 3 below for what is left: the timezone audit and the missing
+   lifecycle states.
 4. **You are storing Aadhaar scans** with no retention policy, no consent
    notice, and no named owner. That is the item with legal exposure attached.
 
@@ -390,14 +393,23 @@ through. Your roadmap already spotted this; it is correct.
 
 ## Phase 3 — correctness gaps that only appear under real load
 
-### Close the double-booking race in the database
+### ~~Close the double-booking race in the database~~ ✅ Done
 
-`allocateRooms()` re-checks clashes before writing, which is a check-then-act
-race. Under two managers, or one manager double-clicking, it can still write
-overlapping holds. The demo will never show you this; the fest weekend will.
+Shipped in `00000000000003_room_holds_and_infants.sql` on 2026-09-03,
+essentially as designed below. Differences from this plan, all deliberate:
 
-Postgres can make it impossible. It needs one row per room-hold rather than
-`assigned_room_ids uuid[]`:
+- **`assigned_room_ids` was dropped immediately**, not kept for a release as a
+  read-only fallback. Two sources of truth for the same fact is what the change
+  existed to remove, and the app is not yet in production.
+- **Writes go through a `set_room_holds()` plpgsql function** so delete+insert
+  is one transaction — two PostgREST calls would drop the old holds before
+  discovering the new ones do not fit.
+- **`allocateRooms()` no longer pre-checks occupancy at all.** Keeping the check
+  would have kept the race.
+- `23P01` is caught and surfaced as `RoomClashError` → "those rooms were just
+  taken — refresh the grid".
+
+The original design, for reference:
 
 ```sql
 create extension if not exists btree_gist;
@@ -419,10 +431,12 @@ booking holds the room, so `VACATED`, `CANCELLED` and `CANCELLATION_APPROVED`
 delete it. `ROOM_HOLDING_STATUSES` stops being a rule you remember to apply and
 becomes a table that cannot lie.
 
-Migration path: create the table, backfill from `assigned_room_ids`, switch
-occupancy queries and `allocateRooms()` to it, keep the array column for one
-release as a read-only fallback, then drop it. Catch the exclusion-violation
-error code (`23P01`) and show "that room was just taken" rather than a 500.
+- **Early checkout** now works for free, as predicted: `VACATED` is outside
+  `ROOM_HOLDING_STATUSES`, so `updateBookingStatus` deletes the holds and the
+  room is immediately free.
+- **Still open:** a **no-show** booking holds its room until someone marks it
+  `VACATED` or `CANCELLED`. An auto-release job (or a manager action) is the
+  remaining piece.
 
 ### Timezones
 

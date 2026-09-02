@@ -1,5 +1,28 @@
+import { addMonths } from "date-fns";
 import type { BookingSearchCriteria } from "./booking-search";
 import type { BookingStatus, Profile, Role } from "./types";
+
+/** How far ahead of today a stay may be booked. */
+export const ADVANCE_BOOKING_WINDOW_MONTHS = 1;
+
+/**
+ * Official / dignitary visits are arranged by the institute on its own notice
+ * and are the one category exempt from the advance-booking window.
+ */
+export function isAdvanceWindowExempt(role: Role): boolean {
+  return role === "official";
+}
+
+/**
+ * The latest check-in a role may request, or null when the role is exempt.
+ * Applied to check-in only: a stay that starts inside the window may run past
+ * it. Both the client and the server build the booking schema from this, so
+ * the limit cannot be bypassed by a crafted request.
+ */
+export function latestCheckIn(role: Role, from: Date = new Date()): Date | null {
+  if (isAdvanceWindowExempt(role)) return null;
+  return addMonths(from, ADVANCE_BOOKING_WINDOW_MONTHS);
+}
 
 /** Where a fresh booking enters the approval pipeline, by requester role. */
 export function initialStatusForRole(role: Role): BookingStatus {

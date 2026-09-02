@@ -29,6 +29,17 @@ export interface RoleFormConfig {
   };
   relationship_style: "dropdown" | "free_text";
   relationship_options: string[];
+  /**
+   * Relationships that satisfy the dependency below, e.g. Mother / Father.
+   * Empty disables the rule.
+   */
+  parent_relationships: string[];
+  /**
+   * Relationships that may only be booked when a `parent_relationships` guest
+   * is on the same request — the institute rule that siblings and
+   * grandparents are accommodated only alongside a parent.
+   */
+  dependent_relationships: string[];
   alumni_card: FieldMode;
   /** Informational banner under "Number of rooms" (null = no banner). */
   banner_text: string | null;
@@ -45,6 +56,11 @@ export const GUEST_FIELD_LABELS: Record<keyof RoleFormConfig["guest_fields"], st
 };
 
 const DOUBLE_PREFERENCE_BANNER = "Double shared rooms will get first preference";
+
+/** Students may bring parents freely; these two satisfy the dependency below. */
+const STUDENT_PARENT_RELATIONSHIPS = ["Mother", "Father"];
+/** Accommodated only when a parent is staying too. */
+const STUDENT_DEPENDENT_RELATIONSHIPS = ["Grandmother", "Grandfather", "Siblings"];
 
 /** The spec's defaults, used until a developer saves a custom configuration. */
 export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): RoleFormConfig {
@@ -63,6 +79,8 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
     },
     relationship_style: "dropdown",
     relationship_options: [...STUDENT_RELATIONSHIPS],
+    parent_relationships: [],
+    dependent_relationships: [],
     alumni_card: "hidden",
     banner_text: null,
     custom_fields: [],
@@ -72,6 +90,8 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
       return {
         ...base,
         allowed_guest_house_ids: bageshriOnly.length > 0 ? bageshriOnly : all,
+        parent_relationships: [...STUDENT_PARENT_RELATIONSHIPS],
+        dependent_relationships: [...STUDENT_DEPENDENT_RELATIONSHIPS],
         banner_text: DOUBLE_PREFERENCE_BANNER,
       };
     case "employee":
@@ -106,17 +126,87 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
   }
 }
 
-/** Drop references to deleted guest houses; fall back to "all" if none remain. */
+/**
+ * Drop references to deleted guest houses (falling back to "all" if none
+ * remain) and keep the relationship dependency consistent with the options
+ * actually offered.
+ */
 export function sanitizeFormConfig(
   config: RoleFormConfig,
   guestHouses: GuestHouse[]
 ): RoleFormConfig {
   const existing = new Set(guestHouses.map((g) => g.id));
   const ids = config.allowed_guest_house_ids.filter((id) => existing.has(id));
+
+  // Rows saved before the dependency rule existed have no arrays at all; fall
+  // back to the role's spec defaults so the rule is not silently lost.
+  const defaults = buildDefaultFormConfig(config.role, guestHouses);
+  const offered = new Set(config.relationship_options);
+  const parents = (config.parent_relationships ?? defaults.parent_relationships).filter((r) =>
+    offered.has(r)
+  );
+  // A dependency nobody can satisfy would make those options unselectable, so
+  // the rule lapses if every parent option has been renamed or removed.
+  const dependents =
+    parents.length === 0
+      ? []
+      : (config.dependent_relationships ?? defaults.dependent_relationships).filter(
+          (r) => offered.has(r) && !parents.includes(r)
+        );
+
   return {
     ...config,
     allowed_guest_house_ids: ids.length > 0 ? ids : guestHouses.map((g) => g.id),
+    parent_relationships: dependents.length === 0 ? [] : parents,
+    dependent_relationships: dependents,
   };
+}
+
+/** Join words as "a, b and c" / "a or b". */
+function formatList(items: string[], conjunction: "and" | "or"): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} ${conjunction} ${items[items.length - 1]}`;
+}
+
+/**
+ * The parent-dependency rule: a relationship in `dependent_relationships` may
+ * only appear when some guest on the same request has one from
+ * `parent_relationships`. Returns the error message, or null when the request
+ * is acceptable. Shared by the booking form and the server-side schema.
+ */
+export function parentDependencyError(
+  config: RoleFormConfig,
+  relationships: (string | null | undefined)[]
+): string | null {
+  const { parent_relationships: parents, dependent_relationships: dependents } = config;
+  if (parents.length === 0 || dependents.length === 0) return null;
+
+  const chosen = relationships.map((r) => r?.trim()).filter((r): r is string => Boolean(r));
+  if (!chosen.some((r) => dependents.includes(r))) return null;
+  if (chosen.some((r) => parents.includes(r))) return null;
+
+  return `${formatList(dependents, "and")} can only be accommodated when ${formatList(
+    parents,
+    "or"
+  )} is also staying`;
+}
+
+/** Whether the request already carries a guest who unlocks the dependent options. */
+export function hasQualifyingParent(
+  config: RoleFormConfig,
+  relationships: (string | null | undefined)[]
+): boolean {
+  return relationships.some((r) => r && config.parent_relationships.includes(r.trim()));
+}
+
+/** One-line description of the rule for form hints. Null when the rule is off. */
+export function parentDependencyHint(config: RoleFormConfig): string | null {
+  const { parent_relationships: parents, dependent_relationships: dependents } = config;
+  if (parents.length === 0 || dependents.length === 0) return null;
+  return `${formatList(dependents, "and")} become selectable once a guest on this request is marked ${formatList(
+    parents,
+    "or"
+  )}.`;
 }
 
 /**

@@ -18,6 +18,16 @@ type FormConfigRow = {
 type Insertable<T, Generated extends keyof T> = Omit<T, Generated> &
   Partial<Pick<T, Generated>>;
 
+/** The bookings table as it really is: no `assigned_room_ids` column. */
+type BookingRow = Omit<Booking, "assigned_room_ids">;
+
+/** `during` is a tstzrange, written and read as a `[lower,upper)` literal. */
+type RoomHoldRow = {
+  booking_id: string;
+  room_id: string;
+  during: string;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -40,18 +50,25 @@ export interface Database {
         Relationships: [];
       };
       bookings: {
-        Row: Booking;
+        // `assigned_room_ids` is NOT a column — it is derived from room_holds
+        // on read (migration 3). Omitted here so a stray write cannot compile.
+        Row: BookingRow;
         Insert: Insertable<
-          Booking,
+          BookingRow,
           | "id"
-          | "assigned_room_ids"
           | "rejection_reason"
           | "alumni_id_url"
           | "custom_fields"
           | "created_at"
           | "updated_at"
         >;
-        Update: Partial<Booking>;
+        Update: Partial<BookingRow>;
+        Relationships: [];
+      };
+      room_holds: {
+        Row: RoomHoldRow;
+        Insert: RoomHoldRow;
+        Update: Partial<RoomHoldRow>;
         Relationships: [];
       };
       form_configs: {
@@ -64,7 +81,7 @@ export interface Database {
         Row: BookingGuest;
         Insert: Insertable<
           BookingGuest,
-          "id" | "age" | "relationship" | "id_number" | "id_document_url"
+          "id" | "age" | "relationship" | "id_number" | "id_document_url" | "is_infant"
         >;
         Update: Partial<BookingGuest>;
         Relationships: [];
@@ -77,7 +94,18 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      /** Replaces a booking's room holds transactionally (migration 3). */
+      set_room_holds: {
+        Args: {
+          p_booking_id: string;
+          p_room_ids: string[];
+          p_check_in: string;
+          p_check_out: string;
+        };
+        Returns: undefined;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

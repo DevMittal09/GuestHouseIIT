@@ -14,7 +14,16 @@ export const getCurrentUser = cache(async (): Promise<Profile | null> => {
   const cookieStore = await cookies();
   const userId = cookieStore.get(SESSION_COOKIE)?.value;
   if (!userId) return null;
-  return getStore().getProfile(userId);
+  try {
+    return await getStore().getProfile(userId);
+  } catch {
+    // A session cookie left over from the other backend does not merely miss,
+    // it throws: mock profile ids are strings like "official-admin" and
+    // Postgres rejects them as malformed uuids (22P02). Treating that as
+    // signed-out keeps the login page reachable — otherwise the stale cookie
+    // 500s every route including the one that would let you replace it.
+    return null;
+  }
 });
 
 export async function requireUser(): Promise<Profile> {

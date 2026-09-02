@@ -138,6 +138,27 @@ listing two names would make that feature fail confusingly.
 **Consequence.** Any code assuming exactly two guest houses is a bug. `/manager`
 already guards the zero-guest-house case.
 
+## Number inputs keep a raw string
+
+**Decision.** `components/ui/quantity-input.tsx` stores the typed text,
+including the empty string, and leaves validation to the caller. No component
+may bind a number input to a coerced value.
+
+**Why.** The guest-count box was `value={fields.length}` with
+`onChange={e => setGuestCount(Number(e.target.value) || 1)}`. Selecting the "1"
+and deleting it produced `""`, `Number("")` is `0`, `|| 1` snapped it back to
+`1`, and the box became uneditable — the spinner arrows were the only way to
+change it. Reported directly as bad UX, and it is the same class of bug as the
+native time input.
+
+**Cost.** Validation moves to the caller, so an empty box needs its own error
+path. `countField` in the zod schema reports "Number of rooms is required" for a
+blank field rather than `z.coerce.number()`'s misleading "At least 1 room".
+
+**Detail.** The input is `type="text"` with `inputMode="numeric"` rather than
+`type="number"`, which gives full control of the string and still shows a
+numeric keypad on mobile; explicit −/+ buttons replace the spinner.
+
 ## Custom time picker instead of native inputs
 
 **Decision.** Ban `datetime-local` and `type="time"`; use
@@ -175,6 +196,192 @@ visual consistency; the fix (dark `--primary-foreground`) is documented in
 **Decision.** The `/history` PDF export generates a print-optimized HTML string server-side, opens it in a new window, and triggers the browser's `window.print()` dialog.
 
 **Why.** Generating a true PDF server-side would require heavy dependencies like Puppeteer or `pdfkit`, which adds significant complexity to a Next.js serverless deployment. A styled HTML table printed to PDF by the user's browser provides excellent quality without backend overhead.
+
+## The parent rule is config, not a role check
+
+**Decision.** Express "siblings and grandparents only when a parent is staying"
+as two arrays on `RoleFormConfig` (`parent_relationships`,
+`dependent_relationships`) evaluated by one shared function, rather than an
+`if (role === "student")` branch against hardcoded option names.
+
+**Why.** The relationship options are already editable from the Form Builder. A
+hardcoded rule matching the literal strings "Mother" and "Siblings" would break
+silently the first time an admin renamed one — and breaking silently is the
+failure mode this codebase has been burned by before (see the facet-count bug).
+Making the rule reference the same list the dropdown renders means the two
+cannot disagree.
+
+**Cost.** Two more fields on a jsonb blob, a Form Builder section to edit them,
+and a sanitizer that has to handle three degradation cases: a row saved before
+the feature existed, an option renamed out from under the rule, and every parent
+option removed. The last one deliberately **disables** the rule rather than
+leaving options nobody can select.
+
+**Rejected alternative.** Enforce it only in the UI. The zod schema is built on
+both sides from the same config, so a crafted request would have sailed past a
+client-only check — the same reasoning that made the field modes server-enforced.
+
+## Advance-booking window exempts officials only
+
+**Decision.** Cap check-in at one month ahead for every requester category
+except `official`.
+
+**Why.** The guest houses cannot commit rooms a year out, and an unbounded
+window fills the calendar with speculative bookings that nobody cancels.
+Officials are exempt for the same reason they bypass intermediate review:
+dignitary visits are scheduled by the institute on its own notice, and the
+manager needs to be able to hold rooms for an inspection committee whenever it
+is announced.
+
+**Cost.** A requester who genuinely needs a longer lead time has no path except
+asking the office. Accepted — that conversation was happening anyway, and the
+alternative is a per-role window setting nobody would tune.
+
+**Detail worth keeping.** The cap is on check-in, not check-out: a stay
+beginning inside the window may run past it. And it uses date-fns `addMonths`,
+which clamps 31 January to 28 February; `setMonth` would have rolled it to
+3 March.
+
+## Availability is a third store method, not a reuse of the second
+
+**Decision.** Add `listRoomOccupancy()` returning (room, booking, period)
+segments, rather than making the availability grid call `getOccupiedRoomIds()`
+once per hour or widening that method's return type.
+
+**Why.** `getOccupiedRoomIds` collapses to a set of ids, which is exactly right
+for "can I allocate this room" and useless for drawing when a room is taken.
+Twenty-four calls per day per guest house would have been the alternative.
+
+**Cost.** A third occupancy query to keep in step with `ROOM_HOLDING_STATUSES`
+across both stores. Mitigated by checking the new method's room set against
+`getOccupiedRoomIds` for the same window — if they ever diverge, that is a bug
+in one of them.
+
+**Related decision — hour bucketing lives in `lib/`.** Same reasoning as
+`lib/booking-search.ts`: the interesting behaviour is at the boundaries (does an
+11:00 checkout free the 11 AM cell?), and behaviour that subtle has to be
+reachable by a test rather than buried in a client component.
+
+## Availability shows periods to everyone, names to staff
+
+**Decision.** `/availability` is open to every signed-in role, but
+`requester_name` and `purpose_of_visit` are stripped for anyone who is not
+`gh_manager` or `developer`.
+
+**Why.** The grid exists to answer "is anything free that week", which needs no
+guest identity. Publishing who is in which room to the entire institute would
+have been a privacy regression on a system that already holds ID scans — the
+opposite direction from the DPDP work in the production plan.
+
+**Cost.** The manager's view and a student's view of the same data differ, so
+the filtering has to happen in one place. It does: the store populates the
+fields and the action removes them.
+
+## Room occupancy moved into the database
+
+**Decision.** Replace `bookings.assigned_room_ids uuid[]` with a `room_holds`
+table carrying a `tstzrange` and an exclusion constraint, and drop the array
+column rather than keeping it as a fallback.
+
+**Why.** `allocateRooms()` re-read occupancy and then wrote. That is
+check-then-act: correct for one manager, wrong for two, and wrong for one
+manager who double-clicks. No amount of application code closes it, because the
+gap is between the read and the write. Postgres can make the bad state
+unwritable, so it should.
+
+The bigger win was the invariant that came with it — *a row exists exactly while
+the booking holds the room*. `ROOM_HOLDING_STATUSES` had been a filter that
+every occupancy query, the room grid and the availability grid each had to
+remember to apply. Now releasing rooms is one rule in `updateBookingStatus`, and
+the queries are plain reads.
+
+**Cost.** A third occupancy concept to keep in step across two stores, and the
+mock store has to emulate an exclusion constraint. That emulation is honest,
+though: the mock is single-process and writes synchronously, so a check
+immediately before the write really is atomic there.
+
+**Rejected alternative.** Keep the array column for one release as a read-only
+fallback, as the production plan suggested. Two sources of truth for the same
+fact is exactly what this change existed to remove, and the app is not yet in
+production, so the fallback would only have been something to drift.
+
+**Consequence.** `allocateRooms()` deliberately does **no** pre-flight clash
+check. Adding one back would reintroduce the race it was written to remove;
+losing the race is reported through `RoomClashError` instead.
+
+## Infants are guest rows, not a count (superseded an earlier decision)
+
+**First decision, migration 3 — wrong.** `bookings.infants` as an integer, on
+the reasoning that a guest row wants an Aadhaar number and an ID upload, neither
+of which a two-year-old has, so infants should not be guests at all.
+
+**What that got wrong.** It conflated "needs no ID" with "needs no record". The
+guest house keeps a register, and the office wants the child's **name, age and
+gender** on it like anyone else — a bare count cannot carry that, and a child
+who is physically in the building was invisible to every reviewer view.
+
+**Second decision, migration 4 — current.** `booking_guests.is_infant boolean`.
+Infants are ordinary guest rows; only the **ID number and ID document are
+waived**, and they occupy no bed.
+
+**Why an explicit flag rather than `age < 10`.** The two answer different
+questions. Age is a fact about the guest; `is_infant` is a decision about
+whether they take a bed. Deriving it would also silently waive ID the moment
+someone corrected an age, which is not a thing that should happen implicitly.
+The app does check that a guest marked infant is actually under the limit.
+
+**Consequence to remember.** Capacity maths uses `countBedGuests(guests)`, never
+`guests.length`. Getting that wrong over-books every room by the number of
+infants. A booking with **only** infants is refused — someone has to be on a bed.
+
+## Room capacity is expressed as "with an extra bed"
+
+**Decision.** `ROOM_CAPACITY[type]` is `{ standard, withExtraBed }`, and the UI
+says "sleeps 2, 3 with an extra bed" rather than "3 max".
+
+**Why.** The third occupant of a double is not a property of the room, it is a
+bed somebody has to physically roll in. Naming the field `max` hid that: the
+manager saw a capacity number and no indication that anything had to be
+arranged. `extraBedsNeeded()` now tells them how many, on the allocation screen.
+
+**Cost.** A rename that touched every capacity call site, done while the feature
+was days old rather than after the vocabulary had set.
+
+## Room capacity varies by room type
+
+**Decision.** A double sleeps 2 (3 at a stretch), a single sleeps 1 (2 at a
+stretch), rather than one flat "2, max 3" for every room.
+
+**Why.** The requirement was stated as "2, at most 3 in one room", but the
+schema has always distinguished `single` from `double_sharing`, and putting
+three people in a single room is not what the guest house means by a single.
+Per-type capacity honours the intent for the room type that dominates and stays
+sensible for the other.
+
+**Cost.** One more table to keep in mind. It is one exported constant in
+`lib/occupancy.ts`; flattening it to a uniform 2/3 is a one-line change if the
+Administration Section wants that instead.
+
+## The PDF export is a real PDF
+
+**Decision.** Generate the report client-side with jsPDF + autotable and
+`doc.save()` it, instead of returning styled HTML for the browser to print.
+
+**Why.** The old flow opened a popup, wrote HTML into it and called `print()`,
+which meant popup blockers, a file named like a report but ending `.html`, and a
+"now choose Save as PDF" instruction. It also decoded the document with
+`atob()`, which is Latin-1 — so every em dash in the report arrived mangled.
+"Download as PDF" should download a PDF.
+
+**Cost.** Two client dependencies (~400 KB), dynamically imported so they only
+load for a manager or developer who actually clicks Export. jsPDF's built-in
+fonts are WinAnsi, so `pdfSafe()` maps typographic punctuation to ASCII and
+drops anything outside Latin-1 — a real Unicode font would add ~700 KB for
+content that is romanised in practice.
+
+**Kept.** The server action still re-derives the user, scope and filters from
+the query string and returns *data*, not markup. The export can no more exceed
+what the caller may see than it could before.
 
 ## Booking Lifecycle Expansion
 

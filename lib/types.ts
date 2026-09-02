@@ -72,6 +72,11 @@ export type Booking = {
   check_in: string; // ISO datetime
   check_out: string; // ISO datetime
   rooms_requested: number;
+  /**
+   * Derived from `room_holds` on read — there is no such column. Holds are the
+   * source of truth for which rooms a booking occupies; see
+   * `supabase/migrations/00000000000003_room_holds_and_infants.sql`.
+   */
   assigned_room_ids: string[];
   rejection_reason: string | null;
   alumni_id_url: string | null;
@@ -97,6 +102,12 @@ export type BookingGuest = {
   relationship: string | null;
   id_number: string | null;
   id_document_url: string | null;
+  /**
+   * A child under `INFANT_AGE_LIMIT` sharing a guardian's bed. Their name, age
+   * and gender are still recorded for the register; only the ID is waived, and
+   * they do not occupy a bed for capacity purposes.
+   */
+  is_infant: boolean;
 }
 
 export type BookingLog = {
@@ -116,6 +127,23 @@ export type BookingWithDetails = Booking & {
   guests: BookingGuest[];
   logs: BookingLog[];
   assigned_rooms: Room[];
+}
+
+/**
+ * One room held by one booking over a period, for the public availability
+ * grid. `requester_name` and `purpose_of_visit` are filled by the store but
+ * stripped for viewers who may not see who booked — see
+ * `app/actions/availability.ts`.
+ */
+export type RoomOccupancySegment = {
+  room_id: string;
+  booking_id: string;
+  booking_reference_id: string;
+  status: BookingStatus;
+  check_in: string;
+  check_out: string;
+  requester_name: string | null;
+  purpose_of_visit: string | null;
 }
 
 export interface BookingFilter {
@@ -138,6 +166,26 @@ export interface NewBookingInput {
   alumni_id_url: string | null;
   custom_fields: CustomFieldValue[] | null;
   guests: Omit<BookingGuest, "id" | "booking_id">[];
+}
+
+/**
+ * One room held by one booking for a period. The database enforces that two
+ * holds on the same room cannot overlap, which is what makes double-booking
+ * unrepresentable rather than merely unlikely.
+ */
+export type RoomHold = {
+  booking_id: string;
+  room_id: string;
+  check_in: string;
+  check_out: string;
+}
+
+/** Raised when a hold collides with one written by someone else. */
+export class RoomClashError extends Error {
+  constructor(message = "Those rooms were just taken for these dates — refresh the grid") {
+    super(message);
+    this.name = "RoomClashError";
+  }
 }
 
 export const STATUS_LABELS: Record<BookingStatus, string> = {

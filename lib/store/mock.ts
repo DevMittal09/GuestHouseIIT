@@ -11,7 +11,10 @@ import type {
   NewBookingInput,
   Profile,
   Room,
+  RoomHold,
+  RoomOccupancySegment,
 } from "@/lib/types";
+import { RoomClashError } from "@/lib/types";
 import type { Role, RoomType } from "@/lib/types";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
@@ -24,6 +27,7 @@ import {
   seedGuests,
   seedLogs,
   seedProfiles,
+  seedRoomHolds,
   seedRooms,
 } from "./seed";
 
@@ -35,6 +39,8 @@ interface Db {
   booking_guests: BookingGuest[];
   booking_logs: BookingLog[];
   form_configs: RoleFormConfig[];
+  /** Source of truth for occupancy; `Booking.assigned_room_ids` is derived. */
+  room_holds: RoomHold[];
 }
 
 const DB_PATH = path.join(process.cwd(), ".local-db.json");
@@ -48,6 +54,29 @@ function loadDb(): Db {
     if (!db.form_configs) {
       db.form_configs = [];
       dirty = true;
+    }
+    if (!db.room_holds) {
+      // Same backfill as migration 3: rebuild holds from the old array field,
+      // for the statuses that actually hold a room.
+      db.room_holds = [];
+      for (const b of db.bookings) {
+        if (!ROOM_HOLDING_STATUSES.includes(b.status)) continue;
+        for (const roomId of b.assigned_room_ids ?? []) {
+          db.room_holds.push({
+            booking_id: b.id,
+            room_id: roomId,
+            check_in: b.check_in,
+            check_out: b.check_out,
+          });
+        }
+      }
+      dirty = true;
+    }
+    for (const g of db.booking_guests) {
+      if (g.is_infant === undefined) {
+        g.is_infant = false;
+        dirty = true;
+      }
     }
     for (const seeded of seedProfiles) {
       if (!db.profiles.some((p) => p.id === seeded.id || p.email === seeded.email)) {
@@ -66,17 +95,38 @@ function loadDb(): Db {
     booking_guests: seedGuests,
     booking_logs: seedLogs,
     form_configs: [],
+    room_holds: seedRoomHolds,
   };
   saveDb(db);
   return db;
 }
 
-function saveDb(db: Db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+/** Strict overlap, the same rule the database's `&&` on a `[)` range applies. */
+function holdOverlaps(hold: RoomHold, from: string, to: string): boolean {
+  return hold.check_in < to && hold.check_out > from;
 }
 
-function overlaps(b: Booking, checkIn: string, checkOut: string): boolean {
-  return b.check_in < checkOut && b.check_out > checkIn;
+/**
+ * The mock's stand-in for the `room_holds_no_overlap` exclusion constraint.
+ * Node is single-threaded and `saveDb` writes synchronously, so a check
+ * immediately before the write is genuinely atomic here — unlike the old
+ * check-then-act against Postgres.
+ */
+function assertNoClash(db: Db, bookingId: string, roomIds: string[], from: string, to: string) {
+  const clash = db.room_holds.find(
+    (h) =>
+      h.booking_id !== bookingId && roomIds.includes(h.room_id) && holdOverlaps(h, from, to)
+  );
+  if (clash) {
+    const room = db.rooms.find((r) => r.id === clash.room_id);
+    throw new RoomClashError(
+      `Room ${room?.room_number ?? clash.room_id} was just taken for these dates — refresh the grid`
+    );
+  }
+}
+
+function saveDb(db: Db) {
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 }
 
 export class MockStore implements DataStore {
@@ -143,15 +193,21 @@ export class MockStore implements DataStore {
   }
 
   private hydrate(db: Db, b: Booking): BookingWithDetails {
+    // Holds are the source of truth; any `assigned_room_ids` left on an old
+    // stored booking is ignored so the two cannot drift.
+    const assignedRoomIds = db.room_holds
+      .filter((h) => h.booking_id === b.id)
+      .map((h) => h.room_id);
     return {
       ...b,
+      assigned_room_ids: assignedRoomIds,
       requester: db.profiles.find((p) => p.id === b.user_id)!,
       guest_house: db.guest_houses.find((g) => g.id === b.guest_house_id)!,
       guests: db.booking_guests.filter((g) => g.booking_id === b.id),
       logs: db.booking_logs
         .filter((l) => l.booking_id === b.id)
         .sort((a, c) => a.timestamp.localeCompare(c.timestamp)),
-      assigned_rooms: b.assigned_room_ids
+      assigned_rooms: assignedRoomIds
         .map((id) => db.rooms.find((r) => r.id === id))
         .filter((r): r is Room => Boolean(r)),
     };
@@ -199,10 +255,30 @@ export class MockStore implements DataStore {
     const db = loadDb();
     const b = db.bookings.find((x) => x.id === id);
     if (!b) throw new Error("Booking not found");
+
+    // Rooms first: a clash must abort before the status moves, so a failed
+    // allocation leaves the booking exactly as it was.
+    if (update.assigned_room_ids !== undefined) {
+      assertNoClash(db, id, update.assigned_room_ids, b.check_in, b.check_out);
+      db.room_holds = db.room_holds.filter((h) => h.booking_id !== id);
+      for (const roomId of update.assigned_room_ids) {
+        db.room_holds.push({
+          booking_id: id,
+          room_id: roomId,
+          check_in: b.check_in,
+          check_out: b.check_out,
+        });
+      }
+    }
+
     const previous = b.status;
     b.status = update.status;
     if (update.rejection_reason !== undefined) b.rejection_reason = update.rejection_reason;
-    if (update.assigned_room_ids !== undefined) b.assigned_room_ids = update.assigned_room_ids;
+    // A hold exists exactly while the booking holds the room, so leaving
+    // ROOM_HOLDING_STATUSES releases the rooms with no caller involvement.
+    if (!ROOM_HOLDING_STATUSES.includes(update.status)) {
+      db.room_holds = db.room_holds.filter((h) => h.booking_id !== id);
+    }
     b.updated_at = new Date().toISOString();
     db.booking_logs.push({
       ...log,
@@ -221,15 +297,49 @@ export class MockStore implements DataStore {
     excludeBookingId?: string
   ): Promise<string[]> {
     const db = loadDb();
+    // Straight off the holds — no status filtering needed, because a hold row
+    // only exists while the booking is actually holding the room.
+    const roomsHere = new Set(
+      db.rooms.filter((r) => r.guest_house_id === guestHouseId).map((r) => r.id)
+    );
     const occupied = new Set<string>();
-    for (const b of db.bookings) {
-      if (b.guest_house_id !== guestHouseId) continue;
-      if (!ROOM_HOLDING_STATUSES.includes(b.status)) continue;
-      if (b.id === excludeBookingId) continue;
-      if (!overlaps(b, checkIn, checkOut)) continue;
-      for (const roomId of b.assigned_room_ids) occupied.add(roomId);
+    for (const hold of db.room_holds) {
+      if (hold.booking_id === excludeBookingId) continue;
+      if (!roomsHere.has(hold.room_id)) continue;
+      if (!holdOverlaps(hold, checkIn, checkOut)) continue;
+      occupied.add(hold.room_id);
     }
     return [...occupied];
+  }
+
+  async listRoomOccupancy(
+    guestHouseId: string,
+    from: string,
+    to: string
+  ): Promise<RoomOccupancySegment[]> {
+    const db = loadDb();
+    const roomsHere = new Set(
+      db.rooms.filter((r) => r.guest_house_id === guestHouseId).map((r) => r.id)
+    );
+    const segments: RoomOccupancySegment[] = [];
+    for (const hold of db.room_holds) {
+      if (!roomsHere.has(hold.room_id)) continue;
+      if (!holdOverlaps(hold, from, to)) continue;
+      const b = db.bookings.find((x) => x.id === hold.booking_id);
+      if (!b) continue;
+      const requester = db.profiles.find((p) => p.id === b.user_id);
+      segments.push({
+        room_id: hold.room_id,
+        booking_id: b.id,
+        booking_reference_id: b.booking_reference_id,
+        status: b.status,
+        check_in: hold.check_in,
+        check_out: hold.check_out,
+        requester_name: requester?.full_name ?? null,
+        purpose_of_visit: b.purpose_of_visit,
+      });
+    }
+    return segments;
   }
 
   async saveDocument(file: File, folder: string): Promise<string> {
@@ -353,7 +463,7 @@ export class MockStore implements DataStore {
     const db = loadDb();
     const room = db.rooms.find((r) => r.id === id);
     if (!room) return;
-    if (db.bookings.some((b) => b.assigned_room_ids.includes(id))) {
+    if (db.room_holds.some((h) => h.room_id === id)) {
       throw new Error(`Room ${room.room_number} is assigned to a booking — deactivate it instead`);
     }
     db.rooms = db.rooms.filter((r) => r.id !== id);
@@ -383,6 +493,8 @@ export class MockStore implements DataStore {
     db.bookings = db.bookings.filter((b) => b.id !== id);
     db.booking_guests = db.booking_guests.filter((g) => g.booking_id !== id);
     db.booking_logs = db.booking_logs.filter((l) => l.booking_id !== id);
+    // Matches `on delete cascade` on room_holds.booking_id.
+    db.room_holds = db.room_holds.filter((h) => h.booking_id !== id);
     saveDb(db);
   }
 }

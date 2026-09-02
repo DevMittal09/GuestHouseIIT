@@ -8,185 +8,82 @@ import {
 } from "@/lib/booking-search";
 import { getStore } from "@/lib/store";
 import { ROLE_LABELS, STATUS_LABELS, type BookingWithDetails } from "@/lib/types";
+import { countBedGuests, countInfants } from "@/lib/occupancy";
 import { canExportPdf, historyScope } from "@/lib/workflow";
 import { formatDate, formatDateTime } from "@/lib/format";
 
+/**
+ * One booking, flattened and pre-formatted for the report. The action returns
+ * data, not markup: the PDF itself is drawn in the browser (`lib/report-pdf.ts`)
+ * because a real PDF server-side would mean bundling a headless browser.
+ * Authorization still happens here — the client sends only a query string and
+ * the user, scope and filters are all re-derived below.
+ */
+export interface ReportRow {
+  reference: string;
+  requester: string;
+  category: string;
+  guestHouse: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  rooms: string;
+  status: string;
+  party: string;
+  guestNames: string;
+  purpose: string;
+  submitted: string;
+  remarks: string;
+}
+
+export interface HistoryReport {
+  subtitle: string;
+  filters: string[];
+  generatedAt: string;
+  generatedBy: string;
+  rows: ReportRow[];
+  statusSummary: { label: string; count: number }[];
+  totals: { bookings: number; guests: number; infants: number; roomNights: number };
+  truncated: boolean;
+}
+
 export type PdfExportResult =
-  | { ok: true; pdfBase64: string; filename: string; rows: number }
+  | { ok: true; report: HistoryReport }
   | { ok: false; error: string };
 
-/**
- * Build a simple HTML table suitable for printing/saving as PDF.
- * We generate a self-contained HTML document that the client will
- * render to a Blob via the browser's print-to-PDF or a jsPDF text approach.
- *
- * Since we cannot rely on a headless browser server-side, we generate a
- * well-structured HTML document and convert it to a base64 PDF-like format
- * that the client can download. The actual approach: generate HTML and
- * use the browser to print it.
- */
-function generatePdfHtml(
-  rows: BookingWithDetails[],
-  title: string,
-  dateRange: string
-): string {
-  const tableRows = rows
-    .map(
-      (b) => `
-      <tr>
-        <td>${escapeHtml(b.booking_reference_id)}</td>
-        <td>${escapeHtml(b.requester?.full_name ?? "—")}</td>
-        <td>${escapeHtml(ROLE_LABELS[b.user_role])}</td>
-        <td>${escapeHtml(b.guest_house?.name ?? "—")}</td>
-        <td>${escapeHtml(formatDate(b.check_in))} — ${escapeHtml(formatDate(b.check_out))}</td>
-        <td>${escapeHtml(String(b.rooms_requested))}</td>
-        <td>${escapeHtml(b.assigned_rooms.map((r) => r.room_number).join(", ") || "—")}</td>
-        <td>${escapeHtml(STATUS_LABELS[b.status])}</td>
-        <td>${escapeHtml(b.guests.map((g) => g.name).join(", "))}</td>
-        <td>${escapeHtml(b.purpose_of_visit)}</td>
-        <td>${escapeHtml(formatDateTime(b.created_at))}</td>
-        <td>${escapeHtml(b.rejection_reason ?? "—")}</td>
-      </tr>`
-    )
-    .join("\n");
-
-  // Summary stats
-  const statusSummary = rows.reduce<Record<string, number>>((acc, b) => {
-    const label = STATUS_LABELS[b.status];
-    acc[label] = (acc[label] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const summaryHtml = Object.entries(statusSummary)
-    .map(([label, count]) => `<span style="margin-right:16px;">${label}: <strong>${count}</strong></span>`)
-    .join("");
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>${escapeHtml(title)}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 9px;
-      color: #1a1a1a;
-      padding: 16px;
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 2px solid #f7a600;
-    }
-    .header h1 { font-size: 16px; color: #2b2b2b; }
-    .header .subtitle { font-size: 10px; color: #666; margin-top: 4px; }
-    .header .meta { text-align: right; font-size: 9px; color: #888; }
-    .summary {
-      background: #faf9f7;
-      border: 1px solid #e3e1dc;
-      border-radius: 4px;
-      padding: 8px 12px;
-      margin-bottom: 12px;
-      font-size: 9px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 8px;
-    }
-    th {
-      background: #f7a600;
-      color: #fff;
-      text-align: left;
-      padding: 4px 6px;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-    td {
-      padding: 3px 6px;
-      border-bottom: 1px solid #eee;
-      vertical-align: top;
-      word-break: break-word;
-    }
-    tr:nth-child(even) td { background: #faf9f7; }
-    .footer {
-      margin-top: 16px;
-      padding-top: 8px;
-      border-top: 1px solid #e3e1dc;
-      font-size: 8px;
-      color: #888;
-      text-align: center;
-    }
-    @media print {
-      body { padding: 0; }
-      .no-print { display: none; }
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div>
-      <h1>IIT Palakkad — Guest House Booking Report</h1>
-      <div class="subtitle">${escapeHtml(dateRange)}</div>
-    </div>
-    <div class="meta">
-      Generated: ${escapeHtml(formatDateTime(new Date().toISOString()))}<br/>
-      Total records: ${rows.length}
-    </div>
-  </div>
-
-  <div class="summary">${summaryHtml}</div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Reference</th>
-        <th>Requester</th>
-        <th>Category</th>
-        <th>Guest House</th>
-        <th>Stay Period</th>
-        <th>Rooms</th>
-        <th>Assigned</th>
-        <th>Status</th>
-        <th>Guests</th>
-        <th>Purpose</th>
-        <th>Submitted</th>
-        <th>Remarks</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${tableRows}
-    </tbody>
-  </table>
-
-  <div class="footer">
-    IIT Palakkad Guest House Management System — Confidential
-  </div>
-</body>
-</html>`;
+function nightsBetween(checkIn: string, checkOut: string): number {
+  const ms = new Date(checkOut).getTime() - new Date(checkIn).getTime();
+  return Math.max(1, Math.round(ms / 86_400_000));
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function toReportRow(b: BookingWithDetails): ReportRow {
+  const beds = countBedGuests(b.guests);
+  const infants = countInfants(b.guests);
+  const party = infants > 0 ? `${beds} + ${infants} inf` : String(beds);
+  return {
+    reference: b.booking_reference_id,
+    requester: b.requester?.full_name ?? "—",
+    category: ROLE_LABELS[b.user_role],
+    guestHouse: b.guest_house?.name ?? "—",
+    checkIn: formatDateTime(b.check_in),
+    checkOut: formatDateTime(b.check_out),
+    nights: nightsBetween(b.check_in, b.check_out),
+    rooms:
+      b.assigned_rooms.length > 0
+        ? b.assigned_rooms.map((r) => r.room_number).join(", ")
+        : `${b.rooms_requested} requested`,
+    status: STATUS_LABELS[b.status],
+    party,
+    guestNames: b.guests.map((g) => g.name).join(", "),
+    purpose: b.purpose_of_visit,
+    submitted: formatDate(b.created_at),
+    remarks: b.rejection_reason ?? "",
+  };
 }
 
 /**
- * Export the current log view as a PDF report. The PDF is generated as an
- * HTML document converted to a PDF-printable format. We return the HTML as
- * base64 which the client triggers as a downloadable file.
- *
- * For a true server-side PDF we'd need puppeteer or similar, but for this
- * application we generate a print-optimized HTML file that can be printed
- * to PDF from any browser, OR we use a lightweight approach of generating
- * the document and letting the browser handle it.
+ * Gather the current log view as report data. GH Manager and Developer only.
+ * Capped at HISTORY_EXPORT_LIMIT rows, like the CSV export.
  */
 export async function exportHistoryPdf(queryString: string): Promise<PdfExportResult> {
   try {
@@ -205,35 +102,56 @@ export async function exportHistoryPdf(queryString: string): Promise<PdfExportRe
       limit: HISTORY_EXPORT_LIMIT,
     });
 
-    const { rows } = await getStore().searchBookings(criteria);
+    const { rows, truncated } = await getStore().searchBookings(criteria);
 
-    // Build a human-readable date range label
-    let dateRange = "All bookings";
-    if (params.from && params.to) {
-      dateRange = `Check-in period: ${params.from} to ${params.to}`;
-    } else if (params.from) {
-      dateRange = `Check-in from: ${params.from}`;
-    } else if (params.to) {
-      dateRange = `Check-in until: ${params.to}`;
+    // Human-readable description of what was filtered, for the report header.
+    const filters: string[] = [];
+    if (params.q) filters.push(`Search: "${params.q}"`);
+    if (params.from && params.to) filters.push(`Check-in ${params.from} to ${params.to}`);
+    else if (params.from) filters.push(`Check-in from ${params.from}`);
+    else if (params.to) filters.push(`Check-in until ${params.to}`);
+    if (params.statuses.length > 0) {
+      filters.push(`Status: ${params.statuses.map((s) => STATUS_LABELS[s]).join(", ")}`);
     }
-    if (params.q) {
-      dateRange += ` | Search: "${params.q}"`;
+    if (params.guestHouseId) {
+      const gh = rows.find((r) => r.guest_house_id === params.guestHouseId)?.guest_house?.name;
+      if (gh) filters.push(`Guest house: ${gh}`);
+    }
+    if (params.userRole) filters.push(`Category: ${ROLE_LABELS[params.userRole]}`);
+    if (params.actor === "me") filters.push("Handled by me");
+    if (filters.length === 0) filters.push("No filters — every booking in scope");
+
+    const counts = new Map<string, number>();
+    for (const b of rows) {
+      const label = STATUS_LABELS[b.status];
+      counts.set(label, (counts.get(label) ?? 0) + 1);
     }
 
-    const title = "Guest House Booking Report";
-    const html = generatePdfHtml(rows, title, dateRange);
-
-    // Encode the HTML as base64 to send to the client.
-    // The client will create a Blob and trigger download as an .html file
-    // that the user can print to PDF, OR we can use a proper approach.
-    const pdfBase64 = Buffer.from(html, "utf-8").toString("base64");
-
-    const stamp = new Date().toISOString().slice(0, 10);
     return {
       ok: true,
-      pdfBase64,
-      filename: `guest-house-report-${stamp}.html`,
-      rows: rows.length,
+      report: {
+        subtitle: scope.label,
+        filters,
+        generatedAt: formatDateTime(new Date().toISOString()),
+        generatedBy: `${user.full_name} (${ROLE_LABELS[user.role]})`,
+        rows: rows.map(toReportRow),
+        statusSummary: [...counts.entries()]
+          .map(([label, count]) => ({ label, count }))
+          .sort((a, b) => b.count - a.count),
+        totals: {
+          bookings: rows.length,
+          guests: rows.reduce((n, b) => n + countBedGuests(b.guests), 0),
+          infants: rows.reduce((n, b) => n + countInfants(b.guests), 0),
+          roomNights: rows.reduce(
+            (n, b) =>
+              n +
+              nightsBetween(b.check_in, b.check_out) *
+                Math.max(b.assigned_rooms.length, b.rooms_requested),
+            0
+          ),
+        },
+        truncated,
+      },
     };
   } catch (e) {
     console.error("exportHistoryPdf failed", e);

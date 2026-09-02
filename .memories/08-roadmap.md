@@ -53,8 +53,11 @@ Vitest fits the stack. Until then, the ad-hoc `npx tsx` approach in
 ## 6. Features the Administration Section will likely ask for next
 
 - **Booking modification** — currently a booking can be cancelled and resubmitted
-  but not edited.
-- **Manager reassignment of rooms** after approval.
+  but not edited. Note that `room_holds.during` is built from the booking's
+  dates, so any feature that changes dates must rewrite the holds through
+  `set_room_holds()` (and may now legitimately fail on a clash).
+- **Manager reassignment of rooms** after approval. `set_room_holds()` already
+  replaces a booking's holds transactionally, so this is mostly UI.
 - **Bulk room creation** — adding 20 rooms one at a time is tedious.
 - **Attachments on rejection** so reviewers can explain with a document.
 - **Per-guest-house managers.** The `gh_manager` role currently sees every guest

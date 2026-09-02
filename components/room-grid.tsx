@@ -9,6 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TimeSelect } from "@/components/ui/time-select";
 import { toDatetimeLocal } from "@/lib/format";
+import {
+  allocationCapacityError,
+  capacityOf,
+  countBedGuests,
+  describeCapacity,
+  describeParty,
+  extraBedsNeeded,
+} from "@/lib/occupancy";
 import { cn } from "@/lib/utils";
 import type { BookingWithDetails, Room } from "@/lib/types";
 
@@ -103,6 +111,13 @@ export function RoomGrid({
   const doubles = rooms.filter((r) => r.room_type === "double_sharing");
   const singles = rooms.filter((r) => r.room_type === "single");
 
+  // Infants share with their guardians, so only the others need a bed.
+  const bedGuests = countBedGuests(booking.guests);
+  const selectedRooms = rooms.filter((r) => selected.has(r.id));
+  const selectedCapacity = capacityOf(selectedRooms);
+  const capacityProblem =
+    selected.size > 0 ? allocationCapacityError(bedGuests, selectedRooms) : null;
+
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -155,23 +170,66 @@ export function RoomGrid({
         {loading && <span className="text-muted-foreground">Loading occupancy…</span>}
       </div>
 
-      <RoomSection title="Double Sharing" rooms={doubles} occupied={occupied} selected={selected} onToggle={toggle} />
-      <RoomSection title="Single" rooms={singles} occupied={occupied} selected={selected} onToggle={toggle} />
+      <RoomSection
+        title={`Double Sharing — ${describeCapacity("double_sharing")}`}
+        rooms={doubles}
+        occupied={occupied}
+        selected={selected}
+        onToggle={toggle}
+      />
+      <RoomSection
+        title={`Single — ${describeCapacity("single")}`}
+        rooms={singles}
+        occupied={occupied}
+        selected={selected}
+        onToggle={toggle}
+      />
 
-      <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 p-3">
-        <p className="text-sm">
-          Selected <span className="font-semibold">{selected.size}</span> of{" "}
-          <span className="font-semibold">{booking.rooms_requested}</span> requested room(s)
-          {selected.size > 0 && (
-            <span className="text-muted-foreground">
-              {" "}
-              — {rooms.filter((r) => selected.has(r.id)).map((r) => r.room_number).join(", ")}
-            </span>
-          )}
-        </p>
-        <Button onClick={confirm} disabled={isPending || selected.size === 0}>
-          {isPending ? "Allocating…" : "Confirm & Allocate"}
-        </Button>
+      <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-1 text-sm">
+            <p>
+              Selected <span className="font-semibold">{selected.size}</span> of{" "}
+              <span className="font-semibold">{booking.rooms_requested}</span> requested room(s)
+              {selected.size > 0 && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  — {selectedRooms.map((r) => r.room_number).join(", ")}
+                </span>
+              )}
+            </p>
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">{describeParty(booking.guests)}</span>
+              {selected.size > 0 && (
+                <>
+                  {" "}
+                  · selection sleeps {selectedCapacity.standard}
+                  {selectedCapacity.withExtraBed > selectedCapacity.standard && (
+                    <>
+                      , {selectedCapacity.withExtraBed} with{" "}
+                      {selectedCapacity.withExtraBed - selectedCapacity.standard} extra bed
+                      {selectedCapacity.withExtraBed - selectedCapacity.standard === 1 ? "" : "s"}
+                    </>
+                  )}
+                  {extraBedsNeeded(bedGuests, selected.size) > 0 && !capacityProblem && (
+                    <span className="text-foreground">
+                      {" "}
+                      — {extraBedsNeeded(bedGuests, selected.size)} extra bed
+                      {extraBedsNeeded(bedGuests, selected.size) === 1 ? "" : "s"} required
+                    </span>
+                  )}
+                </>
+              )}
+            </p>
+          </div>
+          <Button
+            onClick={confirm}
+            disabled={isPending || selected.size === 0 || capacityProblem !== null}
+          >
+            {isPending ? "Allocating…" : "Confirm & Allocate"}
+          </Button>
+        </div>
+        {capacityProblem && <p className="text-sm text-destructive">{capacityProblem}</p>}
       </div>
     </div>
   );
@@ -207,7 +265,7 @@ function RoomSection({
               title={
                 isOccupied
                   ? `${room.room_number} — occupied for the selected dates`
-                  : room.room_number
+                  : `${room.room_number} — ${describeCapacity(room.room_type)}`
               }
               className={cn(
                 "flex h-12 items-center justify-center rounded-md border text-xs font-semibold text-white transition-transform",

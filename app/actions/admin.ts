@@ -41,6 +41,8 @@ const formConfigSchema = z.object({
   }),
   relationship_style: z.enum(["dropdown", "free_text"]),
   relationship_options: z.array(z.string().trim().min(1)).max(30),
+  parent_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
+  dependent_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
   alumni_card: fieldMode,
   banner_text: z.string().trim().max(200).nullable(),
   custom_fields: z
@@ -74,6 +76,27 @@ export async function saveRoleFormConfig(config: RoleFormConfig): Promise<Action
       parsed.data.relationship_options.length === 0
     ) {
       return { ok: false, error: "The relationship dropdown needs at least one option" };
+    }
+    // A dependency the requester cannot satisfy would make those options
+    // permanently unselectable.
+    if (parsed.data.dependent_relationships.length > 0 && parsed.data.parent_relationships.length === 0) {
+      return {
+        ok: false,
+        error: "Pick at least one relationship that unlocks the restricted ones",
+      };
+    }
+    const offered = new Set(parsed.data.relationship_options);
+    const stray = [...parsed.data.parent_relationships, ...parsed.data.dependent_relationships].find(
+      (r) => !offered.has(r)
+    );
+    if (stray) {
+      return { ok: false, error: `“${stray}” is not one of the relationship dropdown options` };
+    }
+    const overlap = parsed.data.parent_relationships.find((r) =>
+      parsed.data.dependent_relationships.includes(r)
+    );
+    if (overlap) {
+      return { ok: false, error: `“${overlap}” cannot both unlock and be restricted` };
     }
     await getStore().saveFormConfig(parsed.data);
     return done();

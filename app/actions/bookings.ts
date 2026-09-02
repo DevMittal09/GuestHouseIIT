@@ -8,7 +8,8 @@ import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import { OFFICIAL_EMAIL_WHITELIST } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import type { BookingGuest, BookingStatus, CustomFieldValue, Gender } from "@/lib/types";
-import { REQUESTER_ROLES } from "@/lib/types";
+import { REQUESTER_ROLES, RoomClashError } from "@/lib/types";
+import { allocationCapacityError, countBedGuests } from "@/lib/occupancy";
 import { canReview, initialStatusForRole, nextStatusOnApprove } from "@/lib/workflow";
 
 export type ActionResult =
@@ -91,7 +92,8 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       }
     }
 
-    // Per-guest ID documents.
+    // Per-guest ID documents. Infants are exempt: they are on the register by
+    // name and age, but an under-10 has no ID to upload.
     const guests: Omit<BookingGuest, "id" | "booking_id">[] = [];
     for (let i = 0; i < payload.guests.length; i++) {
       const g = payload.guests[i];
@@ -101,7 +103,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         const fileError = validFile(file);
         if (fileError) return { ok: false, error: fileError };
         documentUrl = await store.saveDocument(file, "guest-ids");
-      } else if (config.guest_fields.id_document === "required") {
+      } else if (config.guest_fields.id_document === "required" && !g.is_infant) {
         return { ok: false, error: `ID document upload is required for guest ${i + 1}` };
       }
       guests.push({
@@ -109,8 +111,9 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         age: g.age ?? null,
         gender: (g.gender as Gender | undefined) ?? "other",
         relationship: g.relationship ?? null,
-        id_number: g.id_number ?? null,
+        id_number: g.is_infant ? null : (g.id_number ?? null),
         id_document_url: documentUrl,
+        is_infant: g.is_infant,
       });
     }
 
@@ -222,24 +225,19 @@ export async function allocateRooms(bookingId: string, roomIds: string[]): Promi
       return { ok: false, error: "Selected rooms do not belong to this guest house" };
     }
 
-    // Re-check clashes at confirm time to avoid double allocation.
-    const occupied = new Set(
-      await store.getOccupiedRoomIds(
-        booking.guest_house_id,
-        booking.check_in,
-        booking.check_out,
-        booking.id
-      )
+    // Do the picked rooms actually sleep the party? Infants share with their
+    // guardians, so they need no bed and are excluded from the head count.
+    const selectedRooms = roomIds.map((id) => roomsById.get(id)!);
+    const capacityProblem = allocationCapacityError(
+      countBedGuests(booking.guests),
+      selectedRooms
     );
-    const clash = roomIds.find((id) => occupied.has(id));
-    if (clash) {
-      return {
-        ok: false,
-        error: `Room ${roomsById.get(clash)?.room_number} was just booked for these dates — refresh the grid`,
-      };
-    }
+    if (capacityProblem) return { ok: false, error: capacityProblem };
 
-    const roomNumbers = roomIds.map((id) => roomsById.get(id)!.room_number).join(", ");
+    // No pre-flight occupancy check: the room_holds exclusion constraint is
+    // the authority, and checking first would only reintroduce the
+    // check-then-act race this replaced. A loser gets RoomClashError below.
+    const roomNumbers = selectedRooms.map((r) => r.room_number).join(", ");
     await store.updateBookingStatus(
       bookingId,
       { status: "APPROVED", assigned_room_ids: roomIds },
@@ -253,6 +251,7 @@ export async function allocateRooms(bookingId: string, roomIds: string[]): Promi
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
+    if (e instanceof RoomClashError) return { ok: false, error: e.message };
     console.error("allocateRooms failed", e);
     return { ok: false, error: "Something went wrong while allocating rooms" };
   }

@@ -7,8 +7,10 @@ import type {
   Profile,
   Role,
   Room,
+  RoomOccupancySegment,
   RoomType,
 } from "@/lib/types";
+import { RoomClashError } from "@/lib/types";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
@@ -36,6 +38,29 @@ type BookingRow = Booking & {
   guests: BookingWithDetails["guests"];
   logs: BookingWithDetails["logs"];
 };
+
+/** A room hold joined to its room, for `hydrate`. */
+type HoldRow = { booking_id: string; room_id: string; rooms: Room | null };
+
+/** A room hold joined to its booking, for `listRoomOccupancy`. */
+type OccupancyRow = {
+  room_id: string;
+  booking_id: string;
+  during: string;
+  bookings: {
+    booking_reference_id: string;
+    status: Booking["status"];
+    check_in: string;
+    check_out: string;
+    purpose_of_visit: string;
+    requester: { full_name: string } | null;
+  } | null;
+};
+
+/** Postgres `[lower,upper)` tstzrange literal. */
+function rangeLiteral(from: string, to: string): string {
+  return `["${new Date(from).toISOString()}","${new Date(to).toISOString()}")`;
+}
 
 export class SupabaseStore implements DataStore {
   private db = getSupabase();
@@ -104,25 +129,45 @@ export class SupabaseStore implements DataStore {
       remarks: "Booking submitted",
     });
     if (logError) throw logError;
-    return booking;
+    // A fresh booking holds nothing until the manager allocates rooms.
+    return { ...booking, assigned_room_ids: [] };
   }
 
+  /**
+   * Fill in `assigned_room_ids` / `assigned_rooms` from `room_holds`. There is
+   * no `assigned_room_ids` column any more — holds are the source of truth, so
+   * the two cannot drift apart.
+   */
   private async hydrate(rows: BookingRow[]): Promise<BookingWithDetails[]> {
-    const roomIds = [...new Set(rows.flatMap((r) => r.assigned_room_ids ?? []))];
-    let roomsById = new Map<string, Room>();
-    if (roomIds.length > 0) {
-      const { data, error } = await this.db.from("rooms").select("*").in("id", roomIds);
-      if (error) throw error;
-      roomsById = new Map(data.map((r) => [r.id, r]));
+    if (rows.length === 0) return [];
+
+    const { data: holds, error: holdError } = await this.db
+      .from("room_holds")
+      .select("booking_id, room_id, rooms(*)")
+      .in(
+        "booking_id",
+        rows.map((r) => r.id)
+      );
+    if (holdError) throw holdError;
+
+    const byBooking = new Map<string, Room[]>();
+    for (const hold of (holds ?? []) as unknown as HoldRow[]) {
+      const list = byBooking.get(hold.booking_id) ?? [];
+      if (hold.rooms) list.push(hold.rooms);
+      byBooking.set(hold.booking_id, list);
     }
-    return rows.map((r) => ({
-      ...r,
-      assigned_room_ids: r.assigned_room_ids ?? [],
-      logs: [...r.logs].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
-      assigned_rooms: (r.assigned_room_ids ?? [])
-        .map((id) => roomsById.get(id))
-        .filter((room): room is Room => Boolean(room)),
-    }));
+
+    return rows.map((r) => {
+      const assignedRooms = (byBooking.get(r.id) ?? []).sort((a, b) =>
+        a.room_number.localeCompare(b.room_number)
+      );
+      return {
+        ...r,
+        assigned_room_ids: assignedRooms.map((room) => room.id),
+        logs: [...r.logs].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
+        assigned_rooms: assignedRooms,
+      };
+    });
   }
 
   async getBooking(id: string): Promise<BookingWithDetails | null> {
@@ -190,21 +235,39 @@ export class SupabaseStore implements DataStore {
   async updateBookingStatus(id: string, update: StatusUpdate, log: NewLogInput): Promise<void> {
     const { data: current, error: readError } = await this.db
       .from("bookings")
-      .select("status")
+      .select("status, check_in, check_out")
       .eq("id", id)
       .single();
     if (readError) throw readError;
+
+    // Rooms first. The exclusion constraint is the only thing here that can
+    // fail on a race, and failing before the status moves leaves the booking
+    // untouched for the caller to retry against fresh occupancy.
+    if (update.assigned_room_ids !== undefined) {
+      await this.setRoomHolds(id, update.assigned_room_ids, current.check_in, current.check_out);
+    }
 
     const { error } = await this.db
       .from("bookings")
       .update({
         status: update.status,
         ...(update.rejection_reason !== undefined && { rejection_reason: update.rejection_reason }),
-        ...(update.assigned_room_ids !== undefined && { assigned_room_ids: update.assigned_room_ids }),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
     if (error) throw error;
+
+    // A hold exists exactly while the booking holds the room, so a status that
+    // is not in ROOM_HOLDING_STATUSES releases the rooms with no caller
+    // involvement — VACATED, CANCELLED, REJECTED and CANCELLATION_APPROVED all
+    // free their rooms here rather than at each call site.
+    if (!ROOM_HOLDING_STATUSES.includes(update.status)) {
+      const { error: releaseError } = await this.db
+        .from("room_holds")
+        .delete()
+        .eq("booking_id", id);
+      if (releaseError) throw releaseError;
+    }
 
     const { error: logError } = await this.db.from("booking_logs").insert({
       booking_id: id,
@@ -217,23 +280,83 @@ export class SupabaseStore implements DataStore {
     if (logError) throw logError;
   }
 
+  /**
+   * Replace a booking's holds in one transaction. Doing the delete and the
+   * insert as two PostgREST calls would drop the old holds before finding out
+   * the new ones do not fit; the `set_room_holds` function rolls both back on
+   * an exclusion violation.
+   */
+  private async setRoomHolds(
+    bookingId: string,
+    roomIds: string[],
+    checkIn: string,
+    checkOut: string
+  ): Promise<void> {
+    const { error } = await this.db.rpc("set_room_holds", {
+      p_booking_id: bookingId,
+      p_room_ids: roomIds,
+      p_check_in: checkIn,
+      p_check_out: checkOut,
+    });
+    if (!error) return;
+    // 23P01 = exclusion_violation: someone else holds one of these rooms.
+    if (error.code === "23P01") throw new RoomClashError();
+    throw error;
+  }
+
   async getOccupiedRoomIds(
     guestHouseId: string,
     checkIn: string,
     checkOut: string,
     excludeBookingId?: string
   ): Promise<string[]> {
+    // Straight off the holds — no status filter needed, because a hold row
+    // only exists while the booking is actually holding the room.
     let query = this.db
-      .from("bookings")
-      .select("id, assigned_room_ids")
-      .eq("guest_house_id", guestHouseId)
-      .in("status", ROOM_HOLDING_STATUSES)
-      .lt("check_in", checkOut)
-      .gt("check_out", checkIn);
-    if (excludeBookingId) query = query.neq("id", excludeBookingId);
+      .from("room_holds")
+      .select("room_id, rooms!inner(guest_house_id)")
+      .eq("rooms.guest_house_id", guestHouseId)
+      .overlaps("during", rangeLiteral(checkIn, checkOut));
+    if (excludeBookingId) query = query.neq("booking_id", excludeBookingId);
     const { data, error } = await query;
     if (error) throw error;
-    return [...new Set(data.flatMap((b) => b.assigned_room_ids ?? []))];
+    return [...new Set((data ?? []).map((h) => h.room_id))];
+  }
+
+  async listRoomOccupancy(
+    guestHouseId: string,
+    from: string,
+    to: string
+  ): Promise<RoomOccupancySegment[]> {
+    const { data, error } = await this.db
+      .from("room_holds")
+      .select(
+        `room_id, booking_id, during,
+         rooms!inner(guest_house_id),
+         bookings!inner(booking_reference_id, status, check_in, check_out, purpose_of_visit,
+                        requester:profiles!bookings_user_id_fkey(full_name))`
+      )
+      .eq("rooms.guest_house_id", guestHouseId)
+      .overlaps("during", rangeLiteral(from, to));
+    if (error) throw error;
+
+    const rows = (data ?? []) as unknown as OccupancyRow[];
+    return rows.flatMap((hold) => {
+      const b = hold.bookings;
+      if (!b) return [];
+      return [
+        {
+          room_id: hold.room_id,
+          booking_id: hold.booking_id,
+          booking_reference_id: b.booking_reference_id,
+          status: b.status,
+          check_in: b.check_in,
+          check_out: b.check_out,
+          requester_name: b.requester?.full_name ?? null,
+          purpose_of_visit: b.purpose_of_visit,
+        },
+      ];
+    });
   }
 
   async saveDocument(file: File, folder: string): Promise<string> {
@@ -368,9 +491,9 @@ export class SupabaseStore implements DataStore {
 
   async deleteRoom(id: string): Promise<void> {
     const { count, error: countError } = await this.db
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .contains("assigned_room_ids", [id]);
+      .from("room_holds")
+      .select("room_id", { count: "exact", head: true })
+      .eq("room_id", id);
     if (countError) throw countError;
     if ((count ?? 0) > 0) {
       throw new Error("This room is assigned to a booking — deactivate it instead");

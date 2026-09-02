@@ -194,33 +194,19 @@ export function BookingHistory({
         toast.error(result.error);
         return;
       }
-      if (result.rows === 0) {
+      const count = result.report.rows.length;
+      if (count === 0) {
         toast.error("No bookings found for the selected range");
         return;
       }
-      // Decode the base64 HTML and open in a print window
-      const html = atob(result.pdfBase64);
-      const printWindow = window.open("", "_blank");
-      if (printWindow) {
-        printWindow.document.write(html);
-        printWindow.document.close();
-        // Small delay to ensure styles load before print dialog
-        setTimeout(() => {
-          printWindow.print();
-        }, 300);
-        toast.success(`Report ready — ${result.rows} booking${result.rows === 1 ? "" : "s"}. Use "Save as PDF" in the print dialog.`);
-      } else {
-        // Popup blocked — fall back to download
-        const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = result.filename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
-        toast.success(`Report downloaded — open the file and print to PDF.`);
+      try {
+        const { downloadHistoryPdf } = await import("@/lib/report-pdf");
+        const stamp = new Date().toISOString().slice(0, 10);
+        await downloadHistoryPdf(result.report, `guest-house-report-${stamp}.pdf`);
+        toast.success(`Downloaded ${count} booking${count === 1 ? "" : "s"} as PDF`);
+      } catch (e) {
+        console.error("PDF generation failed", e);
+        toast.error("Could not generate the PDF");
       }
     });
 

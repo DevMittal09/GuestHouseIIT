@@ -5,6 +5,7 @@ import type {
   GuestHouse,
   Profile,
   Room,
+  RoomHold,
 } from "@/lib/types";
 
 export const GH_BAGESHRI = "gh-bageshri";
@@ -153,14 +154,28 @@ export const seedBookings: Booking[] = [
 ];
 
 export const seedGuests: BookingGuest[] = [
-  { id: "g-1", booking_id: "bk-demo-1", name: "Sunitha Menon", age: 52, gender: "female", relationship: "Mother", id_number: "XXXX-XXXX-4821", id_document_url: null },
-  { id: "g-2", booking_id: "bk-demo-1", name: "Ravi Menon", age: 56, gender: "male", relationship: "Father", id_number: "XXXX-XXXX-9130", id_document_url: null },
-  { id: "g-3", booking_id: "bk-demo-2", name: "Arjun Das", age: 31, gender: "male", relationship: null, id_number: null, id_document_url: null },
-  { id: "g-4", booking_id: "bk-demo-2", name: "Meera Krishnan", age: 28, gender: "female", relationship: null, id_number: null, id_document_url: null },
-  { id: "g-5", booking_id: "bk-demo-3", name: "Vikram Iyer", age: 29, gender: "male", relationship: null, id_number: "XXXX-XXXX-7754", id_document_url: null },
-  { id: "g-6", booking_id: "bk-demo-4", name: "Prof. Ananya Bose", age: 45, gender: "female", relationship: "Research collaborator", id_number: "XXXX-XXXX-2216", id_document_url: null },
-  { id: "g-7", booking_id: "bk-demo-5", name: "NIRF Committee (2 members)", age: null, gender: "male", relationship: null, id_number: null, id_document_url: null },
+  { id: "g-1", booking_id: "bk-demo-1", name: "Sunitha Menon", age: 52, gender: "female", relationship: "Mother", id_number: "XXXX-XXXX-4821", id_document_url: null, is_infant: false },
+  { id: "g-2", booking_id: "bk-demo-1", name: "Ravi Menon", age: 56, gender: "male", relationship: "Father", id_number: "XXXX-XXXX-9130", id_document_url: null, is_infant: false },
+  { id: "g-3", booking_id: "bk-demo-2", name: "Arjun Das", age: 31, gender: "male", relationship: null, id_number: null, id_document_url: null, is_infant: false },
+  { id: "g-4", booking_id: "bk-demo-2", name: "Meera Krishnan", age: 28, gender: "female", relationship: null, id_number: null, id_document_url: null, is_infant: false },
+  { id: "g-5", booking_id: "bk-demo-3", name: "Vikram Iyer", age: 29, gender: "male", relationship: null, id_number: "XXXX-XXXX-7754", id_document_url: null, is_infant: false },
+  { id: "g-6", booking_id: "bk-demo-4", name: "Prof. Ananya Bose", age: 45, gender: "female", relationship: "Research collaborator", id_number: "XXXX-XXXX-2216", id_document_url: null, is_infant: false },
+  { id: "g-7", booking_id: "bk-demo-5", name: "NIRF Committee (2 members)", age: null, gender: "male", relationship: null, id_number: null, id_document_url: null, is_infant: false },
 ];
+
+/**
+ * Occupancy for the seeded bookings. Only bk-demo-5 is approved, so it is the
+ * only one holding rooms — the others are still awaiting approval and reserve
+ * nothing. Derived from the bookings above so the two cannot disagree.
+ */
+export const seedRoomHolds: RoomHold[] = seedBookings.flatMap((b) =>
+  b.assigned_room_ids.map((room_id) => ({
+    booking_id: b.id,
+    room_id,
+    check_in: b.check_in,
+    check_out: b.check_out,
+  }))
+);
 
 export const seedLogs: BookingLog[] = [
   { id: "l-1", booking_id: "bk-demo-1", action_by: "student-anjali", action_by_name: "Anjali Menon", previous_status: null, new_status: "PENDING_WARDEN", remarks: "Booking submitted", timestamp: iso(-1, 9) },

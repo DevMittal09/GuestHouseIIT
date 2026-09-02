@@ -27,6 +27,7 @@ app/
     dashboard/             requester's own bookings
     book/                  the booking form
     warden/  fa/  iar/     reviewer queues (one component, three scopings)
+    availability/          read-only room availability grid (every role)
     history/               booking history (requesters) / approval log (all roles)
     manager/               room allocation console
     admin/                 developer superadmin console
@@ -110,6 +111,29 @@ bypassed by a crafted request. Custom-field answers are snapshotted onto the
 booking together with their label, so a reviewer still sees the original question
 text after an admin later edits the form.
 
+#### Relationship dependencies
+
+The config also carries a *relationship dependency*, which is how the institute
+rule "siblings and grandparents only when a parent is staying" is expressed
+without hardcoding a role check:
+
+- `parent_relationships` — options that satisfy the dependency (Mother, Father);
+- `dependent_relationships` — options gated behind it (Grandmother,
+  Grandfather, Siblings).
+
+Both default to the student spec and are empty for every other role. The rule is
+evaluated by one function, `parentDependencyError()`, called from the booking
+form (which greys out the gated `<option>`s) and from the zod schema (which
+actually enforces it, per-guest, server-side).
+
+> **Trap.** A developer can rename the relationship options from the Form
+> Builder. `sanitizeFormConfig` therefore intersects both arrays with the
+> options actually offered, and **drops the rule entirely if no parent option
+> survives** — otherwise the gated options would be permanently unselectable
+> with nothing in the UI explaining why. It also backfills both arrays from the
+> spec defaults when a saved row predates the feature, so existing student
+> configs pick the rule up rather than silently losing it.
+
 ## The approval workflow
 
 `lib/workflow.ts` is the single source of truth.
@@ -124,6 +148,11 @@ text after an admin later edits the form.
 
 Rules encoded there:
 
+- Check-in must fall within **one month** of today (`latestCheckIn`).
+  `isAdvanceWindowExempt()` exempts **`official` only** — dignitary visits are
+  arranged on the institute's own notice, and the same exemption is why they
+  bypass intermediate review. The cap applies to check-in, not check-out: a stay
+  that starts inside the window may run past it.
 - An intermediate approval always forwards to `PENDING_GH_MANAGER`.
 - The manager does **not** approve through the generic review action. Approval
   happens via `allocateRooms()`, which assigns rooms and sets `APPROVED` in one
@@ -160,12 +189,84 @@ queries and the room grid use this instead of checking just `APPROVED`.
 occupied, blue selected — grouped into double-sharing and single rooms, with a
 date/time selector that re-queries occupancy live.
 
-Occupancy is computed as: room ids held by bookings in **`ROOM_HOLDING_STATUSES`**
-(`APPROVED`, `OCCUPIED`, `CANCELLATION_REQUESTED`) in the same guest house whose
-window overlaps. Overlap is strict —
-`check_in < other_check_out && check_out > other_check_in` — so a checkout and a
-same-instant check-in do **not** clash. `allocateRooms()` re-checks for clashes at
-confirm time, so two managers acting simultaneously cannot double-book a room.
+### Occupancy is a database constraint, not a code path
+
+`room_holds` holds one row per (booking, room) with a `tstzrange` period and an
+**exclusion constraint** that refuses two overlapping holds on the same room.
+See [04-database.md](04-database.md#room_holds--occupancy-the-database-can-enforce)
+for the DDL.
+
+The old design read occupancy, decided there was no clash, then wrote — a
+check-then-act race that a single manager almost never loses and two managers
+eventually do. `allocateRooms()` now does **no pre-flight occupancy check at
+all**: checking first would only reintroduce the race. It writes, and the loser
+of a race gets `RoomClashError` telling them to refresh the grid.
+
+The invariant is *a hold row exists exactly while the booking holds the room*,
+which collapses a lot of incidental complexity:
+
+- occupancy queries are a plain read of `room_holds`, with no status filter;
+- `updateBookingStatus` deletes holds whenever the new status leaves
+  `ROOM_HOLDING_STATUSES`, so releasing rooms is one rule in one place rather
+  than something each transition has to remember;
+- `Booking.assigned_room_ids` is **derived from holds on read** — the column is
+  gone, so the two cannot disagree.
+
+`during` is half-open `[check_in, check_out)`, which is exactly the strict
+overlap the app always applied: a checkout and a same-instant check-in do
+**not** clash.
+
+### Capacity
+
+`lib/occupancy.ts` owns how many people fit. A double sleeps 2 on its own beds
+and 3 once an extra bed is rolled in; a single sleeps 1, or 2. The field is
+named `withExtraBed` rather than `max` deliberately — the third occupant is not
+a property of the room, it is a bed somebody has to arrange, and
+`extraBedsNeeded()` puts that number in front of the manager at allocation time.
+
+**Infants** — under 10, sharing a guardian's bed — are guest rows carrying
+`is_infant`. They are on the register with their name, age and gender like
+anyone else; what is waived is the ID. Because they occupy no bed, every
+capacity calculation counts `countBedGuests(guests)` rather than
+`guests.length`.
+
+It is checked twice because two different things are known at the two moments:
+`requestedRoomsError()` at submission, when only a room *count* exists, and
+`allocationCapacityError()` at allocation, when the manager has picked actual
+rooms with actual types. The booking form adds a third, softer check — it will
+not let you add more guests than the rooms you picked can sleep.
+
+## Room availability (`/availability`)
+
+The manager's grid answers "which rooms can I give *this* booking". Requesters
+had no way to ask the prior question — "is anything free that week?" — so
+`/availability` is a read-only view of the same occupancy data, open to **every
+signed-in role**. It is the only route with no role gate.
+
+The chart is a time × room matrix for one chosen day: 24 hours down the Y axis,
+room numbers across the X, red where a room is held and blank where it is free,
+with a per-room list of booking periods underneath.
+
+Three things are worth knowing:
+
+- **A third store method, not a reuse of the second.** `getOccupiedRoomIds`
+  collapses to a set of ids, which loses the periods the chart needs.
+  `listRoomOccupancy(guestHouseId, from, to)` returns one segment per (room,
+  booking) instead, over the same statuses and the same strict overlap. The two
+  must agree; they are checked against each other rather than assumed.
+- **The bucketing is a pure function in `lib/availability.ts`, not component
+  code.** `bucketOccupancyByHour()` decides which of a day's 24 hours each
+  booking holds. Putting it in `lib/` follows the same reasoning as
+  `lib/booking-search.ts`: the boundary behaviour is where the bugs are, so it
+  has to be reachable by a test. A stay checking out at 11:00 releases the 11 AM
+  hour, and a back-to-back booking starting at that instant picks it up — the
+  same half-open semantics as allocation.
+- **Identity is stripped per viewer, in the action.** `getDayAvailability`
+  returns `requester_name` and `purpose_of_visit` only to `gh_manager` and
+  `developer`; everyone else sees periods, reference ids and statuses. A student
+  checking availability has no business seeing who is in room B-204. The store
+  populates the fields and the action removes them, so the filtering happens in
+  exactly one place.
 
 ## Archive search & history
 

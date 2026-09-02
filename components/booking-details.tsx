@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
+import { describeParty } from "@/lib/occupancy";
 import { ROLE_LABELS, type BookingWithDetails } from "@/lib/types";
 
 function isPdf(url: string) {
@@ -62,6 +63,7 @@ export function BookingDetails({
         <Field label="Check-in" value={formatDateTime(booking.check_in)} />
         <Field label="Check-out" value={formatDateTime(booking.check_out)} />
         <Field label="Rooms requested" value={String(booking.rooms_requested)} />
+        <Field label="Party size" value={describeParty(booking.guests)} />
         {booking.assigned_rooms.length > 0 && (
           <Field
             label="Assigned rooms"
@@ -108,16 +110,31 @@ export function BookingDetails({
             <TableBody>
               {booking.guests.map((g) => (
                 <TableRow key={g.id}>
-                  <TableCell className="font-medium">{g.name}</TableCell>
+                  <TableCell className="font-medium">
+                    {g.name}
+                    {g.is_infant && (
+                      <Badge variant="secondary" className="ml-2 align-middle">
+                        Infant
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell>{g.age ?? "—"}</TableCell>
                   <TableCell className="capitalize">{g.gender}</TableCell>
                   <TableCell>{g.relationship ?? "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{g.id_number ?? "—"}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {g.is_infant ? (
+                      <span className="font-sans text-muted-foreground">Not required</span>
+                    ) : (
+                      (g.id_number ?? "—")
+                    )}
+                  </TableCell>
                   <TableCell>
                     {g.id_document_url ? (
                       <a href={g.id_document_url} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-4">
                         View
                       </a>
+                    ) : g.is_infant ? (
+                      <span className="text-muted-foreground">Not required</span>
                     ) : (
                       "—"
                     )}

@@ -12,9 +12,10 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 | `guest_houses` | `name` (free-form, unique) and `total_rooms` (recounted from active rooms). |
 | `rooms` | `guest_house_id`, `room_number`, `room_type`, `is_active`. Unique per (guest house, room number). |
 | `bookings` | The core record — see below. |
-| `booking_guests` | One row per guest: name, age, gender, relationship, id number, `id_document_url`. |
+| `booking_guests` | One row per guest: name, age, gender, relationship, id number, `id_document_url`, `is_infant`. |
 | `booking_logs` | Append-only audit trail of status changes. |
 | `form_configs` | One row per requester role: `role` (PK), `config` jsonb, `updated_at`. |
+| `room_holds` | Which room each booking occupies, and when. See below — this is the interesting one. |
 
 ### `bookings` columns worth knowing
 
@@ -22,10 +23,58 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 - `user_role` — the requester's role *at submission time*, snapshotted so later
   role changes do not rewrite history.
 - `status` — see enum below.
-- `assigned_room_ids uuid[]` — filled by `allocateRooms()`.
 - `rejection_reason`, `alumni_id_url`.
 - `custom_fields jsonb` — snapshot of admin-defined field answers, each with its
   `label` preserved so reviewers see the original question text.
+
+> **There is no `assigned_room_ids` column.** It was dropped in migration 3.
+> `Booking.assigned_room_ids` still exists in the domain type but is **derived
+> from `room_holds`** during hydration in both stores.
+
+## `room_holds` — occupancy the database can enforce
+
+```sql
+create table public.room_holds (
+  booking_id uuid not null references bookings (id) on delete cascade,
+  room_id    uuid not null references rooms (id) on delete cascade,
+  during     tstzrange not null,          -- [check_in, check_out)
+  primary key (booking_id, room_id),
+  constraint room_holds_no_overlap
+    exclude using gist (room_id with =, during with &&)
+);
+```
+
+Needs the `btree_gist` extension (the migration creates it).
+
+**Why it exists.** `allocateRooms()` used to read occupancy, decide there was no
+clash, and then write — a check-then-act race. One manager almost never loses
+it; two managers, or one double-click, can write two holds on the same room. The
+exclusion constraint makes that write fail instead, with SQLSTATE `23P01`, which
+the store turns into `RoomClashError`.
+
+**The invariant that makes everything else simple:** *a row exists exactly while
+the booking is holding the room.* So:
+
+- occupancy queries are a plain read of `room_holds` — no status filter, because
+  a released booking has no rows;
+- `updateBookingStatus` deletes the holds whenever the new status is not in
+  `ROOM_HOLDING_STATUSES`, so `VACATED` / `CANCELLED` / `REJECTED` /
+  `CANCELLATION_APPROVED` free their rooms in one place rather than at each call
+  site;
+- `deleteRoom` checks `room_holds` rather than scanning bookings.
+
+`during` is **half-open**, which is precisely the app's strict-overlap rule: a
+stay ending at 11:00 and another starting at 11:00 do not collide.
+
+**Writes go through `set_room_holds(booking_id, room_ids, check_in, check_out)`,**
+a plpgsql function added by the same migration. It deletes and re-inserts in one
+transaction; doing that as two PostgREST calls would drop the existing holds
+before discovering the new ones do not fit.
+
+The mock store keeps a `room_holds` array and emulates the constraint in
+`assertNoClash`. Node is single-threaded and `saveDb` writes synchronously, so a
+check immediately before the write is genuinely atomic there — the race the
+constraint exists to stop cannot occur in a single-process JSON store.
 
 ## Enums
 
@@ -44,7 +93,11 @@ room_type:      single, double_sharing
 
 ## Row-level security
 
-RLS is enabled on all seven tables, with 19 policies. The shape:
+RLS is enabled on all eight tables. The shape:
+
+- `room_holds` are **readable by any authenticated user** — `/availability`
+  shows every role which rooms are free — while writes follow
+  `can_access_booking()` on the parent booking.
 
 - `profiles` are readable by authenticated users; you may update your own.
 - Booking visibility flows through `can_access_booking(b)`, a `security definer`
@@ -85,6 +138,30 @@ search is a plain read of `bookings` and would flow through the existing
 scoping that `historyScope()` applies in the app. No new policy is needed, but
 verify the two agree before switching off the service-role key.
 
+## What the availability grid reads
+
+`listRoomOccupancy` selects from **`room_holds`**, inner-joined to `rooms` (to
+filter by guest house) and to `bookings` (for the reference, status and
+requester name), with a `during && [from,to)` overlap. No status filter is
+needed — a hold only exists while the room is actually held. It is fully
+expressible in PostgREST, so unlike archive search nothing is refined in JS.
+
+The requester's name is fetched and then **discarded in the server action** for
+roles that may not see it. That is deliberate: the alternative is two queries
+that can drift. If this ever moves to per-user sessions and RLS, note that the
+grid is read by every role, so the existing `can_access_booking(b)` helper is
+*too narrow* for it — availability needs a policy exposing occupancy without
+booking detail, or it stays a service-role read behind the action's own check.
+
+## `form_configs` shape changes
+
+`form_configs.config` is jsonb, so new keys need no migration. Two were added
+for the relationship dependency: `parent_relationships` and
+`dependent_relationships`, both `string[]`. Rows saved before that are missing
+the keys entirely; `sanitizeFormConfig` backfills them from the spec defaults on
+read, so no data fix-up is required. See
+[02-architecture.md](02-architecture.md) for the degradation rules.
+
 ## Storage
 
 A **private** bucket named `documents` holds Aadhaar/ID scans and alumni cards.
@@ -101,6 +178,17 @@ Migrations are stored in `supabase/migrations/` and should be applied sequential
 Current migrations:
 1. `00000000000001_init.sql` (baseline schema)
 2. `00000000000002_booking_lifecycle.sql` (added `OCCUPIED`, `VACATED`, `CANCELLATION_REQUESTED`, `CANCELLATION_APPROVED`)
+3. `00000000000003_room_holds_and_infants.sql` (`room_holds` + its exclusion
+   constraint and `set_room_holds()`, backfill from `assigned_room_ids`, drops
+   that column, adds `bookings.infants`)
+4. `00000000000004_infant_guests.sql` (adds `booking_guests.is_infant`, drops
+   `bookings.infants` — infants became guest rows so their name and age reach
+   the register; only their ID is waived)
+
+> Migration 3 is **destructive**: it drops `bookings.assigned_room_ids` after
+> backfilling. Its `on conflict do nothing` also swallows any pre-existing
+> double-booking the old race had written, so run the orphan query in the file's
+> comment afterwards to see whether anything was dropped.
 
 When you change the schema you must update, in the same commit:
 

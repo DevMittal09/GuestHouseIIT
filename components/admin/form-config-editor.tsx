@@ -191,21 +191,78 @@ export function FormConfigEditor({
             </NativeSelect>
           </div>
           {config.relationship_style === "dropdown" && (
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Relationship dropdown options (one per line)</Label>
-              <Textarea
-                rows={4}
-                value={config.relationship_options.join("\n")}
-                onChange={(e) =>
-                  update({
-                    relationship_options: e.target.value
+            <>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Relationship dropdown options (one per line)</Label>
+                <Textarea
+                  rows={4}
+                  value={config.relationship_options.join("\n")}
+                  onChange={(e) => {
+                    const options = e.target.value
                       .split("\n")
                       .map((s) => s.trim())
-                      .filter(Boolean),
-                  })
-                }
-              />
-            </div>
+                      .filter(Boolean);
+                    // Keep the dependency rule pointing at options that exist.
+                    const offered = new Set(options);
+                    update({
+                      relationship_options: options,
+                      parent_relationships: config.parent_relationships.filter((r) =>
+                        offered.has(r)
+                      ),
+                      dependent_relationships: config.dependent_relationships.filter((r) =>
+                        offered.has(r)
+                      ),
+                    });
+                  }}
+                />
+              </div>
+              <div className="space-y-3 sm:col-span-2 lg:col-span-3">
+                <div>
+                  <Label>Restricted relationships</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Options that stay locked on the booking form until one of the unlocking
+                    relationships below is chosen for another guest — the rule that siblings and
+                    grandparents are accommodated only when a parent is also staying. Leave both
+                    empty to allow every option freely.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <RelationshipPicker
+                    title="Unlocking (e.g. Mother, Father)"
+                    options={config.relationship_options}
+                    selected={config.parent_relationships}
+                    disabledOptions={config.dependent_relationships}
+                    onToggle={(option, checked) =>
+                      update({
+                        parent_relationships: checked
+                          ? [...config.parent_relationships, option]
+                          : config.parent_relationships.filter((r) => r !== option),
+                      })
+                    }
+                  />
+                  <RelationshipPicker
+                    title="Restricted (e.g. Siblings, grandparents)"
+                    options={config.relationship_options}
+                    selected={config.dependent_relationships}
+                    disabledOptions={config.parent_relationships}
+                    onToggle={(option, checked) =>
+                      update({
+                        dependent_relationships: checked
+                          ? [...config.dependent_relationships, option]
+                          : config.dependent_relationships.filter((r) => r !== option),
+                      })
+                    }
+                  />
+                </div>
+                {config.dependent_relationships.length > 0 &&
+                  config.parent_relationships.length === 0 && (
+                    <p className="text-sm text-destructive">
+                      Pick at least one unlocking relationship, or the restricted ones can never be
+                      selected.
+                    </p>
+                  )}
+              </div>
+            </>
           )}
           <div className="space-y-2">
             <Label>Alumni ID card upload</Label>
@@ -307,10 +364,64 @@ export function FormConfigEditor({
         <Button variant="outline" onClick={reset} disabled={isPending}>
           Reset to spec defaults
         </Button>
-        <Button onClick={save} disabled={isPending || config.allowed_guest_house_ids.length === 0}>
+        <Button
+          onClick={save}
+          disabled={
+            isPending ||
+            config.allowed_guest_house_ids.length === 0 ||
+            (config.dependent_relationships.length > 0 &&
+              config.parent_relationships.length === 0)
+          }
+        >
           {isPending ? "Saving…" : `Save ${ROLE_LABELS[role]} form`}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** Checkbox list over the relationship options, for one side of the rule. */
+function RelationshipPicker({
+  title,
+  options,
+  selected,
+  disabledOptions,
+  onToggle,
+}: {
+  title: string;
+  options: string[];
+  selected: string[];
+  disabledOptions: string[];
+  onToggle: (option: string, checked: boolean) => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <p className="text-sm font-medium">{title}</p>
+      {options.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Add dropdown options first.</p>
+      ) : (
+        options.map((option) => {
+          const taken = disabledOptions.includes(option);
+          return (
+            <label
+              key={option}
+              className={cn(
+                "flex items-center gap-2 text-sm",
+                taken && "cursor-not-allowed opacity-50"
+              )}
+            >
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={selected.includes(option)}
+                disabled={taken}
+                onChange={(e) => onToggle(option, e.target.checked)}
+              />
+              {option}
+            </label>
+          );
+        })
+      )}
     </div>
   );
 }

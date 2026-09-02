@@ -6,9 +6,11 @@ import { useEffect } from "react";
 /**
  * Routes where polling is more harmful than useful: the approval log is
  * historical data behind a search, so re-fetching it every few seconds only
- * re-runs a full archive scan and churns the results under the reader.
+ * re-runs a full archive scan and churns the results under the reader. The
+ * availability grid fetches its own data client-side and has a Refresh button,
+ * so a server refresh would do nothing but work.
  */
-const NO_POLL_PREFIXES = ["/history"];
+const NO_POLL_PREFIXES = ["/history", "/availability"];
 
 /**
  * Poll-based "realtime": re-fetches server data so reviewer queues and

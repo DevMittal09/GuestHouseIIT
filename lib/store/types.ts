@@ -8,6 +8,7 @@ import type {
   NewBookingInput,
   Profile,
   Room,
+  RoomOccupancySegment,
   RoomType,
 } from "@/lib/types";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
@@ -56,6 +57,19 @@ export interface DataStore {
     checkOut: string,
     excludeBookingId?: string
   ): Promise<string[]>;
+
+  /**
+   * One segment per (room, booking) held over [from, to), for the availability
+   * grid. Same ROOM_HOLDING_STATUSES and strict-overlap rule as
+   * `getOccupiedRoomIds`, but it keeps the period and the booking so the grid
+   * can draw when each room is taken. Identifying fields are populated here
+   * and stripped per viewer in `app/actions/availability.ts`.
+   */
+  listRoomOccupancy(
+    guestHouseId: string,
+    from: string,
+    to: string
+  ): Promise<RoomOccupancySegment[]>;
 
   /** Persist an uploaded document, returning a browser-loadable URL. */
   saveDocument(file: File, folder: string): Promise<string>;

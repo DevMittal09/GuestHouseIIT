@@ -63,7 +63,8 @@ port 3000 before launching your own.
 
 **Any new data operation must be added to the interface and to both
 implementations**, or one backend silently breaks. `searchBookings` is the
-newest one — see the approval-log section below for the trap it already hit.
+trap-laden one — see the approval-log section below. `listRoomOccupancy`
+(availability grid) is the newest.
 
 - The mock store rewrites the whole JSON file on every mutation. It is
   single-process and not concurrency-safe — fine for dev, never for production.
@@ -111,6 +112,18 @@ Reviewer roles: `warden` (scoped to `profile.hostel_name`), `faculty_advisor`
 - Rejection requires a non-empty reason everywhere (enforced server-side).
 - `official` bookings are restricted to `OFFICIAL_EMAIL_WHITELIST` in
   `lib/routes.ts`, and are highlighted + sorted to the top of the manager queue.
+
+### Advance-booking window
+
+Check-in must be within **one month** of today. `latestCheckIn(role)` in
+`lib/workflow.ts` is the single source of truth; `isAdvanceWindowExempt()`
+exempts **`official` only**, because dignitary visits are arranged on the
+institute's own notice. The limit applies to `check_in` only — a stay that
+starts inside the window may run past it.
+
+`bookingPayloadSchema` applies it on client *and* server, so the `max` on the
+date input is convenience, not enforcement. Use `addMonths` (date-fns), never
+`setMonth`, or 31 Jan + 1 month lands on 3 March.
 
 ### Post-approval lifecycle
 
@@ -164,6 +177,24 @@ shared rooms will get first preference" banner; employee and official use
 free-text relationship; **club and official hide the relationship field**;
 club ID uploads are optional; alumni ID card is mandatory.
 
+### The parent-dependency rule (students)
+
+Institute policy: a student may book for parents freely, but **siblings and
+grandparents only when a parent is staying too**. This is config, not a
+hardcoded role check — `parent_relationships` (Mother, Father) and
+`dependent_relationships` (Grandmother, Grandfather, Siblings) on
+`RoleFormConfig`, defaulted for `student` and empty for everyone else.
+
+- `parentDependencyError(config, relationships)` in `lib/form-config.ts` is the
+  one matcher, called by the booking form *and* `bookingPayloadSchema`. The
+  form greys out the restricted `<option>`s until a parent is chosen; the zod
+  `superRefine` is what actually enforces it.
+- `sanitizeFormConfig` backfills both arrays from the spec defaults when a
+  saved row predates the rule, drops entries no longer in
+  `relationship_options`, and **lapses the rule entirely if no parent option
+  survives a rename** — otherwise those options would be permanently
+  unselectable. Keep that guard if you touch it.
+
 ## Booking history & archive search (`/history`)
 
 Accessible to **all roles**. Requesters see their own booking history (nav:
@@ -192,24 +223,85 @@ Everything" toggle and the "My decision" column are shown.
 - `exportHistoryCsv` (`app/actions/history.ts`) takes only a query string and
   re-derives user + scope + params server-side. Keep it that way.
 - `exportHistoryPdf` (`app/actions/history-pdf.ts`) — GH Manager and Developer
-  only. Generates a print-optimized HTML report with IIT Palakkad branding,
-  opened in a new window + `window.print()`. Date presets: Today / Last 7 days /
+  only. Returns **report data, not markup**; `lib/report-pdf.ts` draws a real
+  A4-landscape PDF client-side with jsPDF (dynamically imported) and saves it.
+  Keep the scope re-derivation server-side. Date presets: Today / Last 7 days /
   This month / Current filters.
 - `/history` is excluded from the 5 s polling (`NO_POLL_PREFIXES` in
   `components/auto-refresh.tsx`).
 
-## Room allocation
+## Room allocation — occupancy is a DB constraint
+
+`room_holds` (migration 3) holds one row per (booking, room) with a `tstzrange`
+`during` and an **exclusion constraint** that refuses two overlapping holds on
+the same room. This replaced a check-then-act race in `allocateRooms()`.
+
+**The invariant: a hold row exists exactly while the booking holds the room.**
+
+- `Booking.assigned_room_ids` is **derived from holds on read** — there is no
+  such column. Both stores fill it in during hydration.
+- `updateBookingStatus` deletes holds when the new status is outside
+  `ROOM_HOLDING_STATUSES`, so releasing rooms is one rule, not a per-transition
+  chore. Occupancy queries need **no** status filter.
+- `allocateRooms()` deliberately does **no pre-flight clash check** — that would
+  reintroduce the race. It writes; the loser gets `RoomClashError` (`23P01`).
+- Supabase writes go through the `set_room_holds()` plpgsql function so
+  delete+insert is one transaction. The mock store emulates the constraint in
+  `assertNoClash` (safe there: single process, synchronous write).
+- `during` is half-open `[check_in, check_out)`, so a checkout and a
+  same-instant check-in do **not** clash.
 
 `components/room-grid.tsx` — cinema-style grid, green available / red occupied /
-blue selected, grouped into double-sharing and single. A date+time selector
-re-queries occupancy live.
+blue selected, grouped into double-sharing and single, with a live date+time
+selector.
 
-Occupancy = room ids held by bookings in **`ROOM_HOLDING_STATUSES`** (`APPROVED`,
-`OCCUPIED`, `CANCELLATION_REQUESTED`) in the same guest house whose
-`[check_in, check_out)` overlaps the window. Overlap is strict
-(`check_in < other_check_out && check_out > other_check_in`), so a checkout and a
-same-instant check-in do **not** clash. `allocateRooms()` re-checks clashes at
-confirm time to avoid two managers double-booking a room.
+### Capacity and infants — `lib/occupancy.ts`
+
+| Room type | Own beds | With one extra bed |
+| --- | --- | --- |
+| `double_sharing` | 2 | 3 |
+| `single` | 1 | 2 |
+
+The third occupant of a double is on a **rolled-in extra bed** — hence the field
+name `withExtraBed` (not `max`) and `extraBedsNeeded()`, which tells the manager
+how many to arrange. Say so in UI copy; it is a thing someone has to physically do.
+
+**Infants** (under `INFANT_AGE_LIMIT` = 10) are **guest rows carrying
+`is_infant`**, not a count. Their name, age and gender still go on the register;
+only the **ID number and ID document are waived**, and they occupy no bed.
+
+> **Always measure capacity with `countBedGuests(guests)`, never
+> `guests.length`.** Getting that wrong over-books every room by the number of
+> infants. A booking of infants only is refused — someone must be on a bed.
+
+Checked twice, because different things are known: `requestedRoomsError()` at
+submission (only a room count exists) and `allocationCapacityError()` at
+allocation (actual room types known). The booking form additionally caps how
+many guests can be added to what the chosen rooms sleep, plus infants — so
+picking rooms first, then guests, is the intended order.
+
+## Room availability grid (`/availability`)
+
+Open to **every signed-in role** — the one route with no role gate. Pick a
+guest house and a date; the chart puts the 24 hours of that day down the Y axis
+and room numbers across the X axis, red where a room is held and blank where it
+is free, with a room-by-room list of booking periods underneath.
+
+- `listRoomOccupancy(guestHouseId, from, to)` (both stores) returns one segment
+  per **(room, booking)** using the same `ROOM_HOLDING_STATUSES` + strict
+  overlap as `getOccupiedRoomIds`. The two must agree — a throwaway parity
+  check caught nothing, but that is exactly where the backends drift.
+- **Hour bucketing lives in `lib/availability.ts`, not the component**
+  (`bucketOccupancyByHour`), so the boundary behaviour is testable: a stay
+  checking out at 11:00 releases the 11 AM hour, and a same-instant
+  back-to-back booking picks it up.
+- `getDayAvailability` (`app/actions/availability.ts`) **strips
+  `requester_name` and `purpose_of_visit` unless the caller is `gh_manager` or
+  `developer`**. Everyone else gets periods and reference ids only. Do not
+  widen this without a reason — the grid answers "is this room free", which
+  needs no guest identity.
+- Excluded from the 5 s polling: the component fetches client-side and has its
+  own Refresh button.
 
 ## Developer console (`/admin`, role `developer`)
 
@@ -261,6 +353,13 @@ site deliberately. Fix by setting `--primary-foreground` to a dark brown.
   via `value` (`"HH:mm"`, 24h) + `onChange`. Its exported `parseTime` /
   `toTimeValue` handle the 12 AM = `00:00` and 12 PM = `12:00` traps — verified
   with throwaway tests, so re-test them if you touch the conversion.
+- **Never bind a number input to a coerced value.**
+  `value={n} onChange={e => setN(Number(e.target.value) || 1)}` makes the box
+  impossible to clear: `Number("")` is 0, `|| 1` snaps it back, and only the
+  spinner arrows work. Use `components/ui/quantity-input.tsx`, which keeps the
+  raw string (empty included) and leaves validation to the caller. In the schema
+  that is `countField`, which reports "…is required" for a blank box instead of
+  `z.coerce.number()`'s misleading "At least 1 room".
 - **shadcn/ui registry changed.** `init` needs `-b radix -p nova --no-monorepo`;
   `-b neutral` is rejected. There is **no `form` component** in this registry —
   hence `components/ui/native-select.tsx` (a styled native `<select>` that works
@@ -291,9 +390,11 @@ something to look at.
 
 ## Supabase setup
 
-Two migration files applied sequentially:
+Three migration files applied sequentially:
 1. `supabase/migrations/00000000000001_init.sql` (tables, enums, RLS, private `documents` bucket)
 2. `supabase/migrations/00000000000002_booking_lifecycle.sql` (adds `OCCUPIED`, `VACATED`, `CANCELLATION_REQUESTED`, `CANCELLATION_APPROVED` to `booking_status`)
+3. `supabase/migrations/00000000000003_room_holds_and_infants.sql` (`room_holds` + exclusion constraint + `set_room_holds()`, backfills and **drops** `bookings.assigned_room_ids`, adds `bookings.infants`). Destructive — read its header comment before running it against real data.
+4. `supabase/migrations/00000000000004_infant_guests.sql` (adds `booking_guests.is_infant`, **drops** `bookings.infants`)
 
 Then `supabase/seed.sql`. Locally: `supabase db reset`.
 Hosted: paste both migrations + seed into the SQL editor. Fill `.env.local` and
