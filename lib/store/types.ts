@@ -49,7 +49,7 @@ export interface DataStore {
   searchBookings(criteria: BookingSearchCriteria): Promise<BookingSearchResult>;
   updateBookingStatus(id: string, update: StatusUpdate, log: NewLogInput): Promise<void>;
 
-  /** Room ids held by APPROVED bookings overlapping [checkIn, checkOut). */
+  /** Room ids held by bookings in ROOM_HOLDING_STATUSES overlapping [checkIn, checkOut). */
   getOccupiedRoomIds(
     guestHouseId: string,
     checkIn: string,
