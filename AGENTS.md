@@ -112,6 +112,25 @@ Reviewer roles: `warden` (scoped to `profile.hostel_name`), `faculty_advisor`
 - `official` bookings are restricted to `OFFICIAL_EMAIL_WHITELIST` in
   `lib/routes.ts`, and are highlighted + sorted to the top of the manager queue.
 
+### Post-approval lifecycle
+
+After approval, the GH Manager controls the booking through:
+
+```
+APPROVED → OCCUPIED → VACATED
+         ↘ CANCELLATION_REQUESTED → CANCELLATION_APPROVED
+         ↘ CANCELLED (direct, by manager)
+```
+
+`ROOM_HOLDING_STATUSES` = `APPROVED`, `OCCUPIED`, `CANCELLATION_REQUESTED` —
+only these keep rooms reserved. Occupancy queries and the room grid use this
+const, not a hardcoded `APPROVED` check.
+
+Cancellation flow: a requester can request cancellation of an approved/occupied
+booking (`requestCancellation` action, requires reason). The manager reviews via
+`approveCancellation` / `rejectCancellation`. Direct cancellation pre-approval
+uses the existing `cancelBooking` action.
+
 ## The form-config system (most important non-obvious part)
 
 Booking forms are **data-driven, not hardcoded**. `lib/form-config.ts` defines
@@ -145,11 +164,17 @@ shared rooms will get first preference" banner; employee and official use
 free-text relationship; **club and official hide the relationship field**;
 club ID uploads are optional; alumni ID card is mandatory.
 
-## Approval log & archive search (`/history`)
+## Booking history & archive search (`/history`)
 
-One page for every approver role (`HISTORY_ROLES` in `lib/workflow.ts`): warden,
-faculty advisor, IAR cell, GH manager, developer. Default view is the reviewer's
-own decisions; toggling "Show" turns it into a searchable archive.
+Accessible to **all roles**. Requesters see their own booking history (nav:
+"Booking History"); approvers see an approval log + searchable archive (nav:
+"Approval Log"). `historyScope(user)` controls what each role sees:
+- Requesters are scoped to `userId` (own bookings only).
+- Reviewers are scoped to their jurisdiction (hostel/club/alumni).
+- GH Manager and Developer see everything.
+
+`isOwnBookings` flag on the scope controls whether the "Handled by me /
+Everything" toggle and the "My decision" column are shown.
 
 - **Matching rules live in `lib/booking-search.ts`, not in the stores.** Both
   stores fetch candidates and call the same `runBookingSearch()`. Add search
@@ -166,6 +191,10 @@ own decisions; toggling "Show" turns it into a searchable archive.
   expressed in PostgREST.
 - `exportHistoryCsv` (`app/actions/history.ts`) takes only a query string and
   re-derives user + scope + params server-side. Keep it that way.
+- `exportHistoryPdf` (`app/actions/history-pdf.ts`) — GH Manager and Developer
+  only. Generates a print-optimized HTML report with IIT Palakkad branding,
+  opened in a new window + `window.print()`. Date presets: Today / Last 7 days /
+  This month / Current filters.
 - `/history` is excluded from the 5 s polling (`NO_POLL_PREFIXES` in
   `components/auto-refresh.tsx`).
 
@@ -175,8 +204,9 @@ own decisions; toggling "Show" turns it into a searchable archive.
 blue selected, grouped into double-sharing and single. A date+time selector
 re-queries occupancy live.
 
-Occupancy = room ids held by **`APPROVED`** bookings in the same guest house
-whose `[check_in, check_out)` overlaps the window. Overlap is strict
+Occupancy = room ids held by bookings in **`ROOM_HOLDING_STATUSES`** (`APPROVED`,
+`OCCUPIED`, `CANCELLATION_REQUESTED`) in the same guest house whose
+`[check_in, check_out)` overlaps the window. Overlap is strict
 (`check_in < other_check_out && check_out > other_check_in`), so a checkout and a
 same-instant check-in do **not** clash. `allocateRooms()` re-checks clashes at
 confirm time to avoid two managers double-booking a room.
@@ -245,6 +275,10 @@ site deliberately. Fix by setting `--primary-foreground` to a dark brown.
   `!.env.example` exception must stay.
 - Domain shapes in `lib/types.ts` are `type` aliases, not `interface`, so
   Supabase's generated `Insert`/`Update` helpers accept them.
+- **Node version.** The system default is Node v18, but Next.js 16 requires
+  `>= 20.9.0`. Load nvm first:
+  `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 20`
+  before running `npm run dev` / `npm run build`.
 
 ## Demo personas
 
@@ -257,10 +291,14 @@ something to look at.
 
 ## Supabase setup
 
-`supabase/migrations/00000000000001_init.sql` (tables, enums, RLS, private
-`documents` bucket) then `supabase/seed.sql`. Locally: `supabase db reset`.
-Hosted: paste both into the SQL editor. Fill `.env.local` and restart the dev
-server; the store switches automatically. See README.md for the full walkthrough.
+Two migration files applied sequentially:
+1. `supabase/migrations/00000000000001_init.sql` (tables, enums, RLS, private `documents` bucket)
+2. `supabase/migrations/00000000000002_booking_lifecycle.sql` (adds `OCCUPIED`, `VACATED`, `CANCELLATION_REQUESTED`, `CANCELLATION_APPROVED` to `booking_status`)
+
+Then `supabase/seed.sql`. Locally: `supabase db reset`.
+Hosted: paste both migrations + seed into the SQL editor. Fill `.env.local` and
+restart the dev server; the store switches automatically. See README.md for the
+full walkthrough.
 
 ## Repo state
 
