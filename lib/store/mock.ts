@@ -41,6 +41,8 @@ interface Db {
   form_configs: RoleFormConfig[];
   /** Source of truth for occupancy; `Booking.assigned_room_ids` is derived. */
   room_holds: RoomHold[];
+  /** Runtime settings, e.g. the developer console password hash. */
+  app_settings?: Record<string, string>;
 }
 
 const DB_PATH = path.join(process.cwd(), ".local-db.json");
@@ -485,6 +487,16 @@ export class MockStore implements DataStore {
   async deleteFormConfig(role: Role): Promise<void> {
     const db = loadDb();
     db.form_configs = db.form_configs.filter((c) => c.role !== role);
+    saveDb(db);
+  }
+
+  async getSetting(key: string): Promise<string | null> {
+    return loadDb().app_settings?.[key] ?? null;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    const db = loadDb();
+    db.app_settings = { ...(db.app_settings ?? {}), [key]: value };
     saveDb(db);
   }
 

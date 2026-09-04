@@ -84,6 +84,13 @@ require deleting the database.
 
 ### 3.2 Auth is mocked, with exactly one swap point
 
+There is one exception worth knowing: `/admin` sits behind a **console
+password** (`lib/admin-lock.ts`, default `0000`, changeable from Console
+Access). It is enforced inside `requireDeveloper()`, so it guards the admin
+*actions* rather than just hiding the UI. It is a speed bump for demos, **not**
+authentication — identity is still a persona cookie, so anyone can claim to be
+the developer. See §6.
+
 `lib/auth.ts` `getCurrentUser()` reads the `gh_mock_user` cookie (a profile id).
 Login is a persona picker. **No other module contains auth logic**, so replacing
 that one function with institute SSO is the whole production migration.
@@ -267,7 +274,23 @@ can only narrow, never widen. Do not reorder that spread.
 Queue pages poll every 5 s (`components/auto-refresh.tsx`); `/history` and
 `/availability` are excluded via `NO_POLL_PREFIXES`.
 
-## 6. Privacy posture
+## 6. Privacy and access posture
+
+**The developer console password** (`lib/admin-lock.ts`) guards `/admin`:
+
+- default `0000`, changed from the **Console Access** tab;
+- stored as a scrypt hash in `app_settings` (migration 5) — never plaintext,
+  never sent to the client;
+- the unlock is an httpOnly HMAC cookie signed **with the stored hash**, so a
+  password change invalidates every outstanding unlock;
+- checked inside `requireDeveloper()`, so it covers the actions, not just the
+  page;
+- attempts throttled per user in-process (10 per 5 min);
+- a missing `app_settings` table falls back to the default rather than throwing.
+
+> It stops casual poking, nothing more. Identity is still a persona cookie, so
+> anyone can become the developer — the password is a demo guard, and the real
+> fix is item 1 of [08-roadmap.md](08-roadmap.md).
 
 - `/availability` is open to every role, so `getDayAvailability` **strips
   `requester_name` and `purpose_of_visit` unless the caller is `gh_manager` or

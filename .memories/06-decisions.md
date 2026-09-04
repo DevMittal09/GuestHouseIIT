@@ -383,6 +383,37 @@ content that is romanised in practice.
 the query string and returns *data*, not markup. The export can no more exceed
 what the caller may see than it could before.
 
+## A password on the developer console, enforced in the action layer
+
+**Decision.** Gate `/admin` behind a console password (default `0000`,
+changeable in-console), and check it inside `requireDeveloper()` rather than
+only in the layout.
+
+**Why the action layer.** Hiding the console behind a page check would have been
+a five-line change, and worthless: this codebase's own rule is that the UI
+hiding a button is never the security boundary. Every admin mutation already
+funnels through `requireDeveloper()`, so adding the check there means a crafted
+request with a developer persona cookie and no unlock gets nothing.
+
+**Why the unlock cookie is signed with the password hash.** It gives password
+rotation for free — change the password and every outstanding unlock stops
+verifying, with nowhere to track sessions. The alternative, a server-side
+session table, is real infrastructure for a demo guard.
+
+**Why scrypt rather than a plain comparison.** Node ships it, so no dependency,
+and the hash sits in a database the developer console can dump. A stored
+plaintext `0000` would have been a plaintext password in an exportable table.
+
+**What it costs — and what it is not.** Identity is still a persona cookie, so
+anyone can claim to be the developer; this only stops casual poking during a
+demo. It must not be described as securing the console, and it does not shorten
+the real work in [09-production-plan.md](09-production-plan.md) Phase 1. The
+throttle is in-process, so it resets on restart and does not span instances.
+
+**Degradation.** A missing `app_settings` table falls back to the default
+password instead of throwing — the same lesson as the stale session cookie: the
+one page that could fix the problem must not be the page that crashes.
+
 ## Booking Lifecycle Expansion
 
 **Decision.** Added `OCCUPIED` and `VACATED` to the end of the approval pipeline, and shifted cancellation flow to `CANCELLATION_REQUESTED` → `CANCELLATION_APPROVED` for approved bookings.

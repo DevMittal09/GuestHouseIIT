@@ -328,6 +328,27 @@ is free, with a room-by-room list of booking periods underneath.
 - Excluded from the 5 s polling: the component fetches client-side and has its
   own Refresh button.
 
+## Developer console lock
+
+`/admin` sits behind a console password (`lib/admin-lock.ts`). Default **`0000`**
+until a developer sets one from **Console Access**.
+
+- **Enforced in `requireDeveloper()`**, not just the layout — a crafted request
+  with a developer persona cookie but no unlock gets nothing. Keep it that way.
+- Stored as a scrypt hash in `app_settings` (migration 5), never plaintext, and
+  never sent to the client: read it inside a server action and return a verdict.
+- The unlock is an HMAC-signed, httpOnly cookie (`gh_admin_unlock`, 8 h) whose
+  **signing key is the stored hash**, so changing the password invalidates every
+  outstanding unlock for free.
+- A missing `app_settings` table degrades to the default password rather than
+  throwing — otherwise the only page that could fix it would 500.
+- Attempts are throttled per user, in-process (10 per 5 min). It resets on
+  restart and does not span instances; real rate limiting belongs at the edge.
+
+> **This is a speed bump, not authentication.** Identity is still a persona
+> cookie, so anyone can claim to be the developer — the password only stops
+> casual poking during a demo. Do not describe it as securing the console.
+
 ## Developer console (`/admin`, role `developer`)
 
 `app/(portal)/admin/*` + `components/admin/*`, actions in `app/actions/admin.ts`
@@ -420,6 +441,7 @@ Three migration files applied sequentially:
 2. `supabase/migrations/00000000000002_booking_lifecycle.sql` (adds `OCCUPIED`, `VACATED`, `CANCELLATION_REQUESTED`, `CANCELLATION_APPROVED` to `booking_status`)
 3. `supabase/migrations/00000000000003_room_holds_and_infants.sql` (`room_holds` + exclusion constraint + `set_room_holds()`, backfills and **drops** `bookings.assigned_room_ids`, adds `bookings.infants`). Destructive — read its header comment before running it against real data.
 4. `supabase/migrations/00000000000004_infant_guests.sql` (adds `booking_guests.is_infant`, **drops** `bookings.infants`)
+5. `supabase/migrations/00000000000005_app_settings.sql` (`app_settings` key/value table for the developer console password hash; service-role only, no `authenticated` policy)
 
 Then `supabase/seed.sql`. Locally: `supabase db reset`.
 Hosted: paste both migrations + seed into the SQL editor. Fill `.env.local` and

@@ -3,15 +3,34 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import {
+  checkAdminPassword,
+  clearAttempts,
+  grantAdminUnlock,
+  isAdminUnlocked,
+  recordFailedAttempt,
+  revokeAdminUnlock,
+  setAdminPassword,
+  throttleCheck,
+  validatePasswordChoice,
+} from "@/lib/admin-lock";
 import type { RoleFormConfig } from "@/lib/form-config";
 import { getStore } from "@/lib/store";
 import type { BookingStatus, Profile, Role, RoomType } from "@/lib/types";
 import { REQUESTER_ROLES } from "@/lib/types";
 import type { ActionResult } from "./bookings";
 
+/**
+ * Every admin mutation funnels through here, so the console password is
+ * enforced on the **actions**, not merely by hiding the UI. A crafted request
+ * with a developer persona cookie but no unlock still gets nothing.
+ */
 async function requireDeveloper(): Promise<Profile> {
   const user = await requireUser();
   if (user.role !== "developer") throw new Error("Developer access required");
+  if (!(await isAdminUnlocked())) {
+    throw new Error("Developer console is locked — enter the console password again");
+  }
   return user;
 }
 
@@ -22,6 +41,74 @@ function fail(e: unknown): ActionResult {
 function done(): ActionResult {
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+// ---------------------------------------------------------------- console lock
+
+/** Exchange the console password for an unlock cookie. */
+export async function unlockAdminConsole(password: string): Promise<ActionResult> {
+  try {
+    const user = await requireUser();
+    if (user.role !== "developer") return { ok: false, error: "Developer access required" };
+
+    const gate = throttleCheck(user.id);
+    if (!gate.allowed) {
+      return {
+        ok: false,
+        error: `Too many attempts — try again in ${gate.retryInSeconds}s`,
+      };
+    }
+
+    if (!(await checkAdminPassword(password))) {
+      recordFailedAttempt(user.id);
+      return { ok: false, error: "Incorrect console password" };
+    }
+
+    clearAttempts(user.id);
+    await grantAdminUnlock();
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Drop the unlock without switching persona. */
+export async function lockAdminConsole(): Promise<ActionResult> {
+  await revokeAdminUnlock();
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
+ * Change the console password. Requires the current one even though the caller
+ * is already unlocked — an unlocked console left open should not let a passer-by
+ * lock the real developer out.
+ */
+export async function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<ActionResult> {
+  try {
+    await requireDeveloper();
+
+    if (!(await checkAdminPassword(currentPassword))) {
+      return { ok: false, error: "Current password is incorrect" };
+    }
+    const problem = validatePasswordChoice(newPassword);
+    if (problem) return { ok: false, error: problem };
+    if (await checkAdminPassword(newPassword)) {
+      return { ok: false, error: "That is already the current password" };
+    }
+
+    await setAdminPassword(newPassword);
+    // The unlock cookie is signed with the old hash, so it is now invalid —
+    // mint a fresh one so the developer is not thrown out of their own session.
+    await grantAdminUnlock();
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
 }
 
 // ---------------------------------------------------------------- form configs

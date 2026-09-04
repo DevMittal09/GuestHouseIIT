@@ -28,6 +28,13 @@ type RoomHoldRow = {
   during: string;
 };
 
+/** `value` is jsonb; the app stores plain strings in it. */
+type AppSettingRow = {
+  key: string;
+  value: string;
+  updated_at: string;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -69,6 +76,12 @@ export interface Database {
         Row: RoomHoldRow;
         Insert: RoomHoldRow;
         Update: Partial<RoomHoldRow>;
+        Relationships: [];
+      };
+      app_settings: {
+        Row: AppSettingRow;
+        Insert: Insertable<AppSettingRow, "updated_at">;
+        Update: Partial<AppSettingRow>;
         Relationships: [];
       };
       form_configs: {

@@ -16,6 +16,7 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 | `booking_logs` | Append-only audit trail of status changes. |
 | `form_configs` | One row per requester role: `role` (PK), `config` jsonb, `updated_at`. |
 | `room_holds` | Which room each booking occupies, and when. See below — this is the interesting one. |
+| `app_settings` | Runtime key/value. Currently one key: the developer console password hash. **Service-role only — no `authenticated` policy**, because a developer policy would expose the hash to anyone who can set their own role. |
 
 ### `bookings` columns worth knowing
 
@@ -184,6 +185,8 @@ Current migrations:
 4. `00000000000004_infant_guests.sql` (adds `booking_guests.is_infant`, drops
    `bookings.infants` — infants became guest rows so their name and age reach
    the register; only their ID is waived)
+5. `00000000000005_app_settings.sql` (`app_settings` key/value table holding the
+   developer console password hash)
 
 > Migration 3 is **destructive**: it drops `bookings.assigned_room_ids` after
 > backfilling. Its `on conflict do nothing` also swallows any pre-existing

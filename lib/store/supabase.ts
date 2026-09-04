@@ -530,6 +530,23 @@ export class SupabaseStore implements DataStore {
     if (error) throw error;
   }
 
+  async getSetting(key: string): Promise<string | null> {
+    const { data, error } = await this.db
+      .from("app_settings")
+      .select("value")
+      .eq("key", key)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.value ?? null;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    const { error } = await this.db
+      .from("app_settings")
+      .upsert({ key, value, updated_at: new Date().toISOString() });
+    if (error) throw error;
+  }
+
   async deleteBooking(id: string): Promise<void> {
     const { error } = await this.db.from("bookings").delete().eq("id", id);
     if (error) throw error;

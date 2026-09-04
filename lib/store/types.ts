@@ -96,5 +96,13 @@ export interface DataStore {
   saveFormConfig(config: RoleFormConfig): Promise<void>;
   deleteFormConfig(role: Role): Promise<void>;
 
+  /**
+   * Runtime key/value settings (`app_settings`). Holds the developer console
+   * password hash, so values must never be sent to the client — read them
+   * inside a server action and return a verdict, not the value.
+   */
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
+
   deleteBooking(id: string): Promise<void>;
 }
