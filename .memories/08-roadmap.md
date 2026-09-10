@@ -38,13 +38,14 @@ manager's address. Keep the render server-side for the mailed copy;
 `lib/report-pdf.ts` is client-side (jsPDF, dynamically imported), so the mailed
 report needs either a server-side renderer or an HTML table body.
 
-## 3. Push the repository
+## 3. ~~Push the repository~~ ✅ Resolved
 
-`git push` currently fails: the local GitHub identity is **Rizzwan285** while the
-remote is `https://github.com/DevMittal09/GuestHouseIIT.git`, which denies write
-access. This is a credentials issue, not a code issue. Options: add Rizzwan285 as
-a collaborator, use a DevMittal09 personal access token, or push to a repository
-under Rizzwan285. Two commits are ready on `main`.
+`git push` used to fail because the local GitHub identity is **Rizzwan285**
+while the remote is `https://github.com/DevMittal09/GuestHouseIIT.git`. Access
+has since been granted — pushes to `main` succeed as of 10 Sep 2026. If it comes
+back it is still a credentials issue and not a code one: add Rizzwan285 as a
+collaborator, use a DevMittal09 personal access token, or push to a repository
+under Rizzwan285.
 
 ## 4. Automated tests
 

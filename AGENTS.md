@@ -541,6 +541,7 @@ full walkthrough.
 Git history was reset from the create-next-app scaffold and restarted with a
 single initial commit on `main`.
 Remote is `https://github.com/DevMittal09/GuestHouseIIT.git`. The local machine's
-GitHub identity is a **different account**, so `git push` fails with a
-permissions error until that account is added as a collaborator or a
-`DevMittal09` credential is used — this is a credential issue, not a code issue.
+GitHub identity is a different account (`Rizzwan285`), which used to make
+`git push` fail with a permissions error. **That is resolved** — pushes to
+`main` succeed as of 10 Sep 2026. If it returns it is a credential problem, not
+a code one: add the account as a collaborator or use a `DevMittal09` token.
