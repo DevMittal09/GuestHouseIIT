@@ -5,10 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { allocateRooms, getOccupancy } from "@/app/actions/bookings";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { TimeSelect } from "@/components/ui/time-select";
-import { toDatetimeLocal } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import {
   allocationCapacityError,
   capacityOf,
@@ -21,8 +18,13 @@ import { cn } from "@/lib/utils";
 import type { BookingWithDetails, Room } from "@/lib/types";
 
 /**
- * Cinema-style room allocation grid.
- * Green = available · Red = occupied for the selected dates · Blue = selected.
+ * Cinema-style room allocation grid for one booking.
+ * Green = free for this stay · Red = already held · Blue = selected.
+ *
+ * Red rooms are rendered `disabled`, so a room held by another booking for any
+ * part of this stay cannot be picked at all — the exclusion constraint on
+ * `room_holds` is still the authority, but the manager never gets far enough
+ * to hit it.
  */
 export function RoomGrid({
   booking,
@@ -34,14 +36,16 @@ export function RoomGrid({
   onAllocated?: () => void;
 }) {
   const router = useRouter();
-  const [initialInDate, initialInTime] = toDatetimeLocal(booking.check_in).split("T");
-  const [initialOutDate, initialOutTime] = toDatetimeLocal(booking.check_out).split("T");
-  const [inDate, setInDate] = useState(initialInDate);
-  const [inTime, setInTime] = useState(initialInTime);
-  const [outDate, setOutDate] = useState(initialOutDate);
-  const [outTime, setOutTime] = useState(initialOutTime);
-  const checkIn = `${inDate}T${inTime}`;
-  const checkOut = `${outDate}T${outTime}`;
+  // Occupancy is read for the booking's *own* dates and nothing else.
+  //
+  // This used to have its own date/time pickers, which meant the manager could
+  // shift the window, see a room go green, pick it — and allocate a room that
+  // was in fact taken for the actual stay. The write was still safe (the
+  // room_holds exclusion constraint refused it), but the grid was offering
+  // rooms it should never have shown. The rule now is: a room that is held for
+  // any part of this stay is never selectable.
+  const checkIn = booking.check_in;
+  const checkOut = booking.check_out;
   const [occupied, setOccupied] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -49,14 +53,8 @@ export function RoomGrid({
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    if (!inDate || !outDate || new Date(checkOut) <= new Date(checkIn)) return;
     let cancelled = false;
-    getOccupancy(
-      booking.guest_house_id,
-      new Date(checkIn).toISOString(),
-      new Date(checkOut).toISOString(),
-      booking.id
-    )
+    getOccupancy(booking.guest_house_id, checkIn, checkOut, booking.id)
       .then((ids) => {
         if (cancelled) return;
         setOccupied(new Set(ids));
@@ -71,7 +69,7 @@ export function RoomGrid({
     return () => {
       cancelled = true;
     };
-  }, [booking.guest_house_id, booking.id, inDate, outDate, checkIn, checkOut, refreshKey]);
+  }, [booking.guest_house_id, booking.id, checkIn, checkOut, refreshKey]);
 
   const refreshOccupancy = () => {
     setLoading(true);
@@ -120,52 +118,23 @@ export function RoomGrid({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="grid-check-in">View occupancy from</Label>
-          <Input
-            id="grid-check-in"
-            type="date"
-            value={inDate}
-            onChange={(e) => {
-              setInDate(e.target.value);
-              setLoading(true);
-            }}
-          />
-          <TimeSelect
-            label="Occupancy from"
-            value={inTime}
-            onChange={(v) => {
-              setInTime(v);
-              setLoading(true);
-            }}
-          />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 p-3 text-sm">
+        <div>
+          <p className="text-xs tracking-wide text-muted-foreground uppercase">
+            Occupancy for this stay
+          </p>
+          <p className="font-medium">
+            {formatDateTime(checkIn)} → {formatDateTime(checkOut)}
+          </p>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="grid-check-out">until</Label>
-          <Input
-            id="grid-check-out"
-            type="date"
-            value={outDate}
-            onChange={(e) => {
-              setOutDate(e.target.value);
-              setLoading(true);
-            }}
-          />
-          <TimeSelect
-            label="Occupancy until"
-            value={outTime}
-            onChange={(v) => {
-              setOutTime(v);
-              setLoading(true);
-            }}
-          />
-        </div>
+        <Button type="button" variant="outline" size="sm" onClick={refreshOccupancy}>
+          Refresh availability
+        </Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-xs">
         <LegendSwatch className="bg-emerald-500" label="Available" />
-        <LegendSwatch className="bg-red-500" label="Occupied / Booked" />
+        <LegendSwatch className="bg-red-500" label="Already allotted — cannot be picked" />
         <LegendSwatch className="bg-blue-500" label="Selected for this booking" />
         {loading && <span className="text-muted-foreground">Loading occupancy…</span>}
       </div>
@@ -264,7 +233,7 @@ function RoomSection({
               disabled={isOccupied}
               title={
                 isOccupied
-                  ? `${room.room_number} — occupied for the selected dates`
+                  ? `${room.room_number} — already allotted for these dates`
                   : `${room.room_number} — ${describeCapacity(room.room_type)}`
               }
               className={cn(

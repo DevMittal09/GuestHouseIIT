@@ -42,6 +42,7 @@ import {
   type HistoryParams,
 } from "@/lib/booking-search";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import {
   REQUESTER_ROLES,
@@ -186,7 +187,7 @@ export function BookingHistory({
       }
       try {
         const { downloadHistoryPdf } = await import("@/lib/report-pdf");
-        const stamp = new Date().toISOString().slice(0, 10);
+        const stamp = toInstituteDateValue(new Date());
         await downloadHistoryPdf(result.report, `guest-house-report-${stamp}.pdf`);
         toast.success(`Downloaded ${count} booking${count === 1 ? "" : "s"} as PDF`);
       } catch (e) {

@@ -187,6 +187,13 @@ Current migrations:
    the register; only their ID is waived)
 5. `00000000000005_app_settings.sql` (`app_settings` key/value table holding the
    developer console password hash)
+6. `00000000000006_booking_meals.sql` (`bookings.meals` jsonb + a check that all
+   three keys are present and boolean). Additive with a default, so existing
+   bookings read as "no meals requested".
+
+> **Migration 6 must be applied before a booking can be created against
+> Supabase.** The insert names the column, so without it every submission
+> fails. The mock store self-heals instead (`loadDb()` backfills `meals`).
 
 > Migration 3 is **destructive**: it drops `bookings.assigned_room_ids` after
 > backfilling. Its `on conflict do nothing` also swallows any pre-existing
@@ -200,6 +207,18 @@ When you change the schema you must update, in the same commit:
 3. `lib/types.ts` domain shapes,
 4. `lib/store/mock.ts` **and** `lib/store/supabase.ts`,
 5. `supabase/seed.sql` and `lib/store/seed.ts` if demo data is affected.
+
+## One-off repairs — `supabase/repairs/`
+
+Not migrations, never applied automatically, each with a header explaining what
+it is for and how to check it applies to your data.
+
+- `2026-09-10-utc-parsed-bookings.sql` — shifts the bookings that were stored
+  5h30m late by the pre-`lib/tz.ts` `toIso()` running on a UTC host, and
+  rebuilds their `room_holds` through `set_room_holds()` (the dates and the
+  holds must move together or the availability grid disagrees with the
+  booking). Runs in one transaction, so a shift that would collide with another
+  booking aborts the whole thing rather than half-applying.
 
 ## Resetting data
 

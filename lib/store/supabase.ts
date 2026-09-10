@@ -14,6 +14,7 @@ import { RoomClashError } from "@/lib/types";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
+import { normalizeMeals } from "@/lib/meals";
 import { getSupabase } from "@/lib/supabase/client";
 import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
 import type { DataStore, NewLogInput, NewProfileInput, StatusUpdate } from "./types";
@@ -130,7 +131,7 @@ export class SupabaseStore implements DataStore {
     });
     if (logError) throw logError;
     // A fresh booking holds nothing until the manager allocates rooms.
-    return { ...booking, assigned_room_ids: [] };
+    return { ...booking, meals: normalizeMeals(booking.meals), assigned_room_ids: [] };
   }
 
   /**
@@ -163,6 +164,9 @@ export class SupabaseStore implements DataStore {
       );
       return {
         ...r,
+        // Rows written before migration 6 have no `meals`; normalising here
+        // means no consumer downstream needs a null check.
+        meals: normalizeMeals(r.meals),
         assigned_room_ids: assignedRooms.map((room) => room.id),
         logs: [...r.logs].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
         assigned_rooms: assignedRooms,

@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
+import { describeMeals } from "@/lib/meals";
 import { describeParty } from "@/lib/occupancy";
 import { ROLE_LABELS, type BookingWithDetails } from "@/lib/types";
 
@@ -64,6 +65,7 @@ export function BookingDetails({
         <Field label="Check-out" value={formatDateTime(booking.check_out)} />
         <Field label="Rooms requested" value={String(booking.rooms_requested)} />
         <Field label="Party size" value={describeParty(booking.guests)} />
+        <Field label="Meals requested" value={describeMeals(booking.meals)} />
         {booking.assigned_rooms.length > 0 && (
           <Field
             label="Assigned rooms"

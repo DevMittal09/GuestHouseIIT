@@ -33,7 +33,22 @@ shown to every role**, between the role-specific links and the log.
   email whitelist, validates each upload (5 MB; JPG/PNG/WEBP/PDF), stores
   documents, then writes the booking with its guests and initial status.
 
-Guest count is dynamic (1–15) via `useFieldArray`. Uploaded files are held in a
+Two panels sit between the stay details and the guest list:
+
+- **Room availability** (`components/booking-availability.tsx`) — the same
+  hour-by-hour chart as `/availability`, for the guest house and check-in date
+  currently chosen, so a requester is not picking dates blind. It calls the same
+  `getDayAvailability` action, which strips guest identity for non-staff, so it
+  answers *when* rooms are taken and never by whom. The chart itself lives in
+  `components/occupancy-chart.tsx`, shared with `/availability`.
+- **Meals** — breakfast / lunch / dinner checkboxes with serving times, always
+  optional, summarised in a line under them. Stored as `bookings.meals`; see
+  `lib/meals.ts`.
+
+Guest count is dynamic (1–15) via `useFieldArray`. Each guest row past the first
+carries a **Remove guest N** button — a real destructive-styled button with a
+trash icon above the fold of the fieldset, not the ghost text it used to be,
+which read as a label rather than a control. Uploaded files are held in a
 `Map` keyed by field-array row id, outside react-hook-form, because `File`
 objects do not belong in form state.
 
@@ -104,23 +119,44 @@ Scoping is applied in the store query *and* re-checked in `canReview()` inside
 - Tabs per guest house, built from the database (not hardcoded); the
   zero-guest-house case is handled explicitly.
 - Official bookings are highlighted and sorted to the top.
-- Selecting a booking opens the allocation grid: pick a window, see live
-  occupancy, click rooms, then **Confirm & Allocate** → `allocateRooms()` assigns
-  rooms and flips the booking to `APPROVED` atomically, re-checking clashes.
+- Selecting a booking opens the allocation grid, which shows occupancy **for
+  that booking's own dates only**, then **Confirm & Allocate** → `allocateRooms()`
+  assigns rooms and flips the booking to `APPROVED` atomically, re-checking
+  clashes. The grid used to have its own date/time pickers; shifting them turned
+  rooms green that were actually taken for the stay, so the manager was being
+  offered rooms already allotted to someone else. Occupied rooms are rendered
+  `disabled` and cannot be picked at all.
 - Rejection requires a reason.
 - The allocation panel shows the party size, what the selected rooms sleep, and
   refuses to confirm while the selection is too small
   (`allocationCapacityError`). Infants are excluded from the head count.
+- **Stays are grouped by phase, not status**, into three tables — **Current
+  occupants** (check-in passed, check-out not reached), **Awaiting check-out**
+  (past check-out, never marked Vacated, still holding rooms) and **Upcoming
+  stays**. One combined "Upcoming & current stays" table used to mix them, so a
+  booking for next week sat beside a guest in the building and read as occupied.
+  `stayPhase()` in `lib/workflow.ts` is the rule.
 - **Post-approval lifecycle controls**: the manager can mark a booking as
   `OCCUPIED` (checked in), `VACATED` (checked out), or `CANCELLED`. These
-  transitions use `updateLifecycleStatus` in `app/actions/bookings.ts`, and the
+  transitions use `updateBookingLifecycle` in `app/actions/bookings.ts`, and the
   store releases the room holds automatically for any status outside
   `ROOM_HOLDING_STATUSES`.
+  - **`OCCUPIED` is refused before check-in** (`occupancyNotStartedError`),
+    server-side, with the button disabled from the same function and labelled
+    "Available from check-in". Occupancy is a fact recorded at the desk, not
+    something a date implies.
+  - The two lifecycle buttons carry **distinct colours** — green for "Mark as
+    Occupied", indigo for "Mark as Vacated" — because they are what the manager
+    clicks all day and telling them apart at a glance matters more than matching
+    the palette. Vacated was previously the neutral secondary button.
+- Each stays row shows the booking's **meals** alongside its rooms.
 - **Cancellation request review**: when a requester submits a cancellation
   request for an approved/occupied booking, the manager can approve or reject it
   via `approveCancellation` / `rejectCancellation` in `app/actions/bookings.ts`.
 
-Queue pages poll every 5 s via `components/auto-refresh.tsx`.
+Queue pages poll every 5 s via `components/auto-refresh.tsx`, which
+`components/tab-session-guard.tsx` suspends when the tab's claimed identity no
+longer matches the signed-in user.
 
 ## Room availability grid (`/availability`)
 
@@ -288,7 +324,9 @@ Layout and tabs in `app/(portal)/admin/layout.tsx`; all actions in
 | `lib/booking-search.ts` | Archive search: criteria, query tokenizer, pure matchers,
 faceting, sorting, paging, query-string parsing. Shared by both stores. |
 | `lib/routes.ts` | Role landing pages, official email whitelist. |
-| `lib/format.ts` | Date/time formatting helpers. |
+| `lib/format.ts` | Date/time formatting helpers, all delegating to `lib/tz.ts`. |
+| `lib/tz.ts` | The institute timezone (`Asia/Kolkata`): `instituteIso` to parse a typed wall-clock time, `formatInstitute*` / `instituteHour` / `instituteDayBounds` to read instants back. Nothing else may parse a naked datetime string or format without a zone. |
+| `lib/meals.ts` | Meal keys, labels, serving times, `normalizeMeals` (the only reader), `describeMeals`. |
 
 ## UI primitives
 

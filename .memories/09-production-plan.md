@@ -438,12 +438,40 @@ becomes a table that cannot lie.
   `VACATED` or `CANCELLED`. An auto-release job (or a manager action) is the
   remaining piece.
 
-### Timezones
+### ~~Timezones~~ ✅ Done — and it had already happened
 
-Confirm `check_in` and `check_out` are `timestamptz` and that every render is
-pinned to `Asia/Kolkata`. A guest house booking that shifts by 5:30 hours because
-a server runs UTC is the kind of bug that gets a system switched off. Add it to
-`lib/format.ts` and test it with `TZ=UTC npm run build`.
+This section predicted the bug almost word for word:
+
+> A guest house booking that shifts by 5:30 hours because a server runs UTC is
+> the kind of bug that gets a system switched off.
+
+It did. Once the app ran on a UTC host, `toIso()` —
+`new Date("2026-09-15T12:00").toISOString()` — resolved the form's wall-clock
+string in the **process** timezone, stored 12:00 as `12:00Z`, and the Guest
+House Manager read it back as **5:30 PM**; a 10:00 check-out became 3:30 PM.
+It was reported from the manager's console, which is exactly the "switched off"
+path this warned about.
+
+Fixed on 2026-09-10 by `lib/tz.ts`, which pins the app to `Asia/Kolkata`:
+`instituteIso()` parses a typed time, `formatInstitute*` / `instituteHour` /
+`instituteDayBounds` read instants back. `lib/format.ts` delegates to it, so
+nothing has to remember. Verified under `TZ=IST`, `TZ=UTC` and
+`TZ=America/New_York` — identical output.
+
+Two lessons worth keeping:
+
+- **The plan's own advice was not enough.** "Add it to `lib/format.ts`" would
+  have fixed rendering and left the *parse* wrong, which is where the corruption
+  actually was — the bad value went into the database. Both directions have to
+  be zoned, and the parse is the one that does lasting damage.
+- **`TZ=UTC npm run build` would not have caught it.** A build renders nothing
+  with a user-entered time in it. What catches it is running the domain logic
+  under a non-IST `TZ`, which is now what the throwaway suite does.
+
+**Still outstanding:** four bookings written during the UTC window are stored
+5h30m late and stay wrong until repaired —
+`supabase/repairs/2026-09-10-utc-parsed-bookings.sql` shifts them and rebuilds
+their room holds. Not run automatically; read its header first.
 
 ### Missing states that the office will hit in week one
 
@@ -452,7 +480,10 @@ a server runs UTC is the kind of bug that gets a system switched off. Add it to
 - **Extend a stay.** Extremely common and currently impossible.
 - **Move a guest to a different room mid-stay.** Also common; maintenance happens.
 - **No-show.** A booking that was never occupied and never vacated holds a room
-  forever. Add an auto-release or a manager action.
+  forever. Add an auto-release or a manager action. **Partly addressed:** the
+  manager console now has an **Awaiting check-out** section listing exactly
+  these — past their check-out, still holding rooms — so they are visible
+  rather than silently hoarding inventory. Closing them off is still manual.
 - **Early checkout.** `VACATED` before `check_out` should free the room
   immediately, which the `room_holds` model gives you for free.
 

@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFieldArray, useForm, useWatch, type FieldPath } from "react-hook-form";
-import { format } from "date-fns";
+import { Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { createBooking } from "@/app/actions/bookings";
+import { BookingAvailability } from "@/components/booking-availability";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -37,8 +38,10 @@ import {
   type CustomField,
   type RoleFormConfig,
 } from "@/lib/form-config";
+import { MEAL_KEYS, MEAL_LABELS, MEAL_TIMES } from "@/lib/meals";
+import { toInstituteDateValue } from "@/lib/tz";
 import { latestCheckIn } from "@/lib/workflow";
-import { ROLE_LABELS, type GuestHouse, type Profile } from "@/lib/types";
+import { ROLE_LABELS, type GuestHouse, type MealKey, type Profile } from "@/lib/types";
 
 interface GuestFields {
   name: string;
@@ -57,6 +60,7 @@ interface FormValues {
   check_out_date: string;
   check_out_time: string;
   rooms_requested: string;
+  meals: Record<MealKey, boolean>;
   guests: GuestFields[];
   custom: Record<string, string | boolean>;
 }
@@ -102,6 +106,7 @@ export function BookingForm({
       check_out_date: "",
       check_out_time: "10:00",
       rooms_requested: "1",
+      meals: { breakfast: false, lunch: false, dinner: false },
       guests: [{ ...EMPTY_GUEST }],
       custom: {},
     },
@@ -111,6 +116,11 @@ export function BookingForm({
   const checkInTime = useWatch({ control, name: "check_in_time" });
   const checkOutTime = useWatch({ control, name: "check_out_time" });
   const roomsRequested = useWatch({ control, name: "rooms_requested" });
+  // The availability panel follows the guest house and check-in date as they
+  // are picked, so the requester sees the day they are actually choosing.
+  const selectedGuestHouseId = useWatch({ control, name: "guest_house_id" });
+  const checkInDate = useWatch({ control, name: "check_in_date" });
+  const selectedMeals = useWatch({ control, name: "meals" });
 
   // Siblings / grandparents stay locked until a parent is on the request.
   const watchedGuests = useWatch({ control, name: "guests" });
@@ -135,12 +145,20 @@ export function BookingForm({
   const guestCeiling = Math.min(bedsAvailable + infantCount, MAX_GUESTS);
   const overCapacity = roomsPicked > 0 && bedGuests > bedsAvailable;
 
+  const chosenMeals = MEAL_KEYS.filter((meal) => selectedMeals?.[meal]);
+  const mealSummary =
+    chosenMeals.length === 0
+      ? "No meals requested — guests will arrange their own."
+      : `${chosenMeals.map((meal) => MEAL_LABELS[meal]).join(", ")} for ${fields.length} guest${
+          fields.length === 1 ? "" : "s"
+        }.`;
+
   // Advance-booking window: officials are exempt, so the cap can be absent.
   const [checkInLimits] = useState(() => {
     const limit = latestCheckIn(config.role);
     return {
-      min: format(new Date(), "yyyy-MM-dd"),
-      max: limit ? format(limit, "yyyy-MM-dd") : undefined,
+      min: toInstituteDateValue(new Date()),
+      max: limit ? toInstituteDateValue(limit) : undefined,
       note: advanceWindowMessage(config.role),
     };
   });
@@ -208,6 +226,7 @@ export function BookingForm({
       check_in: `${values.check_in_date}T${values.check_in_time}`,
       check_out: `${values.check_out_date}T${values.check_out_time}`,
       rooms_requested: values.rooms_requested,
+      meals: values.meals,
       guests: values.guests.map((g) => ({
         name: g.name,
         age: g.age === "" ? undefined : g.age,
@@ -416,6 +435,60 @@ export function BookingForm({
 
       <Card>
         <CardHeader>
+          <CardTitle>Room availability</CardTitle>
+          <CardDescription>
+            What is already booked at your chosen guest house on your check-in date, hour by
+            hour. Use it to pick a day with room to spare — nothing here is reserved for you
+            until the Guest House Manager allocates a room.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BookingAvailability
+            guestHouseId={selectedGuestHouseId}
+            date={checkInDate}
+            guestHouseName={
+              guestHouses.find((g) => g.id === selectedGuestHouseId)?.name
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Meals</CardTitle>
+          <CardDescription>
+            Tick the meals your party would like the guest house to lay on. Optional — leave them
+            all unticked if guests will make their own arrangements. The kitchen uses this for
+            head counts, so tell the manager if plans change after booking.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {MEAL_KEYS.map((meal) => (
+              <label
+                key={meal}
+                className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 has-checked:border-primary has-checked:bg-primary/5"
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 accent-primary"
+                  {...register(`meals.${meal}` as const)}
+                />
+                <span className="text-sm">
+                  <span className="block font-medium">{MEAL_LABELS[meal]}</span>
+                  <span className="block text-xs text-muted-foreground">{MEAL_TIMES[meal]}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {mealSummary}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Guest details</CardTitle>
           <CardDescription>
             {idDocRequired
@@ -600,14 +673,17 @@ export function BookingForm({
                 </p>
               )}
               {fields.length > 1 && (
-                <div className="mt-3 flex justify-end">
+                <div className="mt-4 flex justify-end border-t pt-3">
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="destructive"
                     size="sm"
+                    aria-label={`Remove guest ${i + 1}`}
+                    className="border-destructive/30"
                     onClick={() => removeGuestAt(i, field.id)}
                   >
-                    Remove guest
+                    <Trash2Icon />
+                    Remove guest {i + 1}
                   </Button>
                 </div>
               )}

@@ -16,6 +16,7 @@ import type {
 } from "@/lib/types";
 import { RoomClashError } from "@/lib/types";
 import type { Role, RoomType } from "@/lib/types";
+import { normalizeMeals } from "@/lib/meals";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
@@ -77,6 +78,14 @@ function loadDb(): Db {
     for (const g of db.booking_guests) {
       if (g.is_infant === undefined) {
         g.is_infant = false;
+        dirty = true;
+      }
+    }
+    for (const b of db.bookings) {
+      // Migration 6's counterpart: a booking made before meals were asked
+      // about has no answer, which is "none requested".
+      if (!b.meals) {
+        b.meals = normalizeMeals(undefined);
         dirty = true;
       }
     }
@@ -172,6 +181,7 @@ export class MockStore implements DataStore {
       rejection_reason: null,
       alumni_id_url: input.alumni_id_url,
       custom_fields: input.custom_fields,
+      meals: normalizeMeals(input.meals),
       created_at: nowIso,
       updated_at: nowIso,
     };
@@ -202,6 +212,7 @@ export class MockStore implements DataStore {
       .map((h) => h.room_id);
     return {
       ...b,
+      meals: normalizeMeals(b.meals),
       assigned_room_ids: assignedRoomIds,
       requester: db.profiles.find((p) => p.id === b.user_id)!,
       guest_house: db.guest_houses.find((g) => g.id === b.guest_house_id)!,

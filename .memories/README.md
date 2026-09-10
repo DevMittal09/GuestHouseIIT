@@ -61,7 +61,7 @@ lib/                       domain logic: types, workflow, form config, occupancy
 supabase/                  migrations + seed SQL
 ```
 
-## 3. The five ideas that explain most of the codebase
+## 3. The six ideas that explain most of the codebase
 
 ### 3.1 One data interface, two implementations
 
@@ -150,7 +150,25 @@ clash.
   single-threaded and `saveDb` is synchronous, so a check immediately before the
   write is genuinely atomic there.
 
-### 3.5 Rules live in `lib/` as pure functions
+### 3.5 Every wall-clock time is institute time
+
+`lib/tz.ts` pins the app to **Asia/Kolkata**. Instants are stored as ISO/UTC;
+only two operations are zoned — parsing what a user typed, and rendering it
+back. Nothing may call `new Date("2026-09-15T12:00")` (the spec resolves that in
+the *process* timezone) or format an instant with date-fns / `toLocaleString()`
+/ `getHours()`.
+
+This exists because it was a real bug. `toIso()` was
+`new Date(datetimeLocal).toISOString()`, which is correct on a machine set to
+IST and wrong everywhere else. Once the app ran on a UTC host, a booking for
+12:00 was stored as `12:00Z` and the manager's console read it back as
+**5:30 PM** — and a 10:00 check-out as **3:30 PM**. Four rows written in that
+window are still shifted in the database;
+`supabase/repairs/2026-09-10-utc-parsed-bookings.sql` corrects them and rebuilds
+their room holds. As a bonus, zoned formatting means a server-rendered date and
+its client hydration agree even when the two machines are in different zones.
+
+### 3.6 Rules live in `lib/` as pure functions
 
 The matching, scoping and capacity rules are deliberately not inside stores or
 components, because that is where two backends drift apart and where behaviour
@@ -163,6 +181,8 @@ becomes untestable:
 | `lib/booking-search.ts` | Archive search: tokenizer, matchers, facets, paging |
 | `lib/occupancy.ts` | Room capacity, infants, how many rooms a party needs |
 | `lib/availability.ts` | Availability grid maths (hour bucketing, day bounds) |
+| `lib/tz.ts` | The institute timezone: parsing typed times, formatting instants |
+| `lib/meals.ts` | Meal preferences and how they are normalised on read |
 | `lib/booking-schema.ts` | The config-driven zod schema both sides run |
 
 ## 4. The domain rules
@@ -194,6 +214,15 @@ APPROVED → OCCUPIED → VACATED
          ↘ CANCELLATION_REQUESTED → CANCELLATION_APPROVED
          ↘ CANCELLED (direct, pre-approval or by the manager)
 ```
+
+`OCCUPIED` means *the guest is in the room* — a fact the manager records at the
+desk, not something the dates imply. `occupancyNotStartedError()` refuses the
+transition before check-in (server-side, with the console disabling the button
+from the same function), and `stayPhase()` — `upcoming` / `current` / `past` —
+is the read side. `/manager` groups by phase rather than status into **Current
+occupants**, **Awaiting check-out** and **Upcoming stays**. Previously one
+"Upcoming & current stays" table mixed them, so a booking for next week
+appeared alongside a guest in the building and read as occupied.
 
 ### 4.2 Who may stay — the relationship dependency
 
@@ -236,7 +265,18 @@ chosen rooms sleep, plus infants.
 
 > **Trap:** a booking of infants only is refused — someone has to be on a bed.
 
-### 4.4 Advance-booking window
+### 4.4 Meals
+
+The requester ticks breakfast / lunch / dinner when booking, so the kitchen has
+head counts before guests arrive. Stored as **one jsonb column**
+(`bookings.meals`, migration 6) rather than three booleans: it is one answer to
+one question and is always read as a set, which is the same reasoning as
+`custom_fields`. `normalizeMeals()` is the only reader — a booking made before
+the question existed has no value, which truthfully means "none requested", so
+both stores normalise during hydration and nothing downstream needs a null
+check. Always optional; "no meals" is the common answer.
+
+### 4.5 Advance-booking window
 
 Check-in must be within **one month** of today. `latestCheckIn(role)` is the
 source of truth and `isAdvanceWindowExempt()` exempts **`official` only** —
@@ -244,7 +284,7 @@ dignitary visits are arranged on the institute's own notice. The cap applies to
 check-in, not check-out. Use date-fns `addMonths`, never `setMonth` (31 Jan + 1
 month must clamp to 28 Feb, not roll to 3 Mar).
 
-### 4.5 Archive scoping — `/history`
+### 4.6 Archive scoping — `/history`
 
 Open to **all roles**; `historyScope(user)` decides the slice. Requesters see
 their own bookings ("Booking History"); reviewers see their jurisdiction and the
@@ -264,7 +304,7 @@ can only narrow, never widen. Do not reorder that spread.
 | --- | --- | --- |
 | `/` | anyone | Persona picker (stands in for SSO) |
 | `/dashboard` | requesters | Own bookings, status, assigned rooms, cancellation |
-| `/book` | requesters | The config-driven booking form |
+| `/book` | requesters | The config-driven booking form, with an hour-by-hour availability panel and meal choices |
 | `/warden` `/fa` `/iar` | reviewers | One `ReviewQueue` component, three scopings |
 | `/availability` | **every role** | Read-only time × room occupancy grid |
 | `/history` | **every role** | Booking history / approval log, CSV + PDF export |
@@ -321,6 +361,14 @@ Queue pages poll every 5 s (`components/auto-refresh.tsx`); `/history` and
 - **shadcn registry.** `init` needs `-b radix -p nova --no-monorepo`. There is
   **no `form` component** — hence `components/ui/native-select.tsx` and manual
   `FieldError` rendering.
+- **One cookie, every tab.** Signing in as another persona in one tab changes
+  who *every* tab is, and the 5 s polling made the others silently re-render as
+  the new persona mid-task. `components/tab-session-guard.tsx` has each tab
+  claim its identity in `sessionStorage` and, on a mismatch, blocks that tab and
+  stops its polling instead of letting the view morph. It cannot give tabs
+  separate sessions — a cookie has no such granularity; that arrives with real
+  authentication (roadmap item 1). Until then, two identities need two browser
+  profiles or a private window.
 - **`.gitignore` has `.env*`**, which also hides `.env.example`; the
   `!.env.example` exception must stay.
 - **Node version.** Next.js 16 needs `>= 20.9.0`.
@@ -375,10 +423,18 @@ the developer's working data.
 
 ---
 
-Migrations are numbered and applied forward only; there are four. Migration 4
+Migrations are numbered and applied forward only; there are six. Migration 4
 moved infants from `bookings.infants` to `booking_guests.is_infant` — see
-[06-decisions.md](06-decisions.md) for why the first model was wrong.
+[06-decisions.md](06-decisions.md) for why the first model was wrong. Migration
+6 adds `bookings.meals`; **it must be applied before bookings can be created
+against Supabase** (the mock store self-heals instead).
 
-Last substantive update: 2026-09-03 — room holds moved into the database with an
-exclusion constraint, extra-bed room capacity, infants as guest rows, guest
-count capped by rooms, clearable number inputs, real PDF export.
+`supabase/repairs/` holds one-off data fixes that are not migrations and are
+never applied automatically. Read each file's header before running it.
+
+Last substantive update: 2026-09-10 — all times pinned to institute time
+(`lib/tz.ts`, fixing bookings that read back 5h30m late), meal preferences per
+booking, hour-by-hour availability inside the booking form, the manager console
+split into current / awaiting check-out / upcoming, `OCCUPIED` refused before
+check-in, the allocation grid locked to the booking's own dates, and a per-tab
+session guard.

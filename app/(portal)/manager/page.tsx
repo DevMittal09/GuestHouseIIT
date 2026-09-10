@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { stayPhase } from "@/lib/workflow";
 
 export default async function ManagerPage({
   searchParams,
@@ -35,12 +36,20 @@ export default async function ManagerPage({
     store.listBookings({ status: "CANCELLATION_REQUESTED", guestHouseId: current.id }),
     store.listRooms(current.id),
   ]);
-  const nowIso = new Date().toISOString();
+  const now = new Date();
 
-  // Merge approved + occupied bookings for the stays table, filter to current/future.
-  const stays = [...allApproved, ...allOccupied]
-    .filter((b) => b.check_out >= nowIso)
-    .sort((a, b) => a.check_in.localeCompare(b.check_in));
+  // Split the stays by where they actually are in time, not by status. An
+  // approved booking for next week and a guest currently in the building are
+  // two different jobs for the manager, and lumping them together was reading
+  // as "this future booking is occupied".
+  const stays = [...allApproved, ...allOccupied].sort((a, b) =>
+    a.check_in.localeCompare(b.check_in)
+  );
+  const currentStays = stays.filter((b) => stayPhase(b, now) === "current");
+  const upcomingStays = stays.filter((b) => stayPhase(b, now) === "upcoming");
+  // A stay past its check-out that was never marked Vacated still needs
+  // closing off, so it stays visible with the current occupants.
+  const overdueStays = stays.filter((b) => stayPhase(b, now) === "past");
 
   return (
     <div className="space-y-6">
@@ -72,7 +81,9 @@ export default async function ManagerPage({
 
       <ManagerQueue
         pending={pending}
-        approved={stays}
+        current={currentStays}
+        upcoming={upcomingStays}
+        overdue={overdueStays}
         cancellationRequests={cancellationRequests}
         rooms={rooms}
       />

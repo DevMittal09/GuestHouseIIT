@@ -9,13 +9,34 @@ remove the persona picker from `app/page.tsx`, and switch request-scoped databas
 access to the anon key so RLS becomes the real boundary. Everything else in the
 app already re-checks authorization server-side, so this change is contained.
 
-## 2. Notifications
+## 2. Notifications and the day-wise occupancy report (both asked for)
 
-Not built. Requesters currently have to open the dashboard to learn a decision.
-Email on status change is the obvious first step: submitted, approved at each
-tier, rejected (with reason), rooms allocated. Supabase Edge Functions or a
-transactional email provider both fit; the hook point is
-`updateBookingStatus()`, which every transition already funnels through.
+**Still the largest open gap, and it is two Administration Section requirements,
+not a nice-to-have** — see the status table in
+[01-background.md](01-background.md#follow-up-requirements-from-the-administration-section).
+
+There is **no mail transport anywhere in the project**: no `nodemailer`, no
+provider SDK, no SMTP settings in `.env.example`. That single missing piece
+blocks both of these:
+
+- **Email on room allocation** (requirement 5). Requesters currently have to
+  open the dashboard to learn a decision. `allocateRooms()` in
+  `app/actions/bookings.ts` is the hook point for the allocation mail, and
+  `updateBookingStatus()` is the funnel every other transition passes through —
+  submitted, approved at each tier, rejected (with reason).
+- **A day-wise guest house log / occupancy report mailed to the GH Manager**
+  (requirement 3). The *content* already exists: `exportHistoryPdf`
+  (`app/actions/history-pdf.ts`) plus `lib/report-pdf.ts` render an A4-landscape
+  report from the same search criteria, and `listRoomOccupancy` gives per-room
+  occupancy for a date range. What is missing is a scheduled job and delivery.
+
+Do them together. Sketch: a `lib/mail.ts` with one `sendMail()` seam (mirroring
+how `lib/auth.ts` is the single swap point for identity), an env-configured
+transport, and a daily cron — Supabase Edge Function + `pg_cron`, or a Vercel
+cron route — that builds the previous day's occupancy and posts it to the
+manager's address. Keep the render server-side for the mailed copy;
+`lib/report-pdf.ts` is client-side (jsPDF, dynamically imported), so the mailed
+report needs either a server-side renderer or an HTML table body.
 
 ## 3. Push the repository
 

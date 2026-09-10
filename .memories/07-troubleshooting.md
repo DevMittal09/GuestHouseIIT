@@ -29,6 +29,43 @@ controlled via `value` (`"HH:mm"`, 24-hour) and `onChange`. **Never reintroduce
 native time inputs.** Its `parseTime` / `toTimeValue` handle the classic traps
 (12 AM = `00:00`, 12 PM = `12:00`); re-test those if you touch the conversion.
 
+## Times are 5h30m late — a 12:00 booking shows as 5:30 PM
+
+**Fixed.** `toIso()` in `app/actions/bookings.ts` used to be
+`new Date(datetimeLocal).toISOString()`. A naked "2026-09-15T12:00" is resolved
+in the **process** timezone, so it was right on a developer machine set to IST
+and wrong on a UTC host: 12:00 was stored as `12:00Z`, which is 5:30 PM IST.
+A 10:00 check-out became 3:30 PM. It goes through `lib/tz.ts` now.
+
+Two things to know if you see it again:
+
+- **Rows written during that period are still wrong in the database.** The code
+  fix only affects new bookings. Compare the stored time-of-day: a correctly
+  stored IST wall-clock time on the hour lands on `06:30Z` / `04:30Z`, a
+  UTC-parsed one keeps the typed `12:00Z` / `10:00Z`.
+  `supabase/repairs/2026-09-10-utc-parsed-bookings.sql` shifts them and rebuilds
+  their room holds.
+- **Anything that reintroduces `new Date(<datetime string>)` or an unzoned
+  formatter brings it back.** Use `instituteIso()` to parse and `lib/format.ts`
+  to render. Verify by running the app's logic under `TZ=UTC` — that is the
+  environment where the bug appears, and a machine in IST will not show it.
+
+## Bookings fail to submit against Supabase with a column error
+
+`bookings.meals` is migration 6. Apply
+`supabase/migrations/00000000000006_booking_meals.sql` in the SQL editor. Reads
+degrade gracefully (`normalizeMeals` fills in "none requested"), so the symptom
+is writes failing while every page still renders.
+
+## A tab suddenly shows a different user, or says "This browser switched user"
+
+Working as intended. The mock session is a cookie, which belongs to the browser
+and not to a tab, so signing in as another persona anywhere changes every tab —
+and the 5 s polling used to make the others re-render as that persona in place.
+`components/tab-session-guard.tsx` now blocks the mismatched tab and stops its
+polling. To use two accounts at once, use a private window or a second browser
+profile; genuine per-tab sessions need real authentication.
+
 ## Form Builder changes appear to do nothing
 
 **Symptom.** You edit `buildDefaultFormConfig` and the form is unchanged.

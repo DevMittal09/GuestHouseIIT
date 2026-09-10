@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { format } from "date-fns";
 import { parentDependencyError, type FieldMode, type RoleFormConfig } from "./form-config";
 import { countBedGuests, INFANT_AGE_LIMIT, requestedRoomsError } from "./occupancy";
+import { formatInstituteDate, instituteDate } from "./tz";
 import { latestCheckIn } from "./workflow";
 
 const optionalTrimmed = z
@@ -109,6 +109,19 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
         tooMany: "Maximum 10 rooms per request",
       }),
       guests: z.array(guestSchema(config)).min(1, "Add at least one guest"),
+      // Meals are always optional: "no meals" is a valid, common answer.
+      meals: z
+        .object({
+          breakfast: z.boolean().optional(),
+          lunch: z.boolean().optional(),
+          dinner: z.boolean().optional(),
+        })
+        .optional()
+        .transform((v) => ({
+          breakfast: v?.breakfast === true,
+          lunch: v?.lunch === true,
+          dinner: v?.dinner === true,
+        })),
       custom: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
     })
     .superRefine((v, ctx) => {
@@ -157,18 +170,20 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
         });
       }
     })
-    .refine((v) => new Date(v.check_out) > new Date(v.check_in), {
+    // `check_in` / `check_out` are wall-clock strings, so they are resolved in
+    // the institute's timezone — never the runtime's. See `lib/tz.ts`.
+    .refine((v) => instituteDate(v.check_out) > instituteDate(v.check_in), {
       message: "Check-out must be after check-in",
       path: ["check_out"],
     })
-    .refine((v) => new Date(v.check_in) > new Date(), {
+    .refine((v) => instituteDate(v.check_in) > new Date(), {
       message: "Check-in must be in the future",
       path: ["check_in"],
     })
     .refine(
       (v) => {
         const limit = latestCheckIn(config.role);
-        return !limit || new Date(v.check_in) <= limit;
+        return !limit || instituteDate(v.check_in) <= limit;
       },
       {
         message: advanceWindowMessage(config.role),
@@ -195,9 +210,8 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
 export function advanceWindowMessage(role: RoleFormConfig["role"]): string {
   const limit = latestCheckIn(role);
   if (!limit) return "";
-  return `Bookings open one month in advance — the latest check-in you can request is ${format(
-    limit,
-    "d MMM yyyy"
+  return `Bookings open one month in advance — the latest check-in you can request is ${formatInstituteDate(
+    limit
   )}`;
 }
 

@@ -26,6 +26,10 @@ export type BookingStatus =
 export type RoomType = "single" | "double_sharing";
 export type Gender = "male" | "female" | "other";
 
+/** Meals the guest house can lay on for a booking. See `lib/meals.ts`. */
+export type MealKey = "breakfast" | "lunch" | "dinner";
+export type MealPreferences = Record<MealKey, boolean>;
+
 export const REQUESTER_ROLES: Role[] = ["student", "employee", "official", "club", "alumni"];
 export const REVIEWER_ROLES: Role[] = ["warden", "faculty_advisor", "iar_cell", "gh_manager"];
 
@@ -81,6 +85,12 @@ export type Booking = {
   rejection_reason: string | null;
   alumni_id_url: string | null;
   custom_fields: CustomFieldValue[] | null;
+  /**
+   * Which meals the requester asked for. Always a complete object — bookings
+   * predating the field are normalised on read, so no consumer needs a
+   * null check.
+   */
+  meals: MealPreferences;
   created_at: string;
   updated_at: string;
 }
@@ -165,6 +175,7 @@ export interface NewBookingInput {
   rooms_requested: number;
   alumni_id_url: string | null;
   custom_fields: CustomFieldValue[] | null;
+  meals: MealPreferences;
   guests: Omit<BookingGuest, "id" | "booking_id">[];
 }
 

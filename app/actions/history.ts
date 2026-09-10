@@ -8,6 +8,7 @@ import {
   parseHistoryParams,
 } from "@/lib/booking-search";
 import { getStore } from "@/lib/store";
+import { toInstituteDateValue } from "@/lib/tz";
 import { ROLE_LABELS, STATUS_LABELS, type BookingWithDetails } from "@/lib/types";
 import { historyScope, isRequesterHistory } from "@/lib/workflow";
 import { formatDateTime } from "@/lib/format";
@@ -95,7 +96,7 @@ export async function exportHistoryCsv(queryString: string): Promise<ExportResul
 
     const { rows } = await getStore().searchBookings(criteria);
     const csv = [COLUMNS.map(csvCell).join(","), ...rows.map((b) => csvRow(b, user.id))].join("\r\n");
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = toInstituteDateValue(new Date());
     const prefix = isRequester ? "booking-history" : "approval-log";
     return {
       ok: true,

@@ -14,15 +14,10 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  bucketOccupancyByHour,
-  dayBounds,
-  hourLabel,
-  toDateInputValue,
-  HOURS_IN_DAY,
-  type RoomDayOccupancy,
-} from "@/lib/availability";
-import { formatDateTime } from "@/lib/format";
+import { bucketOccupancyByHour, dayBounds, toDateInputValue } from "@/lib/availability";
+import { LegendSwatch, OccupancyChart } from "@/components/occupancy-chart";
+import { formatDate, formatDateTime } from "@/lib/format";
+import { instituteHour } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import {
   STATUS_LABELS,
@@ -30,8 +25,6 @@ import {
   type Room,
   type RoomOccupancySegment,
 } from "@/lib/types";
-
-const HOURS = Array.from({ length: HOURS_IN_DAY }, (_, h) => h);
 
 const todayValue = () => toDateInputValue(new Date());
 
@@ -86,7 +79,9 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
   // than a grid full of "Invalid Date".
   const hasValidDate = !Number.isNaN(start.getTime());
   const isToday = date === todayValue();
-  const currentHour = new Date().getHours();
+  // Institute time, not the reader's: the "current hour" marker has to line
+  // up with the rows, which are the guest house's hours.
+  const currentHour = instituteHour();
   const occupiedNow = isToday
     ? rooms.filter((r) => occupancy.get(r.id)?.hours[currentHour]).length
     : 0;
@@ -196,39 +191,11 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
               This guest house has no active rooms.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <div
-                className="grid min-w-fit text-xs"
-                style={{
-                  gridTemplateColumns: `4.5rem repeat(${rooms.length}, minmax(2.75rem, 1fr))`,
-                }}
-              >
-                <div className="sticky left-0 z-10 border-b bg-background pb-2 pr-2 text-right font-medium text-muted-foreground">
-                  Time
-                </div>
-                {rooms.map((room) => (
-                  <div
-                    key={room.id}
-                    title={`${room.room_number} — ${
-                      room.room_type === "double_sharing" ? "Double sharing" : "Single"
-                    }`}
-                    className="border-b pb-2 text-center font-semibold"
-                  >
-                    {room.room_number}
-                  </div>
-                ))}
-
-                {HOURS.map((h) => (
-                  <HourRow
-                    key={h}
-                    hour={h}
-                    rooms={rooms}
-                    occupancy={occupancy}
-                    isCurrent={isToday && h === currentHour}
-                  />
-                ))}
-              </div>
-            </div>
+            <OccupancyChart
+              rooms={rooms}
+              occupancy={occupancy}
+              currentHour={isToday ? currentHour : null}
+            />
           )}
         </CardContent>
       </Card>
@@ -238,12 +205,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           <CardTitle>Room details</CardTitle>
           <CardDescription>
             Every room in this guest house with its booking periods covering{" "}
-            {hasValidDate &&
-              start.toLocaleDateString(undefined, {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
+            {hasValidDate && formatDate(start.toISOString())}
             .{!showsOccupant && " Guest details are visible to guest house staff only."}
           </CardDescription>
         </CardHeader>
@@ -300,65 +262,12 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
 
       {hasValidDate && (
         <p className="text-xs text-muted-foreground">
-          Availability shown for {start.toLocaleDateString()} until {end.toLocaleDateString()}.
+          Availability shown for {formatDate(start.toISOString())} until{" "}
+          {formatDate(end.toISOString())}, in institute time.
           Rooms are held by approved, occupied and pending-cancellation bookings; requests still
           awaiting approval do not reserve a room.
         </p>
       )}
     </div>
-  );
-}
-
-function HourRow({
-  hour,
-  rooms,
-  occupancy,
-  isCurrent,
-}: {
-  hour: number;
-  rooms: Room[];
-  occupancy: Map<string, RoomDayOccupancy>;
-  isCurrent: boolean;
-}) {
-  return (
-    <>
-      <div
-        className={cn(
-          "sticky left-0 z-10 flex h-6 items-center justify-end bg-background pr-2 text-[10px] tabular-nums",
-          isCurrent ? "font-semibold text-primary" : "text-muted-foreground"
-        )}
-      >
-        {hourLabel(hour)}
-      </div>
-      {rooms.map((room) => {
-        const segment = occupancy.get(room.id)?.hours[hour] ?? null;
-        return (
-          <div
-            key={room.id}
-            title={
-              segment
-                ? `${room.room_number} — booked at ${hourLabel(hour)} · ${
-                    segment.booking_reference_id
-                  }${segment.requester_name ? ` · ${segment.requester_name}` : ""}`
-                : `${room.room_number} — free at ${hourLabel(hour)}`
-            }
-            className={cn(
-              "h-6 border-r border-b",
-              segment ? "bg-red-500" : "bg-background",
-              isCurrent && "border-t-2 border-t-primary"
-            )}
-          />
-        );
-      })}
-    </>
-  );
-}
-
-function LegendSwatch({ className, label }: { className: string; label: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className={cn("size-3 rounded-sm", className)} />
-      {label}
-    </span>
   );
 }

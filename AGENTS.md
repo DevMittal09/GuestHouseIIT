@@ -120,6 +120,27 @@ Reviewer roles: `warden` (scoped to `profile.hostel_name`), `faculty_advisor`
 - `official` bookings are restricted to `OFFICIAL_EMAIL_WHITELIST` in
   `lib/routes.ts`, and are highlighted + sorted to the top of the manager queue.
 
+### Time is institute time — `lib/tz.ts`
+
+Every wall-clock time in this app is **Asia/Kolkata**, regardless of where the
+server or the browser runs. Instants are stored as ISO/UTC; only parsing what a
+user typed and rendering it back are zoned.
+
+- **Never** `new Date("2026-09-15T12:00")` on a naked datetime string — the spec
+  resolves that in the *process* timezone. Use `instituteIso()`.
+- **Never** format an instant with date-fns `format`, `toLocaleString()` or
+  `getHours()`. Use `lib/format.ts` (`formatDateTime`, `formatDate`) or the
+  `formatInstitute*` / `instituteHour` helpers.
+- This is also what makes server-rendered dates and their client hydration
+  agree when the two machines are in different zones.
+
+> **This is a fixed bug, not a preference.** `toIso()` used to be
+> `new Date(datetimeLocal).toISOString()`. On a UTC host a booking for 12:00
+> was stored as `12:00Z` and read back in the manager's console as **5:30 PM**
+> — and a 10:00 check-out as **3:30 PM**. Rows written during that period are
+> still 5h30m late in the database; `supabase/repairs/2026-09-10-utc-parsed-bookings.sql`
+> shifts them (and rebuilds their holds) and explains how to tell them apart.
+
 ### Advance-booking window
 
 Check-in must be within **one month** of today. `latestCheckIn(role)` in
@@ -145,6 +166,16 @@ APPROVED → OCCUPIED → VACATED
 `ROOM_HOLDING_STATUSES` = `APPROVED`, `OCCUPIED`, `CANCELLATION_REQUESTED` —
 only these keep rooms reserved. Occupancy queries and the room grid use this
 const, not a hardcoded `APPROVED` check.
+
+**`OCCUPIED` is a fact recorded at the desk, not something a date implies.**
+`occupancyNotStartedError()` refuses `APPROVED → OCCUPIED` before the booking's
+check-in, enforced in `updateBookingLifecycle` and used by the console to
+disable the button. `stayPhase()` (`upcoming` | `current` | `past`) is the
+matching read side: `/manager` groups stays by phase, not by status, into
+**Current occupants**, **Awaiting check-out** (past check-out, never marked
+Vacated, still holding rooms) and **Upcoming stays**. Before that split a
+booking for next week sat under the same heading as a guest in the building and
+read as though it were occupied.
 
 Cancellation flow: a requester can request cancellation of an approved/occupied
 booking (`requestCancellation` action, requires reason). The manager reviews via
@@ -248,10 +279,13 @@ Everything" toggle and the "My decision" column are shown.
   August. Calendar periods cover the *whole* period including days still to
   come, so "This month" catches upcoming arrivals.
 
-  Build the day string from **local** date parts, never
-  `toISOString().slice(0,10)` — in IST that reports the previous day until
-  05:30. Two presets can resolve to the same range (31 Jan: "Last 30 days" and
-  "This month"), so `matchDatePreset` returns the first in display order.
+  Never `toISOString().slice(0,10)` — that is UTC, and in IST it reports the
+  previous day until 05:30. `resolveDatePreset` converts "now" to an institute
+  civil date once (`instituteToday`) and the calendar arithmetic then reads
+  plain local year/month/day off it, so "This month" is August on 1 September
+  IST even when the server is in UTC. Two presets can resolve to the same range
+  (31 Jan: "Last 30 days" and "This month"), so `matchDatePreset` returns the
+  first in display order.
 - `/history` is excluded from the 5 s polling (`NO_POLL_PREFIXES` in
   `components/auto-refresh.tsx`).
 
@@ -277,8 +311,16 @@ the same room. This replaced a check-then-act race in `allocateRooms()`.
   same-instant check-in do **not** clash.
 
 `components/room-grid.tsx` — cinema-style grid, green available / red occupied /
-blue selected, grouped into double-sharing and single, with a live date+time
-selector.
+blue selected, grouped into double-sharing and single.
+
+> **The grid reads occupancy for the booking's own dates and nothing else.** It
+> used to carry its own date+time pickers. A manager who shifted that window saw
+> rooms turn green that were in fact taken for the actual stay; the write was
+> still safe (the exclusion constraint refused it) but the grid was offering
+> rooms it should never have shown. Occupied rooms render `disabled`, so a room
+> allotted to someone else for any part of this stay cannot be picked at all.
+> Do not reintroduce a date selector here — `/availability` is where you browse
+> other dates.
 
 ### Capacity and infants — `lib/occupancy.ts`
 
@@ -305,6 +347,22 @@ allocation (actual room types known). The booking form additionally caps how
 many guests can be added to what the chosen rooms sleep, plus infants — so
 picking rooms first, then guests, is the intended order.
 
+## Meals — `lib/meals.ts`
+
+The requester ticks breakfast / lunch / dinner when booking, so the kitchen has
+head counts before guests arrive. One jsonb column (`bookings.meals`, migration
+6), not three booleans, because it is one answer to one question and is always
+read as a set — the same shape as `custom_fields`.
+
+- `normalizeMeals()` is the only way to read it. Bookings predating migration 6
+  have no value, and the mock store's JSON gets hand-edited, so a missing or
+  partial object must mean "none requested", never a crash. Both stores call it
+  during hydration, so `Booking.meals` is always a complete object downstream.
+- Meals are always optional — "no meals" is the common answer, so there is no
+  required-field mode for them.
+- Shown on `BookingDetails` (so every reviewer sees them) and as a column in the
+  manager's stays tables.
+
 ## Room availability grid (`/availability`)
 
 Open to **every signed-in role** — the one route with no role gate. Pick a
@@ -327,6 +385,12 @@ is free, with a room-by-room list of booking periods underneath.
   needs no guest identity.
 - Excluded from the 5 s polling: the component fetches client-side and has its
   own Refresh button.
+- **The chart itself is `components/occupancy-chart.tsx`**, shared with the
+  panel inside the booking form (`components/booking-availability.tsx`), which
+  shows the same hour-by-hour picture for the guest house and check-in date
+  being chosen. Requesters were otherwise picking dates blind. One chart, one
+  action, one bucketing — so what the requester sees and what the manager sees
+  cannot drift.
 
 ## Developer console lock
 
@@ -393,6 +457,18 @@ site deliberately. Fix by setting `--primary-foreground` to a dark brown.
   the browser as an opaque `NetworkError`. `next.config.ts` raises
   `experimental.serverActions.bodySizeLimit` to `25mb`. Per-file validation
   (5 MB, JPG/PNG/WEBP/PDF) lives in `app/actions/bookings.ts`.
+- **One cookie, every tab.** The mock session is a cookie, so signing in as a
+  different persona in one tab changes who *every* open tab is — and with the
+  5 s polling the others quietly re-render as the new persona mid-task, which
+  reads as the app corrupting itself. `components/tab-session-guard.tsx` has
+  each tab claim its identity in `sessionStorage`, and when the server-rendered
+  user later disagrees it blocks that tab and **stops the polling** so the view
+  holds still instead of morphing. It does not give tabs separate sessions —
+  a cookie cannot. Real per-tab sessions arrive with real auth; until then a
+  second identity needs a private window. It reads storage through
+  `useSyncExternalStore`, not `useState` + an effect, because reading storage
+  during render is impure and setState in an effect body fails the React
+  Compiler lint.
 - **Never use `datetime-local` or `type="time"`.** Firefox makes them
   type-only, which reads as "I can't select the time". Use
   `components/ui/time-select.tsx` — hour / minute / AM-PM dropdowns, controlled
@@ -442,6 +518,10 @@ Three migration files applied sequentially:
 3. `supabase/migrations/00000000000003_room_holds_and_infants.sql` (`room_holds` + exclusion constraint + `set_room_holds()`, backfills and **drops** `bookings.assigned_room_ids`, adds `bookings.infants`). Destructive — read its header comment before running it against real data.
 4. `supabase/migrations/00000000000004_infant_guests.sql` (adds `booking_guests.is_infant`, **drops** `bookings.infants`)
 5. `supabase/migrations/00000000000005_app_settings.sql` (`app_settings` key/value table for the developer console password hash; service-role only, no `authenticated` policy)
+6. `supabase/migrations/00000000000006_booking_meals.sql` (`bookings.meals` jsonb + a shape check). Additive and defaulted, so existing bookings read as "no meals requested". **Until this is applied, creating a booking against Supabase fails** — the mock store self-heals instead.
+
+`supabase/repairs/` holds one-off data fixes that are **not** migrations and are
+not applied automatically. Read the header of each before running it.
 
 Then `supabase/seed.sql`. Locally: `supabase db reset`.
 Hosted: paste both migrations + seed into the SQL editor. Fill `.env.local` and

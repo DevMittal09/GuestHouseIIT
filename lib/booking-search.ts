@@ -7,6 +7,7 @@ import {
   type Role,
 } from "@/lib/types";
 import { REQUESTER_ROLES } from "@/lib/types";
+import { instituteParts } from "@/lib/tz";
 
 /**
  * Keyword + filter search over the booking archive.
@@ -403,10 +404,25 @@ const WEEK_STARTS_ON = 1;
  * Local-time yyyy-MM-dd, matching what `<input type="date">` expects.
  * Never `toISOString().slice(0, 10)` — that is UTC, and in IST (UTC+5:30) it
  * reports the previous day until 05:30.
+ *
+ * Safe to read runtime-local parts here because every Date the preset
+ * arithmetic touches is a *civil* date built by `instituteToday()` — a
+ * runtime-local midnight whose calendar day is the institute's.
  */
 function isoDay(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * "Today" as the institute sees it, as a runtime-local midnight. The calendar
+ * arithmetic below only ever reads year/month/day, so converting once here is
+ * what keeps "This month" from being August on a UTC server at 01:00 IST on
+ * 1 September.
+ */
+function instituteToday(now: Date): Date {
+  const p = instituteParts(now);
+  return new Date(p.year, p.month - 1, p.day);
 }
 
 function shiftDays(from: Date, days: number): Date {
@@ -445,8 +461,9 @@ function endOfQuarter(d: Date, quarterOffset = 0): Date {
 /** The `from`/`to` a preset resolves to, inclusive of both ends. */
 export function resolveDatePreset(
   preset: DatePreset,
-  now: Date = new Date()
+  at: Date = new Date()
 ): { from: string; to: string } {
+  const now = instituteToday(at);
   const today = isoDay(now);
   const range = (from: Date, to: Date) => ({ from: isoDay(from), to: isoDay(to) });
 

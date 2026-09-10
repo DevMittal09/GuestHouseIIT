@@ -54,6 +54,25 @@ called out explicitly and are easy to lose in a refactor:
 - official visits are **restricted to whitelisted institute email addresses** and
   should surface at the top of the manager's queue.
 
+## Follow-up requirements from the Administration Section
+
+A second list of five changes was handed over after the first build. Status as
+of **10 Sep 2026**:
+
+| # | Requirement | Status | Where |
+| --- | --- | --- | --- |
+| 1 | Parents may stay freely; siblings and grandparents only when a father or mother is also staying | **Done** | `parent_relationships` / `dependent_relationships` on `RoleFormConfig`, enforced by `parentDependencyError()` — see [03-implementation.md](03-implementation.md) |
+| 2 | Room availability grid for all users, showing room details, booking periods and vacant/occupied status | **Done** | `/availability` + `lib/availability.ts` + `app/actions/availability.ts` |
+| 3 | Day-wise guest house log / occupancy report, emailed automatically to the Guest House Manager | **Not built** | No mail transport exists in the project at all. The manual counterpart — `exportHistoryPdf` + `lib/report-pdf.ts` — is in place, so the report *content* is solved and only scheduling + delivery are missing. See [08-roadmap.md](08-roadmap.md) §2 |
+| 4 | Bookings only within a one-month advance window | **Done** | `latestCheckIn()` / `isAdvanceWindowExempt()` in `lib/workflow.ts`, applied by `bookingPayloadSchema` on client and server |
+| 5 | Automatic email notification to stakeholders after room allocation | **Not built** | Same gap as #3 — `allocateRooms()` is the hook point |
+
+> **The two open items are one piece of work, not two.** Both need a mail
+> transport (SMTP relay or a transactional provider) plus a place to run
+> scheduled jobs. Nothing else in the codebase blocks them: `allocateRooms()`
+> and `updateBookingStatus()` are already the single funnels every transition
+> passes through.
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

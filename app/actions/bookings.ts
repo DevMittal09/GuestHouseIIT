@@ -7,10 +7,16 @@ import { validateCustomValue } from "@/lib/form-config";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import { OFFICIAL_EMAIL_WHITELIST } from "@/lib/routes";
 import { getStore } from "@/lib/store";
+import { instituteIso } from "@/lib/tz";
 import type { BookingGuest, BookingStatus, CustomFieldValue, Gender } from "@/lib/types";
 import { REQUESTER_ROLES, RoomClashError } from "@/lib/types";
 import { allocationCapacityError, countBedGuests } from "@/lib/occupancy";
-import { canReview, initialStatusForRole, nextStatusOnApprove } from "@/lib/workflow";
+import {
+  canReview,
+  initialStatusForRole,
+  nextStatusOnApprove,
+  occupancyNotStartedError,
+} from "@/lib/workflow";
 
 export type ActionResult =
   | { ok: true; reference?: string }
@@ -27,8 +33,14 @@ function validFile(file: File): string | null {
   return null;
 }
 
+/**
+ * The form sends a wall-clock string ("2026-09-15T12:00"). Resolve it in the
+ * institute's timezone rather than the server's — `new Date()` on a naked
+ * datetime string uses the *process* zone, so a booking for 12:00 was stored
+ * as 12:00 UTC on a UTC host and read back as 5:30 PM.
+ */
 function toIso(datetimeLocal: string): string {
-  return new Date(datetimeLocal).toISOString();
+  return instituteIso(datetimeLocal);
 }
 
 export async function createBooking(formData: FormData): Promise<ActionResult> {
@@ -139,6 +151,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       rooms_requested: payload.rooms_requested,
       alumni_id_url: alumniIdUrl,
       custom_fields: customValues.length > 0 ? customValues : null,
+      meals: payload.meals,
       guests,
     });
 
@@ -330,6 +343,15 @@ export async function updateBookingLifecycle(bookingId: string, targetStatus: Bo
     const expected = LIFECYCLE_TRANSITIONS[booking.status];
     if (!expected || expected !== targetStatus) {
       return { ok: false, error: `Cannot change status from ${booking.status} to ${targetStatus}` };
+    }
+
+    // "Occupied" means the guest is physically in the room. A stay that has
+    // not started cannot be one, and marking it early makes the manager's
+    // "current occupants" list and the availability grid lie about who is in
+    // the building right now.
+    if (targetStatus === "OCCUPIED") {
+      const tooEarly = occupancyNotStartedError(booking);
+      if (tooEarly) return { ok: false, error: tooEarly };
     }
 
     const remarkMap: Record<string, string> = {

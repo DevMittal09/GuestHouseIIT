@@ -33,16 +33,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
+import { describeMeals } from "@/lib/meals";
+import { occupancyNotStartedError, stayPhase } from "@/lib/workflow";
 import { ROLE_LABELS, STATUS_LABELS, type BookingStatus, type BookingWithDetails, type Room } from "@/lib/types";
 
 export function ManagerQueue({
   pending,
-  approved,
+  current,
+  upcoming,
+  overdue,
   cancellationRequests,
   rooms,
 }: {
   pending: BookingWithDetails[];
-  approved: BookingWithDetails[];
+  /** Stays happening right now — check-in has passed, check-out has not. */
+  current: BookingWithDetails[];
+  /** Allocated stays that have not started yet. */
+  upcoming: BookingWithDetails[];
+  /** Past their check-out but never marked Vacated — still need closing off. */
+  overdue: BookingWithDetails[];
   cancellationRequests: BookingWithDetails[];
   rooms: Room[];
 }) {
@@ -122,39 +131,64 @@ export function ManagerQueue({
         )}
       </section>
 
-      {/* Upcoming & current stays */}
+      {/* Current occupants — guests physically in the building now */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold">
-          Upcoming &amp; current stays{" "}
+        <h2 className="mb-1 text-lg font-semibold">
+          Current occupants{" "}
           <Badge variant="secondary" className="align-middle">
-            {approved.length}
+            {current.length}
           </Badge>
         </h2>
-        {approved.length === 0 ? (
+        <p className="mb-3 text-sm text-muted-foreground">
+          Stays that have started and not yet reached their check-out time. Mark a guest as
+          Occupied when they arrive at the desk, and Vacated when they leave.
+        </p>
+        {current.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
-            No approved stays for this guest house.
+            Nobody is staying at this guest house right now.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Requester</TableHead>
-                  <TableHead>Check-in</TableHead>
-                  <TableHead>Check-out</TableHead>
-                  <TableHead>Assigned rooms</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {approved.map((b) => (
-                  <ApprovedRow key={b.id} booking={b} />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <StaysTable bookings={current} />
+        )}
+      </section>
+
+      {/* Past check-out but never closed off. Their own section, because
+          counting them as "current occupants" would be the same kind of lie
+          this split exists to remove. */}
+      {overdue.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold">
+            Awaiting check-out{" "}
+            <Badge variant="destructive" className="align-middle">
+              {overdue.length}
+            </Badge>
+          </h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            These stays are past their check-out time and were never marked Vacated, so they are
+            still holding their rooms. Close them off to release the rooms.
+          </p>
+          <StaysTable bookings={overdue} showOverdue />
+        </section>
+      )}
+
+      {/* Upcoming — allocated, not started */}
+      <section>
+        <h2 className="mb-1 text-lg font-semibold">
+          Upcoming stays{" "}
+          <Badge variant="secondary" className="align-middle">
+            {upcoming.length}
+          </Badge>
+        </h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Rooms are already held for these bookings. They cannot be marked Occupied until their
+          check-in time.
+        </p>
+        {upcoming.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+            No upcoming stays for this guest house.
+          </p>
+        ) : (
+          <StaysTable bookings={upcoming} />
         )}
       </section>
     </div>
@@ -205,18 +239,85 @@ function ManagerRow({ booking, rooms }: { booking: BookingWithDetails; rooms: Ro
   );
 }
 
-/** Lifecycle status label and style for the next action button. */
-const LIFECYCLE_ACTIONS: Record<string, { label: string; nextStatus: BookingStatus; variant: "default" | "secondary" }> = {
-  APPROVED: { label: "Mark as Occupied", nextStatus: "OCCUPIED", variant: "default" },
-  OCCUPIED: { label: "Mark as Vacated", nextStatus: "VACATED", variant: "secondary" },
+/**
+ * One table of allocated stays, used for both current occupants and upcoming
+ * stays so the two read identically apart from the heading.
+ */
+function StaysTable({
+  bookings,
+  showOverdue = false,
+}: {
+  bookings: BookingWithDetails[];
+  /** Flag stays past their check-out that were never marked Vacated. */
+  showOverdue?: boolean;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-lg border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Reference</TableHead>
+            <TableHead>Requester</TableHead>
+            <TableHead>Check-in</TableHead>
+            <TableHead>Check-out</TableHead>
+            <TableHead>Assigned rooms</TableHead>
+            <TableHead>Meals</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {bookings.map((b) => (
+            <StayRow key={b.id} booking={b} showOverdue={showOverdue} />
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+/**
+ * The next lifecycle step for a stay.
+ *
+ * "Mark as Vacated" gets its own colour rather than reusing the neutral
+ * secondary button: check-in and check-out are the two things the manager
+ * clicks all day, and telling them apart at a glance matters more than
+ * matching the rest of the palette.
+ */
+const LIFECYCLE_ACTIONS: Record<
+  string,
+  { label: string; nextStatus: BookingStatus; className: string }
+> = {
+  APPROVED: {
+    label: "Mark as Occupied",
+    nextStatus: "OCCUPIED",
+    className:
+      "bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600",
+  },
+  OCCUPIED: {
+    label: "Mark as Vacated",
+    nextStatus: "VACATED",
+    className:
+      "bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500",
+  },
 };
 
-/** Approved/Occupied/Vacated booking row — lifecycle updates. */
-function ApprovedRow({ booking }: { booking: BookingWithDetails }) {
+/** Approved/Occupied booking row — lifecycle updates. */
+function StayRow({
+  booking,
+  showOverdue,
+}: {
+  booking: BookingWithDetails;
+  showOverdue: boolean;
+}) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   const action = LIFECYCLE_ACTIONS[booking.status];
+  // The same rule the server enforces, so the button is never offered for a
+  // click that would be refused.
+  const tooEarly = action?.nextStatus === "OCCUPIED" ? occupancyNotStartedError(booking) : null;
+  const overdue = showOverdue && stayPhase(booking) === "past";
 
   const handleLifecycle = () =>
     startTransition(async () => {
@@ -231,12 +332,20 @@ function ApprovedRow({ booking }: { booking: BookingWithDetails }) {
     });
 
   return (
-    <TableRow>
+    <TableRow className={overdue ? "bg-amber-50/60 dark:bg-amber-950/20" : undefined}>
       <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
       <TableCell>{booking.requester.full_name}</TableCell>
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
-      <TableCell>{formatDateTime(booking.check_out)}</TableCell>
+      <TableCell>
+        {formatDateTime(booking.check_out)}
+        {overdue && (
+          <Badge variant="outline" className="ml-2 align-middle">
+            Overdue
+          </Badge>
+        )}
+      </TableCell>
       <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "—"}</TableCell>
+      <TableCell className="text-xs">{describeMeals(booking.meals)}</TableCell>
       <TableCell>
         <StatusBadge status={booking.status} />
       </TableCell>
@@ -244,12 +353,17 @@ function ApprovedRow({ booking }: { booking: BookingWithDetails }) {
         {action && (
           <Button
             size="sm"
-            variant={action.variant}
-            disabled={isPending}
+            className={tooEarly ? undefined : action.className}
+            variant={tooEarly ? "outline" : "default"}
+            disabled={isPending || tooEarly !== null}
+            title={tooEarly ?? undefined}
             onClick={handleLifecycle}
           >
             {isPending ? "Updating…" : action.label}
           </Button>
+        )}
+        {tooEarly && (
+          <p className="mt-1 text-xs text-muted-foreground">Available from check-in</p>
         )}
       </TableCell>
     </TableRow>

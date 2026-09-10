@@ -66,6 +66,7 @@ export interface Database {
           | "rejection_reason"
           | "alumni_id_url"
           | "custom_fields"
+          | "meals"
           | "created_at"
           | "updated_at"
         >;

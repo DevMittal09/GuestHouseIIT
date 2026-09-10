@@ -1,3 +1,4 @@
+import { instituteDayBounds, toInstituteDateValue } from "./tz";
 import type { Room, RoomOccupancySegment } from "./types";
 
 export const HOURS_IN_DAY = 24;
@@ -5,23 +6,23 @@ const HOUR_MS = 3_600_000;
 
 /** One room's day: the booking holding each hour (null = free), plus its bookings. */
 export interface RoomDayOccupancy {
-  /** 24 entries, midnight-first, in the viewer's local time. */
+  /** 24 entries, midnight-first, in institute time (`lib/tz.ts`). */
   hours: (RoomOccupancySegment | null)[];
   segments: RoomOccupancySegment[];
 }
 
-/** Local midnight of `date` ("yyyy-MM-dd") and of the day after. */
+/**
+ * Institute midnight of `date` ("yyyy-MM-dd") and of the day after. Zoned
+ * rather than runtime-local so the grid draws the same day for a manager in
+ * Palakkad and a server in UTC.
+ */
 export function dayBounds(date: string): { start: Date; end: Date } {
-  const start = new Date(`${date}T00:00:00`);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return { start, end };
+  return instituteDayBounds(date);
 }
 
-/** "yyyy-MM-dd" for a Date, in local time. */
+/** "yyyy-MM-dd" for a Date, in institute time. */
 export function toDateInputValue(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return toInstituteDateValue(d);
 }
 
 /** "1 PM" style label for the hour axis. */

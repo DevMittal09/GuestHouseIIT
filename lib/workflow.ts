@@ -82,6 +82,42 @@ export const ACTIVE_STATUSES: BookingStatus[] = [
   "PENDING_GH_MANAGER",
 ];
 
+/**
+ * Where a stay sits relative to now.
+ *
+ * `OCCUPIED` is a *fact the manager records at the desk* — the guest walked in
+ * — not something a date implies. So the phase is read off the booking's own
+ * check-in and check-out, and the manager console groups by it. Without this
+ * a stay starting next week sat under the same heading as one happening now,
+ * and a future booking could be marked Occupied by mistake.
+ */
+export type StayPhase = "upcoming" | "current" | "past";
+
+export function stayPhase(
+  booking: { check_in: string; check_out: string },
+  now: Date = new Date()
+): StayPhase {
+  const at = now.toISOString();
+  if (booking.check_in > at) return "upcoming";
+  // Half-open, matching `room_holds.during`: a stay checking out at 11:00 is
+  // no longer current at 11:00.
+  if (booking.check_out <= at) return "past";
+  return "current";
+}
+
+/**
+ * Why the manager cannot mark this booking Occupied yet, or null when they
+ * can. Enforced server-side in `updateBookingLifecycle`; the console uses the
+ * same function to disable the button and say why.
+ */
+export function occupancyNotStartedError(
+  booking: { check_in: string },
+  now: Date = new Date()
+): string | null {
+  if (booking.check_in <= now.toISOString()) return null;
+  return "This stay has not started yet — it can be marked Occupied from its check-in time.";
+}
+
 /** Statuses that represent a booking where rooms are currently held/occupied. */
 export const ROOM_HOLDING_STATUSES: BookingStatus[] = [
   "APPROVED",
