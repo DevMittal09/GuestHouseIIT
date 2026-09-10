@@ -154,9 +154,7 @@ Scoping is applied in the store query *and* re-checked in `canReview()` inside
   request for an approved/occupied booking, the manager can approve or reject it
   via `approveCancellation` / `rejectCancellation` in `app/actions/bookings.ts`.
 
-Queue pages poll every 5 s via `components/auto-refresh.tsx`, which
-`components/tab-session-guard.tsx` suspends when the tab's claimed identity no
-longer matches the signed-in user.
+Queue pages poll every 5 s via `components/auto-refresh.tsx`.
 
 ## Room availability grid (`/availability`)
 

@@ -419,3 +419,158 @@ one page that could fix the problem must not be the page that crashes.
 **Decision.** Added `OCCUPIED` and `VACATED` to the end of the approval pipeline, and shifted cancellation flow to `CANCELLATION_REQUESTED` → `CANCELLATION_APPROVED` for approved bookings.
 
 **Why.** A booking doesn't end when it's approved; the Guest House Manager needs to track live occupancy and release rooms when guests depart or cancel. The `ROOM_HOLDING_STATUSES` grouping (`APPROVED`, `OCCUPIED`, `CANCELLATION_REQUESTED`) ensures room capacity logic dynamically respects real-world occupancy.
+
+## All wall-clock times are institute time, not the runtime's
+
+**Decision.** Pin the whole app to `Asia/Kolkata` in `lib/tz.ts`. Instants stay
+ISO/UTC in storage; exactly two operations are zoned — parsing a wall-clock time
+the user typed (`instituteIso`) and rendering an instant back
+(`formatInstitute*`, `instituteHour`, `instituteDayBounds`). `lib/format.ts`
+delegates to it, so callers cannot get it wrong by forgetting.
+
+**Why.** This was a live bug, not a precaution. `toIso()` was
+`new Date(datetimeLocal).toISOString()`, and the ECMAScript spec resolves a
+naked `"2026-09-15T12:00"` in the **process** timezone. That is correct on a
+developer machine set to IST and wrong everywhere else. On a UTC host a 12:00
+booking was stored as `12:00Z` and the Guest House Manager's console read it
+back as 5:30 PM, a 10:00 check-out as 3:30 PM — reported as "the time is 05:30
+and 3:30, it should be what the user has given".
+
+**Why a fixed zone rather than the viewer's.** The guest house is one building.
+"Check in at 12:00" means 12:00 there, and a warden reading the same booking
+from anywhere must see the same number. Rendering in the *viewer's* zone would
+have made the manager and the requester disagree about a single fact.
+
+**Why not just `process.env.TZ`.** It fixes the server and leaves every browser
+outside IST wrong, and it makes correctness depend on a deploy setting rather
+than on the code. Explicit `Intl` zones also removed the SSR/hydration mismatch
+class for free: a server-rendered date and its client hydration now agree even
+when the two machines are in different zones.
+
+**What it costs.** Two rules to hold: never `new Date(<naked datetime string>)`,
+never format without a zone. `date-fns` `format` is no longer usable for
+display. And the bug leaves a tail — rows written during the UTC window are
+still stored 5h30m late, so the code fix needed a data repair beside it
+(`supabase/repairs/2026-09-10-utc-parsed-bookings.sql`), which also has to
+rebuild `room_holds` because `during` is derived from the booking's dates.
+
+**What we got wrong the first time round.** [09-production-plan.md](09-production-plan.md)
+Phase 3 predicted this bug and prescribed "add it to `lib/format.ts` and test
+with `TZ=UTC npm run build`". Both halves were insufficient: fixing only
+formatting leaves the *parse* wrong, which is the half that corrupts stored
+data, and a build renders no user-entered times so it catches nothing. The test
+that works is running the domain logic under a non-IST `TZ`.
+
+## Meals are one jsonb column, not three booleans
+
+**Decision.** `bookings.meals` is a single jsonb object
+`{breakfast, lunch, dinner}` (migration 6), read only through
+`normalizeMeals()`.
+
+**Why one column.** It is one answer to one question and is always consumed as a
+set — the kitchen reads "table for four, breakfast and dinner". Three boolean
+columns would have spread one concept across three places in the row type, the
+insert type, both stores and every display. `custom_fields` is already jsonb for
+the same reason.
+
+**Why `normalizeMeals` is mandatory on read.** Bookings predate the field, so
+the honest value for them is "none requested" rather than an error; the mock
+store's JSON file gets hand-edited; and a `check` constraint protects Postgres
+but not the mock backend. Normalising during hydration in both stores means
+`Booking.meals` is always a complete object and no consumer downstream needs a
+null check.
+
+**Why always optional.** "No meals" is the common answer. Giving meals a
+`FieldMode` in the form config would have implied a role could be *required* to
+order dinner.
+
+**What it costs.** Meals cannot be filtered or aggregated in SQL as cheaply as
+columns could. If the kitchen ever wants "how many breakfasts next Tuesday" as a
+query rather than a report, this becomes a jsonb expression index or a
+generated column.
+
+## The manager console groups stays by phase, not by status
+
+**Decision.** Split the single "Upcoming & current stays" table into **Current
+occupants**, **Awaiting check-out** and **Upcoming stays**, driven by
+`stayPhase()` (`current` | `past` | `upcoming`) rather than by booking status.
+Separately, refuse `APPROVED → OCCUPIED` before the booking's check-in
+(`occupancyNotStartedError`), server-side, with the console disabling the button
+from the same function.
+
+**Why.** Status and time are different facts and the old table conflated them. A
+booking approved for next week sat in the same list as a guest in the building,
+and because a manager could mark anything Occupied at any time, a future stay
+could genuinely carry the `OCCUPIED` badge — which is what was reported. Grouping
+by phase makes the common question ("who is in the building right now?") a
+heading rather than a scan.
+
+**Why `OCCUPIED` needs a guard at all.** It is a fact recorded at the desk — the
+guest walked in — not something a date implies. Letting it be set early makes the
+current-occupants list and the availability grid both lie about the building.
+
+**Why "Awaiting check-out" is its own section rather than part of current.** A
+stay past its check-out that nobody marked Vacated is still holding its rooms, so
+it cannot be hidden. But counting it under "Current occupants" would be the same
+category error the split exists to remove. Its own section with a red count also
+turns the long-standing no-show problem
+([09-production-plan.md](09-production-plan.md) Phase 3) from invisible into
+visible.
+
+**What it costs.** Three tables where there was one, and the phase is computed at
+request time, so a stay crosses between sections on the next poll rather than
+live.
+
+## The allocation grid is locked to the booking's own dates
+
+**Decision.** `components/room-grid.tsx` reads occupancy for the booking's
+`check_in`/`check_out` and nothing else. Its date and time pickers are gone, and
+rooms held for any part of the stay render `disabled`.
+
+**Why.** The pickers let the manager change the window the grid *displayed*
+while `allocateRooms()` always wrote holds for the booking's *real* dates. Shift
+the window past a conflict and an already-allotted room turned green, invited a
+click, and then failed. The write was never unsafe — the `room_holds` exclusion
+constraint refused it — but the grid was offering rooms allotted to someone else,
+which is what "the same room can be allotted to a different person" described.
+
+**Why remove the control rather than fix the query.** The control had no job left
+once the occupancy query was correct: allocation is always for one fixed period,
+and browsing other dates is what `/availability` is for. Keeping it would have
+been a second way to ask the same question, which is how the two answers came to
+disagree.
+
+**What it costs.** A manager who wants to see the room's wider calendar leaves
+the dialog. That is a real regression in convenience, and the fix if it bites is
+a read-only link to `/availability`, not the pickers back.
+
+## Per-tab session guard — built, then reverted
+
+**Decision.** Do **not** try to make browser tabs behave like independent
+sessions. `components/tab-session-guard.tsx` was written and removed the same
+day; the app polls with `components/auto-refresh.tsx` as it always did.
+
+**What it did.** Each tab recorded who it believed it was signed in as in
+`sessionStorage`. When the server-rendered user later disagreed, the tab was
+covered with a "This browser switched user" panel and its 5 s polling stopped,
+so it froze with an explanation instead of quietly re-rendering as someone else.
+
+**Why it was reverted.** Two reasons, both from using it:
+
+- **The overlay was intrusive.** It interrupted a real, deliberate action —
+  switching persona — with a modal explaining something the user already knew.
+  A demo tool blocking the demo is worse than the behaviour it was guarding.
+- **It cost every page load.** The guard mounted in the portal layout, so a
+  concern that only arises when someone deliberately opens two personas was
+  paid for on every navigation by everyone.
+
+**The constraint that has not changed.** A cookie belongs to the browser, not to
+a tab, so signing in anywhere changes every tab, and with polling the others
+follow within seconds. Nothing in the UI can fix that; the session token has to
+move somewhere per-tab, which is a change to authentication itself
+([09-production-plan.md](09-production-plan.md) Phase 1). Until then the honest
+answer is a private window or a second browser profile.
+
+**So: do not rebuild this.** If tab bleed is raised again, the options are
+per-tab sessions as part of real auth, or documenting the private-window
+workaround — not another client-side guard.

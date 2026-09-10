@@ -29,9 +29,16 @@ supabase status              # prints URL, anon key, service_role key
 ## Hosted Supabase
 
 1. Create a project at https://supabase.com/dashboard.
-2. In the SQL Editor run `supabase/migrations/00000000000001_init.sql`, then
-   `supabase/seed.sql`.
+2. In the SQL Editor run **every file in `supabase/migrations/` in numerical
+   order** (there are six), then `supabase/seed.sql`.
 3. Copy the keys from **Project Settings → API**.
+
+> **Migrations are not applied automatically and an existing project will not
+> pick up new ones.** Migration 6 (`bookings.meals`) is the current example: the
+> booking insert names the column, so until it is applied **every submission
+> fails** while every page still renders — reads degrade to "no meals
+> requested" via `normalizeMeals`. After pulling changes, check whether
+> `supabase/migrations/` has grown.
 
 Either way, fill `.env.local` and restart the dev server:
 
@@ -49,7 +56,18 @@ variables; `.env.local` is gitignored and must stay that way.
 > console's user management (it creates Supabase Auth users).
 
 The current hosted project already has the schema, seed data and the private
-`documents` bucket applied.
+`documents` bucket applied. As of 10 Sep 2026 it is on migration 5 — **migration
+6 still needs applying**, and
+`supabase/repairs/2026-09-10-utc-parsed-bookings.sql` still needs running to
+correct four bookings stored 5h30m late (see below).
+
+### One-off repairs
+
+`supabase/repairs/` holds data fixes that are **not** migrations and are never
+applied automatically. Each file's header explains what it is for and how to
+check whether it applies to your data. Read it, take a backup, and run it
+deliberately in the SQL editor. They are not idempotent — the timezone repair in
+particular would shift already-correct rows a second time if re-run.
 
 ## Verifying changes
 
@@ -112,11 +130,18 @@ Not yet deployed. The intended path is Vercel + hosted Supabase.
    `SUPABASE_SERVICE_ROLE_KEY` as server-only (do **not** prefix it with
    `NEXT_PUBLIC_`).
 4. Deploy; Vercel detects Next.js automatically. `npm run build` must pass first.
-5. Apply the migration and seed to the production Supabase project if it is
-   separate from the development one.
+5. Apply **all** migrations, in order, and the seed to the production Supabase
+   project if it is separate from the development one.
 
 **Configuration that must survive deployment:**
 
+- **The host's timezone no longer matters — keep it that way.** `lib/tz.ts`
+  pins every wall-clock operation to `Asia/Kolkata`, so the app is correct on a
+  UTC host (Vercel) and on an IST laptop alike. Do not "fix" a date problem by
+  setting `TZ` on the deployment: that would make correctness depend on a deploy
+  setting and would still leave browsers outside IST wrong. This is the bug that
+  stored bookings 5h30m late once already — see
+  [07-troubleshooting.md](07-troubleshooting.md).
 - `next.config.ts` raises `experimental.serverActions.bodySizeLimit` to `25mb`
   for document uploads. Without it, uploads fail as an opaque browser
   `NetworkError`.

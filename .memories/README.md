@@ -362,13 +362,11 @@ Queue pages poll every 5 s (`components/auto-refresh.tsx`); `/history` and
   **no `form` component** — hence `components/ui/native-select.tsx` and manual
   `FieldError` rendering.
 - **One cookie, every tab.** Signing in as another persona in one tab changes
-  who *every* tab is, and the 5 s polling made the others silently re-render as
-  the new persona mid-task. `components/tab-session-guard.tsx` has each tab
-  claim its identity in `sessionStorage` and, on a mismatch, blocks that tab and
-  stops its polling instead of letting the view morph. It cannot give tabs
-  separate sessions — a cookie has no such granularity; that arrives with real
-  authentication (roadmap item 1). Until then, two identities need two browser
-  profiles or a private window.
+  who *every* tab is, and the 5 s polling makes the others re-render as that
+  persona. A cookie has no per-tab granularity, so this cannot be fixed in the
+  UI; a guard that blocked the mismatched tab was built and reverted (see
+  [06-decisions.md](06-decisions.md)). Real per-tab sessions come with real
+  authentication (roadmap item 1); until then use a private window.
 - **`.gitignore` has `.env*`**, which also hides `.env.example`; the
   `!.env.example` exception must stay.
 - **Node version.** Next.js 16 needs `>= 20.9.0`.
@@ -436,5 +434,4 @@ Last substantive update: 2026-09-10 — all times pinned to institute time
 (`lib/tz.ts`, fixing bookings that read back 5h30m late), meal preferences per
 booking, hour-by-hour availability inside the booking form, the manager console
 split into current / awaiting check-out / upcoming, `OCCUPIED` refused before
-check-in, the allocation grid locked to the booking's own dates, and a per-tab
-session guard.
+check-in, and the allocation grid locked to the booking's own dates.

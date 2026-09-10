@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TabSessionGuard } from "@/components/tab-session-guard";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { logout } from "@/app/actions/auth";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
@@ -69,7 +69,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
-      <TabSessionGuard userId={user.id} userName={user.full_name} />
+      <AutoRefresh />
     </div>
   );
 }

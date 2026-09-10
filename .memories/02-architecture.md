@@ -33,7 +33,7 @@ app/
     admin/                 developer superadmin console
   actions/                 all mutations (server actions)
 components/                feature components + components/ui primitives
-lib/                       domain logic: types, workflow, form config, store
+lib/                       domain logic: types, workflow, form config, tz, store
 supabase/                  migrations + seed SQL
 ```
 
@@ -41,7 +41,7 @@ Everything that writes data goes through a **server action** in `app/actions/`.
 There are no API routes. Pages are server components that read through the store
 and pass plain data to client components.
 
-## The three ideas that explain most of the codebase
+## The four ideas that explain most of the codebase
 
 ### 1. One data interface, two implementations
 
@@ -134,6 +134,31 @@ actually enforces it, per-guest, server-side).
 > spec defaults when a saved row predates the feature, so existing student
 > configs pick the rule up rather than silently losing it.
 
+### 4. Every wall-clock time is institute time
+
+`lib/tz.ts` pins the app to **Asia/Kolkata**. Instants are stored as ISO/UTC and
+only two operations are zoned:
+
+| Direction | Function | Used by |
+| --- | --- | --- |
+| A time the user typed → an instant | `instituteIso()` | `toIso()` in `createBooking`, the zod schema's date comparisons |
+| An instant → something a human reads | `formatInstitute*`, `instituteHour`, `instituteDayBounds` | `lib/format.ts`, the availability grid, the date presets |
+
+Two rules follow, and they are the whole discipline: **never**
+`new Date("2026-09-15T12:00")` (the spec resolves a naked datetime string in the
+*process* timezone) and **never** format an instant with date-fns `format`,
+`toLocaleString()` or `getHours()`.
+
+This is a fixed bug rather than a precaution. `toIso()` was
+`new Date(datetimeLocal).toISOString()`, which is right on a machine set to IST
+and wrong everywhere else; on a UTC host a 12:00 booking was stored as `12:00Z`
+and the manager's console read it back as 5:30 PM. The parse is the dangerous
+half — it puts a wrong value in the database, and rows written that way stay
+wrong after the code is fixed (`supabase/repairs/`). A fixed zone rather than the
+viewer's is deliberate: the guest house is one building, so everyone must read
+"12:00" as the same moment. It also removes the SSR/hydration mismatch class,
+because the rendered string no longer depends on which machine rendered it.
+
 ## The approval workflow
 
 `lib/workflow.ts` is the single source of truth.
@@ -183,11 +208,34 @@ APPROVED → OCCUPIED → VACATED
 `lib/workflow.ts` defines which statuses keep rooms reserved. Room occupancy
 queries and the room grid use this instead of checking just `APPROVED`.
 
+**Status is not the same fact as time, and the console keeps them apart.**
+`OCCUPIED` records that the guest walked in, so `occupancyNotStartedError()`
+refuses the transition before the booking's check-in — enforced in
+`updateBookingLifecycle`, with the button disabled from the same function.
+`stayPhase()` (`upcoming` | `current` | `past`) is the read side, and `/manager`
+groups by it rather than by status:
+
+| Section | Phase | Why it is separate |
+| --- | --- | --- |
+| Current occupants | `current` | Who is in the building right now |
+| Awaiting check-out | `past`, still holding rooms | Never marked Vacated, so still consuming inventory |
+| Upcoming stays | `upcoming` | Allocated, not started; cannot be marked Occupied yet |
+
+One combined table previously mixed all three, so a booking for next week read
+as though it were occupied.
+
 ## Room allocation and clash detection
 
 `components/room-grid.tsx` renders the cinema-style grid — green available, red
-occupied, blue selected — grouped into double-sharing and single rooms, with a
-date/time selector that re-queries occupancy live.
+occupied, blue selected — grouped into double-sharing and single rooms.
+
+**Occupancy is read for the booking's own dates and nothing else.** The grid
+used to carry its own date/time selector, but `allocateRooms()` always wrote
+holds for the booking's *real* period. Shifting the displayed window past a
+conflict turned an already-allotted room green; the write still failed safely on
+the exclusion constraint, but the grid was offering rooms belonging to another
+booking. Occupied rooms now render `disabled`, so such a room cannot be picked
+at all. Browsing other dates belongs to `/availability`.
 
 ### Occupancy is a database constraint, not a code path
 
@@ -246,6 +294,14 @@ signed-in role**. It is the only route with no role gate.
 The chart is a time × room matrix for one chosen day: 24 hours down the Y axis,
 room numbers across the X, red where a room is held and blank where it is free,
 with a per-room list of booking periods underneath.
+
+**The chart itself is `components/occupancy-chart.tsx`**, shared with
+`components/booking-availability.tsx`, which embeds the same picture in the
+booking form for the guest house and check-in date being chosen — requesters
+were otherwise picking dates blind and discovering a clash only when the
+submission bounced. One component, one action, one bucketing, so the view a
+requester uses to choose and the view the manager uses to allocate cannot
+drift apart.
 
 Three things are worth knowing:
 

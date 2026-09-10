@@ -57,14 +57,19 @@ Two things to know if you see it again:
 degrade gracefully (`normalizeMeals` fills in "none requested"), so the symptom
 is writes failing while every page still renders.
 
-## A tab suddenly shows a different user, or says "This browser switched user"
+## A tab suddenly shows a different user
 
-Working as intended. The mock session is a cookie, which belongs to the browser
-and not to a tab, so signing in as another persona anywhere changes every tab —
-and the 5 s polling used to make the others re-render as that persona in place.
-`components/tab-session-guard.tsx` now blocks the mismatched tab and stops its
-polling. To use two accounts at once, use a private window or a second browser
-profile; genuine per-tab sessions need real authentication.
+Expected, and not fixable in the UI. The mock session is a cookie, which belongs
+to the browser and not to a tab, so signing in as another persona anywhere
+changes every tab — and the 5 s polling makes the others re-render as that
+persona within seconds. To use two accounts at once, use a private window or a
+second browser profile.
+
+A `TabSessionGuard` that detected the mismatch and blocked the affected tab was
+built and then **reverted**: the blocking overlay was intrusive and it added
+work to every page load for a demo-only concern. Don't rebuild it — see
+[06-decisions.md](06-decisions.md). Genuine per-tab sessions need real
+authentication.
 
 ## Form Builder changes appear to do nothing
 

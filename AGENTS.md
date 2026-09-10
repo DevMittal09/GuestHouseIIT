@@ -458,17 +458,12 @@ site deliberately. Fix by setting `--primary-foreground` to a dark brown.
   `experimental.serverActions.bodySizeLimit` to `25mb`. Per-file validation
   (5 MB, JPG/PNG/WEBP/PDF) lives in `app/actions/bookings.ts`.
 - **One cookie, every tab.** The mock session is a cookie, so signing in as a
-  different persona in one tab changes who *every* open tab is — and with the
-  5 s polling the others quietly re-render as the new persona mid-task, which
-  reads as the app corrupting itself. `components/tab-session-guard.tsx` has
-  each tab claim its identity in `sessionStorage`, and when the server-rendered
-  user later disagrees it blocks that tab and **stops the polling** so the view
-  holds still instead of morphing. It does not give tabs separate sessions —
-  a cookie cannot. Real per-tab sessions arrive with real auth; until then a
-  second identity needs a private window. It reads storage through
-  `useSyncExternalStore`, not `useState` + an effect, because reading storage
-  during render is impure and setState in an effect body fails the React
-  Compiler lint.
+  different persona in one tab changes who *every* open tab is, and the 5 s
+  polling makes the others re-render as that persona. This is inherent to cookie
+  auth, not a bug to patch in the UI — a blocking "this browser switched user"
+  guard was built and **reverted** (see [.memories/06-decisions.md](.memories/06-decisions.md));
+  don't rebuild it. Two identities at once need two browser profiles or a
+  private window, and genuine per-tab sessions arrive with real auth.
 - **Never use `datetime-local` or `type="time"`.** Firefox makes them
   type-only, which reads as "I can't select the time". Use
   `components/ui/time-select.tsx` — hour / minute / AM-PM dropdowns, controlled
