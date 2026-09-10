@@ -29,10 +29,24 @@ export function toTimeValue(hour12: number, minute: number, period: "AM" | "PM")
   return `${pad(hour24)}:${pad(minute)}`;
 }
 
+/** "9:00 PM" — the plain reading of a "HH:mm" value. */
+export function describeTime(value: string): string {
+  const { hour12, minute, period } = parseTime(value);
+  return `${hour12}:${pad(minute)} ${period}`;
+}
+
 /**
  * Alarm-clock style time picker: separate hour, minute and AM/PM dropdowns.
  * `value`/`onChange` speak "HH:mm" in 24-hour form (what the form payload uses).
  * Native selects also accept type-ahead, so the time can be typed as well.
+ *
+ * **The AM/PM dropdown keeps whatever it already held when the hour changes**,
+ * which is correct but easy to miss: a field defaulting to 12:00 reads as PM,
+ * so changing the hour to 9 gives 9 PM, not the 9 AM the user meant. That
+ * silently produced "Check-out must be after check-in" on a booking the user
+ * had filled in correctly as far as they could see. Hence the read-back below
+ * the dropdowns — the resolved time is spelled out so a wrong period is
+ * visible before submitting, not after.
  */
 export function TimeSelect({
   value,
@@ -53,6 +67,7 @@ export function TimeSelect({
     : [...MINUTE_STEPS, minute].sort((a, b) => a - b);
 
   return (
+    <div className="space-y-1">
     <div className="flex items-center gap-1">
       <NativeSelect
         aria-label={`${label} hour`}
@@ -91,6 +106,10 @@ export function TimeSelect({
         <option value="AM">AM</option>
         <option value="PM">PM</option>
       </NativeSelect>
+    </div>
+      <p className="text-xs text-muted-foreground">
+        {label}: <span className="font-medium text-foreground">{describeTime(value)}</span>
+      </p>
     </div>
   );
 }

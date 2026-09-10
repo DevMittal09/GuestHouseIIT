@@ -29,6 +29,29 @@ controlled via `value` (`"HH:mm"`, 24-hour) and `onChange`. **Never reintroduce
 native time inputs.** Its `parseTime` / `toTimeValue` handle the classic traps
 (12 AM = `00:00`, 12 PM = `12:00`); re-test those if you touch the conversion.
 
+## "Check-out must be after check-in" on times that clearly are
+
+The AM/PM dropdown in `components/ui/time-select.tsx` keeps whatever it already
+held when only the hour is changed, and the booking form's two time fields
+default to **opposite periods**: check-in `12:00` displays as PM, check-out
+`10:00` as AM. So a requester who wants 9 AM → 10 PM and changes only the two
+hour dropdowns actually submits **9 PM → 10 AM**, which really is out of order.
+The old message stated the rule back at them and named neither time, so there
+was nothing to act on.
+
+Fixed on 10 Sep 2026 by making the interpretation visible rather than by
+loosening validation:
+
+- `TimeSelect` prints the resolved time under the dropdowns ("Check-in: 9:00 PM").
+- The booking form shows a live **Your stay** panel with both resolved instants,
+  the duration, and the error inline — so it is caught while filling the form.
+- `checkOutOrderError()` (`lib/booking-schema.ts`) is the shared message used by
+  both the schema and that panel. It names both times and, when they fall on the
+  same day, says the AM/PM dropdowns do not change on their own.
+
+If this is reported again, first ask what the read-back line says — it is the
+fastest way to tell a mis-set period from a genuine date mistake.
+
 ## Times are 5h30m late — a 12:00 booking shows as 5:30 PM
 
 **Fixed.** `toIso()` in `app/actions/bookings.ts` used to be

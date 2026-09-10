@@ -30,7 +30,11 @@ import {
   maxGuestsFor,
   roomsNeededFor,
 } from "@/lib/occupancy";
-import { advanceWindowMessage, bookingPayloadSchema } from "@/lib/booking-schema";
+import {
+  advanceWindowMessage,
+  bookingPayloadSchema,
+  checkOutOrderError,
+} from "@/lib/booking-schema";
 import {
   hasQualifyingParent,
   parentDependencyHint,
@@ -39,7 +43,7 @@ import {
   type RoleFormConfig,
 } from "@/lib/form-config";
 import { MEAL_KEYS, MEAL_LABELS, MEAL_TIMES } from "@/lib/meals";
-import { toInstituteDateValue } from "@/lib/tz";
+import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { latestCheckIn } from "@/lib/workflow";
 import { ROLE_LABELS, type GuestHouse, type MealKey, type Profile } from "@/lib/types";
 
@@ -120,6 +124,7 @@ export function BookingForm({
   // are picked, so the requester sees the day they are actually choosing.
   const selectedGuestHouseId = useWatch({ control, name: "guest_house_id" });
   const checkInDate = useWatch({ control, name: "check_in_date" });
+  const checkOutDate = useWatch({ control, name: "check_out_date" });
   const selectedMeals = useWatch({ control, name: "meals" });
 
   // Siblings / grandparents stay locked until a parent is on the request.
@@ -144,6 +149,31 @@ export function BookingForm({
   // who need none. Marking a guest as an infant frees a bed slot immediately.
   const guestCeiling = Math.min(bedsAvailable + infantCount, MAX_GUESTS);
   const overCapacity = roomsPicked > 0 && bedGuests > bedsAvailable;
+
+  // A live reading of the stay, so a mis-set AM/PM is caught while filling the
+  // form rather than by a validation error after submitting. `checkOutOrderError`
+  // is the same function the schema uses, so the two cannot disagree.
+  const stay = (() => {
+    if (!checkInDate || !checkOutDate) return null;
+    const from = `${checkInDate}T${checkInTime}`;
+    const to = `${checkOutDate}T${checkOutTime}`;
+    const fromAt = instituteDate(from);
+    const toAt = instituteDate(to);
+    if (Number.isNaN(fromAt.getTime()) || Number.isNaN(toAt.getTime())) return null;
+    const problem = checkOutOrderError(from, to);
+    const hours = (toAt.getTime() - fromAt.getTime()) / 3_600_000;
+    return {
+      from: formatInstituteDateTime(fromAt),
+      to: formatInstituteDateTime(toAt),
+      problem,
+      duration:
+        hours >= 24
+          ? `${Math.floor(hours / 24)} night${Math.floor(hours / 24) === 1 ? "" : "s"}${
+              hours % 24 ? ` and ${Math.round(hours % 24)} hours` : ""
+            }`
+          : `${Math.round(hours)} hour${Math.round(hours) === 1 ? "" : "s"}`,
+    };
+  })();
 
   const chosenMeals = MEAL_KEYS.filter((meal) => selectedMeals?.[meal]);
   const mealSummary =
@@ -419,6 +449,30 @@ export function BookingForm({
             />
             <FieldError message={err("check_out")} />
           </div>
+
+          {stay && (
+            <div
+              className={
+                stay.problem
+                  ? "space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm sm:col-span-2"
+                  : "space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-sm sm:col-span-2"
+              }
+            >
+              <p>
+                <span className="text-xs tracking-wide text-muted-foreground uppercase">
+                  Your stay
+                </span>
+                <br />
+                <span className="font-medium">{stay.from}</span>
+                <span className="text-muted-foreground"> → </span>
+                <span className="font-medium">{stay.to}</span>
+                {!stay.problem && (
+                  <span className="text-muted-foreground"> · {stay.duration}</span>
+                )}
+              </p>
+              {stay.problem && <p className="text-destructive">{stay.problem}</p>}
+            </div>
+          )}
 
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="purpose_of_visit">Purpose of visit *</Label>

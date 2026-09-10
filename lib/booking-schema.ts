@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parentDependencyError, type FieldMode, type RoleFormConfig } from "./form-config";
 import { countBedGuests, INFANT_AGE_LIMIT, requestedRoomsError } from "./occupancy";
-import { formatInstituteDate, instituteDate } from "./tz";
+import { formatInstituteDate, formatInstituteDateTime, instituteDate } from "./tz";
 import { latestCheckIn } from "./workflow";
 
 const optionalTrimmed = z
@@ -172,9 +172,9 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
     })
     // `check_in` / `check_out` are wall-clock strings, so they are resolved in
     // the institute's timezone — never the runtime's. See `lib/tz.ts`.
-    .refine((v) => instituteDate(v.check_out) > instituteDate(v.check_in), {
-      message: "Check-out must be after check-in",
-      path: ["check_out"],
+    .superRefine((v, ctx) => {
+      const message = checkOutOrderError(v.check_in, v.check_out);
+      if (message) ctx.addIssue({ code: "custom", message, path: ["check_out"] });
     })
     .refine((v) => instituteDate(v.check_in) > new Date(), {
       message: "Check-in must be in the future",
@@ -204,6 +204,41 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
         }
       });
     });
+}
+
+/**
+ * Why check-out is not after check-in, spelled out — or null when it is fine.
+ *
+ * The bare "Check-out must be after check-in" was a tautology to anyone who had
+ * just entered what they believed were valid times, and it hid a real trap: the
+ * AM/PM dropdown keeps its previous value when only the hour is changed, and
+ * the two fields default to opposite periods (check-in 12:00 is PM, check-out
+ * 10:00 is AM). A user asking for 9 AM → 10 PM by touching only the hour
+ * dropdowns actually submitted 9 PM → 10 AM. So the message names both times as
+ * the system read them, and points at the periods when that is what went wrong.
+ *
+ * Shared by the schema and the booking form's live stay summary, so the two
+ * cannot describe the same problem differently.
+ */
+export function checkOutOrderError(checkIn: string, checkOut: string): string | null {
+  const inAt = instituteDate(checkIn);
+  const outAt = instituteDate(checkOut);
+  if (Number.isNaN(inAt.getTime()) || Number.isNaN(outAt.getTime())) return null;
+  if (outAt > inAt) return null;
+
+  const reading = `You have asked to check in on ${formatInstituteDateTime(
+    inAt
+  )} and check out on ${formatInstituteDateTime(outAt)}`;
+
+  if (outAt.getTime() === inAt.getTime()) {
+    return `${reading} — the same moment. A stay needs to end after it starts.`;
+  }
+  // Same calendar day: the periods are the usual culprit, because only the
+  // times can be out of order.
+  if (checkIn.slice(0, 10) === checkOut.slice(0, 10)) {
+    return `${reading}, which is earlier the same day. Check the AM/PM dropdown on each time — they do not change on their own when you pick a new hour.`;
+  }
+  return `${reading}. Check-out has to be after check-in.`;
 }
 
 /** Wording for the advance-booking limit, with the actual last bookable date. */

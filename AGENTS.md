@@ -470,6 +470,19 @@ site deliberately. Fix by setting `--primary-foreground` to a dark brown.
   via `value` (`"HH:mm"`, 24h) + `onChange`. Its exported `parseTime` /
   `toTimeValue` handle the 12 AM = `00:00` and 12 PM = `12:00` traps — verified
   with throwaway tests, so re-test them if you touch the conversion.
+- **A three-dropdown time picker silently keeps its AM/PM.** Changing only the
+  hour reuses the period already selected, and the booking form's two fields
+  default to *opposite* periods — check-in `12:00` reads PM, check-out `10:00`
+  reads AM. A requester asking for 9 AM → 10 PM by touching only the hour
+  dropdowns submitted **9 PM → 10 AM** and got "Check-out must be after
+  check-in" on a form that looked right to them. Two defences, keep both:
+  `TimeSelect` prints a read-back of the resolved time (`describeTime`) under
+  the dropdowns, and the booking form shows a live **Your stay** summary with
+  both resolved instants. `checkOutOrderError()` in `lib/booking-schema.ts` is
+  the shared message — it names both times as the system read them and points
+  at the AM/PM dropdowns when the two are on the same day. Don't replace it with
+  a bare "check-out must be after check-in"; that was a tautology to the person
+  who had just entered the times.
 - **Never bind a number input to a coerced value.**
   `value={n} onChange={e => setN(Number(e.target.value) || 1)}` makes the box
   impossible to clear: `Number("")` is 0, `|| 1` snaps it back, and only the
