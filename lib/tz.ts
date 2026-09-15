@@ -21,6 +21,13 @@ const MONTHS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 const PARTS_FORMAT = new Intl.DateTimeFormat("en-US", {
@@ -145,4 +152,85 @@ export function instituteDayBounds(day: string): { start: Date; end: Date } {
     start,
     end: instituteDate(`${next.year}-${pad(next.month)}-${pad(next.day)}T00:00`),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Calendar dates ("YYYY-MM-DD")
+//
+// A calendar date names a day, not an instant, so it has no timezone of its
+// own. The arithmetic below runs in UTC only because a UTC day is always 24
+// hours long; nothing here reads the runtime's zone and nothing becomes an
+// instant. When you need the instants a day spans, use `instituteDayBounds`.
+
+const DATE_VALUE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** Year, month (1-12) and day of a "YYYY-MM-DD" date, or null when it is not a real date. */
+export function parseDateValue(
+  value: string
+): { year: number; month: number; day: number } | null {
+  const match = DATE_VALUE.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  // Date.UTC rolls 31 February over into March; a real date survives the trip.
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) return null;
+  return { year, month, day };
+}
+
+/**
+ * "YYYY-MM-DD" for a year, month (1-12) and day. Out-of-range parts roll over
+ * the way `Date.UTC` does: day 0 is the last day of the previous month, and
+ * month 13 is January of the following year.
+ */
+export function dateValueOf(year: number, month: number, day: number): string {
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
+/** `value` moved by `days` calendar days: "2026-09-30" + 1 is "2026-10-01". */
+export function addDaysToDateValue(value: string, days: number): string {
+  const parts = parseDateValue(value);
+  if (!parts) return value;
+  return dateValueOf(parts.year, parts.month, parts.day + days);
+}
+
+/** Day of the week of a calendar date, 0 = Sunday. NaN when it is not a date. */
+export function weekdayOfDateValue(value: string): number {
+  const parts = parseDateValue(value);
+  if (!parts) return Number.NaN;
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+}
+
+/**
+ * A calendar date for people: "Tue 15 Sep" by default. The options add the
+ * year ("Tue 15 Sep 2026"), or drop the weekday ("15 Sep") or the month
+ * ("Tue 15").
+ */
+export function formatDateValue(
+  value: string,
+  {
+    weekday = true,
+    month = true,
+    year = false,
+  }: { weekday?: boolean; month?: boolean; year?: boolean } = {}
+): string {
+  const parts = parseDateValue(value);
+  if (!parts) return value;
+  return [
+    weekday ? WEEKDAYS[weekdayOfDateValue(value)] : null,
+    String(parts.day),
+    month ? MONTHS[parts.month - 1] : null,
+    year ? String(parts.year) : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** "September 2026" for any date in that month. */
+export function formatMonthOfDateValue(value: string): string {
+  const parts = parseDateValue(value);
+  if (!parts) return value;
+  return `${MONTH_NAMES[parts.month - 1]} ${parts.year}`;
 }

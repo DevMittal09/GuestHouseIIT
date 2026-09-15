@@ -29,6 +29,13 @@ export type Gender = "male" | "female" | "other";
 /** Meals the guest house can lay on for a booking. See `lib/meals.ts`. */
 export type MealKey = "breakfast" | "lunch" | "dinner";
 export type MealPreferences = Record<MealKey, boolean>;
+/** The meals asked for on one institute calendar day ("yyyy-MM-dd") of a stay. */
+export type MealDay = { date: string } & MealPreferences;
+/**
+ * Meals for a stay, day by day: one entry per day that has at least one meal,
+ * in date order. Read it only through `normalizeMeals` (`lib/meals.ts`).
+ */
+export type MealPlan = MealDay[];
 
 export const REQUESTER_ROLES: Role[] = ["student", "employee", "official", "club", "alumni"];
 export const REVIEWER_ROLES: Role[] = ["warden", "faculty_advisor", "iar_cell", "gh_manager"];
@@ -55,6 +62,11 @@ export type GuestHouse = {
   id: string;
   name: string;
   total_rooms: number;
+  /**
+   * Whether requesters may choose meals here (migration 8). Hamsanandi only by
+   * default; changed from the developer console, never inferred from the name.
+   */
+  serves_meals: boolean;
 }
 
 export type Room = {
@@ -86,11 +98,17 @@ export type Booking = {
   alumni_id_url: string | null;
   custom_fields: CustomFieldValue[] | null;
   /**
-   * Which meals the requester asked for. Always a complete object — bookings
-   * predating the field are normalised on read, so no consumer needs a
-   * null check.
+   * The meals the requester asked for, per day of the stay. Always a clean
+   * plan — bookings predating the field, and the old whole-stay object, are
+   * normalised on read, so no consumer needs a null check.
    */
-  meals: MealPreferences;
+  meals: MealPlan;
+  /**
+   * Whether one or more infants (under `INFANT_AGE_LIMIT`) are coming. One
+   * yes/no for the booking however many: they share a guardian's bed and need
+   * no ID, so they are not guest rows. Added by migration 7.
+   */
+  has_infant: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -113,9 +131,10 @@ export type BookingGuest = {
   id_number: string | null;
   id_document_url: string | null;
   /**
-   * A child under `INFANT_AGE_LIMIT` sharing a guardian's bed. Their name, age
-   * and gender are still recorded for the register; only the ID is waived, and
-   * they do not occupy a bed for capacity purposes.
+   * Legacy. Before migration 7 an infant was a guest row carrying this flag;
+   * new bookings record infants as `Booking.has_infant` and always write false
+   * here. Old infant rows still share a guardian's bed, so `countBedGuests`
+   * keeps them out of capacity.
    */
   is_infant: boolean;
 }
@@ -175,7 +194,8 @@ export interface NewBookingInput {
   rooms_requested: number;
   alumni_id_url: string | null;
   custom_fields: CustomFieldValue[] | null;
-  meals: MealPreferences;
+  meals: MealPlan;
+  has_infant: boolean;
   guests: Omit<BookingGuest, "id" | "booking_id">[];
 }
 

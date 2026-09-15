@@ -272,11 +272,13 @@ named `withExtraBed` rather than `max` deliberately — the third occupant is no
 a property of the room, it is a bed somebody has to arrange, and
 `extraBedsNeeded()` puts that number in front of the manager at allocation time.
 
-**Infants** — under 10, sharing a guardian's bed — are guest rows carrying
-`is_infant`. They are on the register with their name, age and gender like
-anyone else; what is waived is the ID. Because they occupy no bed, every
-capacity calculation counts `countBedGuests(guests)` rather than
-`guests.length`.
+**Infants** — under 10, sharing a guardian's bed — are one switch on the
+booking, `has_infant` (migration 7), saying whether any are coming. They have no
+guest row, no count and no ID, and occupy no bed, so on a new booking every guest
+row is a bed. Bookings made before migration 7 recorded infants as guest rows
+carrying `is_infant`, and those rows still exist — so capacity for a *stored*
+booking counts `countBedGuests(guests)` rather than `guests.length`, and
+`hasInfant(booking)` reads either the switch or a legacy row.
 
 It is checked twice because two different things are known at the two moments:
 `requestedRoomsError()` at submission, when only a room *count* exists, and
@@ -291,9 +293,14 @@ had no way to ask the prior question — "is anything free that week?" — so
 `/availability` is a read-only view of the same occupancy data, open to **every
 signed-in role**. It is the only route with no role gate.
 
-The chart is a time × room matrix for one chosen day: 24 hours down the Y axis,
-room numbers across the X, red where a room is held and blank where it is free,
-with a per-room list of booking periods underneath.
+The chart is a time × room matrix: room numbers across the X axis, time down
+the Y axis, red where a room is held and blank where it is free, with a per-room
+list of booking periods underneath. **Day, Week and Month views** share those
+axes. The day view has a row per hour; the week and month views a row per day,
+with time also running down *inside* each day's row, so a stay is drawn as one
+continuous bar from check-in to check-out rather than a colour per day. Keeping
+time vertical at every scale is deliberate — switching views zooms out instead
+of rotating the picture (see [06-decisions.md](06-decisions.md)).
 
 **The chart itself is `components/occupancy-chart.tsx`**, shared with
 `components/booking-availability.tsx`, which embeds the same picture in the
@@ -310,19 +317,26 @@ Three things are worth knowing:
   `listRoomOccupancy(guestHouseId, from, to)` returns one segment per (room,
   booking) instead, over the same statuses and the same strict overlap. The two
   must agree; they are checked against each other rather than assumed.
-- **The bucketing is a pure function in `lib/availability.ts`, not component
-  code.** `bucketOccupancyByHour()` decides which of a day's 24 hours each
-  booking holds. Putting it in `lib/` follows the same reasoning as
-  `lib/booking-search.ts`: the boundary behaviour is where the bugs are, so it
-  has to be reachable by a test. A stay checking out at 11:00 releases the 11 AM
-  hour, and a back-to-back booking starting at that instant picks it up — the
-  same half-open semantics as allocation.
-- **Identity is stripped per viewer, in the action.** `getDayAvailability`
+- **The calendar maths is pure functions in `lib/availability.ts`, not
+  component code.** `bucketOccupancyByHour()` decides which of a day's 24 hours
+  each booking holds; `availabilityRange()` and `shiftAnchor()` decide which
+  days a week or month view covers (Monday–Sunday weeks, calendar months, a
+  month step that clamps 31 January to 28 February); `bucketOccupancyByDay()`
+  clips each booking to the range as a bar and counts booked minutes per day.
+  Putting it in `lib/` follows the same reasoning as `lib/booking-search.ts`:
+  the boundary behaviour is where the bugs are, so it has to be reachable by a
+  test. A stay checking out at 11:00 releases the 11 AM hour, and a back-to-back
+  booking starting at that instant picks it up — the same half-open semantics
+  as allocation. Day arithmetic on `"yyyy-MM-dd"` strings runs in UTC
+  (`addDaysToDateValue` in `lib/tz.ts`) because a calendar date has no zone.
+- **Identity is stripped per viewer, in the action.** `getRoomAvailability`
   returns `requester_name` and `purpose_of_visit` only to `gh_manager` and
   `developer`; everyone else sees periods, reference ids and statuses. A student
   checking availability has no business seeing who is in room B-204. The store
   populates the fields and the action removes them, so the filtering happens in
-  exactly one place.
+  exactly one place. The action also refuses a window longer than
+  `MAX_AVAILABILITY_DAYS` (62 days): a month view needs 31, and without a cap
+  any signed-in user could read every hold ever written in one request.
 
 ## Archive search & history
 

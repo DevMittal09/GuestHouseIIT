@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { parentDependencyError, type FieldMode, type RoleFormConfig } from "./form-config";
-import { countBedGuests, INFANT_AGE_LIMIT, requestedRoomsError } from "./occupancy";
+import { MAX_MEAL_DAYS, mealPlanError, normalizeMeals } from "./meals";
+import { requestedRoomsError } from "./occupancy";
 import { formatInstituteDate, formatInstituteDateTime, instituteDate } from "./tz";
 import { latestCheckIn } from "./workflow";
 
@@ -35,11 +36,9 @@ function guestSchema(config: RoleFormConfig) {
             .string({ message: "Select a relationship" })
             .refine((v) => config.relationship_options.includes(v), "Select a relationship")
         : textField(f.relationship, "Relationship is required"),
-    // An infant's ID is waived here rather than in the form config, because it
-    // is a fact about the guest, not about the role's form. The per-guest
-    // checks below re-apply the config's requirement to everyone else.
+    // Optional here; the per-guest check below applies the role's requirement,
+    // so the message lands on the right row.
     id_number: optionalTrimmed,
-    is_infant: z.boolean().optional().transform((v) => v ?? false),
   });
 }
 
@@ -64,8 +63,8 @@ function countField(opts: {
   emptyAs?: number;
 }) {
   // `.optional()` so an absent key reaches the transform as `undefined` and is
-  // treated as a blank box — for infants that means 0, for rooms it means the
-  // "required" message, rather than zod's "expected nonoptional".
+  // treated as a blank box — `emptyAs` when given, otherwise the "required"
+  // message, rather than zod's "expected nonoptional".
   return z
     .union([z.string(), z.number()])
     .optional()
@@ -109,50 +108,45 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
         tooMany: "Maximum 10 rooms per request",
       }),
       guests: z.array(guestSchema(config)).min(1, "Add at least one guest"),
-      // Meals are always optional: "no meals" is a valid, common answer.
-      meals: z
-        .object({
-          breakfast: z.boolean().optional(),
-          lunch: z.boolean().optional(),
-          dinner: z.boolean().optional(),
-        })
+      // One switch for the whole booking, however many infants are coming.
+      // They share a guardian's bed, so they are neither guest rows nor counted.
+      has_infant: z
+        .boolean()
         .optional()
-        .transform((v) => ({
-          breakfast: v?.breakfast === true,
-          lunch: v?.lunch === true,
-          dinner: v?.dinner === true,
-        })),
+        .transform((v) => v === true),
+      // Meals are optional and chosen per day of the stay; "no meals" is a
+      // valid, common answer. Normalised to a clean plan (days with a meal,
+      // in date order); whether each day and meal fits the stay is checked
+      // below, and whether the guest house serves meals is checked in
+      // `createBooking`, which knows the guest house.
+      meals: z
+        .array(
+          z.object({
+            date: z.string(),
+            breakfast: z.boolean().optional(),
+            lunch: z.boolean().optional(),
+            dinner: z.boolean().optional(),
+          })
+        )
+        .max(MAX_MEAL_DAYS, "Too many days of meals for one booking")
+        .optional()
+        .transform((v) => normalizeMeals(v ?? [])),
       custom: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
     })
     .superRefine((v, ctx) => {
-      // Only guests who need a bed count against the rooms.
-      const message = requestedRoomsError(countBedGuests(v.guests), v.rooms_requested);
+      // Every guest row on a new request needs a bed — infants are the
+      // `has_infant` switch, not rows — so the row count is the bed count.
+      // (Stored bookings can still hold legacy infant rows; count those with
+      // `countBedGuests`.)
+      const message = requestedRoomsError(v.guests.length, v.rooms_requested);
       if (message) {
         ctx.addIssue({ code: "custom", message, path: ["rooms_requested"] });
       }
     })
     .superRefine((v, ctx) => {
-      const idRequired = config.guest_fields.id_number === "required";
+      if (config.guest_fields.id_number !== "required") return;
       v.guests.forEach((g, i) => {
-        if (g.is_infant) {
-          // An infant is still a person on the register: name and age stay
-          // required, and the age has to actually be an infant's.
-          if (g.age == null) {
-            ctx.addIssue({
-              code: "custom",
-              message: `Enter the infant's age (under ${INFANT_AGE_LIMIT})`,
-              path: ["guests", i, "age"],
-            });
-          } else if (g.age >= INFANT_AGE_LIMIT) {
-            ctx.addIssue({
-              code: "custom",
-              message: `An infant must be under ${INFANT_AGE_LIMIT} — untick the box for an older guest`,
-              path: ["guests", i, "age"],
-            });
-          }
-          return; // ID is waived.
-        }
-        if (idRequired && (g.id_number ?? "").length < 4) {
+        if ((g.id_number ?? "").length < 4) {
           ctx.addIssue({
             code: "custom",
             message: "Aadhaar / ID number is required",
@@ -161,20 +155,22 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
         }
       });
     })
-    .superRefine((v, ctx) => {
-      if (countBedGuests(v.guests) === 0) {
-        ctx.addIssue({
-          code: "custom",
-          message: "An infant cannot stay alone — add the adult they are travelling with",
-          path: ["guests"],
-        });
-      }
-    })
     // `check_in` / `check_out` are wall-clock strings, so they are resolved in
     // the institute's timezone — never the runtime's. See `lib/tz.ts`.
     .superRefine((v, ctx) => {
       const message = checkOutOrderError(v.check_in, v.check_out);
       if (message) ctx.addIssue({ code: "custom", message, path: ["check_out"] });
+    })
+    .superRefine((v, ctx) => {
+      // Only once the dates are sound, so a mis-set AM/PM is not reported a
+      // second time as meals "outside your stay".
+      if (v.meals.length === 0 || checkOutOrderError(v.check_in, v.check_out)) return;
+      const message = mealPlanError(
+        v.meals,
+        instituteDate(v.check_in),
+        instituteDate(v.check_out)
+      );
+      if (message) ctx.addIssue({ code: "custom", message, path: ["meals"] });
     })
     .refine((v) => instituteDate(v.check_in) > new Date(), {
       message: "Check-in must be in the future",

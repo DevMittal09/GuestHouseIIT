@@ -58,6 +58,14 @@ type OccupancyRow = {
   } | null;
 };
 
+/**
+ * `serves_meals` arrives with migration 8. Until it is applied a guest house
+ * serves no meals — the booking form then simply offers none.
+ */
+function withMealsFlag(row: GuestHouse): GuestHouse {
+  return { ...row, serves_meals: row.serves_meals ?? false };
+}
+
 /** Postgres `[lower,upper)` tstzrange literal. */
 function rangeLiteral(from: string, to: string): string {
   return `["${new Date(from).toISOString()}","${new Date(to).toISOString()}")`;
@@ -81,7 +89,7 @@ export class SupabaseStore implements DataStore {
   async listGuestHouses(): Promise<GuestHouse[]> {
     const { data, error } = await this.db.from("guest_houses").select("*").order("name");
     if (error) throw error;
-    return data;
+    return data.map(withMealsFlag);
   }
 
   async getGuestHouse(id: string): Promise<GuestHouse | null> {
@@ -91,7 +99,7 @@ export class SupabaseStore implements DataStore {
       .eq("id", id)
       .maybeSingle();
     if (error) throw error;
-    return data;
+    return data ? withMealsFlag(data) : null;
   }
 
   async listRooms(guestHouseId: string): Promise<Room[]> {
@@ -131,7 +139,7 @@ export class SupabaseStore implements DataStore {
     });
     if (logError) throw logError;
     // A fresh booking holds nothing until the manager allocates rooms.
-    return { ...booking, meals: normalizeMeals(booking.meals), assigned_room_ids: [] };
+    return { ...booking, meals: normalizeMeals(booking.meals, booking), assigned_room_ids: [] };
   }
 
   /**
@@ -164,9 +172,14 @@ export class SupabaseStore implements DataStore {
       );
       return {
         ...r,
-        // Rows written before migration 6 have no `meals`; normalising here
-        // means no consumer downstream needs a null check.
-        meals: normalizeMeals(r.meals),
+        // Rows written before migration 6 have no `meals`, and rows not yet
+        // converted by migration 8 hold the whole-stay object; normalising
+        // here means no consumer downstream needs to know either.
+        meals: normalizeMeals(r.meals, r),
+        guest_house: r.guest_house ? withMealsFlag(r.guest_house) : r.guest_house,
+        // Rows read before migration 7 is applied have no `has_infant`; an
+        // infant guest row is what the old model used to say the same thing.
+        has_infant: r.has_infant ?? r.guests.some((g) => g.is_infant),
         assigned_room_ids: assignedRooms.map((room) => room.id),
         logs: [...r.logs].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
         assigned_rooms: assignedRooms,
@@ -424,10 +437,13 @@ export class SupabaseStore implements DataStore {
       .select()
       .single();
     if (error) throw error;
-    return data;
+    return withMealsFlag(data);
   }
 
-  async updateGuestHouse(id: string, patch: { name?: string }): Promise<void> {
+  async updateGuestHouse(
+    id: string,
+    patch: { name?: string; serves_meals?: boolean }
+  ): Promise<void> {
     const { error } = await this.db.from("guest_houses").update(patch).eq("id", id);
     if (error) throw error;
   }

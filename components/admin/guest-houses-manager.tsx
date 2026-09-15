@@ -9,6 +9,7 @@ import {
   deleteGuestHouseAction,
   deleteRoomAction,
   renameGuestHouseAction,
+  setGuestHouseMealsAction,
   setRoomActiveAction,
 } from "@/app/actions/admin";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { GuestHouse, Room, RoomType } from "@/lib/types";
 import type { ActionResult } from "@/app/actions/bookings";
@@ -135,6 +137,20 @@ function GuestHouseCard({
               </Button>
             )}
             <Badge variant="secondary">{gh.total_rooms} active rooms</Badge>
+            <label className="flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1 text-sm transition-colors has-checked:border-primary has-checked:bg-primary/5">
+              <Switch
+                checked={gh.serves_meals}
+                disabled={isPending}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  run(
+                    () => setGuestHouseMealsAction(gh.id, on),
+                    on ? `Meals enabled at ${gh.name}` : `Meals disabled at ${gh.name}`
+                  );
+                }}
+              />
+              Serves meals
+            </label>
           </div>
           <Button
             variant="destructive"
@@ -151,7 +167,8 @@ function GuestHouseCard({
         </div>
         <CardDescription>
           Deactivated rooms stay in the system but disappear from the manager&apos;s allocation
-          grid.
+          grid. With &ldquo;Serves meals&rdquo; on, requesters booking this guest house choose
+          meals day by day; with it off, the booking form offers no meals here.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

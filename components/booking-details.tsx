@@ -10,8 +10,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
-import { describeMeals } from "@/lib/meals";
-import { describeParty } from "@/lib/occupancy";
+import { describeMeals, MEAL_KEYS, MEAL_LABELS } from "@/lib/meals";
+import { countBedGuests, describeParty } from "@/lib/occupancy";
+import { formatDateValue } from "@/lib/tz";
 import { ROLE_LABELS, type BookingWithDetails } from "@/lib/types";
 
 function isPdf(url: string) {
@@ -64,7 +65,7 @@ export function BookingDetails({
         <Field label="Check-in" value={formatDateTime(booking.check_in)} />
         <Field label="Check-out" value={formatDateTime(booking.check_out)} />
         <Field label="Rooms requested" value={String(booking.rooms_requested)} />
-        <Field label="Party size" value={describeParty(booking.guests)} />
+        <Field label="Party size" value={describeParty(booking)} />
         <Field label="Meals requested" value={describeMeals(booking.meals)} />
         {booking.assigned_rooms.length > 0 && (
           <Field
@@ -75,6 +76,48 @@ export function BookingDetails({
       </div>
 
       <Field label="Purpose of visit" value={booking.purpose_of_visit} block />
+
+      {booking.meals.length > 0 && (
+        <div>
+          <h4 className="mb-1 font-medium">Meals by day</h4>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Each ticked meal is for {countBedGuests(booking.guests)} guest
+            {countBedGuests(booking.guests) === 1 ? "" : "s"}.
+          </p>
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Day</TableHead>
+                  {MEAL_KEYS.map((meal) => (
+                    <TableHead key={meal} className="text-center">
+                      {MEAL_LABELS[meal]}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {booking.meals.map((day) => (
+                  <TableRow key={day.date}>
+                    <TableCell className="font-medium">{formatDateValue(day.date)}</TableCell>
+                    {MEAL_KEYS.map((meal) => (
+                      <TableCell key={meal} className="text-center">
+                        {day[meal] ? (
+                          <span aria-label="Requested">✓</span>
+                        ) : (
+                          <span className="text-muted-foreground" aria-label="Not requested">
+                            —
+                          </span>
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
 
       {booking.custom_fields && booking.custom_fields.length > 0 && (
         <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">

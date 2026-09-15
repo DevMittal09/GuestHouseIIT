@@ -46,7 +46,7 @@ export interface Database {
       };
       guest_houses: {
         Row: GuestHouse;
-        Insert: Insertable<GuestHouse, "id">;
+        Insert: Insertable<GuestHouse, "id" | "serves_meals">;
         Update: Partial<GuestHouse>;
         Relationships: [];
       };
@@ -67,6 +67,7 @@ export interface Database {
           | "alumni_id_url"
           | "custom_fields"
           | "meals"
+          | "has_infant"
           | "created_at"
           | "updated_at"
         >;

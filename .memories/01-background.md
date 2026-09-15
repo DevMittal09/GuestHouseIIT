@@ -73,6 +73,22 @@ of **10 Sep 2026**:
 > and `updateBookingStatus()` are already the single funnels every transition
 > passes through.
 
+## Meeting notes — 15 Sep 2026
+
+A third round came out of a meeting with the guest house office
+(`Guest House Meeting Notes.md` in the repo root, untracked). Part of it was
+picked up the same day; everything else in the notes is not started.
+
+| Requirement | Status | Where |
+| --- | --- | --- |
+| Room availability per week and per month, not only per day | **Done** | Day / Week / Month switch on `/availability` — `availabilityRange` + `bucketOccupancyByDay` in `lib/availability.ts`, `RangeOccupancyChart` in `components/occupancy-chart.tsx` |
+| The availability grid's red legend "Booked / occupied" should read "Booked" | **Done** | `components/availability-grid.tsx` — legend, badge and counts all say booked |
+| Formal wording for "sleeps 2, 3 with an extra bed" in the manager's Review & Allocate dialog | **Done** | Kept and rewritten, not removed — the extra-bed count is operational. `describeCapacity()` in `lib/occupancy.ts`; labelled summary in `components/room-grid.tsx`. Also fixed extra beds being under-counted for single rooms (`extraBedsFor`) |
+| One "infant accompanying" toggle instead of per-guest infant rows | **Done** | `bookings.has_infant` (migration 7); "Infant accompanying" switch beside "+ Add guest" in `components/booking-form.tsx`. Legacy infant guest rows are kept and still read correctly |
+| Meals chosen per day in a grid, not one selection for the whole stay | **Done** | Days × meals table in `components/meal-plan-grid.tsx`; `bookings.meals` is a per-day `MealPlan` (migration 8, which also converted old answers). A day offers only meals served during the stay (`stayMealDays`). Not ticked by default — that part of the notes was not in this round's request |
+| Meals only at Hamsanandi | **Done** | `guest_houses.serves_meals` (migration 8), on for Hamsanandi, toggled in the developer console — a flag, not a name check. Enforced in `createBooking` |
+| Everything else in the notes — invoices, caretaker role, ±4 h buffer, HOD approvals, debitable heads, email threading, dining booking, danger warnings, workflow documentation | Not started | Not part of this round |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

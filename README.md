@@ -80,8 +80,11 @@ supabase status                # prints API URL, anon key and service_role key
 ### Option B — hosted Supabase (supabase.com)
 
 1. Create a project at https://supabase.com/dashboard (free tier is fine).
-2. In the project's **SQL Editor**, paste and run
-   `supabase/migrations/00000000000001_init.sql`, then `supabase/seed.sql`.
+2. In the project's **SQL Editor**, paste and run **every file in
+   `supabase/migrations/` in numerical order** (`00000000000001_init.sql` through
+   `00000000000008_meal_plans.sql`), then `supabase/seed.sql`. An existing project
+   does not pick up new migrations by itself — after pulling changes, run the ones
+   you have not applied yet, in order.
    (Or link the CLI: `supabase link --project-ref <ref>` then `supabase db push`.)
 3. Copy the keys from **Project Settings → API**.
 

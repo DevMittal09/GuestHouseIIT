@@ -112,7 +112,7 @@ export async function downloadHistoryPdf(report: HistoryReport, filename: string
   const stats: [string, string][] = [
     ["Bookings", String(report.totals.bookings)],
     ["Guests", String(report.totals.guests)],
-    ["Infants", String(report.totals.infants)],
+    ["With infants", String(report.totals.withInfants)],
     ["Room-nights", String(report.totals.roomNights)],
   ];
   stats.forEach(([label, value], i) => {

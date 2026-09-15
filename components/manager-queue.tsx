@@ -33,7 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
-import { describeMeals } from "@/lib/meals";
+import { describeMealDays, describeMeals } from "@/lib/meals";
 import { occupancyNotStartedError, stayPhase } from "@/lib/workflow";
 import { ROLE_LABELS, STATUS_LABELS, type BookingStatus, type BookingWithDetails, type Room } from "@/lib/types";
 
@@ -345,7 +345,12 @@ function StayRow({
         )}
       </TableCell>
       <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "—"}</TableCell>
-      <TableCell className="text-xs">{describeMeals(booking.meals)}</TableCell>
+      <TableCell
+        className="text-xs"
+        title={describeMealDays(booking.meals).join("\n") || undefined}
+      >
+        {describeMeals(booking.meals)}
+      </TableCell>
       <TableCell>
         <StatusBadge status={booking.status} />
       </TableCell>

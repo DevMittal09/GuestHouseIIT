@@ -8,7 +8,7 @@ import {
 } from "@/lib/booking-search";
 import { getStore } from "@/lib/store";
 import { ROLE_LABELS, STATUS_LABELS, type BookingWithDetails } from "@/lib/types";
-import { countBedGuests, countInfants } from "@/lib/occupancy";
+import { countBedGuests, countInfants, hasInfant } from "@/lib/occupancy";
 import { canExportPdf, historyScope } from "@/lib/workflow";
 import { formatDate, formatDateTime } from "@/lib/format";
 
@@ -43,7 +43,13 @@ export interface HistoryReport {
   generatedBy: string;
   rows: ReportRow[];
   statusSummary: { label: string; count: number }[];
-  totals: { bookings: number; guests: number; infants: number; roomNights: number };
+  totals: {
+    bookings: number;
+    guests: number;
+    /** Bookings with an infant accompanying — bookings record whether, not how many. */
+    withInfants: number;
+    roomNights: number;
+  };
   truncated: boolean;
 }
 
@@ -58,8 +64,10 @@ function nightsBetween(checkIn: string, checkOut: string): number {
 
 function toReportRow(b: BookingWithDetails): ReportRow {
   const beds = countBedGuests(b.guests);
-  const infants = countInfants(b.guests);
-  const party = infants > 0 ? `${beds} + ${infants} inf` : String(beds);
+  // Older bookings listed their infants; newer ones say only whether any came.
+  const listed = countInfants(b.guests);
+  const party =
+    listed > 0 ? `${beds} + ${listed} inf` : hasInfant(b) ? `${beds} + inf` : String(beds);
   return {
     reference: b.booking_reference_id,
     requester: b.requester?.full_name ?? "—",
@@ -141,7 +149,7 @@ export async function exportHistoryPdf(queryString: string): Promise<PdfExportRe
         totals: {
           bookings: rows.length,
           guests: rows.reduce((n, b) => n + countBedGuests(b.guests), 0),
-          infants: rows.reduce((n, b) => n + countInfants(b.guests), 0),
+          withInfants: rows.filter((b) => hasInfant(b)).length,
           roomNights: rows.reduce(
             (n, b) =>
               n +

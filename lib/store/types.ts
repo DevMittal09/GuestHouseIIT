@@ -81,7 +81,7 @@ export interface DataStore {
   deleteProfile(id: string): Promise<void>;
 
   createGuestHouse(name: string): Promise<GuestHouse>;
-  updateGuestHouse(id: string, patch: { name?: string }): Promise<void>;
+  updateGuestHouse(id: string, patch: { name?: string; serves_meals?: boolean }): Promise<void>;
   /** Throws if bookings reference the guest house. */
   deleteGuestHouse(id: string): Promise<void>;
 

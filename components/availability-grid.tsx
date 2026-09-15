@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { toast } from "sonner";
-import { getDayAvailability } from "@/app/actions/availability";
+import { getRoomAvailability } from "@/app/actions/availability";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,9 +15,26 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { bucketOccupancyByHour, dayBounds, toDateInputValue } from "@/lib/availability";
-import { LegendSwatch, OccupancyChart } from "@/components/occupancy-chart";
-import { formatDate, formatDateTime } from "@/lib/format";
+import {
+  LegendSwatch,
+  OccupancyChart,
+  RangeOccupancyChart,
+} from "@/components/occupancy-chart";
+import {
+  AVAILABILITY_VIEWS,
+  availabilityRange,
+  bucketOccupancyByDay,
+  bucketOccupancyByHour,
+  describeRange,
+  freeRoomsByDay,
+  rangeProgress,
+  roomRangeStatus,
+  roomsBookedAt,
+  shiftAnchor,
+  toDateInputValue,
+  type AvailabilityView,
+} from "@/lib/availability";
+import { formatDateTime } from "@/lib/format";
 import { instituteHour } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import {
@@ -26,66 +44,82 @@ import {
   type RoomOccupancySegment,
 } from "@/lib/types";
 
+interface Loaded {
+  /** Which request this data answers — see `requestKey` below. */
+  key: string;
+  rooms: Room[];
+  segments: RoomOccupancySegment[];
+  showsOccupant: boolean;
+}
+
 const todayValue = () => toDateInputValue(new Date());
 
+/** The period a view shows, for sentences such as "free all week". */
+const PERIOD: Record<AvailabilityView, string> = { day: "day", week: "week", month: "month" };
+
 /**
- * Read-only room availability chart, open to every signed-in user.
- * Y axis is the hours of the chosen day, X axis is the room number; a cell is
- * red while that room is held by a booking and blank while it is free.
+ * Read-only room availability, open to every signed-in user.
+ *
+ * Time runs down the chart and room numbers run across it in all three views:
+ * the day view has a row per hour, the week and month views a row per day. A
+ * room is red while a booking holds it and blank while it is free.
  */
 export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] }) {
   const [guestHouseId, setGuestHouseId] = useState(guestHouses[0]?.id ?? "");
+  const [view, setView] = useState<AvailabilityView>("day");
   const [date, setDate] = useState(todayValue);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [segments, setSegments] = useState<RoomOccupancySegment[]>([]);
-  const [showsOccupant, setShowsOccupant] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+
+  // Null while the date input is cleared, so the page asks for a date rather
+  // than drawing a grid of "Invalid Date".
+  const range = useMemo(() => availabilityRange(view, date), [view, date]);
+
+  // Loading is derived by comparing keys rather than kept as a flag, so the
+  // effect never sets state synchronously (React Compiler lint).
+  const requestKey = `${guestHouseId}|${view}|${date}|${refreshKey}`;
+  const loading = Boolean(guestHouseId && range) && loaded?.key !== requestKey;
 
   useEffect(() => {
-    if (!guestHouseId || !date) return;
-    const { start, end } = dayBounds(date);
-    if (Number.isNaN(start.getTime())) return;
-
-    // `loading` is raised by the handlers that change these inputs, not here:
-    // setState in an effect body trips the React Compiler lint.
+    if (!guestHouseId || !range) return;
     let cancelled = false;
-    getDayAvailability(guestHouseId, start.toISOString(), end.toISOString())
+    getRoomAvailability(guestHouseId, range.start.toISOString(), range.end.toISOString())
       .then((data) => {
-        if (cancelled) return;
-        setRooms(data.rooms);
-        setSegments(data.segments);
-        setShowsOccupant(data.showsOccupant);
-        setLoading(false);
+        if (!cancelled) setLoaded({ key: requestKey, ...data });
       })
       .catch(() => {
         if (cancelled) return;
         toast.error("Could not load room availability");
-        setLoading(false);
+        setLoaded({ key: requestKey, rooms: [], segments: [], showsOccupant: false });
       });
     return () => {
       cancelled = true;
     };
-  }, [guestHouseId, date, refreshKey]);
+  }, [guestHouseId, range, requestKey]);
 
-  const { start, end } = useMemo(() => dayBounds(date), [date]);
+  const rooms = useMemo(() => loaded?.rooms ?? [], [loaded]);
+  const segments = useMemo(() => loaded?.segments ?? [], [loaded]);
+  const showsOccupant = loaded?.showsOccupant ?? false;
 
-  const occupancy = useMemo(
-    () => bucketOccupancyByHour(rooms, segments, start),
-    [rooms, segments, start]
+  // The day chart draws hours. Every view also takes per-day totals, which
+  // drive the badges and counts, so "booked" means the same thing in all three.
+  const hourly = useMemo(
+    () => (range?.view === "day" ? bucketOccupancyByHour(rooms, segments, range.start) : null),
+    [rooms, segments, range]
+  );
+  const daily = useMemo(
+    () => (range ? bucketOccupancyByDay(rooms, segments, range) : null),
+    [rooms, segments, range]
   );
 
-  // Clearing the date input leaves an unparseable value; show a prompt rather
-  // than a grid full of "Invalid Date".
-  const hasValidDate = !Number.isNaN(start.getTime());
-  const isToday = date === todayValue();
-  // Institute time, not the reader's: the "current hour" marker has to line
-  // up with the rows, which are the guest house's hours.
+  const today = todayValue();
+  const showsToday = range?.days.includes(today) ?? false;
+  // Institute time, not the reader's: the markers have to line up with the
+  // rows, which are the guest house's hours and days.
   const currentHour = instituteHour();
-  const occupiedNow = isToday
-    ? rooms.filter((r) => occupancy.get(r.id)?.hours[currentHour]).length
-    : 0;
-  const bookedToday = rooms.filter((r) => occupancy.get(r.id)?.segments.length).length;
+  const bookedNow = showsToday && daily ? roomsBookedAt(daily) : 0;
+  const bookedInRange = rooms.filter((r) => (daily?.get(r.id)?.segments.length ?? 0) > 0).length;
+  const period = PERIOD[view];
 
   if (guestHouses.length === 0) {
     return (
@@ -100,65 +134,92 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
       <Card>
         <CardContent className="flex flex-wrap items-end gap-4 pt-6">
           {guestHouses.length > 1 && (
-            <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1">
-              {guestHouses.map((gh) => (
-                <button
-                  key={gh.id}
-                  type="button"
-                  onClick={() => {
-                    setGuestHouseId(gh.id);
-                    setLoading(true);
-                  }}
-                  className={cn(
-                    "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
-                    gh.id === guestHouseId
-                      ? "bg-background shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {gh.name}
-                </button>
-              ))}
+            <div className="space-y-1.5">
+              <Label className="block">Guest house</Label>
+              <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1">
+                {guestHouses.map((gh) => (
+                  <SegmentButton
+                    key={gh.id}
+                    active={gh.id === guestHouseId}
+                    onClick={() => setGuestHouseId(gh.id)}
+                  >
+                    {gh.name}
+                  </SegmentButton>
+                ))}
+              </div>
             </div>
           )}
           <div className="space-y-1.5">
-            <Label htmlFor="availability-date">Date</Label>
-            <Input
-              id="availability-date"
-              type="date"
-              value={date}
-              onChange={(e) => {
-                setDate(e.target.value);
-                setLoading(true);
-              }}
-              className="w-44"
-            />
+            <Label className="block">View</Label>
+            <div className="flex gap-1 rounded-lg bg-muted p-1" role="group" aria-label="View">
+              {AVAILABILITY_VIEWS.map((option) => (
+                <SegmentButton
+                  key={option.value}
+                  active={option.value === view}
+                  onClick={() => setView(option.value)}
+                >
+                  {option.label}
+                </SegmentButton>
+              ))}
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="invisible block">Refresh</Label>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setLoading(true);
-                setRefreshKey((k) => k + 1);
-              }}
-            >
-              Refresh
-            </Button>
+            <Label htmlFor="availability-date">
+              {view === "day" ? "Date" : `Any date in the ${period}`}
+            </Label>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={`Previous ${period}`}
+                disabled={!range}
+                onClick={() => setDate((d) => shiftAnchor(view, d, -1))}
+              >
+                <ChevronLeftIcon />
+              </Button>
+              <Input
+                id="availability-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-40"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={`Next ${period}`}
+                disabled={!range}
+                onClick={() => setDate((d) => shiftAnchor(view, d, 1))}
+              >
+                <ChevronRightIcon />
+              </Button>
+            </div>
           </div>
+          <Button type="button" variant="outline" onClick={() => setDate(todayValue())}>
+            Today
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setRefreshKey((k) => k + 1)}>
+            Refresh
+          </Button>
           <div className="ml-auto text-sm text-muted-foreground">
             {loading ? (
               "Loading availability…"
             ) : (
               <>
-                <span className="font-medium text-foreground">{rooms.length}</span> rooms ·{" "}
-                <span className="font-medium text-foreground">{bookedToday}</span> booked on this
-                date
-                {isToday && (
+                <Figure>{rooms.length}</Figure> rooms · <Figure>{bookedInRange}</Figure> booked{" "}
+                {view === "day" ? "on this date" : `during this ${period}`}
+                {view !== "day" && (
                   <>
                     {" "}
-                    · <span className="font-medium text-foreground">{occupiedNow}</span> occupied
-                    right now
+                    · <Figure>{rooms.length - bookedInRange}</Figure> free all {period}
+                  </>
+                )}
+                {showsToday && (
+                  <>
+                    {" "}
+                    · <Figure>{bookedNow}</Figure> booked right now
                   </>
                 )}
               </>
@@ -169,20 +230,26 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
 
       <Card>
         <CardHeader>
-          <CardTitle>Room availability</CardTitle>
+          <CardTitle>Room availability{range ? ` — ${describeRange(range)}` : ""}</CardTitle>
           <CardDescription>
-            Hours of the day down the side, room numbers across the top. Red means the room is
-            held by a booking for that hour; blank means it is free.
+            {view === "day"
+              ? "Hours of the day down the side, room numbers across the top. Red means the room is booked for that hour; blank means it is free."
+              : "Days down the side, room numbers across the top. Each day's row runs from midnight at its top edge to midnight at its bottom, so a stay is one red bar from check-in to check-out. The figure beside each date is the number of rooms free all day."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-4 text-xs">
-            <LegendSwatch className="bg-red-500" label="Booked / occupied" />
+            <LegendSwatch className="bg-red-500" label="Booked" />
             <LegendSwatch className="border bg-background" label="Vacant" />
-            {isToday && <LegendSwatch className="bg-primary" label="Current hour" />}
+            {showsToday && (
+              <LegendSwatch
+                className="bg-primary"
+                label={view === "day" ? "Current hour" : "Today and the current time"}
+              />
+            )}
           </div>
 
-          {!hasValidDate ? (
+          {!range ? (
             <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
               Pick a date to see room availability.
             </p>
@@ -191,83 +258,124 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
               This guest house has no active rooms.
             </p>
           ) : (
-            <OccupancyChart
-              rooms={rooms}
-              occupancy={occupancy}
-              currentHour={isToday ? currentHour : null}
-            />
+            <div className={cn("transition-opacity", loading && "opacity-60")}>
+              {hourly ? (
+                <OccupancyChart
+                  rooms={rooms}
+                  occupancy={hourly}
+                  currentHour={showsToday ? currentHour : null}
+                />
+              ) : daily ? (
+                <RangeOccupancyChart
+                  rooms={rooms}
+                  range={range}
+                  occupancy={daily}
+                  freeByDay={freeRoomsByDay(rooms, daily, range)}
+                  today={today}
+                  nowAt={rangeProgress(range)}
+                />
+              ) : null}
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <Card className={hasValidDate ? undefined : "hidden"}>
-        <CardHeader>
-          <CardTitle>Room details</CardTitle>
-          <CardDescription>
-            Every room in this guest house with its booking periods covering{" "}
-            {hasValidDate && formatDate(start.toISOString())}
-            .{!showsOccupant && " Guest details are visible to guest house staff only."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {rooms.map((room) => {
-            const entry = occupancy.get(room.id);
-            const roomSegments = entry?.segments ?? [];
-            const hoursHeld = entry?.hours.filter(Boolean).length ?? 0;
-            return (
-              <div
-                key={room.id}
-                className="flex flex-wrap items-start gap-x-4 gap-y-2 rounded-lg border p-3"
-              >
-                <div className="w-24 shrink-0">
-                  <p className="font-semibold">{room.room_number}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {room.room_type === "double_sharing" ? "Double sharing" : "Single"}
-                  </p>
-                </div>
-                <div className="w-28 shrink-0">
-                  {roomSegments.length === 0 ? (
-                    <Badge variant="secondary">Vacant</Badge>
-                  ) : hoursHeld >= 24 ? (
-                    <Badge variant="destructive">Occupied</Badge>
-                  ) : (
-                    <Badge variant="outline">Partly booked</Badge>
-                  )}
-                </div>
-                <div className="min-w-48 flex-1 space-y-1">
-                  {roomSegments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Free all day — available to book.
+      {range && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Room details</CardTitle>
+            <CardDescription>
+              Every room in this guest house with its bookings during {describeRange(range)}.
+              {!showsOccupant && " Guest details are visible to guest house staff only."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {rooms.map((room) => {
+              const entry = daily?.get(room.id);
+              const status = roomRangeStatus(entry, range);
+              const roomSegments = entry?.segments ?? [];
+              return (
+                <div
+                  key={room.id}
+                  className="flex flex-wrap items-start gap-x-4 gap-y-2 rounded-lg border p-3"
+                >
+                  <div className="w-24 shrink-0">
+                    <p className="font-semibold">{room.room_number}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {room.room_type === "double_sharing" ? "Double sharing" : "Single"}
                     </p>
-                  ) : (
-                    roomSegments.map((s) => (
-                      <p key={s.booking_id} className="text-sm">
-                        <span className="font-medium">{formatDateTime(s.check_in)}</span>
-                        {" → "}
-                        <span className="font-medium">{formatDateTime(s.check_out)}</span>
-                        <span className="text-muted-foreground">
-                          {" "}
-                          · {s.booking_reference_id} · {STATUS_LABELS[s.status]}
-                          {s.requester_name && ` · ${s.requester_name}`}
-                        </span>
+                  </div>
+                  <div className="w-28 shrink-0">
+                    {status === "vacant" ? (
+                      <Badge variant="secondary">Vacant</Badge>
+                    ) : status === "booked" ? (
+                      <Badge variant="destructive">Booked</Badge>
+                    ) : (
+                      <Badge variant="outline">Partly booked</Badge>
+                    )}
+                  </div>
+                  <div className="min-w-48 flex-1 space-y-1">
+                    {roomSegments.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Free all {period} — available to book.
                       </p>
-                    ))
-                  )}
+                    ) : (
+                      roomSegments.map((s) => (
+                        <p key={s.booking_id} className="text-sm">
+                          <span className="font-medium">{formatDateTime(s.check_in)}</span>
+                          {" → "}
+                          <span className="font-medium">{formatDateTime(s.check_out)}</span>
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · {s.booking_reference_id} · {STATUS_LABELS[s.status]}
+                            {s.requester_name && ` · ${s.requester_name}`}
+                          </span>
+                        </p>
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
-      {hasValidDate && (
+      {range && (
         <p className="text-xs text-muted-foreground">
-          Availability shown for {formatDate(start.toISOString())} until{" "}
-          {formatDate(end.toISOString())}, in institute time.
-          Rooms are held by approved, occupied and pending-cancellation bookings; requests still
-          awaiting approval do not reserve a room.
+          Availability shown for {describeRange(range)}, in institute time. Rooms are held by
+          approved, occupied and pending-cancellation bookings; requests still awaiting approval
+          do not reserve a room.
         </p>
       )}
     </div>
   );
+}
+
+function SegmentButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+        active ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Figure({ children }: { children: React.ReactNode }) {
+  return <span className="font-medium text-foreground">{children}</span>;
 }

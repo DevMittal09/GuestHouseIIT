@@ -228,6 +228,20 @@ export async function renameGuestHouseAction(id: string, name: string): Promise<
   }
 }
 
+/** Whether requesters booking this guest house may choose meals. */
+export async function setGuestHouseMealsAction(
+  id: string,
+  servesMeals: boolean
+): Promise<ActionResult> {
+  try {
+    await requireDeveloper();
+    await getStore().updateGuestHouse(id, { serves_meals: servesMeals === true });
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function deleteGuestHouseAction(id: string): Promise<ActionResult> {
   try {
     await requireDeveloper();

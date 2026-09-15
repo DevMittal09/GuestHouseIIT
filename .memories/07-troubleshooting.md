@@ -75,10 +75,34 @@ Two things to know if you see it again:
 
 ## Bookings fail to submit against Supabase with a column error
 
-`bookings.meals` is migration 6. Apply
-`supabase/migrations/00000000000006_booking_meals.sql` in the SQL editor. Reads
-degrade gracefully (`normalizeMeals` fills in "none requested"), so the symptom
-is writes failing while every page still renders.
+The booking insert names columns that migrations add: `bookings.meals`
+(migration 6) and `bookings.has_infant` (migration 7) — and until migration 8
+runs, migration 6's check constraint refuses the per-day meal plan the form now
+sends. Apply whichever of
+`supabase/migrations/00000000000006_booking_meals.sql`,
+`00000000000007_booking_infant_flag.sql` and `00000000000008_meal_plans.sql` is
+missing, in order, in the SQL editor. Reads degrade gracefully (`normalizeMeals` fills in "none requested",
+and a missing `has_infant` is derived from infant guest rows), so the symptom is
+writes failing while every page still renders. The requester only sees
+"Something went wrong while submitting the booking"; the server log carries the
+PostgREST error naming the missing column.
+
+## The Meals card is missing from the booking form
+
+Meals are offered only where `guest_houses.serves_meals` is on — check the guest
+house under Developer Console → Guest Houses & Rooms ("Serves meals"). Three
+other causes, all expected:
+
+- the role's allowed guest houses all have it off (students are Bageshri-only by
+  default), so the card is not rendered at all;
+- on Supabase before migration 8 the column does not exist and every guest house
+  reads as serving no meals;
+- the table itself appears only once a guest house that serves meals and a valid
+  check-in / check-out are chosen — until then the card explains what is
+  missing.
+
+A meal showing a dash instead of a checkbox is served before check-in or after
+check-out (hover for which); that is `stayMealDays` working, not a bug.
 
 ## A tab suddenly shows a different user
 

@@ -180,9 +180,9 @@ becomes untestable:
 | `lib/form-config.ts` | Form config, defaults, sanitization, the relationship dependency |
 | `lib/booking-search.ts` | Archive search: tokenizer, matchers, facets, paging |
 | `lib/occupancy.ts` | Room capacity, infants, how many rooms a party needs |
-| `lib/availability.ts` | Availability grid maths (hour bucketing, day bounds) |
+| `lib/availability.ts` | Availability grid maths (day / week / month ranges, hour and day bucketing, badges) |
 | `lib/tz.ts` | The institute timezone: parsing typed times, formatting instants |
-| `lib/meals.ts` | Meal preferences and how they are normalised on read |
+| `lib/meals.ts` | Per-day meal plans: serving windows, which meals a stay can have, normalising on read |
 | `lib/booking-schema.ts` | The config-driven zod schema both sides run |
 
 ## 4. The domain rules
@@ -248,33 +248,43 @@ the gated options) and by the zod schema (which enforces it).
 | `single` | 1 | 2 |
 
 The third occupant of a double is on a rolled-in extra bed, which is why the
-field is called `withExtraBed` and the UI says so — `extraBedsNeeded()` tells
-the manager how many to arrange.
+field is called `withExtraBed` and the UI says so — the allocation dialog tells
+the manager how many to arrange (`extraBedsFor()`, counted against the rooms
+actually picked). Keep that copy formal: "Occupancy: 2 guests (maximum 3 with
+an extra bed)", never "sleeps 2, 3 with an extra bed", which the office called
+too informal.
 
 **Infants** are children under `INFANT_AGE_LIMIT` (10) sharing a guardian's
-bed. They are **guest rows with `is_infant`**, not a count: the office still
-wants their name, age and gender on the register, and only the **ID is
-waived**. They occupy no bed, so `countBedGuests()` — never `guests.length` —
-is what capacity is measured against.
+bed. Since migration 7 a booking records them as **one switch, `has_infant`** —
+whether any are coming, not how many, with no names and no ID — because the
+office asked for exactly one option. Bookings made earlier can still carry
+**legacy infant guest rows** (`booking_guests.is_infant`), so for a stored
+booking capacity is measured with `countBedGuests()` — never `guests.length` —
+and the flag is read through `hasInfant()`.
 
 Capacity is checked twice, because different things are known at each point:
 `requestedRoomsError()` at submission, when only a room *count* exists, and
 `allocationCapacityError()` at allocation, when the actual room types are
 known. The booking form also caps how many guests can be added to what the
-chosen rooms sleep, plus infants.
+chosen rooms accommodate.
 
-> **Trap:** a booking of infants only is refused — someone has to be on a bed.
+> **Trap:** infants are not guests. Giving them guest rows again would put them
+> back into the capacity count and the ID requirement; the switch exists so
+> they are in neither.
 
 ### 4.4 Meals
 
-The requester ticks breakfast / lunch / dinner when booking, so the kitchen has
-head counts before guests arrive. Stored as **one jsonb column**
-(`bookings.meals`, migration 6) rather than three booleans: it is one answer to
-one question and is always read as a set, which is the same reasoning as
-`custom_fields`. `normalizeMeals()` is the only reader — a booking made before
-the question existed has no value, which truthfully means "none requested", so
-both stores normalise during hydration and nothing downstream needs a null
-check. Always optional; "no meals" is the common answer.
+Meals are chosen **per day of the stay** in a days × breakfast / lunch / dinner
+grid, so the kitchen has head counts before guests arrive — and **only at guest
+houses that serve meals** (`guest_houses.serves_meals`: Hamsanandi on by
+default, toggled in the developer console, never a check on the name). Stored as
+**one jsonb column** (`bookings.meals`), since migration 8 a `MealPlan`: one
+`{date, breakfast, lunch, dinner}` entry per IST day that has a meal. A day
+offers only the meals whose serving window overlaps the stay (`stayMealDays`),
+enforced by `mealPlanError` in the schema on both sides. `normalizeMeals()` is
+the only reader: it expands the old whole-stay object over the stay's days (the
+same rule migration 8 applied in SQL) and turns anything missing into "none
+requested", so nothing downstream needs a null check. Always optional.
 
 ### 4.5 Advance-booking window
 
@@ -304,12 +314,12 @@ can only narrow, never widen. Do not reorder that spread.
 | --- | --- | --- |
 | `/` | anyone | Persona picker (stands in for SSO) |
 | `/dashboard` | requesters | Own bookings, status, assigned rooms, cancellation |
-| `/book` | requesters | The config-driven booking form, with an hour-by-hour availability panel and meal choices |
+| `/book` | requesters | The config-driven booking form, with an hour-by-hour availability panel, a per-day meal grid (where the guest house serves meals) and an "Infant accompanying" switch |
 | `/warden` `/fa` `/iar` | reviewers | One `ReviewQueue` component, three scopings |
-| `/availability` | **every role** | Read-only time × room occupancy grid |
+| `/availability` | **every role** | Read-only time × room occupancy chart, by day, week or month |
 | `/history` | **every role** | Booking history / approval log, CSV + PDF export |
 | `/manager` | gh_manager | Cinema-style allocation grid, lifecycle controls |
-| `/admin/*` | developer | Users, guest houses & rooms, Form Builder, all bookings |
+| `/admin/*` | developer | Users, guest houses & rooms (including which serve meals), Form Builder, all bookings |
 
 Queue pages poll every 5 s (`components/auto-refresh.tsx`); `/history` and
 `/availability` are excluded via `NO_POLL_PREFIXES`.
@@ -332,10 +342,11 @@ Queue pages poll every 5 s (`components/auto-refresh.tsx`); `/history` and
 > anyone can become the developer — the password is a demo guard, and the real
 > fix is item 1 of [08-roadmap.md](08-roadmap.md).
 
-- `/availability` is open to every role, so `getDayAvailability` **strips
+- `/availability` is open to every role, so `getRoomAvailability` **strips
   `requester_name` and `purpose_of_visit` unless the caller is `gh_manager` or
   `developer`**. Everyone else sees periods, reference ids and statuses. The
-  grid answers "is this room free", which needs no guest identity.
+  grid answers "is this room free", which needs no guest identity. For the same
+  reason the action refuses windows longer than `MAX_AVAILABILITY_DAYS` (62).
 - `exportHistoryCsv` / `exportHistoryPdf` take only a query string and re-derive
   the user, scope and params server-side, so an export can never exceed what the
   caller may see. Keep it that way.
@@ -406,6 +417,14 @@ There is **no test framework**. Both of these are proven to work:
 2. **HTTP smoke tests** against a running dev server. Auth is a cookie holding a
    profile id, so you can impersonate anyone:
    `curl -s -b "gh_mock_user=gh-manager" http://localhost:3000/manager`
+3. **Client-rendered UI** — headless Chrome driven over the DevTools protocol,
+   no packages needed; **migrations** — a throwaway `postgres:16-alpine`
+   container with Supabase stand-ins. Both recipes are in
+   [05-deployment.md](05-deployment.md#verifying-changes).
+
+> `.env.local` points at the **hosted** Supabase project. For any test that
+> writes, start the dev server with `NEXT_PUBLIC_SUPABASE_URL=` (empty) so it
+> uses the mock store, and remove the `.local-db.json` it creates afterwards.
 
 Always finish with `npm run build` (runs the typecheck) and `npm run lint`.
 `next dev` refuses to start if port 3000 is already in use.
@@ -421,16 +440,30 @@ the developer's working data.
 
 ---
 
-Migrations are numbered and applied forward only; there are six. Migration 4
-moved infants from `bookings.infants` to `booking_guests.is_infant` — see
-[06-decisions.md](06-decisions.md) for why the first model was wrong. Migration
-6 adds `bookings.meals`; **it must be applied before bookings can be created
-against Supabase** (the mock store self-heals instead).
+Migrations are numbered and applied forward only; there are eight. Migration 4
+moved infants from `bookings.infants` to `booking_guests.is_infant`, and
+migration 7 moved them again, to one `bookings.has_infant` switch — see
+[06-decisions.md](06-decisions.md) for why each model changed. Migration 6 adds
+`bookings.meals`, migration 7 `bookings.has_infant`, and migration 8
+`guest_houses.serves_meals` plus the per-day shape of `bookings.meals`; **all
+three must be applied before bookings (with meals) can be created against
+Supabase** (the mock store self-heals instead). Migrations 7 and 8 were checked
+against a throwaway Postgres before being written down — see
+[05-deployment.md](05-deployment.md#verifying-changes).
 
 `supabase/repairs/` holds one-off data fixes that are not migrations and are
 never applied automatically. Read each file's header before running it.
 
-Last substantive update: 2026-09-10 — all times pinned to institute time
+Last substantive update: 2026-09-15 — from the guest house meeting notes: room
+availability by day, week or month (time runs down in every view; a stay is one
+bar) with the red legend reading "Booked"; formal capacity wording in the
+allocation dialog, which also fixed extra beds being under-counted for single
+rooms; one "Infant accompanying" switch per booking (migration 7); and meals
+chosen per day, only at guest houses that serve them (migration 8). See the
+meeting-notes table in [01-background.md](01-background.md) for what is done and
+what is not.
+
+Previous update: 2026-09-10 — all times pinned to institute time
 (`lib/tz.ts`, fixing bookings that read back 5h30m late), meal preferences per
 booking, hour-by-hour availability inside the booking form, the manager console
 split into current / awaiting check-out / upcoming, `OCCUPIED` refused before

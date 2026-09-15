@@ -69,6 +69,12 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     if (!config.allowed_guest_house_ids.includes(guestHouse.id)) {
       return { ok: false, error: `Your role cannot book ${guestHouse.name}` };
     }
+    // Meals only where the guest house serves them (Hamsanandi by default,
+    // set in the developer console). The form hides the grid elsewhere; this
+    // is the check a crafted request meets.
+    if (payload.meals.length > 0 && !guestHouse.serves_meals) {
+      return { ok: false, error: `Meals are not served at ${guestHouse.name}` };
+    }
 
     // Room limit enforcement: check against total active rooms and date-range availability.
     const activeRooms = await store.listRooms(payload.guest_house_id);
@@ -104,8 +110,8 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       }
     }
 
-    // Per-guest ID documents. Infants are exempt: they are on the register by
-    // name and age, but an under-10 has no ID to upload.
+    // Per-guest ID documents. Every guest row needs a bed and an ID; infants
+    // are the booking's `has_infant` switch and have no row to upload for.
     const guests: Omit<BookingGuest, "id" | "booking_id">[] = [];
     for (let i = 0; i < payload.guests.length; i++) {
       const g = payload.guests[i];
@@ -115,7 +121,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         const fileError = validFile(file);
         if (fileError) return { ok: false, error: fileError };
         documentUrl = await store.saveDocument(file, "guest-ids");
-      } else if (config.guest_fields.id_document === "required" && !g.is_infant) {
+      } else if (config.guest_fields.id_document === "required") {
         return { ok: false, error: `ID document upload is required for guest ${i + 1}` };
       }
       guests.push({
@@ -123,9 +129,10 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         age: g.age ?? null,
         gender: (g.gender as Gender | undefined) ?? "other",
         relationship: g.relationship ?? null,
-        id_number: g.is_infant ? null : (g.id_number ?? null),
+        id_number: g.id_number ?? null,
         id_document_url: documentUrl,
-        is_infant: g.is_infant,
+        // Legacy column: infants are `bookings.has_infant` since migration 7.
+        is_infant: false,
       });
     }
 
@@ -152,6 +159,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       alumni_id_url: alumniIdUrl,
       custom_fields: customValues.length > 0 ? customValues : null,
       meals: payload.meals,
+      has_infant: payload.has_infant,
       guests,
     });
 

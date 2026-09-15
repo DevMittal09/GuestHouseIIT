@@ -81,11 +81,25 @@ function loadDb(): Db {
         dirty = true;
       }
     }
+    for (const gh of db.guest_houses) {
+      // Migration 8's counterpart: when the flag arrived, meals were served at
+      // Hamsanandi only. From then on the stored flag is the truth.
+      if (gh.serves_meals === undefined) {
+        gh.serves_meals = gh.name === "Hamsanandi";
+        dirty = true;
+      }
+    }
     for (const b of db.bookings) {
-      // Migration 6's counterpart: a booking made before meals were asked
-      // about has no answer, which is "none requested".
-      if (!b.meals) {
-        b.meals = normalizeMeals(undefined);
+      // Migrations 6 and 8: no answer at all is "none requested", and the old
+      // whole-stay object is expanded into one entry per day of the stay.
+      if (!Array.isArray(b.meals)) {
+        b.meals = normalizeMeals(b.meals, b);
+        dirty = true;
+      }
+      // Migration 7's counterpart: infants moved from guest rows to one flag
+      // on the booking, set wherever an infant row exists.
+      if (b.has_infant === undefined) {
+        b.has_infant = db.booking_guests.some((g) => g.booking_id === b.id && g.is_infant);
         dirty = true;
       }
     }
@@ -182,6 +196,7 @@ export class MockStore implements DataStore {
       alumni_id_url: input.alumni_id_url,
       custom_fields: input.custom_fields,
       meals: normalizeMeals(input.meals),
+      has_infant: input.has_infant,
       created_at: nowIso,
       updated_at: nowIso,
     };
@@ -212,7 +227,7 @@ export class MockStore implements DataStore {
       .map((h) => h.room_id);
     return {
       ...b,
-      meals: normalizeMeals(b.meals),
+      meals: normalizeMeals(b.meals, b),
       assigned_room_ids: assignedRoomIds,
       requester: db.profiles.find((p) => p.id === b.user_id)!,
       guest_house: db.guest_houses.find((g) => g.id === b.guest_house_id)!,
@@ -406,17 +421,21 @@ export class MockStore implements DataStore {
     if (db.guest_houses.some((g) => g.name.toLowerCase() === name.toLowerCase())) {
       throw new Error("A guest house with this name already exists");
     }
-    const gh: GuestHouse = { id: randomUUID(), name, total_rooms: 0 };
+    const gh: GuestHouse = { id: randomUUID(), name, total_rooms: 0, serves_meals: false };
     db.guest_houses.push(gh);
     saveDb(db);
     return gh;
   }
 
-  async updateGuestHouse(id: string, patch: { name?: string }): Promise<void> {
+  async updateGuestHouse(
+    id: string,
+    patch: { name?: string; serves_meals?: boolean }
+  ): Promise<void> {
     const db = loadDb();
     const gh = db.guest_houses.find((g) => g.id === id);
     if (!gh) throw new Error("Guest house not found");
     if (patch.name) gh.name = patch.name;
+    if (patch.serves_meals !== undefined) gh.serves_meals = patch.serves_meals;
     saveDb(db);
   }
 

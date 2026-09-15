@@ -9,10 +9,10 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 | Table | Purpose |
 | --- | --- |
 | `profiles` | One row per user. `id` references `auth.users`. Holds `email`, `full_name`, `role`, `hostel_name`, `department_or_club`, `roll_number`. |
-| `guest_houses` | `name` (free-form, unique) and `total_rooms` (recounted from active rooms). |
+| `guest_houses` | `name` (free-form, unique), `total_rooms` (recounted from active rooms) and `serves_meals` (migration 8 — whether the booking form offers meals there; Hamsanandi on by default). |
 | `rooms` | `guest_house_id`, `room_number`, `room_type`, `is_active`. Unique per (guest house, room number). |
 | `bookings` | The core record — see below. |
-| `booking_guests` | One row per guest: name, age, gender, relationship, id number, `id_document_url`, `is_infant`. |
+| `booking_guests` | One row per guest: name, age, gender, relationship, id number, `id_document_url`, `is_infant` (legacy since migration 7 — see `has_infant` below). |
 | `booking_logs` | Append-only audit trail of status changes. |
 | `form_configs` | One row per requester role: `role` (PK), `config` jsonb, `updated_at`. |
 | `room_holds` | Which room each booking occupies, and when. See below — this is the interesting one. |
@@ -27,6 +27,18 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 - `rejection_reason`, `alumni_id_url`.
 - `custom_fields jsonb` — snapshot of admin-defined field answers, each with its
   `label` preserved so reviewers see the original question text.
+- `meals jsonb` — the per-day meal plan since migration 8:
+  `[{"date":"YYYY-MM-DD","breakfast":bool,"lunch":bool,"dinner":bool}]`, only
+  days with a meal, in date order, default `[]`. A `check` constraint built on
+  `jsonb_path_exists` refuses anything else (an object, a missing key, a
+  non-boolean, a date not shaped `yyyy-mm-dd`). Migration 6 created it as one
+  `{breakfast, lunch, dinner}` object for the whole stay; migration 8 converted
+  those rows day by day with the serving windows from `lib/meals.ts`.
+- `has_infant boolean` (migration 7) — whether any infants accompany the party.
+  One flag however many; infants have no guest row. It was backfilled from
+  legacy `booking_guests.is_infant` rows, which stay: they are still infants
+  sharing a bed, so capacity for those bookings uses `countBedGuests`, and new
+  bookings write `is_infant = false`.
 
 > **There is no `assigned_room_ids` column.** It was dropped in migration 3.
 > `Booking.assigned_room_ids` still exists in the domain type but is **derived
@@ -190,10 +202,28 @@ Current migrations:
 6. `00000000000006_booking_meals.sql` (`bookings.meals` jsonb + a check that all
    three keys are present and boolean). Additive with a default, so existing
    bookings read as "no meals requested".
+7. `00000000000007_booking_infant_flag.sql` (`bookings.has_infant`, set wherever
+   a legacy infant guest row exists; keeps `booking_guests.is_infant` for those
+   rows and comments it as legacy). Additive.
+8. `00000000000008_meal_plans.sql` (`guest_houses.serves_meals`, set for
+   Hamsanandi; converts every `bookings.meals` object into the per-day array —
+   each old meal kept only on days its serving window falls inside the stay —
+   changes the column default to `[]` and replaces migration 6's shape check).
+   Converts data, but nothing is lost: an old answer becomes the plan it
+   implied. Safe to re-run.
 
-> **Migration 6 must be applied before a booking can be created against
-> Supabase.** The insert names the column, so without it every submission
-> fails. The mock store self-heals instead (`loadDb()` backfills `meals`).
+> **Migrations 6, 7 and 8 must be applied before bookings can be created against
+> Supabase.** The insert names `meals` and `has_infant`, and until migration 8
+> runs, migration 6's constraint refuses a per-day plan. The mock store
+> self-heals instead (`loadDb()` expands `meals`, derives `has_infant` from
+> infant guest rows, and sets `serves_meals` for Hamsanandi).
+
+> **Migrations 7 and 8 were tested before being committed**, in a throwaway
+> `postgres:16-alpine` container: migrations 1–6 on stand-ins for Supabase's
+> `auth` / `storage` schemas and roles, old-shape bookings inserted, 7 and 8
+> applied twice with the session zone set to New York, and every converted row
+> compared with what `normalizeMeals` produces for the same stay. The recipe is
+> in [05-deployment.md](05-deployment.md#verifying-changes).
 
 > Migration 3 is **destructive**: it drops `bookings.assigned_room_ids` after
 > backfilling. Its `on conflict do nothing` also swallows any pre-existing

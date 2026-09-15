@@ -48,6 +48,18 @@ you should do the same rather than assuming:
    Use this to check a page renders (200) and that scoping works (e.g. the Malhar
    warden sees only Malhar students' requests).
 
+   `.env.local` currently points at the **hosted** Supabase project, so a plain
+   dev server writes there. For anything that creates or changes data, start it
+   with `NEXT_PUBLIC_SUPABASE_URL= npm run dev` — an empty value in the process
+   environment beats `.env.local` and selects the mock store — and delete the
+   `.local-db.json` it creates if there was none before.
+3. **Headless Chrome** for client-rendered UI (dialogs, the meal grid, the
+   week/month charts), driven over the DevTools protocol with Node 20's
+   `--experimental-websocket` — no packages needed. Recipe and gotchas in
+   `.memories/05-deployment.md`. Migrations are checked in a throwaway
+   `postgres:16-alpine` container the same way — never against the hosted
+   project.
+
 `next dev` refuses to start if another dev server is already running — check
 port 3000 before launching your own.
 
@@ -330,67 +342,123 @@ blue selected, grouped into double-sharing and single.
 | `single` | 1 | 2 |
 
 The third occupant of a double is on a **rolled-in extra bed** — hence the field
-name `withExtraBed` (not `max`) and `extraBedsNeeded()`, which tells the manager
-how many to arrange. Say so in UI copy; it is a thing someone has to physically do.
+name `withExtraBed` (not `max`). Say so in UI copy; it is a thing someone has to
+physically do.
 
-**Infants** (under `INFANT_AGE_LIMIT` = 10) are **guest rows carrying
-`is_infant`**, not a count. Their name, age and gender still go on the register;
-only the **ID number and ID document are waived**, and they occupy no bed.
+- **Keep the copy formal.** The office found "sleeps 2, 3 with an extra bed" too
+  informal for the Review & Allocate dialog, so `describeCapacity()` reads
+  "Occupancy: 2 guests (maximum 3 with an extra bed)" and the allocation summary
+  is labelled figures (rooms selected, guests, capacity of selection, extra beds
+  required), not a sentence. The capacity error messages use the same register.
+- **Extra beds at allocation are counted against the rooms actually picked**
+  (`extraBedsFor(guests, rooms)`). `extraBedsNeeded(guests, roomCount)` assumes
+  double rooms and is only for the booking form, before rooms exist — using it
+  in the dialog under-counted a single room holding two guests.
 
-> **Always measure capacity with `countBedGuests(guests)`, never
-> `guests.length`.** Getting that wrong over-books every room by the number of
-> infants. A booking of infants only is refused — someone must be on a bed.
+**Infants** (under `INFANT_AGE_LIMIT` = 10) are **one switch per booking —
+`bookings.has_infant`** (migration 7): an infant is coming, however many. No
+names, no count, no ID; they share a guardian's bed and take no room or bed.
+The switch sits beside "+ Add guest" in the booking form
+(`components/ui/switch.tsx`), so every guest row on a new booking is a
+bed-occupying guest with the role's usual ID requirement.
+
+> **Stored bookings can still hold legacy infant guest rows** — migration 4
+> made infants rows, migration 7 replaced that. Those rows share a bed, so for
+> any *stored* booking measure capacity with `countBedGuests(guests)`, never
+> `guests.length`, and read the flag through `hasInfant(booking)`, which also
+> sees a legacy row. `booking_guests.is_infant` stays for them; new bookings
+> write `false`. `describeParty(booking)` renders both shapes.
 
 Checked twice, because different things are known: `requestedRoomsError()` at
 submission (only a room count exists) and `allocationCapacityError()` at
 allocation (actual room types known). The booking form additionally caps how
-many guests can be added to what the chosen rooms sleep, plus infants — so
-picking rooms first, then guests, is the intended order.
+many guests can be added to what the chosen rooms accommodate — so picking rooms
+first, then guests, is the intended order.
 
 ## Meals — `lib/meals.ts`
 
-The requester ticks breakfast / lunch / dinner when booking, so the kitchen has
-head counts before guests arrive. One jsonb column (`bookings.meals`, migration
-6), not three booleans, because it is one answer to one question and is always
-read as a set — the same shape as `custom_fields`.
+The requester chooses meals **per day of the stay** in a days × breakfast /
+lunch / dinner grid (`components/meal-plan-grid.tsx`), so the kitchen has head
+counts before guests arrive. Still one jsonb column, `bookings.meals`, but since
+migration 8 it is a **`MealPlan`**: one `{date, breakfast, lunch, dinner}` entry
+per institute calendar day that has a meal, in date order. (Migration 6 created
+it as one `{breakfast, lunch, dinner}` answer for the whole stay.)
 
-- `normalizeMeals()` is the only way to read it. Bookings predating migration 6
-  have no value, and the mock store's JSON gets hand-edited, so a missing or
-  partial object must mean "none requested", never a crash. Both stores call it
-  during hydration, so `Booking.meals` is always a complete object downstream.
-- Meals are always optional — "no meals" is the common answer, so there is no
-  required-field mode for them.
-- Shown on `BookingDetails` (so every reviewer sees them) and as a column in the
-  manager's stays tables.
+- **Only where the guest house serves meals.** `guest_houses.serves_meals`
+  (migration 8) — Hamsanandi on, Bageshri off — toggled in the developer
+  console (Guest Houses & Rooms → "Serves meals"). **Never check the guest
+  house name in code.** The form hides the grid where it does not apply, and
+  `createBooking` refuses meals for a guest house that does not serve them.
+- **A day offers only the meals served during the stay.** `stayMealDays()`
+  lists every IST date from check-in to the day of check-out; a meal is
+  available when its `MEAL_SERVING_WINDOWS` window overlaps the stay, half-open
+  like room holds (a noon arrival gets no breakfast that day, leaving at 07:30
+  misses breakfast, a midnight check-out adds no day). Unavailable cells show a
+  dash. `mealPlanError()` enforces the same rule in the zod schema on client
+  and server, and `MEAL_TIMES` labels are derived from the windows.
+- **Migration 8 converted old rows with the same rule, in SQL.** The windows are
+  written into the migration, so keep any future conversion in step with
+  `MEAL_SERVING_WINDOWS`. The SQL and `normalizeMeals` were run on the same
+  fixtures in a throwaway Postgres and agree.
+- `normalizeMeals(value, stay)` is the only way to read it: it cleans arrays,
+  expands the legacy whole-stay object over the stay's days, and turns anything
+  else into "none requested". Both stores call it while hydrating (passing the
+  booking as the stay), so `Booking.meals` is always a clean plan downstream.
+- The form keeps ticks as `"date|meal"` slots outside react-hook-form
+  (`mealSlot` / `mealPlanFromSlots`), because the rows follow the dates. Slots
+  the stay no longer covers are ignored rather than deleted, so changing the
+  dates back restores them. Nothing is ticked by default; each column's "Every
+  day" box ticks that meal for the whole stay. Meals are always optional.
+- Shown on `BookingDetails` as a per-day table with the head count (so every
+  reviewer sees them) and as "Breakfast (2 days), Dinner (1 day)" in the
+  manager's stays tables, with the per-day list in the cell's tooltip.
 
 ## Room availability grid (`/availability`)
 
 Open to **every signed-in role** — the one route with no role gate. Pick a
-guest house and a date; the chart puts the 24 hours of that day down the Y axis
-and room numbers across the X axis, red where a room is held and blank where it
-is free, with a room-by-room list of booking periods underneath.
+guest house, a **Day / Week / Month** view and a date (with previous / next and
+Today buttons). Time always runs **down** the chart and room numbers
+**across** it: the day view has a row per hour, the week and month views a row
+per day. Red is labelled **Booked** — not "Booked / occupied": a hold is a
+reservation, and `OCCUPIED` is a separate fact recorded at the desk. A
+room-by-room list underneath gives each booking period and a Vacant / Partly
+booked / Booked badge for the whole period shown.
 
 - `listRoomOccupancy(guestHouseId, from, to)` (both stores) returns one segment
   per **(room, booking)** using the same `ROOM_HOLDING_STATUSES` + strict
   overlap as `getOccupiedRoomIds`. The two must agree — a throwaway parity
   check caught nothing, but that is exactly where the backends drift.
-- **Hour bucketing lives in `lib/availability.ts`, not the component**
-  (`bucketOccupancyByHour`), so the boundary behaviour is testable: a stay
-  checking out at 11:00 releases the 11 AM hour, and a same-instant
-  back-to-back booking picks it up.
-- `getDayAvailability` (`app/actions/availability.ts`) **strips
+- **All the calendar maths lives in `lib/availability.ts`, not the
+  components**, so the boundary behaviour is testable: `bucketOccupancyByHour`
+  (a stay checking out at 11:00 releases the 11 AM hour, and a same-instant
+  back-to-back booking picks it up), `availabilityRange` / `shiftAnchor` (weeks
+  run Monday–Sunday; a month step clamps 31 Jan → 28 Feb), and
+  `bucketOccupancyByDay` (bars as fractions of the range, plus booked minutes
+  per day, which drive the badges and the "N free" figure beside each date).
+- Calendar dates (`"yyyy-MM-dd"`) go through `parseDateValue` /
+  `addDaysToDateValue` / `formatDateValue` in `lib/tz.ts`. They do the
+  arithmetic in UTC because a calendar date has no zone; turning a date into
+  instants is still `instituteDayBounds`.
+- **In the week and month views time also runs down inside each day's row**
+  (midnight at its top edge), so a stay is one continuous bar from check-in to
+  check-out (`RangeOccupancyChart`). Keep those axes: switching views should
+  zoom out, not rotate the picture.
+- `getRoomAvailability(guestHouseId, fromIso, toIso)`
+  (`app/actions/availability.ts`, formerly `getDayAvailability`) **strips
   `requester_name` and `purpose_of_visit` unless the caller is `gh_manager` or
-  `developer`**. Everyone else gets periods and reference ids only. Do not
-  widen this without a reason — the grid answers "is this room free", which
-  needs no guest identity.
+  `developer`**, and **refuses windows longer than `MAX_AVAILABILITY_DAYS`
+  (62)** because every role can call it. Everyone else gets periods and
+  reference ids only. Do not widen this without a reason — the grid answers "is
+  this room free", which needs no guest identity.
 - Excluded from the 5 s polling: the component fetches client-side and has its
   own Refresh button.
-- **The chart itself is `components/occupancy-chart.tsx`**, shared with the
-  panel inside the booking form (`components/booking-availability.tsx`), which
-  shows the same hour-by-hour picture for the guest house and check-in date
-  being chosen. Requesters were otherwise picking dates blind. One chart, one
-  action, one bucketing — so what the requester sees and what the manager sees
-  cannot drift.
+- **The charts live in `components/occupancy-chart.tsx`** — `OccupancyChart`
+  (a day) and `RangeOccupancyChart` (a week or month). The day chart is shared
+  with the panel inside the booking form (`components/booking-availability.tsx`),
+  which shows the same hour-by-hour picture for the guest house and check-in
+  date being chosen. Requesters were otherwise picking dates blind. One chart,
+  one action, one bucketing — so what the requester sees and what the manager
+  sees cannot drift.
 
 ## Developer console lock
 
@@ -520,13 +588,15 @@ something to look at.
 
 ## Supabase setup
 
-Three migration files applied sequentially:
+Migration files, applied sequentially:
 1. `supabase/migrations/00000000000001_init.sql` (tables, enums, RLS, private `documents` bucket)
 2. `supabase/migrations/00000000000002_booking_lifecycle.sql` (adds `OCCUPIED`, `VACATED`, `CANCELLATION_REQUESTED`, `CANCELLATION_APPROVED` to `booking_status`)
 3. `supabase/migrations/00000000000003_room_holds_and_infants.sql` (`room_holds` + exclusion constraint + `set_room_holds()`, backfills and **drops** `bookings.assigned_room_ids`, adds `bookings.infants`). Destructive — read its header comment before running it against real data.
 4. `supabase/migrations/00000000000004_infant_guests.sql` (adds `booking_guests.is_infant`, **drops** `bookings.infants`)
 5. `supabase/migrations/00000000000005_app_settings.sql` (`app_settings` key/value table for the developer console password hash; service-role only, no `authenticated` policy)
 6. `supabase/migrations/00000000000006_booking_meals.sql` (`bookings.meals` jsonb + a shape check). Additive and defaulted, so existing bookings read as "no meals requested". **Until this is applied, creating a booking against Supabase fails** — the mock store self-heals instead.
+7. `supabase/migrations/00000000000007_booking_infant_flag.sql` (`bookings.has_infant`, backfilled wherever a legacy infant guest row exists; `booking_guests.is_infant` is kept for those rows). **Until this is applied, creating a booking against Supabase fails** — the insert names the column. Reads degrade: a missing flag is derived from infant guest rows.
+8. `supabase/migrations/00000000000008_meal_plans.sql` (`guest_houses.serves_meals`, set for Hamsanandi; converts `bookings.meals` to the per-day array with the serving windows from `lib/meals.ts`, and replaces migration 6's shape check). **Until this is applied, a booking with meals cannot be created against Supabase**, and every guest house reads as serving no meals. Safe to re-run.
 
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are
 not applied automatically. Read the header of each before running it.

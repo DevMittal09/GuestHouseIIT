@@ -54,9 +54,10 @@ insert into public.profiles (id, email, full_name, role, hostel_name, department
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------- guest houses
-insert into public.guest_houses (id, name, total_rooms) values
-  ('22222222-2222-2222-2222-222222222201', 'Bageshri', 20),
-  ('22222222-2222-2222-2222-222222222202', 'Hamsanandi', 16)
+-- Meals are served at Hamsanandi only (migration 8); editable in the console.
+insert into public.guest_houses (id, name, total_rooms, serves_meals) values
+  ('22222222-2222-2222-2222-222222222201', 'Bageshri', 20, false),
+  ('22222222-2222-2222-2222-222222222202', 'Hamsanandi', 16, true)
 on conflict (name) do nothing;
 
 -- ---------------------------------------------------------------- rooms

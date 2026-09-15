@@ -309,7 +309,7 @@ production, so the fallback would only have been something to drift.
 check. Adding one back would reintroduce the race it was written to remove;
 losing the race is reported through `RoomClashError` instead.
 
-## Infants are guest rows, not a count (superseded an earlier decision)
+## Infants are guest rows, not a count (superseded an earlier decision — and was itself superseded by migration 7, below)
 
 **First decision, migration 3 — wrong.** `bookings.infants` as an integer, on
 the reasoning that a guest row wants an Aadhaar number and an ID upload, neither
@@ -334,6 +334,40 @@ The app does check that a guest marked infant is actually under the limit.
 `guests.length`. Getting that wrong over-books every room by the number of
 infants. A booking with **only** infants is refused — someone has to be on a bed.
 
+## Infants are one switch on the booking (supersedes infant guest rows)
+
+**Decision (15 Sep 2026, migration 7).** Replace the per-guest "Infant"
+checkbox with one **"Infant accompanying"** switch for the whole booking,
+`bookings.has_infant`. No count, no names, no ID.
+
+**Why.** The guest house office asked for it in so many words: instead of the
+option to add multiple infants, a single toggle saying an infant is going to be
+there, irrespective of the number. The guest-row model optimised for a register
+line per child; what the office actually wants is to know that a child is
+coming, and the rows made requesters type a toddler's name, age and gender and
+reason about which boxes an infant waived.
+
+**What survives from the previous decision.** Infants still share a guardian's
+bed and never count against capacity. With no rows at all the rule gets simpler
+for new bookings: every guest row is a bed and follows the role's ID rule, and
+the switch cannot change the guest ceiling.
+
+**Why the old column stays.** Rows written under migration 4 are real infants.
+Dropping `booking_guests.is_infant` would turn them into bed-occupying adults on
+bookings that may still be awaiting allocation. So the column remains (commented
+as legacy), new bookings write `false`, `countBedGuests` still excludes those
+rows, and `hasInfant(booking)` / `describeParty(booking)` read both shapes —
+"2 guests + 1 infant" for an old booking, "2 guests, with infant(s)" for a new
+one. Migration 7 backfills the flag from the rows; the mock store does the same
+on load, and the Supabase store derives it when the column is not there yet.
+
+**Cost.** New bookings no longer record infants' names or ages — a trade the
+office made explicitly. The PDF report's "Infants" total became **"With
+infants"** (bookings, not children), because the count no longer exists.
+
+**Rejected.** An infant *count* on the booking. That was the first model
+(migration 3), and "irrespective of the number" rules it out.
+
 ## Room capacity is expressed as "with an extra bed"
 
 **Decision.** `ROOM_CAPACITY[type]` is `{ standard, withExtraBed }`, and the UI
@@ -346,6 +380,24 @@ arranged. `extraBedsNeeded()` now tells them how many, on the allocation screen.
 
 **Cost.** A rename that touched every capacity call site, done while the feature
 was days old rather than after the vocabulary had set.
+
+**Wording revised (15 Sep 2026 meeting).** The office read "sleeps 2, 3 with an
+extra bed" in the Review & Allocate dialog as too informal and asked for it to
+be made professional or removed. It was kept and rewritten rather than removed:
+the extra-bed count is operational — someone has to roll a bed in — and the
+dialog is the only place the manager sees it. `describeCapacity()` now returns
+"Occupancy: 2 guests (maximum 3 with an extra bed)", section headings are
+"Double sharing rooms" / "Single rooms" with that line beneath, and the
+allocation summary became four labelled figures (rooms selected, guests,
+capacity of selection, extra beds required) instead of a run-on sentence. The
+error messages moved to the same register ("can accommodate at most…", "Please
+select an additional room").
+
+**Bug found on the way.** The dialog computed extra beds with
+`extraBedsNeeded(guests, roomCount)`, which assumes double rooms, so two guests
+in one *single* room reported 0 extra beds. It now uses
+`extraBedsFor(guests, selectedRooms)`, counted against the rooms' real types;
+`extraBedsNeeded` stays for the booking form, where no rooms exist yet.
 
 ## Room capacity varies by room type
 
@@ -465,7 +517,9 @@ that works is running the domain logic under a non-IST `TZ`.
 
 **Decision.** `bookings.meals` is a single jsonb object
 `{breakfast, lunch, dinner}` (migration 6), read only through
-`normalizeMeals()`.
+`normalizeMeals()`. *Revised by migration 8: the column stays, but its value is
+now a per-day plan — see "Meals are chosen per day" below. The reasoning here
+still holds for the column itself.*
 
 **Why one column.** It is one answer to one question and is always consumed as a
 set — the kitchen reads "table for four, breakfast and dinner". Three boolean
@@ -574,3 +628,107 @@ answer is a private window or a second browser profile.
 **So: do not rebuild this.** If tab bleed is raised again, the options are
 per-tab sessions as part of real auth, or documenting the private-window
 workaround — not another client-side guard.
+
+## Week and month availability keep time running down
+
+**Decision.** `/availability` gained Week and Month views (15 Sep 2026 meeting)
+that keep the day view's axes — rooms across, time down — with one row per day
+and time also running down *inside* each row, so a booking is one continuous
+bar (`RangeOccupancyChart`, `bucketOccupancyByDay`).
+
+**Why these axes.** A hotel "tape chart" puts rooms down and dates across, and
+reads well on its own. But the day view — which every role already knew, and
+which the booking form embeds — has rooms across and hours down. A switch that
+rotated the picture would make Day → Week feel like a different chart instead
+of a zoomed-out one. Keeping time vertical at both scales also makes continuity
+free: a stay from noon Monday to 10:00 Wednesday is one bar starting halfway
+down Monday and ending partway down Wednesday.
+
+**Why a bar per booking rather than a colour per day.** Check-in and check-out
+days are almost always partial — a noon check-in leaves the morning free — so a
+"partly booked" colour would have been the commonest state while saying nothing
+about *which* part of the day was free. The bar shows it; the per-day "N free"
+figure and the per-room badge carry the counts.
+
+**Why one bucketing for every view's badges.** The day view's badge used to
+read "Occupied" when all 24 hour *cells* were touched, which a 00:30–23:30 stay
+also satisfies. Badges now come from booked minutes (`roomRangeStatus`) in all
+three views.
+
+**Why "Booked", not "Booked / occupied".** A hold is a reservation; `OCCUPIED`
+is a status the manager records when the guest arrives. Labelling red
+"occupied" on a future date is the same confusion the manager console's phase
+split removed, so the legend, badge and counts all say "booked".
+
+**Cost.** A second chart component and a second bucketing function. The action
+also gained a cap (`MAX_AVAILABILITY_DAYS`, 62): every signed-in role can call
+it, and without one a single request could read every hold ever written.
+
+**Rejected.** Seven or thirty one-day requests per view — one wider
+`listRoomOccupancy` call returns the same segments.
+
+## Meals are chosen per day, and only meals served during the stay are offered
+
+**Decision (15 Sep 2026, migration 8).** Replace the single breakfast / lunch /
+dinner answer with a per-day plan: a days × meals grid in the form, stored as
+`[{date, breakfast, lunch, dinner}]` in the same jsonb column. A day offers a
+meal only if that meal's serving window overlaps the stay.
+
+**Why per day.** Reported directly: booked for two days and wanting breakfast on
+one of them, a requester had no way to say so — "one selection for all days".
+The kitchen's real question is how many breakfasts on Tuesday, which a
+whole-stay answer cannot give.
+
+**Why gate by serving window.** Without it the grid offers breakfast on a noon
+arrival day and dinner on a 10 AM departure day, and one "Every day" click
+orders meals nobody will eat. The serving times were already on screen
+(`MEAL_TIMES`); they are now also the rule (`MEAL_SERVING_WINDOWS`), with the
+labels derived from the windows so the two cannot disagree. Half-open like room
+holds, so a 07:30 departure misses breakfast and a midnight check-out adds no
+day.
+
+**Why still one jsonb column.** Same reasoning as before — it is read and written
+as a whole. Storing only days that have a meal keeps "no meals" as `[]`.
+
+**Why convert old rows instead of living with two shapes.** Migration 8 expands
+each old whole-stay answer over the stay's days with the same windows, in SQL,
+so the column has one shape and per-day questions can be asked in SQL. The
+`check` constraint then enforces that shape. `normalizeMeals` still reads the
+old shape — for mock databases, and for a Supabase project where migration 8 has
+not run yet — with the identical rule; both were run on the same fixtures and
+agree.
+
+**Why ticks live outside react-hook-form.** The grid's rows are derived from the
+dates, so RHF field paths would shift under the user as dates change. A `Set` of
+`"date|meal"` keys survives that, and `mealPlanFromSlots` drops whatever the stay
+no longer covers at submit time; changing the dates back restores earlier ticks.
+
+**Not done.** The meeting notes also said meals should be ticked by default. It
+was not in the request that implemented this, so nothing is pre-ticked; the
+"Every day" boxes make ticking a whole stay one click per meal.
+
+**Cost.** A bigger form card, a data-converting migration, and a jsonpath check
+constraint instead of three key checks.
+
+## Which guest houses serve meals is a flag, not a name
+
+**Decision.** `guest_houses.serves_meals boolean` (migration 8) — on for
+Hamsanandi, off for Bageshri, toggled in the developer console — rather than
+`if (guestHouse.name === "Hamsanandi")`.
+
+**Why.** Guest house names are free-form and editable (see "Free-form guest
+house names" above). A name check would silently stop offering meals the day
+someone renamed the building, and a new guest house could never serve meals
+without a code change. The same meeting asked that the developer console be able
+to change rules like this without an IT person.
+
+**Where the name still appears.** Only as the one-time default: migration 8's
+backfill, `supabase/seed.sql`, the mock seed and the mock store's self-heal for
+old `.local-db.json` files — the role `buildDefaultFormConfig` plays for
+"students book Bageshri".
+
+**Enforcement.** The form shows the meals card only if some guest house the role
+may book serves meals, and explains when the chosen one does not;
+`createBooking` refuses a non-empty plan for a guest house with the flag off.
+Before migration 8 the Supabase store reads the flag as false, so the card
+disappears rather than offering meals that could not be saved.

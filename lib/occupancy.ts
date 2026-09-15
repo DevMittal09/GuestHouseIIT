@@ -12,7 +12,10 @@ export const ROOM_CAPACITY: Record<RoomType, { standard: number; withExtraBed: n
   double_sharing: { standard: 2, withExtraBed: 3 },
 };
 
-/** A guest marked as an infant must be under this age. */
+/**
+ * Children under this age are infants: they share a guardian's bed and need no
+ * ID. A booking records only *whether* any are coming (`Booking.has_infant`).
+ */
 export const INFANT_AGE_LIMIT = 10;
 
 /** Capacity used before rooms are picked, when their types are not yet known. */
@@ -24,22 +27,37 @@ export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   double_sharing: "Double sharing",
 };
 
-/** Anything with a bed. Infants share with their guardians, so they are not counted. */
+/**
+ * Guests who need a bed. A new booking only ever holds such guests — infants
+ * are the `has_infant` switch — but bookings made before migration 7 can carry
+ * infant guest rows, which share a guardian's bed and must not be counted.
+ */
 export function countBedGuests(guests: { is_infant?: boolean }[]): number {
   return guests.filter((g) => !g.is_infant).length;
 }
 
+/** Infant guest rows, which only bookings made before migration 7 have. */
 export function countInfants(guests: { is_infant?: boolean }[]): number {
   return guests.filter((g) => g.is_infant).length;
 }
 
-/** "2 adults + 1 infant" style summary of a guest list. */
-export function describeParty(guests: Pick<BookingGuest, "is_infant">[]): string {
-  const beds = countBedGuests(guests);
-  const infants = countInfants(guests);
+type PartyBooking = { guests: Pick<BookingGuest, "is_infant">[]; has_infant: boolean };
+
+/** Whether an infant is coming: the booking's switch, or a legacy infant row. */
+export function hasInfant(booking: PartyBooking): boolean {
+  return booking.has_infant || booking.guests.some((g) => g.is_infant);
+}
+
+/**
+ * "3 guests" or "3 guests, with infant(s)". An older booking that listed its
+ * infants as guest rows reads "2 guests + 1 infant".
+ */
+export function describeParty(booking: PartyBooking): string {
+  const beds = countBedGuests(booking.guests);
   const guestPart = `${beds} guest${beds === 1 ? "" : "s"}`;
-  if (infants === 0) return guestPart;
-  return `${guestPart} + ${infants} infant${infants === 1 ? "" : "s"}`;
+  const listed = countInfants(booking.guests);
+  if (listed > 0) return `${guestPart} + ${listed} infant${listed === 1 ? "" : "s"}`;
+  return booking.has_infant ? `${guestPart}, with infant(s)` : guestPart;
 }
 
 /** Total a set of rooms sleeps, on their own beds and with extra beds added. */
@@ -66,10 +84,21 @@ export function maxGuestsFor(rooms: number): number {
   return rooms * DEFAULT_ROOM_MAX;
 }
 
-/** How many of the guests in `rooms` rooms would be on an extra bed. */
+/**
+ * How many of the guests in `rooms` rooms would be on an extra bed, before the
+ * rooms are chosen — so it assumes double sharing rooms. Once the actual rooms
+ * are known, use `extraBedsFor`.
+ */
 export function extraBedsNeeded(guests: number, rooms: number): number {
   return Math.max(0, guests - rooms * DEFAULT_ROOM_STANDARD);
 }
+
+/** Extra beds needed to fit `guests` into these particular rooms. */
+export function extraBedsFor(guests: number, rooms: Room[]): number {
+  return Math.max(0, guests - capacityOf(rooms).standard);
+}
+
+const guestCount = (n: number) => `${n} guest${n === 1 ? "" : "s"}`;
 
 /**
  * Checked at submission, before rooms exist: does the requested room count
@@ -79,7 +108,7 @@ export function extraBedsNeeded(guests: number, rooms: number): number {
 export function requestedRoomsError(guests: number, rooms: number): string | null {
   if (guests <= maxGuestsFor(rooms)) return null;
   const needed = roomsNeededFor(guests);
-  return `${rooms} room${rooms === 1 ? "" : "s"} can sleep ${maxGuestsFor(rooms)} at most (${DEFAULT_ROOM_STANDARD} per room, ${DEFAULT_ROOM_MAX} with an extra bed). ${guests} guests need at least ${needed} rooms. Infants under ${INFANT_AGE_LIMIT} share with their guardians and do not need a bed.`;
+  return `${rooms} room${rooms === 1 ? "" : "s"} can accommodate at most ${guestCount(maxGuestsFor(rooms))} (${DEFAULT_ROOM_STANDARD} per room, or ${DEFAULT_ROOM_MAX} with an extra bed). ${guestCount(guests)} require at least ${needed} rooms. Infants under ${INFANT_AGE_LIMIT} share a guardian's bed and are not counted.`;
 }
 
 /**
@@ -89,12 +118,18 @@ export function requestedRoomsError(guests: number, rooms: number): string | nul
 export function allocationCapacityError(guests: number, rooms: Room[]): string | null {
   const capacity = capacityOf(rooms);
   if (guests <= capacity.withExtraBed) return null;
-  return `${rooms.length} room${rooms.length === 1 ? "" : "s"} sleep ${capacity.withExtraBed} even with extra beds, but this booking needs beds for ${guests} — allocate another room.`;
+  return `The selected room${rooms.length === 1 ? "" : "s"} can accommodate at most ${guestCount(capacity.withExtraBed)}, including extra beds, but this booking has ${guestCount(guests)} requiring a bed. Please select an additional room.`;
 }
 
-/** Human-readable occupancy for one room, e.g. "sleeps 2, 3 with an extra bed". */
+/**
+ * Occupancy of one room type in the manager's words, e.g.
+ * "Occupancy: 2 guests (maximum 3 with an extra bed)". It is shown in the
+ * Review & Allocate dialog, where "sleeps 2, 3 with an extra bed" was read as
+ * too informal — so it is phrased like a specification, not a remark.
+ */
 export function describeCapacity(roomType: RoomType): string {
   const { standard, withExtraBed } = ROOM_CAPACITY[roomType];
-  if (withExtraBed <= standard) return `sleeps ${standard}`;
-  return `sleeps ${standard}, ${withExtraBed} with an extra bed`;
+  const base = `Occupancy: ${guestCount(standard)}`;
+  if (withExtraBed <= standard) return base;
+  return `${base} (maximum ${withExtraBed} with an extra bed)`;
 }

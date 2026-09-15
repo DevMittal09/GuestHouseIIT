@@ -7,6 +7,7 @@ import { Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { createBooking } from "@/app/actions/bookings";
 import { BookingAvailability } from "@/components/booking-availability";
+import { MealPlanGrid } from "@/components/meal-plan-grid";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,10 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { QuantityInput } from "@/components/ui/quantity-input";
+import { Switch } from "@/components/ui/switch";
 import { TimeSelect } from "@/components/ui/time-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  countInfants,
   DEFAULT_ROOM_MAX,
   DEFAULT_ROOM_STANDARD,
   extraBedsNeeded,
@@ -42,10 +43,10 @@ import {
   type CustomField,
   type RoleFormConfig,
 } from "@/lib/form-config";
-import { MEAL_KEYS, MEAL_LABELS, MEAL_TIMES } from "@/lib/meals";
+import { describeMeals, mealPlanFromSlots, stayMealDays } from "@/lib/meals";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { latestCheckIn } from "@/lib/workflow";
-import { ROLE_LABELS, type GuestHouse, type MealKey, type Profile } from "@/lib/types";
+import { ROLE_LABELS, type GuestHouse, type Profile } from "@/lib/types";
 
 interface GuestFields {
   name: string;
@@ -53,7 +54,6 @@ interface GuestFields {
   gender: "" | "male" | "female" | "other";
   relationship: string;
   id_number: string;
-  is_infant: boolean;
 }
 
 interface FormValues {
@@ -64,7 +64,8 @@ interface FormValues {
   check_out_date: string;
   check_out_time: string;
   rooms_requested: string;
-  meals: Record<MealKey, boolean>;
+  /** One switch for the booking: are any infants coming, however many. */
+  has_infant: boolean;
   guests: GuestFields[];
   custom: Record<string, string | boolean>;
 }
@@ -75,7 +76,6 @@ const EMPTY_GUEST: GuestFields = {
   gender: "",
   relationship: "",
   id_number: "",
-  is_infant: false,
 };
 
 /** Hard ceiling regardless of rooms, so the form cannot grow unbounded. */
@@ -97,6 +97,10 @@ export function BookingForm({
   const [alumniCard, setAlumniCard] = useState<File | null>(null);
   const [alumniCardError, setAlumniCardError] = useState<string | null>(null);
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
+  // Meal choices live outside react-hook-form as "date|meal" keys (`mealSlot`):
+  // the grid's rows follow the stay dates, which fixed field paths cannot.
+  const [mealSlots, setMealSlots] = useState<Set<string>>(() => new Set());
+  const [mealsError, setMealsError] = useState<string | null>(null);
 
   const gf = config.guest_fields;
   const idDocRequired = gf.id_document === "required";
@@ -110,7 +114,7 @@ export function BookingForm({
       check_out_date: "",
       check_out_time: "10:00",
       rooms_requested: "1",
-      meals: { breakfast: false, lunch: false, dinner: false },
+      has_infant: false,
       guests: [{ ...EMPTY_GUEST }],
       custom: {},
     },
@@ -125,7 +129,6 @@ export function BookingForm({
   const selectedGuestHouseId = useWatch({ control, name: "guest_house_id" });
   const checkInDate = useWatch({ control, name: "check_in_date" });
   const checkOutDate = useWatch({ control, name: "check_out_date" });
-  const selectedMeals = useWatch({ control, name: "meals" });
 
   // Siblings / grandparents stay locked until a parent is on the request.
   const watchedGuests = useWatch({ control, name: "guests" });
@@ -137,17 +140,16 @@ export function BookingForm({
   const isLockedRelationship = (option: string) =>
     !parentPresent && config.dependent_relationships.includes(option);
 
-  // Infants share a guardian's bed, so only the others count against the rooms.
-  const guestRows = watchedGuests ?? [];
-  const infantCount = countInfants(guestRows);
-  const bedGuests = Math.max(fields.length - infantCount, 0);
+  // Every guest row needs a bed. Infants are not rows at all: one switch says
+  // whether any are coming, and they share a guardian's bed.
+  const hasInfant = useWatch({ control, name: "has_infant" });
+  const bedGuests = fields.length;
   const roomsNeeded = roomsNeededFor(bedGuests);
   const roomsPicked = Number(roomsRequested) || 0;
   const bedsAvailable = maxGuestsFor(roomsPicked);
   const extraBeds = extraBedsNeeded(bedGuests, roomsPicked);
-  // "In accordance with the rooms": the beds those rooms provide, plus infants,
-  // who need none. Marking a guest as an infant frees a bed slot immediately.
-  const guestCeiling = Math.min(bedsAvailable + infantCount, MAX_GUESTS);
+  // "In accordance with the rooms": no more guests than those rooms can take.
+  const guestCeiling = Math.min(bedsAvailable, MAX_GUESTS);
   const overCapacity = roomsPicked > 0 && bedGuests > bedsAvailable;
 
   // A live reading of the stay, so a mis-set AM/PM is caught while filling the
@@ -163,6 +165,8 @@ export function BookingForm({
     const problem = checkOutOrderError(from, to);
     const hours = (toAt.getTime() - fromAt.getTime()) / 3_600_000;
     return {
+      fromAt,
+      toAt,
       from: formatInstituteDateTime(fromAt),
       to: formatInstituteDateTime(toAt),
       problem,
@@ -175,13 +179,18 @@ export function BookingForm({
     };
   })();
 
-  const chosenMeals = MEAL_KEYS.filter((meal) => selectedMeals?.[meal]);
+  // Meals are offered only where the chosen guest house serves them, and only
+  // for the days and serving times the stay actually covers.
+  const selectedGuestHouse = guestHouses.find((g) => g.id === selectedGuestHouseId);
+  const servesMeals = selectedGuestHouse?.serves_meals ?? false;
+  const mealHouseNames = guestHouses.filter((g) => g.serves_meals).map((g) => g.name);
+  const mealCheckIn = stay && !stay.problem ? stay.fromAt : null;
+  const mealDays = stay && !stay.problem ? stayMealDays(stay.fromAt, stay.toAt) : [];
+  const mealPlan = servesMeals ? mealPlanFromSlots(mealSlots, mealDays) : [];
   const mealSummary =
-    chosenMeals.length === 0
-      ? "No meals requested — guests will arrange their own."
-      : `${chosenMeals.map((meal) => MEAL_LABELS[meal]).join(", ")} for ${fields.length} guest${
-          fields.length === 1 ? "" : "s"
-        }.`;
+    mealPlan.length === 0
+      ? "No meals requested — guests will make their own arrangements."
+      : `${describeMeals(mealPlan)}, for ${fields.length} guest${fields.length === 1 ? "" : "s"}.`;
 
   // Advance-booking window: officials are exempt, so the cap can be absent.
   const [checkInLimits] = useState(() => {
@@ -227,10 +236,10 @@ export function BookingForm({
       return;
     }
     // The rooms already chosen decide how many guests can be added. Infants
-    // are exempt, so the ceiling rises as guests are marked as infants.
+    // are not guests here, so they never count against it.
     if (n > guestCeiling) {
       setGuestCountError(
-        `${roomsPicked} room${roomsPicked === 1 ? "" : "s"} sleep ${bedsAvailable}. Add another room, or mark under-${INFANT_AGE_LIMIT}s as infants — they share a bed.`
+        `${roomsPicked === 1 ? "1 room accommodates" : `${roomsPicked} rooms accommodate`} up to ${bedsAvailable} guests. Add another room. Infants are not counted — use the “Infant accompanying” switch for them.`
       );
       return;
     }
@@ -249,6 +258,7 @@ export function BookingForm({
   const onSubmit = handleSubmit((values) => {
     clearErrors();
     setAlumniCardError(null);
+    setMealsError(null);
 
     const payload = {
       guest_house_id: values.guest_house_id,
@@ -256,14 +266,14 @@ export function BookingForm({
       check_in: `${values.check_in_date}T${values.check_in_time}`,
       check_out: `${values.check_out_date}T${values.check_out_time}`,
       rooms_requested: values.rooms_requested,
-      meals: values.meals,
+      meals: mealPlan,
+      has_infant: values.has_infant,
       guests: values.guests.map((g) => ({
         name: g.name,
         age: g.age === "" ? undefined : g.age,
         gender: g.gender === "" ? undefined : g.gender,
         relationship: g.relationship === "" ? undefined : g.relationship,
         id_number: g.id_number === "" ? undefined : g.id_number,
-        is_infant: g.is_infant,
       })),
       custom: values.custom,
     };
@@ -277,14 +287,18 @@ export function BookingForm({
     if (!parsed.success) {
       hasError = true;
       for (const issue of parsed.error.issues) {
+        // Meals are not a react-hook-form field, so their message has its own slot.
+        if (issue.path[0] === "meals") {
+          setMealsError(issue.message);
+          continue;
+        }
         setError(issue.path.join(".") as FieldPath<FormValues>, { message: issue.message });
       }
     }
 
-    // File + custom-field requirements are enforced outside zod. Infants are
-    // exempt from the ID upload, matching the server-side check.
+    // File + custom-field requirements are enforced outside zod.
     fields.forEach((f, i) => {
-      if (idDocRequired && !values.guests[i]?.is_infant && !guestFiles.get(f.id)) {
+      if (idDocRequired && !guestFiles.get(f.id)) {
         hasError = true;
         setError(`guests.${i}.name` as FieldPath<FormValues>, {
           type: "file",
@@ -398,12 +412,12 @@ export function BookingForm({
               onChange={(raw) => setValue("rooms_requested", raw, { shouldValidate: false })}
             />
             <p className="text-xs text-muted-foreground">
-              A double sharing room sleeps {DEFAULT_ROOM_STANDARD}, or{" "}
-              {DEFAULT_ROOM_MAX} with one extra bed.{" "}
+              Each double sharing room accommodates {DEFAULT_ROOM_STANDARD} guests, or{" "}
+              {DEFAULT_ROOM_MAX} with an extra bed.{" "}
               {roomsPicked > 0 && (
                 <>
-                  {roomsPicked} room{roomsPicked === 1 ? "" : "s"} = {bedsAvailable} bed
-                  {bedsAvailable === 1 ? "" : "s"}.
+                  {roomsPicked === 1 ? "1 room accommodates" : `${roomsPicked} rooms accommodate`}{" "}
+                  up to {bedsAvailable} guest{bedsAvailable === 1 ? "" : "s"}.
                 </>
               )}
             </p>
@@ -507,39 +521,40 @@ export function BookingForm({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Meals</CardTitle>
-          <CardDescription>
-            Tick the meals your party would like the guest house to lay on. Optional — leave them
-            all unticked if guests will make their own arrangements. The kitchen uses this for
-            head counts, so tell the manager if plans change after booking.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-3">
-            {MEAL_KEYS.map((meal) => (
-              <label
-                key={meal}
-                className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 has-checked:border-primary has-checked:bg-primary/5"
-              >
-                <input
-                  type="checkbox"
-                  className="mt-0.5 size-4 accent-primary"
-                  {...register(`meals.${meal}` as const)}
+      {/* Only for roles that can book a guest house serving meals at all. */}
+      {mealHouseNames.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Meals</CardTitle>
+            <CardDescription>
+              Meals are served at {joinNames(mealHouseNames)} only. Tick the meals your party would
+              like on each day of the stay — optional, so leave the table empty if guests will make
+              their own arrangements. The kitchen uses this for head counts, so tell the manager if
+              plans change after booking.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!selectedGuestHouse ? (
+              <EmptyNote>Choose a guest house above to see the meal options.</EmptyNote>
+            ) : !servesMeals ? (
+              <EmptyNote>Meals are not served at {selectedGuestHouse.name}.</EmptyNote>
+            ) : !mealCheckIn ? (
+              <EmptyNote>Choose your check-in and check-out to pick meals for each day.</EmptyNote>
+            ) : (
+              <>
+                <MealPlanGrid
+                  days={mealDays}
+                  checkIn={mealCheckIn}
+                  slots={mealSlots}
+                  onChange={setMealSlots}
                 />
-                <span className="text-sm">
-                  <span className="block font-medium">{MEAL_LABELS[meal]}</span>
-                  <span className="block text-xs text-muted-foreground">{MEAL_TIMES[meal]}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {mealSummary}
-          </p>
-        </CardContent>
-      </Card>
+                <p className="text-sm text-muted-foreground">{mealSummary}</p>
+              </>
+            )}
+            <FieldError message={mealsError ?? undefined} />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -572,7 +587,21 @@ export function BookingForm({
             >
               + Add guest
             </Button>
+            <label
+              htmlFor="has_infant"
+              className="flex h-9 cursor-pointer items-center gap-2.5 rounded-md border px-3 text-sm transition-colors has-checked:border-primary has-checked:bg-primary/5"
+            >
+              <Switch id="has_infant" {...register("has_infant")} />
+              Infant accompanying
+            </label>
           </div>
+          {hasInfant && (
+            <p className="-mt-1 text-xs text-muted-foreground">
+              Children under {INFANT_AGE_LIMIT} share a guardian&apos;s bed, so they need no room,
+              bed or ID of their own — this one switch covers however many are coming. Add only
+              the guests who need a bed below.
+            </p>
+          )}
 
           <div
             className={
@@ -581,24 +610,19 @@ export function BookingForm({
                 : "rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
             }
           >
-            <span className="font-medium text-foreground">{bedGuests}</span> needing a bed
-            {infantCount > 0 && (
-              <>
-                {" "}
-                and <span className="font-medium text-foreground">{infantCount}</span> infant
-                {infantCount === 1 ? "" : "s"} sharing
-              </>
-            )}
+            <span className="font-medium text-foreground">{bedGuests}</span> guest
+            {bedGuests === 1 ? "" : "s"} requiring a bed
+            {hasInfant && <>, with infant(s) sharing a guardian&apos;s bed</>}
             {roomsPicked > 0 && (
               <>
                 {" "}
-                · <span className="font-medium text-foreground">{roomsPicked}</span> room
-                {roomsPicked === 1 ? "" : "s"} sleep{" "}
-                <span className="font-medium text-foreground">{bedsAvailable}</span>
+                · {roomsPicked === 1 ? "1 room accommodates" : `${roomsPicked} rooms accommodate`}{" "}
+                up to <span className="font-medium text-foreground">{bedsAvailable}</span> guest
+                {bedsAvailable === 1 ? "" : "s"}
                 {extraBeds > 0 && !overCapacity && (
                   <>
                     {" "}
-                    ({extraBeds} extra bed{extraBeds === 1 ? "" : "s"} needed)
+                    · {extraBeds} extra bed{extraBeds === 1 ? "" : "s"} required
                   </>
                 )}
               </>
@@ -606,7 +630,7 @@ export function BookingForm({
             {overCapacity && (
               <>
                 {" "}
-                — add {roomsNeeded - roomsPicked} more room
+                — please add {roomsNeeded - roomsPicked} more room
                 {roomsNeeded - roomsPicked === 1 ? "" : "s"}.
               </>
             )}
@@ -624,23 +648,11 @@ export function BookingForm({
             </p>
           )}
 
-          {fields.map((field, i) => {
-            const isInfant = guestRows[i]?.is_infant ?? false;
-            return (
+          {fields.map((field, i) => (
             <fieldset key={field.id} className="rounded-lg border p-4">
               <legend className="px-1 text-sm font-medium text-muted-foreground">
                 Guest {i + 1}
-                {isInfant && <span className="text-primary"> · infant</span>}
               </legend>
-
-              <label className="mb-4 flex w-fit items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5 text-sm">
-                <input
-                  type="checkbox"
-                  className="size-4 accent-primary"
-                  {...register(`guests.${i}.is_infant`)}
-                />
-                Infant — under {INFANT_AGE_LIMIT}, shares a bed
-              </label>
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {gf.name !== "hidden" && (
@@ -698,14 +710,14 @@ export function BookingForm({
                     <FieldError message={err(`guests.${i}.relationship`)} />
                   </div>
                 )}
-                {gf.id_number !== "hidden" && !isInfant && (
+                {gf.id_number !== "hidden" && (
                   <div className="space-y-2">
                     <Label>Aadhaar / ID number{star(gf.id_number)}</Label>
                     <Input placeholder="XXXX-XXXX-XXXX" {...register(`guests.${i}.id_number`)} />
                     <FieldError message={err(`guests.${i}.id_number`)} />
                   </div>
                 )}
-                {gf.id_document !== "hidden" && !isInfant && (
+                {gf.id_document !== "hidden" && (
                   <div className="space-y-2">
                     <Label>ID document{idDocRequired ? " *" : " (optional)"}</Label>
                     <Input
@@ -720,12 +732,6 @@ export function BookingForm({
                   </div>
                 )}
               </div>
-              {isInfant && (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  No ID is needed for an infant, and they do not take up a bed — but their name,
-                  age and gender still go on the guest house register.
-                </p>
-              )}
               {fields.length > 1 && (
                 <div className="mt-4 flex justify-end border-t pt-3">
                   <Button
@@ -742,8 +748,7 @@ export function BookingForm({
                 </div>
               )}
             </fieldset>
-            );
-          })}
+          ))}
           <FieldError message={err("guests")} />
         </CardContent>
       </Card>
@@ -857,4 +862,18 @@ function ReadOnly({ label, value }: { label: string; value: string }) {
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <p className="text-sm text-destructive">{message}</p>;
+}
+
+function EmptyNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+/** "A", "A and B", "A, B and C". */
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }

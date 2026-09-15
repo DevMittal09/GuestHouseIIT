@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getDayAvailability } from "@/app/actions/availability";
+import { getRoomAvailability } from "@/app/actions/availability";
 import { LegendSwatch, OccupancyChart } from "@/components/occupancy-chart";
 import { Button } from "@/components/ui/button";
 import { bucketOccupancyByHour, dayBounds, toDateInputValue } from "@/lib/availability";
@@ -26,7 +26,7 @@ interface Loaded {
  * same action, same bucketing — so what the requester sees while choosing and
  * what the manager sees while allocating cannot disagree.
  *
- * `getDayAvailability` strips guest identity for everyone but the manager and
+ * `getRoomAvailability` strips guest identity for everyone but the manager and
  * the developer, so this shows *when* rooms are taken, never by whom.
  */
 export function BookingAvailability({
@@ -44,7 +44,7 @@ export function BookingAvailability({
   const ready = Boolean(guestHouseId && date);
   // Deriving "loading" from a key comparison rather than a state flag keeps
   // the effect free of a synchronous setState, which the React Compiler lint
-  // rejects — the same reason `/availability` raises its flag in the handlers.
+  // rejects. `/availability` derives its loading state the same way.
   const requestKey = `${guestHouseId}|${date}|${refreshKey}`;
   const loading = ready && loaded?.key !== requestKey;
 
@@ -53,7 +53,7 @@ export function BookingAvailability({
     const { start, end } = dayBounds(date);
     if (Number.isNaN(start.getTime())) return;
     let cancelled = false;
-    getDayAvailability(guestHouseId, start.toISOString(), end.toISOString())
+    getRoomAvailability(guestHouseId, start.toISOString(), end.toISOString())
       .then((data) => {
         if (cancelled) return;
         setLoaded({ key: requestKey, rooms: data.rooms, segments: data.segments, failed: false });

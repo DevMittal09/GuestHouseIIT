@@ -12,7 +12,8 @@ import {
   countBedGuests,
   describeCapacity,
   describeParty,
-  extraBedsNeeded,
+  extraBedsFor,
+  ROOM_TYPE_LABELS,
 } from "@/lib/occupancy";
 import { cn } from "@/lib/utils";
 import type { BookingWithDetails, Room } from "@/lib/types";
@@ -115,6 +116,9 @@ export function RoomGrid({
   const selectedCapacity = capacityOf(selectedRooms);
   const capacityProblem =
     selected.size > 0 ? allocationCapacityError(bedGuests, selectedRooms) : null;
+  // Counted against the rooms actually picked: two guests in one single room
+  // need an extra bed, which the pre-selection estimate (doubles) would miss.
+  const extraBeds = extraBedsFor(bedGuests, selectedRooms);
 
   return (
     <div className="space-y-4">
@@ -140,57 +144,62 @@ export function RoomGrid({
       </div>
 
       <RoomSection
-        title={`Double Sharing — ${describeCapacity("double_sharing")}`}
+        title={`${ROOM_TYPE_LABELS.double_sharing} rooms`}
+        description={describeCapacity("double_sharing")}
         rooms={doubles}
         occupied={occupied}
         selected={selected}
         onToggle={toggle}
       />
       <RoomSection
-        title={`Single — ${describeCapacity("single")}`}
+        title={`${ROOM_TYPE_LABELS.single} rooms`}
+        description={describeCapacity("single")}
         rooms={singles}
         occupied={occupied}
         selected={selected}
         onToggle={toggle}
       />
 
-      <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="space-y-1 text-sm">
-            <p>
-              Selected <span className="font-semibold">{selected.size}</span> of{" "}
-              <span className="font-semibold">{booking.rooms_requested}</span> requested room(s)
-              {selected.size > 0 && (
-                <span className="text-muted-foreground">
-                  {" "}
-                  — {selectedRooms.map((r) => r.room_number).join(", ")}
-                </span>
-              )}
-            </p>
-            <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">{describeParty(booking.guests)}</span>
-              {selected.size > 0 && (
-                <>
-                  {" "}
-                  · selection sleeps {selectedCapacity.standard}
-                  {selectedCapacity.withExtraBed > selectedCapacity.standard && (
-                    <>
-                      , {selectedCapacity.withExtraBed} with{" "}
-                      {selectedCapacity.withExtraBed - selectedCapacity.standard} extra bed
-                      {selectedCapacity.withExtraBed - selectedCapacity.standard === 1 ? "" : "s"}
-                    </>
-                  )}
-                  {extraBedsNeeded(bedGuests, selected.size) > 0 && !capacityProblem && (
-                    <span className="text-foreground">
-                      {" "}
-                      — {extraBedsNeeded(bedGuests, selected.size)} extra bed
-                      {extraBedsNeeded(bedGuests, selected.size) === 1 ? "" : "s"} required
-                    </span>
-                  )}
-                </>
-              )}
-            </p>
-          </div>
+      <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
+        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryItem
+            label="Rooms selected"
+            value={`${selected.size} of ${booking.rooms_requested} requested`}
+            detail={
+              selected.size > 0 ? selectedRooms.map((r) => r.room_number).join(", ") : undefined
+            }
+          />
+          <SummaryItem label="Guests" value={describeParty(booking)} />
+          <SummaryItem
+            label="Capacity of selection"
+            value={
+              selected.size > 0
+                ? `${selectedCapacity.standard} guest${selectedCapacity.standard === 1 ? "" : "s"}`
+                : "—"
+            }
+            detail={
+              selected.size > 0 && selectedCapacity.withExtraBed > selectedCapacity.standard
+                ? `Maximum ${selectedCapacity.withExtraBed} with extra beds`
+                : undefined
+            }
+          />
+          <SummaryItem
+            label="Extra beds required"
+            value={selected.size > 0 && !capacityProblem ? String(extraBeds) : "—"}
+            detail={
+              selected.size > 0 && !capacityProblem && extraBeds > 0
+                ? "To be arranged before check-in"
+                : undefined
+            }
+            attention={selected.size > 0 && !capacityProblem && extraBeds > 0}
+          />
+        </dl>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {capacityProblem ? (
+            <p className="text-sm text-destructive">{capacityProblem}</p>
+          ) : (
+            <span />
+          )}
           <Button
             onClick={confirm}
             disabled={isPending || selected.size === 0 || capacityProblem !== null}
@@ -198,20 +207,49 @@ export function RoomGrid({
             {isPending ? "Allocating…" : "Confirm & Allocate"}
           </Button>
         </div>
-        {capacityProblem && <p className="text-sm text-destructive">{capacityProblem}</p>}
       </div>
+    </div>
+  );
+}
+
+function SummaryItem({
+  label,
+  value,
+  detail,
+  attention = false,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  /** Highlights a figure someone has to act on, such as extra beds to arrange. */
+  attention?: boolean;
+}) {
+  return (
+    <div>
+      <dt className="text-xs tracking-wide text-muted-foreground uppercase">{label}</dt>
+      <dd
+        className={cn(
+          "font-medium",
+          attention && "text-amber-700 dark:text-amber-400"
+        )}
+      >
+        {value}
+      </dd>
+      {detail && <dd className="text-xs text-muted-foreground">{detail}</dd>}
     </div>
   );
 }
 
 function RoomSection({
   title,
+  description,
   rooms,
   occupied,
   selected,
   onToggle,
 }: {
   title: string;
+  description: string;
   rooms: Room[];
   occupied: Set<string>;
   selected: Set<string>;
@@ -220,7 +258,10 @@ function RoomSection({
   if (rooms.length === 0) return null;
   return (
     <div>
-      <p className="mb-2 text-sm font-medium text-muted-foreground">{title}</p>
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <p className="text-sm font-medium">{title}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
       <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 md:grid-cols-8">
         {rooms.map((room) => {
           const isOccupied = occupied.has(room.id);
@@ -234,7 +275,7 @@ function RoomSection({
               title={
                 isOccupied
                   ? `${room.room_number} — already allotted for these dates`
-                  : `${room.room_number} — ${describeCapacity(room.room_type)}`
+                  : `${room.room_number} — ${ROOM_TYPE_LABELS[room.room_type]}. ${describeCapacity(room.room_type)}`
               }
               className={cn(
                 "flex h-12 items-center justify-center rounded-md border text-xs font-semibold text-white transition-transform",

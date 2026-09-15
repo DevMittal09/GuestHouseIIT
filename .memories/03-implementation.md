@@ -38,12 +38,21 @@ Two panels sit between the stay details and the guest list:
 - **Room availability** (`components/booking-availability.tsx`) — the same
   hour-by-hour chart as `/availability`, for the guest house and check-in date
   currently chosen, so a requester is not picking dates blind. It calls the same
-  `getDayAvailability` action, which strips guest identity for non-staff, so it
+  `getRoomAvailability` action, which strips guest identity for non-staff, so it
   answers *when* rooms are taken and never by whom. The chart itself lives in
   `components/occupancy-chart.tsx`, shared with `/availability`.
-- **Meals** — breakfast / lunch / dinner checkboxes with serving times, always
-  optional, summarised in a line under them. Stored as `bookings.meals`; see
-  `lib/meals.ts`.
+- **Meals** — shown only when a guest house the role may book serves meals
+  (`serves_meals`). A days × breakfast / lunch / dinner table
+  (`components/meal-plan-grid.tsx`) for the stay being entered: one row per IST
+  date from check-in to check-out, a checkbox wherever that meal is served
+  during the stay, a dash (tooltip "Served before check-in" / "after
+  check-out") where it is not, and an "Every day" box heading each column.
+  Until a guest house and valid dates are chosen — or when the chosen guest
+  house serves no meals — the card says so instead of showing the table. A line
+  under it summarises the plan ("Breakfast (2 days), Dinner (1 day), for 3
+  guests"). Ticks live as `"date|meal"` slots outside react-hook-form and become
+  the submitted `MealPlan` through `mealPlanFromSlots`; a meals error from the
+  schema appears under the card. Always optional. See `lib/meals.ts`.
 
 Guest count is dynamic (1–15) via `useFieldArray`. Each guest row past the first
 carries a **Remove guest N** button — a real destructive-styled button with a
@@ -53,7 +62,7 @@ which read as a label rather than a control. Uploaded files are held in a
 objects do not belong in form state.
 
 **Counts use `components/ui/quantity-input.tsx`**, not a raw number input —
-guests, rooms and infants. It keeps the typed string so the box can be cleared
+guests and rooms. It keeps the typed string so the box can be cleared
 and retyped; the old `Number(value) || 1` pattern made it uneditable. The guest
 count is its own `useState` string rather than being read off `fields.length`,
 and the field array is resized only once a valid number is present. An empty box
@@ -61,16 +70,18 @@ blocks submit with "Number of guests is required".
 
 Three policy rules are applied here as well as in the schema:
 
-- **Room capacity.** A hint under the room count says what a double sleeps and
-  how many beds the chosen rooms give. The guest-count input is **capped at
-  what those rooms sleep plus the infants already marked**, and a live summary
-  band shows beds needed vs available and how many extra beds that implies.
-  `requestedRoomsError` in the schema is what actually enforces it.
-- **Infants.** A checkbox on each guest row, not a separate count. Ticking it
-  hides that guest's ID number and ID document fields, exempts them from the
-  upload requirement on both sides, and frees a bed slot so one more guest can
-  be added. Their name, age and gender stay required, and the age must be under
-  `INFANT_AGE_LIMIT`.
+- **Room capacity.** A hint under the room count says what a double sharing
+  room accommodates and how many guests the chosen rooms take. The guest-count
+  input is **capped at what those rooms accommodate**, and a live summary band
+  shows the guests requiring a bed against that, and how many extra beds it
+  implies. `requestedRoomsError` in the schema is what actually enforces it.
+- **Infants.** One **"Infant accompanying"** switch beside "+ Add guest"
+  (`has_infant`), not a checkbox per guest and not a count — the office asked
+  for a single yes/no however many infants come. Infants are not guest rows, so
+  every row needs a bed (and an ID wherever the role requires one), and the
+  switch never changes the guest ceiling. Turning it on shows a one-line note
+  that under-10s share a guardian's bed. Bookings made before migration 7 still
+  show per-guest "Infant" badges in `BookingDetails`.
 
 - **Relationship dependency.** The form watches every guest's relationship with
   `useWatch` (never `watch()` — React Compiler lint). Until some guest is marked
@@ -111,6 +122,11 @@ with a mandatory reason on rejection. The IAR view embeds the alumni ID card.
 Scoping is applied in the store query *and* re-checked in `canReview()` inside
 `reviewBooking`, so a crafted request cannot approve another hostel's student.
 
+`components/booking-details.tsx`, shared by every reviewer dialog, the manager
+and the requester, shows the party ("3 guests, with infant(s)") and, when meals
+were requested, a **Meals by day** table with the head count each ticked meal is
+for.
+
 ## Guest house manager console
 
 `app/(portal)/manager/page.tsx` + `components/manager-queue.tsx` +
@@ -127,9 +143,16 @@ Scoping is applied in the store query *and* re-checked in `canReview()` inside
   offered rooms already allotted to someone else. Occupied rooms are rendered
   `disabled` and cannot be picked at all.
 - Rejection requires a reason.
-- The allocation panel shows the party size, what the selected rooms sleep, and
-  refuses to confirm while the selection is too small
-  (`allocationCapacityError`). Infants are excluded from the head count.
+- Rooms are grouped under **Double sharing rooms** and **Single rooms**, each
+  with its formal occupancy line from `describeCapacity()` ("Occupancy: 2
+  guests (maximum 3 with an extra bed)"). The allocation summary is four
+  labelled figures — **Rooms selected** (with the room numbers), **Guests**,
+  **Capacity of selection** (standard, with the maximum including extra beds)
+  and **Extra beds required** (amber when non-zero, counted against the rooms
+  actually picked with `extraBedsFor`). Confirm is refused while the selection
+  is too small (`allocationCapacityError`). Infants are excluded from the head
+  count. The wording used to be "selection sleeps 2, 3 with 1 extra bed", which
+  the office found too informal.
 - **Stays are grouped by phase, not status**, into three tables — **Current
   occupants** (check-in passed, check-out not reached), **Awaiting check-out**
   (past check-out, never marked Vacated, still holding rooms) and **Upcoming
@@ -149,7 +172,9 @@ Scoping is applied in the store query *and* re-checked in `canReview()` inside
     Occupied", indigo for "Mark as Vacated" — because they are what the manager
     clicks all day and telling them apart at a glance matters more than matching
     the palette. Vacated was previously the neutral secondary button.
-- Each stays row shows the booking's **meals** alongside its rooms.
+- Each stays row shows the booking's **meals** alongside its rooms, as
+  "Breakfast (3 days), Dinner (1 day)", with the per-day list in the cell's
+  tooltip (`describeMealDays`).
 - **Cancellation request review**: when a requester submits a cancellation
   request for an approved/occupied booking, the manager can approve or reject it
   via `approveCancellation` / `rejectCancellation` in `app/actions/bookings.ts`.
@@ -165,27 +190,57 @@ everyone. `app/(portal)/availability/page.tsx` (server, lists guest houses) +
 | Concern | File |
 | --- | --- |
 | Page shell + guest house list | `app/(portal)/availability/page.tsx` |
-| Chart, date picker, room list | `components/availability-grid.tsx` |
-| Data fetch + identity stripping | `app/actions/availability.ts` (`getDayAvailability`) |
-| Hour bucketing, day bounds, labels | `lib/availability.ts` |
+| View switch, date navigation, summary, room list | `components/availability-grid.tsx` |
+| The charts — `OccupancyChart` (day), `RangeOccupancyChart` (week / month) | `components/occupancy-chart.tsx` |
+| Data fetch, window cap, identity stripping | `app/actions/availability.ts` (`getRoomAvailability`) |
+| Ranges, bucketing, badges, labels | `lib/availability.ts` |
+| Calendar-date arithmetic and labels | `lib/tz.ts` (`parseDateValue`, `addDaysToDateValue`, `formatDateValue`) |
 | Store query | `listRoomOccupancy` in `lib/store/mock.ts` + `lib/store/supabase.ts` |
 
-The chart is a CSS grid: `4.5rem` for the hour axis then one
+**Controls.** Guest house tabs, a **Day / Week / Month** switch, and a date
+input between previous / next buttons that step one day, week or month, plus
+**Today** and **Refresh**. In the week and month views the date picks the
+period containing it — weeks run Monday to Sunday, months are calendar months.
+`availabilityRange(view, date)` resolves the period and `shiftAnchor` steps it,
+clamping 31 January to 28 February on a month step.
+
+**Day view.** A CSS grid: `4.5rem` for the hour axis then one
 `minmax(2.75rem, 1fr)` column per room, wrapped in `overflow-x-auto` with the
 hour column and the room-number header both sticky. Each cell is an hour × room,
 red when held and blank when free, with a `title` naming the booking. When the
 selected date is today the current hour is marked in the brand amber.
 
-Underneath, a per-room list gives the room number, type, a Vacant / Partly
-booked / Occupied badge, and each booking period in full. That list is also the
-non-colour channel for the chart, which matters because the roadmap flags
-colour-only signalling as an accessibility gap.
+**Week and month views.** One row per day (3rem tall in a week, 1.75rem in a
+month), one column per room. Each room column is a single grid item spanning
+every day row, and each booking is an absolutely positioned red bar whose top and
+height are fractions of the whole range (`bucketOccupancyByDay`). A three-night
+stay is therefore one bar that starts partway down its check-in day and ends
+partway down its check-out day. Beside each date is the number of rooms free all
+day; today's row is tinted and an amber line marks the current time. Each bar's
+`title` names the booking and its period.
 
-**What each role sees.** `getDayAvailability` fills `requester_name` and
+**Legend, badges and counts.** Red is labelled **Booked** (it used to say
+"Booked / occupied"). Underneath, a per-room list gives the room number, type, a
+**Vacant / Partly booked / Booked** badge for the whole period shown, and each
+booking period in full, in check-in order. The badge comes from booked minutes
+(`roomRangeStatus`), so it means the same thing in every view — the old day-view
+badge said "Occupied" whenever all 24 hour *cells* were touched. That list is also
+the non-colour channel for the chart, which matters because the roadmap flags
+colour-only signalling as an accessibility gap. The summary line gives rooms
+booked on the date (or during the week / month), rooms free for the whole period,
+and — when today is in view — rooms booked right now.
+
+**What each role sees.** `getRoomAvailability` fills `requester_name` and
 `purpose_of_visit` only for `gh_manager` and `developer`; every other role gets
-the period, the reference id and the status. Rooms deactivated after a booking
-was allocated are filtered out, so no segment can point at a column that is not
+the period, the reference id and the status. It refuses a window longer than
+`MAX_AVAILABILITY_DAYS` (62 days). Rooms deactivated after a booking was
+allocated are filtered out, so no segment can point at a column that is not
 drawn.
+
+**Loading.** Like the booking form's panel, the grid derives "loading" by
+comparing the key of the request its data answers with the current one, rather
+than keeping a flag — no `setState` in the effect body. While a new period loads,
+the previous chart stays on screen, dimmed.
 
 Polling is off on this route (`NO_POLL_PREFIXES`): the component fetches its own
 data client-side, so a server refresh would do nothing but work. There is a
@@ -300,7 +355,7 @@ Layout and tabs in `app/(portal)/admin/layout.tsx`; all actions in
 | Tab | UI | Capabilities |
 | --- | --- | --- |
 | Users & Roles | `components/admin/users-manager.tsx` | Create/edit/delete profiles; assign any of the 10 roles; set hostel, department/club, roll number (these drive warden and FA scoping). Cannot delete yourself or drop your own developer role. In Supabase mode, creating a user also creates a Supabase Auth user (password `password123`) — needs the service-role key. |
-| Guest Houses & Rooms | `components/admin/guest-houses-manager.tsx` | Create/rename/delete guest houses; add, enable/disable, delete rooms. `total_rooms` is recounted from active rooms automatically. Deleting is blocked when bookings reference the guest house, or when a room is assigned to a booking (disable it instead). |
+| Guest Houses & Rooms | `components/admin/guest-houses-manager.tsx` | Create/rename/delete guest houses; add, enable/disable, delete rooms. `total_rooms` is recounted from active rooms automatically. Deleting is blocked when bookings reference the guest house, or when a room is assigned to a booking (disable it instead). A **Serves meals** switch per guest house (`setGuestHouseMealsAction` → `updateGuestHouse`) decides whether the booking form offers meals there; new guest houses start with it off. |
 | Form Builder | `components/admin/form-config-editor.tsx` | Per requester role: allowed guest houses, every guest field's mode, relationship style and options, the relationship dependency (two checkbox lists — which options unlock, which are restricted), alumni-card mode, banner text, and custom fields. Editing the option list re-filters both dependency lists so they cannot reference a deleted option; save is blocked when a restriction has nothing to unlock it. "Reset to spec defaults" deletes the saved row. |
 | All Bookings | `components/admin/bookings-manager.tsx` | Every booking with status filters, an audit-logged force-status override (remark required), and hard delete. |
 
@@ -314,7 +369,7 @@ Layout and tabs in `app/(portal)/admin/layout.tsx`; all actions in
 / `canExportPdf` / `isRequesterHistory`, advance-booking window
 (`latestCheckIn` / `isAdvanceWindowExempt`). |
 | `lib/form-config.ts` | `RoleFormConfig`, defaults per role, sanitization, custom-field validation, the relationship dependency (`parentDependencyError` / `hasQualifyingParent` / `parentDependencyHint`). |
-| `lib/availability.ts` | Availability grid maths: `bucketOccupancyByHour`, `dayBounds`, `hourLabel`, `toDateInputValue`. |
+| `lib/availability.ts` | Availability grid maths: `bucketOccupancyByHour`, `dayBounds`, `hourLabel`, `toDateInputValue`; the week/month views' `availabilityRange`, `shiftAnchor`, `describeRange`, `bucketOccupancyByDay`, `freeRoomsByDay`, `roomRangeStatus`, `rangeProgress`, `roomsBookedAt`; `MAX_AVAILABILITY_DAYS`. |
 | `lib/occupancy.ts` | Room capacity per type, `INFANT_AGE_LIMIT`, `roomsNeededFor`, `requestedRoomsError`, `allocationCapacityError`. |
 | `lib/report-pdf.ts` | Client-side PDF rendering for the history report (dynamically imported). |
 | `lib/form-config-server.ts` | `getEffectiveFormConfig` — saved config or defaults. |
@@ -323,16 +378,19 @@ Layout and tabs in `app/(portal)/admin/layout.tsx`; all actions in
 faceting, sorting, paging, query-string parsing. Shared by both stores. |
 | `lib/routes.ts` | Role landing pages, official email whitelist. |
 | `lib/format.ts` | Date/time formatting helpers, all delegating to `lib/tz.ts`. |
-| `lib/tz.ts` | The institute timezone (`Asia/Kolkata`): `instituteIso` to parse a typed wall-clock time, `formatInstitute*` / `instituteHour` / `instituteDayBounds` to read instants back. Nothing else may parse a naked datetime string or format without a zone. |
-| `lib/meals.ts` | Meal keys, labels, serving times, `normalizeMeals` (the only reader), `describeMeals`. |
+| `lib/tz.ts` | The institute timezone (`Asia/Kolkata`): `instituteIso` to parse a typed wall-clock time, `formatInstitute*` / `instituteHour` / `instituteDayBounds` to read instants back. Nothing else may parse a naked datetime string or format without a zone. Also calendar-date helpers for `"yyyy-MM-dd"` strings — `parseDateValue`, `dateValueOf`, `addDaysToDateValue`, `weekdayOfDateValue`, `formatDateValue` ("Tue 15 Sep"), `formatMonthOfDateValue` — which do day arithmetic in UTC because a calendar date has no zone. |
+| `lib/meals.ts` | Meal keys and labels; `MEAL_SERVING_WINDOWS` and the `MEAL_TIMES` labels derived from them; `stayMealDays` / `mealUnavailableReason` (which meals a stay can have); `normalizeMeals` (the only reader — cleans arrays, expands the legacy whole-stay object); `mealPlanError` (the schema's rule); `mealSlot` / `mealPlanFromSlots` (the form's selection); `describeMeals` / `describeMealDays` / `mealDayCounts`. |
 
 ## UI primitives
 
-`components/ui/` holds the shadcn components in use plus two local additions:
+`components/ui/` holds the shadcn components in use plus these local additions:
 
 - **`native-select.tsx`** — a styled native `<select>`. This registry ships no
   `form` component and Radix's Select does not work with `register()`, so this is
   the workhorse input for every dropdown.
+- **`switch.tsx`** — a native checkbox (`role="switch"`) styled as an on/off
+  switch, native for the same reason: it takes `register()` directly. Used for
+  "Infant accompanying" in the booking form.
 - **`time-select.tsx`** — the hour/minute/AM-PM picker. Exports `parseTime` and
   `toTimeValue`, which handle the 12 AM = `00:00` and 12 PM = `12:00` traps.
 
@@ -352,6 +410,9 @@ brown (the dark theme already uses `#251a00`).
 Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase, auth
 password `password123`): 12 personas and 5 bookings positioned so every queue has
 something in it. Rooms: Bageshri 10 double + 10 single, Hamsanandi 8 + 8.
+Hamsanandi serves meals and Bageshri does not; the two Hamsanandi demo bookings
+carry per-day meal plans built from their dates (`demoMeals` in
+`lib/store/seed.ts`), and bk-demo-4 has the infant switch on.
 
 | Persona | Email |
 | --- | --- |

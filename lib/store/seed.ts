@@ -1,8 +1,11 @@
+import { normalizeMeals, stayMealDays } from "@/lib/meals";
 import type {
   Booking,
   BookingGuest,
   BookingLog,
   GuestHouse,
+  MealKey,
+  MealPlan,
   Profile,
   Room,
   RoomHold,
@@ -11,9 +14,10 @@ import type {
 export const GH_BAGESHRI = "gh-bageshri";
 export const GH_HAMSANANDI = "gh-hamsanandi";
 
+// Meals are served at Hamsanandi only, as in migration 8 and supabase/seed.sql.
 export const seedGuestHouses: GuestHouse[] = [
-  { id: GH_BAGESHRI, name: "Bageshri", total_rooms: 20 },
-  { id: GH_HAMSANANDI, name: "Hamsanandi", total_rooms: 16 },
+  { id: GH_BAGESHRI, name: "Bageshri", total_rooms: 20, serves_meals: false },
+  { id: GH_HAMSANANDI, name: "Hamsanandi", total_rooms: 16, serves_meals: true },
 ];
 
 function makeRooms(ghId: string, prefix: string, doubles: number, singles: number): Room[] {
@@ -60,7 +64,8 @@ const iso = (daysFromNow: number, hour: number) => {
 };
 
 // Demo bookings so every portal has something in its queue on first run.
-export const seedBookings: Booking[] = [
+// Meals are filled in below, from the stay dates.
+const demoBookings: Booking[] = [
   {
     id: "bk-demo-1",
     booking_reference_id: "IITPKD-GH-2026-DM001",
@@ -76,7 +81,8 @@ export const seedBookings: Booking[] = [
     rejection_reason: null,
     alumni_id_url: null,
     custom_fields: null,
-    meals: { breakfast: true, lunch: false, dinner: true },
+    meals: [],
+    has_infant: false,
     created_at: iso(-1, 9),
     updated_at: iso(-1, 9),
   },
@@ -95,7 +101,8 @@ export const seedBookings: Booking[] = [
     rejection_reason: null,
     alumni_id_url: null,
     custom_fields: null,
-    meals: { breakfast: true, lunch: true, dinner: true },
+    meals: [],
+    has_infant: false,
     created_at: iso(-2, 15),
     updated_at: iso(-2, 15),
   },
@@ -114,7 +121,8 @@ export const seedBookings: Booking[] = [
     rejection_reason: null,
     alumni_id_url: null,
     custom_fields: null,
-    meals: { breakfast: true, lunch: false, dinner: false },
+    meals: [],
+    has_infant: false,
     created_at: iso(-1, 18),
     updated_at: iso(-1, 18),
   },
@@ -133,7 +141,9 @@ export const seedBookings: Booking[] = [
     rejection_reason: null,
     alumni_id_url: null,
     custom_fields: null,
-    meals: { breakfast: false, lunch: false, dinner: false },
+    meals: [],
+    // The one demo booking with an infant, so the manager console shows the flag.
+    has_infant: true,
     created_at: iso(-3, 11),
     updated_at: iso(-2, 9),
   },
@@ -152,11 +162,42 @@ export const seedBookings: Booking[] = [
     rejection_reason: null,
     alumni_id_url: null,
     custom_fields: null,
-    meals: { breakfast: true, lunch: true, dinner: true },
+    meals: [],
+    has_infant: false,
     created_at: iso(-5, 10),
     updated_at: iso(-4, 16),
   },
 ];
+
+/**
+ * A meal plan for a demo stay, built day by day so the manager console shows a
+ * real per-day plan. `pick` is asked about each meal served during the stay,
+ * with the day's position in it (0 = arrival day).
+ */
+function demoMeals(b: Booking, pick: (meal: MealKey, dayIndex: number) => boolean): MealPlan {
+  return normalizeMeals(
+    stayMealDays(new Date(b.check_in), new Date(b.check_out)).map(({ date, available }, i) => ({
+      date,
+      breakfast: available.breakfast && pick("breakfast", i),
+      lunch: available.lunch && pick("lunch", i),
+      dinner: available.dinner && pick("dinner", i),
+    }))
+  );
+}
+
+/** Only the Hamsanandi bookings have meals — Bageshri serves none. */
+const DEMO_MEALS: Record<string, (b: Booking) => MealPlan> = {
+  // Visiting artists: every meal served during the stay.
+  "bk-demo-2": (b) => demoMeals(b, () => true),
+  // A collaborator: breakfast every morning, dinner on the day they arrive.
+  "bk-demo-4": (b) =>
+    demoMeals(b, (meal, day) => meal === "breakfast" || (meal === "dinner" && day === 0)),
+};
+
+export const seedBookings: Booking[] = demoBookings.map((b) => ({
+  ...b,
+  meals: DEMO_MEALS[b.id]?.(b) ?? [],
+}));
 
 export const seedGuests: BookingGuest[] = [
   { id: "g-1", booking_id: "bk-demo-1", name: "Sunitha Menon", age: 52, gender: "female", relationship: "Mother", id_number: "XXXX-XXXX-4821", id_document_url: null, is_infant: false },
