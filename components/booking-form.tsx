@@ -43,10 +43,23 @@ import {
   type CustomField,
   type RoleFormConfig,
 } from "@/lib/form-config";
+import {
+  bookingTypesFor,
+  defaultBookingTypeFor,
+  describeBookingType,
+  needsAlumniDetails,
+} from "@/lib/booking-types";
 import { describeMeals, mealPlanFromSlots, stayMealDays } from "@/lib/meals";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
+import { cn } from "@/lib/utils";
 import { latestCheckIn } from "@/lib/workflow";
-import { ROLE_LABELS, type GuestHouse, type Profile } from "@/lib/types";
+import {
+  BOOKING_TYPE_LABELS,
+  ROLE_LABELS,
+  type BookingType,
+  type GuestHouse,
+  type Profile,
+} from "@/lib/types";
 
 interface GuestFields {
   name: string;
@@ -57,6 +70,11 @@ interface GuestFields {
 }
 
 interface FormValues {
+  /** Asked first: it decides the approval route and how the stay is settled. */
+  booking_type: BookingType;
+  /** Both only apply to a booking raised for an alumnus. */
+  alumni_name: string;
+  alumni_roll_number: string;
   guest_house_id: string;
   purpose_of_visit: string;
   check_in_date: string;
@@ -107,6 +125,11 @@ export function BookingForm({
 
   const form = useForm<FormValues>({
     defaultValues: {
+      // "Official" for staff, because that is the common case; a role with one
+      // option is never shown the question at all.
+      booking_type: defaultBookingTypeFor(config.role) ?? "official",
+      alumni_name: "",
+      alumni_roll_number: "",
       guest_house_id: guestHouses.length === 1 ? guestHouses[0].id : "",
       purpose_of_visit: "",
       check_in_date: "",
@@ -127,6 +150,16 @@ export function BookingForm({
   // The availability panel follows the guest house and check-in date as they
   // are picked, so the requester sees the day they are actually choosing.
   const selectedGuestHouseId = useWatch({ control, name: "guest_house_id" });
+  const bookingType = useWatch({ control, name: "booking_type" });
+  // Which booking types this role may pick, and whether the question is worth
+  // asking — a club only ever books officially.
+  const [bookingTypeOptions] = useState(() => bookingTypesFor(config.role));
+  const forAlumnus = needsAlumniDetails(bookingType);
+  // The Alumni ID card is demanded by the role's form config *or* by this
+  // request being raised for an alumnus, since the IAR accounts book both ways
+  // from one form.
+  const alumniCardRequired = config.alumni_card === "required" || forAlumnus;
+  const showAlumniSection = config.alumni_card !== "hidden" || forAlumnus;
   const checkInDate = useWatch({ control, name: "check_in_date" });
   const checkOutDate = useWatch({ control, name: "check_out_date" });
 
@@ -261,6 +294,11 @@ export function BookingForm({
     setMealsError(null);
 
     const payload = {
+      booking_type: values.booking_type,
+      // Sent only when they apply; the schema rejects them on any other kind
+      // of booking, so a stale value cannot ride along.
+      alumni_name: forAlumnus ? values.alumni_name : undefined,
+      alumni_roll_number: forAlumnus ? values.alumni_roll_number : undefined,
       guest_house_id: values.guest_house_id,
       purpose_of_visit: values.purpose_of_visit,
       check_in: `${values.check_in_date}T${values.check_in_time}`,
@@ -306,7 +344,7 @@ export function BookingForm({
         });
       }
     });
-    if (config.alumni_card === "required" && !alumniCard) {
+    if (alumniCardRequired && !alumniCard) {
       hasError = true;
       setAlumniCardError("Alumni ID card upload is mandatory");
     }
@@ -357,6 +395,48 @@ export function BookingForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
+      {/* The first question, because it decides the approval route and how the
+          stay is settled. Roles with a single option are not asked — the value
+          is still recorded on the booking. */}
+      {bookingTypeOptions.length > 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Type of booking</CardTitle>
+            <CardDescription>
+              Who the stay is for decides who approves it and how it is settled, so this comes
+              first — the rest of the form follows from it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {bookingTypeOptions.map((option) => (
+                <label
+                  key={option}
+                  className={cn(
+                    "flex cursor-pointer gap-3 rounded-lg border p-3 text-sm transition-colors",
+                    "has-checked:border-primary has-checked:bg-primary/5"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    value={option}
+                    className="mt-0.5 size-4 shrink-0 accent-primary"
+                    {...register("booking_type")}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-medium">{BOOKING_TYPE_LABELS[option]}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {describeBookingType(config.role, option)}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <FieldError message={err("booking_type")} />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Simulated LDAP profile — read-only */}
       <Card>
         <CardHeader>
@@ -771,21 +851,54 @@ export function BookingForm({
         </Card>
       )}
 
-      {config.alumni_card !== "hidden" && (
+      {showAlumniSection && (
         <Card>
           <CardHeader>
             <CardTitle>Alumni verification</CardTitle>
             <CardDescription>
-              Upload your Alumni ID card{config.alumni_card === "required" ? " (mandatory)" : " (optional)"}.
+              {forAlumnus
+                ? "The alumnus cannot sign in to confirm their own details, so record them here for the IAR Office to verify against the ID card."
+                : `Upload your Alumni ID card${alumniCardRequired ? " (mandatory)" : " (optional)"}.`}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <Input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
-              onChange={(e) => setAlumniCard(e.target.files?.[0] ?? null)}
-            />
-            <FieldError message={alumniCardError ?? undefined} />
+          <CardContent className="space-y-4">
+            {forAlumnus && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="alumni_name">Alumnus full name *</Label>
+                  <Input
+                    id="alumni_name"
+                    placeholder="As printed on the Alumni ID card"
+                    {...register("alumni_name")}
+                  />
+                  <FieldError message={err("alumni_name")} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="alumni_roll_number">Student / roll number *</Label>
+                  <Input
+                    id="alumni_roll_number"
+                    placeholder="e.g. 101601023"
+                    {...register("alumni_roll_number")}
+                  />
+                  <FieldError message={err("alumni_roll_number")} />
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="alumni_card">
+                Alumni ID card{alumniCardRequired ? " *" : " (optional)"}
+              </Label>
+              <Input
+                id="alumni_card"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={(e) => setAlumniCard(e.target.files?.[0] ?? null)}
+              />
+              <p className="text-xs text-muted-foreground">
+                JPG, PNG, WEBP or PDF, up to 5 MB.
+              </p>
+              <FieldError message={alumniCardError ?? undefined} />
+            </div>
           </CardContent>
         </Card>
       )}

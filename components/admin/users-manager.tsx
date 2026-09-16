@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -49,6 +50,7 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Profile | null>(null);
   const [values, setValues] = useState<UserFormInput>(EMPTY);
+  const [toDelete, setToDelete] = useState<Profile | null>(null);
 
   const openCreate = () => {
     setEditing(null);
@@ -83,8 +85,7 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
       }
     });
 
-  const remove = (p: Profile) => {
-    if (!window.confirm(`Delete ${p.full_name} (${p.email})? This cannot be undone.`)) return;
+  const remove = (p: Profile) =>
     startTransition(async () => {
       const result = await deleteUserAction(p.id);
       if (result.ok) {
@@ -94,7 +95,6 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
         toast.error(result.error);
       }
     });
-  };
 
   const set = (key: keyof UserFormInput) => (v: string) =>
     setValues((prev) => ({ ...prev, [key]: v }));
@@ -144,7 +144,7 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
                       variant="destructive"
                       size="sm"
                       disabled={isPending}
-                      onClick={() => remove(p)}
+                      onClick={() => setToDelete(p)}
                     >
                       Delete
                     </Button>
@@ -155,6 +155,30 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
           </TableBody>
         </Table>
       </div>
+
+      <ConfirmDialog
+        open={toDelete !== null}
+        onOpenChange={(open) => !open && setToDelete(null)}
+        title={toDelete ? `Delete ${toDelete.full_name}?` : ""}
+        description={
+          toDelete
+            ? `This permanently removes the ${ROLE_LABELS[toDelete.role]} account ${toDelete.email}.`
+            : ""
+        }
+        consequences={[
+          "The person can no longer sign in to the portal.",
+          "Blocked if they have any bookings — those must be deleted or reassigned first.",
+          "Past approvals stay in the audit trail, which records the name separately.",
+        ]}
+        confirmPhrase={toDelete?.email}
+        confirmLabel="Delete user"
+        pending={isPending}
+        onConfirm={() => {
+          const p = toDelete;
+          setToDelete(null);
+          if (p) remove(p);
+        }}
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">

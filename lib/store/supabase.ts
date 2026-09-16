@@ -180,6 +180,14 @@ export class SupabaseStore implements DataStore {
         // Rows read before migration 7 is applied have no `has_infant`; an
         // infant guest row is what the old model used to say the same thing.
         has_infant: r.has_infant ?? r.guests.some((g) => g.is_infant),
+        // Likewise before migration 9: the requester category is all the old
+        // rows recorded, so derive the booking type from it exactly as the
+        // migration's backfill does.
+        booking_type:
+          r.booking_type ??
+          (r.user_role === "student" ? "personal" : r.user_role === "alumni" ? "alumni" : "official"),
+        alumni_name: r.alumni_name ?? null,
+        alumni_roll_number: r.alumni_roll_number ?? null,
         assigned_room_ids: assignedRooms.map((room) => room.id),
         logs: [...r.logs].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
         assigned_rooms: assignedRooms,

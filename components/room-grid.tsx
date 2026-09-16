@@ -30,10 +30,20 @@ import type { BookingWithDetails, Room } from "@/lib/types";
 export function RoomGrid({
   booking,
   rooms,
+  occupancyVersion,
   onAllocated,
 }: {
   booking: BookingWithDetails;
   rooms: Room[];
+  /**
+   * Changes whenever any booking's room holds change, server-side. The grid
+   * loads occupancy once when the dialog opens, so without this it never
+   * learnt that someone else had taken a room underneath it — the office
+   * reported allocations "not being reflected in the grid". Folding it into
+   * the fetch key means a change upstream re-fetches on the next render, and
+   * an unchanged fingerprint costs nothing.
+   */
+  occupancyVersion?: string;
   onAllocated?: () => void;
 }) {
   const router = useRouter();
@@ -70,7 +80,7 @@ export function RoomGrid({
     return () => {
       cancelled = true;
     };
-  }, [booking.guest_house_id, booking.id, checkIn, checkOut, refreshKey]);
+  }, [booking.guest_house_id, booking.id, checkIn, checkOut, refreshKey, occupancyVersion]);
 
   const refreshOccupancy = () => {
     setLoading(true);

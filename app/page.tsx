@@ -13,15 +13,18 @@ import { loginAs } from "@/app/actions/auth";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
 import { getStore } from "@/lib/store";
-import { REQUESTER_ROLES, ROLE_LABELS, type Profile } from "@/lib/types";
+import { REVIEWER_ROLES, ROLE_LABELS, type Profile } from "@/lib/types";
 
 export default async function LoginPage() {
   const user = await getCurrentUser();
   if (user) redirect(homeForRole(user.role));
 
   const profiles = await getStore().listProfiles();
-  const requesters = profiles.filter((p) => REQUESTER_ROLES.includes(p.role));
-  const reviewers = profiles.filter((p) => !REQUESTER_ROLES.includes(p.role));
+  // Split by where the persona *works*, not by whether it can book: the IAR
+  // Office both approves and books, and belongs with the reviewers.
+  const isStaff = (p: Profile) => REVIEWER_ROLES.includes(p.role) || p.role === "developer";
+  const requesters = profiles.filter((p) => !isStaff(p));
+  const reviewers = profiles.filter(isStaff);
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-12">

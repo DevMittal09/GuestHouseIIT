@@ -256,3 +256,37 @@ it is for and how to check it applies to your data.
 - Supabase local: `supabase db reset`.
 - Supabase hosted: re-run the migration and seed by hand (destructive — check
   first).
+
+
+## Migration 9 — booking types and two new roles (16 Sep 2026)
+
+`supabase/migrations/00000000000009_booking_types_and_roles.sql`.
+
+Adds two `user_role` enum values (`iar_student_cell`, `gh_caretaker`), a new
+`booking_type` enum (`official` | `personal` | `alumni`), and three columns on
+`bookings`: `booking_type` (not null, default `official`), `alumni_name`,
+`alumni_roll_number`.
+
+Why columns and not a new role: *why* a stay is booked is a property of the
+request, not the person. The same staff member books officially for a visiting
+collaborator one week and privately for family the next, and the two are
+approved and settled differently.
+
+- **Backfill** derives `booking_type` from `user_role` — student → `personal`,
+  alumni → `alumni`, everything else → `official`. Guarded with
+  `where booking_type = 'official' and user_role in ('student','alumni')`, so
+  re-running cannot overwrite a real answer.
+- **`bookings_alumni_details`** check: the two alumni columns may only be
+  non-null when `booking_type = 'alumni'`, so a stale value cannot sit on a
+  booking whose form never collected it.
+- `alter type ... add value` is transactional since PG12 but the new value
+  cannot be *used* in the same transaction. Nothing in this migration writes
+  the new role values, so it is safe as one file; a later migration that
+  inserts rows with them needs its own.
+- **The `alumni` role is kept.** Alumni have no institute login any more, but
+  bookings made before this still carry the role. It is out of
+  `REQUESTER_ROLES` and into `ARCHIVED_REQUESTER_ROLES`; `BOOKING_CATEGORY_ROLES`
+  is the union the history filter and reports read, so old rows stay findable.
+- Both stores degrade gracefully before the migration is applied:
+  `SupabaseStore.hydrate` derives `booking_type` the same way the SQL does, and
+  the mock store's `loadDb` self-heals old `.local-db.json` files identically.

@@ -193,9 +193,11 @@ becomes untestable:
 | --- | --- | --- |
 | student | `PENDING_WARDEN` | warden → manager |
 | club | `PENDING_FA` | faculty advisor → manager |
-| alumni | `PENDING_IAR` | IAR cell → manager |
+| iar_student_cell | `PENDING_IAR` | IAR Office → manager |
+| iar_cell (IAR Office) | `PENDING_GH_MANAGER` | manager (direct — it *is* the approver) |
 | employee | `PENDING_GH_MANAGER` | manager |
 | official | `PENDING_GH_MANAGER` | manager (direct, highest priority) |
+| alumni | *retired* | kept only for bookings already in the archive |
 
 - Intermediate approval always forwards to `PENDING_GH_MANAGER`.
 - The manager does **not** approve through the generic review action. Approval
@@ -203,7 +205,9 @@ becomes untestable:
   together — making "approved with no rooms" unrepresentable.
 - Rejection requires a non-empty reason, enforced server-side at every tier.
 - Reviewer scoping is `canReview()`: wardens see their `hostel_name`, faculty
-  advisors their `department_or_club`.
+  advisors their `department_or_club`. It also refuses
+  `reviewer.id === requester.id` — the IAR Office both books and approves, so
+  self-approval has to be impossible by construction, not just by routing.
 - `official` bookings are restricted to `OFFICIAL_EMAIL_WHITELIST`
   (`lib/routes.ts`) and sort to the top of the manager queue.
 
@@ -223,6 +227,40 @@ is the read side. `/manager` groups by phase rather than status into **Current
 occupants**, **Awaiting check-out** and **Upcoming stays**. Previously one
 "Upcoming & current stays" table mixed them, so a booking for next week
 appeared alongside a guest in the building and read as occupied.
+
+### 4.1a Why a stay is booked — `lib/booking-types.ts`
+
+`bookings.booking_type` is `official` | `personal` | `alumni` (migration 9). It
+is a property of the **request**, not the requester: the same staff member
+books officially for a collaborator one week and privately for family the next,
+and the two are approved and settled differently.
+
+`bookingTypesFor(role)` is the one policy. A role with a single option is
+**never asked** — a toggle with one position is not a decision — but the value
+is still recorded. Employee is the only role with a real choice (`official`
+default, `personal`); club and official are official-only; student is personal.
+
+`alumni` means *on behalf of an alumnus*, who has no institute login. It
+requires `alumni_name`, `alumni_roll_number` and the Alumni ID card. The card
+is demanded by `config.alumni_card === "required"` **or** by the booking being
+for an alumnus, because the IAR accounts book both ways from one form — the
+requirement follows the request, not the account.
+
+> **Alumni cannot sign in.** There is no alumni persona and `alumni` is out of
+> `REQUESTER_ROLES`. It stays in the `Role` union and in
+> `BOOKING_CATEGORY_ROLES` (what history filters and reports read) because
+> stored bookings still carry it; removing it would orphan them.
+
+### 4.1b The caretaker — a subset, not a second console
+
+`gh_caretaker` is the reception desk. `/caretaker` shows today's checkouts,
+current occupants, awaiting check-out and upcoming stays, and can mark guests
+Occupied / Vacated. No allocation, no approvals, no cancellations —
+`canUpdateLifecycle()` / `LIFECYCLE_ROLES` gate the one action it shares with
+the manager, server-side.
+
+It reuses `components/stays-table.tsx` and `components/checkouts-today.tsx`
+rather than owning copies, so the two consoles cannot drift apart.
 
 ### 4.2 Who may stay — the relationship dependency
 
@@ -314,11 +352,12 @@ can only narrow, never widen. Do not reorder that spread.
 | --- | --- | --- |
 | `/` | anyone | Persona picker (stands in for SSO) |
 | `/dashboard` | requesters | Own bookings, status, assigned rooms, cancellation |
-| `/book` | requesters | The config-driven booking form, with an hour-by-hour availability panel, a per-day meal grid (where the guest house serves meals) and an "Infant accompanying" switch |
+| `/book` | requesters | The config-driven booking form, opening with the booking type, a **browsable** availability panel (day/week/month), a per-day meal grid (where the guest house serves meals) and an "Infant accompanying" switch |
 | `/warden` `/fa` `/iar` | reviewers | One `ReviewQueue` component, three scopings |
 | `/availability` | **every role** | Read-only time × room occupancy chart, by day, week or month |
 | `/history` | **every role** | Booking history / approval log, CSV + PDF export |
-| `/manager` | gh_manager | Cinema-style allocation grid, lifecycle controls |
+| `/manager` | gh_manager | Cinema-style allocation grid, today's checkouts, lifecycle controls |
+| `/caretaker` | gh_caretaker | Reception desk: today's checkouts, occupants, upcoming, mark in/out |
 | `/admin/*` | developer | Users, guest houses & rooms (including which serve meals), Form Builder, all bookings |
 
 Queue pages poll every 5 s (`components/auto-refresh.tsx`); `/history` and
@@ -396,14 +435,18 @@ guest houses and rooms only** — the five demo bookings are mock-store only.
 | Employee | `priya@iitpkd.ac.in` | `employee-priya` |
 | Official (whitelisted) | `admin@iitpkd.ac.in` | `official-admin` |
 | Club (Petrichor) | `petrichor@iitpkd.ac.in` | `club-petrichor` |
-| Alumnus | `vikram.iyer@alumni.iitpkd.ac.in` | `alumni-vikram` |
+| IAR Student Cell | `iar.studentcell@iitpkd.ac.in` | `iar-student-cell` |
 | Wardens | `warden.malhar@`, `warden.saveri@iitpkd.ac.in` | `warden-malhar`, `warden-saveri` |
 | Faculty advisor | `fa.petrichor@iitpkd.ac.in` | `fa-petrichor` |
-| IAR cell | `iar@iitpkd.ac.in` | `iar-cell` |
+| IAR Office | `iar@iitpkd.ac.in` | `iar-cell` |
 | GH manager | `guesthouse@iitpkd.ac.in` | `gh-manager` |
+| GH caretaker | `gh.reception@iitpkd.ac.in` | `gh-caretaker` |
 | Developer | `developer@iitpkd.ac.in` | `developer` |
 
 Rooms: Bageshri 10 double + 10 single, Hamsanandi 8 + 8.
+
+**There is no alumnus persona** — demo booking 3 is now the IAR Student Cell
+booking on behalf of Vikram Iyer, sitting in the IAR Office's queue.
 
 ## 9. How to verify a change
 
@@ -440,7 +483,7 @@ the developer's working data.
 
 ---
 
-Migrations are numbered and applied forward only; there are eight. Migration 4
+Migrations are numbered and applied forward only; there are nine. Migration 4
 moved infants from `bookings.infants` to `booking_guests.is_infant`, and
 migration 7 moved them again, to one `bookings.has_infant` switch — see
 [06-decisions.md](06-decisions.md) for why each model changed. Migration 6 adds
@@ -454,7 +497,17 @@ against a throwaway Postgres before being written down — see
 `supabase/repairs/` holds one-off data fixes that are not migrations and are
 never applied automatically. Read each file's header before running it.
 
-Last substantive update: 2026-09-15 — from the guest house meeting notes: room
+Last substantive update: 2026-09-16 — the second pass over the meeting notes:
+booking type (`official` / `personal` / on behalf of an alumnus) as a column
+rather than a role; alumni logins removed with the IAR Office and a new IAR
+Student Cell booking for them; a Guest House Caretaker role for reception; the
+booking form's availability panel made browsable by day/week/month; today's
+checkouts on the manager and caretaker consoles; future bookings no longer able
+to read as Occupied (the developer override was the remaining way in); the
+allocation grid refetching when holds change underneath it; and typed
+confirmations on destructive developer actions. Migration 9 covers the schema.
+
+Previous update: 2026-09-15 — from the guest house meeting notes: room
 availability by day, week or month (time runs down in every view; a stay is one
 bar) with the red legend reading "Booked"; formal capacity wording in the
 allocation dialog, which also fixed extra beds being under-counted for single

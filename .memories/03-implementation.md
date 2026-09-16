@@ -394,6 +394,62 @@ faceting, sorting, paging, query-string parsing. Shared by both stores. |
 - **`time-select.tsx`** — the hour/minute/AM-PM picker. Exports `parseTime` and
   `toTimeValue`, which handle the 12 AM = `00:00` and 12 PM = `12:00` traps.
 
+## Booking type and the IAR pipeline
+
+`bookings.booking_type` — `official` | `personal` | `alumni` (migration 9) — is
+a property of the **request**, not the requester, so the same account can book
+both ways. `lib/booking-types.ts` is the one policy:
+
+- `bookingTypesFor(role)` — what a role may pick. Employee is the only role with
+  a real choice (`official` default, `personal`); student is personal-only; club
+  and official are official-only; both IAR accounts get `official` | `alumni`.
+- `offersBookingTypeChoice(role)` — a role with one option is **never asked**,
+  but the value is still recorded on the booking.
+- `bookingTypeError()` — the server-side counterpart, run inside
+  `bookingPayloadSchema`, so a crafted request cannot book privately on an
+  account that only books officially.
+- `needsAlumniDetails()` — `alumni` requires `alumni_name`,
+  `alumni_roll_number` and the Alumni ID card. The card is required by the
+  role's form config **or** by the booking being for an alumnus, because the
+  IAR accounts book both ways from one form.
+
+The form asks it first, in a card above "Requester details"
+(`components/booking-form.tsx`), because it decides the approval route.
+
+**The IAR split.** Alumni have no institute login. `iar_student_cell` books for
+its own office or for an alumnus and routes to `PENDING_IAR`; `iar_cell` (the
+IAR Office) approves those *and* books itself, going straight to
+`PENDING_GH_MANAGER` — routing it to its own queue would be self-approval.
+`canReview()` additionally refuses `reviewer.id === requester.id`.
+`historyScope` for the IAR Office spans three categories via `userRoles`
+(Student Cell, its own, legacy alumni), which a single `userRole` cannot say.
+
+## Reception (caretaker) console
+
+`gh_caretaker` + `/caretaker` + `components/caretaker-console.tsx`. A deliberate
+**subset** of the manager's console: today's checkouts, current occupants,
+awaiting check-out, upcoming stays, and marking guests Occupied / Vacated.
+No allocation, no approvals, no cancellations — it never even loads the pending
+queue.
+
+Shared rather than copied, so the two consoles cannot drift:
+
+- **`components/stays-table.tsx`** — the allocated-stays table and its lifecycle
+  buttons, used by both consoles. Renders through `displayStatus()`.
+- **`components/checkouts-today.tsx`** — rooms due back today, earliest first,
+  overdue flagged, Mark as Vacated inline. Only an `OCCUPIED` stay can be
+  vacated; an approved guest who never arrived is closed off by the manager.
+
+`canUpdateLifecycle()` / `LIFECYCLE_ROLES` (`lib/workflow.ts`) gate the one
+action the two roles share, server-side in `updateBookingLifecycle`.
+
+## Destructive actions in the developer console
+
+**`components/ui/confirm-dialog.tsx`** replaced every `window.confirm`. It lists
+the consequences and, for guest houses, users and bookings, requires the
+operator to type the name, email or reference id. A stray Enter must not delete
+a guest house and all its rooms.
+
 ## Branding
 
 Palette and logo are taken from https://dashboard.iitpkd.ac.in/ — primary amber
@@ -408,7 +464,7 @@ brown (the dark theme already uses `#251a00`).
 ## Demo data
 
 Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase, auth
-password `password123`): 12 personas and 5 bookings positioned so every queue has
+password `password123`): 13 personas and 5 bookings positioned so every queue has
 something in it. Rooms: Bageshri 10 double + 10 single, Hamsanandi 8 + 8.
 Hamsanandi serves meals and Bageshri does not; the two Hamsanandi demo bookings
 carry per-day meal plans built from their dates (`demoMeals` in
@@ -421,12 +477,17 @@ carry per-day meal plans built from their dates (`demoMeals` in
 | Employee | `priya@iitpkd.ac.in` |
 | Official (whitelisted) | `admin@iitpkd.ac.in` |
 | Club (Petrichor) | `petrichor@iitpkd.ac.in` |
-| Alumnus | `vikram.iyer@alumni.iitpkd.ac.in` |
+| IAR Student Cell | `iar.studentcell@iitpkd.ac.in` |
 | Wardens | `warden.malhar@`, `warden.saveri@iitpkd.ac.in` |
 | Faculty advisor | `fa.petrichor@iitpkd.ac.in` |
-| IAR cell | `iar@iitpkd.ac.in` |
+| IAR Office | `iar@iitpkd.ac.in` |
 | GH manager | `guesthouse@iitpkd.ac.in` |
+| GH caretaker | `gh.reception@iitpkd.ac.in` |
 | Developer | `developer@iitpkd.ac.in` |
+
+**There is no alumnus persona** — alumni cannot sign in. Demo booking 3 is the
+IAR Student Cell booking on behalf of Vikram Iyer (`101601023`), sitting in the
+IAR Office's queue, so the new pipeline has something in it on first run.
 
 Whitelisted official addresses (`lib/routes.ts`): `admin@`, `director.office@`,
 `registrar@iitpkd.ac.in`.

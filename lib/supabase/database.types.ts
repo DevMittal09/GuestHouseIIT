@@ -64,6 +64,9 @@ export interface Database {
           BookingRow,
           | "id"
           | "rejection_reason"
+          | "booking_type"
+          | "alumni_name"
+          | "alumni_roll_number"
           | "alumni_id_url"
           | "custom_fields"
           | "meals"

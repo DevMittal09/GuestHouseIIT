@@ -13,7 +13,7 @@ import { formatDateTime } from "@/lib/format";
 import { describeMeals, MEAL_KEYS, MEAL_LABELS } from "@/lib/meals";
 import { countBedGuests, describeParty } from "@/lib/occupancy";
 import { formatDateValue } from "@/lib/tz";
-import { ROLE_LABELS, type BookingWithDetails } from "@/lib/types";
+import { BOOKING_TYPE_LABELS, ROLE_LABELS, type BookingWithDetails } from "@/lib/types";
 
 function isPdf(url: string) {
   return url.split("?")[0].toLowerCase().endsWith(".pdf");
@@ -52,6 +52,7 @@ export function BookingDetails({
         <span className="font-mono text-xs text-muted-foreground">{booking.booking_reference_id}</span>
         <StatusBadge status={booking.status} />
         <Badge variant="outline">{ROLE_LABELS[booking.user_role]}</Badge>
+        <Badge variant="secondary">{BOOKING_TYPE_LABELS[booking.booking_type]}</Badge>
       </div>
 
       <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
@@ -62,6 +63,10 @@ export function BookingDetails({
           <Field label="Department / Club" value={booking.requester.department_or_club} />
         )}
         {booking.requester.roll_number && <Field label="Roll No." value={booking.requester.roll_number} />}
+        {booking.alumni_name && <Field label="Alumnus" value={booking.alumni_name} />}
+        {booking.alumni_roll_number && (
+          <Field label="Alumnus student / roll no." value={booking.alumni_roll_number} />
+        )}
         <Field label="Check-in" value={formatDateTime(booking.check_in)} />
         <Field label="Check-out" value={formatDateTime(booking.check_out)} />
         <Field label="Rooms requested" value={String(booking.rooms_requested)} />

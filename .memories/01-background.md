@@ -28,10 +28,12 @@ four recurring problems:
 | Role | Notes |
 | --- | --- |
 | Student | Bageshri only; request routes to their own hostel warden |
-| Employee (faculty/staff) | Both guest houses; goes straight to the manager |
-| Club / fest council | Both; routes to the club's faculty advisor |
-| Alumni | Both; routes to the IAR (International & Alumni Relations) cell |
-| Official / dignitary | Both; highest priority, bypasses intermediate review |
+| Employee (faculty/staff) | Both guest houses; goes straight to the manager. The one role asked **official or personal** at the top of the form |
+| Club / fest council | Both; routes to the club's faculty advisor. Official only — not asked |
+| IAR Student Cell | Books for its own office or **on behalf of an alumnus**; routes to the IAR Office |
+| IAR Office | Approves the Student Cell's requests, and books itself — its own requests go straight to the manager, since it is the approver |
+| Official / dignitary | Both; highest priority, bypasses intermediate review. Official only — not asked |
+| ~~Alumni~~ | **Retired 16 Sep 2026.** Alumni have no institute login, so they cannot sign in; the two IAR accounts book for them. The role survives only on bookings already in the archive |
 
 **Reviewers and administrators:**
 
@@ -39,8 +41,9 @@ four recurring problems:
 | --- | --- |
 | Hostel warden | Only students of *their* hostel |
 | Faculty advisor | Only *their* club or council |
-| IAR cell | All alumni requests, with the uploaded alumni ID card |
+| IAR Office | Requests from the IAR Student Cell, with the uploaded alumni ID card. Also books itself |
 | Guest house manager | Every pre-approved request; assigns actual rooms |
+| Guest house caretaker | Reception desk: today's checkouts, current occupants, upcoming stays, and marking guests in and out. **No allocation or approvals** |
 | Developer (superadmin) | Everything, plus configuration of the system itself |
 
 ## Where the requirements came from
@@ -87,7 +90,29 @@ picked up the same day; everything else in the notes is not started.
 | One "infant accompanying" toggle instead of per-guest infant rows | **Done** | `bookings.has_infant` (migration 7); "Infant accompanying" switch beside "+ Add guest" in `components/booking-form.tsx`. Legacy infant guest rows are kept and still read correctly |
 | Meals chosen per day in a grid, not one selection for the whole stay | **Done** | Days × meals table in `components/meal-plan-grid.tsx`; `bookings.meals` is a per-day `MealPlan` (migration 8, which also converted old answers). A day offers only meals served during the stay (`stayMealDays`). Not ticked by default — that part of the notes was not in this round's request |
 | Meals only at Hamsanandi | **Done** | `guest_houses.serves_meals` (migration 8), on for Hamsanandi, toggled in the developer console — a flag, not a name check. Enforced in `createBooking` |
-| Everything else in the notes — invoices, caretaker role, ±4 h buffer, HOD approvals, debitable heads, email threading, dining booking, danger warnings, workflow documentation | Not started | Not part of this round |
+| Everything else in the notes | Picked up 16 Sep or still open — see the next section | |
+
+## Meeting notes — second pass, 16 Sep 2026
+
+The remainder of the same meeting notes. Status as of **16 Sep 2026**:
+
+| Requirement | Status | Where |
+| --- | --- | --- |
+| Make the room availability view dynamic in "new booking" — see rooms booked earlier or later than the intended date | **Done** | `components/booking-availability.tsx` now has Day/Week/Month and date navigation, opening on the check-in date. Browsing is transient: `browsed` is tagged with the check-in it was chosen against, so a new check-in snaps the chart back. A banner states that browsing does not change the booking |
+| In GHM login, room availability/booking is not being reflected in the grid | **Done** | `/manager` computes an `occupancyVersion` fingerprint of every room hold and passes it to `RoomGrid`, which folds it into its fetch key. The grid loaded occupancy once when its dialog opened, so it never learnt that another allocation had landed underneath it |
+| In the GHM console, a card for today's upcoming checkouts | **Done** | `components/checkouts-today.tsx`, on both the manager and caretaker consoles. Sorted earliest first, overdue rows flagged, Mark as Vacated inline |
+| Future bookings should not be marked as occupied | **Done** | Three defences: `occupancyNotStartedError()` already refused the write; the **developer force-status override** (the remaining way in) now runs the same check; and `displayStatus()` / `describeSegmentStatus()` refuse to *render* a not-yet-started stay as Occupied, so rows already forced early stop lying to reception |
+| GH Caretaker role — a subset of the GHM console: current occupants, upcoming stays, mark occupied/vacated | **Done** | `gh_caretaker`, `/caretaker`, `components/caretaker-console.tsx`. Reuses the manager's own `stays-table.tsx` / `checkouts-today.tsx` so the two cannot drift; `canUpdateLifecycle()` gates the shared action server-side |
+| Faculty and staff: official (default) or personal at the start of New Booking; clubs and offices official-only with no toggle | **Done** | `bookings.booking_type` (migration 9) + `bookingTypesFor()` in `lib/booking-types.ts`. A role with one option is never shown the question, but the value is still recorded |
+| Remove alumni login; IAR cell books for them (office or on behalf of an alumnus), with alumni student ID and ID card as PDF/image | **Done** | Alumni persona and login removed; `iar_cell` (IAR Office) and a new `iar_student_cell` both book with an office/alumni choice. Alumni bookings carry `alumni_name`, `alumni_roll_number` and the ID card (JPG/PNG/WEBP/PDF, 5 MB) |
+| IAR student cell's requests go to the IAR office for approval | **Done** | `initialStatusFor()`: `iar_student_cell` → `PENDING_IAR` → manager; `iar_cell` → manager directly, because routing it to its own queue would be self-approval. `canReview()` also refuses `reviewer.id === requester.id` |
+| Warning messages for dangerous tasks like deleting a guest house | **Done** | `components/ui/confirm-dialog.tsx` replaced every `window.confirm`: it lists what will be lost and makes the operator type the guest house name, user email or booking reference |
+| Invoices with payment account details; invoice at checkout for GHM and caretaker; official invoices routed to accounts | Not started | Needs a billing model and a PDF template; `lib/report-pdf.ts` is the nearest existing machinery |
+| ±4 hour buffer on bookings | Not started | Would change the overlap rule, so it touches `room_holds.during` and every occupancy query at once |
+| HOD approval for a faculty member's booking; debitable heads (dept / project / personal fund) | Not started | The routing hook is `initialStatusFor()`, which takes only the role today — its doc comment marks where the booking type becomes an argument |
+| Dining/lunch booking at the guest house with debitable heads | Not started | Distinct from the per-day meal plan, which is about head counts, not billing |
+| Email in a single thread rather than standalone messages | Not started | Still blocked on there being no mail transport at all — see [08-roadmap.md](08-roadmap.md) §2 |
+| Documentation for every booking workflow | Not started | |
 
 ## Scope decisions made during the build
 

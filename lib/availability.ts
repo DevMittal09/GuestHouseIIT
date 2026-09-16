@@ -8,7 +8,7 @@ import {
   toInstituteDateValue,
   weekdayOfDateValue,
 } from "./tz";
-import type { Room, RoomOccupancySegment } from "./types";
+import { STATUS_LABELS, type Room, type RoomOccupancySegment } from "./types";
 
 export const HOURS_IN_DAY = 24;
 const HOUR_MS = 3_600_000;
@@ -33,6 +33,26 @@ export function dayBounds(date: string): { start: Date; end: Date } {
 /** "yyyy-MM-dd" for a Date, in institute time. */
 export function toDateInputValue(d: Date): string {
   return toInstituteDateValue(d);
+}
+
+/**
+ * How to describe one booking's hold in the room list, given where it sits in
+ * time.
+ *
+ * A hold is a *reservation*; "Occupied" is a separate fact the desk records
+ * when the guest walks in. So a stay that has not started is only ever
+ * "Booked", never "Occupied", no matter what its row says — the office
+ * reported future bookings reading as occupied, and this is the read side of
+ * that fix (`displayStatus` in `lib/workflow.ts` is the other).
+ */
+export function describeSegmentStatus(
+  segment: Pick<RoomOccupancySegment, "status" | "check_in" | "check_out">,
+  now: Date = new Date()
+): string {
+  const at = now.toISOString();
+  if (segment.check_in > at) return "Booked · upcoming";
+  if (segment.check_out <= at) return "Booked · past check-out";
+  return STATUS_LABELS[segment.status];
 }
 
 /** "1 PM" style label for the hour axis. */

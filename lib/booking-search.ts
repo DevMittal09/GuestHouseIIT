@@ -6,7 +6,7 @@ import {
   type BookingWithDetails,
   type Role,
 } from "@/lib/types";
-import { REQUESTER_ROLES } from "@/lib/types";
+import { BOOKING_CATEGORY_ROLES } from "@/lib/types";
 import { instituteParts } from "@/lib/tz";
 
 /**
@@ -35,6 +35,15 @@ export interface BookingSearchCriteria {
   statuses?: BookingStatus[];
   guestHouseId?: string;
   userRole?: Role;
+  /**
+   * Match any one of these requester categories. Used by scopes that cover
+   * several — the IAR Office sees Student Cell, its own and legacy alumni
+   * requests — where the single `userRole` above can only name one.
+   *
+   * Like `statuses`, this is never pushed down to SQL: it comes from the
+   * caller's scope, and `runBookingSearch` applies it alongside the rest.
+   */
+  userRoles?: Role[];
   /** Requester scoping, same semantics as `BookingFilter`. */
   hostelName?: string;
   club?: string;
@@ -192,6 +201,7 @@ function matchesExceptStatus(
 ): boolean {
   if (c.guestHouseId && b.guest_house_id !== c.guestHouseId) return false;
   if (c.userRole && b.user_role !== c.userRole) return false;
+  if (c.userRoles?.length && !c.userRoles.includes(b.user_role)) return false;
   if (c.hostelName && b.requester?.hostel_name !== c.hostelName) return false;
   if (c.club && b.requester?.department_or_club !== c.club) return false;
   if (c.actedBy && !reviewerActionsOn(b, c.actedBy).length) return false;
@@ -576,8 +586,13 @@ export function parseHistoryParams(
         .filter((s): s is BookingStatus => (ALL_STATUSES as string[]).includes(s))
     : [];
 
+  // Retired categories are still filterable: the archive holds alumni bookings
+  // from before alumni lost their logins, and hiding them from the filter
+  // would make those rows unreachable rather than merely unbookable.
   const roleParam = firstValue(raw.role);
-  const userRole = REQUESTER_ROLES.includes(roleParam as Role) ? (roleParam as Role) : undefined;
+  const userRole = BOOKING_CATEGORY_ROLES.includes(roleParam as Role)
+    ? (roleParam as Role)
+    : undefined;
 
   const sortParam = firstValue(raw.sort) as BookingSortKey | undefined;
   const sort = sortParam && BOOKING_SORT_KEYS.includes(sortParam) ? sortParam : "recent";

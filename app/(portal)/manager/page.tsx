@@ -4,8 +4,9 @@ import { ManagerQueue } from "@/components/manager-queue";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
 import { getStore } from "@/lib/store";
+import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
-import { stayPhase } from "@/lib/workflow";
+import { checksOutOn, stayPhase } from "@/lib/workflow";
 
 export default async function ManagerPage({
   searchParams,
@@ -51,6 +52,28 @@ export default async function ManagerPage({
   // closing off, so it stays visible with the current occupants.
   const overdueStays = stays.filter((b) => stayPhase(b, now) === "past");
 
+  // "Today" is the guest house's day, not the server's — see lib/tz.ts.
+  const { start: dayStart, end: dayEnd } = instituteDayBounds(toInstituteDateValue(now));
+  const checkoutsToday = stays
+    .filter((b) => checksOutOn(b, dayStart, dayEnd))
+    .sort((a, b) => a.check_out.localeCompare(b.check_out));
+
+  /**
+   * A fingerprint of every room hold on this guest house.
+   *
+   * The allocation grid loads occupancy once, when its dialog opens. If another
+   * manager allocated a room in the meantime the grid went on showing it green
+   * until someone pressed Refresh — the write was still refused by the
+   * exclusion constraint, but the grid was offering rooms that were already
+   * gone. This page re-renders every few seconds, so any change to the holds
+   * changes this string and the open grid re-fetches; when nothing has changed
+   * the string is stable and it does not.
+   */
+  const occupancyVersion = [...stays, ...cancellationRequests]
+    .map((b) => `${b.id}:${b.status}:${[...b.assigned_room_ids].sort().join("+")}`)
+    .sort()
+    .join("|");
+
   return (
     <div className="space-y-6">
       <div>
@@ -84,8 +107,11 @@ export default async function ManagerPage({
         current={currentStays}
         upcoming={upcomingStays}
         overdue={overdueStays}
+        checkoutsToday={checkoutsToday}
         cancellationRequests={cancellationRequests}
         rooms={rooms}
+        occupancyVersion={occupancyVersion}
+        nowIso={now.toISOString()}
       />
     </div>
   );

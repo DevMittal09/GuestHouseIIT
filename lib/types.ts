@@ -3,11 +3,22 @@ export type Role =
   | "employee"
   | "official"
   | "club"
+  /**
+   * Legacy. Alumni have no institute login, so they can no longer sign in or
+   * submit anything themselves — the IAR Office and the IAR Student Cell book
+   * on their behalf (`booking_type: "alumni"`). The role is kept because
+   * bookings made before that change still carry it.
+   */
   | "alumni"
   | "warden"
   | "faculty_advisor"
+  /** The IAR Office: approves IAR Student Cell requests, and books directly. */
   | "iar_cell"
+  /** The IAR Student Cell: books for its office or for an alumnus, via the IAR Office. */
+  | "iar_student_cell"
   | "gh_manager"
+  /** Guest house reception: a subset of the manager's console. */
+  | "gh_caretaker"
   | "developer";
 
 export type BookingStatus =
@@ -26,6 +37,26 @@ export type BookingStatus =
 export type RoomType = "single" | "double_sharing";
 export type Gender = "male" | "female" | "other";
 
+/**
+ * Why the stay is being booked, chosen at the top of the booking form.
+ *
+ * This is a property of the *request*, not of the requester: the same member
+ * of staff books officially for a visiting collaborator one week and privately
+ * for their own family the next, and the two are billed and approved
+ * differently. Roles that only ever book one way (a club, a dignitary's
+ * office) are not asked — see `bookingTypesFor` in `lib/booking-types.ts`.
+ *
+ * `alumni` means "on behalf of an alumnus", who has no login of their own; it
+ * carries the alumnus's name, student id and ID card on the booking.
+ */
+export type BookingType = "official" | "personal" | "alumni";
+
+export const BOOKING_TYPE_LABELS: Record<BookingType, string> = {
+  official: "Official",
+  personal: "Personal",
+  alumni: "On behalf of an alumnus",
+};
+
 /** Meals the guest house can lay on for a booking. See `lib/meals.ts`. */
 export type MealKey = "breakfast" | "lunch" | "dinner";
 export type MealPreferences = Record<MealKey, boolean>;
@@ -37,8 +68,44 @@ export type MealDay = { date: string } & MealPreferences;
  */
 export type MealPlan = MealDay[];
 
-export const REQUESTER_ROLES: Role[] = ["student", "employee", "official", "club", "alumni"];
-export const REVIEWER_ROLES: Role[] = ["warden", "faculty_advisor", "iar_cell", "gh_manager"];
+/**
+ * Roles that can sign in and submit a booking today.
+ *
+ * `alumni` is deliberately absent: alumni have no institute login, so nobody
+ * signs in as one any more. The IAR Office (`iar_cell`) and the IAR Student
+ * Cell book for them instead. Both of those also submit bookings for their own
+ * office, which is why a reviewer role appears in this list — `iar_cell`
+ * reviews the Student Cell's requests *and* raises its own.
+ */
+export const REQUESTER_ROLES: Role[] = [
+  "student",
+  "employee",
+  "official",
+  "club",
+  "iar_cell",
+  "iar_student_cell",
+];
+
+/**
+ * Requester roles that exist only on stored bookings. They are not offered
+ * anywhere a new booking is made, but the archive still has to name and filter
+ * them, so history and reports read from `BOOKING_CATEGORY_ROLES` below.
+ */
+export const ARCHIVED_REQUESTER_ROLES: Role[] = ["alumni"];
+
+/** Every role a stored booking's `user_role` can be — current or retired. */
+export const BOOKING_CATEGORY_ROLES: Role[] = [
+  ...REQUESTER_ROLES,
+  ...ARCHIVED_REQUESTER_ROLES,
+];
+
+export const REVIEWER_ROLES: Role[] = [
+  "warden",
+  "faculty_advisor",
+  "iar_cell",
+  "gh_manager",
+  "gh_caretaker",
+];
 
 export const STUDENT_RELATIONSHIPS = [
   "Mother",
@@ -95,6 +162,16 @@ export type Booking = {
    */
   assigned_room_ids: string[];
   rejection_reason: string | null;
+  /**
+   * Why the stay was booked. Drives the approval route and, for `alumni`, the
+   * three fields below. Bookings made before migration 9 are backfilled from
+   * `user_role`, so this is never null downstream.
+   */
+  booking_type: BookingType;
+  /** The alumnus this stay is for — only on `booking_type: "alumni"`. */
+  alumni_name: string | null;
+  /** That alumnus's student / roll number, for the IAR Office to verify against. */
+  alumni_roll_number: string | null;
   alumni_id_url: string | null;
   custom_fields: CustomFieldValue[] | null;
   /**
@@ -192,6 +269,9 @@ export interface NewBookingInput {
   check_in: string;
   check_out: string;
   rooms_requested: number;
+  booking_type: BookingType;
+  alumni_name: string | null;
+  alumni_roll_number: string | null;
   alumni_id_url: string | null;
   custom_fields: CustomFieldValue[] | null;
   meals: MealPlan;
@@ -238,10 +318,14 @@ export const ROLE_LABELS: Record<Role, string> = {
   employee: "Employee (Faculty & Staff)",
   official: "Official / Dignitary",
   club: "Club / Fest Council",
-  alumni: "Alumni",
+  // Named as retired so an old booking in the archive is not mistaken for a
+  // category anyone can still submit under.
+  alumni: "Alumni (via IAR, legacy)",
   warden: "Hostel Warden",
   faculty_advisor: "Faculty Advisor",
-  iar_cell: "IAR Cell",
+  iar_cell: "IAR Office",
+  iar_student_cell: "IAR Student Cell",
   gh_manager: "Guest House Manager",
+  gh_caretaker: "Guest House Caretaker",
   developer: "Developer (Superadmin)",
 };

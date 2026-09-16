@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { bookingPayloadSchema } from "@/lib/booking-schema";
+import { needsAlumniDetails } from "@/lib/booking-types";
 import { validateCustomValue } from "@/lib/form-config";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import { OFFICIAL_EMAIL_WHITELIST } from "@/lib/routes";
@@ -13,7 +14,8 @@ import { REQUESTER_ROLES, RoomClashError } from "@/lib/types";
 import { allocationCapacityError, countBedGuests } from "@/lib/occupancy";
 import {
   canReview,
-  initialStatusForRole,
+  canUpdateLifecycle,
+  initialStatusFor,
   nextStatusOnApprove,
   occupancyNotStartedError,
 } from "@/lib/workflow";
@@ -136,14 +138,19 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       });
     }
 
-    // Alumni ID card (mode set by form config; "required" for alumni by default).
+    // Alumni ID card. Two things can ask for it: the role's form config, and
+    // the booking itself being raised on behalf of an alumnus — the IAR
+    // accounts book both ways from one form, so the requirement follows the
+    // request rather than the account.
+    const forAlumnus = needsAlumniDetails(payload.booking_type);
+    const cardRequired = config.alumni_card === "required" || forAlumnus;
     let alumniIdUrl: string | null = null;
     const alumniCard = formData.get("alumni_card");
-    if (alumniCard instanceof File && alumniCard.size > 0 && config.alumni_card !== "hidden") {
+    if (alumniCard instanceof File && alumniCard.size > 0 && (config.alumni_card !== "hidden" || forAlumnus)) {
       const fileError = validFile(alumniCard);
       if (fileError) return { ok: false, error: fileError };
       alumniIdUrl = await store.saveDocument(alumniCard, "alumni-cards");
-    } else if (config.alumni_card === "required") {
+    } else if (cardRequired) {
       return { ok: false, error: "Alumni ID card upload is mandatory" };
     }
 
@@ -151,11 +158,14 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       user_id: user.id,
       guest_house_id: payload.guest_house_id,
       user_role: user.role,
-      status: initialStatusForRole(user.role),
+      status: initialStatusFor(user.role),
       purpose_of_visit: payload.purpose_of_visit,
       check_in: checkInIso,
       check_out: checkOutIso,
       rooms_requested: payload.rooms_requested,
+      booking_type: payload.booking_type,
+      alumni_name: forAlumnus ? payload.alumni_name : null,
+      alumni_roll_number: forAlumnus ? payload.alumni_roll_number : null,
       alumni_id_url: alumniIdUrl,
       custom_fields: customValues.length > 0 ? customValues : null,
       meals: payload.meals,
@@ -339,11 +349,15 @@ const LIFECYCLE_TRANSITIONS: Partial<Record<BookingStatus, BookingStatus>> = {
   OCCUPIED: "VACATED",
 };
 
-/** GH Manager: advance a booking through its lifecycle (Approved → Occupied → Vacated). */
+/** GH Manager or Caretaker: advance a booking (Approved → Occupied → Vacated). */
 export async function updateBookingLifecycle(bookingId: string, targetStatus: BookingStatus): Promise<ActionResult> {
   try {
     const user = await requireUser();
-    if (user.role !== "gh_manager") return { ok: false, error: "Only the GH Manager can update booking status" };
+    // The caretaker on reception records arrivals and departures as well —
+    // that is the whole of their console. Allocation and approvals are not.
+    if (!canUpdateLifecycle(user.role)) {
+      return { ok: false, error: "Your role cannot update booking status" };
+    }
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };

@@ -11,6 +11,8 @@ export function homeForRole(role: Role): string {
       return "/iar";
     case "gh_manager":
       return "/manager";
+    case "gh_caretaker":
+      return "/caretaker";
     case "developer":
       return "/admin";
     default:

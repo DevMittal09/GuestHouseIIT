@@ -1,6 +1,9 @@
 -- Seed data for local Supabase development (supabase db reset applies this).
 -- Creates confirmed auth users (password: "password123") plus their profiles,
 -- the two guest houses and their rooms.
+--
+-- There is no alumni persona: alumni have no institute login, so the IAR
+-- Office and the IAR Student Cell raise those bookings for them (migration 9).
 
 -- ---------------------------------------------------------------- auth users
 create or replace function pg_temp.seed_user(uid uuid, user_email text)
@@ -29,13 +32,14 @@ select pg_temp.seed_user('11111111-1111-1111-1111-111111111102', '142202014@smai
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111103', 'priya@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111104', 'admin@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111105', 'petrichor@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111106', 'vikram.iyer@alumni.iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111107', 'warden.malhar@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111108', 'warden.saveri@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111109', 'fa.petrichor@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111110', 'iar@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111111', 'guesthouse@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111112', 'developer@iitpkd.ac.in');
+select pg_temp.seed_user('11111111-1111-1111-1111-111111111113', 'iar.studentcell@iitpkd.ac.in');
+select pg_temp.seed_user('11111111-1111-1111-1111-111111111114', 'gh.reception@iitpkd.ac.in');
 
 -- ---------------------------------------------------------------- profiles
 insert into public.profiles (id, email, full_name, role, hostel_name, department_or_club, roll_number) values
@@ -44,13 +48,14 @@ insert into public.profiles (id, email, full_name, role, hostel_name, department
   ('11111111-1111-1111-1111-111111111103', 'priya@iitpkd.ac.in', 'Dr. Priya Sharma', 'employee', null, 'Computer Science & Engineering', null),
   ('11111111-1111-1111-1111-111111111104', 'admin@iitpkd.ac.in', 'Director''s Office', 'official', null, 'Administration', null),
   ('11111111-1111-1111-1111-111111111105', 'petrichor@iitpkd.ac.in', 'Petrichor Fest Council', 'club', null, 'Petrichor', null),
-  ('11111111-1111-1111-1111-111111111106', 'vikram.iyer@alumni.iitpkd.ac.in', 'Vikram Iyer', 'alumni', null, null, '101601023'),
   ('11111111-1111-1111-1111-111111111107', 'warden.malhar@iitpkd.ac.in', 'Dr. Suresh Kumar (Warden, Malhar)', 'warden', 'Malhar', null, null),
   ('11111111-1111-1111-1111-111111111108', 'warden.saveri@iitpkd.ac.in', 'Dr. Lakshmi Devi (Warden, Saveri)', 'warden', 'Saveri', null, null),
   ('11111111-1111-1111-1111-111111111109', 'fa.petrichor@iitpkd.ac.in', 'Dr. Arun Prasad (FA, Petrichor)', 'faculty_advisor', null, 'Petrichor', null),
-  ('11111111-1111-1111-1111-111111111110', 'iar@iitpkd.ac.in', 'IAR Cell Office', 'iar_cell', null, 'International & Alumni Relations', null),
+  ('11111111-1111-1111-1111-111111111110', 'iar@iitpkd.ac.in', 'IAR Office', 'iar_cell', null, 'International & Alumni Relations', null),
   ('11111111-1111-1111-1111-111111111111', 'guesthouse@iitpkd.ac.in', 'Guest House Manager', 'gh_manager', null, null, null),
-  ('11111111-1111-1111-1111-111111111112', 'developer@iitpkd.ac.in', 'Portal Developer', 'developer', null, null, null)
+  ('11111111-1111-1111-1111-111111111112', 'developer@iitpkd.ac.in', 'Portal Developer', 'developer', null, null, null),
+  ('11111111-1111-1111-1111-111111111113', 'iar.studentcell@iitpkd.ac.in', 'IAR Student Cell', 'iar_student_cell', null, 'International & Alumni Relations', null),
+  ('11111111-1111-1111-1111-111111111114', 'gh.reception@iitpkd.ac.in', 'Guest House Caretaker', 'gh_caretaker', null, null, null)
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------- guest houses

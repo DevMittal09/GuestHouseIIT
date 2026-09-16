@@ -21,6 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -114,6 +115,8 @@ function GuestHouseCard({
   const [name, setName] = useState(gh.name);
   const [roomNumber, setRoomNumber] = useState("");
   const [roomType, setRoomType] = useState<RoomType>("double_sharing");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [roomToDelete, setRoomToDelete] = useState<Room | null>(null);
 
   return (
     <Card>
@@ -156,14 +159,31 @@ function GuestHouseCard({
             variant="destructive"
             size="sm"
             disabled={isPending}
-            onClick={() => {
-              if (window.confirm(`Delete guest house ${gh.name} and all its rooms?`)) {
-                run(() => deleteGuestHouseAction(gh.id), "Guest house deleted");
-              }
-            }}
+            onClick={() => setConfirmDelete(true)}
           >
             Delete guest house
           </Button>
+          {/* Deleting a guest house takes its rooms with it, so this asks for
+              the name to be typed rather than accepting a stray Enter on a
+              browser confirm. */}
+          <ConfirmDialog
+            open={confirmDelete}
+            onOpenChange={setConfirmDelete}
+            title={`Delete ${gh.name}?`}
+            description="This permanently removes the guest house from the portal. It cannot be undone."
+            consequences={[
+              `All ${rooms.length} room${rooms.length === 1 ? "" : "s"} in ${gh.name} are deleted with it.`,
+              "Requesters can no longer choose it, and it disappears from the availability grid.",
+              "Blocked if any booking still references this guest house — delete those first.",
+            ]}
+            confirmPhrase={gh.name}
+            confirmLabel="Delete guest house"
+            pending={isPending}
+            onConfirm={() => {
+              setConfirmDelete(false);
+              run(() => deleteGuestHouseAction(gh.id), "Guest house deleted");
+            }}
+          />
         </div>
         <CardDescription>
           Deactivated rooms stay in the system but disappear from the manager&apos;s allocation
@@ -248,11 +268,7 @@ function GuestHouseCard({
                     size="sm"
                     disabled={isPending}
                     className="text-destructive"
-                    onClick={() => {
-                      if (window.confirm(`Delete room ${room.room_number}?`)) {
-                        run(() => deleteRoomAction(room.id), "Room deleted");
-                      }
-                    }}
+                    onClick={() => setRoomToDelete(room)}
                   >
                     ✕
                   </Button>
@@ -261,6 +277,24 @@ function GuestHouseCard({
             ))}
           </div>
         )}
+
+        <ConfirmDialog
+          open={roomToDelete !== null}
+          onOpenChange={(open) => !open && setRoomToDelete(null)}
+          title={roomToDelete ? `Delete room ${roomToDelete.room_number}?` : ""}
+          description="This permanently removes the room. Deactivating it instead keeps its booking history intact."
+          consequences={[
+            "The room disappears from the allocation grid and the availability chart.",
+            "Blocked if the room is assigned to any booking — deactivate it instead.",
+          ]}
+          confirmLabel="Delete room"
+          pending={isPending}
+          onConfirm={() => {
+            const room = roomToDelete;
+            setRoomToDelete(null);
+            if (room) run(() => deleteRoomAction(room.id), "Room deleted");
+          }}
+        />
       </CardContent>
     </Card>
   );

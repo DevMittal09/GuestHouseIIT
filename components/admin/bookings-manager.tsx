@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -118,6 +119,7 @@ function AdminBookingRow({ booking }: { booking: BookingWithDetails }) {
   const [open, setOpen] = useState(false);
   const [overrideStatus, setOverrideStatus] = useState<BookingStatus>(booking.status);
   const [remark, setRemark] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const applyOverride = () =>
     startTransition(async () => {
@@ -132,7 +134,6 @@ function AdminBookingRow({ booking }: { booking: BookingWithDetails }) {
     });
 
   const remove = () => {
-    if (!window.confirm(`Permanently delete ${booking.booking_reference_id}?`)) return;
     startTransition(async () => {
       const result = await adminDeleteBookingAction(booking.id);
       if (result.ok) {
@@ -210,9 +211,32 @@ function AdminBookingRow({ booking }: { booking: BookingWithDetails }) {
               </div>
             </DialogContent>
           </Dialog>
-          <Button variant="destructive" size="sm" disabled={isPending} onClick={remove}>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={isPending}
+            onClick={() => setConfirmDelete(true)}
+          >
             Delete
           </Button>
+          <ConfirmDialog
+            open={confirmDelete}
+            onOpenChange={setConfirmDelete}
+            title={`Delete ${booking.booking_reference_id}?`}
+            description="This erases the booking itself, not just its status. Forcing it to Cancelled keeps the record and the audit trail."
+            consequences={[
+              "The guest list, uploaded ID documents and the full approval trail are deleted.",
+              "Any rooms it holds are released immediately.",
+              "It disappears from the archive, so reports covering past dates will change.",
+            ]}
+            confirmPhrase={booking.booking_reference_id}
+            confirmLabel="Delete booking"
+            pending={isPending}
+            onConfirm={() => {
+              setConfirmDelete(false);
+              remove();
+            }}
+          />
         </div>
       </TableCell>
     </TableRow>

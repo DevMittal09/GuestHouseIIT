@@ -26,6 +26,7 @@ import {
   bucketOccupancyByDay,
   bucketOccupancyByHour,
   describeRange,
+  describeSegmentStatus,
   freeRoomsByDay,
   rangeProgress,
   roomRangeStatus,
@@ -37,12 +38,7 @@ import {
 import { formatDateTime } from "@/lib/format";
 import { instituteHour } from "@/lib/tz";
 import { cn } from "@/lib/utils";
-import {
-  STATUS_LABELS,
-  type GuestHouse,
-  type Room,
-  type RoomOccupancySegment,
-} from "@/lib/types";
+import { type GuestHouse, type Room, type RoomOccupancySegment } from "@/lib/types";
 
 interface Loaded {
   /** Which request this data answers — see `requestKey` below. */
@@ -327,7 +323,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
                           <span className="font-medium">{formatDateTime(s.check_out)}</span>
                           <span className="text-muted-foreground">
                             {" "}
-                            · {s.booking_reference_id} · {STATUS_LABELS[s.status]}
+                            · {s.booking_reference_id} · {describeSegmentStatus(s)}
                             {s.requester_name && ` · ${s.requester_name}`}
                           </span>
                         </p>

@@ -116,13 +116,46 @@ security boundary.
 | --- | --- | --- |
 | student | → Hostel Warden → GH Manager | `PENDING_WARDEN` |
 | club | → Faculty Advisor → GH Manager | `PENDING_FA` |
-| alumni | → IAR Cell → GH Manager | `PENDING_IAR` |
+| iar_student_cell | → IAR Office → GH Manager | `PENDING_IAR` |
+| iar_cell (IAR Office) | → GH Manager (direct — it *is* the approver) | `PENDING_GH_MANAGER` |
 | employee | → GH Manager | `PENDING_GH_MANAGER` |
 | official | → GH Manager (direct, highest priority) | `PENDING_GH_MANAGER` |
+| alumni | *retired* — kept only for stored bookings | `PENDING_IAR` |
 
 Reviewer roles: `warden` (scoped to `profile.hostel_name`), `faculty_advisor`
-(scoped to `profile.department_or_club`), `iar_cell`, `gh_manager`, plus
-`developer` (superadmin). Scoping lives in `canReview()`.
+(scoped to `profile.department_or_club`), `iar_cell`, `gh_manager`,
+`gh_caretaker`, plus `developer` (superadmin). Scoping lives in `canReview()`,
+which also refuses `reviewer.id === requester.id` — the IAR Office both books
+and approves, so self-approval has to be impossible by construction.
+
+### Booking type — `lib/booking-types.ts`
+
+`bookings.booking_type` is `official` | `personal` | `alumni`: a property of the
+**request**, not the requester. `bookingTypesFor(role)` is the single source of
+truth for which a role may pick, and a role with one option is **never asked** —
+the form records the value silently. Employee is the only role with a real
+choice (`official` default, `personal`); club and official are official-only.
+
+`alumni` means *on behalf of an alumnus*, who has no login: it requires
+`alumni_name`, `alumni_roll_number` and the Alumni ID card upload. The card is
+demanded by `config.alumni_card === "required"` **or** by the booking being for
+an alumnus — the IAR accounts book both ways from one form, so the requirement
+follows the request, not the account.
+
+**Alumni have no login.** There is no alumni persona and `alumni` is not in
+`REQUESTER_ROLES`. It stays in the `Role` union and in `BOOKING_CATEGORY_ROLES`
+(used by history filters and reports) because stored bookings still carry it —
+dropping it would orphan them.
+
+### Guest House Caretaker — `gh_caretaker`
+
+Reception desk; a deliberate **subset** of `/manager` at `/caretaker`: today's
+checkouts, current occupants, awaiting check-out, upcoming stays, and marking
+guests Occupied / Vacated. No allocation, no approvals, no cancellations.
+`canUpdateLifecycle()` / `LIFECYCLE_ROLES` gate the one action it shares with
+the manager, server-side. It reuses `components/stays-table.tsx` and
+`components/checkouts-today.tsx` rather than owning copies, so the two consoles
+cannot drift.
 
 - Intermediate approval always forwards to `PENDING_GH_MANAGER`.
 - The GH Manager does **not** approve via the generic review action —
@@ -325,6 +358,25 @@ the same room. This replaced a check-then-act race in `allocateRooms()`.
 `components/room-grid.tsx` — cinema-style grid, green available / red occupied /
 blue selected, grouped into double-sharing and single.
 
+### The booking form's availability panel is browsable
+
+`components/booking-availability.tsx` opens on the check-in date but the
+requester can move a day either side, or switch to Week / Month — someone whose
+date is full needs to see what *is* free without losing a half-filled form. The
+browsing is transient: `browsed` is tagged with the check-in date it was chosen
+against, so picking a new check-in makes it stale and the chart snaps back with
+no effect and no setState-during-render. Moving the chart never moves the
+booking; a banner says so. Same action, chart and bucketing as `/availability`.
+
+> **The allocation grid refetches when holds change.** `/manager` builds an
+> `occupancyVersion` fingerprint of every booking's room holds and passes it to
+> `RoomGrid`, which folds it into its fetch key. The grid loads occupancy once
+> when its dialog opens, so without this it never learnt that another
+> allocation had landed underneath it — the write was still refused by the
+> exclusion constraint, but the grid went on offering rooms that were gone.
+> This is the "room availability/booking is not being reflected in the GHM
+> grid" report. An unchanged fingerprint costs nothing.
+
 > **The grid reads occupancy for the booking's own dates and nothing else.** It
 > used to carry its own date+time pickers. A manager who shifted that window saw
 > rooms turn green that were in fact taken for the actual stay; the write was
@@ -486,6 +538,10 @@ until a developer sets one from **Console Access**.
 `app/(portal)/admin/*` + `components/admin/*`, actions in `app/actions/admin.ts`
 (every one gated by `requireDeveloper()`):
 
+- **Destructive actions ask properly.** `components/ui/confirm-dialog.tsx`
+  replaced every `window.confirm`: it lists what will be lost and, for guest
+  houses / users / bookings, makes the operator type the name, email or
+  reference id. A stray Enter must not delete a guest house and its rooms.
 - **Users & Roles** — CRUD profiles, assign any role, set hostel / dept-club /
   roll number (these drive warden and FA scoping). Cannot delete yourself or
   drop your own developer role. In Supabase mode, creating a user also creates a
@@ -582,8 +638,10 @@ site deliberately. Fix by setting `--primary-foreground` to a dark brown.
 Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase auth
 password `password123`): two students in different hostels (Malhar, Saveri),
 an employee, a whitelisted official (`admin@iitpkd.ac.in`), the Petrichor club,
-an alumnus, two wardens, a Petrichor faculty advisor, the IAR cell, a GH
-manager, and `developer@iitpkd.ac.in`. Five demo bookings seed every queue with
+the IAR Student Cell, two wardens, a Petrichor faculty advisor, the IAR Office,
+a GH manager, a GH caretaker (`gh.reception@iitpkd.ac.in`), and
+`developer@iitpkd.ac.in`. **There is no alumnus persona** — demo booking 3 is
+now the Student Cell booking for one. Five demo bookings seed every queue with
 something to look at.
 
 ## Supabase setup
@@ -596,6 +654,12 @@ Migration files, applied sequentially:
 5. `supabase/migrations/00000000000005_app_settings.sql` (`app_settings` key/value table for the developer console password hash; service-role only, no `authenticated` policy)
 6. `supabase/migrations/00000000000006_booking_meals.sql` (`bookings.meals` jsonb + a shape check). Additive and defaulted, so existing bookings read as "no meals requested". **Until this is applied, creating a booking against Supabase fails** — the mock store self-heals instead.
 7. `supabase/migrations/00000000000007_booking_infant_flag.sql` (`bookings.has_infant`, backfilled wherever a legacy infant guest row exists; `booking_guests.is_infant` is kept for those rows). **Until this is applied, creating a booking against Supabase fails** — the insert names the column. Reads degrade: a missing flag is derived from infant guest rows.
+9. `supabase/migrations/00000000000009_booking_types_and_roles.sql`
+   (`bookings.booking_type` + `alumni_name` + `alumni_roll_number`, and the
+   `iar_student_cell` / `gh_caretaker` enum values). Backfills `booking_type`
+   from `user_role`. Additive and defaulted; safe to re-run. **Until it is
+   applied, creating a booking against Supabase fails** — the insert names the
+   columns — and reads degrade via a fallback in `SupabaseStore.hydrate`.
 8. `supabase/migrations/00000000000008_meal_plans.sql` (`guest_houses.serves_meals`, set for Hamsanandi; converts `bookings.meals` to the per-day array with the serving windows from `lib/meals.ts`, and replaces migration 6's shape check). **Until this is applied, a booking with meals cannot be created against Supabase**, and every guest house reads as serving no meals. Safe to re-run.
 
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are

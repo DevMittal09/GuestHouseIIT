@@ -108,6 +108,22 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
       };
     case "alumni":
       return { ...base, alumni_card: "required" };
+    // The two IAR accounts book for guests they are hosting, not for relatives,
+    // so the relationship field means nothing here. The Alumni ID card is not
+    // set on the config: it is required exactly when the *request* is on behalf
+    // of an alumnus, which is a per-booking choice — see `needsAlumniDetails`.
+    case "iar_cell":
+    case "iar_student_cell":
+      return {
+        ...base,
+        guest_fields: {
+          ...base.guest_fields,
+          relationship: "hidden",
+          id_number: "optional",
+          id_document: "optional",
+        },
+        relationship_style: "free_text",
+      };
     case "official":
       return {
         ...base,

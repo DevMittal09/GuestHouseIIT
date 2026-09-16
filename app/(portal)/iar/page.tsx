@@ -14,13 +14,18 @@ export default async function IarPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">IAR Cell Portal</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">IAR Office Portal</h1>
         <p className="text-muted-foreground">
-          Alumni booking requests awaiting verification — open a request to preview the uploaded
-          Alumni ID card.
+          Requests raised by the IAR Student Cell — for an alumnus or for their office — awaiting
+          your verification. Open one to check the alumnus&rsquo;s details against the uploaded
+          Alumni ID card. Bookings you raise yourself go straight to the Guest House Manager.
         </p>
       </div>
-      <ReviewQueue bookings={bookings} emptyMessage="No pending alumni requests." showAlumniCard />
+      <ReviewQueue
+        bookings={bookings}
+        emptyMessage="No requests awaiting IAR Office verification."
+        showAlumniCard
+      />
     </div>
   );
 }

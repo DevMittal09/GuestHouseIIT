@@ -8,12 +8,16 @@ import { logout } from "@/app/actions/auth";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
 import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
+import { isRequesterHistory } from "@/lib/workflow";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/");
 
-  const isRequester = REQUESTER_ROLES.includes(user.role);
+  // Who may raise a booking, and who reads an approval log, are two different
+  // questions now that the IAR Office does both.
+  const canBook = REQUESTER_ROLES.includes(user.role);
+  const readsOwnHistory = isRequesterHistory(user.role);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -37,7 +41,7 @@ export default async function PortalLayout({ children }: { children: React.React
           </Link>
 
           <nav className="flex items-center gap-1 text-sm">
-            {isRequester && (
+            {canBook && (
               <>
                 <NavLink href="/dashboard">My Bookings</NavLink>
                 <NavLink href="/book">New Booking</NavLink>
@@ -47,10 +51,11 @@ export default async function PortalLayout({ children }: { children: React.React
             {user.role === "faculty_advisor" && <NavLink href="/fa">FA Queue</NavLink>}
             {user.role === "iar_cell" && <NavLink href="/iar">IAR Queue</NavLink>}
             {user.role === "gh_manager" && <NavLink href="/manager">Manager Console</NavLink>}
+            {user.role === "gh_caretaker" && <NavLink href="/caretaker">Reception</NavLink>}
             {user.role === "developer" && <NavLink href="/admin">Developer Console</NavLink>}
             <NavLink href="/availability">Room Availability</NavLink>
             <NavLink href="/history">
-              {isRequester ? "Booking History" : "Approval Log"}
+              {readsOwnHistory ? "Booking History" : "Approval Log"}
             </NavLink>
           </nav>
 

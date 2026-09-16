@@ -102,6 +102,21 @@ function loadDb(): Db {
         b.has_infant = db.booking_guests.some((g) => g.booking_id === b.id && g.is_infant);
         dirty = true;
       }
+      // Migration 9's counterpart: why a stay was booked. Old rows recorded
+      // only the requester category, so derive it the same way the SQL does.
+      if (b.booking_type === undefined) {
+        b.booking_type =
+          b.user_role === "student" ? "personal" : b.user_role === "alumni" ? "alumni" : "official";
+        dirty = true;
+      }
+      if (b.alumni_name === undefined) {
+        b.alumni_name = null;
+        dirty = true;
+      }
+      if (b.alumni_roll_number === undefined) {
+        b.alumni_roll_number = null;
+        dirty = true;
+      }
     }
     for (const seeded of seedProfiles) {
       if (!db.profiles.some((p) => p.id === seeded.id || p.email === seeded.email)) {
@@ -193,6 +208,9 @@ export class MockStore implements DataStore {
       rooms_requested: input.rooms_requested,
       assigned_room_ids: [],
       rejection_reason: null,
+      booking_type: input.booking_type,
+      alumni_name: input.alumni_name,
+      alumni_roll_number: input.alumni_roll_number,
       alumni_id_url: input.alumni_id_url,
       custom_fields: input.custom_fields,
       meals: normalizeMeals(input.meals),

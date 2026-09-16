@@ -17,7 +17,8 @@ import {
 import type { RoleFormConfig } from "@/lib/form-config";
 import { getStore } from "@/lib/store";
 import type { BookingStatus, Profile, Role, RoomType } from "@/lib/types";
-import { REQUESTER_ROLES } from "@/lib/types";
+import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
+import { occupancyNotStartedError } from "@/lib/workflow";
 import type { ActionResult } from "./bookings";
 
 /**
@@ -293,10 +294,9 @@ export async function deleteRoomAction(id: string): Promise<ActionResult> {
 const userSchema = z.object({
   email: z.string().trim().email("Enter a valid email"),
   full_name: z.string().trim().min(2, "Name is required"),
-  role: z.enum([
-    "student", "employee", "official", "club", "alumni",
-    "warden", "faculty_advisor", "iar_cell", "gh_manager", "developer",
-  ]),
+  // Derived from ROLE_LABELS rather than written out again: a hand-kept copy
+  // of the role list silently rejected every newly added role.
+  role: z.enum(Object.keys(ROLE_LABELS) as [Role, ...Role[]]),
   hostel_name: z.string().trim().transform((v) => v || null),
   department_or_club: z.string().trim().transform((v) => v || null),
   roll_number: z.string().trim().transform((v) => v || null),
@@ -370,6 +370,17 @@ export async function adminSetBookingStatusAction(
     const dev = await requireDeveloper();
     if (!OVERRIDABLE.includes(status)) return { ok: false, error: "Unknown status" };
     if (!remark.trim()) return { ok: false, error: "A remark is required for status overrides" };
+
+    // The override exists to unstick a workflow, not to state something that
+    // cannot be true. A guest cannot be in a room before their stay begins,
+    // and a booking forced to OCCUPIED early is exactly how future bookings
+    // came to read as occupied on the manager's console.
+    if (status === "OCCUPIED") {
+      const booking = await getStore().getBooking(id);
+      if (!booking) return { ok: false, error: "Booking not found" };
+      const tooEarly = occupancyNotStartedError(booking);
+      if (tooEarly) return { ok: false, error: tooEarly };
+    }
     await getStore().updateBookingStatus(
       id,
       { status },

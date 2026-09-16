@@ -24,15 +24,33 @@ export function latestCheckIn(role: Role, from: Date = new Date()): Date | null 
   return addMonths(from, ADVANCE_BOOKING_WINDOW_MONTHS);
 }
 
-/** Where a fresh booking enters the approval pipeline, by requester role. */
-export function initialStatusForRole(role: Role): BookingStatus {
+/**
+ * Where a fresh booking enters the approval pipeline.
+ *
+ * One account can raise requests that answer to different people, so the route
+ * is not simply "the requester's boss". The IAR Student Cell's requests — for
+ * its own office or for an alumnus — are checked by the IAR Office first. The
+ * IAR Office's own requests are not: it *is* the approving body, so routing
+ * them to `PENDING_IAR` would have it approve itself, which is not a control
+ * at all. Those go straight to the manager.
+ *
+ * The route is a function of the role alone today. It takes no booking type
+ * because none of the current pipelines branch on one — if HOD approval for a
+ * faculty member's *personal* booking is ever added (it is in the meeting
+ * notes but was not asked for), this is where the type becomes an argument.
+ */
+export function initialStatusFor(role: Role): BookingStatus {
   switch (role) {
     case "student":
       return "PENDING_WARDEN";
     case "club":
       return "PENDING_FA";
+    // Retired role, kept so a resubmitted legacy booking still routes sanely.
     case "alumni":
       return "PENDING_IAR";
+    case "iar_student_cell":
+      return "PENDING_IAR";
+    case "iar_cell":
     case "employee":
     case "official":
       return "PENDING_GH_MANAGER";
@@ -69,6 +87,10 @@ export function nextStatusOnApprove(current: BookingStatus): BookingStatus {
  */
 export function canReview(reviewer: Profile, status: BookingStatus, requester: Profile): boolean {
   if (REVIEWER_STAGE[reviewer.role] !== status) return false;
+  // Nobody signs off their own request. The IAR Office both books and reviews,
+  // and its own bookings skip `PENDING_IAR` for that reason — this is the
+  // belt-and-braces check in case one ever lands there anyway.
+  if (reviewer.id === requester.id) return false;
   if (reviewer.role === "warden") return reviewer.hostel_name === requester.hostel_name;
   if (reviewer.role === "faculty_advisor")
     return reviewer.department_or_club === requester.department_or_club;
@@ -125,14 +147,60 @@ export const ROOM_HOLDING_STATUSES: BookingStatus[] = [
   "CANCELLATION_REQUESTED",
 ];
 
+/**
+ * The status to *show* for a stay, which is not always the status stored.
+ *
+ * A booking whose check-in has not arrived cannot be occupied, whatever the
+ * row says — and rows can say so, because the developer console can force any
+ * status and older data predates the guard in `updateBookingLifecycle`. The
+ * office reported exactly this: future bookings reading as "Occupied". Writes
+ * are refused at the source; this keeps a bad row already in the database from
+ * telling the reception a guest is in a room that is in fact empty.
+ */
+export function displayStatus(
+  booking: { status: BookingStatus; check_in: string },
+  now: Date = new Date()
+): BookingStatus {
+  // Whatever the row says, nobody is in a room before the stay begins.
+  if (booking.status === "OCCUPIED" && booking.check_in > now.toISOString()) {
+    return "APPROVED";
+  }
+  return booking.status;
+}
+
+/** Whether a stay's check-out falls on the given institute calendar date. */
+export function checksOutOn(
+  booking: { check_out: string },
+  dayStart: Date,
+  dayEnd: Date
+): boolean {
+  const at = new Date(booking.check_out).getTime();
+  return at >= dayStart.getTime() && at < dayEnd.getTime();
+}
+
 /** Roles that get the approval log / booking archive at `/history`. */
 export const HISTORY_ROLES: Role[] = [
   "warden",
   "faculty_advisor",
   "iar_cell",
   "gh_manager",
+  "gh_caretaker",
   "developer",
 ];
+
+/**
+ * Roles that record arrivals and departures at the desk.
+ *
+ * The caretaker sits on the guest house reception and does exactly this much:
+ * marks guests Occupied when they walk in and Vacated when they leave. Room
+ * allocation, approvals and cancellations stay with the manager, which is what
+ * makes this a subset of that console rather than a second copy of it.
+ */
+export const LIFECYCLE_ROLES: Role[] = ["gh_manager", "gh_caretaker"];
+
+export function canUpdateLifecycle(role: Role): boolean {
+  return LIFECYCLE_ROLES.includes(role);
+}
 
 /** All roles now have access to logs — requesters see their own bookings. */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -157,7 +225,10 @@ export type HistoryScope =
   | {
       ok: true;
       /** Applied last when building criteria, so the URL cannot widen it. */
-      criteria: Pick<BookingSearchCriteria, "hostelName" | "club" | "userRole" | "userId">;
+      criteria: Pick<
+        BookingSearchCriteria,
+        "hostelName" | "club" | "userRole" | "userRoles" | "userId"
+      >;
       /** Human-readable description of the boundary, shown in the UI. */
       label: string;
       /** False when the role is fixed by the scope (hides the category filter). */
@@ -208,12 +279,24 @@ export function historyScope(user: Profile): HistoryScope {
     case "iar_cell":
       return {
         ok: true,
-        criteria: { userRole: "alumni" },
-        label: "Alumni requests",
+        // Three categories, not one: requests the Student Cell raised (which
+        // this office approves), this office's own bookings, and the alumni
+        // requests made before alumni lost their logins. A single `userRole`
+        // could only name one of them and would hide the other two.
+        criteria: { userRoles: ["alumni", "iar_student_cell", "iar_cell"] },
+        label: "Alumni and IAR requests",
         canFilterByRole: false,
         isOwnBookings: false,
       };
     case "gh_manager":
+      return {
+        ok: true,
+        criteria: {},
+        label: "All guest house bookings",
+        canFilterByRole: true,
+        isOwnBookings: false,
+      };
+    case "gh_caretaker":
       return {
         ok: true,
         criteria: {},

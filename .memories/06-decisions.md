@@ -732,3 +732,83 @@ may book serves meals, and explains when the chosen one does not;
 `createBooking` refuses a non-empty plan for a guest house with the flag off.
 Before migration 8 the Supabase store reads the flag as false, so the card
 disappears rather than offering meals that could not be saved.
+
+
+---
+
+## 16 Sep 2026 — meeting follow-ups
+
+### Booking type is a column, not a role
+
+**Options:** (a) new roles `employee_official` / `employee_personal`; (b) a
+`booking_type` column on `bookings`; (c) an admin-defined custom field.
+
+**Chose (b).** The same person books both ways, so (a) would have forced two
+accounts on one member of staff. (c) would have made the approval route depend
+on a free-text answer a developer could rename. `bookingTypesFor(role)` in
+`lib/booking-types.ts` is the single policy, and a role with one option is
+never shown the question — a toggle with one position is not a decision.
+
+### The IAR Office both books and approves; the Student Cell only books
+
+The office asked for the IAR Student Cell to raise requests (for its own office
+or for an alumnus) with **approval going to the IAR Office**, and for the IAR
+Office itself to book with **no approval step**.
+
+So `iar_cell` appears in both `REQUESTER_ROLES` and `REVIEWER_ROLES`.
+`initialStatusFor(role, type)` sends `iar_student_cell` to `PENDING_IAR` and
+`iar_cell` straight to `PENDING_GH_MANAGER` — routing the latter through
+`PENDING_IAR` would have it approve itself, which is not a control at all.
+`canReview()` additionally refuses `reviewer.id === requester.id`, so that
+stays true even if a booking somehow lands in the wrong queue.
+
+`historyScope` for `iar_cell` needed to match **three** categories (Student
+Cell, its own, legacy alumni), which a single `userRole` cannot express — hence
+`userRoles?: Role[]` on `BookingSearchCriteria`. Like `statuses`, it is never
+pushed down to SQL.
+
+### Alumni logins removed, not the alumni role
+
+Alumni have no LDAP account, so the persona and the login are gone. The `Role`
+union keeps `alumni` because stored bookings carry it; deleting the enum value
+would orphan them. `ARCHIVED_REQUESTER_ROLES` / `BOOKING_CATEGORY_ROLES` keep
+those rows filterable in the archive while making them unbookable.
+
+### Caretaker reuses the manager's components
+
+**Options:** (a) a simplified copy of the stays tables; (b) the manager console
+with pieces hidden by role; (c) extract the shared tables and compose two
+consoles.
+
+**Chose (c).** (a) drifts — two tables showing "the same" thing diverge within
+a release. (b) makes the role check a rendering detail, and the office
+explicitly wanted reception to see *less*, not the same screen with gaps.
+`stays-table.tsx` and `checkouts-today.tsx` are shared; `/caretaker` composes
+them and never loads the pending queue at all. The one shared action is gated
+server-side by `canUpdateLifecycle()`.
+
+### "Future bookings show as occupied" — fixed on both sides
+
+The write guard already existed in `updateBookingLifecycle`, but the developer
+console's force-status override bypassed it, and rows forced Occupied early
+were already in the data. So: the override now runs the same
+`occupancyNotStartedError()` check, **and** `displayStatus()` /
+`describeSegmentStatus()` refuse to render a not-yet-started stay as Occupied.
+Fixing only the write would have left the existing bad rows lying to reception.
+
+### Availability inside the booking form became browsable
+
+The panel was locked to the check-in date, which answered "is my date free?"
+but not "then what *is*?". It now has Day/Week/Month and date navigation.
+
+The trap avoided: letting the panel own a date that then disagrees with the
+booking. `browsed` is stored as `{from, value}` tagged with the check-in date
+it was chosen against, so a new check-in makes it stale and the chart snaps
+back — derived, not an effect, so the React Compiler lint stays happy. A banner
+states that browsing does not change the booking.
+
+### Destructive admin actions
+
+`window.confirm` said nothing about consequences and accepted a stray Enter.
+`components/ui/confirm-dialog.tsx` lists what will be lost and requires the
+operator to type the guest house name / user email / booking reference.

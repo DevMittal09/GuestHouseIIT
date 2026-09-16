@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { bookingTypeError, needsAlumniDetails } from "./booking-types";
 import { parentDependencyError, type FieldMode, type RoleFormConfig } from "./form-config";
 import { MAX_MEAL_DAYS, mealPlanError, normalizeMeals } from "./meals";
 import { requestedRoomsError } from "./occupancy";
@@ -96,6 +97,16 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
   return z
     .object({
       guest_house_id: z.string().min(1, "Select a guest house"),
+      // Why the stay is booked. Whether this role may pick it at all is
+      // checked below, so a crafted request cannot book privately on an
+      // account that only books officially.
+      booking_type: z.enum(["official", "personal", "alumni"], {
+        message: "Choose whether this is an official or a personal booking",
+      }),
+      // Only meaningful on an alumni booking; the refinement below requires
+      // them there and rejects them everywhere else.
+      alumni_name: optionalTrimmed,
+      alumni_roll_number: optionalTrimmed,
       purpose_of_visit: z.string().trim().min(5, "Describe the purpose of the visit"),
       check_in: z.string().regex(DATETIME_LOCAL, "Check-in date & time is required"),
       check_out: z.string().regex(DATETIME_LOCAL, "Check-out date & time is required"),
@@ -132,6 +143,36 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
         .optional()
         .transform((v) => normalizeMeals(v ?? [])),
       custom: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
+    })
+    .superRefine((v, ctx) => {
+      const message = bookingTypeError(config.role, v.booking_type);
+      if (message) ctx.addIssue({ code: "custom", message, path: ["booking_type"] });
+    })
+    .superRefine((v, ctx) => {
+      // An alumnus cannot log in to speak for themselves, so the request
+      // raised for them has to carry enough for the IAR Office to verify who
+      // it is actually for. Everything else must *not* carry these, so a
+      // stale value cannot ride along on a form that never asked.
+      if (!needsAlumniDetails(v.booking_type)) {
+        if (v.alumni_name || v.alumni_roll_number) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Alumni details belong only on a booking made for an alumnus",
+            path: ["alumni_name"],
+          });
+        }
+        return;
+      }
+      if (!v.alumni_name) {
+        ctx.addIssue({ code: "custom", message: "Enter the alumnus's full name", path: ["alumni_name"] });
+      }
+      if (!v.alumni_roll_number) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Enter the alumnus's student / roll number",
+          path: ["alumni_roll_number"],
+        });
+      }
     })
     .superRefine((v, ctx) => {
       // Every guest row on a new request needs a bed — infants are the
