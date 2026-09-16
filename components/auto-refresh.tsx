@@ -8,9 +8,11 @@ import { useEffect } from "react";
  * historical data behind a search, so re-fetching it every few seconds only
  * re-runs a full archive scan and churns the results under the reader. The
  * availability grid fetches its own data client-side and has a Refresh button,
- * so a server refresh would do nothing but work.
+ * so a server refresh would do nothing but work. The mail outbox is the same
+ * shape as the availability grid — its own fetch, its own Refresh button — and
+ * polling it would re-run four count queries every five seconds.
  */
-const NO_POLL_PREFIXES = ["/history", "/availability"];
+const NO_POLL_PREFIXES = ["/history", "/availability", "/admin/mail"];
 
 /**
  * Poll-based "realtime": re-fetches server data so reviewer queues and

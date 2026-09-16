@@ -16,6 +16,8 @@ app runs against a local mock data layer:
 - **Database** → `.local-db.json` (auto-seeded on first run; delete it to reset demo data)
 - **Auth** → mock cookie session with one-click role switching from the login page
 - **Uploads** → saved under `public/uploads/`
+- **Email** → written to `.local-mail/*.eml` instead of being sent (open one in any mail
+  client to see exactly what a recipient would have received)
 
 ## Roles & approval pipelines
 
@@ -106,6 +108,67 @@ The data layer is a single interface (`lib/store/types.ts`) with two implementat
 lives in `lib/auth.ts`; swap `getCurrentUser()` for Supabase Auth / institute SSO to go to
 production. Uploaded documents go to the private `documents` bucket via signed URLs.
 
+## Email notifications
+
+Out of the box, mail is **written to `.local-mail/*.eml`** rather than sent, so the portal
+works with no credentials. To send for real, set two variables in `.env.local`:
+
+```bash
+MAIL_USER=guesthouse@iitpkd.ac.in
+MAIL_APP_PASSWORD=<16-character app password>   # Gmail rejects account passwords for SMTP
+
+# Safety valve: send EVERYTHING here instead of to real requesters and wardens.
+# Set this on every deployment that is not production.
+MAIL_REDIRECT_ALL_TO=you@example.com
+
+# Absolute origin for links inside mail bodies (defaults to http://localhost:3000)
+APP_BASE_URL=https://guesthouse.iitpkd.ac.in
+
+# Required in production: guards the two cron routes below, which send mail to real people
+CRON_SECRET=<a long random string>
+```
+
+`.env.example` documents the rest (host, port, from/reply-to, `MAIL_DRY_RUN`). Defaults are
+Gmail on `smtp.gmail.com:465`. Against Supabase, apply
+`supabase/migrations/00000000000010_email_outbox.sql` first — until then bookings still work
+and only the mail is skipped, with a warning in the server log.
+
+**Check it works:** sign in as `developer@iitpkd.ac.in`, open the developer console →
+**Mail Outbox**, and press *Send a test message*. That page also shows every message the
+portal has queued, what failed and why, and lets you retry one.
+
+### What gets sent
+
+| When | To |
+| --- | --- |
+| A booking is submitted | Requester (acknowledgement) and the first reviewer in its pipeline |
+| A tier approves | Requester, and the Guest House Manager it moved to |
+| A booking is rejected | Requester, with the reviewer's reason verbatim |
+| Rooms are allocated | Requester (room numbers, check-in, what ID to carry); manager + caretaker get a copy |
+| A cancellation is requested or decided | Manager, then the requester |
+| The day before check-in | Requester (rooms, directions, what to bring) |
+| Daily | Each reviewer with a non-empty queue — one digest, not one mail per request |
+| Daily | Manager + caretaker — the day-wise guest house log, per guest house |
+| A request has waited over 48 h | The reviewer, copying the manager |
+
+All mail about one booking arrives as a **single thread**, and nothing is sent inside a
+request: messages are queued in `email_outbox` and delivered by a worker, so a slow or
+broken mail host can never fail a booking or make a requester wait.
+
+### Scheduling
+
+Two routes do the timed work. Point any cron at them with the `CRON_SECRET` as a bearer
+token:
+
+```cron
+*/5 * * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/mail/dispatch
+30 2 * * *   curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/mail/cron
+```
+
+`30 2` UTC is 08:00 IST. The dispatch route is only a safety net — mail normally leaves
+within a second of the action that caused it. Every daily job is idempotent per institute
+calendar day, so a missed run still delivers on the next one and a double run sends nothing.
+
 ## Project map
 
 ```
@@ -113,7 +176,9 @@ lib/types.ts             domain types, enums, labels
 lib/workflow.ts          pipeline rules (initial status, transitions, reviewer scoping)
 lib/booking-schema.ts    zod validation + per-role form rules
 lib/store/               DataStore interface, mock + Supabase implementations, seed data
+lib/mail/                transport seam, templates, outbox worker, digests
 app/actions/             server actions: auth, createBooking, review, allocateRooms
+app/api/mail/            the outbox worker and the daily cron (the only route handlers)
 app/(portal)/            dashboard, book, warden, fa, iar, manager
 components/              booking form, review queues, manager console, room grid
 supabase/                migrations + seed SQL

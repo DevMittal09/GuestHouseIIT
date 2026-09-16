@@ -450,6 +450,174 @@ the consequences and, for guest houses, users and bookings, requires the
 operator to type the name, email or reference id. A stray Enter must not delete
 a guest house and all its rooms.
 
+## Email notifications — `lib/mail/`
+
+Built 16 Sep 2026. Two Administration Section requirements (allocation mail,
+the day-wise log) plus the meeting note about single-threaded email, all of
+which needed the same missing piece.
+
+### The shape
+
+| File | What it is |
+| --- | --- |
+| `types.ts` | `Mailer`, `OutboundMessage`, the `MailEventKey` union, the outbox row |
+| `config.ts` | Env reading, `portalUrl()`, `cronAuthorized()` |
+| `index.ts` | `getMailer()` — picks the transport from the environment |
+| `smtp.ts` | `SmtpMailer` (nodemailer, pooled) |
+| `file.ts` | `FileMailer` → `.local-mail/*.eml`, and `DryRunMailer` |
+| `redirect.ts` | `MAIL_REDIRECT_ALL_TO`, applied at **send** time |
+| `render.ts` | Blocks → HTML **and** plain text, from one description |
+| `templates.ts` | What each mail says. Pure functions, no store access |
+| `thread.ts` | Deterministic per-booking Message-ID + subject prefix |
+| `recipients.ts` | Who gets told — via `canReview()`, never a re-derived rule |
+| `notify.ts` | `notify*()` per workflow event: queue, then `after()` a dispatch |
+| `dispatch.ts` | The worker: claim → send → settle, with backoff |
+| `digest.ts` | The scheduled jobs (digests, reminders, desk report, escalations) |
+
+Transport is chosen the way `lib/store/index.ts` chooses a backend:
+
+| Condition | Transport | Mail goes to |
+| --- | --- | --- |
+| `MAIL_DRY_RUN=true` | `DryRunMailer` | nowhere (one log line) |
+| `MAIL_USER` + `MAIL_APP_PASSWORD` | `SmtpMailer` | the SMTP host |
+| otherwise | `FileMailer` | `.local-mail/*.eml` |
+
+The file mailer exists for the same reason `MockStore` does: a first run needs
+no credentials and no network. Open an `.eml` in any mail client to see exactly
+what a recipient would have got.
+
+### Nothing sends inside a server action
+
+Actions **queue**; `lib/mail/dispatch.ts` sends. Three reasons, and the third
+is the one that bites silently:
+
+1. A slow SMTP host would add its latency to every booking submission.
+2. A failed send must not fail a booking that is already stored.
+3. On a serverless host, un-awaited work is frozen the moment the function
+   responds — mail started and not awaited simply vanishes.
+
+So `notify.ts` writes to `email_outbox` (migration 10) and schedules a dispatch
+with `after()` from `next/server`, which runs once the response is out. The
+cron route is the safety net for anything queued while SMTP was down.
+
+**Every `notify*()` swallows its own errors.** If migration 10 is not applied,
+or a profile has no address, the booking still succeeds and the failure is a
+log line. A notification is worth less than the request it describes.
+
+### The hooks are in the actions, not in `updateBookingStatus()`
+
+Tempting, and wrong. The store method sees a status pair; only the action knows
+*why* — which reason the reviewer typed, which rooms the manager picked,
+whether a cancellation was approved or declined. Hooking the store would mean
+reconstructing intent from a status transition, and would also mail on the
+developer console's **force-status override**, which is a repair tool: a
+developer fixing a bad row should not send a parent a confirmation.
+
+### What is sent
+
+| Event | To | Carries |
+| --- | --- | --- |
+| Submitted | Requester | Reference, summary, "nothing needed yet" |
+| Submitted | First-tier reviewer | Who asked, a link to their queue |
+| Tier approved | Requester | Progress, what happens next |
+| Tier approved | Next tier (manager) | Who forwarded it |
+| Rejected | Requester | **The reason, verbatim** |
+| Rooms allocated | Requester | Room numbers, check-in, what ID to carry |
+| Rooms allocated | Manager + caretaker | Copy for the desk register |
+| Cancellation requested | Manager | Reason; rooms stay held until they decide |
+| Cancellation decided | Requester | Outcome, and that the booking stands if declined |
+| Cancelled | Requester (unless they did it) + desk if rooms were held | Reason |
+| Day before check-in | Requester | Rooms, directions, what to bring |
+| Daily | Each reviewer with a non-empty queue | One digest, not one mail per request |
+| Daily | Manager + caretaker | Per guest house: the day-wise log |
+| Pending > 48 h | Reviewer, cc manager | Escalation nudge |
+
+**Digests matter more than they look.** Per-request mail to a warden during
+fest week trains them to filter the portal into spam, and then the portal stops
+working. The manager is deliberately *not* digested — their pending
+allocations are a section of the daily desk report, and two mails listing the
+same queue is how a report stops being read.
+
+### Recipients come from `canReview()`
+
+`reviewersFor()` filters profiles through the very predicate that decides
+whether their button works. Re-deriving "wardens of this hostel" in the mail
+layer would be a second copy of the scoping rule, and the two would drift — the
+Malhar warden would start getting mail about Saveri students while still,
+correctly, being unable to act on them. `canReview` also refuses
+`reviewer.id === requester.id`, so the IAR Office is never asked to approve its
+own booking.
+
+### One thread per booking
+
+From the meeting notes: *"Email — try to send in a single thread instead of a
+standalone email."* Two things must line up, and mail clients need **both**:
+
+1. `threadRootFor(bookingId)` is a deterministic `Message-ID`. The requester's
+   acknowledgement claims it; every later message sets `In-Reply-To` and
+   `References` to it. Derived from the booking id, so it needs no storage.
+2. Every subject leads with the reference — `[IITPKD-GH-2026-AB12C] …`. Gmail
+   splits a thread when the subject changes, and it also means searching a
+   mailbox for a reference finds every message about it.
+
+### HTML and text from one description
+
+`render.ts` takes a list of blocks (`paragraph`, `facts`, `callout`, `table`,
+`list`, `button`, `note`) and renders both bodies. A template that wrote the
+two separately would drift until the text part was wrong — and the text part is
+what every HTML-refusing client and every screen reader reads.
+
+Email constraints baked into the markup: tables for layout, inline styles only
+(Gmail strips `<style>`), no external images (blocked by default, and the
+portal may be on localhost). The header uses dark brown on amber rather than
+the site's white-on-amber, which fails WCAG AA — the fix `AGENTS.md`
+recommends, applied here from the start.
+
+**Never put an ID document link in a mail body.** Reviewer mail says the
+documents are in the portal and links to the page.
+
+### `MAIL_REDIRECT_ALL_TO` is applied at send time
+
+The outbox always records who the message was genuinely for; the redirect
+rewrites the envelope in `dispatch.ts`. So flipping the variable changes where
+mail goes without rewriting history, and the console's outbox still answers
+"was the warden *supposed* to get this?". The redirected copy carries an
+`X-Original-To` header and a banner in the body, because the header is exactly
+what nobody looks at when wondering why a test mailbox is full of other
+people's bookings.
+
+Set it on every non-production deployment. Without it, one person pointing a
+staging server at real data mails a real parent.
+
+### Idempotency is the whole safety story
+
+`email_outbox.idempotency_key` is unique, and `enqueueEmails` inserts with
+`on conflict do nothing`. The key is
+`event:booking:stamp:recipients` — the stamp being the booking's `updated_at`
+for a transition, or the institute calendar date for a digest. That gives:
+
+- a retried server action queues nothing new;
+- a digest is once per reviewer per day, so **the cron schedule is advisory** —
+  a missed 8am run still delivers at 9am and a second run at 9:05 does nothing;
+- two dispatchers never send the same message, because claiming is a single
+  `for update skip locked` statement (`claim_queued_emails`, migration 10).
+
+### Scheduling
+
+`/api/mail/dispatch` drains the outbox; `/api/mail/cron` runs the daily jobs
+and then drains. Both accept GET and POST (cron runners disagree), and both are
+guarded by `CRON_SECRET` — **required in production**, optional outside it so
+`npm run dev` stays usable. 8am IST is `30 2 * * *` in UTC.
+
+### The Mail Outbox console
+
+`/admin/mail` (developer only, behind the console lock) lists the queue, what
+failed and why, and offers Retry, "Send queued now" and "Send a test message".
+The test goes through the queue rather than calling the transport directly, so
+a pass proves the whole path and not merely that a password was accepted.
+Bodies are deliberately not returned to the client: the question there is
+delivery, and the content is the booking, one click away in All Bookings.
+
 ## Branding
 
 Palette and logo are taken from https://dashboard.iitpkd.ac.in/ — primary amber

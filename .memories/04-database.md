@@ -17,6 +17,7 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 | `form_configs` | One row per requester role: `role` (PK), `config` jsonb, `updated_at`. |
 | `room_holds` | Which room each booking occupies, and when. See below — this is the interesting one. |
 | `app_settings` | Runtime key/value. Currently one key: the developer console password hash. **Service-role only — no `authenticated` policy**, because a developer policy would expose the hash to anyone who can set their own role. |
+| `email_outbox` | The notification queue (migration 10). One row per message: recipients, rendered HTML and text, status, attempts, backoff. **Service-role only, like `app_settings`** — the rendered bodies quote guest names, purposes of visit and rejection reasons, which makes this table more sensitive than the bookings it describes. |
 
 ### `bookings` columns worth knowing
 
@@ -166,6 +167,46 @@ grid is read by every role, so the existing `can_access_booking(b)` helper is
 *too narrow* for it — availability needs a policy exposing occupancy without
 booking detail, or it stays a service-role read behind the action's own check.
 
+## `email_outbox` — the notification queue
+
+Added by migration 10 (16 Sep 2026). Additive and defaulted; nothing existing
+reads it, so it is safe to apply at any time and safe to re-run.
+
+**Why a table rather than sending in the action.** Sending inline would make
+the requester wait for SMTP, would raise the question of whether a failed send
+fails a booking, and on a serverless host would silently lose any un-awaited
+send. It also gives you the thing you want at 11pm during a pilot: a table you
+can query to answer *"did the warden actually get told?"*.
+
+Two pieces do the real work:
+
+- **`idempotency_key text not null unique`.** `enqueueEmails` inserts with
+  `on conflict do nothing`, so a retried server action — or two dispatchers
+  racing — cannot mail the same parent twice. The key carries the booking's
+  `updated_at` for a transition and the institute calendar date for a digest,
+  which is also what makes the cron schedule advisory rather than exact.
+- **`claim_queued_emails(p_limit int, p_stale_after interval)`.** Selects due
+  rows `for update skip locked` and flips them to `SENDING` in one statement.
+  Doing this as select-then-update over PostgREST would be exactly the
+  check-then-act race that `room_holds` exists to avoid. Rows stuck in
+  `SENDING` longer than `p_stale_after` are reclaimed, so a worker that dies
+  mid-send does not strand them.
+
+`booking_id` is `on delete set null`, not `cascade`: the mail really was sent,
+so the record of it must outlive a booking a developer later hard-deletes. The
+mock store emulates this in `deleteBooking`.
+
+Statuses are `QUEUED | SENDING | SENT | FAILED` (`email_status` enum). A retry
+is **`QUEUED` with `scheduled_for` pushed forward**, not `FAILED`; only giving
+up after five attempts is `FAILED`. `event_key` is plain `text`, not an enum,
+so adding a notification kind needs no migration — the union in
+`lib/mail/types.ts` is where it is constrained.
+
+Verified in a throwaway `postgres:16-alpine` alongside migrations 1–9: the
+unique key, the claim's exclusivity, stale reclaim, the `scheduled_for` gate,
+the row limit, the `updated_at` trigger, the `set null` FK, and that re-running
+the migration keeps existing rows.
+
 ## `form_configs` shape changes
 
 `form_configs.config` is jsonb, so new keys need no migration. Two were added
@@ -211,6 +252,12 @@ Current migrations:
    changes the column default to `[]` and replaces migration 6's shape check).
    Converts data, but nothing is lost: an old answer becomes the plan it
    implied. Safe to re-run.
+10. `00000000000010_email_outbox.sql` (`email_outbox` + `email_status` enum +
+   `claim_queued_emails()`). Additive, defaulted and safe to re-run. **Until it
+   is applied, queueing throws** — every `notify*()` in `lib/mail/notify.ts`
+   catches it and logs, so bookings and approvals still work and only the mail
+   is missing. `/api/mail/dispatch` and `/api/mail/cron` return a 500 naming
+   this file.
 
 > **Migrations 6, 7 and 8 must be applied before bookings can be created against
 > Supabase.** The insert names `meals` and `has_infant`, and until migration 8

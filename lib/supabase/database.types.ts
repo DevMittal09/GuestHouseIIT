@@ -8,6 +8,7 @@ import type {
   Room,
 } from "@/lib/types";
 import type { RoleFormConfig } from "@/lib/form-config";
+import type { EmailMessage } from "@/lib/mail/types";
 
 type FormConfigRow = {
   role: Role;
@@ -34,6 +35,13 @@ type AppSettingRow = {
   value: string;
   updated_at: string;
 };
+
+/**
+ * `email_outbox` (migration 10). `event_key` is a plain text column rather
+ * than an enum, so a new notification kind needs no migration — the union in
+ * `lib/mail/types.ts` is where it is constrained.
+ */
+type EmailOutboxRow = Omit<EmailMessage, "event_key"> & { event_key: string };
 
 export interface Database {
   public: {
@@ -89,6 +97,25 @@ export interface Database {
         Update: Partial<AppSettingRow>;
         Relationships: [];
       };
+      email_outbox: {
+        Row: EmailOutboxRow;
+        Insert: Insertable<
+          EmailOutboxRow,
+          | "id"
+          | "cc_emails"
+          | "thread_root"
+          | "is_thread_root"
+          | "status"
+          | "attempts"
+          | "last_error"
+          | "scheduled_for"
+          | "sent_at"
+          | "created_at"
+          | "updated_at"
+        >;
+        Update: Partial<EmailOutboxRow>;
+        Relationships: [];
+      };
       form_configs: {
         Row: FormConfigRow;
         Insert: Insertable<FormConfigRow, "updated_at">;
@@ -122,6 +149,18 @@ export interface Database {
           p_check_out: string;
         };
         Returns: undefined;
+      };
+      /**
+       * Claims due outbox rows with `for update skip locked` (migration 10),
+       * so two dispatchers cannot send the same message.
+       */
+      claim_queued_emails: {
+        Args: {
+          p_limit: number;
+          /** A Postgres interval literal, e.g. `"300 seconds"`. */
+          p_stale_after: string;
+        };
+        Returns: EmailOutboxRow[];
       };
     };
     Enums: Record<string, never>;

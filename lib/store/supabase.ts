@@ -14,6 +14,14 @@ import { RoomClashError } from "@/lib/types";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
+import type {
+  EmailMessage,
+  EmailOutboxFilter,
+  EmailSettlement,
+  MailStatus,
+  NewEmailInput,
+} from "@/lib/mail/types";
+import { MAIL_STATUSES } from "@/lib/mail/types";
 import { normalizeMeals } from "@/lib/meals";
 import { getSupabase } from "@/lib/supabase/client";
 import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
@@ -42,6 +50,9 @@ type BookingRow = Booking & {
 
 /** A room hold joined to its room, for `hydrate`. */
 type HoldRow = { booking_id: string; room_id: string; rooms: Room | null };
+
+/** The `email_outbox` row as PostgREST returns it: `event_key` is plain text. */
+type EmailOutboxRow = Omit<EmailMessage, "event_key"> & { event_key: string };
 
 /** A room hold joined to its booking, for `listRoomOccupancy`. */
 type OccupancyRow = {
@@ -579,6 +590,120 @@ export class SupabaseStore implements DataStore {
     const { error } = await this.db.from("bookings").delete().eq("id", id);
     if (error) throw error;
   }
+
+  // ---- email outbox ------------------------------------------------
+
+  async enqueueEmails(inputs: NewEmailInput[]): Promise<number> {
+    if (inputs.length === 0) return 0;
+    // `ignoreDuplicates` makes this `on conflict do nothing` against the
+    // unique index on idempotency_key, so a retried action re-queues nothing.
+    // The returned rows are the ones that were actually new.
+    const { data, error } = await this.db
+      .from("email_outbox")
+      .upsert(
+        inputs.map((input) => ({
+          booking_id: input.booking_id,
+          event_key: input.event_key,
+          idempotency_key: input.idempotency_key,
+          to_emails: input.to_emails,
+          cc_emails: input.cc_emails,
+          subject: input.subject,
+          body_html: input.body_html,
+          body_text: input.body_text,
+          thread_root: input.thread_root,
+          is_thread_root: input.is_thread_root,
+          ...(input.scheduled_for ? { scheduled_for: input.scheduled_for } : {}),
+        })),
+        { onConflict: "idempotency_key", ignoreDuplicates: true }
+      )
+      .select("id");
+    if (error) throw error;
+    return data?.length ?? 0;
+  }
+
+  async claimQueuedEmails(limit: number, staleAfterMs: number): Promise<EmailMessage[]> {
+    // One statement, `for update skip locked` inside: two workers running at
+    // once get disjoint batches instead of both sending the same message.
+    // Doing this as select-then-update over PostgREST would be exactly the
+    // check-then-act race that `room_holds` exists to avoid.
+    const { data, error } = await this.db.rpc("claim_queued_emails", {
+      p_limit: limit,
+      p_stale_after: `${Math.max(1, Math.round(staleAfterMs / 1000))} seconds`,
+    });
+    if (error) throw error;
+    return (data ?? []).map(hydrateEmail);
+  }
+
+  async settleEmail(id: string, result: EmailSettlement): Promise<void> {
+    const patch = result.ok
+      ? { status: "SENT" as MailStatus, sent_at: new Date().toISOString(), last_error: null }
+      : {
+          // A retry is still QUEUED, due later; only giving up is FAILED.
+          status: (result.retryAt ? "QUEUED" : "FAILED") as MailStatus,
+          last_error: result.error,
+          ...(result.retryAt ? { scheduled_for: result.retryAt } : {}),
+        };
+    const { error } = await this.db.from("email_outbox").update(patch).eq("id", id);
+    if (error) throw error;
+  }
+
+  async listEmails(filter: EmailOutboxFilter): Promise<EmailMessage[]> {
+    let query = this.db
+      .from("email_outbox")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(filter.limit ?? 100);
+    if (filter.status) query = query.eq("status", filter.status);
+    if (filter.bookingId) query = query.eq("booking_id", filter.bookingId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? []).map(hydrateEmail);
+  }
+
+  async countEmailsByStatus(): Promise<Record<MailStatus, number>> {
+    const counts = Object.fromEntries(MAIL_STATUSES.map((s) => [s, 0])) as Record<MailStatus, number>;
+    // `head: true` with an exact count returns the number and no rows, so this
+    // stays cheap however large the outbox gets.
+    await Promise.all(
+      MAIL_STATUSES.map(async (status) => {
+        const { count, error } = await this.db
+          .from("email_outbox")
+          .select("id", { count: "exact", head: true })
+          .eq("status", status);
+        if (error) throw error;
+        counts[status] = count ?? 0;
+      })
+    );
+    return counts;
+  }
+
+  async requeueEmail(id: string): Promise<void> {
+    const { error } = await this.db
+      .from("email_outbox")
+      .update({
+        status: "QUEUED" as MailStatus,
+        attempts: 0,
+        last_error: null,
+        scheduled_for: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) throw error;
+  }
+}
+
+/**
+ * Fill in the defaults Postgres applies, so `EmailMessage` is the same shape
+ * from either backend. `cc_emails` defaults to `{}` and `thread_root` is
+ * nullable, but a row written before those had values would otherwise reach
+ * the dispatcher as undefined.
+ */
+function hydrateEmail(row: EmailOutboxRow): EmailMessage {
+  return {
+    ...row,
+    cc_emails: row.cc_emails ?? [],
+    to_emails: row.to_emails ?? [],
+    event_key: row.event_key as EmailMessage["event_key"],
+  };
 }
 
 function makeReference(): string {

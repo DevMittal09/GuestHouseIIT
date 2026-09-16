@@ -44,3 +44,6 @@ next-env.d.ts
 # local mock data layer
 .local-db.json
 /public/uploads/
+
+# mail written to disk by the FileMailer when no SMTP credentials are set
+.local-mail/

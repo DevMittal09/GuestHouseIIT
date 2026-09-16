@@ -15,6 +15,10 @@ import {
   validatePasswordChoice,
 } from "@/lib/admin-lock";
 import type { RoleFormConfig } from "@/lib/form-config";
+import { mailConfig } from "@/lib/mail/config";
+import { dispatchOutbox, drainOutbox } from "@/lib/mail/dispatch";
+import { queueMessages } from "@/lib/mail/notify";
+import type { MailStatus } from "@/lib/mail/types";
 import { getStore } from "@/lib/store";
 import type { BookingStatus, Profile, Role, RoomType } from "@/lib/types";
 import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
@@ -391,6 +395,171 @@ export async function adminSetBookingStatusAction(
         remarks: remark.trim(),
       }
     );
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---------------------------------------------------------------- mail outbox
+
+/**
+ * The mail log, for the developer console.
+ *
+ * Developer-only, like everything else in this file — rendered bodies quote
+ * guest names, purposes of visit and rejection reasons verbatim, so the outbox
+ * is more sensitive than the bookings it describes.
+ *
+ * Bodies are deliberately **not** returned: the list answers "was this sent,
+ * to whom, and did it fail", which needs a subject and a status, not 20 KB of
+ * HTML per row.
+ */
+export async function listMailOutbox(
+  status?: MailStatus
+): Promise<
+  | { ok: true; rows: MailOutboxSummary[]; counts: Record<MailStatus, number>; transport: string }
+  | { ok: false; error: string }
+> {
+  try {
+    await requireDeveloper();
+    const store = getStore();
+    const [rows, counts] = await Promise.all([
+      store.listEmails({ status, limit: 200 }),
+      store.countEmailsByStatus(),
+    ]);
+    return {
+      ok: true,
+      counts,
+      transport: mailConfig().transport,
+      rows: rows.map((row) => ({
+        id: row.id,
+        booking_id: row.booking_id,
+        event_key: row.event_key,
+        to_emails: row.to_emails,
+        cc_emails: row.cc_emails,
+        subject: row.subject,
+        status: row.status,
+        attempts: row.attempts,
+        last_error: row.last_error,
+        scheduled_for: row.scheduled_for,
+        sent_at: row.sent_at,
+        created_at: row.created_at,
+      })),
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
+  }
+}
+
+export type MailOutboxSummary = {
+  id: string;
+  booking_id: string | null;
+  event_key: string;
+  to_emails: string[];
+  cc_emails: string[];
+  subject: string;
+  status: MailStatus;
+  attempts: number;
+  last_error: string | null;
+  scheduled_for: string;
+  sent_at: string | null;
+  created_at: string;
+};
+
+/** Put a failed message back in the queue and try it immediately. */
+export async function retryMailMessage(id: string): Promise<ActionResult> {
+  try {
+    await requireDeveloper();
+    await getStore().requeueEmail(id);
+    await dispatchOutbox();
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Send whatever is queued now, rather than waiting for the cron. */
+export async function flushMailOutbox(): Promise<
+  { ok: true; sent: number; failed: number } | { ok: false; error: string }
+> {
+  try {
+    await requireDeveloper();
+    const result = await drainOutbox();
+    revalidatePath("/", "layout");
+    return { ok: true, sent: result.sent, failed: result.failed };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
+  }
+}
+
+/**
+ * Prove the SMTP credentials and the route before trusting them.
+ *
+ * Goes through the queue like everything else rather than calling the
+ * transport directly, so a successful test proves the *whole* path —
+ * enqueue, claim, render, send — and not merely that a password is accepted.
+ */
+export async function sendTestEmail(): Promise<ActionResult> {
+  try {
+    const dev = await requireDeveloper();
+    const config = mailConfig();
+    const now = new Date();
+
+    const queued = await queueMessages([
+      {
+        eventKey: "desk.daily_report",
+        booking: null,
+        to: [dev.email],
+        subjectText: "Guest house portal — mail test",
+        threadRoot: null,
+        // The instant, so a second test is a second message rather than a
+        // duplicate the idempotency key swallows.
+        stamp: `test:${now.toISOString()}`,
+        doc: {
+          heading: "Mail is configured correctly",
+          preheader: `Test message sent via ${config.transport}.`,
+          blocks: [
+            {
+              kind: "paragraph",
+              text: "If you are reading this, the portal can queue, render and deliver mail. This message went through the outbox exactly like a real notification.",
+            },
+            {
+              kind: "facts",
+              rows: [
+                ["Transport", config.transport],
+                ["SMTP host", `${config.host}:${config.port}`],
+                ["From", config.from],
+                ["Reply-To", config.replyTo],
+                ["Redirecting all mail to", config.redirectAllTo ?? "(not set — real recipients)"],
+                ["Portal base URL", config.baseUrl],
+                ["Requested by", `${dev.full_name} <${dev.email}>`],
+              ],
+            },
+            ...(config.redirectAllTo
+              ? []
+              : [
+                  {
+                    kind: "callout" as const,
+                    tone: "warning" as const,
+                    title: "No redirect is set",
+                    lines: [
+                      "MAIL_REDIRECT_ALL_TO is empty, so notifications go to real requesters, wardens and parents. That is correct for production and wrong for anything else.",
+                    ],
+                  },
+                ]),
+          ],
+        },
+      },
+    ]);
+
+    if (queued === 0) return { ok: false, error: "Could not queue the test message" };
+    // Queued messages normally leave via `after()`; here the developer is
+    // waiting on the answer, so send within the action.
+    const result = await dispatchOutbox();
+    if (result.sent === 0 && result.failed > 0) {
+      const [row] = await getStore().listEmails({ status: "FAILED", limit: 1 });
+      return { ok: false, error: row?.last_error ?? "The test message could not be sent" };
+    }
     return done();
   } catch (e) {
     return fail(e);

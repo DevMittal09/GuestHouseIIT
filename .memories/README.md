@@ -41,7 +41,8 @@ UI.
 
 Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind v4 ·
 shadcn/ui (radix base, "nova" preset) · zod 4 · react-hook-form · Supabase
-(optional) · date-fns · jsPDF. **No test framework is installed** — see §9.
+(optional) · date-fns · jsPDF · nodemailer. **No test framework is installed**
+— see §9.
 
 ```
 app/
@@ -55,9 +56,10 @@ app/
     history/               booking history (requesters) / approval log (all roles)
     manager/               room allocation console
     admin/                 developer superadmin console
-  actions/                 every mutation (server actions; there are no API routes)
+  actions/                 every mutation (server actions)
+  api/mail/                the only route handlers: the outbox worker and the daily cron
 components/                feature components + components/ui primitives
-lib/                       domain logic: types, workflow, form config, occupancy, store
+lib/                       domain logic: types, workflow, form config, occupancy, store, mail
 supabase/                  migrations + seed SQL
 ```
 
@@ -358,10 +360,19 @@ can only narrow, never widen. Do not reorder that spread.
 | `/history` | **every role** | Booking history / approval log, CSV + PDF export |
 | `/manager` | gh_manager | Cinema-style allocation grid, today's checkouts, lifecycle controls |
 | `/caretaker` | gh_caretaker | Reception desk: today's checkouts, occupants, upcoming, mark in/out |
-| `/admin/*` | developer | Users, guest houses & rooms (including which serve meals), Form Builder, all bookings |
+| `/admin/*` | developer | Users, guest houses & rooms (including which serve meals), Form Builder, all bookings, mail outbox |
+| `/api/mail/dispatch` | cron (`CRON_SECRET`) | Drains the email outbox |
+| `/api/mail/cron` | cron (`CRON_SECRET`) | Daily digests, check-in reminders, the day-wise guest house log, 48-hour escalations |
 
-Queue pages poll every 5 s (`components/auto-refresh.tsx`); `/history` and
-`/availability` are excluded via `NO_POLL_PREFIXES`.
+Queue pages poll every 5 s (`components/auto-refresh.tsx`); `/history`,
+`/availability` and `/admin/mail` are excluded via `NO_POLL_PREFIXES` — each
+fetches client-side and has its own Refresh button.
+
+**Email.** Every workflow transition sends mail, queued through `email_outbox`
+and delivered by a worker so a slow or broken mail host can never fail a
+booking. One thread per booking; reviewers get a daily digest rather than one
+mail per request. `lib/mail/` — see
+[03-implementation.md](03-implementation.md) and the decision log.
 
 ## 6. Privacy and access posture
 

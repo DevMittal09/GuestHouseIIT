@@ -20,6 +20,14 @@ import { normalizeMeals } from "@/lib/meals";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
+import type {
+  EmailMessage,
+  EmailOutboxFilter,
+  EmailSettlement,
+  MailStatus,
+  NewEmailInput,
+} from "@/lib/mail/types";
+import { MAIL_STATUSES } from "@/lib/mail/types";
 import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
 import type { DataStore, NewLogInput, NewProfileInput, StatusUpdate } from "./types";
 import {
@@ -44,6 +52,8 @@ interface Db {
   room_holds: RoomHold[];
   /** Runtime settings, e.g. the developer console password hash. */
   app_settings?: Record<string, string>;
+  /** Queued notifications; see `lib/mail/dispatch.ts`. */
+  email_outbox?: EmailMessage[];
 }
 
 const DB_PATH = path.join(process.cwd(), ".local-db.json");
@@ -56,6 +66,12 @@ function loadDb(): Db {
     let dirty = false;
     if (!db.form_configs) {
       db.form_configs = [];
+      dirty = true;
+    }
+    // Migration 10's counterpart: databases written before notifications
+    // existed simply have no outbox yet.
+    if (!db.email_outbox) {
+      db.email_outbox = [];
       dirty = true;
     }
     if (!db.room_holds) {
@@ -136,6 +152,7 @@ function loadDb(): Db {
     booking_logs: seedLogs,
     form_configs: [],
     room_holds: seedRoomHolds,
+    email_outbox: [],
   };
   saveDb(db);
   return db;
@@ -555,6 +572,117 @@ export class MockStore implements DataStore {
     db.booking_logs = db.booking_logs.filter((l) => l.booking_id !== id);
     // Matches `on delete cascade` on room_holds.booking_id.
     db.room_holds = db.room_holds.filter((h) => h.booking_id !== id);
+    // Matches `on delete set null` on email_outbox.booking_id: the mail was
+    // still sent, so the record of it outlives the booking.
+    for (const mail of db.email_outbox ?? []) {
+      if (mail.booking_id === id) mail.booking_id = null;
+    }
+    saveDb(db);
+  }
+
+  // ---- email outbox ------------------------------------------------
+
+  async enqueueEmails(inputs: NewEmailInput[]): Promise<number> {
+    if (inputs.length === 0) return 0;
+    const db = loadDb();
+    const outbox = (db.email_outbox ??= []);
+    const seen = new Set(outbox.map((m) => m.idempotency_key));
+    const nowIso = new Date().toISOString();
+    let added = 0;
+    for (const input of inputs) {
+      // The mock's stand-in for the unique index on idempotency_key.
+      if (seen.has(input.idempotency_key)) continue;
+      seen.add(input.idempotency_key);
+      outbox.push({
+        ...input,
+        id: randomUUID(),
+        status: "QUEUED",
+        attempts: 0,
+        last_error: null,
+        scheduled_for: input.scheduled_for ?? nowIso,
+        sent_at: null,
+        created_at: nowIso,
+        updated_at: nowIso,
+      });
+      added++;
+    }
+    if (added > 0) saveDb(db);
+    return added;
+  }
+
+  async claimQueuedEmails(limit: number, staleAfterMs: number): Promise<EmailMessage[]> {
+    const db = loadDb();
+    const outbox = (db.email_outbox ??= []);
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
+    // Single-threaded and `saveDb` is synchronous, so selecting and marking
+    // here is genuinely atomic — the same reason `assertNoClash` is safe.
+    const claimed = outbox
+      .filter((m) => {
+        if (new Date(m.scheduled_for).getTime() > now) return false;
+        if (m.status === "QUEUED") return true;
+        // Reclaim a row whose worker died mid-send.
+        return m.status === "SENDING" && now - new Date(m.updated_at).getTime() > staleAfterMs;
+      })
+      .sort((a, b) => a.scheduled_for.localeCompare(b.scheduled_for))
+      .slice(0, limit);
+    for (const mail of claimed) {
+      mail.status = "SENDING";
+      mail.attempts += 1;
+      mail.updated_at = nowIso;
+    }
+    if (claimed.length > 0) saveDb(db);
+    // Copies, so a caller mutating what it got cannot corrupt the store.
+    return claimed.map((m) => ({ ...m }));
+  }
+
+  async settleEmail(id: string, result: EmailSettlement): Promise<void> {
+    const db = loadDb();
+    const mail = (db.email_outbox ??= []).find((m) => m.id === id);
+    if (!mail) return;
+    const nowIso = new Date().toISOString();
+    if (result.ok) {
+      mail.status = "SENT";
+      mail.sent_at = nowIso;
+      mail.last_error = null;
+    } else {
+      // A retry is still QUEUED, due later; only giving up is FAILED.
+      mail.status = result.retryAt ? "QUEUED" : "FAILED";
+      mail.last_error = result.error;
+      if (result.retryAt) mail.scheduled_for = result.retryAt;
+    }
+    mail.updated_at = nowIso;
+    saveDb(db);
+  }
+
+  async listEmails(filter: EmailOutboxFilter): Promise<EmailMessage[]> {
+    const outbox = loadDb().email_outbox ?? [];
+    return outbox
+      .filter((m) => {
+        if (filter.status && m.status !== filter.status) return false;
+        if (filter.bookingId && m.booking_id !== filter.bookingId) return false;
+        return true;
+      })
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, filter.limit ?? 100);
+  }
+
+  async countEmailsByStatus(): Promise<Record<MailStatus, number>> {
+    const outbox = loadDb().email_outbox ?? [];
+    const counts = Object.fromEntries(MAIL_STATUSES.map((s) => [s, 0])) as Record<MailStatus, number>;
+    for (const mail of outbox) counts[mail.status] += 1;
+    return counts;
+  }
+
+  async requeueEmail(id: string): Promise<void> {
+    const db = loadDb();
+    const mail = (db.email_outbox ??= []).find((m) => m.id === id);
+    if (!mail) return;
+    mail.status = "QUEUED";
+    mail.attempts = 0;
+    mail.last_error = null;
+    mail.scheduled_for = new Date().toISOString();
+    mail.updated_at = mail.scheduled_for;
     saveDb(db);
   }
 }

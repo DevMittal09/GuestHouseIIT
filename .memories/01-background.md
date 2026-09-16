@@ -66,15 +66,16 @@ of **10 Sep 2026**:
 | --- | --- | --- | --- |
 | 1 | Parents may stay freely; siblings and grandparents only when a father or mother is also staying | **Done** | `parent_relationships` / `dependent_relationships` on `RoleFormConfig`, enforced by `parentDependencyError()` — see [03-implementation.md](03-implementation.md) |
 | 2 | Room availability grid for all users, showing room details, booking periods and vacant/occupied status | **Done** | `/availability` + `lib/availability.ts` + `app/actions/availability.ts` |
-| 3 | Day-wise guest house log / occupancy report, emailed automatically to the Guest House Manager | **Not built** | No mail transport exists in the project at all. The manual counterpart — `exportHistoryPdf` + `lib/report-pdf.ts` — is in place, so the report *content* is solved and only scheduling + delivery are missing. See [08-roadmap.md](08-roadmap.md) §2 |
+| 3 | Day-wise guest house log / occupancy report, emailed automatically to the Guest House Manager | **Done** | `queueDailyDeskReports()` in `lib/mail/digest.ts`, driven by `/api/mail/cron`. One report per guest house per day to the manager *and* the caretaker: arrivals, departures, who is in house, stays past check-out still holding rooms, and what awaits allocation. Rendered as HTML tables, not a PDF, because `lib/report-pdf.ts` is client-side (jsPDF) and there is no browser in a cron job |
 | 4 | Bookings only within a one-month advance window | **Done** | `latestCheckIn()` / `isAdvanceWindowExempt()` in `lib/workflow.ts`, applied by `bookingPayloadSchema` on client and server |
-| 5 | Automatic email notification to stakeholders after room allocation | **Not built** | Same gap as #3 — `allocateRooms()` is the hook point |
+| 5 | Automatic email notification to stakeholders after room allocation | **Done** | `notifyRoomsAllocated()`, called from `allocateRooms()`. The requester gets their room numbers, the check-in time and what ID to carry; the manager and caretaker get a copy for the desk register |
 
-> **The two open items are one piece of work, not two.** Both need a mail
-> transport (SMTP relay or a transactional provider) plus a place to run
-> scheduled jobs. Nothing else in the codebase blocks them: `allocateRooms()`
-> and `updateBookingStatus()` are already the single funnels every transition
-> passes through.
+> **The two were one piece of work, and were built as one** on 16 Sep 2026.
+> Both needed the same missing thing — a mail transport plus somewhere to run
+> scheduled jobs — so `lib/mail/` provides both: a `Mailer` seam with SMTP /
+> file / dry-run implementations, an `email_outbox` queue (migration 10) that
+> keeps a slow or broken mail host from ever failing a booking, and two cron
+> routes. See the mail section in [03-implementation.md](03-implementation.md).
 
 ## Meeting notes — 15 Sep 2026
 
@@ -111,7 +112,7 @@ The remainder of the same meeting notes. Status as of **16 Sep 2026**:
 | ±4 hour buffer on bookings | Not started | Would change the overlap rule, so it touches `room_holds.during` and every occupancy query at once |
 | HOD approval for a faculty member's booking; debitable heads (dept / project / personal fund) | Not started | The routing hook is `initialStatusFor()`, which takes only the role today — its doc comment marks where the booking type becomes an argument |
 | Dining/lunch booking at the guest house with debitable heads | Not started | Distinct from the per-day meal plan, which is about head counts, not billing |
-| Email in a single thread rather than standalone messages | Not started | Still blocked on there being no mail transport at all — see [08-roadmap.md](08-roadmap.md) §2 |
+| Email in a single thread rather than standalone messages | **Done** | `lib/mail/thread.ts`. Every message about a booking references a deterministic root Message-ID derived from the booking id, and every subject leads with the booking reference — mail clients need *both* to group a thread |
 | Documentation for every booking workflow | Not started | |
 
 ## Scope decisions made during the build
@@ -124,8 +125,9 @@ The remainder of the same meeting notes. Status as of **16 Sep 2026**:
 - **Authentication was deliberately deferred.** See
   [06-decisions.md](06-decisions.md) — the app uses a mock persona picker with a
   single, well-marked swap point so institute SSO can be dropped in later.
-- **Notifications are not built.** Email/SMS on status change is the most
-  obvious next feature; see [08-roadmap.md](08-roadmap.md).
+- **Email notifications are built; SMS is not.** `lib/mail/` covers every
+  workflow transition plus daily digests, reminders and escalations. SMS would
+  be a second `Mailer`-shaped seam and has not been asked for.
 
 ## Status
 

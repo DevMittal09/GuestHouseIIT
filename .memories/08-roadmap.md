@@ -9,34 +9,37 @@ remove the persona picker from `app/page.tsx`, and switch request-scoped databas
 access to the anon key so RLS becomes the real boundary. Everything else in the
 app already re-checks authorization server-side, so this change is contained.
 
-## 2. Notifications and the day-wise occupancy report (both asked for)
+## 2. ~~Notifications and the day-wise occupancy report~~ ✅ Done
 
-**Still the largest open gap, and it is two Administration Section requirements,
-not a nice-to-have** — see the status table in
-[01-background.md](01-background.md#follow-up-requirements-from-the-administration-section).
+Shipped 16 Sep 2026 in `lib/mail/`, essentially as the sketch below proposed —
+one `Mailer` seam mirroring how `lib/auth.ts` is the swap point for identity,
+an env-configured transport, and a cron route. Differences from the plan, all
+deliberate:
 
-There is **no mail transport anywhere in the project**: no `nodemailer`, no
-provider SDK, no SMTP settings in `.env.example`. That single missing piece
-blocks both of these:
+- **An `email_outbox` table (migration 10) sits between the action and the
+  transport.** Sending inside the action would make the requester wait for
+  SMTP, would raise the question of whether a failed send fails a booking, and
+  on a serverless host would silently lose any un-awaited send.
+- **The notification hooks are in the server actions, not
+  `updateBookingStatus()`.** The store method sees a status pair; only the
+  action knows *why* — which reason the reviewer typed, which rooms were
+  picked, whether a cancellation was approved or declined. Hooking the store
+  would also have mailed on the developer console's force-status override,
+  which is a repair tool.
+- **The mailed report is HTML tables, not a PDF**, exactly as predicted here:
+  `lib/report-pdf.ts` is client-side (jsPDF, dynamically imported) and a cron
+  job has no browser.
+- **Digests, not per-item mail, for reviewers.** Per-request mail to a warden
+  during fest week is how a portal gets filtered into spam.
 
-- **Email on room allocation** (requirement 5). Requesters currently have to
-  open the dashboard to learn a decision. `allocateRooms()` in
-  `app/actions/bookings.ts` is the hook point for the allocation mail, and
-  `updateBookingStatus()` is the funnel every other transition passes through —
-  submitted, approved at each tier, rejected (with reason).
-- **A day-wise guest house log / occupancy report mailed to the GH Manager**
-  (requirement 3). The *content* already exists: `exportHistoryPdf`
-  (`app/actions/history-pdf.ts`) plus `lib/report-pdf.ts` render an A4-landscape
-  report from the same search criteria, and `listRoomOccupancy` gives per-room
-  occupancy for a date range. What is missing is a scheduled job and delivery.
+Still open, and deliberately so:
 
-Do them together. Sketch: a `lib/mail.ts` with one `sendMail()` seam (mirroring
-how `lib/auth.ts` is the single swap point for identity), an env-configured
-transport, and a daily cron — Supabase Edge Function + `pg_cron`, or a Vercel
-cron route — that builds the previous day's occupancy and posts it to the
-manager's address. Keep the render server-side for the mailed copy;
-`lib/report-pdf.ts` is client-side (jsPDF, dynamically imported), so the mailed
-report needs either a server-side renderer or an HTML table body.
+- **No SMS.** It would be a second seam of the same shape; nobody has asked.
+- **The cron is external.** `/api/mail/cron` and `/api/mail/dispatch` are
+  ordinary routes guarded by `CRON_SECRET`; something has to call them
+  (systemd timer, Vercel cron, `pg_cron` + `net.http_post`). Every job is
+  idempotent per institute day, so a missed run self-heals on the next one and
+  a double run sends nothing.
 
 ## 3. ~~Push the repository~~ ✅ Resolved
 

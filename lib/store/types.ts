@@ -13,6 +13,13 @@ import type {
 } from "@/lib/types";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
+import type {
+  EmailMessage,
+  EmailOutboxFilter,
+  EmailSettlement,
+  MailStatus,
+  NewEmailInput,
+} from "@/lib/mail/types";
 import type { Role } from "@/lib/types";
 
 export type NewProfileInput = Omit<Profile, "id">;
@@ -105,4 +112,38 @@ export interface DataStore {
   setSetting(key: string, value: string): Promise<void>;
 
   deleteBooking(id: string): Promise<void>;
+
+  // ---- email outbox ------------------------------------------------
+  //
+  // Notifications are queued by the action that caused them and sent by the
+  // worker in `lib/mail/dispatch.ts`. Nothing sends inside a server action: a
+  // slow SMTP host would make the requester wait for it, and a failed send
+  // must not fail a booking.
+
+  /**
+   * Queue messages, skipping any whose `idempotency_key` is already stored.
+   * Returns how many rows were actually new — a retried action or two racing
+   * dispatchers must not mail the same parent twice.
+   */
+  enqueueEmails(inputs: NewEmailInput[]): Promise<number>;
+
+  /**
+   * Atomically take up to `limit` messages that are due, marking them
+   * `SENDING` and counting the attempt. Only the caller that wins the claim
+   * gets the row, so two workers never send the same message. Messages stuck
+   * in `SENDING` past `staleAfterMs` are reclaimed — a process that died
+   * mid-send must not strand them forever.
+   */
+  claimQueuedEmails(limit: number, staleAfterMs: number): Promise<EmailMessage[]>;
+
+  /** Record the outcome of a send: `SENT`, or `FAILED`/re-`QUEUED` with a reason. */
+  settleEmail(id: string, result: EmailSettlement): Promise<void>;
+
+  /** Outbox rows, newest first — the developer console's mail log. */
+  listEmails(filter: EmailOutboxFilter): Promise<EmailMessage[]>;
+
+  countEmailsByStatus(): Promise<Record<MailStatus, number>>;
+
+  /** Put a failed message back in the queue, due now, with its attempts reset. */
+  requeueEmail(id: string): Promise<void>;
 }

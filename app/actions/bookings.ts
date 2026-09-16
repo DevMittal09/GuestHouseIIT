@@ -6,6 +6,15 @@ import { bookingPayloadSchema } from "@/lib/booking-schema";
 import { needsAlumniDetails } from "@/lib/booking-types";
 import { validateCustomValue } from "@/lib/form-config";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
+import {
+  notifyBookingSubmitted,
+  notifyCancellationDecided,
+  notifyCancellationRequested,
+  notifyCancelled,
+  notifyRejected,
+  notifyRoomsAllocated,
+  notifyTierApproved,
+} from "@/lib/mail/notify";
 import { OFFICIAL_EMAIL_WHITELIST } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { instituteIso } from "@/lib/tz";
@@ -173,6 +182,11 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       guests,
     });
 
+    // Acknowledge to the requester and tell whoever has to decide. Queued,
+    // never sent inline: a slow SMTP host must not make the requester wait,
+    // and a mail failure must not fail a booking that is already stored.
+    await notifyBookingSubmitted(booking.id);
+
     revalidatePath("/", "layout");
     return { ok: true, reference: booking.booking_reference_id };
   } catch (e) {
@@ -213,6 +227,9 @@ export async function reviewBooking(
           remarks: reason!.trim(),
         }
       );
+      // The reason reaches the requester verbatim — a paraphrase would be a
+      // different decision, and the reason is the entire point of the mail.
+      await notifyRejected(bookingId, user, reason!.trim());
     } else {
       const next = nextStatusOnApprove(booking.status);
       await store.updateBookingStatus(
@@ -225,6 +242,10 @@ export async function reviewBooking(
           remarks: next === "PENDING_GH_MANAGER" ? "Approved and forwarded to Guest House Manager" : "Approved",
         }
       );
+      // Two audiences, one transition: the requester learns it moved, the next
+      // tier learns it is theirs. `booking.status` here is the stage that was
+      // just signed off, which is what the requester's mail names.
+      await notifyTierApproved(bookingId, user, booking.status);
     }
     revalidatePath("/", "layout");
     return { ok: true };
@@ -279,6 +300,10 @@ export async function allocateRooms(bookingId: string, roomIds: string[]): Promi
         remarks: `Rooms allocated: ${roomNumbers}`,
       }
     );
+    // Administration Section requirement 5: the requester should not have to
+    // open the portal to learn their room numbers.
+    await notifyRoomsAllocated(bookingId, user);
+
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
@@ -322,6 +347,9 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
           remarks: `Cancellation requested: ${reason.trim()}`,
         }
       );
+      // The rooms stay held until the manager decides, so the manager is the
+      // one who needs to know. The requester just clicked the button.
+      await notifyCancellationRequested(bookingId, reason.trim());
     } else {
       // Pending bookings can be cancelled directly.
       await store.updateBookingStatus(
@@ -334,6 +362,9 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
           remarks: `Cancelled by requester: ${reason.trim()}`,
         }
       );
+      // A pending request held no rooms, so the desk has nothing to free and
+      // nothing to hear about.
+      await notifyCancelled(bookingId, user, reason.trim(), { heldRooms: false });
     }
     revalidatePath("/", "layout");
     return { ok: true };
@@ -421,6 +452,8 @@ export async function approveCancellation(bookingId: string): Promise<ActionResu
         remarks: "Cancellation approved — rooms released",
       }
     );
+    await notifyCancellationDecided(bookingId, "approved", user, booking.rejection_reason);
+
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
@@ -458,6 +491,10 @@ export async function rejectCancellation(bookingId: string, reason: string): Pro
         remarks: `Cancellation rejected: ${reason.trim()}`,
       }
     );
+    // The booking stands and the rooms stay held, which the requester has no
+    // way of knowing otherwise — they asked to cancel and nothing changed.
+    await notifyCancellationDecided(bookingId, "rejected", user, reason.trim());
+
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {

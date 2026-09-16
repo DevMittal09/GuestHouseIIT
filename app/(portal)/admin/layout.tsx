@@ -10,6 +10,7 @@ const TABS = [
   { href: "/admin/guest-houses", label: "Guest Houses & Rooms" },
   { href: "/admin/forms", label: "Form Builder" },
   { href: "/admin/bookings", label: "All Bookings" },
+  { href: "/admin/mail", label: "Mail Outbox" },
   { href: "/admin/access", label: "Console Access" },
 ];
 

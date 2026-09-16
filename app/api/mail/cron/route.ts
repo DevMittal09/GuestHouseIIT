@@ -1,0 +1,73 @@
+import { cronAuthorized, mailConfig } from "@/lib/mail/config";
+import { runDailyMailJobs } from "@/lib/mail/digest";
+import { drainOutbox } from "@/lib/mail/dispatch";
+
+/**
+ * The daily mail jobs: approval digests, check-in reminders, the day-wise
+ * guest house log, and the pending-too-long escalation.
+ *
+ * Intended for 8am institute time — the digest is only useful before people
+ * start their day:
+ *
+ *     30 2 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+ *                   https://<host>/api/mail/cron
+ *
+ * (02:30 UTC is 08:00 IST. If the runner speaks IST, use `0 8 * * *`.)
+ *
+ * **The schedule is advisory.** Every job keys its idempotency on the
+ * institute calendar date, so a missed 8am run still delivers at 9am, and a
+ * second run at 9:05 sends nothing. That is deliberate: a cron you can safely
+ * re-run is a cron you can debug.
+ *
+ * It queues and then drains, so one call does the whole job rather than
+ * leaving the mail for the dispatch route.
+ */
+
+export const dynamic = "force-dynamic";
+
+async function handle(request: Request): Promise<Response> {
+  const auth = cronAuthorized(request);
+  if (!auth.ok) {
+    return Response.json({ ok: false, error: auth.reason }, { status: 401 });
+  }
+
+  try {
+    const queued = await runDailyMailJobs();
+    const dispatched = await drainOutbox();
+
+    return Response.json({
+      ok: true,
+      transport: mailConfig().transport,
+      queued,
+      dispatched,
+    });
+  } catch (error) {
+    return failed(error);
+  }
+}
+/**
+ * A store error here is almost always one thing: migration 10 has not been
+ * applied, so there is no outbox to read. A cron runner's log should say that
+ * rather than showing an opaque 500 from the framework.
+ */
+function failed(error: unknown): Response {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error("[mail] route failed", error);
+  return Response.json(
+    {
+      ok: false,
+      error: message,
+      hint: "If the outbox table is missing, apply supabase/migrations/00000000000010_email_outbox.sql.",
+    },
+    { status: 500 }
+  );
+}
+
+
+export async function GET(request: Request) {
+  return handle(request);
+}
+
+export async function POST(request: Request) {
+  return handle(request);
+}

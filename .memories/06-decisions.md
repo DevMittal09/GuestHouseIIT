@@ -812,3 +812,99 @@ states that browsing does not change the booking.
 `window.confirm` said nothing about consequences and accepted a stray Enter.
 `components/ui/confirm-dialog.tsx` lists what will be lost and requires the
 operator to type the guest house name / user email / booking reference.
+
+## Email: a queue between the action and the transport (16 Sep 2026)
+
+Two Administration Section requirements (mail on allocation, the day-wise log)
+and one meeting note (single-threaded email) all needed the same missing piece,
+so they were built as one: `lib/mail/`.
+
+**The transport is a seam, not a call site.** `Mailer` has one method, and
+`getMailer()` picks an implementation from the environment exactly as
+`lib/store/index.ts` picks a backend. SMTP today (Gmail with an app password);
+the production plan is the institute's own relay, sending as `iitpkd.ac.in`
+with SPF and DKIM already correct. That migration should be an `.env.local`
+change and nothing else — which is why host, port, from, reply-to and the
+Message-ID domain are all variables rather than constants.
+
+The third implementation, `FileMailer` → `.local-mail/*.eml`, exists for the
+reason `MockStore` exists: the first run of this project needs no credentials
+and no network.
+
+**Nothing sends inside a server action.** Actions queue into `email_outbox`;
+`dispatch.ts` sends. Three reasons, the third being the one that fails
+silently:
+
+1. A slow SMTP host would add its latency to every booking submission.
+2. A failed send must not fail a booking that is already stored.
+3. On a serverless host, un-awaited work is frozen the moment the function
+   responds, so mail started and not awaited simply vanishes.
+
+Delivery is still prompt: `notify.ts` schedules the dispatch with `after()`
+from `next/server`, which runs after the response is out. The cron route is the
+safety net, not the normal path.
+
+**The hooks are in the actions, not `updateBookingStatus()`.** The roadmap had
+suggested the store method, since every transition funnels through it, and that
+was wrong. The store sees a status pair; only the action knows *why* — which
+reason the reviewer typed, which rooms were picked, whether a cancellation was
+approved or declined. Hooking the store would also have mailed on the developer
+console's force-status override, which is a repair tool: a developer fixing a
+bad row should not send a parent a confirmation.
+
+**Recipients come from `canReview()`.** Re-deriving "wardens of this hostel" in
+the mail layer would be a second copy of the scoping rule, and the two would
+drift — the Malhar warden would get mail about Saveri students while still,
+correctly, being unable to act on them. It also means nobody is ever asked to
+approve their own booking, because `canReview` already refuses that.
+
+**Idempotency is the whole safety story.** A unique `idempotency_key` plus
+`on conflict do nothing`, keyed on the booking's `updated_at` for a transition
+and on the institute calendar date for a digest. Consequences worth keeping:
+
+- a retried action queues nothing new;
+- **the cron schedule is advisory** — a missed 8am run still delivers at 9am,
+  and a second run at 9:05 sends nothing. A cron you can safely re-run is a
+  cron you can debug;
+- two dispatchers never double-send, because claiming is one
+  `for update skip locked` statement (`claim_queued_emails`).
+
+**Digests, not per-item mail, for reviewers.** Per-request mail to a warden
+during fest week trains them to filter the portal into spam, and then the
+portal stops working. One 8am summary does not. The manager is deliberately
+*not* digested — their pending allocations are a section of the daily desk
+report, and two mails listing the same queue is how a report stops being read.
+
+**The daily log is sent even on a quiet day.** The first implementation skipped
+a guest house with nothing to report, which was wrong for a *log*: a missing
+report would mean either "nothing happened" or "the cron stopped running", and
+the reader could not tell which. It now always sends (unless the guest house
+has no rooms yet) and says plainly that the day was quiet. A test caught this.
+
+**`MAIL_REDIRECT_ALL_TO` is applied at send time, not queue time.** The outbox
+therefore records who the message was genuinely for, so flipping the variable
+changes where mail goes without rewriting history, and the console's outbox
+still answers "was the warden *supposed* to get this?". The redirected copy
+carries `X-Original-To` **and** a banner in the body — the header is exactly
+what nobody looks at when wondering why a test mailbox is full of other
+people's bookings.
+
+**HTML and plain text come from one block list.** A template that wrote the two
+separately would drift until the text part was wrong, and the text part is what
+every HTML-refusing client and every screen reader reads. `render.ts` describes
+the content once and renders it twice.
+
+**One thread per booking needs two things, not one.** A deterministic
+`Message-ID` derived from the booking id *and* a subject that always leads with
+the booking reference — mail clients split a thread when the subject changes,
+so the headers alone are not enough.
+
+Two smaller things worth not rediscovering:
+
+- **Gmail app passwords are displayed as four groups of four.** People paste
+  the spaces. `mailConfig()` strips whitespace from `MAIL_APP_PASSWORD` only —
+  a generic `MAIL_PASSWORD` may legitimately contain a space.
+- **`nodemailer` needs `serverExternalPackages`.** It resolves transports with
+  dynamic requires and reaches for `net`/`tls`/`dns`, which the Server
+  Components bundler cannot follow, and it is not on Next's built-in externals
+  list.

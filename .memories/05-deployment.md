@@ -159,6 +159,29 @@ already present in the process environment), so `supabaseConfigured()` is false
 and the mock store is used. Delete the `.local-db.json` it creates afterwards if
 there was none before.
 
+**5. Mail, without sending any**
+
+Three ways, in increasing realism:
+
+- **Pure logic** — `render.ts`, `templates.ts`, `thread.ts` and `redirect.ts`
+  have no store or network dependency, so `npx tsx` covers them directly. Worth
+  asserting: the plain-text part carries the same facts as the HTML (they are
+  rendered from one block list and must stay that way), a rejection reason
+  appears verbatim, dates render in IST, and a `purpose_of_visit` containing
+  markup is escaped.
+- **The outbox and the worker** — `chdir` to a temp directory **before**
+  dynamically importing the store, because `MockStore` derives its paths from
+  `process.cwd()` at module load. With no `MAIL_USER` set, `dispatchOutbox()`
+  uses the `FileMailer`, so the assertions can read the `.eml` it wrote.
+  `MAIL_DRY_RUN=true` sends nothing at all.
+- **Live SMTP** — `tsx` does not read `.env.local` (Next does), so load it in
+  the script. `new SmtpMailer(mailConfig()).verify()` proves the credentials
+  without sending anything; `send()` then delivers one real message. With
+  `MAIL_REDIRECT_ALL_TO` set it can only reach that mailbox.
+
+Note that the test file must wrap top-level `await` in an async IIFE — this
+tsconfig emits CJS, and esbuild refuses top-level await there.
+
 **Always run before finishing:**
 
 ```bash
@@ -189,12 +212,20 @@ Not yet deployed. The intended path is Vercel + hosted Supabase.
 1. Push the repository to GitHub (see [08-roadmap.md](08-roadmap.md) for the
    current permissions blocker).
 2. Import the project in Vercel.
-3. Set the three environment variables in Vercel's project settings — mark
-   `SUPABASE_SERVICE_ROLE_KEY` as server-only (do **not** prefix it with
-   `NEXT_PUBLIC_`).
+3. Set the environment variables in Vercel's project settings — mark
+   `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_APP_PASSWORD` and `CRON_SECRET` as
+   server-only (do **not** prefix them with `NEXT_PUBLIC_`). Set
+   `APP_BASE_URL` too, or every link in an email points at localhost.
 4. Deploy; Vercel detects Next.js automatically. `npm run build` must pass first.
 5. Apply **all** migrations, in order, and the seed to the production Supabase
    project if it is separate from the development one.
+6. Schedule the two mail routes (`vercel.json` `crons`, or a systemd timer):
+   `/api/mail/dispatch` every few minutes, `/api/mail/cron` at 08:00 IST
+   (`30 2 * * *` UTC). Without the second, digests, reminders and the day-wise
+   log never go out — per-event mail still does, via `after()`.
+7. **Decide `MAIL_REDIRECT_ALL_TO` deliberately.** Production is the one place
+   it should be unset. Anywhere else, leaving it unset means the portal mails
+   real parents and wardens from a staging database.
 
 **Configuration that must survive deployment:**
 

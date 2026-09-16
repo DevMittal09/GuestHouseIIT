@@ -82,8 +82,13 @@ port 3000 before launching your own.
 
 **Any new data operation must be added to the interface and to both
 implementations**, or one backend silently breaks. `searchBookings` is the
-trap-laden one — see the approval-log section below. `listRoomOccupancy`
-(availability grid) is the newest.
+trap-laden one — see the approval-log section below. The email outbox
+(`enqueueEmails` / `claimQueuedEmails` / `settleEmail` / `listEmails` /
+`countEmailsByStatus` / `requeueEmail`) is the newest, and the one where the
+two implementations differ most: Supabase claims rows through a
+`for update skip locked` function, while the mock store can select-then-mark
+because it is single-process and `saveDb` is synchronous — the same reasoning
+as `assertNoClash`.
 
 - The mock store rewrites the whole JSON file on every mutation. It is
   single-process and not concurrency-safe — fine for dev, never for production.
@@ -465,6 +470,68 @@ it as one `{breakfast, lunch, dinner}` answer for the whole stay.)
   reviewer sees them) and as "Breakfast (2 days), Dinner (1 day)" in the
   manager's stays tables, with the per-day list in the cell's tooltip.
 
+## Email notifications — `lib/mail/`
+
+Booking mail is **queued, not sent inline**. Actions call `notify*()` from
+`lib/mail/notify.ts`, which writes to `email_outbox` (migration 10) and
+schedules `dispatchOutbox()` with `after()`; `lib/mail/dispatch.ts` does the
+sending. Reasons, the last of which fails silently: a slow SMTP host must not
+make the requester wait, a failed send must not fail a stored booking, and on a
+serverless host un-awaited work is frozen the moment the function responds.
+
+`getMailer()` picks the transport from the environment, the way
+`lib/store/index.ts` picks a backend:
+
+| Condition | Transport | Mail goes to |
+| --- | --- | --- |
+| `MAIL_DRY_RUN=true` | `DryRunMailer` | nowhere (one log line) |
+| `MAIL_USER` + `MAIL_APP_PASSWORD` | `SmtpMailer` (nodemailer) | the SMTP host |
+| otherwise | `FileMailer` | `.local-mail/*.eml` |
+
+The file mailer keeps the zero-setup first run working, like `MockStore`.
+`.env.example` documents every variable.
+
+- **The hooks live in the server actions, not `updateBookingStatus()`.** The
+  store sees a status pair; only the action knows *why* — the reason typed, the
+  rooms picked, whether a cancellation was approved or declined. It would also
+  mail on the developer console's force-status override, which is a repair
+  tool.
+- **Every `notify*()` swallows its own errors.** Missing migration, bad
+  credentials, a profile with no address — the booking still succeeds and the
+  failure is a log line.
+- **Recipients come from `canReview()`** (`lib/mail/recipients.ts`), never a
+  re-derived hostel/club match. A second copy of the scoping rule would drift
+  and start mailing wardens about other hostels' students.
+- **`MAIL_REDIRECT_ALL_TO` is applied at send time**, so the outbox keeps an
+  honest record of the real recipients. Set it on every non-production
+  deployment: without it, one person pointing staging at real data mails a real
+  parent.
+- **Idempotency does the heavy lifting.** `idempotency_key` is unique and
+  inserts are `on conflict do nothing`, keyed on the booking's `updated_at` for
+  a transition and the institute date for a digest. So retries queue nothing,
+  and **the cron schedule is advisory** — a missed 8am run delivers at 9am, a
+  second run at 9:05 sends nothing.
+- **Reviewers get one daily digest, not one mail per request** — per-item mail
+  during fest week is how a portal gets filtered into spam. The manager is not
+  digested; their queue is a section of the daily desk report instead.
+- **HTML and plain text are rendered from one block list** (`lib/mail/render.ts`).
+  Do not hand-write either body. Tables and inline styles only, no external
+  images, and **never a link to an ID document** — mail points at the portal.
+- **One thread per booking** (`lib/mail/thread.ts`) needs both a deterministic
+  `Message-ID` and a subject that always leads with the booking reference; mail
+  clients split a thread when the subject changes.
+- `nodemailer` is in `serverExternalPackages` (dynamic requires + Node
+  built-ins). Gmail app passwords are shown in four groups of four and people
+  paste the spaces, so `mailConfig()` strips whitespace from
+  `MAIL_APP_PASSWORD`.
+
+Scheduling: `/api/mail/dispatch` drains the queue, `/api/mail/cron` runs the
+daily jobs (digests, check-in reminders, the per-guest-house day-wise log,
+48-hour escalations) then drains. Both take GET or POST and are guarded by
+`CRON_SECRET` — **required in production**, optional elsewhere. 8am IST is
+`30 2 * * *` UTC. `/admin/mail` in the developer console shows the outbox, what
+failed and why, and sends a test message through the real queue.
+
 ## Room availability grid (`/availability`)
 
 Open to **every signed-in role** — the one route with no role gate. Pick a
@@ -661,6 +728,12 @@ Migration files, applied sequentially:
    applied, creating a booking against Supabase fails** — the insert names the
    columns — and reads degrade via a fallback in `SupabaseStore.hydrate`.
 8. `supabase/migrations/00000000000008_meal_plans.sql` (`guest_houses.serves_meals`, set for Hamsanandi; converts `bookings.meals` to the per-day array with the serving windows from `lib/meals.ts`, and replaces migration 6's shape check). **Until this is applied, a booking with meals cannot be created against Supabase**, and every guest house reads as serving no meals. Safe to re-run.
+10. `supabase/migrations/00000000000010_email_outbox.sql` (`email_outbox` +
+   `email_status` enum + `claim_queued_emails()`, which claims due rows
+   `for update skip locked` so two dispatchers cannot double-send). Additive,
+   defaulted and safe to re-run. **Until it is applied, queueing throws** —
+   `notify*()` catches and logs it, so bookings still work and only the mail is
+   missing.
 
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are
 not applied automatically. Read the header of each before running it.
