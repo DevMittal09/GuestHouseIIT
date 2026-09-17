@@ -87,6 +87,41 @@ writes failing while every page still renders. The requester only sees
 "Something went wrong while submitting the booking"; the server log carries the
 PostgREST error naming the missing column.
 
+## Every booking is rejected with "Invalid input: expected string, received null"
+
+Reported 16 Sep 2026: submitting the booking form failed with that message and
+nothing highlighted. It affected **every requester role**, not just the student
+it was reported on — no booking could be submitted at all.
+
+**Cause: the schema could not accept its own output.** The form validates on
+the client and then sends `parsed.data` — the schema's *output* — over the wire
+(`components/booking-form.tsx`), and `createBooking` re-parses it with the same
+`bookingPayloadSchema`. `optionalTrimmed` was:
+
+```ts
+z.string().optional().transform((v) => (v && v.trim() ? v.trim() : null))
+```
+
+Its input rejects `null`; its output *is* `string | null`. So the first pass
+turned a blank `alumni_name` into `null`, `JSON.stringify` kept that key (it
+drops `undefined`, not `null`), and the second pass rejected it with zod's
+default invalid-type message.
+
+It was invisible from the form because the failing paths were `alumni_name`
+and `alumni_roll_number` — fields a student's form never renders — so
+`setError` had no visible field to attach to and the requester saw only the
+toast.
+
+**Fix:** `.nullish()` instead of `.optional()`, so the transform's output is
+also a valid input. `countField` and the guest `age` field were already
+round-trip safe this way, which is the pattern to follow.
+
+**If you touch this schema, check the round trip** — parse a realistic payload,
+`JSON.parse(JSON.stringify(...))` the result, and parse it again. A throwaway
+suite doing exactly that for all six requester roles, plus checks that
+accepting null did not weaken the alumni / ID-number / parent-dependency
+requirements, is the regression guard.
+
 ## The Meals card is missing from the booking form
 
 Meals are offered only where `guest_houses.serves_meals` is on — check the guest

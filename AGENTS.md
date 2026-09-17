@@ -681,6 +681,18 @@ site deliberately. Fix by setting `--primary-foreground` to a dark brown.
   raw string (empty included) and leaves validation to the caller. In the schema
   that is `countField`, which reports "…is required" for a blank box instead of
   `z.coerce.number()`'s misleading "At least 1 room".
+- **`bookingPayloadSchema` must accept its own output.** The booking form
+  validates on the client and sends **`parsed.data`** over the wire
+  (`components/booking-form.tsx`), and `createBooking` re-parses that with the
+  same schema. So every transform's *output* type has to be a valid *input*
+  type. `optionalTrimmed` was `z.string().optional()` transforming blank to
+  `null` — `.optional()` accepts `undefined` but **not** `null`, so the second
+  pass rejected the first pass's own result and **no role could submit a
+  booking at all**, with zod's default "Invalid input: expected string,
+  received null". It was invisible from the form because the failing paths were
+  `alumni_name` / `alumni_roll_number`, fields a student's form never renders.
+  It is `.nullish()` now; `countField` and `age` are round-trip safe the same
+  way. If you add a transform here, check the round trip.
 - **shadcn/ui registry changed.** `init` needs `-b radix -p nova --no-monorepo`;
   `-b neutral` is rejected. There is **no `form` component** in this registry —
   hence `components/ui/native-select.tsx` (a styled native `<select>` that works

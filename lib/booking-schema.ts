@@ -6,9 +6,30 @@ import { requestedRoomsError } from "./occupancy";
 import { formatInstituteDate, formatInstituteDateTime, instituteDate } from "./tz";
 import { latestCheckIn } from "./workflow";
 
+/**
+ * An optional free-text field: trimmed, with blank becoming null.
+ *
+ * **`.nullish()`, not `.optional()`, because this schema has to accept its own
+ * output.** The booking form validates on the client and then sends
+ * `parsed.data` over the wire (`components/booking-form.tsx`), and
+ * `createBooking` re-parses that with the same schema. So the `null` this
+ * transform produces arrives back as *input* on the second pass.
+ *
+ * With `.optional()` it did not, and **no booking could be submitted by any
+ * role**: the server rejected every one with zod's default
+ * "Invalid input: expected string, received null". It was invisible from the
+ * form, because the failing paths were `alumni_name` / `alumni_roll_number` —
+ * fields a student's form never shows — so the requester got an error naming
+ * nothing they could see or change.
+ *
+ * Accepting null does not weaken anything: the refinements below test these
+ * with `!v.alumni_name` and `(g.id_number ?? "").length`, both of which treat
+ * null as absent. `countField` is round-trip safe for the same reason; keep any
+ * new transform that way too.
+ */
 const optionalTrimmed = z
   .string()
-  .optional()
+  .nullish()
   .transform((v) => (v && v.trim() ? v.trim() : null));
 
 function textField(mode: FieldMode, requiredMessage: string, min = 2) {
