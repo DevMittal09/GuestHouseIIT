@@ -21,7 +21,8 @@ There is **no test framework installed**. Verification approach is described in
 
 ```
 app/
-  page.tsx                 login / persona picker
+  page.tsx                 sign-in form (credentials)
+  mock-login/              persona picker (development)
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
     dashboard/             requester's own bookings
@@ -45,8 +46,8 @@ and pass plain data to client components.
 
 ### 1. One data interface, two implementations
 
-`lib/store/types.ts` declares a `DataStore` interface (27 methods). Two classes
-implement it:
+`lib/store/types.ts` declares a `DataStore` interface (36 methods — the last
+six are the email outbox, added 16 Sep 2026). Two classes implement it:
 
 - `lib/store/mock.ts` — a JSON file (`.local-db.json`) plus `public/uploads/`.
   Zero setup, so the app runs immediately after `npm install`.
@@ -69,7 +70,8 @@ not require deleting the database.
 
 `lib/auth.ts` exposes `getCurrentUser()` / `requireUser()`. `getCurrentUser()`
 reads the `gh_mock_user` cookie (a profile id) and looks the profile up. The
-login page is a persona picker.
+sign-in page is a credential form over the same cookie, with the persona
+picker one link away at `/mock-login`.
 
 **No other module contains auth logic.** Replacing that one function with
 Supabase Auth or institute SSO is the entire production migration. Resist the
@@ -422,6 +424,54 @@ the first in display order.
 
 Both take only a query string and re-derive the user, scope and params
 server-side, so an export can never exceed what the caller may see.
+
+## Email notifications
+
+`lib/mail/` (16 Sep 2026). Two seams, deliberately separate, and the split is
+the whole design:
+
+- **`Mailer` is the transport** — one `send()` method, chosen from the
+  environment by `getMailer()` exactly the way `lib/store/index.ts` chooses a
+  backend. `SmtpMailer` (nodemailer) when `MAIL_USER` + `MAIL_APP_PASSWORD` are
+  set, `FileMailer` writing `.local-mail/*.eml` otherwise, `DryRunMailer` when
+  `MAIL_DRY_RUN=true`. The file mailer preserves the zero-setup first run for
+  the same reason `MockStore` does. Moving to the institute's own SMTP relay
+  should be an `.env.local` change and nothing else.
+- **`email_outbox` is the queue** (migration 10). **Nothing sends inside a
+  server action.** The action writes rows and schedules `dispatchOutbox()` with
+  `after()` from `next/server`; `lib/mail/dispatch.ts` claims, sends and
+  settles them. Three reasons, the third of which fails silently: a slow SMTP
+  host must not make the requester wait, a failed send must not fail a stored
+  booking, and on a serverless host un-awaited work is frozen the moment the
+  response is returned.
+
+Everything else follows from those two:
+
+- **The notification hooks live in the server actions, not
+  `updateBookingStatus()`.** The store method sees only a status pair; the
+  action knows *why* — the reason typed, the rooms picked, whether a
+  cancellation was approved or declined. Hooking the store would also have
+  mailed on the developer console's force-status override, which is a repair
+  tool.
+- **Recipients come from `canReview()`** (`lib/mail/recipients.ts`) — the same
+  predicate that decides whether a reviewer's button works, so mail cannot
+  drift from authority.
+- **Correctness rests on a unique `idempotency_key`** plus
+  `on conflict do nothing`, keyed on the booking's `updated_at` for a
+  transition and the institute calendar date for a digest. Retries queue
+  nothing, and the cron schedule becomes advisory rather than exact.
+  `claim_queued_emails()` claims rows `for update skip locked`, so two
+  dispatchers get disjoint batches.
+- **HTML and plain text render from one block list** (`lib/mail/render.ts`), so
+  the two cannot diverge.
+- **Scheduled work is two ordinary route handlers** — `/api/mail/dispatch`
+  drains the queue, `/api/mail/cron` runs the daily digests, reminders,
+  per-guest-house day-wise log and 48-hour escalations. They are the only route
+  handlers in the app; everything else is a server action. Both are guarded by
+  `CRON_SECRET`.
+
+Depth in [03-implementation.md](03-implementation.md); the reasoning and the
+rejected alternatives in [06-decisions.md](06-decisions.md).
 
 ## Audit trail
 

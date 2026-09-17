@@ -5,7 +5,8 @@ Ordered roughly by priority.
 ## 1. Real authentication (blocks production)
 
 Replace `getCurrentUser()` in `lib/auth.ts` with Supabase Auth or institute SSO,
-remove the persona picker from `app/page.tsx`, and switch request-scoped database
+delete both sign-in doors (the credential form on `/` and the persona picker at
+`/mock-login`) along with `DEMO_PASSWORD`, and switch request-scoped database
 access to the anon key so RLS becomes the real boundary. Everything else in the
 app already re-checks authorization server-side, so this change is contained.
 
@@ -60,9 +61,20 @@ No framework is installed. The highest-value targets, in order:
    validation (a throwaway suite of 43 checks already exists for this; it is
    worth keeping the next time someone installs a runner);
 3. `lib/form-config.ts` + `lib/booking-schema.ts` — that `hidden` / `optional` /
-   `required` produce the right schema;
+   `required` produce the right schema, **and that the schema accepts its own
+   output**: the form sends `parsed.data` and the server re-parses it, so a
+   transform whose output is not a valid input breaks every submission. A
+   throwaway suite of 15 checks covering that round trip for all six requester
+   roles (plus that accepting null did not weaken the alumni / ID-number /
+   parent-dependency rules) was written on 17 Sep 2026 when exactly that bug
+   shipped — see [07-troubleshooting.md](07-troubleshooting.md);
 4. occupancy overlap and `allocateRooms` clash re-checking;
-5. `components/ui/time-select.tsx` conversion helpers.
+5. `components/ui/time-select.tsx` conversion helpers;
+6. `lib/mail/*` — rendering (HTML and text from one block list), outbox
+   claim/retry semantics, and that recipients follow `canReview`. Throwaway
+   suites of 23 + 18 + 22 checks were written with the mail layer on 16 Sep
+   2026 but lived in a temp directory and are gone; they are worth recreating
+   as real tests rather than rewriting as throwaways again.
 
 Vitest fits the stack. Until then, the ad-hoc `npx tsx` approach in
 [05-deployment.md](05-deployment.md#verifying-changes) works.
@@ -99,10 +111,23 @@ Vitest fits the stack. Until then, the ad-hoc `npx tsx` approach in
   a trigger (covering reference id, purpose, guest names) and push the match
   down. Raising the cap is not the fix.
 
+- **Narrow `revalidatePath`.** All 11 call sites in `app/actions/bookings.ts`
+  and `app/actions/admin.ts` use `revalidatePath("/", "layout")`, so every
+  action re-renders every route and re-runs the layout's queries before the
+  button's spinner clears. Scoping each to the routes it actually changes is
+  the biggest code-level win for click latency (measured 17 Sep 2026 —
+  see [07-troubleshooting.md](07-troubleshooting.md)). The catch: the 5 s poll
+  is currently what makes *other* tabs notice a change, so narrowing
+  revalidation and changing the poll have to be thought about together.
 - Rate-limit booking submission.
 - Decide a retention policy for uploaded Aadhaar/ID documents with the
   Administration Section, and implement deletion.
 - Add a proper migration workflow if the schema starts changing regularly —
   today there are manual SQL files (e.g. `00000000000001_init.sql` and `00000000000002_booking_lifecycle.sql`).
 - Replace the 5-second polling in `components/auto-refresh.tsx` with Supabase
-  realtime subscriptions if queue volume grows.
+  realtime subscriptions if queue volume grows. It re-renders the whole tree
+  per open tab every 5 s, which against hosted Supabase is a continuous stream
+  of queries competing with whatever the user just clicked. Raising the
+  interval to 20–30 s is the cheap interim step; realtime is the real fix,
+  because it pushes instead of polling and would let `revalidatePath` be
+  narrowed at the same time.

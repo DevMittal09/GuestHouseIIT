@@ -19,6 +19,28 @@ enforcing authorization server-side regardless of how identity arrives.
 **Rejected alternative.** Supabase Auth immediately — would have coupled local
 development to a running Supabase instance and made role switching tedious.
 
+## Two sign-in doors: a credential form and the persona picker
+
+**Decision.** `/` is an email + password form checking the address against a
+profile and the password against one shared `DEMO_PASSWORD` (`password123`, the
+same password `supabase/seed.sql` gives its auth users). The persona picker
+moved to `/mock-login`, linked from below the form.
+
+**Why.** The picker is the right tool for development and the wrong thing to
+put in front of the institute — a wall of names with no password does not read
+as a portal they would trust with guest data. Both were wanted: one to
+demonstrate, one to work with. `/` had to stay the login route because every
+signed-out guard already redirects there.
+
+**Cost.** A second path onto the same cookie, and a password that is not a
+secret — it is printed under the form. Neither is authentication, and both must
+be deleted together when real auth lands (09-production-plan.md step 5), not
+left behind a flag.
+
+**Detail worth keeping.** A wrong password and an unknown address return the
+*same* message. Distinguishing them would let an unauthenticated visitor
+enumerate which institute addresses are registered.
+
 ## Two data stores behind one interface
 
 **Decision.** Define `DataStore` and implement it twice (JSON mock, Supabase).
@@ -908,3 +930,44 @@ Two smaller things worth not rediscovering:
   dynamic requires and reaches for `net`/`tls`/`dns`, which the Server
   Components bundler cannot follow, and it is not on Next's built-in externals
   list.
+
+## The booking schema accepts its own output (17 Sep 2026)
+
+A bug, and the fix had a choice in it worth recording so the wrong one is not
+"fixed" back in later.
+
+**Symptom:** every booking, every role, rejected server-side with zod's
+"Invalid input: expected string, received null" — and nothing highlighted in
+the form, because the failing paths were `alumni_name` / `alumni_roll_number`,
+fields a student's form never renders.
+
+**Cause:** the form validates on the client and sends **`parsed.data`** — the
+schema's *output* — and `createBooking` re-parses that with the same schema.
+`optionalTrimmed` was `z.string().optional()` with a transform turning blank
+into `null`. Its input rejected `null`; its output *was* `string | null`. So
+the second pass rejected the first pass's own result.
+
+**Two ways to fix it, and why the other one is wrong:**
+
+1. **Make the transform round-trip safe** — `.nullish()` instead of
+   `.optional()`. Chosen.
+2. **Send the raw form values instead of `parsed.data`.** Rejected, and this is
+   the tempting one. The server would then receive untrimmed strings, `""`
+   instead of `null`, and string counts instead of numbers — so
+   `NewBookingInput` would get `""` where the database expects null, and the
+   trimming and normalisation the store relies on would silently stop
+   happening. The client's parse is doing real work; throwing its output away
+   to dodge a type mismatch trades one invisible bug for a quieter one.
+
+**The invariant, therefore: every transform in `bookingPayloadSchema` must
+accept what it produces.** `countField` already did this deliberately (it takes
+`string | number` because the server re-parses its numeric output) and the
+guest `age` field did too (`.optional().nullable()`) — `optionalTrimmed` was
+simply the one that was missed. Accepting null weakens nothing: the refinements
+test these with `!v.alumni_name` and `(g.id_number ?? "").length`, which treat
+null as absent.
+
+Guarded by a throwaway suite of 15 checks — the round trip for all six
+requester roles, that a third parse is stable, and that the alumni,
+required-ID and parent-dependency rules still reject what they should. Worth
+keeping when a test runner is installed (roadmap §4).

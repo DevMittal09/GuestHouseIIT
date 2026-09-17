@@ -189,6 +189,40 @@ npm run build     # includes the TypeScript typecheck
 npm run lint      # must stay clean
 ```
 
+**6. Measuring performance — never in `next dev`**
+
+Dev mode compiles on demand, ships source maps and runs the React Compiler
+lint. Measured 17 Sep 2026 on identical data (5 bookings, 36 rooms), warm:
+
+| Route | `next dev` | `next start` |
+| --- | --- | --- |
+| `/dashboard` | 175 ms | 21 ms |
+| `/warden` | 159 ms | 24 ms |
+| `/manager` | 178 ms | 27 ms |
+| `/history` | 209 ms | 25 ms |
+
+So build first and serve the build, on a spare port so a running dev server
+survives:
+
+```bash
+npm run build
+NEXT_PUBLIC_SUPABASE_URL= npx next start -p 3100
+# then, warming each route first so you are not timing compilation:
+curl -s -o /dev/null -w "%{time_total}\n" -b "gh_mock_user=gh-manager" \
+  http://localhost:3100/manager
+```
+
+**Develop against the mock store, not the hosted project — for speed as well
+as safety.** One trivial query to hosted Supabase from the dev machine costs
+270–580 ms, essentially all of it latency (`ttfb` ≈ `total`). A render is
+several queries, so every navigation pays 0.5–1.5 s before the app does
+anything. `NEXT_PUBLIC_SUPABASE_URL= npm run dev` removes that entirely; a
+local `supabase start` keeps the real backend without the round trip.
+
+See [07-troubleshooting.md](07-troubleshooting.md) for the other two causes of
+click latency (`revalidatePath("/", "layout")` on every action, and the 5 s
+poll).
+
 ## Deploying to production
 
 Not yet deployed. The intended path is Vercel + hosted Supabase.
@@ -202,8 +236,9 @@ Not yet deployed. The intended path is Vercel + hosted Supabase.
    sessions exist, use the anon key with a per-request client so RLS becomes the
    enforcement boundary. Keep the service-role client only for genuine admin
    operations.
-3. **Remove the persona picker** from `app/page.tsx`, or hide it behind a
-   development-only flag.
+3. **Remove both sign-in doors** — the credential form on `/`
+   (`components/login-form.tsx`) and the persona picker at `/mock-login`. Not
+   behind a flag; see 09-production-plan.md step 5.
 4. **Change the seeded password** (`password123`) and re-seed, or delete the demo
    accounts entirely.
 

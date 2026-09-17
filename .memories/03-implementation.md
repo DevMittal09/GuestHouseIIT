@@ -6,7 +6,8 @@ What exists today, with file paths.
 
 | Concern | File |
 | --- | --- |
-| Login (persona picker) | `app/page.tsx` |
+| Sign-in (credentials) | `app/page.tsx`, `components/login-form.tsx` |
+| Mock sign-in (persona picker) | `app/mock-login/page.tsx` |
 | Login / logout actions | `app/actions/auth.ts` (`loginAs`, `logout`) |
 | Session read | `lib/auth.ts` (`getCurrentUser`, `requireUser`) |
 | Post-login landing per role | `lib/routes.ts` (`homeForRole`) |

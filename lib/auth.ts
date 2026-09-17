@@ -31,3 +31,19 @@ export async function requireUser(): Promise<Profile> {
   if (!user) throw new Error("Not authenticated");
   return user;
 }
+
+/**
+ * The one password every seeded account shares while authentication is mocked.
+ * It matches the password `supabase/seed.sql` gives its auth users, so the
+ * credential form on `/` behaves the same against either backend.
+ *
+ * A plain comparison is deliberate: this constant is published in the README
+ * and shown on the sign-in page, so there is no secret for a timing attack to
+ * recover. When `getCurrentUser()` is swapped for institute SSO, this and the
+ * `loginAs` persona path both go — see .memories/08-roadmap.md item 1.
+ */
+export const DEMO_PASSWORD = "password123";
+
+export function verifyDemoPassword(password: string): boolean {
+  return password === DEMO_PASSWORD;
+}

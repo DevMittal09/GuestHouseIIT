@@ -18,8 +18,10 @@ to close them and in what order.
 > - **Corrected:** Occupancy now checks `ROOM_HOLDING_STATUSES` (not just
 >   `APPROVED`). The `getOccupiedRoomIds` comment in `store/types.ts` is stale
 >   but the implementation is correct.
-> - **Still valid and unbuilt:** Real auth (Phase 1), email notifications
->   (Phase 2), `room_holds` exclusion constraint (Phase 3), tariff/billing
+> - **Since built:** Email notifications (Phase 2) shipped 16 Sep 2026 —
+>   `lib/mail/` plus the `email_outbox` queue (migration 10). The `room_holds`
+>   exclusion constraint (Phase 3) shipped 3 Sep 2026.
+> - **Still valid and unbuilt:** Real auth (Phase 1), tariff/billing
 >   (Phase 4), DPDP compliance (Phase 5), tests and CI (Phase 6).
 > - **Prerequisite noted:** The `account_directory` proposal references
 >   `hostels(id)` and `clubs(id)` tables that do not exist yet. The
@@ -238,8 +240,11 @@ domain. Confirm with the IAR cell. If it doesn't:
    discipline in `AGENTS.md`.
 4. Add `middleware.ts` for session refresh, and keep the route guards where they
    are — middleware is a convenience, not the boundary.
-5. Delete the persona picker from `app/page.tsx` and delete the `gh_mock_user`
-   cookie path entirely. Do not leave it behind a flag; a flag is a backdoor.
+5. Delete **both** demo sign-in doors — the credential form on `/` with its
+   `DEMO_PASSWORD`, and the persona picker at `/mock-login` — and delete the
+   `gh_mock_user` cookie path entirely. Do not leave either behind a flag; a
+   flag is a backdoor. `/` keeps its route: every signed-out guard redirects
+   there, so the real provider's button replaces the form in place.
 6. Move request-scoped reads to the anon key with the user's session so **RLS
    becomes the real boundary**. Keep one service-role client, used only by
    `app/actions/admin.ts` for user creation.
@@ -259,7 +264,37 @@ you will run it after every auth change.
 
 ---
 
-## Phase 2 — email
+## Phase 2 — email ✅ Built 16 Sep 2026
+
+Shipped as `lib/mail/` essentially as planned below — Nodemailer behind a
+`Mailer` interface, an outbox table, a cron-triggered worker, and
+`MAIL_DRY_RUN` / `MAIL_REDIRECT_ALL_TO`. Differences from this plan, all
+deliberate:
+
+- **It sends as a Gmail mailbox with an app password today**, not the institute
+  relay. Host, port, from and reply-to are all environment variables precisely
+  so that swap is config rather than code. The argument below for using the
+  institute's own infrastructure still stands and is still the target.
+- **No `HttpMailer`.** The third implementation is `FileMailer`, writing
+  `.eml` files for zero-setup local runs; a transactional-API transport is
+  unnecessary until the institute declines to send on the portal's behalf.
+- **Hooks are in the server actions, not `updateBookingStatus()`** — the store
+  sees a status pair, but only the action knows which reason was typed, which
+  rooms were picked, or whether a cancellation was approved. It would also have
+  mailed on the developer console's force-status override, a repair tool.
+- **Templates are a block list rendered to HTML *and* plain text by
+  `lib/mail/render.ts`**, not React Email — one description, two bodies, so the
+  text part cannot drift. No new dependency.
+- **The daily report is HTML tables, not a PDF**, because `lib/report-pdf.ts`
+  is client-side (jsPDF) and a cron job has no browser.
+- **Threading was added** (not in this plan but asked for in the meeting
+  notes): a deterministic per-booking `Message-ID` plus a reference-led subject,
+  because mail clients need both to group a conversation.
+
+Still open: the cron is external (something must call `/api/mail/cron`), and
+there is no SMS.
+
+The original plan, for reference:
 
 ### Your question: Nodemailer, or something better?
 

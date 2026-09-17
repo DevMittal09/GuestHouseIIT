@@ -46,7 +46,8 @@ shadcn/ui (radix base, "nova" preset) · zod 4 · react-hook-form · Supabase
 
 ```
 app/
-  page.tsx                 login / persona picker
+  page.tsx                 sign-in form (credentials)
+  mock-login/              persona picker (development)
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
     dashboard/             requester's own bookings
@@ -94,7 +95,12 @@ authentication — identity is still a persona cookie, so anyone can claim to be
 the developer. See §6.
 
 `lib/auth.ts` `getCurrentUser()` reads the `gh_mock_user` cookie (a profile id).
-Login is a persona picker. **No other module contains auth logic**, so replacing
+Signing in has two doors onto that cookie: `/` is a credential form checking
+the address against a profile and the password against the shared
+`DEMO_PASSWORD` (`password123`), and `/mock-login` is the one-click persona
+picker, linked from beneath the form. The first is what the institute is shown;
+the second is what makes ten roles bearable in development. **No other module
+contains auth logic**, so replacing
 that one function with institute SSO is the whole production migration.
 
 Authorization is separate and always server-side: every server action re-checks
@@ -428,6 +434,17 @@ mail per request. `lib/mail/` — see
   UI; a guard that blocked the mismatched tab was built and reverted (see
   [06-decisions.md](06-decisions.md)). Real per-tab sessions come with real
   authentication (roadmap item 1); until then use a private window.
+- **`bookingPayloadSchema` must accept its own output.** The form validates on
+  the client and sends **`parsed.data`**, which `createBooking` re-parses with
+  the same schema — so every transform's output type has to be a valid input
+  type. `optionalTrimmed` was `z.string().optional()` transforming blank to
+  `null`, which `.optional()` rejects, and **no role could submit a booking at
+  all**. It is `.nullish()` now. Check the round trip if you add a transform.
+- **Never judge performance in `next dev`** — it is ~7× slower than a
+  production build on identical data, and a route's first hit is slower again.
+  Develop against the mock store too: one query to hosted Supabase costs
+  270–580 ms of pure latency, so every click pays it several times over. Both
+  measured in [07-troubleshooting.md](07-troubleshooting.md).
 - **`.gitignore` has `.env*`**, which also hides `.env.example`; the
   `!.env.example` exception must stay.
 - **Node version.** Next.js 16 needs `>= 20.9.0`.

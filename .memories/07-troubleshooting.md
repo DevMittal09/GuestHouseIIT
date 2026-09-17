@@ -122,6 +122,59 @@ suite doing exactly that for all six requester roles, plus checks that
 accepting null did not weaken the alumni / ID-number / parent-dependency
 requirements, is the regression guard.
 
+## The app feels slow when you click a button
+
+Reported 17 Sep 2026. Measured before changing anything, because the guess on
+offer ("can we use multithreading?") was the wrong lever: Node already serves
+requests concurrently, and the time here is spent *waiting* on compilation and
+network round trips, not on CPU work a second core could split. The pages
+already issue their independent queries together (`Promise.all` in `/manager`
+and `/caretaker`), and `SupabaseStore.hydrate` batches room holds into one
+query, so there is no N+1 to find.
+
+Four real causes, in order of size. All measured with 5 bookings / 36 rooms, so
+none of this is data volume:
+
+**1. `next dev` is ~7× slower than a production build.** Same data, warm:
+
+| Route | `next dev` | `next start` |
+| --- | --- | --- |
+| `/dashboard` | 175 ms | 21 ms |
+| `/warden` | 159 ms | 24 ms |
+| `/manager` | 178 ms | 27 ms |
+| `/history` | 209 ms | 25 ms |
+
+A route's *first* hit costs more again (`/dashboard` 376 ms cold vs 94 ms
+warm) because dev compiles on demand. Never judge speed from `next dev`.
+
+**2. Against hosted Supabase every query is an internet round trip.** One
+trivial `select id from guest_houses limit 1` from the dev machine:
+
+```
+270ms · 269ms · 294ms · 569ms   (first sample 1.3s)
+ttfb = 578ms of a 578ms total — pure latency, not query time
+```
+
+A render is several queries plus `getCurrentUser()`, so a navigation costs
+0.5–1.5 s before any of the app's own work. `.env.local` points at the hosted
+project, so a plain `npm run dev` pays this on every click. Develop against the
+mock store (`NEXT_PUBLIC_SUPABASE_URL= npm run dev`) or a local Supabase.
+
+**3. Every action invalidates the whole app.** All 11 call sites in
+`app/actions/bookings.ts` and `app/actions/admin.ts` use
+`revalidatePath("/", "layout")`, so approving one booking re-renders every
+route and re-runs the layout's queries before the button's spinner clears.
+Narrowing this to the routes an action actually changes is the main code-level
+win — but narrowing it too far means another tab stops noticing the change,
+which is what the 5 s poll is currently covering for.
+
+**4. The 5 s poll re-renders the whole tree, per open tab**
+(`components/auto-refresh.tsx`), competing with whatever was just clicked.
+`/history`, `/availability` and `/admin/mail` are already excluded.
+
+**Not the cause:** the email layer. `after()` runs its dispatch *after* the
+response is sent, so queuing and sending never delay a click.
+
 ## The Meals card is missing from the booking form
 
 Meals are offered only where `guest_houses.serves_meals` is on — check the guest

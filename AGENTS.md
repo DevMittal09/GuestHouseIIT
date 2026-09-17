@@ -104,10 +104,15 @@ as `assertNoClash`.
 ## Auth is mocked — one swap point
 
 `lib/auth.ts` `getCurrentUser()` reads the `gh_mock_user` cookie and looks up a
-profile. Login is a persona picker on `/`. **Everything else in the app only
+profile. `/` is a credential form (any seeded address + the shared demo
+password `password123`, `DEMO_PASSWORD` in the same module) and `/mock-login`
+is the one-click persona picker it links to — two doors onto the same cookie.
+**Everything else in the app only
 calls `getCurrentUser()`/`requireUser()`**, so replacing that function with
 Supabase Auth or institute SSO is the whole production migration. Do not scatter
-auth logic elsewhere.
+auth logic elsewhere. Both doors go together when real auth lands; the
+credential form is for showing the institute, the picker for jumping between
+the ten roles in development.
 
 Every server action re-checks authorization server-side (`requireUser`, role
 checks, `canReview`). Keep it that way: the UI hiding a button is never the
