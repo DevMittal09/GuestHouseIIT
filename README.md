@@ -27,7 +27,8 @@ app runs against a local mock data layer:
 | Employee (Faculty & Staff) | Both | Employee → GH Manager |
 | Official / Dignitary | Both | Direct → GH Manager (whitelisted emails only) |
 | Club / Fest Council | Both | Club → Faculty Advisor → GH Manager |
-| Alumni | Both | Alumni → IAR Cell → GH Manager |
+| IAR Student Cell | Both | IAR Student Cell → IAR Office → GH Manager |
+| IAR Office | Both | Direct → GH Manager (it *is* the approver) |
 
 Form behaviour per role (see `lib/booking-schema.ts`):
 
@@ -38,8 +39,10 @@ Form behaviour per role (see `lib/booking-schema.ts`):
   relationship field; queue rows are highlighted and float to the top of the manager's list.
 - **Club** — same field set as student but with no relationship field, and ID/Aadhaar upload is
   optional.
-- **Alumni** — same as student plus a mandatory Alumni ID card upload, previewed inline in the
-  IAR Cell portal.
+- **IAR Student Cell / IAR Office** — alumni have no institute login, so these two accounts
+  raise bookings *on behalf of* an alumnus (`booking_type: "alumni"`): alumnus name, roll number
+  and a mandatory Alumni ID card upload, previewed inline in the IAR portal. There is no alumni
+  persona to sign in as.
 
 Reviewer portals: `/warden` (scoped to the warden's hostel), `/fa` (scoped to the advisor's
 club/council), `/iar`, and `/manager` — the GH Manager console with per-guest-house queues and a

@@ -47,7 +47,7 @@ export const seedProfiles: Profile[] = [
   { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null },
   // No alumni persona: alumni have no institute login, so the IAR Office and
   // the IAR Student Cell raise those bookings for them (migration 9).
-  { id: "iar-student-cell", email: "iar.studentcell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null },
+  { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null },
   // ----- Reviewers / Admins -----
   { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Warden, Malhar)", role: "warden", hostel_name: "Malhar", department_or_club: null, roll_number: null },
   { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Warden, Saveri)", role: "warden", hostel_name: "Saveri", department_or_club: null, roll_number: null },

@@ -38,7 +38,7 @@ select pg_temp.seed_user('11111111-1111-1111-1111-111111111109', 'fa.petrichor@i
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111110', 'iar@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111111', 'guesthouse@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111112', 'developer@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111113', 'iar.studentcell@iitpkd.ac.in');
+select pg_temp.seed_user('11111111-1111-1111-1111-111111111113', 'alumnicell@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111114', 'gh.reception@iitpkd.ac.in');
 
 -- ---------------------------------------------------------------- profiles
@@ -54,7 +54,7 @@ insert into public.profiles (id, email, full_name, role, hostel_name, department
   ('11111111-1111-1111-1111-111111111110', 'iar@iitpkd.ac.in', 'IAR Office', 'iar_cell', null, 'International & Alumni Relations', null),
   ('11111111-1111-1111-1111-111111111111', 'guesthouse@iitpkd.ac.in', 'Guest House Manager', 'gh_manager', null, null, null),
   ('11111111-1111-1111-1111-111111111112', 'developer@iitpkd.ac.in', 'Portal Developer', 'developer', null, null, null),
-  ('11111111-1111-1111-1111-111111111113', 'iar.studentcell@iitpkd.ac.in', 'IAR Student Cell', 'iar_student_cell', null, 'International & Alumni Relations', null),
+  ('11111111-1111-1111-1111-111111111113', 'alumnicell@iitpkd.ac.in', 'IAR Student Cell', 'iar_student_cell', null, 'International & Alumni Relations', null),
   ('11111111-1111-1111-1111-111111111114', 'gh.reception@iitpkd.ac.in', 'Guest House Caretaker', 'gh_caretaker', null, null, null)
 on conflict (id) do nothing;
 

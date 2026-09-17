@@ -1,4 +1,4 @@
-import type { Role } from "./types";
+import { REQUESTER_ROLES, type Role } from "./types";
 
 /** Landing page for each role after sign-in. */
 export function homeForRole(role: Role): string {
@@ -16,7 +16,13 @@ export function homeForRole(role: Role): string {
     case "developer":
       return "/admin";
     default:
-      return "/dashboard";
+      // `/dashboard` bounces anyone who is not a requester to `homeForRole()`,
+      // so a role that lands here without being a requester would redirect to
+      // itself forever. That is not hypothetical: `alumni` is retired but is
+      // still in the `Role` union, and stored/legacy alumni accounts hung the
+      // browser on sign-in. `/availability` is the one route open to every
+      // signed-in role, so it is the safe floor.
+      return REQUESTER_ROLES.includes(role) ? "/dashboard" : "/availability";
   }
 }
 

@@ -446,7 +446,7 @@ guest houses and rooms only** — the five demo bookings are mock-store only.
 | Employee | `priya@iitpkd.ac.in` | `employee-priya` |
 | Official (whitelisted) | `admin@iitpkd.ac.in` | `official-admin` |
 | Club (Petrichor) | `petrichor@iitpkd.ac.in` | `club-petrichor` |
-| IAR Student Cell | `iar.studentcell@iitpkd.ac.in` | `iar-student-cell` |
+| IAR Student Cell | `alumnicell@iitpkd.ac.in` | `iar-student-cell` |
 | Wardens | `warden.malhar@`, `warden.saveri@iitpkd.ac.in` | `warden-malhar`, `warden-saveri` |
 | Faculty advisor | `fa.petrichor@iitpkd.ac.in` | `fa-petrichor` |
 | IAR Office | `iar@iitpkd.ac.in` | `iar-cell` |

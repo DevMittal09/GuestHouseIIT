@@ -645,7 +645,7 @@ carry per-day meal plans built from their dates (`demoMeals` in
 | Employee | `priya@iitpkd.ac.in` |
 | Official (whitelisted) | `admin@iitpkd.ac.in` |
 | Club (Petrichor) | `petrichor@iitpkd.ac.in` |
-| IAR Student Cell | `iar.studentcell@iitpkd.ac.in` |
+| IAR Student Cell | `alumnicell@iitpkd.ac.in` |
 | Wardens | `warden.malhar@`, `warden.saveri@iitpkd.ac.in` |
 | Faculty advisor | `fa.petrichor@iitpkd.ac.in` |
 | IAR Office | `iar@iitpkd.ac.in` |
