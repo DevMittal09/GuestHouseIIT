@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import {
   defaultOverride,
   firstInvalidAddress,
+  MAIL_TEMPLATES_MIGRATION_HINT,
   parseAddressList,
   type MailTemplateOverride,
 } from "@/lib/mail/template-config";
@@ -33,22 +34,58 @@ async function requireMailConsole() {
 }
 
 function fail(e: unknown): ActionResult {
+  if (isMissingTable(e)) return { ok: false, error: MAIL_TEMPLATES_MIGRATION_HINT };
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
 }
+
+/**
+ * Whether the store failed because `mail_templates` does not exist.
+ *
+ * Postgres says `42P01`; PostgREST says `PGRST205` when the table is missing
+ * from its schema cache, which is what you actually get from Supabase before
+ * the migration has run. Both mean the same thing to the person reading the
+ * page, and neither should look like a crash.
+ */
+function isMissingTable(e: unknown): boolean {
+  const code = (e as { code?: string } | null)?.code;
+  if (code === "42P01" || code === "PGRST205") return true;
+  const message = e instanceof Error ? e.message : String(e ?? "");
+  return /mail_templates/.test(message) && /(does not exist|schema cache)/i.test(message);
+}
+
+export type MailTemplateList =
+  | { ok: true; templates: MailTemplateOverride[] }
+  | { ok: false; error: string };
 
 /**
  * Every event, with its stored edits folded in — so the console shows one row
  * per kind of mail whether or not it has been touched. Events with no row
  * come back as `defaultOverride`, which is what "unedited" looks like.
+ *
+ * Returns a result rather than throwing. It is read by a server component,
+ * and an exception there replaces the whole console with "page cannot be
+ * loaded" — which is a terrible way to be told that a migration has not been
+ * run yet, or that this account cannot open this tab.
  */
-export async function listMailTemplates(): Promise<MailTemplateOverride[]> {
-  await requireMailConsole();
-  const stored = new Map(
-    (await getStore().listMailTemplates()).map((o) => [o.event_key, o])
-  );
-  return (Object.keys(MAIL_EVENT_LABELS) as MailEventKey[]).map(
-    (key) => stored.get(key) ?? defaultOverride(key)
-  );
+export async function listMailTemplates(): Promise<MailTemplateList> {
+  try {
+    await requireMailConsole();
+    const stored = new Map(
+      (await getStore().listMailTemplates()).map((o) => [o.event_key, o])
+    );
+    return {
+      ok: true,
+      templates: (Object.keys(MAIL_EVENT_LABELS) as MailEventKey[]).map(
+        (key) => stored.get(key) ?? defaultOverride(key)
+      ),
+    };
+  } catch (e) {
+    if (isMissingTable(e)) return { ok: false, error: MAIL_TEMPLATES_MIGRATION_HINT };
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not load the email templates",
+    };
+  }
 }
 
 export interface MailTemplateInput {

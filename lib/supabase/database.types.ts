@@ -64,7 +64,7 @@ type AppSettingRow = {
 type EmailOutboxRow = Omit<EmailMessage, "event_key"> & { event_key: string };
 
 /**
- * `mail_templates` (migration 12). Only edited events have a row; `cc_emails`
+ * `mail_templates` (migration 13). Only edited events have a row; `cc_emails`
  * is a text[] column, which is why this is not `MailTemplateOverride` itself.
  */
 type MailTemplateRow = {

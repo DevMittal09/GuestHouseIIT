@@ -1,4 +1,4 @@
--- Migration 12: the guest house edits its own emails (Sep 2026).
+-- Migration 13: the guest house edits its own emails (Sep 2026).
 --
 -- Every automatic mail's wording lived in `lib/mail/templates.ts`, so
 -- changing a subject line or adding "bring a photo ID to reception" meant a
@@ -17,7 +17,7 @@
 -- the built-in wording stays the single source of the default, and a template
 -- nobody has touched cannot drift from the code that renders it.
 --
--- Apply after migration 11. Safe to re-run.
+-- Apply after migration 12 (LDAP usernames). Safe to re-run.
 
 create table if not exists public.mail_templates (
   -- Plain text, not an enum, for the same reason `email_outbox.event_key` is:

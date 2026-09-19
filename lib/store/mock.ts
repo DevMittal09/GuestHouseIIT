@@ -69,7 +69,7 @@ interface Db {
   app_settings?: Record<string, string>;
   /** Queued notifications; see `lib/mail/dispatch.ts`. */
   email_outbox?: EmailMessage[];
-  /** Only the mails whose wording has actually been edited (migration 12). */
+  /** Only the mails whose wording has actually been edited (migration 13). */
   mail_templates?: MailTemplateOverride[];
 }
 

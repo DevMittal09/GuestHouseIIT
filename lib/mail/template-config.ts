@@ -167,6 +167,15 @@ export function firstInvalidAddress(addresses: string[]): string | null {
   return addresses.find((a) => !EMAIL.test(a)) ?? null;
 }
 
+/**
+ * Shown when `mail_templates` is not there yet. Lives here rather than in the
+ * server action because a "use server" module may only export async
+ * functions — exporting a string from one fails the build.
+ */
+export const MAIL_TEMPLATES_MIGRATION_HINT =
+  "The email templates table is not there yet — apply " +
+  "supabase/migrations/00000000000013_mail_templates.sql, then reload this page.";
+
 export function mailEventLabel(key: MailEventKey): string {
   return MAIL_EVENT_LABELS[key] ?? key;
 }
