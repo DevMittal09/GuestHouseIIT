@@ -11,8 +11,30 @@ import {
 } from "./recipients";
 import { renderEmail, type EmailDocument } from "./render";
 import * as t from "./templates";
+import {
+  defaultOverride,
+  fillTokens,
+  type MailTemplateOverride,
+} from "./template-config";
 import { bookingSubject, threadRootFor } from "./thread";
 import type { MailEventKey, NewEmailInput } from "./types";
+
+/**
+ * The guest house's edits to the automatic mails, keyed by event.
+ *
+ * A missing table (migration 12 not yet applied) or an unreachable store must
+ * not stop a booking being acknowledged, so this degrades to "no edits" — the
+ * built-in wording — rather than throwing.
+ */
+async function loadMailOverrides(): Promise<Map<MailEventKey, MailTemplateOverride>> {
+  try {
+    const rows = await getStore().listMailTemplates();
+    return new Map(rows.map((r) => [r.event_key, r]));
+  } catch (error) {
+    console.error("[mail] could not read template overrides; using the built-in wording", error);
+    return new Map();
+  }
+}
 
 /**
  * Queues the notifications for a workflow event.
@@ -79,11 +101,35 @@ interface QueueOne {
   threadRoot?: string | null;
 }
 
-function buildInput(params: QueueOne): NewEmailInput | null {
+function buildInput(
+  params: QueueOne,
+  overrides: Map<MailEventKey, MailTemplateOverride>
+): NewEmailInput | null {
+  // What the guest house has changed about this kind of mail, if anything.
+  // Applied here, at the single point every message passes through, so no
+  // template can be edited in the console and then quietly ignored.
+  const edit = overrides.get(params.eventKey) ?? defaultOverride(params.eventKey);
+  if (!edit.enabled) return null;
+
   const to = [...new Set(params.to.filter(Boolean))];
   if (to.length === 0) return null;
-  const cc = [...new Set((params.cc ?? []).filter((address) => !to.includes(address)))];
-  const { html, text } = renderEmail(params.doc, { footerLines: FOOTER });
+  const cc = [
+    ...new Set(
+      [...(params.cc ?? []), ...edit.cc].filter((address) => address && !to.includes(address))
+    ),
+  ];
+  // The intro goes above everything, the outro below it as small print — the
+  // two places a standing sentence belongs without disturbing the facts the
+  // template assembled from the booking.
+  const doc: EmailDocument = {
+    ...params.doc,
+    blocks: [
+      ...(edit.intro ? [{ kind: "paragraph" as const, text: fillTokens(edit.intro, params.booking) }] : []),
+      ...params.doc.blocks,
+      ...(edit.outro ? [{ kind: "note" as const, text: fillTokens(edit.outro, params.booking) }] : []),
+    ],
+  };
+  const { html, text } = renderEmail(doc, { footerLines: FOOTER });
   const bookingId = params.booking?.id ?? null;
   const threadRoot =
     params.threadRoot !== undefined
@@ -101,9 +147,14 @@ function buildInput(params: QueueOne): NewEmailInput | null {
     idempotency_key: `${params.eventKey}:${bookingId ?? "none"}:${params.stamp}:${to.join(",")}`,
     to_emails: to,
     cc_emails: cc,
-    subject: params.booking
-      ? bookingSubject(params.booking.booking_reference_id, params.subjectText)
-      : params.subjectText,
+    // A custom subject replaces the built-in one wholesale, tokens and all —
+    // including the "[IITPKD-GH-…]" prefix, because an office that wants its
+    // own subject usually wants the whole line.
+    subject: edit.subject
+      ? fillTokens(edit.subject, params.booking)
+      : params.booking
+        ? bookingSubject(params.booking.booking_reference_id, params.subjectText)
+        : params.subjectText,
     body_html: html,
     body_text: text,
     thread_root: threadRoot,
@@ -114,9 +165,13 @@ function buildInput(params: QueueOne): NewEmailInput | null {
 
 /** Queue a batch and kick the worker. Returns how many messages were new. */
 export async function queueMessages(messages: (QueueOne | null)[]): Promise<number> {
-  const inputs = messages
-    .filter((m): m is QueueOne => m !== null)
-    .map(buildInput)
+  const pending = messages.filter((m): m is QueueOne => m !== null);
+  if (pending.length === 0) return 0;
+  // Read once for the batch: a transition queues two or three messages and
+  // they share the same overrides.
+  const overrides = await loadMailOverrides();
+  const inputs = pending
+    .map((m) => buildInput(m, overrides))
     .filter((i): i is NewEmailInput => i !== null);
   if (inputs.length === 0) return 0;
 

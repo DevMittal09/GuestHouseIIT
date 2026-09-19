@@ -19,9 +19,11 @@ import type {
   EmailMessage,
   EmailOutboxFilter,
   EmailSettlement,
+  MailEventKey,
   MailStatus,
   NewEmailInput,
 } from "@/lib/mail/types";
+import type { MailTemplateOverride } from "@/lib/mail/template-config";
 import type { Role } from "@/lib/types";
 
 export type NewProfileInput = Omit<Profile, "id">;
@@ -190,4 +192,15 @@ export interface DataStore {
 
   /** Put a failed message back in the queue, due now, with its attempts reset. */
   requeueEmail(id: string): Promise<void>;
+
+  // ---- editable mail templates -------------------------------------
+  //
+  // Only the rows that have actually been edited are stored; everything else
+  // falls back to the wording in `lib/mail/templates.ts`. So an empty table
+  // means "nothing has been customised", not "no mail is configured".
+
+  listMailTemplates(): Promise<MailTemplateOverride[]>;
+  saveMailTemplate(override: MailTemplateOverride): Promise<void>;
+  /** Drop the override, restoring the built-in wording for that event. */
+  resetMailTemplate(key: MailEventKey): Promise<void>;
 }

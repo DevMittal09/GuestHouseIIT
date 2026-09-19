@@ -63,6 +63,20 @@ type AppSettingRow = {
  */
 type EmailOutboxRow = Omit<EmailMessage, "event_key"> & { event_key: string };
 
+/**
+ * `mail_templates` (migration 12). Only edited events have a row; `cc_emails`
+ * is a text[] column, which is why this is not `MailTemplateOverride` itself.
+ */
+type MailTemplateRow = {
+  event_key: string;
+  enabled: boolean;
+  subject: string | null;
+  intro: string | null;
+  outro: string | null;
+  cc_emails: string[];
+  updated_at: string;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -150,6 +164,12 @@ export interface Database {
           | "updated_at"
         >;
         Update: Partial<EmailOutboxRow>;
+        Relationships: [];
+      };
+      mail_templates: {
+        Row: MailTemplateRow;
+        Insert: Insertable<MailTemplateRow, "enabled" | "cc_emails" | "updated_at">;
+        Update: Partial<MailTemplateRow>;
         Relationships: [];
       };
       form_configs: {

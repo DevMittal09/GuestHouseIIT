@@ -25,18 +25,32 @@ import { getStore } from "@/lib/store";
 import type { BookingStatus, Profile, Role, RoomType } from "@/lib/types";
 import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
 import { occupancyNotStartedError } from "@/lib/workflow";
+import {
+  assignableRoles,
+  canUseConsole,
+  canUseConsoleSection,
+  CONSOLE_SECTIONS,
+  userEditError,
+  type ConsoleSection,
+} from "@/lib/access";
 import type { ActionResult } from "./bookings";
 
 /**
- * Every admin mutation funnels through here, so the console password is
- * enforced on the **actions**, not merely by hiding the UI. A crafted request
- * with a developer persona cookie but no unlock still gets nothing.
+ * Every console mutation funnels through here, so both gates are enforced on
+ * the **actions**, not merely by hiding the UI: a crafted request with the
+ * right cookie but no unlock, or with a manager's cookie against a
+ * developer-only section, still gets nothing.
+ *
+ * The section is named at each call site rather than inferred, so adding an
+ * action without deciding who may run it is not possible.
  */
-async function requireDeveloper(): Promise<Profile> {
+async function requireConsole(section: ConsoleSection): Promise<Profile> {
   const user = await requireUser();
-  if (user.role !== "developer") throw new Error("Developer access required");
+  if (!canUseConsoleSection(user.role, section)) {
+    throw new Error(`You do not have access to ${CONSOLE_SECTIONS[section].label}`);
+  }
   if (!(await isAdminUnlocked())) {
-    throw new Error("Developer console is locked — enter the console password again");
+    throw new Error("The console is locked — enter the console password again");
   }
   return user;
 }
@@ -56,7 +70,9 @@ function done(): ActionResult {
 export async function unlockAdminConsole(password: string): Promise<ActionResult> {
   try {
     const user = await requireUser();
-    if (user.role !== "developer") return { ok: false, error: "Developer access required" };
+    // Anyone with a console section may unlock it; which sections they then
+    // see is `consoleSectionsFor`. The password is the door, not the roles.
+    if (!canUseConsole(user.role)) return { ok: false, error: "Console access required" };
 
     const gate = throttleCheck(user.id);
     if (!gate.allowed) {
@@ -97,7 +113,7 @@ export async function changeAdminPassword(
   newPassword: string
 ): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("console_access");
 
     if (!(await checkAdminPassword(currentPassword))) {
       return { ok: false, error: "Current password is incorrect" };
@@ -154,7 +170,7 @@ const formConfigSchema = z.object({
 
 export async function saveRoleFormConfig(config: RoleFormConfig): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("forms");
     const parsed = formConfigSchema.safeParse(config);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid configuration" };
@@ -201,7 +217,7 @@ export async function saveRoleFormConfig(config: RoleFormConfig): Promise<Action
 
 export async function resetRoleFormConfig(role: Role): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("forms");
     await getStore().deleteFormConfig(role);
     return done();
   } catch (e) {
@@ -213,7 +229,7 @@ export async function resetRoleFormConfig(role: Role): Promise<ActionResult> {
 
 export async function createGuestHouseAction(name: string): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("guest_houses");
     const trimmed = name.trim();
     if (trimmed.length < 2) return { ok: false, error: "Guest house name is too short" };
     await getStore().createGuestHouse(trimmed);
@@ -225,7 +241,7 @@ export async function createGuestHouseAction(name: string): Promise<ActionResult
 
 export async function renameGuestHouseAction(id: string, name: string): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("guest_houses");
     const trimmed = name.trim();
     if (trimmed.length < 2) return { ok: false, error: "Guest house name is too short" };
     await getStore().updateGuestHouse(id, { name: trimmed });
@@ -241,7 +257,7 @@ export async function setGuestHouseMealsAction(
   servesMeals: boolean
 ): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("guest_houses");
     await getStore().updateGuestHouse(id, { serves_meals: servesMeals === true });
     return done();
   } catch (e) {
@@ -251,7 +267,7 @@ export async function setGuestHouseMealsAction(
 
 export async function deleteGuestHouseAction(id: string): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("guest_houses");
     await getStore().deleteGuestHouse(id);
     return done();
   } catch (e) {
@@ -265,7 +281,7 @@ export async function createRoomAction(
   roomType: RoomType
 ): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("guest_houses");
     const trimmed = roomNumber.trim();
     if (!trimmed) return { ok: false, error: "Room number is required" };
     await getStore().createRoom(guestHouseId, trimmed, roomType);
@@ -277,7 +293,7 @@ export async function createRoomAction(
 
 export async function setRoomActiveAction(id: string, isActive: boolean): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("guest_houses");
     await getStore().updateRoom(id, { is_active: isActive });
     return done();
   } catch (e) {
@@ -287,7 +303,7 @@ export async function setRoomActiveAction(id: string, isActive: boolean): Promis
 
 export async function deleteRoomAction(id: string): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("guest_houses");
     await getStore().deleteRoom(id);
     return done();
   } catch (e) {
@@ -317,9 +333,14 @@ export type UserFormInput = z.input<typeof userSchema>;
 
 export async function createUserAction(input: UserFormInput): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    const actor = await requireConsole("users");
     const parsed = userSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid user" };
+    // A manager may appoint another manager — that is the point of giving
+    // them this section — but not a developer. Otherwise "add an admin" is a
+    // route to becoming one, and the section split would be decoration.
+    const roleError = assignRoleError(actor, parsed.data.role);
+    if (roleError) return { ok: false, error: roleError };
     await getStore().createProfile(parsed.data);
     return done();
   } catch (e) {
@@ -329,17 +350,32 @@ export async function createUserAction(input: UserFormInput): Promise<ActionResu
 
 export async function updateUserAction(id: string, input: UserFormInput): Promise<ActionResult> {
   try {
-    const dev = await requireDeveloper();
+    const actor = await requireConsole("users");
     const parsed = userSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid user" };
-    if (id === dev.id && parsed.data.role !== "developer") {
-      return { ok: false, error: "You cannot remove your own developer role" };
+    if (id === actor.id && parsed.data.role !== actor.role) {
+      return { ok: false, error: "You cannot change your own role" };
     }
+    // Both halves matter: a manager may not *edit* a developer's account, and
+    // may not promote anyone into one.
+    const target = await getStore().getProfile(id);
+    if (!target) return { ok: false, error: "User not found" };
+    const editError = userEditError(actor, target);
+    if (editError) return { ok: false, error: editError };
+    const roleError = assignRoleError(actor, parsed.data.role);
+    if (roleError) return { ok: false, error: roleError };
     await getStore().updateProfile(id, parsed.data);
     return done();
   } catch (e) {
     return fail(e);
   }
+}
+
+/** Why this console user may not hand out that role, or null when they may. */
+function assignRoleError(actor: Profile, role: Role): string | null {
+  const allowed = assignableRoles(actor.role, Object.keys(ROLE_LABELS) as Role[]);
+  if (allowed.includes(role)) return null;
+  return `Only a developer can assign the ${ROLE_LABELS[role]} role`;
 }
 
 export type LdapImportResult =
@@ -353,7 +389,7 @@ export type LdapImportResult =
  */
 export async function importLdapUidsAction(text: string): Promise<LdapImportResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("users");
     const store = getStore();
     const plan = planLdapUidImport(text, await store.listProfiles());
     if (plan.problems.length) {
@@ -377,8 +413,12 @@ export async function importLdapUidsAction(text: string): Promise<LdapImportResu
 
 export async function deleteUserAction(id: string): Promise<ActionResult> {
   try {
-    const dev = await requireDeveloper();
-    if (id === dev.id) return { ok: false, error: "You cannot delete your own account" };
+    const actor = await requireConsole("users");
+    if (id === actor.id) return { ok: false, error: "You cannot delete your own account" };
+    const target = await getStore().getProfile(id);
+    if (!target) return { ok: false, error: "User not found" };
+    const editError = userEditError(actor, target);
+    if (editError) return { ok: false, error: editError };
     await getStore().deleteProfile(id);
     return done();
   } catch (e) {
@@ -390,7 +430,7 @@ export async function deleteUserAction(id: string): Promise<ActionResult> {
 
 export async function adminDeleteBookingAction(id: string): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("bookings");
     await getStore().deleteBooking(id);
     return done();
   } catch (e) {
@@ -411,7 +451,7 @@ export async function adminSetBookingStatusAction(
   remark: string
 ): Promise<ActionResult> {
   try {
-    const dev = await requireDeveloper();
+    const dev = await requireConsole("bookings");
     if (!OVERRIDABLE.includes(status)) return { ok: false, error: "Unknown status" };
     if (!remark.trim()) return { ok: false, error: "A remark is required for status overrides" };
 
@@ -461,7 +501,7 @@ export async function listMailOutbox(
   | { ok: false; error: string }
 > {
   try {
-    await requireDeveloper();
+    await requireConsole("mail_outbox");
     const store = getStore();
     const [rows, counts] = await Promise.all([
       store.listEmails({ status, limit: 200 }),
@@ -509,7 +549,7 @@ export type MailOutboxSummary = {
 /** Put a failed message back in the queue and try it immediately. */
 export async function retryMailMessage(id: string): Promise<ActionResult> {
   try {
-    await requireDeveloper();
+    await requireConsole("mail_outbox");
     await getStore().requeueEmail(id);
     await dispatchOutbox();
     return done();
@@ -523,7 +563,7 @@ export async function flushMailOutbox(): Promise<
   { ok: true; sent: number; failed: number } | { ok: false; error: string }
 > {
   try {
-    await requireDeveloper();
+    await requireConsole("mail_outbox");
     const result = await drainOutbox();
     revalidatePath("/", "layout");
     return { ok: true, sent: result.sent, failed: result.failed };
@@ -541,7 +581,7 @@ export async function flushMailOutbox(): Promise<
  */
 export async function sendTestEmail(): Promise<ActionResult> {
   try {
-    const dev = await requireDeveloper();
+    const dev = await requireConsole("mail_outbox");
     const config = mailConfig();
     const now = new Date();
 

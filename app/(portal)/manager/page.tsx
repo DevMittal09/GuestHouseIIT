@@ -98,6 +98,11 @@ export default async function ManagerPage({
                 </Link>
               </Button>
             )}
+            {/* Rooms, accounts, booking forms and the wording of the automatic
+                emails — all of it the manager's to change. */}
+            <Button asChild variant="outline">
+              <Link href="/admin/users">Settings</Link>
+            </Button>
           </div>
         }
       >

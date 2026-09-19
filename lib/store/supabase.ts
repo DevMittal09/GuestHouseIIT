@@ -20,10 +20,15 @@ import type {
   EmailMessage,
   EmailOutboxFilter,
   EmailSettlement,
+  MailEventKey,
   MailStatus,
   NewEmailInput,
 } from "@/lib/mail/types";
 import { MAIL_STATUSES } from "@/lib/mail/types";
+import {
+  defaultOverride,
+  type MailTemplateOverride,
+} from "@/lib/mail/template-config";
 import { mealsOn, normalizeMeals } from "@/lib/meals";
 import { getSupabase } from "@/lib/supabase/client";
 import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
@@ -880,6 +885,44 @@ export class SupabaseStore implements DataStore {
       })
     );
     return counts;
+  }
+
+  async listMailTemplates(): Promise<MailTemplateOverride[]> {
+    const { data, error } = await this.db.from("mail_templates").select("*");
+    if (error) throw error;
+    // `cc_emails` is a text[] column; everything else maps straight across.
+    return (data ?? []).map((row) => ({
+      ...defaultOverride(row.event_key as MailEventKey),
+      enabled: row.enabled,
+      subject: row.subject,
+      intro: row.intro,
+      outro: row.outro,
+      cc: row.cc_emails ?? [],
+      updated_at: row.updated_at,
+    }));
+  }
+
+  async saveMailTemplate(override: MailTemplateOverride): Promise<void> {
+    const { error } = await this.db.from("mail_templates").upsert(
+      {
+        event_key: override.event_key,
+        enabled: override.enabled,
+        subject: override.subject,
+        intro: override.intro,
+        outro: override.outro,
+        cc_emails: override.cc,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "event_key" }
+    );
+    if (error) throw error;
+  }
+
+  async resetMailTemplate(key: MailEventKey): Promise<void> {
+    // Deleting the row *is* the reset: with nothing stored, the wording falls
+    // back to `lib/mail/templates.ts`.
+    const { error } = await this.db.from("mail_templates").delete().eq("event_key", key);
+    if (error) throw error;
   }
 
   async requeueEmail(id: string): Promise<void> {

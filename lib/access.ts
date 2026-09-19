@@ -12,7 +12,7 @@
  * override rather than a loophole: the audit trail names who did it and why.
  */
 
-import type { Role } from "./types";
+import type { Profile, Role } from "./types";
 
 /**
  * Roles with unrestricted access to every booking. The developer is included
@@ -66,4 +66,114 @@ export function canEditMeals(role: Role): boolean {
 /** See occupancy and daily meal counts across every guest house. */
 export function canViewAllOccupancy(role: Role): boolean {
   return hasFullBookingAccess(role) || role === "gh_caretaker";
+}
+
+// ------------------------------------------------------- the admin console
+
+/**
+ * The console is not one permission but several.
+ *
+ * The developer built the portal; the Guest House Manager runs the guest
+ * house. Both need to change how it is configured — rooms come in and out of
+ * service, a new manager joins, a booking form needs another field, the
+ * wording of a mail is wrong — and making all of that developer-only means
+ * every operational change waits on a developer. So the console is split, and
+ * each section names the roles that may use it.
+ *
+ * What stays developer-only is what could lock everyone out or rewrite
+ * history: the console password, forcing a booking's status, and deleting
+ * bookings outright.
+ */
+export type ConsoleSection =
+  | "users"
+  | "guest_houses"
+  | "forms"
+  | "mail_templates"
+  | "mail_outbox"
+  | "bookings"
+  | "console_access";
+
+export const CONSOLE_SECTIONS: Record<
+  ConsoleSection,
+  { label: string; href: string; roles: Role[]; blurb: string }
+> = {
+  users: {
+    label: "Users & Roles",
+    href: "/admin/users",
+    roles: ["gh_manager", "developer"],
+    blurb: "Accounts and what each one may do, including other managers.",
+  },
+  guest_houses: {
+    label: "Guest Houses & Rooms",
+    href: "/admin/guest-houses",
+    roles: ["gh_manager", "developer"],
+    blurb: "Guest houses, their rooms, and which of them serve meals.",
+  },
+  forms: {
+    label: "Form Builder",
+    href: "/admin/forms",
+    roles: ["gh_manager", "developer"],
+    blurb: "What each role is asked for on the booking form.",
+  },
+  mail_templates: {
+    label: "Email Templates",
+    href: "/admin/mail-templates",
+    roles: ["gh_manager", "developer"],
+    blurb: "What every automatic email says, and who else is copied on it.",
+  },
+  mail_outbox: {
+    label: "Mail Outbox",
+    href: "/admin/mail",
+    roles: ["gh_manager", "developer"],
+    blurb: "Every message queued or sent, and why any of them failed.",
+  },
+  bookings: {
+    label: "All Bookings",
+    href: "/admin/bookings",
+    roles: ["developer"],
+    blurb: "Force a booking's status or delete it outright. Developer only.",
+  },
+  console_access: {
+    label: "Console Access",
+    href: "/admin/access",
+    roles: ["developer"],
+    blurb: "The console password. Developer only — it is the key to this door.",
+  },
+};
+
+export function canUseConsoleSection(role: Role, section: ConsoleSection): boolean {
+  return CONSOLE_SECTIONS[section].roles.includes(role);
+}
+
+/** The sections this role may open, in tab order. Empty means no console. */
+export function consoleSectionsFor(role: Role): ConsoleSection[] {
+  return (Object.keys(CONSOLE_SECTIONS) as ConsoleSection[]).filter((s) =>
+    canUseConsoleSection(role, s)
+  );
+}
+
+export function canUseConsole(role: Role): boolean {
+  return consoleSectionsFor(role).length > 0;
+}
+
+/**
+ * Which roles this console user may hand out.
+ *
+ * A manager may appoint another manager — that is the point of giving them
+ * Users & Roles — but **not** a developer, and not by editing an existing
+ * developer account. Otherwise "add an admin" is a route to becoming one,
+ * and the split above would be decoration.
+ */
+export function assignableRoles(actor: Role, all: Role[]): Role[] {
+  if (actor === "developer") return all;
+  return all.filter((r) => r !== "developer");
+}
+
+/** Why this console user may not touch that account, or null when they may. */
+export function userEditError(actor: Profile, target: Profile): string | null {
+  if (actor.role === "developer") return null;
+  if (target.role === "developer") {
+    return "Only a developer can change a developer account";
+  }
+  return null;
 }

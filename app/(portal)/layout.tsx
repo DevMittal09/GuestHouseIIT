@@ -36,7 +36,12 @@ export default async function PortalLayout({ children }: { children: React.React
     ...(user.role === "warden" ? [{ href: "/warden", label: "Assistant Warden Queue" }] : []),
     ...(user.role === "faculty_advisor" ? [{ href: "/fa", label: "FA Queue" }] : []),
     ...(user.role === "iar_cell" ? [{ href: "/iar", label: "IAR Queue" }] : []),
-    ...(user.role === "gh_manager" ? [{ href: "/manager", label: "Manager Console" }] : []),
+    ...(user.role === "gh_manager"
+      ? [
+          { href: "/manager", label: "Manager Console" },
+          { href: "/admin/users", label: "Settings" },
+        ]
+      : []),
     ...(user.role === "gh_caretaker" ? [{ href: "/caretaker", label: "Reception" }] : []),
     ...(user.role === "developer" ? [{ href: "/admin", label: "Developer Console" }] : []),
     { href: "/availability", label: "Room Availability" },

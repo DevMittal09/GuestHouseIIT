@@ -37,6 +37,11 @@ import { ROLE_LABELS, type Profile, type Role } from "@/lib/types";
 
 const ALL_ROLES = Object.keys(ROLE_LABELS) as Role[];
 
+/** Accounts this console user may not touch — see `userEditError`. */
+function isLocked(actorRole: Role, target: Profile): boolean {
+  return actorRole !== "developer" && target.role === "developer";
+}
+
 const EMPTY: UserFormInput = {
   email: "",
   full_name: "",
@@ -47,7 +52,16 @@ const EMPTY: UserFormInput = {
   ldap_uid: "",
 };
 
-export function UsersManager({ profiles }: { profiles: Profile[] }) {
+export function UsersManager({
+  profiles,
+  roles = ALL_ROLES,
+  actorRole = "developer",
+}: {
+  profiles: Profile[];
+  /** The roles this console user may hand out — see `assignableRoles`. */
+  roles?: Role[];
+  actorRole?: Role;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -173,13 +187,26 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
                 <TableCell className="font-mono text-xs">{p.ldap_uid ?? "—"}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openEdit(p)}>
+                    {/* A manager cannot edit or remove a developer account —
+                        the server refuses it, and offering the button anyway
+                        would only produce an error. */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isLocked(actorRole, p)}
+                      title={
+                        isLocked(actorRole, p)
+                          ? "Only a developer can change a developer account"
+                          : undefined
+                      }
+                      onClick={() => openEdit(p)}
+                    >
                       Edit
                     </Button>
                     <Button
                       variant="destructive"
                       size="sm"
-                      disabled={isPending}
+                      disabled={isPending || isLocked(actorRole, p)}
                       onClick={() => setToDelete(p)}
                     >
                       Delete
@@ -288,7 +315,7 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
                 value={values.role}
                 onChange={(e) => set("role")(e.target.value)}
               >
-                {ALL_ROLES.map((r) => (
+                {roles.map((r) => (
                   <option key={r} value={r}>
                     {ROLE_LABELS[r]}
                   </option>

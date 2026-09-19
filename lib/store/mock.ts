@@ -28,10 +28,12 @@ import type {
   EmailMessage,
   EmailOutboxFilter,
   EmailSettlement,
+  MailEventKey,
   MailStatus,
   NewEmailInput,
 } from "@/lib/mail/types";
 import { MAIL_STATUSES } from "@/lib/mail/types";
+import type { MailTemplateOverride } from "@/lib/mail/template-config";
 import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
 import type {
   BookingDetailsPatch,
@@ -67,6 +69,8 @@ interface Db {
   app_settings?: Record<string, string>;
   /** Queued notifications; see `lib/mail/dispatch.ts`. */
   email_outbox?: EmailMessage[];
+  /** Only the mails whose wording has actually been edited (migration 12). */
+  mail_templates?: MailTemplateOverride[];
 }
 
 const DB_PATH = path.join(process.cwd(), ".local-db.json");
@@ -882,6 +886,26 @@ export class MockStore implements DataStore {
     const counts = Object.fromEntries(MAIL_STATUSES.map((s) => [s, 0])) as Record<MailStatus, number>;
     for (const mail of outbox) counts[mail.status] += 1;
     return counts;
+  }
+
+  async listMailTemplates(): Promise<MailTemplateOverride[]> {
+    return loadDb().mail_templates ?? [];
+  }
+
+  async saveMailTemplate(override: MailTemplateOverride): Promise<void> {
+    const db = loadDb();
+    const rows = db.mail_templates ?? (db.mail_templates = []);
+    const at = rows.findIndex((r) => r.event_key === override.event_key);
+    const row = { ...override, updated_at: new Date().toISOString() };
+    if (at >= 0) rows[at] = row;
+    else rows.push(row);
+    saveDb(db);
+  }
+
+  async resetMailTemplate(key: MailEventKey): Promise<void> {
+    const db = loadDb();
+    db.mail_templates = (db.mail_templates ?? []).filter((r) => r.event_key !== key);
+    saveDb(db);
   }
 
   async requeueEmail(id: string): Promise<void> {
