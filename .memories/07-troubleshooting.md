@@ -331,3 +331,53 @@ npm install -D supabase
 npx supabase db push
 ```
 Or apply migrations manually via the Supabase Dashboard SQL Editor.
+
+## `next build` fails: "Cannot find module '../../../app/page.js'" in `.next/dev/types`
+
+**Cause.** After moving or deleting a route (19 Sep 2026: `app/page.tsx` and
+`app/mock-login/` moved into `app/(site)/`), `.next/dev/types/validator.ts` —
+written by an earlier `next dev` — still imports the old paths. `next build`
+type-checks it but does not regenerate the dev copy.
+
+**Fix.** `rm -rf .next/dev/types` and build again; `next dev` recreates it. It
+is generated output, nothing is lost.
+
+## A production build on the mock store redirects every persona to `/sign-in`
+
+**Cause.** `NEXT_PUBLIC_SUPABASE_URL` is inlined at **build** time. A build
+made with `.env.local` in force has the hosted URL compiled in, so
+`NEXT_PUBLIC_SUPABASE_URL= npx next start` still uses hosted Supabase, where a
+mock id like `gh-manager` is not a uuid — `getCurrentUser()` returns null and
+every guard redirects. (It also means the "mock" server read the shared
+database.)
+
+**Fix.** `NEXT_PUBLIC_SUPABASE_URL= npm run build` as well as for `next start`,
+then rebuild normally when done. Recipe in
+[05-deployment.md](05-deployment.md).
+
+## Signed-out users land on the public home page instead of a sign-in form
+
+**Cause.** A portal guard doing `redirect("/")`. Since 19 Sep 2026 `/` is the
+public website.
+
+**Fix.** `redirect(SIGN_IN_PATH)` from `lib/routes.ts`. `grep -rn 'redirect("/")' app`
+should find nothing.
+
+## "I can't sign in" with a personal or test address
+
+**Cause.** `signIn()` refuses addresses outside `@iitpkd.ac.in` and its
+subdomains (19 Sep 2026), with "Use your @iitpkd.ac.in email address…". A
+developer-created profile on a gmail address hits this.
+
+**Fix.** Give the profile an institute address in Users & Roles, or use
+`/mock-login` for development. Do not loosen `isInstituteEmail()` — the domain
+rule is the design's requirement and the server is where it is enforced.
+
+## Resizing the camera photos gets killed (exit 137)
+
+**Cause.** The `Images/` originals are 24-megapixel JPEGs; decoding all of them
+in one Python process exhausted memory and the kernel OOM-killed it.
+
+**Fix.** One photo per process, and `im.draft("RGB", (2000, 2000))` before
+loading so the JPEG decoder works at reduced scale. Recipe in
+[10-ui-design.md](10-ui-design.md#photographs).

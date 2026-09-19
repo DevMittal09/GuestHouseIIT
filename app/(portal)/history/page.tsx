@@ -7,9 +7,10 @@ import {
   type RawSearchParams,
 } from "@/lib/booking-search";
 import { getCurrentUser } from "@/lib/auth";
-import { homeForRole } from "@/lib/routes";
+import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { canExportPdf, canViewHistory, historyScope, isRequesterHistory } from "@/lib/workflow";
+import { PageHeader } from "@/components/page-header";
 
 export default async function HistoryPage({
   searchParams,
@@ -17,7 +18,7 @@ export default async function HistoryPage({
   searchParams: Promise<RawSearchParams>;
 }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/");
+  if (!user) redirect(SIGN_IN_PATH);
   if (!canViewHistory(user.role)) redirect(homeForRole(user.role));
 
   const scope = historyScope(user);
@@ -76,16 +77,11 @@ export default async function HistoryPage({
 
 function Heading({ scopeLabel, isRequester }: { scopeLabel: string | null; isRequester: boolean }) {
   return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">
-        {isRequester ? "Booking History" : "Approval Log"}
-      </h1>
-      <p className="text-muted-foreground">
-        {isRequester
-          ? "A complete record of all your guest house booking requests and their status."
-          : "Every request you have approved or rejected, and a searchable archive of past bookings."}
-        {scopeLabel && <span className="ml-1 font-medium text-foreground">{scopeLabel}.</span>}
-      </p>
-    </div>
+    <PageHeader title={isRequester ? "Booking History" : "Approval Log"}>
+      {isRequester
+        ? "A complete record of all your guest house booking requests and their status."
+        : "Every request you have approved or rejected, and a searchable archive of past bookings."}
+      {scopeLabel && <span className="ml-1 font-medium text-foreground">{scopeLabel}.</span>}
+    </PageHeader>
   );
 }

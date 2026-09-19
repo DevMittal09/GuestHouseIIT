@@ -21,8 +21,9 @@ There is **no test framework installed**. Verification approach is described in
 
 ```
 app/
-  page.tsx                 sign-in form (credentials)
-  mock-login/              persona picker (development)
+  (site)/                  PUBLIC website (19 Sep 2026): / home, book-room, book-meal,
+                           guidelines, gallery, contact, sign-in, mock-login
+                           — see 10-ui-design.md
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
     dashboard/             requester's own bookings
@@ -70,8 +71,10 @@ not require deleting the database.
 
 `lib/auth.ts` exposes `getCurrentUser()` / `requireUser()`. `getCurrentUser()`
 reads the `gh_mock_user` cookie (a profile id) and looks the profile up. The
-sign-in page is a credential form over the same cookie, with the persona
-picker one link away at `/mock-login`.
+sign-in page (`/sign-in`, also embedded in the public `/book-room` and
+`/book-meal`) is a credential form over the same cookie, with the persona
+picker one link away at `/mock-login`. `/` is the public website, so signed-out
+guards redirect to `SIGN_IN_PATH`, not `/`.
 
 **No other module contains auth logic.** Replacing that one function with
 Supabase Auth or institute SSO is the entire production migration. Resist the

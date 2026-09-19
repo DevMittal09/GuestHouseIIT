@@ -104,9 +104,14 @@ as `assertNoClash`.
 ## Auth is mocked — one swap point
 
 `lib/auth.ts` `getCurrentUser()` reads the `gh_mock_user` cookie and looks up a
-profile. `/` is a credential form (any seeded address + the shared demo
-password `password123`, `DEMO_PASSWORD` in the same module) and `/mock-login`
-is the one-click persona picker it links to — two doors onto the same cookie.
+profile. `/sign-in` is a credential form (any seeded address + the shared demo
+password `password123`, `DEMO_PASSWORD` in the same module) — the same form is
+embedded in the public `/book-room` and `/book-meal` — and `/mock-login` is the
+one-click persona picker it links to — two doors onto the same cookie.
+**`/` is the public website, not a sign-in page:** signed-out guards
+`redirect(SIGN_IN_PATH)` (`lib/routes.ts`), never `redirect("/")`. `signIn()`
+refuses addresses outside `@iitpkd.ac.in` and its subdomains (students are
+`@smail.`) and redirects to a `next` path only via `safeNextPath()`.
 **Everything else in the app only
 calls `getCurrentUser()`/`requireUser()`**, so replacing that function with
 Supabase Auth or institute SSO is the whole production migration. Do not scatter
@@ -645,16 +650,50 @@ itself, so callers pass only `new_status`. `action_by_name` is denormalized so
 history survives account deletion (`action_by` is nullable / `on delete set
 null`).
 
-## Branding
+## Public website and branding — read `.memories/10-ui-design.md` first
 
-Palette and logo come from **https://dashboard.iitpkd.ac.in/** — primary amber
-`#f7a600`, warm off-white `#faf9f7`, text `#2b2b2b`, borders `#e3e1dc`. Tokens
-live in `app/globals.css` (light + a warm dark variant). The official logo is
-`public/iitpkd-logo.png`, and `app/icon.png` is the same file acting as the
-favicon. Note: white-on-amber is low contrast (WCAG); it matches the official
-site deliberately. Fix by setting `--primary-foreground` to a dark brown.
+Since 19 Sep 2026, built from `design_handoff/` (a reference, not code to copy).
+
+- **`app/(site)/`** is the public site: `/` home, `/book-room`, `/book-meal`,
+  `/guidelines`, `/gallery`, `/contact` (Google Maps embed), `/sign-in`,
+  `/mock-login`. Chrome in `components/site/`; the navy `NavBar`
+  (`components/site/site-nav.tsx`) is shared with the portal shell, and every
+  portal page title is `components/page-header.tsx`.
+- **Facts come from the backend.** Guest houses, room counts, who may book
+  where, approval chains, meal times, the advance window and cancellation rules
+  are rendered from `lib/` by `lib/site-data.ts` / `lib/site-content.ts`. Never
+  hardcode on the site a rule the portal enforces, and never a guest house
+  name. Those loaders swallow store errors so the public site cannot 500.
+- **Editable values** (contact, map, PDF URL, photos) live in `lib/site.ts`;
+  `grep -rn "TODO(site)"` lists what the office still has to confirm.
+- **Book Meal has no flow of its own** — meals are chosen per day inside the
+  room request (`/book`), only where `serves_meals`. Don't build a meal-only
+  booking UI without the backend for it.
+- **Palette:** navy `#12284C` primary (white text), gold `#E8A317` accents and
+  focus ring (gold buttons take **navy** text — never white), body `#41506A`,
+  borders `#E1E5EC`, white background, 3px radius, no shadows; Source Serif 4
+  headings / Source Sans 3 body via `next/font`. Tokens and brand utilities
+  (`bg-navy`, `text-gold-dark`, `bg-band`, `text-body`, …) in
+  `app/globals.css`. The portal is restyled **through the shadcn tokens** —
+  change a token, not forty components. This retired the old amber palette and
+  its white-on-amber contrast failure.
+- **Photos:** originals in `Images/` (gitignored, ~180 MB); the site serves
+  2000px, metadata-stripped copies from `public/site/photos/`. Resize one photo
+  per process with PIL `draft()` or it gets OOM-killed. Their guest house is
+  unconfirmed, so the Gallery groups by subject — don't attribute them.
+- Logos: `public/iitpkd-web-logo.jpg` (wide, in both headers) and
+  `public/iitpkd-logo.png` (emblem; `app/icon.png` is the favicon).
+- Verified at **320 px**: no page-level horizontal scroll, one `<h1>` per page.
+  Keep grids as `repeat(auto-fit|auto-fill, minmax(min(Npx,100%),1fr))`.
 
 ## Traps that already cost time
+
+- **`NEXT_PUBLIC_*` is inlined at build time.** To serve a production build on
+  the mock store, `NEXT_PUBLIC_SUPABASE_URL=` must be empty for `npm run build`
+  *and* `next start`; otherwise the build still talks to hosted Supabase and
+  every mock persona is bounced to `/sign-in`. Rebuild normally afterwards.
+- **Moving a route leaves `.next/dev/types` stale** and `next build` fails with
+  "Cannot find module '…/app/page.js'". `rm -rf .next/dev/types`.
 
 - **Server action body limit.** File uploads exceed the 1 MB default and fail in
   the browser as an opaque `NetworkError`. `next.config.ts` raises

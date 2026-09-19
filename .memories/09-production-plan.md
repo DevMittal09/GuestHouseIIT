@@ -240,11 +240,14 @@ domain. Confirm with the IAR cell. If it doesn't:
    discipline in `AGENTS.md`.
 4. Add `middleware.ts` for session refresh, and keep the route guards where they
    are — middleware is a convenience, not the boundary.
-5. Delete **both** demo sign-in doors — the credential form on `/` with its
-   `DEMO_PASSWORD`, and the persona picker at `/mock-login` — and delete the
-   `gh_mock_user` cookie path entirely. Do not leave either behind a flag; a
-   flag is a backdoor. `/` keeps its route: every signed-out guard redirects
-   there, so the real provider's button replaces the form in place.
+5. Delete **both** demo sign-in doors — the credential form
+   (`components/login-form.tsx`, on `/sign-in`, `/book-room` and `/book-meal`)
+   with its `DEMO_PASSWORD`, and the persona picker at `/mock-login` — and
+   delete the `gh_mock_user` cookie path entirely. Do not leave either behind a
+   flag; a flag is a backdoor. The three pages keep their routes: every
+   signed-out guard redirects to `/sign-in` (`SIGN_IN_PATH`) and the public
+   booking pages link there, so the real provider's button replaces the form
+   inside `SignInPanel`. (`/` is the public website since 19 Sep 2026.)
 6. Move request-scoped reads to the anon key with the user's session so **RLS
    becomes the real boundary**. Keep one service-role client, used only by
    `app/actions/admin.ts` for user creation.

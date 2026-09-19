@@ -6,12 +6,14 @@ What exists today, with file paths.
 
 | Concern | File |
 | --- | --- |
-| Sign-in (credentials) | `app/page.tsx`, `components/login-form.tsx` |
-| Mock sign-in (persona picker) | `app/mock-login/page.tsx` |
-| Login / logout actions | `app/actions/auth.ts` (`loginAs`, `logout`) |
+| Public website (home, booking entry points, guidelines, gallery, contact) | `app/(site)/*`, `components/site/*` — see [10-ui-design.md](10-ui-design.md) |
+| Sign-in (credentials) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` → `components/login-form.tsx` |
+| Mock sign-in (persona picker) | `app/(site)/mock-login/page.tsx` |
+| Login / logout actions | `app/actions/auth.ts` (`signIn` — institute domain + safe `next`; `loginAs`; `logout` → `/sign-in`) |
+| Where signed-out visitors go | `SIGN_IN_PATH` in `lib/routes.ts` (`/` is the public home page) |
 | Session read | `lib/auth.ts` (`getCurrentUser`, `requireUser`) |
 | Post-login landing per role | `lib/routes.ts` (`homeForRole`) |
-| Authenticated shell + nav | `app/(portal)/layout.tsx` |
+| Authenticated shell + nav | `app/(portal)/layout.tsx` (sticky navy `NavBar` from `components/site/site-nav.tsx`), page titles via `components/page-header.tsx` |
 
 Nav links are role-aware: requesters see Dashboard / New Booking / Booking History,
 reviewers see their queue + Approval Log, the manager sees the console +
@@ -213,7 +215,8 @@ clamping 31 January to 28 February on a month step.
 `minmax(2.75rem, 1fr)` column per room, wrapped in `overflow-x-auto` with the
 hour column and the room-number header both sticky. Each cell is an hour × room,
 red when held and blank when free, with a `title` naming the booking. When the
-selected date is today the current hour is marked in the brand amber.
+selected date is today the current hour is marked in the primary colour (navy
+since the 19 Sep 2026 restyle; it was amber before).
 
 **Week and month views.** One row per day (3rem tall in a week, 1.75rem in a
 month), one column per room. Each room column is a single grid item spanning
@@ -221,7 +224,7 @@ every day row, and each booking is an absolutely positioned red bar whose top an
 height are fractions of the whole range (`bucketOccupancyByDay`). A three-night
 stay is therefore one bar that starts partway down its check-in day and ends
 partway down its check-out day. Beside each date is the number of rooms free all
-day; today's row is tinted and an amber line marks the current time. Each bar's
+day; today's row is tinted and a primary-colour (navy) line marks the current time. Each bar's
 `title` names the booking and its period.
 
 **Legend, badges and counts.** Red is labelled **Booked** (it used to say
@@ -625,14 +628,21 @@ delivery, and the content is the booking, one click away in All Bookings.
 
 ## Branding
 
-Palette and logo are taken from https://dashboard.iitpkd.ac.in/ — primary amber
-`#f7a600`, warm off-white `#faf9f7`, text `#2b2b2b`, borders `#e3e1dc`. Tokens
-live in `app/globals.css` for both light and a warm dark variant. The logo is
-`public/iitpkd-logo.png`; `app/icon.png` is the same file serving as the favicon.
+**Since 19 Sep 2026 the palette comes from the guest house design handoff**
+(`design_handoff/README.md`): navy `#12284C` (primary, white text), gold
+`#E8A317` (accents, focus ring, the public CTA with navy text), body text
+`#41506A`, borders `#E1E5EC`, white background, 3px corners, no shadows;
+Source Serif 4 headings and Source Sans 3 body via `next/font`. Tokens and the
+brand utilities (`bg-navy`, `text-gold-dark`, `bg-band`, …) live in
+`app/globals.css`. Full table and rules in [10-ui-design.md](10-ui-design.md).
 
-Known accessibility caveat: white-on-amber is low contrast by WCAG. It matches
-the official site deliberately. To fix, set `--primary-foreground` to a dark
-brown (the dark theme already uses `#251a00`).
+Logos: `public/iitpkd-web-logo.jpg` (the wide institute web logo, in both
+headers) and `public/iitpkd-logo.png` (the emblem; `app/icon.png` is the same
+file serving as the favicon).
+
+The earlier amber-on-off-white palette copied from dashboard.iitpkd.ac.in, and
+its white-on-amber WCAG failure, are gone — white on navy is ≈13:1. Mail
+templates (`lib/mail/render.ts`) still carry their own inline amber header.
 
 ## Demo data
 

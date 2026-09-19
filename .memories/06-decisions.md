@@ -41,6 +41,12 @@ left behind a flag.
 *same* message. Distinguishing them would let an unauthenticated visitor
 enumerate which institute addresses are registered.
 
+**Superseded in part (19 Sep 2026).** The credential form moved from `/` to
+`/sign-in` (and is embedded in the public `/book-room` and `/book-meal`),
+because `/` became the public guest house website. The "every guard redirects
+to `/`" constraint was resolved by pointing every guard at `SIGN_IN_PATH`
+instead. Everything else here still holds. See the UI redesign entry below.
+
 ## Two data stores behind one interface
 
 **Decision.** Define `DataStore` and implement it twice (JSON mock, Supabase).
@@ -202,7 +208,11 @@ not integrate with react-hook-form's `register()` without a controller wrapper
 per field. A styled native select works everywhere, is keyboard- and
 mobile-friendly, and supports type-ahead.
 
-## Branding copied from the official dashboard
+## Branding copied from the official dashboard (superseded 19 Sep 2026)
+
+> Replaced by the guest house design handoff's navy/gold palette — see
+> "UI redesign from the design handoff" at the end of this file. Kept for the
+> history.
 
 **Decision.** Take the palette and logo from https://dashboard.iitpkd.ac.in/
 verbatim, including white-on-amber buttons.
@@ -982,3 +992,88 @@ Guarded by a throwaway suite of 15 checks — the round trip for all six
 requester roles, that a third parse is stable, and that the alumni,
 required-ID and parent-dependency rules still reject what they should. Worth
 keeping when a test runner is installed (roadmap §4).
+
+## UI redesign from the design handoff (19 Sep 2026)
+
+Detail in [10-ui-design.md](10-ui-design.md). The decisions, with the options
+that lost:
+
+### The public site is a route group, `/` included
+
+**Decision.** `app/(site)/` holds the seven-tab website as real routes, and `/`
+is its home page. The portal stays in `app/(portal)/` with its URLs unchanged.
+
+**Why.** The design is a public front door; one URL per tab is what the
+handoff asked for and what links, the back button and search engines need.
+**Rejected:** keeping `/` as the sign-in page and putting the site at `/site` —
+the institute would link the portal's login form as the guest house's home.
+**Cost:** every `redirect("/")` in a portal guard had to become
+`redirect(SIGN_IN_PATH)`; a new guard that copies an old file and redirects to
+`/` will quietly land signed-out users on the brochure.
+
+### Content from the backend, look from the design
+
+**Decision.** Every sentence on the public site that states a rule the portal
+enforces is rendered from `lib/` (`lib/site-data.ts`, `lib/site-content.ts`);
+only amenities and house rules are literal copy, marked `TODO(site)`.
+
+**Why.** The owner asked for the UI to be based on the backend, and the
+prototype's copy contradicted it in places ("seven days in advance" against a
+one-month *maximum*; fixed check-in/out times against per-booking times; a
+meal-only booking flow that does not exist). A brochure hand-written once
+drifts the first time the Form Builder changes who may book where.
+**Cost:** the public pages read the store on every request (they are dynamic).
+
+### "Book Meal" tells the truth instead of building a meal flow
+
+**Decision.** `/book-meal` is the design's gated page, but it says meals are
+chosen day by day inside the room request at the guest houses that serve them,
+lists the serving times, and signs in to `/book`.
+
+**Why.** There is no meal-only booking in the backend; a dining booking is in
+the meeting notes as *not started* and needs billing (debitable heads). Building
+a UI for it would be building the feature. **Rejected:** hiding the tab — the
+design and the office both expect it.
+
+### Institute domain enforced in `signIn()`, subdomains included
+
+**Decision.** `isInstituteEmail()` accepts `@iitpkd.ac.in` and any
+`@*.iitpkd.ac.in`; `signIn()` enforces it, the form repeats it.
+
+**Why.** The design requires server-side enforcement, and students sign in as
+`@smail.iitpkd.ac.in`, which an exact-match check would have locked out.
+**Cost:** a developer-created account on a personal address can no longer use
+the credential form (the persona picker still works).
+
+### The portal restyle goes through the tokens, not the pages
+
+**Decision.** Re-point the shadcn tokens (`--primary` navy, `--ring` gold,
+`--radius` 3px, fonts) and add one `PageHeader`; leave every feature component
+alone.
+
+**Why.** Dozens of components already speak `bg-primary`, `ring`, `rounded-lg`.
+Changing the tokens restyles all of them consistently with no risk to
+behaviour; editing each would have been a large diff with real regression risk
+in the most-used screens. **Side effect accepted:** the availability chart's
+"now" marker turned from amber to navy.
+
+### Photos: resized copies served, originals ignored, no attribution
+
+**Decision.** Serve 2000px, metadata-stripped copies from
+`public/site/photos/`; gitignore the 180 MB of originals in `Images/`; group the
+Gallery by subject, not by guest house.
+
+**Why.** Originals are 10–18 MB each — unshippable, and bloating git forever.
+Nothing says which guest house each photo shows; they probably show Hamsanandi,
+but a guest-facing page that is wrong about which building a room is in is
+worse than one that does not say. **Rejected:** attributing them to Hamsanandi
+on inference.
+
+### The map pins the institute, not the guest house
+
+**Decision.** Use the institute's own Google Maps embed from the handoff, as one
+configurable value.
+
+**Why.** No guest-house-specific pin is published. A hand-placed pin would be a
+guess; the institute pin is at least correct at campus scale, and replacing it
+is a one-line change once the office supplies coordinates.

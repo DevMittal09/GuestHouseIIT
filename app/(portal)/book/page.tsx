@@ -2,13 +2,14 @@ import { redirect } from "next/navigation";
 import { BookingForm } from "@/components/booking-form";
 import { getCurrentUser } from "@/lib/auth";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
-import { homeForRole, OFFICIAL_EMAIL_WHITELIST } from "@/lib/routes";
+import { homeForRole, OFFICIAL_EMAIL_WHITELIST, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { REQUESTER_ROLES } from "@/lib/types";
+import { PageHeader } from "@/components/page-header";
 
 export default async function BookPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/");
+  if (!user) redirect(SIGN_IN_PATH);
   if (!REQUESTER_ROLES.includes(user.role)) redirect(homeForRole(user.role));
   if (user.role === "official" && !OFFICIAL_EMAIL_WHITELIST.includes(user.email)) {
     redirect("/dashboard");
@@ -21,13 +22,10 @@ export default async function BookPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">New Booking Request</h1>
-        <p className="text-muted-foreground">
-          Fill in the stay and guest details — the request enters the approval pipeline for your
-          role automatically.
-        </p>
-      </div>
+      <PageHeader title="New Booking Request">
+        Fill in the stay and guest details — the request enters the approval pipeline for your
+        role automatically.
+      </PageHeader>
       <BookingForm user={user} guestHouses={guestHouses} config={config} />
     </div>
   );

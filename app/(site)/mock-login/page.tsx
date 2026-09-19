@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AuthMasthead } from "@/components/auth-masthead";
+import { Container, PageTitle } from "@/components/site/site-ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { loginAs } from "@/app/actions/auth";
 import { getCurrentUser } from "@/lib/auth";
-import { homeForRole } from "@/lib/routes";
+import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { REVIEWER_ROLES, ROLE_LABELS, type Profile } from "@/lib/types";
 
@@ -33,8 +33,13 @@ export default async function MockLoginPage() {
   const reviewers = profiles.filter(isStaff);
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-12">
-      <AuthMasthead subtitle="Sign in as a persona to explore each workflow (mock authentication for local development)" />
+    <Container className="pt-11 pb-[88px]">
+      <PageTitle
+        className="mb-8"
+        intro="Sign in as a persona to explore each workflow. Mock authentication for local development — it goes when real sign-in arrives."
+      >
+        Choose a persona
+      </PageTitle>
 
       <div className="grid gap-8 md:grid-cols-2">
         <PersonaGroup title="Requesters" description="Submit and track booking requests" profiles={requesters} />
@@ -43,10 +48,10 @@ export default async function MockLoginPage() {
 
       <div className="mt-8 text-center">
         <Button asChild variant="ghost" size="sm">
-          <Link href="/">← Back to sign in</Link>
+          <Link href={SIGN_IN_PATH}>← Back to sign in</Link>
         </Button>
       </div>
-    </main>
+    </Container>
   );
 }
 

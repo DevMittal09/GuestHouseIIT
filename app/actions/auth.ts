@@ -3,7 +3,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, verifyDemoPassword } from "@/lib/auth";
-import { homeForRole } from "@/lib/routes";
+import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
+import { INSTITUTE_EMAIL_ERROR, isInstituteEmail, safeNextPath } from "@/lib/site";
 import { getStore } from "@/lib/store";
 import type { ActionResult } from "./bookings";
 
@@ -17,11 +18,24 @@ async function startSession(userId: string): Promise<void> {
  * persona cookie underneath; the only thing checked is that the address belongs
  * to a profile and that the shared demo password was typed. Replace this and
  * `loginAs` together when real authentication lands.
+ *
+ * Only institute addresses (`@iitpkd.ac.in` and its subdomains, e.g. students'
+ * `@smail.iitpkd.ac.in`) may sign in — the form checks too, but this is the
+ * rule. `next` is where the page wanted to go ("Book a room" sends `/book`);
+ * anything that is not a same-origin path is ignored, and a role that cannot
+ * use the destination is bounced to its own home by that page's guard.
  */
-export async function signIn(email: string, password: string): Promise<ActionResult> {
+export async function signIn(
+  email: string,
+  password: string,
+  next?: string | null
+): Promise<ActionResult> {
   const address = email.trim().toLowerCase();
   if (!address) return { ok: false, error: "Enter your institute email address" };
   if (!password) return { ok: false, error: "Enter your password" };
+  // Safe to say before the account lookup: it describes the domain, not
+  // whether this particular address is registered.
+  if (!isInstituteEmail(address)) return { ok: false, error: INSTITUTE_EMAIL_ERROR };
 
   // Matching in memory rather than adding a `getProfileByEmail` keeps this off
   // the `DataStore` interface, which would otherwise need implementing twice.
@@ -36,7 +50,7 @@ export async function signIn(email: string, password: string): Promise<ActionRes
 
   await startSession(profile.id);
   // Outside any try/catch — `redirect()` signals by throwing.
-  redirect(homeForRole(profile.role));
+  redirect(safeNextPath(next) ?? homeForRole(profile.role));
 }
 
 /** Mock sign-in: pick a seeded persona. Replace with real SSO in production. */
@@ -50,5 +64,6 @@ export async function loginAs(userId: string): Promise<void> {
 export async function logout(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
-  redirect("/");
+  // Straight back to a sign-in form: "Switch user" is the common reason.
+  redirect(SIGN_IN_PATH);
 }
