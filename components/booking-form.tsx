@@ -72,11 +72,12 @@ import {
   ALUMNI_GUEST_HOUSE_NOTE,
 } from "@/lib/policy";
 import {
-  applyMealPreferenceDefaults,
+  declinedFromMealSlots,
   describeMeals,
   MEAL_KEYS,
   mealPlanFromSlots,
   mealSlot,
+  mealSlotsFromDeclined,
   stayMealDays,
 } from "@/lib/meals";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
@@ -189,12 +190,13 @@ export function BookingForm({
   const [alumniCardError, setAlumniCardError] = useState<string | null>(null);
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   // Meal choices live outside react-hook-form as "date|meal" keys (`mealSlot`):
-  // the grid's rows follow the stay dates, which fixed field paths cannot.
-  const [mealSlots, setMealSlots] = useState<Set<string>>(() => new Set());
-  // Dates the requester has already been shown. Picking a preference ticks
-  // every meal on a day they have *not* seen, which is what makes "tick the
-  // whole stay, then untick what you will miss" survive a change of dates.
-  const [mealCovered, setMealCovered] = useState<Set<string>>(() => new Set());
+  // the grid's rows follow the stay dates, which fixed field paths cannot. What
+  // is held is the meals turned *off*, because every meal the stay covers is
+  // ticked once a preference is chosen — see `mealSlotsFromDeclined`. Storing
+  // the ticks instead cannot tell a meal the requester unticked from one that
+  // was never offered, which is why a day added by a later date change would
+  // arrive blank instead of included.
+  const [declinedMealSlots, setDeclinedMealSlots] = useState<Set<string>>(() => new Set());
   const [mealsError, setMealsError] = useState<string | null>(null);
   const [roomsToDrop, setRoomsToDrop] = useState<number | null>(null);
 
@@ -332,14 +334,14 @@ export function BookingForm({
   const mealHouseNames = guestHouses.filter((g) => g.serves_meals).map((g) => g.name);
   const mealCheckIn = stay && !stay.problem ? stay.fromAt : null;
   const mealDays = stay && !stay.problem ? stayMealDays(stay.fromAt, stay.toAt) : [];
-  // Derived, never stored: picking a preference means "we are eating here",
-  // so every day the requester has not yet seen is ticked. Committing it to
-  // state in an effect would fight the React Compiler and, worse, re-tick
-  // meals the requester had just cleared.
-  const effectiveMealSlots = mealPreference
-    ? applyMealPreferenceDefaults(mealSlots, mealDays, mealCovered).slots
-    : mealSlots;
-  const mealPlan = servesMeals ? mealPlanFromSlots(effectiveMealSlots, mealDays) : [];
+  // Derived, never stored. Picking Veg or Non-Veg means "we are eating here",
+  // so the whole stay is ticked and the requester clears what they will miss;
+  // before that, nothing is ticked, because no preference has been given. The
+  // opt-outs are what survive a change of dates.
+  const mealSlots = mealPreference
+    ? mealSlotsFromDeclined(mealDays, declinedMealSlots)
+    : new Set<string>();
+  const mealPlan = servesMeals ? mealPlanFromSlots(mealSlots, mealDays) : [];
   const mealHeadCount = wantsRooms
     ? allGuests.filter((g) => !isInfantEntry(g)).length
     : Number(mealGuestCount) || 0;
@@ -350,10 +352,12 @@ export function BookingForm({
           mealPreference ? ` (${MEAL_PREFERENCE_LABELS[mealPreference].toLowerCase()})` : ""
         }.`;
 
-  /** Ticking or clearing a meal commits both the slots and the days seen. */
+  /**
+   * The grid hands back the full set of ticks; what gets stored is the
+   * inverse — the meals turned off — so the default survives a date change.
+   */
   const onMealSlotsChange = (next: Set<string>) => {
-    setMealSlots(next);
-    setMealCovered(new Set(mealDays.map((d) => d.date)));
+    setDeclinedMealSlots((prev) => declinedFromMealSlots(mealDays, next, prev));
   };
 
   // Advance-booking window: officials are exempt, so the cap can be absent.
@@ -900,9 +904,10 @@ export function BookingForm({
           <CardHeader>
             <CardTitle>Meals</CardTitle>
             <CardDescription>
-              Meals are served at {joinNames(mealHouseNames)} only. Choose a preference and the
-              whole stay is ticked for you — then clear any meal your party will miss. The kitchen
-              uses this for head counts, so tell the manager if plans change after booking.
+              Meals are served at {joinNames(mealHouseNames)} only. Choose a preference and every
+              meal of the stay is included for you — then untick the ones your party will not
+              need, or clear the table entirely. The kitchen uses this for head counts, so tell
+              the manager if plans change after booking.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -969,7 +974,7 @@ export function BookingForm({
                 <MealPlanGrid
                   days={mealDays}
                   checkIn={mealCheckIn}
-                  slots={effectiveMealSlots}
+                  slots={mealSlots}
                   onChange={onMealSlotsChange}
                 />
                 <p className="text-sm text-muted-foreground">{mealSummary}</p>

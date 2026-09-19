@@ -198,52 +198,52 @@ export function mealPlanFromSlots(slots: ReadonlySet<string>, days: StayMealDay[
     .filter(hasAnyMeal);
 }
 
-/** Every meal slot the stay actually covers — the default when a preference is picked. */
-export function allAvailableSlots(days: StayMealDay[]): Set<string> {
-  const slots = new Set<string>();
+/**
+ * The slots the grid shows as ticked: every meal the stay covers, minus the
+ * ones the requester has turned off.
+ *
+ * **Meals default to on.** The form therefore holds the *opt-outs* rather than
+ * the ticks, which is what makes the default survive a date change: a day that
+ * comes into range has no opt-out against it, so it arrives ticked. Storing
+ * ticks instead would have meant back-filling them whenever the stay grew, and
+ * that cannot tell a slot the requester unticked from one that was never
+ * offered.
+ */
+export function mealSlotsFromDeclined(
+  days: StayMealDay[],
+  declined: ReadonlySet<string>,
+): Set<string> {
+  const ticked = new Set<string>();
   for (const { date, available } of days) {
     for (const meal of MEAL_KEYS) {
-      if (available[meal]) slots.add(mealSlot(date, meal));
+      const slot = mealSlot(date, meal);
+      if (available[meal] && !declined.has(slot)) ticked.add(slot);
     }
   }
-  return slots;
+  return ticked;
 }
 
 /**
- * Tick every meal on days the requester has not seen yet.
- *
- * Picking Veg or Non-Veg means "we are eating here", so the whole stay is
- * ticked and the requester unticks the meals they will miss. That has to
- * survive two things:
- *
- * - **Unticking a meal.** The slot is simply absent from `slots`; days already
- *   in `covered` are left exactly as they are, so nothing is re-ticked behind
- *   the requester.
- * - **Changing the dates.** New days are ticked (they are part of "the whole
- *   stay" too), while the unticks on days that survive the change are kept.
- *   A day that drops out of the stay is not forgotten either — its slots stay
- *   in `slots` but `mealPlanFromSlots` ignores them, so moving the dates back
- *   restores what was there.
- *
- * `covered` is the set of dates that have been offered so far; pass back the
- * one this returns.
+ * The opt-outs after the grid hands back a new set of ticks. Only the slots
+ * currently on screen are reconsidered, so a meal turned off for dates the stay
+ * no longer covers stays off if those dates come back — the mirror of the rule
+ * `mealPlanFromSlots` applies to ticks.
  */
-export function applyMealPreferenceDefaults(
-  slots: ReadonlySet<string>,
+export function declinedFromMealSlots(
   days: StayMealDay[],
-  covered: ReadonlySet<string>
-): { slots: Set<string>; covered: Set<string> } {
-  const next = new Set(slots);
-  const nextCovered = new Set(covered);
+  ticked: ReadonlySet<string>,
+  previous: ReadonlySet<string>,
+): Set<string> {
+  const declined = new Set(previous);
   for (const { date, available } of days) {
-    if (!covered.has(date)) {
-      for (const meal of MEAL_KEYS) {
-        if (available[meal]) next.add(mealSlot(date, meal));
-      }
+    for (const meal of MEAL_KEYS) {
+      if (!available[meal]) continue;
+      const slot = mealSlot(date, meal);
+      if (ticked.has(slot)) declined.delete(slot);
+      else declined.add(slot);
     }
-    nextCovered.add(date);
   }
-  return { slots: next, covered: nextCovered };
+  return declined;
 }
 
 /** On how many days each meal was asked for. */
