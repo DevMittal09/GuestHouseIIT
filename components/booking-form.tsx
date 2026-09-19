@@ -59,7 +59,6 @@ import {
   bookingTypesFor,
   defaultBookingTypeFor,
   describeBookingType,
-  describeServiceType,
   needsAlumniDetails,
   serviceTypesFor,
 } from "@/lib/booking-types";
@@ -87,11 +86,8 @@ import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import {
   BOOKING_TYPE_LABELS,
   CITIZENSHIP_LABELS,
-  includesMeals,
   MEAL_PREFERENCE_LABELS,
-  needsRooms,
   ROLE_LABELS,
-  SERVICE_TYPE_LABELS,
   type BookingType,
   type Citizenship,
   type GuestHouse,
@@ -125,7 +121,6 @@ interface RoomFields {
 
 interface FormValues {
   /** Asked first: whether a room is involved changes the rest of the form. */
-  service_type: ServiceType;
   /** Asked next: it decides the approval route and how the stay is settled. */
   booking_type: BookingType;
   /** Only when the Guest House Manager is booking for somebody else. */
@@ -216,14 +211,24 @@ export function BookingForm({
   const [mealsAvailable] = useState(() =>
     guestHouses.some((g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id))
   );
-  const [serviceOptions] = useState(() => serviceTypesFor(config.role, mealsAvailable));
+  /**
+   * Which kind of booking this is. It is **not** a question on the form any
+   * more: the portal offers two doors, and the door settles it. A meals-only
+   * booking arrives here as `initialServiceType`; anything else is a room
+   * booking, and whether meals come with it is decided further down by whether
+   * the requester actually picks any — see `serviceType` below.
+   *
+   * The door is still checked against the role, so a hand-edited URL cannot
+   * put an ineligible account into the meals-only flow.
+   */
+  const [mealsOnly] = useState(
+    () =>
+      initialServiceType === "meals_only" &&
+      serviceTypesFor(config.role, mealsAvailable).includes("meals_only")
+  );
 
   const form = useForm<FormValues>({
     defaultValues: {
-      service_type:
-        initialServiceType && serviceOptions.includes(initialServiceType)
-          ? initialServiceType
-          : (serviceOptions[0] ?? "room"),
       // "Official" for staff, because that is the common case; a role with one
       // option is never shown the question at all.
       booking_type: defaultBookingTypeFor(config.role) ?? "official",
@@ -248,9 +253,7 @@ export function BookingForm({
   const { fields: roomFields, append: appendRoom, remove: removeRoom } =
     useFieldArray({ control, name: "rooms" });
 
-  const serviceType = useWatch({ control, name: "service_type" });
-  const wantsRooms = needsRooms(serviceType);
-  const wantsMeals = includesMeals(serviceType);
+  const wantsRooms = !mealsOnly;
   const checkInTime = useWatch({ control, name: "check_in_time" });
   const checkOutTime = useWatch({ control, name: "check_out_time" });
   // The availability panel follows the guest house and check-in date as they
@@ -278,9 +281,12 @@ export function BookingForm({
   // manager keeps the full list: they are allowed to make an exception, and
   // the server records it in the booking's log when they do.
   const canOverrideHouse = canOverrideGuestHousePolicy(user.role);
-  const offeredGuestHouses = canOverrideHouse
-    ? guestHouses
-    : guestHousesForBookingType(guestHouses, bookingType);
+  const offeredGuestHouses = (
+    canOverrideHouse ? guestHouses : guestHousesForBookingType(guestHouses, bookingType)
+  )
+    // A meals-only booking can only go to a kitchen. Offering a guest house
+    // that serves no meals would be offering a booking nobody can fulfil.
+    .filter((g) => !mealsOnly || g.serves_meals);
   const guestHouseLocked = offeredGuestHouses.length === 1;
   const overridingHouse =
     canOverrideHouse &&
@@ -339,7 +345,13 @@ export function BookingForm({
   // for the days and serving times the stay actually covers.
   const selectedGuestHouse = guestHouses.find((g) => g.id === selectedGuestHouseId);
   const servesMeals = selectedGuestHouse?.serves_meals ?? false;
-  const mealHouseNames = guestHouses.filter((g) => g.serves_meals).map((g) => g.name);
+  /**
+   * Meals are offered only once a guest house has been chosen *and* that guest
+   * house serves them. Asking first and explaining afterwards — "meals are not
+   * served at Bageshri" — is offering something and then taking it away; this
+   * way the question never appears where the answer would be no.
+   */
+  const offerMeals = Boolean(selectedGuestHouse) && servesMeals;
   const mealCheckIn = stay && !stay.problem ? stay.fromAt : null;
   const mealDays = stay && !stay.problem ? stayMealDays(stay.fromAt, stay.toAt) : [];
   // Derived, never stored. Picking Veg or Non-Veg means "we are eating here",
@@ -350,6 +362,16 @@ export function BookingForm({
     ? mealSlotsFromDeclined(mealDays, declinedMealSlots)
     : new Set<string>();
   const mealPlan = servesMeals ? mealPlanFromSlots(mealSlots, mealDays) : [];
+  /**
+   * What is actually being booked, derived rather than asked. A room booking
+   * becomes a room-and-meals booking exactly when meals were picked, so the
+   * two can never disagree the way a separate radio could.
+   */
+  const serviceType: ServiceType = mealsOnly
+    ? "meals_only"
+    : mealPlan.length > 0
+      ? "room_meals"
+      : "room";
   const mealHeadCount = wantsRooms
     ? allGuests.filter((g) => !isInfantEntry(g)).length
     : Number(mealGuestCount) || 0;
@@ -452,7 +474,7 @@ export function BookingForm({
     const checkOut = `${values.check_out_date}T${wantsRooms ? values.check_out_time : MEALS_ONLY_DAY.end}`;
 
     const payload = {
-      service_type: values.service_type,
+      service_type: serviceType,
       booking_type: values.booking_type,
       // Sent only when they apply; the schema rejects them on any other kind
       // of booking, so a stale value cannot ride along.
@@ -463,8 +485,12 @@ export function BookingForm({
       check_in: checkIn,
       check_out: checkOut,
       meal_guest_count: wantsRooms ? "" : values.meal_guest_count,
-      meal_preference: values.meal_preference === "" ? null : values.meal_preference,
-      meals: wantsMeals ? mealPlan : [],
+      // Both are sent only when meals were actually chosen, so a preference
+      // left over from a guest house that was swapped for one with no kitchen
+      // cannot ride along and fail validation on a card nobody can see.
+      meal_preference:
+        mealPlan.length > 0 && values.meal_preference !== "" ? values.meal_preference : null,
+      meals: mealPlan,
       // A meals-only booking has no rooms and no guest rows at all.
       rooms: wantsRooms
         ? values.rooms.map((room) => ({
@@ -503,7 +529,7 @@ export function BookingForm({
       hasError = true;
       for (const issue of parsed.error.issues) {
         // Meals are not a react-hook-form field, so their message has its own slot.
-        if (issue.path[0] === "meals") {
+        if (issue.path[0] === "meals" || issue.path[0] === "service_type") {
           setMealsError(issue.message);
           continue;
         }
@@ -585,33 +611,6 @@ export function BookingForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
-      {/* What is being booked. A role that can only book a room is not asked. */}
-      {serviceOptions.length > 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>What would you like to book?</CardTitle>
-            <CardDescription>
-              Meals are cooked to a head count, so the kitchen needs to know about them whether or
-              not a room is involved.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-3">
-              {serviceOptions.map((option) => (
-                <RadioCard
-                  key={option}
-                  value={option}
-                  title={SERVICE_TYPE_LABELS[option]}
-                  description={describeServiceType(option)}
-                  register={register("service_type")}
-                />
-              ))}
-            </div>
-            <FieldError message={err("service_type")} />
-          </CardContent>
-        </Card>
-      )}
-
       {/* Why the stay is booked. It decides the approval route and how the
           stay is settled. Roles with a single option are not asked — the value
           is still recorded on the booking. */}
@@ -895,20 +894,21 @@ export function BookingForm({
         </Card>
       )}
 
-      {wantsMeals && (
+      {offerMeals && (
         <Card>
           <CardHeader>
-            <CardTitle>Meals</CardTitle>
+            <CardTitle>{mealsOnly ? "Meals" : "Meals (optional)"}</CardTitle>
             <CardDescription>
-              Meals are served at {joinNames(mealHouseNames)} only. Choose a preference and every
-              meal of the stay is included for you — then untick the ones your party will not
-              need, or clear the table entirely. The kitchen uses this for head counts, so tell
-              the manager if plans change after booking.
+              {mealsOnly
+                ? `Meals from the ${selectedGuestHouse?.name} kitchen. Choose a preference and every meal of the range is included for you — then untick the ones you will not need.`
+                : `${selectedGuestHouse?.name} serves meals. Choose a preference if your party would like them and every meal of the stay is included — then untick the ones they will not need, or leave this alone to book the room on its own.`}{" "}
+              The kitchen uses this for head counts, so tell the manager if plans change after
+              booking.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Meal preference *</Label>
+              <Label>Meal preference{mealsOnly ? " *" : ""}</Label>
               <div className="grid gap-3 sm:grid-cols-2">
                 {(["veg", "non_veg"] as const).map((option) => (
                   <RadioCard
@@ -931,11 +931,7 @@ export function BookingForm({
               <FieldError message={err("meal_preference")} />
             </div>
 
-            {!selectedGuestHouse ? (
-              <EmptyNote>Choose a guest house above to see the meal options.</EmptyNote>
-            ) : !servesMeals ? (
-              <EmptyNote>Meals are not served at {selectedGuestHouse.name}.</EmptyNote>
-            ) : !mealCheckIn ? (
+            {!mealCheckIn ? (
               <EmptyNote>Choose your dates to pick meals for each day.</EmptyNote>
             ) : (
               <>
@@ -1580,8 +1576,3 @@ function EmptyNote({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** "A", "A and B", "A, B and C". */
-function joinNames(names: string[]): string {
-  if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}

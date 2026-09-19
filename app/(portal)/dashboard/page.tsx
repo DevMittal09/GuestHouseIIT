@@ -26,10 +26,16 @@ export default async function DashboardPage() {
   // Meals get their own door rather than living inside "New Booking": a
   // department booking lunch for a visiting examiner has no room to ask for,
   // and having to start a room booking to find the option was the complaint.
-  const canBookMeals = serviceTypesFor(
-    user.role,
-    guestHouses.some((g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id))
-  ).includes("meals_only");
+  // Meals chosen *alongside* a room are not here — they belong to the room
+  // booking, and appear once a guest house with a kitchen has been picked.
+  const mealHouses = guestHouses.filter(
+    (g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id)
+  );
+  const canBookMeals = serviceTypesFor(user.role, mealHouses.length > 0).includes("meals_only");
+  // Named after the kitchen, because that is the question the requester is
+  // actually answering — never hardcoded to "Hamsanandi", which is a flag the
+  // developer console can move.
+  const mealHouseNames = mealHouses.map((g) => g.name).join(" / ");
 
   return (
     <div className="space-y-6">
@@ -39,7 +45,9 @@ export default async function DashboardPage() {
           <div className="flex flex-wrap gap-2">
             {canBookMeals && (
               <Button asChild variant="outline">
-                <Link href="/book?service=meals_only">Meal / Dining Booking</Link>
+                <Link href="/book?service=meals_only">
+                Meal Booking{mealHouseNames && ` (${mealHouseNames})`}
+              </Link>
               </Button>
             )}
             <Button asChild>
