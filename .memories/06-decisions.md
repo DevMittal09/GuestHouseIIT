@@ -41,6 +41,80 @@ left behind a flag.
 *same* message. Distinguishing them would let an unauthenticated visitor
 enumerate which institute addresses are registered.
 
+**Superseded in part (19 Sep 2026).** The credential form moved from `/` to
+`/sign-in` (and is embedded in the public `/book-room` and `/book-meal`),
+because `/` became the public guest house website. The "every guard redirects
+to `/`" constraint was resolved by pointing every guard at `SIGN_IN_PATH`
+instead. Everything else here still holds. See the UI redesign entry below.
+
+**Superseded (19 Sep 2026, later).** The email + `DEMO_PASSWORD` form was
+replaced by LDAP sign-in, and the picker became the "Sign in with Google"
+placeholder. See the next entry.
+
+## LDAP sign-in, with a mocked Google door (19 Sep 2026)
+
+**Decision.** The sign-in card asks for an **LDAP username and password**, with
+**"Sign in with Google"** beneath it. Google is a placeholder: it opens the
+persona picker (`/mock-login`, carrying `next`) until OAuth is set up, because
+development needs one-click role switching.
+
+LDAP is real code behind an environment switch, like the store and the mailer.
+`LDAP_URL` selects `LdapDirectory` (`ldapts`, search-then-bind). Without it,
+`MockDirectory` serves one dummy account per persona, listed with passwords in
+[11-ldap-accounts.md](11-ldap-accounts.md) as the user asked.
+
+**Identity is split in two.** The directory proves the password;
+`profiles.ldap_uid` (migration 12) says which portal account that is. The user
+said the real LDAP logins will be "added to the database", and the directory
+knows nothing of roles, hostels or clubs.
+
+**How the real usernames get loaded.** The user asked for a provision to work
+with the original LDAP accounts once they are in the database. Four ways:
+
+- the Users & Roles field, one user at a time;
+- an all-or-nothing bulk import (`email, ldap username` lines);
+- SQL;
+- opt-in `LDAP_LINK_BY_EMAIL`, which links a first sign-in to the profile whose
+  email is the directory's `mail`.
+
+**Why not match LDAP users by email automatically?** A guessed identity mapping
+signs one person in as another, so migration 12 does not backfill, and
+link-by-email is off until someone confirms users cannot edit their own `mail`.
+It also never overwrites an existing `ldap_uid`.
+
+**Why search-then-bind rather than a DN template?** Students and staff are
+likely in different OUs, and the layout is unknown. A subtree search for the
+username works for any layout, at the cost of perhaps needing a read-only
+service account (`LDAP_BIND_DN`).
+
+**Details worth keeping:**
+
+- **An empty password is refused before binding.** An empty password is an
+  unauthenticated bind, which many servers report as success.
+- **Unknown user and wrong password share one message.** "Not registered" only
+  appears after the password is proven.
+- **`LDAP_URL` without `LDAP_BASE_DN` throws** rather than falling back to the
+  published dummy passwords.
+- **Usernames may contain `@`,** because some directories log in by `mail` or
+  `userPrincipalName`. The "not your email address" hint only appears when the
+  attribute is not one of those.
+- **The per-username throttle reuses the console lock's in-process counter.**
+
+**Cost.**
+
+- **The session is still an unsigned cookie**, so LDAP proves who typed a
+  password, not who holds the cookie. Signing it remains roadmap item 1.
+- **Anyone who reads the repo has the dummy passwords.** Deploying without
+  `LDAP_URL` is as open as the picker ever was.
+- **Hosted Supabase needs migration 12** before LDAP sign-in finds anyone there.
+
+**Rejected alternatives:**
+
+- **Keeping the email form alongside LDAP.** Two password forms for one
+  institute is confusing, and the user asked for LDAP + Google.
+- **Wiring Google OAuth now.** The user asked for the mock to stay while
+  developing.
+
 ## Two data stores behind one interface
 
 **Decision.** Define `DataStore` and implement it twice (JSON mock, Supabase).
@@ -202,7 +276,11 @@ not integrate with react-hook-form's `register()` without a controller wrapper
 per field. A styled native select works everywhere, is keyboard- and
 mobile-friendly, and supports type-ahead.
 
-## Branding copied from the official dashboard
+## Branding copied from the official dashboard (superseded 19 Sep 2026)
+
+> Replaced by the guest house design handoff's navy/gold palette — see
+> "UI redesign from the design handoff" at the end of this file. Kept for the
+> history.
 
 **Decision.** Take the palette and logo from https://dashboard.iitpkd.ac.in/
 verbatim, including white-on-amber buttons.
@@ -981,7 +1059,102 @@ null as absent.
 Guarded by a throwaway suite of 15 checks - the round trip for all six
 requester roles, that a third parse is stable, and that the alumni,
 required-ID and parent-dependency rules still reject what they should. Worth
-keeping when a test runner is installed (roadmap 4).
+keeping when a test runner is installed (roadmap §4).
+
+## UI redesign from the design handoff (19 Sep 2026)
+
+Detail in [10-ui-design.md](10-ui-design.md). The decisions, with the options
+that lost:
+
+### The public site is a route group, `/` included
+
+**Decision.** `app/(site)/` holds the seven-tab website as real routes, and `/`
+is its home page. The portal stays in `app/(portal)/` with its URLs unchanged.
+
+**Why.** The design is a public front door; one URL per tab is what the
+handoff asked for and what links, the back button and search engines need.
+**Rejected:** keeping `/` as the sign-in page and putting the site at `/site` —
+the institute would link the portal's login form as the guest house's home.
+**Cost:** every `redirect("/")` in a portal guard had to become
+`redirect(SIGN_IN_PATH)`; a new guard that copies an old file and redirects to
+`/` will quietly land signed-out users on the brochure.
+
+### Content from the backend, look from the design
+
+**Decision.** Every sentence on the public site that states a rule the portal
+enforces is rendered from `lib/` (`lib/site-data.ts`, `lib/site-content.ts`);
+only amenities and house rules are literal copy, marked `TODO(site)`.
+
+**Why.** The owner asked for the UI to be based on the backend, and the
+prototype's copy contradicted it in places ("seven days in advance" against a
+one-month *maximum*; fixed check-in/out times against per-booking times; a
+meal-only booking flow that does not exist). A brochure hand-written once
+drifts the first time the Form Builder changes who may book where.
+**Cost:** the public pages read the store on every request (they are dynamic).
+
+### "Book Meal" tells the truth instead of building a meal flow
+
+> **Updated (19 Sep 2026, merge of `ui` into `main`):** `main` added service
+> type `meals_only` (migration 11), so meals without a room now exist for
+> `MEALS_ONLY_ROLES`, inside the same `/book` form. `/book-meal` still has no
+> flow of its own; its copy now says who can book meals without a room.
+
+**Decision.** `/book-meal` is the design's gated page, but it says meals are
+chosen day by day inside the room request at the guest houses that serve them,
+lists the serving times, and signs in to `/book`.
+
+**Why.** There is no meal-only booking in the backend; a dining booking is in
+the meeting notes as *not started* and needs billing (debitable heads). Building
+a UI for it would be building the feature. **Rejected:** hiding the tab — the
+design and the office both expect it.
+
+### Institute domain enforced in `signIn()`, subdomains included
+
+> **Superseded (19 Sep 2026):** `signIn()` and the email form are gone (LDAP
+> sign-in takes a username). `isInstituteEmail()` is kept for real Google
+> sign-in, which must enforce it on the verified address.
+
+
+**Decision.** `isInstituteEmail()` accepts `@iitpkd.ac.in` and any
+`@*.iitpkd.ac.in`; `signIn()` enforces it, the form repeats it.
+
+**Why.** The design requires server-side enforcement, and students sign in as
+`@smail.iitpkd.ac.in`, which an exact-match check would have locked out.
+**Cost:** a developer-created account on a personal address can no longer use
+the credential form (the persona picker still works).
+
+### The portal restyle goes through the tokens, not the pages
+
+**Decision.** Re-point the shadcn tokens (`--primary` navy, `--ring` gold,
+`--radius` 3px, fonts) and add one `PageHeader`; leave every feature component
+alone.
+
+**Why.** Dozens of components already speak `bg-primary`, `ring`, `rounded-lg`.
+Changing the tokens restyles all of them consistently with no risk to
+behaviour; editing each would have been a large diff with real regression risk
+in the most-used screens. **Side effect accepted:** the availability chart's
+"now" marker turned from amber to navy.
+
+### Photos: resized copies served, originals ignored, no attribution
+
+**Decision.** Serve 2000px, metadata-stripped copies from
+`public/site/photos/`; gitignore the 180 MB of originals in `Images/`; group the
+Gallery by subject, not by guest house.
+
+**Why.** Originals are 10–18 MB each — unshippable, and bloating git forever.
+Nothing says which guest house each photo shows; they probably show Hamsanandi,
+but a guest-facing page that is wrong about which building a room is in is
+worse than one that does not say. **Rejected:** attributing them to Hamsanandi
+on inference.
+
+### The map pins the institute, not the guest house
+
+**Decision.** Use the institute's own Google Maps embed from the handoff, as one
+configurable value.
+
+**Why.** No guest-house-specific pin is published. A hand-placed pin would be a
+guess; the institute pin is at least correct at campus scale, and replacing it
+is a one-line change once the office supplies coordinates.
 
 ## Room-scoped guests and Service Types (Migration 11, Sep 2026)
 

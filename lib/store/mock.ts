@@ -221,6 +221,15 @@ function loadDb(): Db {
         dirty = true;
       }
     }
+    // Migration 12's counterpart: LDAP usernames. Seeded personas get theirs
+    // back (matched by email, as `supabase/seed.sql` does); anyone else starts
+    // without one, as they would in Postgres.
+    for (const p of db.profiles) {
+      if (p.ldap_uid === undefined) {
+        p.ldap_uid = seedProfiles.find((s) => s.email === p.email)?.ldap_uid ?? null;
+        dirty = true;
+      }
+    }
     if (dirty) saveDb(db);
     return db;
   }
@@ -621,6 +630,7 @@ export class MockStore implements DataStore {
     if (db.profiles.some((p) => p.email.toLowerCase() === input.email.toLowerCase())) {
       throw new Error("A user with this email already exists");
     }
+    assertLdapUidFree(db, input.ldap_uid, null);
     const profile: Profile = { ...input, id: randomUUID() };
     db.profiles.push(profile);
     saveDb(db);
@@ -637,6 +647,7 @@ export class MockStore implements DataStore {
     ) {
       throw new Error("A user with this email already exists");
     }
+    if (patch.ldap_uid !== undefined) assertLdapUidFree(db, patch.ldap_uid, id);
     Object.assign(p, patch);
     saveDb(db);
   }
@@ -892,4 +903,16 @@ function makeReference(): string {
     "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".charAt(Math.floor(Math.random() * 32))
   ).join("");
   return `IITPKD-GH-${year}-${rand}`;
+}
+
+/**
+ * The unique index on `lower(ldap_uid)` (migration 12), emulated. Two profiles
+ * sharing a uid would make LDAP sign-in pick one of them arbitrarily.
+ */
+function assertLdapUidFree(db: Db, uid: string | null | undefined, exceptId: string | null): void {
+  if (!uid) return;
+  const wanted = uid.toLowerCase();
+  if (db.profiles.some((p) => p.id !== exceptId && p.ldap_uid?.toLowerCase() === wanted)) {
+    throw new Error("Another user already has this LDAP username");
+  }
 }

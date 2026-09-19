@@ -39,24 +39,27 @@ export const seedRooms: Room[] = [
   ...makeRooms(GH_HAMSANANDI, "H", 8, 8),
 ];
 
+// `ldap_uid` is each persona's dummy LDAP username — the local part of the
+// address, as in the institute directory. Passwords are in
+// lib/ldap/mock-directory.ts and .memories/11-ldap-accounts.md.
 export const seedProfiles: Profile[] = [
   // ----- Requesters -----
-  { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112201001" },
-  { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student", hostel_name: "Saveri", department_or_club: null, roll_number: "142202014" },
-  { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null },
-  { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: "Administration", roll_number: null },
-  { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null },
+  { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112201001", ldap_uid: "112201001" },
+  { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student", hostel_name: "Saveri", department_or_club: null, roll_number: "142202014", ldap_uid: "142202014" },
+  { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "priya" },
+  { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: "Administration", roll_number: null, ldap_uid: "admin" },
+  { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "petrichor" },
   // No alumni persona: alumni have no institute login, so the IAR Office and
   // the IAR Student Cell raise those bookings for them (migration 9).
-  { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null },
+  { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "alumnicell" },
   // ----- Reviewers / Admins -----
-  { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Assistant Warden, Malhar)", role: "warden", hostel_name: "Malhar", department_or_club: null, roll_number: null },
-  { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Assistant Warden, Saveri)", role: "warden", hostel_name: "Saveri", department_or_club: null, roll_number: null },
-  { id: "fa-petrichor", email: "fa.petrichor@iitpkd.ac.in", full_name: "Dr. Arun Prasad (FA, Petrichor)", role: "faculty_advisor", hostel_name: null, department_or_club: "Petrichor", roll_number: null },
-  { id: "iar-cell", email: "iar@iitpkd.ac.in", full_name: "IAR Office", role: "iar_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null },
-  { id: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager", hostel_name: null, department_or_club: null, roll_number: null },
-  { id: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker", hostel_name: null, department_or_club: null, roll_number: null },
-  { id: "developer", email: "developer@iitpkd.ac.in", full_name: "Portal Developer", role: "developer", hostel_name: null, department_or_club: null, roll_number: null },
+  { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Assistant Warden, Malhar)", role: "warden", hostel_name: "Malhar", department_or_club: null, roll_number: null, ldap_uid: "warden.malhar" },
+  { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Assistant Warden, Saveri)", role: "warden", hostel_name: "Saveri", department_or_club: null, roll_number: null, ldap_uid: "warden.saveri" },
+  { id: "fa-petrichor", email: "fa.petrichor@iitpkd.ac.in", full_name: "Dr. Arun Prasad (FA, Petrichor)", role: "faculty_advisor", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "fa.petrichor" },
+  { id: "iar-cell", email: "iar@iitpkd.ac.in", full_name: "IAR Office", role: "iar_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "iar" },
+  { id: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "guesthouse" },
+  { id: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "gh.reception" },
+  { id: "developer", email: "developer@iitpkd.ac.in", full_name: "Portal Developer", role: "developer", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "developer" },
 ];
 
 const now = new Date();

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ import {
   mealsOn,
 } from "@/lib/meals";
 import { countBedGuests } from "@/lib/occupancy";
-import { homeForRole } from "@/lib/routes";
+import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { formatDateValue, parseDateValue, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
@@ -60,7 +61,7 @@ export default async function DailyMealsPage({
   searchParams: Promise<{ date?: string; gh?: string }>;
 }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/");
+  if (!user) redirect(SIGN_IN_PATH);
   if (!canViewAllOccupancy(user.role)) redirect(homeForRole(user.role));
 
   const { date: rawDate, gh } = await searchParams;
@@ -88,18 +89,17 @@ export default async function DailyMealsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Meals for {formatDateValue(day, { year: true })}</h1>
-          <p className="text-muted-foreground">
-            Head counts for the {current.name} kitchen, across every booking that asked for a meal
-            on this day.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href={`/manager?gh=${encodeURIComponent(current.name)}`}>Back to the desk</Link>
-        </Button>
-      </div>
+      <PageHeader
+        title={`Meals for ${formatDateValue(day, { year: true })}`}
+        actions={
+          <Button asChild variant="outline">
+            <Link href={`/manager?gh=${encodeURIComponent(current.name)}`}>Back to the desk</Link>
+          </Button>
+        }
+      >
+        Head counts for the {current.name} kitchen, across every booking that asked for a meal on
+        this day.
+      </PageHeader>
 
       {/* A plain GET form: the date and guest house live in the URL, so a
           particular day can be bookmarked or sent to the kitchen. */}

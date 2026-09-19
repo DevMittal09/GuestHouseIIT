@@ -2,11 +2,12 @@ import { redirect } from "next/navigation";
 import { BookingForm } from "@/components/booking-form";
 import { getCurrentUser } from "@/lib/auth";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
-import { homeForRole, OFFICIAL_EMAIL_WHITELIST } from "@/lib/routes";
+import { homeForRole, OFFICIAL_EMAIL_WHITELIST, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { canBookOnBehalf } from "@/lib/access";
 import { serviceTypesFor } from "@/lib/booking-types";
 import { REQUESTER_ROLES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/types";
+import { PageHeader } from "@/components/page-header";
 
 export default async function BookPage({
   searchParams,
@@ -14,7 +15,7 @@ export default async function BookPage({
   searchParams: Promise<{ service?: string }>;
 }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/");
+  if (!user) redirect(SIGN_IN_PATH);
   // The Guest House Manager is not a requester, but they take bookings at the
   // desk for people who never open the portal — the form asks them who the
   // stay is for and records both parties.
@@ -45,22 +46,21 @@ export default async function BookPage({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {mealsOnly
+      <PageHeader
+        title={
+          mealsOnly
             ? SERVICE_TYPE_LABELS.meals_only
             : onBehalf
               ? "New Booking (on behalf of a guest)"
-              : "New Booking Request"}
-        </h1>
-        <p className="text-muted-foreground">
-          {mealsOnly
-            ? "Meals at the guest house with no room booked. Tell the kitchen how many people, which days and whether it is vegetarian — it goes straight to the Guest House Manager."
-            : onBehalf
-              ? "Take a booking for someone who cannot use the portal themselves. It is recorded against your account and names them as the guest."
-              : "Fill in the stay and guest details — the request enters the approval pipeline for your role automatically."}
-        </p>
-      </div>
+              : "New Booking Request"
+        }
+      >
+        {mealsOnly
+          ? "Meals at the guest house with no room booked. Tell the kitchen how many people, which days and whether it is vegetarian — it goes straight to the Guest House Manager."
+          : onBehalf
+            ? "Take a booking for someone who cannot use the portal themselves. It is recorded against your account and names them as the guest."
+            : "Fill in the stay and guest details — the request enters the approval pipeline for your role automatically."}
+      </PageHeader>
       <BookingForm
         user={user}
         guestHouses={guestHouses}

@@ -4,11 +4,24 @@ Ordered roughly by priority.
 
 ## 1. Real authentication (blocks production)
 
-Replace `getCurrentUser()` in `lib/auth.ts` with Supabase Auth or institute SSO,
-delete both sign-in doors (the credential form on `/` and the persona picker at
-`/mock-login`) along with `DEMO_PASSWORD`, and switch request-scoped database
-access to the anon key so RLS becomes the real boundary. Everything else in the
-app already re-checks authorization server-side, so this change is contained.
+**Partly done (19 Sep 2026):** sign-in is LDAP. The real directory client
+(`LDAP_URL`), `profiles.ldap_uid` (migration 12), the bulk import and opt-in
+link-by-email are built and tested against OpenLDAP. It runs on dummy accounts
+until the institute's LDAP details arrive
+([11-ldap-accounts.md](11-ldap-accounts.md)). `DEMO_PASSWORD` is gone.
+
+Still to do:
+
+- **Connect the institute directory** (env only) and load the real usernames.
+- **Replace the "Sign in with Google" placeholder** (`/mock-login` +
+  `loginAs`) with real Google OAuth, restricted to `isInstituteEmail()`.
+- **Make the session unforgeable.** Today it is an unsigned cookie holding a
+  profile id; use a signed cookie or a Supabase session.
+- **Switch request-scoped database access to the anon key** so RLS becomes the
+  real boundary.
+
+Everything else in the app already re-checks authorization server-side, so
+this change is contained.
 
 ## 2. ~~Notifications and the day-wise occupancy report~~ ✅ Done
 
@@ -81,8 +94,11 @@ Vitest fits the stack. Until then, the ad-hoc `npx tsx` approach in
 
 ## 5. Accessibility pass
 
-- White-on-amber buttons are low contrast (WCAG AA fails). Fix by setting
-  `--primary-foreground` to a dark brown in `app/globals.css`.
+- ~~White-on-amber buttons are low contrast (WCAG AA fails).~~ Fixed 19 Sep
+  2026 by the redesign: primary is navy with white text (≈13:1), and gold
+  buttons carry navy text. The public site was checked at 320 px (no page
+  scroll, one `<h1>` per page, labelled fields, gold focus ring) — see
+  [10-ui-design.md](10-ui-design.md).
 - The room grid conveys availability through colour alone; add a text or icon
   indicator for colour-blind users.
 - Audit focus order and labels in the multi-step booking form.
@@ -131,3 +147,13 @@ Vitest fits the stack. Until then, the ad-hoc `npx tsx` approach in
   interval to 20–30 s is the cheap interim step; realtime is the real fix,
   because it pushes instead of polling and would let `revalidatePath` be
   narrowed at the same time.
+
+## 8. Public website follow-ups (from the 19 Sep 2026 redesign)
+
+Everything tagged `TODO(site)` in `lib/site.ts` and `lib/site-content.ts`:
+confirm the guest house phone and email, a guest-house map pin, the guidelines
+PDF URL (the download button appears once `GUIDELINES_PDF_URL` is set), the
+amenity lines and house rules, and which guest house each photograph shows (so
+the Gallery can have per-guest-house sections and the home cards get covers).
+Optionally restyle the mail templates to the navy/gold palette. Detail in
+[10-ui-design.md](10-ui-design.md).

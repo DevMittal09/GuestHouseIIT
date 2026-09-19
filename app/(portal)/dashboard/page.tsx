@@ -2,17 +2,18 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MyBookings } from "@/components/my-bookings";
+import { PageHeader } from "@/components/page-header";
 import { getCurrentUser } from "@/lib/auth";
 import { serviceTypesFor } from "@/lib/booking-types";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import { MANAGER_HELP_LINE } from "@/lib/policy";
-import { homeForRole } from "@/lib/routes";
+import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { REQUESTER_ROLES } from "@/lib/types";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/");
+  if (!user) redirect(SIGN_IN_PATH);
   if (!REQUESTER_ROLES.includes(user.role)) redirect(homeForRole(user.role));
 
   const store = getStore();
@@ -32,24 +33,23 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">My Bookings</h1>
-          <p className="text-muted-foreground">
-            Track your guest house requests through the approval pipeline.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canBookMeals && (
-            <Button asChild variant="outline">
-              <Link href="/book?service=meals_only">Meal / Dining Booking</Link>
+      <PageHeader
+        title="My Bookings"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {canBookMeals && (
+              <Button asChild variant="outline">
+                <Link href="/book?service=meals_only">Meal / Dining Booking</Link>
+              </Button>
+            )}
+            <Button asChild>
+              <Link href="/book">New Booking (Room)</Link>
             </Button>
-          )}
-          <Button asChild>
-            <Link href="/book">New Booking (Room)</Link>
-          </Button>
-        </div>
-      </div>
+          </div>
+        }
+      >
+        Track your guest house requests through the approval pipeline.
+      </PageHeader>
       <MyBookings bookings={bookings} />
       {/* The way out when the form will not do what the requester needs — a
           stay over the 14-night cap, an exception, a booking taken at the

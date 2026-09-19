@@ -1,5 +1,11 @@
 import { REQUESTER_ROLES, type Role } from "./types";
 
+/**
+ * Where signed-out visitors are sent. `/` is the public guest house website,
+ * so every portal guard redirects here rather than to the home page.
+ */
+export const SIGN_IN_PATH = "/sign-in";
+
 /** Landing page for each role after sign-in. */
 export function homeForRole(role: Role): string {
   switch (role) {

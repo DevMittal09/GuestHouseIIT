@@ -7,9 +7,23 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-source-serif), Georgia, serif;
+  --color-navy: var(--navy);
+  --color-navy-dark: var(--navy-dark);
+  --color-navy-hover: var(--navy-hover);
+  --color-gold: var(--gold);
+  --color-gold-hover: var(--gold-hover);
+  --color-gold-dark: var(--gold-dark);
+  --color-gold-darkest: var(--gold-darkest);
+  --color-body: var(--body-text);
+  --color-band: var(--band);
+  --color-notice: var(--notice);
+  --color-notice-border: var(--notice-border);
+  --color-border-strong: var(--border-strong);
+  --color-footer-text: var(--footer-text);
+  --color-footer-muted: var(--footer-muted);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,78 +63,107 @@
 }
 
 /*
- * IIT Palakkad brand palette, taken from https://dashboard.iitpkd.ac.in/
- * Primary amber #f7a600 on warm off-white #faf9f7, text #2b2b2b,
- * borders #e3e1dc, semantic colors: success #22c55e / warning #f97316 /
- * error #ef4444 / info #06b6d4.
+ * Palette from the guest house design handoff (design_handoff/README.md),
+ * which sits the portal visually alongside iitpkd.ac.in: navy #12284C for
+ * structure and primary actions, gold #E8A317 for accents, focus rings and the
+ * public call to action, body text #41506A, borders #E1E5EC. Corners are
+ * near-square (3px) and nothing carries a shadow.
+ *
+ * This replaced the amber-on-off-white palette copied from
+ * dashboard.iitpkd.ac.in. Primary buttons are now white on navy (12.9:1),
+ * which also retires the white-on-amber contrast failure on the roadmap.
+ * Gold is never used behind white text — gold buttons carry navy text.
  */
 :root {
-  --background: #faf9f7;
-  --foreground: #2b2b2b;
+  /* Brand tokens, exposed as `bg-navy`, `text-gold-dark`, `bg-band`, … */
+  --navy: #12284c;
+  --navy-dark: #0c1d38;
+  --navy-hover: #1b3765;
+  --gold: #e8a317;
+  --gold-hover: #d2910c;
+  --gold-dark: #b8790c;
+  --gold-darkest: #8a5b08;
+  --body-text: #41506a;
+  --band: #f1f3f6;
+  --notice: #fdf7e8;
+  --notice-border: #e8d5a6;
+  --border-strong: #c9d0db;
+  --footer-text: #c6cfdd;
+  --footer-muted: #9daabd;
+
+  --background: #ffffff;
+  --foreground: #12284c;
   --card: #ffffff;
-  --card-foreground: #2b2b2b;
+  --card-foreground: #12284c;
   --popover: #ffffff;
-  --popover-foreground: #2b2b2b;
-  --primary: #f7a600;
+  --popover-foreground: #12284c;
+  --primary: #12284c;
   --primary-foreground: #ffffff;
-  --secondary: #f2f1ee;
-  --secondary-foreground: #2b2b2b;
-  --muted: #f2f1ee;
-  --muted-foreground: #6b7280;
-  --accent: #fef4e0;
-  --accent-foreground: #2b2b2b;
-  --destructive: #ef4444;
-  --border: #e3e1dc;
-  --input: #e3e1dc;
-  --ring: #f7a600;
-  --chart-1: #4f46e5;
-  --chart-2: #f97316;
+  --secondary: #f1f3f6;
+  --secondary-foreground: #12284c;
+  --muted: #f1f3f6;
+  --muted-foreground: #5a6880;
+  --accent: #fdf7e8;
+  --accent-foreground: #12284c;
+  --destructive: #dc2626;
+  --border: #e1e5ec;
+  --input: #c9d0db;
+  --ring: #e8a317;
+  --chart-1: #12284c;
+  --chart-2: #e8a317;
   --chart-3: #06b6d4;
   --chart-4: #22c55e;
   --chart-5: #ef4444;
-  --radius: 0.625rem;
+  --radius: 0.1875rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #2b2b2b;
-  --sidebar-primary: #f7a600;
+  --sidebar-foreground: #12284c;
+  --sidebar-primary: #12284c;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #fef4e0;
-  --sidebar-accent-foreground: #2b2b2b;
-  --sidebar-border: #e3e1dc;
-  --sidebar-ring: #f7a600;
+  --sidebar-accent: #fdf7e8;
+  --sidebar-accent-foreground: #12284c;
+  --sidebar-border: #e1e5ec;
+  --sidebar-ring: #e8a317;
 }
 
+/* Not currently switched on anywhere (no theme provider), kept coherent. */
 .dark {
-  --background: #191714;
-  --foreground: #f2f1ee;
-  --card: #211e1a;
-  --card-foreground: #f2f1ee;
-  --popover: #211e1a;
-  --popover-foreground: #f2f1ee;
-  --primary: #f7a600;
-  --primary-foreground: #251a00;
-  --secondary: #2b2823;
-  --secondary-foreground: #f2f1ee;
-  --muted: #2b2823;
-  --muted-foreground: #a8a49c;
-  --accent: #33291a;
-  --accent-foreground: #f7c14d;
+  --body-text: #c6cfdd;
+  --band: #111f36;
+  --notice: #2a2210;
+  --notice-border: #5c4718;
+  --border-strong: rgba(255, 255, 255, 0.2);
+
+  --background: #0b1628;
+  --foreground: #e6ebf3;
+  --card: #111f36;
+  --card-foreground: #e6ebf3;
+  --popover: #111f36;
+  --popover-foreground: #e6ebf3;
+  --primary: #e8a317;
+  --primary-foreground: #12284c;
+  --secondary: #16263f;
+  --secondary-foreground: #e6ebf3;
+  --muted: #16263f;
+  --muted-foreground: #9daabd;
+  --accent: #1b3765;
+  --accent-foreground: #f3c766;
   --destructive: #f87171;
   --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.15);
-  --ring: #d88f00;
-  --chart-1: #818cf8;
-  --chart-2: #fb923c;
+  --input: rgba(255, 255, 255, 0.18);
+  --ring: #e8a317;
+  --chart-1: #9db7e6;
+  --chart-2: #f3c766;
   --chart-3: #22d3ee;
   --chart-4: #4ade80;
   --chart-5: #f87171;
-  --sidebar: #211e1a;
-  --sidebar-foreground: #f2f1ee;
-  --sidebar-primary: #f7a600;
-  --sidebar-primary-foreground: #251a00;
-  --sidebar-accent: #33291a;
-  --sidebar-accent-foreground: #f7c14d;
+  --sidebar: #111f36;
+  --sidebar-foreground: #e6ebf3;
+  --sidebar-primary: #e8a317;
+  --sidebar-primary-foreground: #12284c;
+  --sidebar-accent: #1b3765;
+  --sidebar-accent-foreground: #f3c766;
   --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #d88f00;
+  --sidebar-ring: #e8a317;
 }
 
 @layer base {
@@ -132,5 +175,22 @@
   }
   html {
     @apply font-sans;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading;
+    text-wrap: pretty;
+  }
+  /*
+   * A visible gold focus ring on plain links and summaries. shadcn controls
+   * draw their own ring from `--ring`, which is the same gold.
+   */
+  a:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 }

@@ -8,7 +8,9 @@ npm run dev            # http://localhost:3000
 ```
 
 With no Supabase variables set, the app uses the mock store: data in
-`.local-db.json`, uploads in `public/uploads/`, login via the persona picker.
+`.local-db.json`, uploads in `public/uploads/`, login with the dummy LDAP
+accounts ([11-ldap-accounts.md](11-ldap-accounts.md)) or "Sign in with Google"
+(the persona picker).
 Everything works — all five booking forms, all approval tiers, the room grid, the
 developer console.
 
@@ -149,7 +151,18 @@ enough to drive Chrome over the DevTools protocol with no extra packages:
 Two gotchas that cost a rerun: `innerText` applies CSS `text-transform`, so an
 `uppercase` label reads "ROOMS SELECTED" (match on `textContent`); and panels
 that finish loading move the page, so scroll, wait, and *then* measure the clip
-— allowing for the 56 px sticky header.
+— allowing for the sticky navy nav bar in the portal (~47 px since the 19 Sep
+2026 restyle; it was a 56 px header before).
+
+Since the public website went in (19 Sep 2026), three more checks are cheap
+and worth keeping: set the viewport to 320 px
+(`Emulation.setDeviceMetricsOverride`) and assert
+`document.documentElement.scrollWidth === 320` and one `<h1>` per page; fill the
+sign-in form on `/book-room` and assert where `location.pathname` lands; and
+list `[...document.images].filter(i => i.complete && !i.naturalWidth)` after
+scrolling to the bottom to catch broken photos. Don't `pkill -f "next start"`
+from the same shell command that mentions it — the pattern matches the shell
+itself and kills it (exit 144); kill the PID from `ss -ltnp` instead.
 
 **Point the dev server at the mock store for any test that writes.**
 `.env.local` holds the hosted Supabase keys, so a plain `npm run dev` writes to
@@ -205,12 +218,20 @@ So build first and serve the build, on a spare port so a running dev server
 survives:
 
 ```bash
-npm run build
+NEXT_PUBLIC_SUPABASE_URL= npm run build   # empty at BUILD time too — see below
 NEXT_PUBLIC_SUPABASE_URL= npx next start -p 3100
 # then, warming each route first so you are not timing compilation:
 curl -s -o /dev/null -w "%{time_total}\n" -b "gh_mock_user=gh-manager" \
   http://localhost:3100/manager
 ```
+
+> **`NEXT_PUBLIC_*` is inlined at build time.** Emptying it only for
+> `next start` is not enough: a build made with `.env.local` in force has the
+> hosted URL compiled in, so the "mock" server still talks to hosted Supabase —
+> reads go to the shared database, and mock persona cookies such as
+> `gh-manager` fail to resolve (not uuids), so every portal route redirects to
+> sign-in. Found 19 Sep 2026. Build with the variable empty, and **rebuild
+> normally afterwards** so the `.next/` you leave behind matches `.env.local`.
 
 **Develop against the mock store, not the hosted project — for speed as well
 as safety.** One trivial query to hosted Supabase from the dev machine costs
@@ -229,18 +250,23 @@ Not yet deployed. The intended path is Vercel + hosted Supabase.
 
 **Blocking items — do these first:**
 
-1. **Replace mock authentication.** Swap `getCurrentUser()` in `lib/auth.ts` for
-   Supabase Auth or institute SSO. Until then anyone can impersonate anyone by
-   setting a cookie. This is the single most important gate.
+1. **Replace the mock session and connect the directory.** Set `LDAP_URL` and
+   friends (`.env.example`) so LDAP sign-in checks the institute directory, load
+   the real usernames onto profiles (migration 12, then the console import —
+   [11-ldap-accounts.md](11-ldap-accounts.md) §3), and make the session
+   something a client cannot forge (signed cookie or Supabase session). Until
+   then anyone can impersonate anyone by setting a cookie. This is the single
+   most important gate.
 2. **Stop using the service-role key for request-scoped reads.** Once real
    sessions exist, use the anon key with a per-request client so RLS becomes the
    enforcement boundary. Keep the service-role client only for genuine admin
    operations.
-3. **Remove both sign-in doors** — the credential form on `/`
-   (`components/login-form.tsx`) and the persona picker at `/mock-login`. Not
-   behind a flag; see 09-production-plan.md step 5.
-4. **Change the seeded password** (`password123`) and re-seed, or delete the demo
-   accounts entirely.
+3. **Replace the Google placeholder** — `/mock-login` and `loginAs` — with real
+   Google OAuth (institute domain only, `isInstituteEmail()`), and delete the
+   dummy-directory sample note under the card. Not behind a flag; see
+   09-production-plan.md step 5. The LDAP form stays.
+4. **Delete the demo personas**, or at least never deploy without `LDAP_URL`:
+   the dummy LDAP passwords are published in this repo.
 
 **Deployment steps once those are done:**
 

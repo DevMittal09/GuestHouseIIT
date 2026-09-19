@@ -107,9 +107,16 @@ Users created from the developer console get Supabase Auth accounts (password `p
 via the admin API, which needs the service-role key.
 
 The data layer is a single interface (`lib/store/types.ts`) with two implementations —
-`MockStore` and `SupabaseStore` — selected automatically in `lib/store/index.ts`. Mock auth
-lives in `lib/auth.ts`; swap `getCurrentUser()` for Supabase Auth / institute SSO to go to
-production. Uploaded documents go to the private `documents` bucket via signed URLs.
+`MockStore` and `SupabaseStore` — selected automatically in `lib/store/index.ts`.
+
+**Signing in.** The sign-in page takes an **LDAP username and password**, checked against
+dummy accounts (one per demo persona — listed in `.memories/11-ldap-accounts.md`, e.g.
+`priya` / `Priya@2026`) until `LDAP_URL` points it at the institute directory (see
+`.env.example`). **"Sign in with Google"** is a placeholder for now: it opens a persona
+picker. The `password123` above is not a portal login. Apply migration 12 so profiles can
+carry their LDAP username (`profiles.ldap_uid`); real usernames are loaded from the
+developer console (Users & Roles → Import LDAP usernames). The session itself is still a
+mock cookie in `lib/auth.ts` — making it unforgeable is part of going to production. Uploaded documents go to the private `documents` bucket via signed URLs.
 
 ## Email notifications
 

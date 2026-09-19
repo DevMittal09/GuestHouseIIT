@@ -240,11 +240,20 @@ domain. Confirm with the IAR cell. If it doesn't:
    discipline in `AGENTS.md`.
 4. Add `middleware.ts` for session refresh, and keep the route guards where they
    are — middleware is a convenience, not the boundary.
-5. Delete **both** demo sign-in doors — the credential form on `/` with its
-   `DEMO_PASSWORD`, and the persona picker at `/mock-login` — and delete the
-   `gh_mock_user` cookie path entirely. Do not leave either behind a flag; a
-   flag is a backdoor. `/` keeps its route: every signed-out guard redirects
-   there, so the real provider's button replaces the form in place.
+5. **Keep the LDAP form; retire the development shortcuts.** Since
+   19 Sep 2026 the sign-in card is LDAP (`signInWithLdap`, `lib/ldap/`) plus a
+   "Sign in with Google" button that opens the persona picker at `/mock-login`.
+   For production:
+   - set `LDAP_URL`, which turns the dummy accounts off;
+   - replace `/mock-login` + `loginAs` with real Google OAuth;
+   - have both doors create a real session instead of the unsigned
+     `gh_mock_user` cookie.
+
+   Do not leave the picker behind a flag; a flag is a backdoor. The three pages
+   keep their routes: every signed-out guard redirects to `/sign-in`
+   (`SIGN_IN_PATH`). (`/` is the public website since 19 Sep 2026.) Real LDAP
+   usernames are loaded onto profiles as described in
+   [11-ldap-accounts.md](11-ldap-accounts.md) §3.
 6. Move request-scoped reads to the anon key with the user's session so **RLS
    becomes the real boundary**. Keep one service-role client, used only by
    `app/actions/admin.ts` for user creation.
