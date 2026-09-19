@@ -375,7 +375,10 @@ export class SupabaseStore implements DataStore {
     // fail on a race, and failing before the status moves leaves the booking
     // untouched for the caller to retry against fresh occupancy.
     if (update.assigned_room_ids !== undefined) {
-      await this.setRoomHolds(id, update.assigned_room_ids, current.check_in, current.check_out);
+      await this.setRoomHolds(id, update.assigned_room_ids, current.check_in, current.check_out, {
+        overrideRoomIds: update.override_room_ids ?? [],
+        overrideBy: update.override_by ?? null,
+      });
       await this.assignRoomsToCards(id, update.assigned_room_ids);
     }
 
@@ -423,13 +426,19 @@ export class SupabaseStore implements DataStore {
     bookingId: string,
     roomIds: string[],
     checkIn: string,
-    checkOut: string
+    checkOut: string,
+    override: { overrideRoomIds: string[]; overrideBy: string | null } = {
+      overrideRoomIds: [],
+      overrideBy: null,
+    }
   ): Promise<void> {
     const { error } = await this.db.rpc("set_room_holds", {
       p_booking_id: bookingId,
       p_room_ids: roomIds,
       p_check_in: checkIn,
       p_check_out: checkOut,
+      p_override_room_ids: override.overrideRoomIds,
+      p_override_by: override.overrideBy,
     });
     if (!error) return;
     // 23P01 = exclusion_violation: someone else holds one of these rooms.

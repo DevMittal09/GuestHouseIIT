@@ -47,6 +47,10 @@ type RoomHoldRow = {
   booking_id: string;
   room_id: string;
   during: string;
+  /** Migration 14: the manager who accepted a turnover overlap, if any. */
+  override_by: string | null;
+  /** Maintained by a trigger; never written from the app. */
+  guard: string;
 };
 
 /** `value` is jsonb; the app stores plain strings in it. */
@@ -137,7 +141,7 @@ export interface Database {
       };
       room_holds: {
         Row: RoomHoldRow;
-        Insert: RoomHoldRow;
+        Insert: Insertable<RoomHoldRow, "override_by" | "guard">;
         Update: Partial<RoomHoldRow>;
         Relationships: [];
       };
@@ -217,6 +221,8 @@ export interface Database {
           p_room_ids: string[];
           p_check_in: string;
           p_check_out: string;
+          p_override_room_ids?: string[];
+          p_override_by?: string | null;
         };
         Returns: undefined;
       };

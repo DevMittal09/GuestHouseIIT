@@ -1,6 +1,8 @@
 import { addMonths } from "date-fns";
 import type { BookingSearchCriteria } from "./booking-search";
 import type { BookingStatus, Profile, Role, ServiceType } from "./types";
+import { formatDateTime } from "./format";
+import { TURNOVER_GRACE_HOURS } from "./turnover";
 
 /** How far ahead of today a stay may be booked. */
 export const ADVANCE_BOOKING_WINDOW_MONTHS = 1;
@@ -141,16 +143,71 @@ export function stayPhase(
 }
 
 /**
- * Why the manager cannot mark this booking Occupied yet, or null when they
- * can. Enforced server-side in `updateBookingLifecycle`; the console uses the
- * same function to disable the button and say why.
+ * The earliest a guest may be checked in: their booked time, less the
+ * turnover grace.
+ *
+ * A guest who turns up half an hour early is standing at the desk, and
+ * refusing to record them means the register disagrees with the building.
+ * A guest who turns up *a day* early has no room — the previous one is still
+ * in it — so the window is the same two hours the changeover override uses,
+ * and for the same reason.
+ */
+export function earliestCheckIn(booking: { check_in: string }): Date {
+  return new Date(Date.parse(booking.check_in) - TURNOVER_GRACE_HOURS * 3_600_000);
+}
+
+/**
+ * Why the desk cannot mark this booking Occupied yet, or null when it can.
+ * Enforced server-side in `updateBookingLifecycle`; the console uses the same
+ * function to decide what the button offers.
+ *
+ * There is no counterpart for Vacated on purpose: a guest may leave whenever
+ * they like, and the desk records it when it happens.
  */
 export function occupancyNotStartedError(
   booking: { check_in: string },
   now: Date = new Date()
 ): string | null {
-  if (booking.check_in <= now.toISOString()) return null;
-  return "This stay has not started yet — it can be marked Occupied from its check-in time.";
+  if (now >= earliestCheckIn(booking)) return null;
+  return `This stay starts on ${formatDateTime(booking.check_in)}. A guest can be checked in up to ${TURNOVER_GRACE_HOURS} hours before that, no earlier — until then the room may still have someone in it.`;
+}
+
+/** Whether the guest is arriving before the time they booked. */
+export function isEarlyArrival(
+  booking: { check_in: string },
+  now: Date = new Date()
+): boolean {
+  return now.toISOString() < booking.check_in;
+}
+
+/**
+ * A request nobody decided in time.
+ *
+ * Its check-in has passed while it was still in a queue, so the stay it asks
+ * for can no longer happen. Nothing deletes it — the archive keeps what was
+ * asked for — but it must stop behaving like a live request: approving one
+ * would hold rooms for dates in the past, and it should not sit in a queue
+ * looking actionable.
+ *
+ * The way out is to reject it, or for the manager to move the dates
+ * (`updateBookingStay`) and then allocate.
+ */
+export function hasLapsed(
+  booking: { status: BookingStatus; check_in: string },
+  now: Date = new Date()
+): boolean {
+  return ACTIVE_STATUSES.includes(booking.status) && booking.check_in < now.toISOString();
+}
+
+/** Why this request can no longer be approved, or null when it still can. */
+export function lapsedError(
+  booking: { status: BookingStatus; check_in: string },
+  now: Date = new Date()
+): string | null {
+  if (!hasLapsed(booking, now)) return null;
+  return `This request was never decided and its check-in (${formatDateTime(
+    booking.check_in
+  )}) has passed, so the stay cannot happen. Reject it, or ask the Guest House Manager to move the dates first.`;
 }
 
 /** Statuses that represent a booking where rooms are currently held/occupied. */

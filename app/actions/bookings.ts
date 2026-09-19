@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
+import { canAssignRooms, canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { aadhaarDigits, bookingPayloadSchema } from "@/lib/booking-schema";
 import { needsAlumniDetails } from "@/lib/booking-types";
@@ -11,7 +11,6 @@ import {
   notifyBookingSubmitted,
   notifyCancellationDecided,
   notifyCancellationRequested,
-  notifyCancelled,
   notifyRejected,
   notifyRoomsAllocated,
   notifyTierApproved,
@@ -19,6 +18,7 @@ import {
 import { guestHousePolicyError } from "@/lib/policy";
 import { OFFICIAL_EMAIL_WHITELIST } from "@/lib/routes";
 import { getStore } from "@/lib/store";
+import { formatDateTime } from "@/lib/format";
 import { instituteIso } from "@/lib/tz";
 import type {
   BookingStatus,
@@ -35,8 +35,14 @@ import {
   roomAssignmentError,
 } from "@/lib/occupancy";
 import {
+  conflictsByRoom,
+  TURNOVER_GRACE_HOURS,
+  type ConflictKind,
+} from "@/lib/turnover";
+import {
   ACTIVE_STATUSES,
   canReview,
+  lapsedError,
   canUpdateLifecycle,
   initialStatusFor,
   nextStatusOnApprove,
@@ -308,6 +314,13 @@ export async function reviewBooking(
     if (action === "reject" && !reason?.trim()) {
       return { ok: false, error: "A rejection reason is mandatory" };
     }
+    // Rejecting a request whose dates have passed is still useful — it closes
+    // it off and tells the requester. Forwarding one is not: it would move a
+    // stay that can no longer happen one step closer to holding a room.
+    if (action === "approve") {
+      const lapsed = lapsedError(booking);
+      if (lapsed) return { ok: false, error: lapsed };
+    }
     // A room booking is approved by allocating a room to it, which is a
     // different screen. A meals-only booking has no room to allocate, so for
     // that one the manager's approval *is* the decision.
@@ -356,7 +369,38 @@ export async function reviewBooking(
 }
 
 /** GH Manager: confirm allocation — assigns rooms and marks APPROVED. */
-export async function allocateRooms(bookingId: string, roomIds: string[]): Promise<ActionResult> {
+/**
+ * Each room's worst conflict with a booking's dates — free, a turnover
+ * overlap the manager may accept, or a real clash. Manager only: a requester
+ * seeing "soft" would read a held room as available.
+ */
+export async function getRoomConflicts(
+  bookingId: string
+): Promise<Record<string, ConflictKind>> {
+  const user = await requireUser();
+  if (!canAssignRooms(user.role)) throw new Error("Not authorised");
+  const store = getStore();
+  const booking = await store.getBooking(bookingId);
+  if (!booking) return {};
+
+  // Widened by the grace at each end, so a stay that ends just before this
+  // one begins is still returned and can be classified as a turnover.
+  const graceMs = TURNOVER_GRACE_HOURS * 3_600_000;
+  const from = new Date(Date.parse(booking.check_in) - graceMs).toISOString();
+  const to = new Date(Date.parse(booking.check_out) + graceMs).toISOString();
+  const segments = (
+    await store.listRoomOccupancy(booking.guest_house_id, from, to)
+  ).filter((seg) => seg.booking_id !== bookingId);
+
+  return conflictsByRoom({ from: booking.check_in, to: booking.check_out }, segments);
+}
+
+export async function allocateRooms(
+  bookingId: string,
+  roomIds: string[],
+  /** Rooms whose turnover overlap the manager is accepting. */
+  overrideRoomIds: string[] = []
+): Promise<ActionResult> {
   try {
     const user = await requireUser();
     if (user.role !== "gh_manager") return { ok: false, error: "Only the GH Manager can allocate rooms" };
@@ -366,6 +410,9 @@ export async function allocateRooms(bookingId: string, roomIds: string[]): Promi
     if (booking.service_type === "meals_only") {
       return { ok: false, error: "A meals-only booking has no room to allocate" };
     }
+    // Allocating a lapsed request would hold rooms for dates in the past.
+    const lapsed = lapsedError(booking);
+    if (lapsed) return { ok: false, error: lapsed };
     // The manager is the last stage of the approval chain, so they can also be
     // the only stage when the request has already been settled off-portal —
     // an override, recorded as one in the log below.
@@ -410,20 +457,55 @@ export async function allocateRooms(bookingId: string, roomIds: string[]): Promi
       if (problem) return { ok: false, error: problem };
     }
 
-    // No pre-flight occupancy check: the room_holds exclusion constraint is
-    // the authority, and checking first would only reintroduce the
-    // check-then-act race this replaced. A loser gets RoomClashError below.
+    // Overrides are re-derived here rather than trusted: the client says
+    // which rooms it is overriding, but *whether* each one is only a turnover
+    // overlap is decided from the stored occupancy. A crafted request naming
+    // a hard clash gets refused, and the database refuses it again.
+    const overrides = [...new Set(overrideRoomIds)].filter((id) => roomIds.includes(id));
+    if (overrides.length > 0) {
+      const conflicts = await getRoomConflicts(bookingId);
+      const hard = overrides.find((id) => conflicts[id] === "hard");
+      if (hard) {
+        const room = roomsById.get(hard);
+        return {
+          ok: false,
+          error: `${room?.room_number ?? "That room"} is booked for more than ${TURNOVER_GRACE_HOURS} hours of this stay — that is a clash, not a changeover, and cannot be overridden.`,
+        };
+      }
+    }
+
+    // No pre-flight occupancy check for the rest: the room_holds exclusion
+    // constraint is the authority, and checking first would only reintroduce
+    // the check-then-act race this replaced. A loser gets RoomClashError.
     const roomNumbers = selectedRooms.map((r) => r.room_number).join(", ");
+    const overrideNumbers = overrides
+      .map((id) => roomsById.get(id)?.room_number ?? id)
+      .join(", ");
     await store.updateBookingStatus(
       bookingId,
-      { status: "APPROVED", assigned_room_ids: roomIds },
+      {
+        status: "APPROVED",
+        assigned_room_ids: roomIds,
+        override_room_ids: overrides,
+        override_by: overrides.length > 0 ? user.id : null,
+      },
       {
         action_by: user.id,
         action_by_name: user.full_name,
         new_status: "APPROVED",
-        remarks: overriding
-          ? `Approved by the Guest House Manager without the remaining review stages (was ${booking.status}). Rooms allocated: ${roomNumbers}`
-          : `Rooms allocated: ${roomNumbers}`,
+        remarks: [
+          overriding
+            ? `Approved by the Guest House Manager without the remaining review stages (was ${booking.status}).`
+            : null,
+          `Rooms allocated: ${roomNumbers}`,
+          // The override is in the log or it did not happen: it is the record
+          // of a human accepting an overlap the system would otherwise refuse.
+          overrides.length > 0
+            ? `Turnover overlap accepted by ${user.full_name} on ${overrideNumbers}.`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" "),
       }
     );
     // Administration Section requirement 5: the requester should not have to
@@ -459,39 +541,37 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
     if (TERMINAL_STATUSES.includes(booking.status)) {
       return { ok: false, error: "This booking is already closed or has a pending cancellation" };
     }
-
-    // Approved or Occupied bookings need manager approval for cancellation.
-    const NEEDS_APPROVAL: BookingStatus[] = ["APPROVED", "OCCUPIED"];
-    if (NEEDS_APPROVAL.includes(booking.status)) {
-      await store.updateBookingStatus(
-        bookingId,
-        { status: "CANCELLATION_REQUESTED", rejection_reason: reason.trim() },
-        {
-          action_by: user.id,
-          action_by_name: user.full_name,
-          new_status: "CANCELLATION_REQUESTED",
-          remarks: `Cancellation requested: ${reason.trim()}`,
-        }
-      );
-      // The rooms stay held until the manager decides, so the manager is the
-      // one who needs to know. The requester just clicked the button.
-      await notifyCancellationRequested(bookingId, reason.trim());
-    } else {
-      // Pending bookings can be cancelled directly.
-      await store.updateBookingStatus(
-        bookingId,
-        { status: "CANCELLED", rejection_reason: reason.trim() },
-        {
-          action_by: user.id,
-          action_by_name: user.full_name,
-          new_status: "CANCELLED",
-          remarks: `Cancelled by requester: ${reason.trim()}`,
-        }
-      );
-      // A pending request held no rooms, so the desk has nothing to free and
-      // nothing to hear about.
-      await notifyCancelled(bookingId, user, reason.trim(), { heldRooms: false });
+    // A stay that has started cannot be cancelled from the portal: the guest
+    // is in the room, and what happens next is a conversation at the desk,
+    // not a status change. The manager can still close it off.
+    if (booking.status === "OCCUPIED") {
+      return {
+        ok: false,
+        error:
+          "This stay has already started — speak to the Guest House Manager to end it early.",
+      };
     }
+
+    // **Every** cancellation goes to the Guest House Manager, whatever stage
+    // the booking had reached. It used to depend on the stage: a request the
+    // warden had not yet seen was simply cancelled, an approved one was
+    // requested. That made "can I cancel?" answerable only by knowing where
+    // in the chain your booking sat. Now the answer is the same at every
+    // stage before the guest walks in — ask, and the manager decides.
+    const stageWhenAsked = booking.status;
+    await store.updateBookingStatus(
+      bookingId,
+      { status: "CANCELLATION_REQUESTED", rejection_reason: reason.trim() },
+      {
+        action_by: user.id,
+        action_by_name: user.full_name,
+        new_status: "CANCELLATION_REQUESTED",
+        remarks: `Cancellation requested at ${stageWhenAsked}: ${reason.trim()}`,
+      }
+    );
+    // The manager decides; whoever was reviewing it is told at the same
+    // moment, for information only — see `notifyCancellationRequested`.
+    await notifyCancellationRequested(bookingId, reason.trim(), stageWhenAsked);
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
@@ -507,7 +587,10 @@ const LIFECYCLE_TRANSITIONS: Partial<Record<BookingStatus, BookingStatus>> = {
 };
 
 /** GH Manager or Caretaker: advance a booking (Approved → Occupied → Vacated). */
-export async function updateBookingLifecycle(bookingId: string, targetStatus: BookingStatus): Promise<ActionResult> {
+export async function updateBookingLifecycle(
+  bookingId: string,
+  targetStatus: BookingStatus
+): Promise<ActionResult> {
   try {
     const user = await requireUser();
     // The caretaker on reception records arrivals and departures as well —
@@ -528,14 +611,29 @@ export async function updateBookingLifecycle(bookingId: string, targetStatus: Bo
     // not started cannot be one, and marking it early makes the manager's
     // "current occupants" list and the availability grid lie about who is in
     // the building right now.
+    // A guest may be checked in up to the turnover grace before their booked
+    // time and no earlier. There is no matching limit on checking *out*:
+    // people leave when they leave, and the desk records it.
     if (targetStatus === "OCCUPIED") {
       const tooEarly = occupancyNotStartedError(booking);
       if (tooEarly) return { ok: false, error: tooEarly };
     }
 
+    // Was it early? Read from the booking rather than trusted from the
+    // caller, so the log says what happened and not what was clicked.
+    const now = new Date().toISOString();
+    const actuallyEarly =
+      targetStatus === "OCCUPIED"
+        ? booking.check_in > now
+        : targetStatus === "VACATED" && booking.check_out > now;
+
     const remarkMap: Record<string, string> = {
-      OCCUPIED: "Guest checked in — marked as Occupied",
-      VACATED: "Guest checked out — marked as Vacated",
+      OCCUPIED: actuallyEarly
+        ? `Guest checked in early — arrived before the booked ${formatDateTime(booking.check_in)}`
+        : "Guest checked in — marked as Occupied",
+      VACATED: actuallyEarly
+        ? `Guest checked out early — left before the booked ${formatDateTime(booking.check_out)}. The room is free from now.`
+        : "Guest checked out — marked as Vacated",
     };
 
     await store.updateBookingStatus(

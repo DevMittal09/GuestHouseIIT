@@ -20,6 +20,7 @@ import { RoomClashError } from "@/lib/types";
 import type { Role, RoomType } from "@/lib/types";
 import { mealsOn, normalizeMeals } from "@/lib/meals";
 import { isInfantAge } from "@/lib/occupancy";
+import { worstConflict } from "@/lib/turnover";
 import { deriveFromRooms } from "./derive";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
@@ -264,11 +265,23 @@ function holdOverlaps(hold: RoomHold, from: string, to: string): boolean {
  * immediately before the write is genuinely atomic here — unlike the old
  * check-then-act against Postgres.
  */
-function assertNoClash(db: Db, bookingId: string, roomIds: string[], from: string, to: string) {
-  const clash = db.room_holds.find(
-    (h) =>
-      h.booking_id !== bookingId && roomIds.includes(h.room_id) && holdOverlaps(h, from, to)
-  );
+function assertNoClash(
+  db: Db,
+  bookingId: string,
+  roomIds: string[],
+  from: string,
+  to: string,
+  overrideRoomIds: string[] = []
+) {
+  // Migration 14's guard, in JS. A room the manager has overridden is
+  // compared on its shrunken range, so a turnover overlap of up to the grace
+  // is allowed and anything longer still clashes.
+  const clash = db.room_holds.find((h) => {
+    if (h.booking_id === bookingId || !roomIds.includes(h.room_id)) return false;
+    const overridden = overrideRoomIds.includes(h.room_id) || Boolean(h.override_by);
+    if (!overridden) return holdOverlaps(h, from, to);
+    return worstConflict({ from, to }, [{ from: h.check_in, to: h.check_out }]) === "hard";
+  });
   if (clash) {
     const room = db.rooms.find((r) => r.id === clash.room_id);
     throw new RoomClashError(
@@ -479,7 +492,8 @@ export class MockStore implements DataStore {
     // Rooms first: a clash must abort before the status moves, so a failed
     // allocation leaves the booking exactly as it was.
     if (update.assigned_room_ids !== undefined) {
-      assertNoClash(db, id, update.assigned_room_ids, b.check_in, b.check_out);
+      const overrides = update.override_room_ids ?? [];
+      assertNoClash(db, id, update.assigned_room_ids, b.check_in, b.check_out, overrides);
       db.room_holds = db.room_holds.filter((h) => h.booking_id !== id);
       for (const roomId of update.assigned_room_ids) {
         db.room_holds.push({
@@ -487,6 +501,7 @@ export class MockStore implements DataStore {
           room_id: roomId,
           check_in: b.check_in,
           check_out: b.check_out,
+          override_by: overrides.includes(roomId) ? (update.override_by ?? null) : null,
         });
       }
       assignRoomsToCards(db, id, update.assigned_room_ids);

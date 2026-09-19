@@ -80,8 +80,9 @@ export function CaretakerConsole({
           </Badge>
         </h2>
         <p className="mb-3 text-sm text-muted-foreground">
-          Rooms are already held for these bookings. A stay cannot be marked Occupied before its
-          check-in time — until then the guest has not arrived.
+          Rooms are already held for these bookings. If a guest turns up before their booked
+          time, use <span className="font-medium">Early check-in</span> — the arrival is
+          recorded as early rather than pretending it was on time.
         </p>
         {upcoming.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">

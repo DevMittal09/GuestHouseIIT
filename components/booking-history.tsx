@@ -44,12 +44,16 @@ import {
 import { formatDate, formatDateTime } from "@/lib/format";
 import { toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
+import { MEAL_KEYS, MEAL_LABELS } from "@/lib/meals";
 import {
   REQUESTER_ROLES,
   ROLE_LABELS,
+  STATUS_LABELS,
   type BookingStatus,
   type BookingWithDetails,
 } from "@/lib/types";
+
+const ALL_STATUSES = Object.keys(STATUS_LABELS) as BookingStatus[];
 import { ACTIVE_STATUSES } from "@/lib/workflow";
 
 interface Tile {
@@ -77,6 +81,7 @@ function toQueryString(params: HistoryParams, defaultActor: HistoryActor): strin
   const sp = new URLSearchParams();
   if (params.q) sp.set("q", params.q);
   if (params.statuses.length) sp.set("status", params.statuses.join(","));
+  if (params.meals.length) sp.set("meal", params.meals.join(","));
   if (params.guestHouseId) sp.set("gh", params.guestHouseId);
   if (params.userRole) sp.set("role", params.userRole);
   if (params.actor !== defaultActor) sp.set("actor", params.actor);
@@ -259,6 +264,7 @@ export function BookingHistory({
                   apply({
                     q: "",
                     statuses: [],
+                    meals: [],
                     guestHouseId: undefined,
                     userRole: undefined,
                     actor: defaultActor,
@@ -284,6 +290,36 @@ export function BookingHistory({
           words in quotes, e.g.{" "}
           <code className="rounded bg-muted px-1 py-0.5 font-mono">guest:&quot;Anita Rao&quot;</code>.
         </p>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Filter label="Stages">
+            {/* Every stage starts ticked, because an empty list means "all".
+                Drawn unticked it read as "nothing selected", which is the
+                opposite of what the archive was actually showing. */}
+            <CheckList
+              options={ALL_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
+              selected={params.statuses}
+              onChange={(next) =>
+                // All ticked is stored as "none", so the URL stays clean and
+                // a stage added later is included rather than silently missed.
+                apply({ statuses: next.length === ALL_STATUSES.length ? [] : next })
+              }
+            />
+          </Filter>
+
+          <Filter label="Meals">
+            <CheckList
+              options={MEAL_KEYS.map((m) => ({ value: m, label: MEAL_LABELS[m] }))}
+              selected={params.meals}
+              onChange={(next) =>
+                apply({ meals: next.length === MEAL_KEYS.length ? [] : next })
+              }
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Keeps bookings that asked for any ticked meal on any day of the stay.
+            </p>
+          </Filter>
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {/* Handled by me / Everything — only for approver roles. */}
@@ -536,6 +572,47 @@ export function BookingHistory({
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A row of tick boxes where **everything ticked is the default**.
+ *
+ * `selected` empty means "no filter", which is the same set of results as
+ * every box ticked — so that is how it is drawn. Unticking one sends the
+ * remaining boxes as an explicit list; ticking the last one back returns to
+ * empty, and the URL loses the parameter again.
+ */
+function CheckList<T extends string>({
+  options,
+  selected,
+  onChange,
+}: {
+  options: { value: T; label: string }[];
+  selected: T[];
+  onChange: (next: T[]) => void;
+}) {
+  const all = selected.length === 0;
+  const isOn = (value: T) => all || selected.includes(value);
+  const toggle = (value: T) => {
+    const current = all ? options.map((o) => o.value) : selected;
+    onChange(isOn(value) ? current.filter((v) => v !== value) : [...current, value]);
+  };
+
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+      {options.map((o) => (
+        <label key={o.value} className="flex cursor-pointer items-center gap-1.5 text-sm">
+          <input
+            type="checkbox"
+            className="size-4 accent-primary"
+            checked={isOn(o.value)}
+            onChange={() => toggle(o.value)}
+          />
+          {o.label}
+        </label>
+      ))}
     </div>
   );
 }

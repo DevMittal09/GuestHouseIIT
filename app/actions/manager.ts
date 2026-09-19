@@ -14,6 +14,7 @@ import {
   countBedGuests,
   roomAssignmentError,
 } from "@/lib/occupancy";
+import { notifyCancelled } from "@/lib/mail/notify";
 import { getStore } from "@/lib/store";
 import { instituteDate, instituteIso, toInstituteDateTimeValue } from "@/lib/tz";
 import type { BookingStatus, MealPlan, MealPreference } from "@/lib/types";
@@ -255,6 +256,10 @@ export async function managerCancelBooking(
       return { ok: false, error: "This booking is already closed" };
     }
 
+    // Whether the booking was holding rooms decides who needs telling, so it
+    // is read before the status change releases them.
+    const heldRooms = ROOM_HOLDING_STATUSES.includes(booking.status);
+
     // Leaving ROOM_HOLDING_STATUSES releases the rooms on its own — see
     // `updateBookingStatus`, where the rule lives.
     await store.updateBookingStatus(
@@ -267,6 +272,9 @@ export async function managerCancelBooking(
         remarks: `Cancelled by the Guest House Manager: ${reason.trim()}`,
       }
     );
+    // The requester did not ask for this one, so they certainly need to hear
+    // about it — and the desk needs to know if a room just came back.
+    await notifyCancelled(bookingId, user, reason.trim(), { heldRooms });
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {

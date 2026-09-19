@@ -7,6 +7,7 @@ import { updateBookingLifecycle } from "@/app/actions/bookings";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InvoiceDialog } from "@/components/invoice-dialog";
 import {
   Table,
   TableBody,
@@ -17,7 +18,13 @@ import {
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
 import { describeMealDays, describeMeals } from "@/lib/meals";
-import { displayStatus, occupancyNotStartedError, stayPhase } from "@/lib/workflow";
+import {
+  displayStatus,
+  earliestCheckIn,
+  isEarlyArrival,
+  occupancyNotStartedError,
+  stayPhase,
+} from "@/lib/workflow";
 import { STATUS_LABELS, type BookingStatus, type BookingWithDetails } from "@/lib/types";
 
 /**
@@ -105,6 +112,12 @@ function StayRow({
   const tooEarly = action?.nextStatus === "OCCUPIED" ? occupancyNotStartedError(booking) : null;
   const overdue = showOverdue && stayPhase(booking) === "past";
 
+  // Both are "off schedule but allowed". Checking in early is bounded by
+  // `occupancyNotStartedError`; checking out early is not bounded at all.
+  const arrivingEarly = action?.nextStatus === "OCCUPIED" && isEarlyArrival(booking);
+  const leavingEarly =
+    action?.nextStatus === "VACATED" && booking.check_out > new Date().toISOString();
+
   const handleLifecycle = () =>
     startTransition(async () => {
       if (!action) return;
@@ -141,20 +154,37 @@ function StayRow({
         <StatusBadge status={displayStatus(booking)} />
       </TableCell>
       <TableCell className="text-right">
-        {action && (
-          <Button
-            size="sm"
-            className={tooEarly ? undefined : action.className}
-            variant={tooEarly ? "outline" : "default"}
-            disabled={isPending || tooEarly !== null}
-            title={tooEarly ?? undefined}
-            onClick={handleLifecycle}
-          >
-            {isPending ? "Updating…" : action.label}
-          </Button>
-        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          {/* Inside the window the button says what it is actually doing —
+              an early arrival or an early departure — and the log records it
+              as such. Outside it, there is nothing to offer: the room may
+              still have the previous guest in it. */}
+          {action && !tooEarly && (
+            <Button
+              size="sm"
+              className={action.className}
+              disabled={isPending}
+              onClick={handleLifecycle}
+            >
+              {isPending
+                ? "Updating…"
+                : arrivingEarly
+                  ? "Early check-in"
+                  : leavingEarly
+                    ? "Early check-out"
+                    : action.label}
+            </Button>
+          )}
+          {/* Available from the moment a guest is in the building: the desk
+              is often asked for the bill before they have formally left. */}
+          {(booking.status === "OCCUPIED" || booking.status === "VACATED") && (
+            <InvoiceDialog booking={booking} />
+          )}
+        </div>
         {tooEarly && (
-          <p className="mt-1 text-xs text-muted-foreground">Available from check-in</p>
+          <p className="mt-1 text-xs text-muted-foreground" title={tooEarly}>
+            Check-in opens {formatDateTime(earliestCheckIn(booking).toISOString())}
+          </p>
         )}
       </TableCell>
     </TableRow>

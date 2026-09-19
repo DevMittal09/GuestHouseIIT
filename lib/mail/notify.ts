@@ -343,23 +343,54 @@ export async function notifyRoomsAllocated(bookingId: string, manager: Profile):
 }
 
 /** A requester asked to cancel an approved stay: only the manager can decide. */
+/**
+ * Someone has asked to cancel.
+ *
+ * Two audiences, two different things to say. The **manager** has to decide,
+ * whatever stage the booking had reached. Whoever **reviewed** it — the
+ * Assistant Warden, the advisor, the IAR Office — is told at the same moment,
+ * because they signed it off and would otherwise find out never; but they are
+ * told, not asked. Routing a cancellation through the review chain again
+ * would leave a guest waiting on two approvals to undo one booking.
+ *
+ * `reviewedBy` is the stage the booking was at when the cancellation was
+ * raised, which is who to inform. On a booking already approved there is no
+ * pending stage, so the reviewers of the stage it passed through are used.
+ */
 export async function notifyCancellationRequested(
   bookingId: string,
-  reason: string
+  reason: string,
+  reviewedStatus?: BookingStatus
 ): Promise<void> {
   await safely("booking.cancellation_requested", async () => {
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const managers = await managerRecipients();
+    const reviewers = reviewedStatus
+      ? await reviewersForStatus(booking, reviewedStatus)
+      : [];
+    const managerAddresses = addressesOf(managers);
+    // A manager who is also the reviewer gets the decision mail, not both.
+    const informOnly = addressesOf(reviewers).filter((a) => !managerAddresses.includes(a));
 
     await queueMessages([
       managers.length > 0
         ? {
             eventKey: "booking.cancellation_requested.manager",
             booking,
-            to: addressesOf(managers),
+            to: managerAddresses,
             subjectText: "Cancellation requested",
             doc: t.cancellationRequestedToManager(booking, reason),
+            stamp: booking.updated_at,
+          }
+        : null,
+      informOnly.length > 0
+        ? {
+            eventKey: "booking.cancellation_requested.reviewer",
+            booking,
+            to: informOnly,
+            subjectText: "Cancellation requested — for your information",
+            doc: t.cancellationRequestedToReviewer(booking, reason),
             stamp: booking.updated_at,
           }
         : null,

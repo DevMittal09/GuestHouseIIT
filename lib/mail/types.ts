@@ -31,6 +31,7 @@ export type MailEventKey =
   | "booking.allocated.requester"
   | "booking.allocated.desk"
   | "booking.cancellation_requested.manager"
+  | "booking.cancellation_requested.reviewer"
   | "booking.cancellation_decided.requester"
   | "booking.cancelled.requester"
   | "booking.cancelled.desk"
@@ -49,6 +50,7 @@ export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
   "booking.allocated.requester": "Rooms allocated",
   "booking.allocated.desk": "Allocation record (desk)",
   "booking.cancellation_requested.manager": "Cancellation requested",
+  "booking.cancellation_requested.reviewer": "Cancellation requested (for information)",
   "booking.cancellation_decided.requester": "Cancellation decided",
   "booking.cancelled.requester": "Booking cancelled",
   "booking.cancelled.desk": "Cancellation record (desk)",

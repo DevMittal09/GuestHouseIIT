@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
+import { lapsedError } from "@/lib/workflow";
 import { describeMeals } from "@/lib/meals";
 import {
   BOOKING_TYPE_LABELS,
@@ -204,8 +205,9 @@ export function ManagerQueue({
           </Badge>
         </h2>
         <p className="mb-3 text-sm text-muted-foreground">
-          Rooms are already held for these bookings. They cannot be marked Occupied until their
-          check-in time.
+          Rooms are already held for these bookings. A guest who arrives ahead of their booked
+          time is checked in with <span className="font-medium">Early check-in</span>, which
+          says so in the log.
         </p>
         {upcoming.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
@@ -231,9 +233,19 @@ function ManagerRow({
 }) {
   const [open, setOpen] = useState(false);
   const mealsOnly = booking.service_type === "meals_only";
+  // Its check-in has passed while it sat here. Allocating would hold rooms
+  // for dates in the past; moving the dates or rejecting are the ways out.
+  const lapsed = lapsedError(booking);
   return (
     <TableRow className={booking.user_role === "official" ? "bg-amber-50/60 dark:bg-amber-950/20" : undefined}>
-      <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
+      <TableCell className="font-mono text-xs">
+        {booking.booking_reference_id}
+        {lapsed && (
+          <Badge variant="destructive" className="ml-2 align-middle" title={lapsed}>
+            Lapsed
+          </Badge>
+        )}
+      </TableCell>
       <TableCell>
         <span className="font-medium">{booking.requester.full_name}</span>
         <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>

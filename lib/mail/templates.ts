@@ -426,6 +426,33 @@ export function cancellationRequestedToManager(
   };
 }
 
+/**
+ * The same cancellation, told to whoever reviewed the request — for
+ * information only.
+ *
+ * They signed the booking off, so they should know it is being withdrawn;
+ * but the decision is the Guest House Manager's alone, and a mail that looks
+ * like a request for approval would have three people waiting on each other.
+ * Hence no button and an explicit "no action needed".
+ */
+export function cancellationRequestedToReviewer(
+  booking: BookingWithDetails,
+  reason: string
+): EmailDocument {
+  return {
+    heading: "A booking you reviewed is being cancelled",
+    preheader: `${booking.booking_reference_id} — ${booking.requester.full_name} asks to cancel. No action needed.`,
+    blocks: [
+      {
+        kind: "paragraph",
+        text: `${booking.requester.full_name} has asked to cancel a request you reviewed. This is for your information — the Guest House Manager decides, and there is nothing for you to do.`,
+      },
+      { kind: "callout", tone: "info", title: "Reason given", lines: [reason] },
+      bookingFacts(booking),
+    ],
+  };
+}
+
 export function cancellationToDesk(booking: BookingWithDetails, actorName: string): EmailDocument {
   return {
     heading: "A booking was cancelled",

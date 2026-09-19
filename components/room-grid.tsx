@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { allocateRooms, getOccupancy } from "@/app/actions/bookings";
+import { allocateRooms, getRoomConflicts } from "@/app/actions/bookings";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -16,6 +16,7 @@ import {
   roomAssignmentError,
   ROOM_TYPE_LABELS,
 } from "@/lib/occupancy";
+import { OVERRIDE_NOTICE, TURNOVER_GRACE_HOURS, type ConflictKind } from "@/lib/turnover";
 import { cn } from "@/lib/utils";
 import type { BookingWithDetails, Room } from "@/lib/types";
 
@@ -58,7 +59,13 @@ export function RoomGrid({
   // any part of this stay is never selectable.
   const checkIn = booking.check_in;
   const checkOut = booking.check_out;
-  const [occupied, setOccupied] = useState<Set<string>>(new Set());
+  /**
+   * Each room's worst conflict with this stay. A `hard` room is unpickable;
+   * a `soft` one overlaps by no more than the turnover grace and can be taken
+   * if the manager accepts it. Requesters never see this — their grid marks
+   * any held room as taken.
+   */
+  const [conflicts, setConflicts] = useState<Record<string, ConflictKind>>({});
   /**
    * The picked rooms **in order**, because the order is meaningful: the first
    * is Room 1's, the second Room 2's. A Set would have carried that meaning
@@ -72,11 +79,13 @@ export function RoomGrid({
 
   useEffect(() => {
     let cancelled = false;
-    getOccupancy(booking.guest_house_id, checkIn, checkOut, booking.id)
-      .then((ids) => {
+    getRoomConflicts(booking.id)
+      .then((next) => {
         if (cancelled) return;
-        setOccupied(new Set(ids));
-        setSelected((prev) => prev.filter((id) => !ids.includes(id)));
+        setConflicts(next);
+        // Only a hard clash forces a deselection; a turnover the manager had
+        // already accepted stays picked.
+        setSelected((prev) => prev.filter((id) => next[id] !== "hard"));
         setLoading(false);
       })
       .catch(() => {
@@ -87,7 +96,7 @@ export function RoomGrid({
     return () => {
       cancelled = true;
     };
-  }, [booking.guest_house_id, booking.id, checkIn, checkOut, refreshKey, occupancyVersion]);
+  }, [booking.id, refreshKey, occupancyVersion]);
 
   const refreshOccupancy = () => {
     setLoading(true);
@@ -95,7 +104,7 @@ export function RoomGrid({
   };
 
   const toggle = (room: Room) => {
-    if (occupied.has(room.id)) return;
+    if (conflicts[room.id] === "hard") return;
     setSelected((prev) => {
       if (prev.includes(room.id)) return prev.filter((id) => id !== room.id);
       if (prev.length >= booking.rooms_requested) {
@@ -108,7 +117,7 @@ export function RoomGrid({
 
   const confirm = () =>
     startTransition(async () => {
-      const result = await allocateRooms(booking.id, selected);
+      const result = await allocateRooms(booking.id, selected, overridden);
       if (result.ok) {
         toast.success(`${booking.booking_reference_id} approved — rooms allocated`);
         onAllocated?.();
@@ -123,6 +132,10 @@ export function RoomGrid({
   const singles = rooms.filter((r) => r.room_type === "single");
 
   // Infants share with their guardians, so only the others need a bed.
+  // Which of the picked rooms the manager is accepting an overlap on. Derived
+  // from the selection rather than tracked separately, so the two cannot
+  // disagree about what is being overridden.
+  const overridden = selected.filter((id) => conflicts[id] === "soft");
   const bedGuests = countBedGuests(booking.guests);
   // In pick order, so index 0 is Room 1's — the same order the server maps
   // onto the booking's room cards.
@@ -165,6 +178,10 @@ export function RoomGrid({
 
       <div className="flex flex-wrap items-center gap-4 text-xs">
         <LegendSwatch className="bg-emerald-500" label="Available" />
+        <LegendSwatch
+          className="bg-amber-400"
+          label={`Changeover — free within ${TURNOVER_GRACE_HOURS}h, yours to override`}
+        />
         <LegendSwatch className="bg-red-500" label="Already allotted — cannot be picked" />
         <LegendSwatch className="bg-blue-500" label="Selected for this booking" />
         {loading && <span className="text-muted-foreground">Loading occupancy…</span>}
@@ -174,7 +191,7 @@ export function RoomGrid({
         title={`${ROOM_TYPE_LABELS.double_sharing} rooms`}
         description={describeCapacity("double_sharing")}
         rooms={doubles}
-        occupied={occupied}
+        conflicts={conflicts}
         selected={selected}
         onToggle={toggle}
       />
@@ -182,7 +199,7 @@ export function RoomGrid({
         title={`${ROOM_TYPE_LABELS.single} rooms`}
         description={describeCapacity("single")}
         rooms={singles}
-        occupied={occupied}
+        conflicts={conflicts}
         selected={selected}
         onToggle={toggle}
       />
@@ -257,6 +274,21 @@ export function RoomGrid({
           </ul>
         )}
 
+        {/* Overriding must be a decision, not a side effect of clicking a
+            yellow tile — so it is spelled out, with the rooms named, before
+            the button that records it against the booking. */}
+        {overridden.length > 0 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+            <p className="font-medium">
+              Accepting a changeover on{" "}
+              {overridden
+                .map((id) => rooms.find((r) => r.id === id)?.room_number ?? id)
+                .join(", ")}
+            </p>
+            <p className="mt-0.5">{OVERRIDE_NOTICE}</p>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           {capacityProblem ? (
             <p className="text-sm text-destructive">{capacityProblem}</p>
@@ -269,7 +301,11 @@ export function RoomGrid({
               isPending || selected.length === 0 || capacityProblem !== null || cardProblem
             }
           >
-            {isPending ? "Allocating…" : "Confirm & Allocate"}
+            {isPending
+              ? "Allocating…"
+              : overridden.length > 0
+                ? "Override & Allocate"
+                : "Confirm & Allocate"}
           </Button>
         </div>
       </div>
@@ -309,14 +345,14 @@ function RoomSection({
   title,
   description,
   rooms,
-  occupied,
+  conflicts,
   selected,
   onToggle,
 }: {
   title: string;
   description: string;
   rooms: Room[];
-  occupied: Set<string>;
+  conflicts: Record<string, ConflictKind>;
   /** Picked rooms in card order; the index is the "Room N" shown on the tile. */
   selected: string[];
   onToggle: (room: Room) => void;
@@ -330,7 +366,9 @@ function RoomSection({
       </div>
       <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 md:grid-cols-8">
         {rooms.map((room) => {
-          const isOccupied = occupied.has(room.id);
+          const conflict = conflicts[room.id] ?? "free";
+          const isOccupied = conflict === "hard";
+          const isTurnover = conflict === "soft";
           const pickedAt = selected.indexOf(room.id);
           const isSelected = pickedAt >= 0;
           return (
@@ -342,15 +380,21 @@ function RoomSection({
               title={
                 isOccupied
                   ? `${room.room_number} — already allotted for these dates`
-                  : `${room.room_number} — ${ROOM_TYPE_LABELS[room.room_type]}. ${describeCapacity(room.room_type)}`
+                  : isTurnover
+                    ? `${room.room_number} — another stay overlaps by up to ${TURNOVER_GRACE_HOURS} hours. Pick it to accept the changeover.`
+                    : `${room.room_number} — ${ROOM_TYPE_LABELS[room.room_type]}. ${describeCapacity(room.room_type)}`
               }
               className={cn(
                 "flex h-12 items-center justify-center rounded-md border text-xs font-semibold text-white transition-transform",
                 isOccupied
                   ? "cursor-not-allowed bg-red-500 opacity-90"
                   : isSelected
-                    ? "bg-blue-500 ring-2 ring-blue-300 hover:scale-105"
-                    : "bg-emerald-500 hover:scale-105 hover:bg-emerald-600"
+                    ? isTurnover
+                      ? "bg-blue-500 ring-2 ring-amber-400 hover:scale-105"
+                      : "bg-blue-500 ring-2 ring-blue-300 hover:scale-105"
+                    : isTurnover
+                      ? "bg-amber-400 text-amber-950 hover:scale-105 hover:bg-amber-500"
+                      : "bg-emerald-500 hover:scale-105 hover:bg-emerald-600"
               )}
             >
               <span className="flex flex-col items-center leading-tight">

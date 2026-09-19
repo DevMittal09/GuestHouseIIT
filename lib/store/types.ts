@@ -41,6 +41,14 @@ export interface StatusUpdate {
    * An empty array releases every room.
    */
   assigned_room_ids?: string[];
+  /**
+   * Rooms among `assigned_room_ids` where the manager accepted a turnover
+   * overlap. The database relaxes its no-overlap rule for these by at most
+   * two hours and records who accepted it — see migration 14.
+   */
+  override_room_ids?: string[];
+  /** Who accepted those overrides. Required when `override_room_ids` is set. */
+  override_by?: string | null;
 }
 
 /**

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { reviewBooking } from "@/app/actions/bookings";
 import { BookingDetails } from "@/components/booking-details";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
+import { lapsedError } from "@/lib/workflow";
 import type { BookingWithDetails } from "@/lib/types";
 
 export function ReviewQueue({
@@ -78,6 +80,10 @@ function ReviewRow({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [detailOpen, setDetailOpen] = useState(false);
+  // Nobody decided this in time and its check-in has gone. It can still be
+  // rejected — that closes it and tells the requester — but forwarding it
+  // would move a stay that cannot happen one step closer to holding a room.
+  const lapsed = lapsedError(booking);
 
   /**
    * A reviewer's only forward move. It is called "forward", not "approve",
@@ -99,7 +105,14 @@ function ReviewRow({
 
   return (
     <TableRow>
-      <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
+      <TableCell className="font-mono text-xs">
+        {booking.booking_reference_id}
+        {lapsed && (
+          <Badge variant="destructive" className="ml-2 align-middle" title={lapsed}>
+            Lapsed
+          </Badge>
+        )}
+      </TableCell>
       <TableCell>
         <span className="font-medium">{booking.requester.full_name}</span>
         <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>
@@ -127,13 +140,13 @@ function ReviewRow({
               <BookingDetails booking={booking} showAlumniCard={showAlumniCard} />
               <DialogFooter className="gap-2">
                 <RejectDialog booking={booking} onDone={() => setDetailOpen(false)} />
-                <Button onClick={approve} disabled={isPending}>
+                <Button onClick={approve} disabled={isPending || lapsed !== null}>
                   {isPending ? "Forwarding…" : "Forward to GH Manager"}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Button size="sm" onClick={approve} disabled={isPending}>
+          <Button size="sm" onClick={approve} disabled={isPending || lapsed !== null}>
             Forward
           </Button>
           <RejectDialog booking={booking} small />

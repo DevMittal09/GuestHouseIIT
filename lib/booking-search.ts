@@ -6,7 +6,8 @@ import {
   type BookingWithDetails,
   type Role,
 } from "@/lib/types";
-import { BOOKING_CATEGORY_ROLES } from "@/lib/types";
+import { BOOKING_CATEGORY_ROLES, type MealKey } from "@/lib/types";
+import { MEAL_KEYS } from "@/lib/meals";
 import { instituteParts } from "@/lib/tz";
 
 /**
@@ -35,6 +36,13 @@ export interface BookingSearchCriteria {
   statuses?: BookingStatus[];
   guestHouseId?: string;
   userRole?: Role;
+  /**
+   * Keep only bookings that asked for at least one of these meals, on any day
+   * of the stay. Empty or omitted means "any". Like `statuses`, applied in JS
+   * rather than SQL — the meals live in a jsonb column and the matcher
+   * already walks the booking.
+   */
+  meals?: MealKey[];
   /**
    * Match any one of these requester categories. Used by scopes that cover
    * several — the IAR Office sees Student Cell, its own and legacy alumni
@@ -206,6 +214,10 @@ function matchesExceptStatus(
   if (c.club && b.requester?.department_or_club !== c.club) return false;
   if (c.actedBy && !reviewerActionsOn(b, c.actedBy).length) return false;
   if (c.userId && b.user_id !== c.userId) return false;
+  if (c.meals?.length) {
+    const asked = new Set(b.meals.flatMap((d) => MEAL_KEYS.filter((m) => d[m])));
+    if (!c.meals.some((m) => asked.has(m))) return false;
+  }
 
   if (c.checkInFrom || c.checkInTo) {
     const checkIn = toMillis(b.check_in);
@@ -546,7 +558,15 @@ export type HistoryActor = "me" | "all";
 
 export interface HistoryParams {
   q: string;
+  /**
+   * Which stages to include. **Empty means every stage**, which is also what
+   * the filter draws as "all ticked" — a status list that started empty and
+   * looked unticked read as "nothing selected, so nothing shown", when in
+   * fact everything was.
+   */
   statuses: BookingStatus[];
+  /** Which meals to require. Empty means the filter is off. */
+  meals: MealKey[];
   guestHouseId?: string;
   userRole?: Role;
   actor: HistoryActor;
@@ -594,6 +614,14 @@ export function parseHistoryParams(
     ? (roleParam as Role)
     : undefined;
 
+  const mealParam = firstValue(raw.meal);
+  const meals = mealParam
+    ? mealParam
+        .split(",")
+        .map((m) => m.trim().toLowerCase())
+        .filter((m): m is MealKey => (MEAL_KEYS as string[]).includes(m))
+    : [];
+
   const sortParam = firstValue(raw.sort) as BookingSortKey | undefined;
   const sort = sortParam && BOOKING_SORT_KEYS.includes(sortParam) ? sortParam : "recent";
 
@@ -607,6 +635,7 @@ export function parseHistoryParams(
   return {
     q: firstValue(raw.q) ?? "",
     statuses: [...new Set(statuses)],
+    meals: [...new Set(meals)],
     guestHouseId: firstValue(raw.gh),
     userRole,
     actor,
@@ -639,6 +668,7 @@ export function criteriaFromParams(
   return {
     query: params.q,
     statuses: params.statuses,
+    meals: params.meals,
     guestHouseId: params.guestHouseId,
     userRole: params.userRole,
     actedBy: params.actor === "me" ? currentUserId : undefined,
@@ -655,6 +685,7 @@ export function hasActiveFilters(params: HistoryParams, defaultActor: HistoryAct
   return Boolean(
     params.q ||
       params.statuses.length ||
+      params.meals.length ||
       params.guestHouseId ||
       params.userRole ||
       params.from ||

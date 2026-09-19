@@ -91,6 +91,10 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
     audience: "The Guest House Manager",
     when: "When a requester asks to cancel a booking that is holding rooms.",
   },
+  "booking.cancellation_requested.reviewer": {
+    audience: "Whoever reviewed the request — Assistant Warden, Faculty Advisor or IAR",
+    when: "The moment a requester asks to cancel. For information only: the Guest House Manager decides.",
+  },
   "booking.cancellation_decided.requester": {
     audience: "The person who made the booking",
     when: "When the Manager approves or refuses a cancellation request.",

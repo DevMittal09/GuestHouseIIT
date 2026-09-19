@@ -466,6 +466,11 @@ export interface NewBookingInput {
 export type RoomHold = {
   booking_id: string;
   room_id: string;
+  /**
+   * The manager who accepted a turnover overlap on this hold (migration 14).
+   * Null on an ordinary hold, which is almost all of them.
+   */
+  override_by?: string | null;
   check_in: string;
   check_out: string;
 }
