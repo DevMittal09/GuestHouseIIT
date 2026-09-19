@@ -331,3 +331,71 @@ npm install -D supabase
 npx supabase db push
 ```
 Or apply migrations manually via the Supabase Dashboard SQL Editor.
+
+## `next build` fails: "Cannot find module '../../../app/page.js'" in `.next/dev/types`
+
+**Cause.** After moving or deleting a route (19 Sep 2026: `app/page.tsx` and
+`app/mock-login/` moved into `app/(site)/`), `.next/dev/types/validator.ts` —
+written by an earlier `next dev` — still imports the old paths. `next build`
+type-checks it but does not regenerate the dev copy.
+
+**Fix.** `rm -rf .next/dev/types` and build again; `next dev` recreates it. It
+is generated output, nothing is lost.
+
+## A production build on the mock store redirects every persona to `/sign-in`
+
+**Cause.** `NEXT_PUBLIC_SUPABASE_URL` is inlined at **build** time. A build
+made with `.env.local` in force has the hosted URL compiled in, so
+`NEXT_PUBLIC_SUPABASE_URL= npx next start` still uses hosted Supabase, where a
+mock id like `gh-manager` is not a uuid — `getCurrentUser()` returns null and
+every guard redirects. (It also means the "mock" server read the shared
+database.)
+
+**Fix.** `NEXT_PUBLIC_SUPABASE_URL= npm run build` as well as for `next start`,
+then rebuild normally when done. Recipe in
+[05-deployment.md](05-deployment.md).
+
+## Signed-out users land on the public home page instead of a sign-in form
+
+**Cause.** A portal guard doing `redirect("/")`. Since 19 Sep 2026 `/` is the
+public website.
+
+**Fix.** `redirect(SIGN_IN_PATH)` from `lib/routes.ts`. `grep -rn 'redirect("/")' app`
+should find nothing.
+
+## "I can't sign in" with LDAP
+
+Since 19 Sep 2026 the card takes an LDAP username, not an email address.
+
+- **"Enter your LDAP username, not your email address"**: the username contains
+  `@`, and the directory's `LDAP_UID_ATTRIBUTE` is not `mail` or
+  `userPrincipalName`.
+- **"Incorrect username or password"**: the directory refused the login. With
+  no `LDAP_URL`, only the dummy accounts in
+  [11-ldap-accounts.md](11-ldap-accounts.md) exist. `password123` is **not** a
+  portal password any more.
+- **"…valid but is not registered on the guest house portal"**: the password
+  was right, but no profile has that `ldap_uid`. Set it in Users & Roles (Edit,
+  or Import LDAP usernames). On Supabase, check that migration 12 is applied
+  and the seed's `update` has been run.
+- **"The institute directory could not be reached"**: the directory threw. The
+  cause is in the server log (`[auth] LDAP sign-in failed:`). The usual
+  suspects:
+  - `LDAP_URL` set without `LDAP_BASE_DN`
+  - a wrong service password
+  - anonymous search refused, which shows up as `noSuchObject` (code 0x20)
+  - an untrusted TLS certificate (use `NODE_EXTRA_CA_CERTS`)
+- **"Too many attempts"**: 10 failures in 5 minutes for that username. The
+  count is in-process, so a server restart clears it.
+
+A developer-created account with no LDAP username can still use "Sign in with
+Google" (the persona picker) in development.
+
+## Resizing the camera photos gets killed (exit 137)
+
+**Cause.** The `Images/` originals are 24-megapixel JPEGs; decoding all of them
+in one Python process exhausted memory and the kernel OOM-killed it.
+
+**Fix.** One photo per process, and `im.draft("RGB", (2000, 2000))` before
+loading so the JPEG decoder works at reduced scale. Recipe in
+[10-ui-design.md](10-ui-design.md#photographs).

@@ -15,6 +15,8 @@ import {
   validatePasswordChoice,
 } from "@/lib/admin-lock";
 import type { RoleFormConfig } from "@/lib/form-config";
+import { planLdapUidImport } from "@/lib/ldap/import";
+import { isValidLdapUid, LDAP_UID_ERROR, normalizeLdapUid } from "@/lib/ldap/uid";
 import { mailConfig } from "@/lib/mail/config";
 import { dispatchOutbox, drainOutbox } from "@/lib/mail/dispatch";
 import { queueMessages } from "@/lib/mail/notify";
@@ -304,6 +306,11 @@ const userSchema = z.object({
   hostel_name: z.string().trim().transform((v) => v || null),
   department_or_club: z.string().trim().transform((v) => v || null),
   roll_number: z.string().trim().transform((v) => v || null),
+  // Optional: without one the person signs in only through the Google door.
+  ldap_uid: z
+    .string()
+    .transform((v) => normalizeLdapUid(v) || null)
+    .refine((v) => v === null || isValidLdapUid(v), LDAP_UID_ERROR),
 });
 
 export type UserFormInput = z.input<typeof userSchema>;
@@ -332,6 +339,39 @@ export async function updateUserAction(id: string, input: UserFormInput): Promis
     return done();
   } catch (e) {
     return fail(e);
+  }
+}
+
+export type LdapImportResult =
+  | { ok: true; updated: number; unchanged: number }
+  | { ok: false; error: string; problems?: string[] };
+
+/**
+ * Bulk-load LDAP usernames onto existing accounts — how the institute's real
+ * LDAP logins get into the portal. Planned by `planLdapUidImport` (all or
+ * nothing); see there for the accepted format.
+ */
+export async function importLdapUidsAction(text: string): Promise<LdapImportResult> {
+  try {
+    await requireDeveloper();
+    const store = getStore();
+    const plan = planLdapUidImport(text, await store.listProfiles());
+    if (plan.problems.length) {
+      return { ok: false, error: "Nothing was changed — fix these lines and try again", problems: plan.problems };
+    }
+    if (plan.changes.length === 0 && plan.unchanged === 0) {
+      return { ok: false, error: "No \"email, LDAP username\" lines found" };
+    }
+    // Two passes, so a uid moving from one account to another (a swap, or a
+    // correction) never collides with itself under the unique index.
+    for (const c of plan.changes) {
+      if (c.from !== null) await store.updateProfile(c.id, { ldap_uid: null });
+    }
+    for (const c of plan.changes) await store.updateProfile(c.id, { ldap_uid: c.to });
+    revalidatePath("/", "layout");
+    return { ok: true, updated: plan.changes.length, unchanged: plan.unchanged };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
   }
 }
 

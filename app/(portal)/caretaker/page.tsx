@@ -2,11 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CaretakerConsole } from "@/components/caretaker-console";
 import { getCurrentUser } from "@/lib/auth";
-import { homeForRole } from "@/lib/routes";
+import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
+import { PageHeader } from "@/components/page-header";
 
 export default async function CaretakerPage({
   searchParams,
@@ -14,7 +15,7 @@ export default async function CaretakerPage({
   searchParams: Promise<{ gh?: string }>;
 }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/");
+  if (!user) redirect(SIGN_IN_PATH);
   if (user.role !== "gh_caretaker") redirect(homeForRole(user.role));
 
   const store = getStore();
@@ -53,13 +54,10 @@ export default async function CaretakerPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Guest House Reception</h1>
-        <p className="text-muted-foreground">
-          Who is in the building, who arrives next, and who leaves today. Room allocation and
-          approvals are handled by the Guest House Manager.
-        </p>
-      </div>
+      <PageHeader title="Guest House Reception">
+        Who is in the building, who arrives next, and who leaves today. Room allocation and
+        approvals are handled by the Guest House Manager.
+      </PageHeader>
 
       {guestHouses.length > 1 && (
         <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">

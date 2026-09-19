@@ -19,6 +19,8 @@ one.
 | [08-roadmap.md](08-roadmap.md) | Known gaps and what to build next |
 | [09-production-plan.md](09-production-plan.md) | Demo → production, in dependency order |
 | [Guest House Meeting Notes.md](Guest%20House%20Meeting%20Notes.md) | The guest house office's own notes, verbatim — the source for the 15 Sep requirements. Tracked against them in [01-background.md](01-background.md) |
+| [10-ui-design.md](10-ui-design.md) | The public website, the design tokens, sign-in pages, photos and map — read before any visual change |
+| [11-ldap-accounts.md](11-ldap-accounts.md) | **Dummy LDAP logins for every persona**, how LDAP sign-in works, and how to switch to the institute's real LDAP accounts |
 
 **Also in the repo root:** `AGENTS.md` is the terse operational brief that agent
 tools load automatically. It is the hard rules; these files are the reasoning.
@@ -48,8 +50,8 @@ shadcn/ui (radix base, "nova" preset) · zod 4 · react-hook-form · Supabase
 
 ```
 app/
-  page.tsx                 sign-in form (credentials)
-  mock-login/              persona picker (development)
+  (site)/                  PUBLIC website: / (home), book-room, book-meal,
+                           guidelines, gallery, contact, sign-in, mock-login
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
     dashboard/             requester's own bookings
@@ -98,13 +100,24 @@ authentication — identity is still a persona cookie, so anyone can claim to be
 the developer. See §6.
 
 `lib/auth.ts` `getCurrentUser()` reads the `gh_mock_user` cookie (a profile id).
-Signing in has two doors onto that cookie: `/` is a credential form checking
-the address against a profile and the password against the shared
-`DEMO_PASSWORD` (`password123`), and `/mock-login` is the one-click persona
-picker, linked from beneath the form. The first is what the institute is shown;
-the second is what makes ten roles bearable in development. **No other module
-contains auth logic**, so replacing
-that one function with institute SSO is the whole production migration.
+Since 19 Sep 2026 the sign-in card (`/sign-in`, and the two public booking entry
+points `/book-room` and `/book-meal`) has two doors onto that cookie:
+
+- **LDAP username + password** (`signInWithLdap`). The directory
+  (`lib/ldap/`) checks the password. It is the real server when `LDAP_URL` is
+  set, and dummy accounts otherwise. `profiles.ldap_uid` then picks the portal
+  account.
+- **"Sign in with Google"**, which for now opens the persona picker at
+  `/mock-login`. It is a placeholder for Google OAuth and the one-click role
+  switcher for development.
+
+The dummy logins and the path to the real LDAP accounts (migration 12, bulk
+import, `LDAP_URL`) are in [11-ldap-accounts.md](11-ldap-accounts.md).
+
+**`/` is the public website, not a sign-in page** — portal guards redirect to
+`SIGN_IN_PATH` (`/sign-in`). **No other module contains auth logic.** The
+cookie is still unsigned, so a signed or server-side session plus real Google
+OAuth is the remaining production migration.
 
 Authorization is separate and always server-side: every server action re-checks
 the caller (`requireUser`, role checks, `canReview`, `requireDeveloper`). The UI
@@ -361,8 +374,11 @@ can only narrow, never widen. Do not reorder that spread.
 
 | Route | Who | What |
 | --- | --- | --- |
-| `/` | anyone | Sign in with an institute email + `DEMO_PASSWORD` (`components/login-form.tsx`) |
-| `/mock-login` | anyone | One-click persona picker, for development. The second door onto the same cookie |
+| `/` | anyone | Public guest house website home (19 Sep 2026) — see [10-ui-design.md](10-ui-design.md) |
+| `/book-room` `/book-meal` | anyone | Public booking entry points: sign in, then `/book` |
+| `/guidelines` `/gallery` `/contact` | anyone | Rules rendered from `lib/`, the photographs, the map |
+| `/sign-in` | anyone | LDAP sign-in + "Sign in with Google"; every portal guard redirects here |
+| `/mock-login` | anyone | Google placeholder: persona picker (development) |
 | `/dashboard` | requesters | Own bookings, status, assigned rooms, cancellation |
 | `/book` | requesters | The config-driven booking form, opening with the booking type, a **browsable** availability panel (day/week/month), a per-day meal grid (where the guest house serves meals) and an "Infant accompanying" switch |
 | `/warden` `/fa` `/iar` | reviewers | One `ReviewQueue` component, three scopings |
@@ -529,7 +545,17 @@ against a throwaway Postgres before being written down — see
 `supabase/repairs/` holds one-off data fixes that are not migrations and are
 never applied automatically. Read each file's header before running it.
 
-Last substantive update: 2026-09-16 — the second pass over the meeting notes:
+Last substantive update: 2026-09-19 — the UI redesign from `design_handoff/`
+([10-ui-design.md](10-ui-design.md)): a public guest house website at `/`
+(home, Book a Room, Book Meal, Guidelines, Gallery, Contact with the Google
+Maps location) in a new `app/(site)/` route group; sign-in moved to `/sign-in`
+with the institute domain enforced server-side; the portal restyled in the same
+navy/gold, Source Serif/Sans, near-square look through the shadcn tokens (which
+also fixed the white-on-amber contrast failure); the office's 14 photographs
+served as 2000px web copies. Public-site facts are rendered from `lib/`, not
+hardcoded.
+
+Previous update: 2026-09-16 — the second pass over the meeting notes:
 booking type (`official` / `personal` / on behalf of an alumnus) as a column
 rather than a role; alumni logins removed with the IAR Office and a new IAR
 Student Cell booking for them; a Guest House Caretaker role for reception; the

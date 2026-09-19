@@ -47,3 +47,7 @@ next-env.d.ts
 
 # mail written to disk by the FileMailer when no SMTP credentials are set
 .local-mail/
+
+# Camera originals for the website photos (10-18 MB each). The web-sized
+# copies the site serves live in public/site/photos/ - see lib/site.ts.
+/Images/

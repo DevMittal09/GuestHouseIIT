@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { AdminLock } from "@/components/admin/admin-lock";
 import { isAdminUnlocked, isDefaultAdminPassword } from "@/lib/admin-lock";
 import { getCurrentUser } from "@/lib/auth";
-import { homeForRole } from "@/lib/routes";
+import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
+import { PageHeader } from "@/components/page-header";
 
 const TABS = [
   { href: "/admin/users", label: "Users & Roles" },
@@ -16,19 +17,16 @@ const TABS = [
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/");
+  if (!user) redirect(SIGN_IN_PATH);
   if (user.role !== "developer") redirect(homeForRole(user.role));
 
   // The real gate is in `requireDeveloper()` — this only decides what to draw.
   if (!(await isAdminUnlocked())) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Developer Console</h1>
-          <p className="text-muted-foreground">
-            Full control over users, guest houses, rooms, booking forms and every booking.
-          </p>
-        </div>
+        <PageHeader title="Developer Console">
+          Full control over users, guest houses, rooms, booking forms and every booking.
+        </PageHeader>
         <AdminLock usingDefault={await isDefaultAdminPassword()} />
       </div>
     );
@@ -36,12 +34,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Developer Console</h1>
-        <p className="text-muted-foreground">
-          Full control over users, guest houses, rooms, booking forms and every booking.
-        </p>
-      </div>
+      <PageHeader title="Developer Console">
+        Full control over users, guest houses, rooms, booking forms and every booking.
+      </PageHeader>
       <nav className="flex flex-wrap gap-1 rounded-lg bg-muted p-1 w-fit">
         {TABS.map((t) => (
           <Link

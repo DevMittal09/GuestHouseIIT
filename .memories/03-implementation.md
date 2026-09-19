@@ -6,12 +6,15 @@ What exists today, with file paths.
 
 | Concern | File |
 | --- | --- |
-| Sign-in (credentials) | `app/page.tsx`, `components/login-form.tsx` |
-| Mock sign-in (persona picker) | `app/mock-login/page.tsx` |
-| Login / logout actions | `app/actions/auth.ts` (`loginAs`, `logout`) |
+| Public website (home, booking entry points, guidelines, gallery, contact) | `app/(site)/*`, `components/site/*` — see [10-ui-design.md](10-ui-design.md) |
+| Sign-in (LDAP + Google button) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` → `components/login-form.tsx` |
+| "Sign in with Google" placeholder (persona picker, honours `next`) | `app/(site)/mock-login/page.tsx` |
+| Login / logout actions | `app/actions/auth.ts` (`signInWithLdap` — directory check, `ldap:<uid>` throttle, profile by `ldap_uid`, safe `next`; `loginAs(id, next)`; `logout` → `/sign-in`) |
+| LDAP directory | `lib/ldap/` — `index.ts` (`getDirectory()` from env), `ldap-directory.ts` (real), `mock-directory.ts` (dummy accounts), `link.ts` (entry → profile, opt-in link by email), `import.ts` (bulk import planner), `uid.ts` (client-safe rules). See [11-ldap-accounts.md](11-ldap-accounts.md) |
+| Where signed-out visitors go | `SIGN_IN_PATH` in `lib/routes.ts` (`/` is the public home page) |
 | Session read | `lib/auth.ts` (`getCurrentUser`, `requireUser`) |
 | Post-login landing per role | `lib/routes.ts` (`homeForRole`) |
-| Authenticated shell + nav | `app/(portal)/layout.tsx` |
+| Authenticated shell + nav | `app/(portal)/layout.tsx` (sticky navy `NavBar` from `components/site/site-nav.tsx`), page titles via `components/page-header.tsx` |
 
 Nav links are role-aware: requesters see Dashboard / New Booking / Booking History,
 reviewers see their queue + Approval Log, the manager sees the console +
@@ -200,7 +203,8 @@ clamping 31 January to 28 February on a month step.
 `minmax(2.75rem, 1fr)` column per room, wrapped in `overflow-x-auto` with the
 hour column and the room-number header both sticky. Each cell is an hour × room,
 red when held and blank when free, with a `title` naming the booking. When the
-selected date is today the current hour is marked in the brand amber.
+selected date is today the current hour is marked in the primary colour (navy
+since the 19 Sep 2026 restyle; it was amber before).
 
 **Week and month views.** One row per day (3rem tall in a week, 1.75rem in a
 month), one column per room. Each room column is a single grid item spanning
@@ -208,7 +212,7 @@ every day row, and each booking is an absolutely positioned red bar whose top an
 height are fractions of the whole range (`bucketOccupancyByDay`). A three-night
 stay is therefore one bar that starts partway down its check-in day and ends
 partway down its check-out day. Beside each date is the number of rooms free all
-day; today's row is tinted and an amber line marks the current time. Each bar's
+day; today's row is tinted and a primary-colour (navy) line marks the current time. Each bar's
 `title` names the booking and its period.
 
 **Legend, badges and counts.** Red is labelled **Booked** (it used to say
@@ -346,7 +350,7 @@ Layout and tabs in `app/(portal)/admin/layout.tsx`; all actions in
 
 | Tab | UI | Capabilities |
 | --- | --- | --- |
-| Users & Roles | `components/admin/users-manager.tsx` | Create/edit/delete profiles; assign any of the 10 roles; set hostel, department/club, roll number (these drive warden and FA scoping). Cannot delete yourself or drop your own developer role. In Supabase mode, creating a user also creates a Supabase Auth user (password `password123`) — needs the service-role key. |
+| Users & Roles | `components/admin/users-manager.tsx` | Create/edit/delete profiles; assign any of the 10 roles; set hostel, department/club, roll number (these drive warden and FA scoping) and **LDAP username**. **Import LDAP usernames** bulk-loads `email, ldap username` pairs, all or nothing. Cannot delete yourself or drop your own developer role. In Supabase mode, creating a user also creates a Supabase Auth user (password `password123`) — needs the service-role key. |
 | Guest Houses & Rooms | `components/admin/guest-houses-manager.tsx` | Create/rename/delete guest houses; add, enable/disable, delete rooms. `total_rooms` is recounted from active rooms automatically. Deleting is blocked when bookings reference the guest house, or when a room is assigned to a booking (disable it instead). A **Serves meals** switch per guest house (`setGuestHouseMealsAction` → `updateGuestHouse`) decides whether the booking form offers meals there; new guest houses start with it off. |
 | Form Builder | `components/admin/form-config-editor.tsx` | Per requester role: allowed guest houses, every guest field's mode, relationship style and options, the relationship dependency (two checkbox lists — which options unlock, which are restricted), alumni-card mode, banner text, and custom fields. Editing the option list re-filters both dependency lists so they cannot reference a deleted option; save is blocked when a restriction has nothing to unlock it. "Reset to spec defaults" deletes the saved row. |
 | All Bookings | `components/admin/bookings-manager.tsx` | Every booking with status filters, an audit-logged force-status override (remark required), and hard delete. |
@@ -612,19 +616,27 @@ delivery, and the content is the booking, one click away in All Bookings.
 
 ## Branding
 
-Palette and logo are taken from https://dashboard.iitpkd.ac.in/ — primary amber
-`#f7a600`, warm off-white `#faf9f7`, text `#2b2b2b`, borders `#e3e1dc`. Tokens
-live in `app/globals.css` for both light and a warm dark variant. The logo is
-`public/iitpkd-logo.png`; `app/icon.png` is the same file serving as the favicon.
+**Since 19 Sep 2026 the palette comes from the guest house design handoff**
+(`design_handoff/README.md`): navy `#12284C` (primary, white text), gold
+`#E8A317` (accents, focus ring, the public CTA with navy text), body text
+`#41506A`, borders `#E1E5EC`, white background, 3px corners, no shadows;
+Source Serif 4 headings and Source Sans 3 body via `next/font`. Tokens and the
+brand utilities (`bg-navy`, `text-gold-dark`, `bg-band`, …) live in
+`app/globals.css`. Full table and rules in [10-ui-design.md](10-ui-design.md).
 
-Known accessibility caveat: white-on-amber is low contrast by WCAG. It matches
-the official site deliberately. To fix, set `--primary-foreground` to a dark
-brown (the dark theme already uses `#251a00`).
+Logos: `public/iitpkd-web-logo.jpg` (the wide institute web logo, in both
+headers) and `public/iitpkd-logo.png` (the emblem; `app/icon.png` is the same
+file serving as the favicon).
+
+The earlier amber-on-off-white palette copied from dashboard.iitpkd.ac.in, and
+its white-on-amber WCAG failure, are gone — white on navy is ≈13:1. Mail
+templates (`lib/mail/render.ts`) still carry their own inline amber header.
 
 ## Demo data
 
 Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase, auth
-password `password123`): 13 personas and 5 bookings positioned so every queue has
+password `password123` — not a portal login; each persona signs in with its
+dummy LDAP account from [11-ldap-accounts.md](11-ldap-accounts.md)): 13 personas and 5 bookings positioned so every queue has
 something in it. Rooms: Bageshri 10 double + 10 single, Hamsanandi 8 + 8.
 Hamsanandi serves meals and Bageshri does not; the two Hamsanandi demo bookings
 carry per-day meal plans built from their dates (`demoMeals` in

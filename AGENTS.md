@@ -101,18 +101,48 @@ as `assertNoClash`.
   **service-role key**. Never commit it, never log it, never send it anywhere.
   `.env.example` documents the variables.
 
-## Auth is mocked — one swap point
+## Sign-in: LDAP + a mocked Google door — one session swap point
 
 `lib/auth.ts` `getCurrentUser()` reads the `gh_mock_user` cookie and looks up a
-profile. `/` is a credential form (any seeded address + the shared demo
-password `password123`, `DEMO_PASSWORD` in the same module) and `/mock-login`
-is the one-click persona picker it links to — two doors onto the same cookie.
-**Everything else in the app only
-calls `getCurrentUser()`/`requireUser()`**, so replacing that function with
-Supabase Auth or institute SSO is the whole production migration. Do not scatter
-auth logic elsewhere. Both doors go together when real auth lands; the
-credential form is for showing the institute, the picker for jumping between
-the ten roles in development.
+profile. Two doors set it (`app/actions/auth.ts`), and both are on the card at
+`/sign-in`, which is also embedded in the public `/book-room` and `/book-meal`:
+
+- **LDAP username + password** → `signInWithLdap()`. The *directory* checks the
+  password (`lib/ldap/`: `getDirectory()` returns the real `LdapDirectory`
+  when `LDAP_URL` is set, otherwise the dummy `MockDirectory`). Then
+  **`profiles.ldap_uid`** (migration 12) says which portal account that is.
+  A valid LDAP login with no profile gets in nowhere. The dummy logins, and
+  how to switch to the real accounts, are in
+  **`.memories/11-ldap-accounts.md`**. Keep that file and
+  `lib/ldap/mock-directory.ts` in step.
+- **"Sign in with Google"** → `/mock-login` (the persona picker) → `loginAs()`.
+  This is a **placeholder** for Google OAuth, and it is also the one-click role
+  switcher for development. Real Google replaces the page and `loginAs`, and
+  must enforce `isInstituteEmail()` on the verified address.
+
+Rules for the LDAP door:
+
+- **Refuse empty passwords before binding.** An empty password is an
+  unauthenticated bind, and many servers report that as success.
+- **Unknown user and wrong password get one message** ("Incorrect username or
+  password"), so the page cannot be used to find out which usernames exist.
+- **Attempts are throttled** per `ldap:<uid>`.
+- **`LDAP_URL` without `LDAP_BASE_DN` fails sign-in** rather than falling back
+  to the published dummy passwords.
+- **`LDAP_LINK_BY_EMAIL=true` is opt-in.** It links a first sign-in by the
+  directory's `mail` and never overwrites an existing `ldap_uid`.
+- **Bulk-loading the real usernames** is Users & Roles → Import LDAP usernames
+  (`lib/ldap/import.ts`, all or nothing).
+
+**`/` is the public website, not a sign-in page:** signed-out guards
+`redirect(SIGN_IN_PATH)` (`lib/routes.ts`), never `redirect("/")`. Redirects go
+to a `next` path only via `safeNextPath()`.
+
+**Everything else in the app only calls
+`getCurrentUser()`/`requireUser()`.** The cookie is still unsigned, so anyone
+can claim any profile id. LDAP proves who typed a password, not who holds the
+cookie. A signed or server-side session plus real Google OAuth is the
+remaining production migration. Do not scatter auth logic elsewhere.
 
 Every server action re-checks authorization server-side (`requireUser`, role
 checks, `canReview`). Keep it that way: the UI hiding a button is never the
@@ -612,6 +642,8 @@ until a developer sets one from **Console Access**.
   roll number (these drive warden and FA scoping). Cannot delete yourself or
   drop your own developer role. In Supabase mode, creating a user also creates a
   Supabase Auth user (password `password123`) — needs the service-role key.
+  The **LDAP username** field and **Import LDAP usernames** (paste
+  `email, ldap username` lines) are how real LDAP logins get onto profiles.
 - **Guest Houses & Rooms** — CRUD guest houses and rooms; `total_rooms` is
   recounted automatically from active rooms. Deleting is blocked when bookings
   reference the guest house, or when a room is assigned to a booking (deactivate
@@ -632,16 +664,51 @@ itself, so callers pass only `new_status`. `action_by_name` is denormalized so
 history survives account deletion (`action_by` is nullable / `on delete set
 null`).
 
-## Branding
+## Public website and branding — read `.memories/10-ui-design.md` first
 
-Palette and logo come from **https://dashboard.iitpkd.ac.in/** — primary amber
-`#f7a600`, warm off-white `#faf9f7`, text `#2b2b2b`, borders `#e3e1dc`. Tokens
-live in `app/globals.css` (light + a warm dark variant). The official logo is
-`public/iitpkd-logo.png`, and `app/icon.png` is the same file acting as the
-favicon. Note: white-on-amber is low contrast (WCAG); it matches the official
-site deliberately. Fix by setting `--primary-foreground` to a dark brown.
+Since 19 Sep 2026, built from `design_handoff/` (a reference, not code to copy).
+
+- **`app/(site)/`** is the public site: `/` home, `/book-room`, `/book-meal`,
+  `/guidelines`, `/gallery`, `/contact` (Google Maps embed), `/sign-in`,
+  `/mock-login`. Chrome in `components/site/`; the navy `NavBar`
+  (`components/site/site-nav.tsx`) is shared with the portal shell, and every
+  portal page title is `components/page-header.tsx`.
+- **Facts come from the backend.** Guest houses, room counts, who may book
+  where, approval chains, meal times, the advance window and cancellation rules
+  are rendered from `lib/` by `lib/site-data.ts` / `lib/site-content.ts`. Never
+  hardcode on the site a rule the portal enforces, and never a guest house
+  name. Those loaders swallow store errors so the public site cannot 500.
+- **Editable values** (contact, map, PDF URL, photos) live in `lib/site.ts`;
+  `grep -rn "TODO(site)"` lists what the office still has to confirm.
+- **Book Meal has no page of its own** — meals are chosen per day inside the
+  booking request (`/book`), only where `serves_meals`; `MEALS_ONLY_ROLES`
+  can pick service type `meals_only` there to book meals without a room.
+  `/book-meal` only explains this and signs in to `/book`.
+- **Palette:** navy `#12284C` primary (white text), gold `#E8A317` accents and
+  focus ring (gold buttons take **navy** text — never white), body `#41506A`,
+  borders `#E1E5EC`, white background, 3px radius, no shadows; Source Serif 4
+  headings / Source Sans 3 body via `next/font`. Tokens and brand utilities
+  (`bg-navy`, `text-gold-dark`, `bg-band`, `text-body`, …) in
+  `app/globals.css`. The portal is restyled **through the shadcn tokens** —
+  change a token, not forty components. This retired the old amber palette and
+  its white-on-amber contrast failure.
+- **Photos:** originals in `Images/` (gitignored, ~180 MB); the site serves
+  2000px, metadata-stripped copies from `public/site/photos/`. Resize one photo
+  per process with PIL `draft()` or it gets OOM-killed. Their guest house is
+  unconfirmed, so the Gallery groups by subject — don't attribute them.
+- Logos: `public/iitpkd-web-logo.jpg` (wide, in both headers) and
+  `public/iitpkd-logo.png` (emblem; `app/icon.png` is the favicon).
+- Verified at **320 px**: no page-level horizontal scroll, one `<h1>` per page.
+  Keep grids as `repeat(auto-fit|auto-fill, minmax(min(Npx,100%),1fr))`.
 
 ## Traps that already cost time
+
+- **`NEXT_PUBLIC_*` is inlined at build time.** To serve a production build on
+  the mock store, `NEXT_PUBLIC_SUPABASE_URL=` must be empty for `npm run build`
+  *and* `next start`; otherwise the build still talks to hosted Supabase and
+  every mock persona is bounced to `/sign-in`. Rebuild normally afterwards.
+- **Moving a route leaves `.next/dev/types` stale** and `next build` fails with
+  "Cannot find module '…/app/page.js'". `rm -rf .next/dev/types`.
 
 - **Server action body limit.** File uploads exceed the 1 MB default and fail in
   the browser as an opaque `NetworkError`. `next.config.ts` raises
@@ -714,7 +781,8 @@ site deliberately. Fix by setting `--primary-foreground` to a dark brown.
 ## Demo personas
 
 Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase auth
-password `password123`): two students in different hostels (Malhar, Saveri),
+password `password123`, which is *not* a portal login — each persona signs in
+with its dummy LDAP account, listed in `.memories/11-ldap-accounts.md`): two students in different hostels (Malhar, Saveri),
 an employee, a whitelisted official (`admin@iitpkd.ac.in`), the Petrichor club,
 the IAR Student Cell, two wardens, a Petrichor faculty advisor, the IAR Office,
 a GH manager, a GH caretaker (`gh.reception@iitpkd.ac.in`), and
@@ -746,6 +814,12 @@ Migration files, applied sequentially:
    `notify*()` catches and logs it, so bookings still work and only the mail is
    missing.
 11. `supabase/migrations/00000000000011_rooms_guests_and_services.sql` (Sep 2026). Room-scoped guests (`booking_rooms`), citizenship, meals-only service types, and `booking_meals` view. Existing bookings are migrated into a single synthetic legacy room. Safe to re-run.
+12. `supabase/migrations/00000000000012_profile_ldap_uid.sql` (`profiles.ldap_uid`
+   + a unique index on `lower(ldap_uid)`). Additive, nullable, safe to re-run,
+   and deliberately **not** backfilled from email. **Until it is applied, LDAP
+   sign-in finds nobody on Supabase and saving a user in the console fails.**
+   Re-run `supabase/seed.sql` afterwards to give the demo personas their
+   usernames.
 
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are
 not applied automatically. Read the header of each before running it.

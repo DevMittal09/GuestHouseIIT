@@ -3,11 +3,12 @@ import { redirect } from "next/navigation";
 import { ManagerQueue } from "@/components/manager-queue";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
-import { homeForRole } from "@/lib/routes";
+import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
+import { PageHeader } from "@/components/page-header";
 
 export default async function ManagerPage({
   searchParams,
@@ -15,7 +16,7 @@ export default async function ManagerPage({
   searchParams: Promise<{ gh?: string }>;
 }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/");
+  if (!user) redirect(SIGN_IN_PATH);
   if (user.role !== "gh_manager") redirect(homeForRole(user.role));
 
   const store = getStore();
@@ -81,28 +82,27 @@ export default async function ManagerPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Guest House Manager Console</h1>
-          <p className="text-muted-foreground">
-            Review pre-approved and direct requests, then allocate rooms per guest house.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {/* Taking a booking at the desk for someone who cannot use the
-              portal, and the kitchen's head count for a given day. */}
-          <Button asChild variant="outline">
-            <Link href="/book">New booking for a guest</Link>
-          </Button>
-          {current.serves_meals && (
+      <PageHeader
+        title="Guest House Manager Console"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {/* Taking a booking at the desk for someone who cannot use the
+                portal, and the kitchen's head count for a given day. */}
             <Button asChild variant="outline">
-              <Link href={`/manager/meals?gh=${encodeURIComponent(current.name)}`}>
-                Meal counts
-              </Link>
+              <Link href="/book">New booking for a guest</Link>
             </Button>
-          )}
-        </div>
-      </div>
+            {current.serves_meals && (
+              <Button asChild variant="outline">
+                <Link href={`/manager/meals?gh=${encodeURIComponent(current.name)}`}>
+                  Meal counts
+                </Link>
+              </Button>
+            )}
+          </div>
+        }
+      >
+        Review pre-approved and direct requests, then allocate rooms per guest house.
+      </PageHeader>
 
       {/* Separate queue per guest house */}
       <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">

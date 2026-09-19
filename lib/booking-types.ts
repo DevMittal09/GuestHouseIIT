@@ -124,6 +124,9 @@ export const MEALS_ONLY_ROLES: Role[] = [
   "gh_manager",
 ];
 
+/** Who {@link MEALS_ONLY_ROLES} are, in words — for error messages and the public site. */
+export const MEALS_ONLY_AUDIENCE = "institute faculty, staff and offices";
+
 export function canBookMealsOnly(role: Role): boolean {
   return MEALS_ONLY_ROLES.includes(role);
 }
@@ -149,7 +152,7 @@ export function serviceTypeError(
 ): string | null {
   if (serviceTypesFor(role, mealsAvailable).includes(service)) return null;
   if (service === "meals_only" && !canBookMealsOnly(role)) {
-    return "Meals without a room can only be booked by institute faculty, staff and offices";
+    return `Meals without a room can only be booked by ${MEALS_ONLY_AUDIENCE}`;
   }
   return `“${SERVICE_TYPE_LABELS[service]}” is not available for your account`;
 }

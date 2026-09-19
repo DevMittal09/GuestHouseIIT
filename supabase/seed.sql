@@ -1,6 +1,10 @@
 -- Seed data for local Supabase development (supabase db reset applies this).
 -- Creates confirmed auth users (password: "password123") plus their profiles,
--- the two guest houses and their rooms.
+-- their dummy LDAP usernames, the two guest houses and their rooms.
+--
+-- Signing in to the portal does not use those auth users' passwords: the
+-- sign-in page checks LDAP (lib/ldap/) and the mock Google door picks a
+-- persona. They exist for `auth.users` foreign keys and a future Supabase Auth.
 --
 -- There is no alumni persona: alumni have no institute login, so the IAR
 -- Office and the IAR Student Cell raise those bookings for them (migration 9).
@@ -57,6 +61,28 @@ insert into public.profiles (id, email, full_name, role, hostel_name, department
   ('11111111-1111-1111-1111-111111111113', 'alumnicell@iitpkd.ac.in', 'IAR Student Cell', 'iar_student_cell', null, 'International & Alumni Relations', null),
   ('11111111-1111-1111-1111-111111111114', 'gh.reception@iitpkd.ac.in', 'Guest House Caretaker', 'gh_caretaker', null, null, null)
 on conflict (id) do nothing;
+
+-- LDAP usernames (migration 12) — the dummy directory's uids, whose passwords
+-- are in lib/ldap/mock-directory.ts and .memories/11-ldap-accounts.md. An
+-- update rather than a column in the insert above so that re-running the seed
+-- fills them in on a database seeded before migration 12.
+update public.profiles p set ldap_uid = v.uid
+from (values
+  ('112201001@smail.iitpkd.ac.in', '112201001'),
+  ('142202014@smail.iitpkd.ac.in', '142202014'),
+  ('priya@iitpkd.ac.in', 'priya'),
+  ('admin@iitpkd.ac.in', 'admin'),
+  ('petrichor@iitpkd.ac.in', 'petrichor'),
+  ('alumnicell@iitpkd.ac.in', 'alumnicell'),
+  ('warden.malhar@iitpkd.ac.in', 'warden.malhar'),
+  ('warden.saveri@iitpkd.ac.in', 'warden.saveri'),
+  ('fa.petrichor@iitpkd.ac.in', 'fa.petrichor'),
+  ('iar@iitpkd.ac.in', 'iar'),
+  ('guesthouse@iitpkd.ac.in', 'guesthouse'),
+  ('gh.reception@iitpkd.ac.in', 'gh.reception'),
+  ('developer@iitpkd.ac.in', 'developer')
+) as v(email, uid)
+where p.email = v.email and p.ldap_uid is null;
 
 -- ---------------------------------------------------------------- guest houses
 -- Meals are served at Hamsanandi only (migration 8); editable in the console.

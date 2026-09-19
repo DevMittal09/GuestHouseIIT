@@ -116,6 +116,20 @@ The remainder of the same meeting notes. Status as of **16 Sep 2026**:
 | Email in a single thread rather than standalone messages | **Done** | `lib/mail/thread.ts`. Every message about a booking references a deterministic root Message-ID derived from the booking id, and every subject leads with the booking reference — mail clients need *both* to group a thread |
 | Documentation for every booking workflow | Not started | |
 
+## Design handoff — 19 Sep 2026
+
+The institute's designer supplied `design_handoff/` — an HTML prototype and
+README for a seven-tab **public** guest house website (Home, Book a Room, Book
+Meal, Guidelines, Gallery, Contact Us, and a link to iitpkd.ac.in), styled to
+sit beside iitpkd.ac.in. The owner asked for it to be built **on what the
+backend actually does**, using the design as a reference for the look, with
+the guest house's **map location** included, and then supplied 14 photographs
+(`Images/`) for the home page and Gallery.
+
+Built the same day: the public site at `/`, sign-in moved to `/sign-in`, and
+the portal restyled to match. What was built, what was left out and why, and
+what is still waiting on the office: [10-ui-design.md](10-ui-design.md).
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed
@@ -124,8 +138,11 @@ The remainder of the same meeting notes. Status as of **16 Sep 2026**:
   optional without a developer. That drove the configurable form system and the
   admin console, which are now the most distinctive parts of the project.
 - **Authentication was deliberately deferred.** See
-  [06-decisions.md](06-decisions.md) — the app uses a mock persona picker with a
-  single, well-marked swap point so institute SSO can be dropped in later.
+  [06-decisions.md](06-decisions.md) — the app used a mock persona picker with a
+  single, well-marked swap point. Since 19 Sep 2026 sign-in is **LDAP**, against
+  dummy accounts until the institute directory is connected (`LDAP_URL`), with a
+  "Sign in with Google" button that opens the persona picker as a placeholder.
+  See [11-ldap-accounts.md](11-ldap-accounts.md).
 - **Email notifications are built; SMS is not.** `lib/mail/` covers every
   workflow transition plus daily digests, reminders and escalations. SMS would
   be a second `Mailer`-shaped seam and has not been asked for.
