@@ -1,4 +1,10 @@
-import { BOOKING_TYPE_LABELS, type BookingType, type Role } from "./types";
+import {
+  BOOKING_TYPE_LABELS,
+  SERVICE_TYPE_LABELS,
+  type BookingType,
+  type Role,
+  type ServiceType,
+} from "./types";
 
 /**
  * Which booking types a role may choose, and which is selected by default.
@@ -24,10 +30,19 @@ const ROLE_BOOKING_TYPES: Partial<Record<Role, BookingType[]>> = {
   club: ["official"],
   official: ["official"],
   iar_cell: ["official", "alumni"],
-  iar_student_cell: ["official", "alumni"],
+  // The Student Cell raises alumni requests only. It had an "Official" option
+  // until the IAR Office asked for it to be withdrawn (Sep 2026): office
+  // bookings are raised by the IAR Office itself, which is also the body that
+  // approves the Student Cell's requests. Stored bookings that used it keep
+  // reading through here — the value is retired, not deleted.
+  iar_student_cell: ["alumni"],
   // Retired: no one books as an alumnus any more, but stored bookings read
   // their type through here.
   alumni: ["alumni"],
+  // The manager takes bookings at the desk for people who never open the
+  // portal, so every kind is open to them — the guest decides which it is,
+  // not the account typing it in.
+  gh_manager: ["official", "personal", "alumni"],
 };
 
 /** The booking types `role` may pick. Empty when the role cannot book at all. */
@@ -87,4 +102,66 @@ export function describeBookingType(role: Role, type: BookingType): string {
     ? "Institute business for the IAR office."
     : "Institute business — a visitor, collaborator or committee hosted by " +
       "the institute.";
+}
+
+// ------------------------------------------------------------ service type
+
+/**
+ * Roles that may book meals without a room.
+ *
+ * Faculty, staff and institute offices eat at the guest house without staying
+ * there — a department hosting an examiner for the day, a committee meeting
+ * over lunch. An ordinary guest has no reason to, and offering it to them
+ * would only produce bookings the kitchen cannot place.
+ *
+ * The manager is here because they book for everybody (see `lib/access.ts`).
+ */
+export const MEALS_ONLY_ROLES: Role[] = [
+  "employee",
+  "official",
+  "iar_cell",
+  "iar_student_cell",
+  "gh_manager",
+];
+
+export function canBookMealsOnly(role: Role): boolean {
+  return MEALS_ONLY_ROLES.includes(role);
+}
+
+/**
+ * What this role may book, given whether any guest house it can use serves
+ * meals at all. Meals-only is withheld from roles that cannot have it; the
+ * two room options are always offered where meals exist, because whether a
+ * *particular* guest house serves them is checked once one is chosen.
+ */
+export function serviceTypesFor(role: Role, mealsAvailable: boolean): ServiceType[] {
+  if (!mealsAvailable) return ["room"];
+  const types: ServiceType[] = ["room", "room_meals"];
+  if (canBookMealsOnly(role)) types.push("meals_only");
+  return types;
+}
+
+/** Why this role may not book that way, or null when it may. */
+export function serviceTypeError(
+  role: Role,
+  service: ServiceType,
+  mealsAvailable: boolean
+): string | null {
+  if (serviceTypesFor(role, mealsAvailable).includes(service)) return null;
+  if (service === "meals_only" && !canBookMealsOnly(role)) {
+    return "Meals without a room can only be booked by institute faculty, staff and offices";
+  }
+  return `“${SERVICE_TYPE_LABELS[service]}” is not available for your account`;
+}
+
+/** How each option is described on the booking form. */
+export function describeServiceType(service: ServiceType): string {
+  switch (service) {
+    case "room":
+      return "A room for the night. Guests make their own arrangements for food.";
+    case "room_meals":
+      return "A room, plus meals from the guest house kitchen on the days you choose.";
+    case "meals_only":
+      return "Meals at the guest house with no room booked — for a visitor you are hosting for the day.";
+  }
 }

@@ -1,6 +1,8 @@
 import type {
   Booking,
   BookingFilter,
+  BookingRoom,
+  BookingRoomWithGuests,
   BookingWithDetails,
   GuestHouse,
   NewBookingInput,
@@ -22,15 +24,23 @@ import type {
   NewEmailInput,
 } from "@/lib/mail/types";
 import { MAIL_STATUSES } from "@/lib/mail/types";
-import { normalizeMeals } from "@/lib/meals";
+import { mealsOn, normalizeMeals } from "@/lib/meals";
 import { getSupabase } from "@/lib/supabase/client";
 import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
-import type { DataStore, NewLogInput, NewProfileInput, StatusUpdate } from "./types";
+import { deriveFromRooms } from "./derive";
+import type {
+  BookingDetailsPatch,
+  DataStore,
+  NewLogInput,
+  NewProfileInput,
+  StatusUpdate,
+} from "./types";
 
 const BOOKING_SELECT = `*,
   requester:profiles!bookings_user_id_fkey(*),
   guest_house:guest_houses(*),
   guests:booking_guests(*),
+  booking_rooms(*),
   logs:booking_logs(*)`;
 
 /**
@@ -45,6 +55,8 @@ type BookingRow = Booking & {
   requester: Profile;
   guest_house: GuestHouse;
   guests: BookingWithDetails["guests"];
+  /** Named for the table, because PostgREST embeds it under that name. */
+  booking_rooms: BookingRoom[] | null;
   logs: BookingWithDetails["logs"];
 };
 
@@ -125,19 +137,66 @@ export class SupabaseStore implements DataStore {
   }
 
   async createBooking(input: NewBookingInput): Promise<Booking> {
-    const { guests, ...bookingInput } = input;
+    // `submission_remarks` is pulled out with the rest: it belongs to the
+    // first log entry, not to the bookings row, and spreading it into the
+    // insert would name a column that does not exist.
+    const {
+      rooms,
+      created_by,
+      on_behalf_of_name,
+      on_behalf_of_email,
+      on_behalf_of_phone,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- discarded on purpose; see above
+      submission_remarks: _submissionRemarks,
+      ...bookingInput
+    } = input;
+    // Counted from the room cards rather than taken from the caller — see
+    // `deriveFromRooms`.
+    const derived = deriveFromRooms(input);
+    const nowIso = new Date().toISOString();
     const { data: booking, error } = await this.db
       .from("bookings")
-      .insert({ ...bookingInput, booking_reference_id: makeReference() })
+      .insert({
+        ...bookingInput,
+        ...derived,
+        booking_reference_id: makeReference(),
+        pets_policy_acknowledged_at: input.pets_policy_acknowledged ? nowIso : null,
+        created_by: created_by ?? null,
+        on_behalf_of_name: on_behalf_of_name ?? null,
+        on_behalf_of_email: on_behalf_of_email ?? null,
+        on_behalf_of_phone: on_behalf_of_phone ?? null,
+      })
       .select()
       .single();
     if (error) throw error;
 
-    if (guests.length > 0) {
-      const { error: guestError } = await this.db
-        .from("booking_guests")
-        .insert(guests.map((g) => ({ ...g, booking_id: booking.id })));
-      if (guestError) throw guestError;
+    // Rooms before guests: a guest row names the card it belongs to, and the
+    // composite foreign key refuses it if that card is not there yet.
+    if (rooms.length > 0) {
+      const { data: roomRows, error: roomError } = await this.db
+        .from("booking_rooms")
+        .insert(
+          rooms.map((room, index) => ({
+            booking_id: booking.id,
+            room_index: index + 1,
+            room_type: room.room_type,
+          }))
+        )
+        .select();
+      if (roomError) throw roomError;
+
+      const byIndex = new Map((roomRows ?? []).map((r) => [r.room_index, r.id]));
+      const guests = rooms.flatMap((room, index) =>
+        room.guests.map((g) => ({
+          ...g,
+          booking_id: booking.id,
+          booking_room_id: byIndex.get(index + 1)!,
+        }))
+      );
+      if (guests.length > 0) {
+        const { error: guestError } = await this.db.from("booking_guests").insert(guests);
+        if (guestError) throw guestError;
+      }
     }
 
     const requester = await this.getProfile(input.user_id);
@@ -146,7 +205,7 @@ export class SupabaseStore implements DataStore {
       action_by: input.user_id,
       action_by_name: requester?.full_name ?? "Unknown",
       new_status: input.status,
-      remarks: "Booking submitted",
+      remarks: input.submission_remarks ?? "Booking submitted",
     });
     if (logError) throw logError;
     // A fresh booking holds nothing until the manager allocates rooms.
@@ -177,10 +236,24 @@ export class SupabaseStore implements DataStore {
       byBooking.set(hold.booking_id, list);
     }
 
+    const roomsById = new Map<string, Room>();
+    for (const hold of (holds ?? []) as unknown as HoldRow[]) {
+      if (hold.rooms) roomsById.set(hold.rooms.id, hold.rooms);
+    }
+
     return rows.map((r) => {
       const assignedRooms = (byBooking.get(r.id) ?? []).sort((a, b) =>
         a.room_number.localeCompare(b.room_number)
       );
+      const guests = r.guests ?? [];
+      const cards = [...(r.booking_rooms ?? [])].sort((a, b) => a.room_index - b.room_index);
+      const rooms: BookingRoomWithGuests[] = cards.map((card) => ({
+        ...card,
+        guests: guests.filter((g) => g.booking_room_id === card.id),
+        assigned_room: card.assigned_room_id
+          ? (roomsById.get(card.assigned_room_id) ?? null)
+          : null,
+      }));
       return {
         ...r,
         // Rows written before migration 6 have no `meals`, and rows not yet
@@ -199,6 +272,23 @@ export class SupabaseStore implements DataStore {
           (r.user_role === "student" ? "personal" : r.user_role === "alumni" ? "alumni" : "official"),
         alumni_name: r.alumni_name ?? null,
         alumni_roll_number: r.alumni_roll_number ?? null,
+        // Before migration 11 there were no room cards, no citizenship and no
+        // service type. A database still on migration 10 reads as a room
+        // booking with one unnamed card holding every guest, which is exactly
+        // what the migration's backfill produces once it runs.
+        service_type: r.service_type ?? ((r.meals?.length ?? 0) > 0 ? "room_meals" : "room"),
+        meal_preference: r.meal_preference ?? null,
+        meal_guest_count: r.meal_guest_count ?? null,
+        pets_policy_acknowledged: r.pets_policy_acknowledged ?? false,
+        pets_policy_acknowledged_at: r.pets_policy_acknowledged_at ?? null,
+        has_foreign_national:
+          r.has_foreign_national ?? guests.some((g) => g.citizenship === "other"),
+        created_by: r.created_by ?? null,
+        on_behalf_of_name: r.on_behalf_of_name ?? null,
+        on_behalf_of_email: r.on_behalf_of_email ?? null,
+        on_behalf_of_phone: r.on_behalf_of_phone ?? null,
+        guests,
+        rooms,
         assigned_room_ids: assignedRooms.map((room) => room.id),
         logs: [...r.logs].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
         assigned_rooms: assignedRooms,
@@ -281,6 +371,7 @@ export class SupabaseStore implements DataStore {
     // untouched for the caller to retry against fresh occupancy.
     if (update.assigned_room_ids !== undefined) {
       await this.setRoomHolds(id, update.assigned_room_ids, current.check_in, current.check_out);
+      await this.assignRoomsToCards(id, update.assigned_room_ids);
     }
 
     const { error } = await this.db
@@ -303,6 +394,7 @@ export class SupabaseStore implements DataStore {
         .delete()
         .eq("booking_id", id);
       if (releaseError) throw releaseError;
+      await this.assignRoomsToCards(id, []);
     }
 
     const { error: logError } = await this.db.from("booking_logs").insert({
@@ -338,6 +430,114 @@ export class SupabaseStore implements DataStore {
     // 23P01 = exclusion_violation: someone else holds one of these rooms.
     if (error.code === "23P01") throw new RoomClashError();
     throw error;
+  }
+
+  /**
+   * Record which room card each allocated room was for, in card order.
+   *
+   * Runs after `setRoomHolds`, never instead of it: the holds are what stop a
+   * double booking, and this is what lets the desk say which party is in
+   * which room. A card past the end of `roomIds` is cleared, which is what a
+   * release looks like.
+   */
+  private async assignRoomsToCards(bookingId: string, roomIds: string[]): Promise<void> {
+    const { data: cards, error } = await this.db
+      .from("booking_rooms")
+      .select("id, room_index")
+      .eq("booking_id", bookingId)
+      .order("room_index");
+    if (error) throw error;
+
+    for (const [i, card] of (cards ?? []).entries()) {
+      const next = roomIds[i] ?? null;
+      const { error: updateError } = await this.db
+        .from("booking_rooms")
+        .update({ assigned_room_id: next })
+        .eq("id", card.id);
+      if (updateError) throw updateError;
+    }
+  }
+
+  async updateBookingDetails(
+    id: string,
+    patch: BookingDetailsPatch,
+    log: NewLogInput
+  ): Promise<void> {
+    const { data: current, error: readError } = await this.db
+      .from("bookings")
+      .select("status, check_in, check_out")
+      .eq("id", id)
+      .single();
+    if (readError) throw readError;
+
+    const checkIn = patch.check_in ?? current.check_in;
+    const checkOut = patch.check_out ?? current.check_out;
+
+    // Dates first. The holds carry the period, so moving the stay moves them,
+    // and the exclusion constraint decides whether that is allowed — a stay
+    // cannot be extended over a room someone else already has. Failing here
+    // leaves the booking untouched.
+    if (checkIn !== current.check_in || checkOut !== current.check_out) {
+      const { data: holds, error: holdError } = await this.db
+        .from("room_holds")
+        .select("room_id")
+        .eq("booking_id", id);
+      if (holdError) throw holdError;
+      await this.setRoomHolds(
+        id,
+        (holds ?? []).map((h) => h.room_id),
+        checkIn,
+        checkOut
+      );
+    }
+
+    const { error } = await this.db
+      .from("bookings")
+      .update({
+        ...(patch.check_in !== undefined && { check_in: checkIn }),
+        ...(patch.check_out !== undefined && { check_out: checkOut }),
+        ...(patch.purpose_of_visit !== undefined && {
+          purpose_of_visit: patch.purpose_of_visit,
+        }),
+        ...(patch.meals !== undefined && { meals: patch.meals }),
+        ...(patch.meal_preference !== undefined && { meal_preference: patch.meal_preference }),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) throw error;
+
+    const { error: logError } = await this.db.from("booking_logs").insert({
+      booking_id: id,
+      action_by: log.action_by,
+      action_by_name: log.action_by_name,
+      previous_status: current.status,
+      new_status: current.status,
+      remarks: log.remarks,
+    });
+    if (logError) throw logError;
+  }
+
+  async listBookingsWithMealsOn(
+    day: string,
+    guestHouseId?: string
+  ): Promise<BookingWithDetails[]> {
+    // The day is an institute calendar date and `meals` is keyed by the same,
+    // so the date is matched inside the jsonb rather than against the stay's
+    // timestamps — a stay can span a day it asked for no meals on.
+    let query = this.db
+      .from("bookings")
+      .select(BOOKING_SELECT)
+      .contains("meals", JSON.stringify([{ date: day }]))
+      .order("check_in");
+    if (guestHouseId) query = query.eq("guest_house_id", guestHouseId);
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const rows = data as unknown as BookingRow[];
+    const hydrated = await this.hydrate(rows);
+    // `contains` matches the day being present at all; this keeps only the
+    // bookings that actually asked for a meal on it.
+    return hydrated.filter((b) => mealsOn(b.meals, day).length > 0);
   }
 
   async getOccupiedRoomIds(

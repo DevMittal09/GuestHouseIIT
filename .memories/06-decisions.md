@@ -967,7 +967,17 @@ simply the one that was missed. Accepting null weakens nothing: the refinements
 test these with `!v.alumni_name` and `(g.id_number ?? "").length`, which treat
 null as absent.
 
-Guarded by a throwaway suite of 15 checks — the round trip for all six
+Guarded by a throwaway suite of 15 checks - the round trip for all six
 requester roles, that a third parse is stable, and that the alumni,
 required-ID and parent-dependency rules still reject what they should. Worth
-keeping when a test runner is installed (roadmap §4).
+keeping when a test runner is installed (roadmap 4).
+
+## Room-scoped guests and Service Types (Migration 11, Sep 2026)
+
+**The Problem:** The office required nationality tracking per guest (for Indian vs Foreign), an updated infant threshold (under 5 years instead of under 10), explicit room capacities (3 guests + 1 infant per room), and a "Meals Only" option for faculty/events.
+
+**The Decision:** Shift from a booking-centric guest list to a room-centric guest list (`booking_rooms`).
+- Guests belong to a room (`booking_room_id`). This allows accurate per-room occupancy validation.
+- `service_type` (`room`, `room_meals`, `meals_only`) dictates whether rooms and guests are collected at all, or just a head count for meals.
+- `booking_meals` view created to provide the kitchen with a relational shape of meal plans without duplicating data from the JSON column.
+- Existing bookings were migrated into a single "legacy" synthetic room to preserve backwards compatibility, and legacy infant flags were retained untouched.

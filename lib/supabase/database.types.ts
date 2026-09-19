@@ -2,7 +2,10 @@ import type {
   Booking,
   BookingGuest,
   BookingLog,
+  BookingRoom,
   GuestHouse,
+  MealKey,
+  MealPreference,
   Profile,
   Role,
   Room,
@@ -21,6 +24,23 @@ type Insertable<T, Generated extends keyof T> = Omit<T, Generated> &
 
 /** The bookings table as it really is: no `assigned_room_ids` column. */
 type BookingRow = Omit<Booking, "assigned_room_ids">;
+
+/** `booking_rooms` (migration 11), plus the flag the backfill set. */
+type BookingRoomRow = BookingRoom & { is_legacy: boolean };
+
+/**
+ * The `booking_meals` view (migration 11): one row per booking, date and meal
+ * actually asked for. Read-only — `bookings.meals` is the source of truth.
+ */
+type BookingMealRow = {
+  booking_id: string;
+  guest_house_id: string;
+  status: Booking["status"];
+  meal_preference: MealPreference | null;
+  meal_date: string;
+  meal_type: MealKey;
+  guest_count: number;
+};
 
 /** `during` is a tstzrange, written and read as a `[lower,upper)` literal. */
 type RoomHoldRow = {
@@ -79,10 +99,26 @@ export interface Database {
           | "custom_fields"
           | "meals"
           | "has_infant"
+          | "service_type"
+          | "meal_preference"
+          | "meal_guest_count"
+          | "pets_policy_acknowledged"
+          | "pets_policy_acknowledged_at"
+          | "has_foreign_national"
+          | "created_by"
+          | "on_behalf_of_name"
+          | "on_behalf_of_email"
+          | "on_behalf_of_phone"
           | "created_at"
           | "updated_at"
         >;
         Update: Partial<BookingRow>;
+        Relationships: [];
+      };
+      booking_rooms: {
+        Row: BookingRoomRow;
+        Insert: Insertable<BookingRoomRow, "id" | "room_type" | "assigned_room_id" | "is_legacy">;
+        Update: Partial<BookingRoomRow>;
         Relationships: [];
       };
       room_holds: {
@@ -126,7 +162,16 @@ export interface Database {
         Row: BookingGuest;
         Insert: Insertable<
           BookingGuest,
-          "id" | "age" | "relationship" | "id_number" | "id_document_url" | "is_infant"
+          | "id"
+          | "age"
+          | "relationship"
+          | "id_number"
+          | "id_document_url"
+          | "is_infant"
+          | "booking_room_id"
+          | "citizenship"
+          | "nationality"
+          | "passport_number"
         >;
         Update: Partial<BookingGuest>;
         Relationships: [];
@@ -138,7 +183,12 @@ export interface Database {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      booking_meals: {
+        Row: BookingMealRow;
+        Relationships: [];
+      };
+    };
     Functions: {
       /** Replaces a booking's room holds transactionally (migration 3). */
       set_room_holds: {

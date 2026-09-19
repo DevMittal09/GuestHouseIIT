@@ -99,9 +99,15 @@ function BookingRow({ booking }: { booking: BookingWithDetails }) {
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
       <TableCell>{formatDateTime(booking.check_out)}</TableCell>
       <TableCell>
-        {booking.assigned_rooms.length > 0
-          ? booking.assigned_rooms.map((r) => r.room_number).join(", ")
-          : booking.rooms_requested}
+        {/* A meals-only booking holds no room, so "0" would read as a room
+            request that came to nothing. */}
+        {booking.service_type === "meals_only" ? (
+          <span className="text-muted-foreground">Meals only</span>
+        ) : booking.assigned_rooms.length > 0 ? (
+          booking.assigned_rooms.map((r) => r.room_number).join(", ")
+        ) : (
+          booking.rooms_requested
+        )}
       </TableCell>
       <TableCell>
         <StatusBadge status={booking.status} />

@@ -1,9 +1,21 @@
 import { z } from "zod";
-import { bookingTypeError, needsAlumniDetails } from "./booking-types";
+import {
+  bookingTypeError,
+  needsAlumniDetails,
+  serviceTypeError,
+} from "./booking-types";
+import { isCountryCode } from "./countries";
 import { parentDependencyError, type FieldMode, type RoleFormConfig } from "./form-config";
 import { MAX_MEAL_DAYS, mealPlanError, normalizeMeals } from "./meals";
-import { requestedRoomsError } from "./occupancy";
+import {
+  INFANT_AGE_LIMIT,
+  isInfantAge,
+  MAX_GUESTS_PER_ROOM,
+  roomPartyError,
+} from "./occupancy";
+import { PETS_POLICY_ACKNOWLEDGEMENT, stayLengthError } from "./policy";
 import { formatInstituteDate, formatInstituteDateTime, instituteDate } from "./tz";
+import { includesMeals, needsRooms } from "./types";
 import { latestCheckIn } from "./workflow";
 
 /**
@@ -36,18 +48,30 @@ function textField(mode: FieldMode, requiredMessage: string, min = 2) {
   return mode === "required" ? z.string().trim().min(min, requiredMessage) : optionalTrimmed;
 }
 
+/**
+ * A passport number: trimmed, upper-cased and checked for shape rather than
+ * for any one country's format. Passport numbering differs by issuer, so a
+ * strict pattern would reject real documents; this only rules out the entries
+ * that are obviously not a passport number at all.
+ */
+const passportField = z
+  .string()
+  .nullish()
+  .transform((v) => (v ? v.trim().toUpperCase() : null));
+
 function guestSchema(config: RoleFormConfig) {
   const f = config.guest_fields;
   return z.object({
     name: textField(f.name, "Guest name is required"),
-    age:
-      f.age === "required"
-        ? z.coerce
-            .number({ message: "Age is required" })
-            .int("Age must be a whole number")
-            .min(1, "Age must be at least 1")
-            .max(120, "Enter a valid age")
-        : z.coerce.number().int().min(1).max(120).optional().nullable(),
+    // Always required, whatever the role's form configuration says: an infant
+    // is defined by their age, and the per-room occupancy rule counts guests
+    // and infants separately. Without an age neither can be decided.
+    // `sanitizeFormConfig` pins the field to "required" for the same reason.
+    age: z.coerce
+      .number({ message: "Age is required" })
+      .int("Age must be a whole number")
+      .min(0, "Age must be 0 or more")
+      .max(120, "Enter a valid age"),
     gender:
       f.gender === "required"
         ? z.enum(["male", "female", "other"], { message: "Gender is required" })
@@ -61,6 +85,20 @@ function guestSchema(config: RoleFormConfig) {
     // Optional here; the per-guest check below applies the role's requirement,
     // so the message lands on the right row.
     id_number: optionalTrimmed,
+    // Asked per guest rather than once per booking: a room can hold an Indian
+    // host and a foreign collaborator, and the guest house's register needs
+    // the passport of whichever of them is a foreign national.
+    citizenship: z.enum(["indian", "other"], { message: "Select the guest's citizenship" }),
+    nationality: optionalTrimmed,
+    passport_number: passportField,
+  });
+}
+
+/** One room card: a room's worth of guests, with the party rule applied to it. */
+function roomSchema(config: RoleFormConfig) {
+  return z.object({
+    room_type: z.enum(["single", "double_sharing"]).nullish().default(null),
+    guests: z.array(guestSchema(config)).min(1, "Add at least one guest to this room"),
   });
 }
 
@@ -102,6 +140,13 @@ function countField(opts: {
         ctx.addIssue({ code: "custom", message: opts.whole });
         return z.NEVER;
       }
+      // The schema has to accept its own output — the form parses, sends
+      // `parsed.data`, and the server parses that again. A blank box becomes
+      // `emptyAs`, which comes back as a *number* on the second pass and would
+      // otherwise fail the range check below. That is not hypothetical: it
+      // made every room booking fail server-side with "At least 1 guest" on a
+      // field the requester was never shown.
+      if (opts.emptyAs !== undefined && n === opts.emptyAs) return n;
       if (n < opts.min) {
         ctx.addIssue({ code: "custom", message: opts.tooFew });
         return z.NEVER;
@@ -114,10 +159,26 @@ function countField(opts: {
     });
 }
 
-export function bookingPayloadSchema(config: RoleFormConfig) {
+/** Context the rules need that is not part of the submission itself. */
+export interface BookingSchemaContext {
+  /** Whether any guest house this role may book serves meals at all. */
+  mealsAvailable: boolean;
+  /** The requester's address, for the duration exemptions in `lib/policy.ts`. */
+  requesterEmail?: string | null;
+}
+
+export function bookingPayloadSchema(
+  config: RoleFormConfig,
+  context: BookingSchemaContext = { mealsAvailable: true }
+) {
   return z
     .object({
       guest_house_id: z.string().min(1, "Select a guest house"),
+      // What is being booked. Checked against the role below, so a crafted
+      // request cannot book meals without a room on an account barred from it.
+      service_type: z.enum(["room", "room_meals", "meals_only"], {
+        message: "Choose what you would like to book",
+      }),
       // Why the stay is booked. Whether this role may pick it at all is
       // checked below, so a crafted request cannot book privately on an
       // account that only books officially.
@@ -131,25 +192,26 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
       purpose_of_visit: z.string().trim().min(5, "Describe the purpose of the visit"),
       check_in: z.string().regex(DATETIME_LOCAL, "Check-in date & time is required"),
       check_out: z.string().regex(DATETIME_LOCAL, "Check-out date & time is required"),
-      rooms_requested: countField({
-        required: "Number of rooms is required",
+      /**
+       * The room cards, each holding its own guests. There is no separate
+       * "number of guests" any more: the rooms *are* the answer, and a count
+       * kept beside them could disagree with them.
+       */
+      rooms: z.array(roomSchema(config)).max(10, "Maximum 10 rooms per request"),
+      /** Head count for a meals-only booking, which has no guest rows. */
+      meal_guest_count: countField({
+        required: "Number of guests is required",
         min: 1,
-        max: 10,
-        whole: "Enter a whole number of rooms",
-        tooFew: "At least 1 room",
-        tooMany: "Maximum 10 rooms per request",
+        max: 100,
+        whole: "Enter a whole number of guests",
+        tooFew: "At least 1 guest",
+        tooMany: "Maximum 100 guests for a meals booking",
+        emptyAs: 0,
       }),
-      guests: z.array(guestSchema(config)).min(1, "Add at least one guest"),
-      // One switch for the whole booking, however many infants are coming.
-      // They share a guardian's bed, so they are neither guest rows nor counted.
-      has_infant: z
-        .boolean()
-        .optional()
-        .transform((v) => v === true),
-      // Meals are optional and chosen per day of the stay; "no meals" is a
-      // valid, common answer. Normalised to a clean plan (days with a meal,
-      // in date order); whether each day and meal fits the stay is checked
-      // below, and whether the guest house serves meals is checked in
+      meal_preference: z.enum(["veg", "non_veg"]).nullish().default(null),
+      // Meals are chosen per day of the stay. Normalised to a clean plan (days
+      // with a meal, in date order); whether each day and meal fits the stay is
+      // checked below, and whether the guest house serves meals is checked in
       // `createBooking`, which knows the guest house.
       meals: z
         .array(
@@ -163,11 +225,30 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
         .max(MAX_MEAL_DAYS, "Too many days of meals for one booking")
         .optional()
         .transform((v) => normalizeMeals(v ?? [])),
+      // Not a formality: the guest house has no kennels and no way to isolate
+      // an animal, so a guest arriving with one has to be turned away at the
+      // desk. Asking here is the only chance to prevent that.
+      pets_policy_acknowledged: z
+        .boolean()
+        .optional()
+        .transform((v) => v === true),
       custom: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
+    })
+    .superRefine((v, ctx) => {
+      const message = serviceTypeError(config.role, v.service_type, context.mealsAvailable);
+      if (message) ctx.addIssue({ code: "custom", message, path: ["service_type"] });
     })
     .superRefine((v, ctx) => {
       const message = bookingTypeError(config.role, v.booking_type);
       if (message) ctx.addIssue({ code: "custom", message, path: ["booking_type"] });
+    })
+    .superRefine((v, ctx) => {
+      if (v.pets_policy_acknowledged) return;
+      ctx.addIssue({
+        code: "custom",
+        message: `Please confirm: “${PETS_POLICY_ACKNOWLEDGEMENT}”`,
+        path: ["pets_policy_acknowledged"],
+      });
     })
     .superRefine((v, ctx) => {
       // An alumnus cannot log in to speak for themselves, so the request
@@ -195,27 +276,148 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
         });
       }
     })
+    // ------------------------------------------------------------- rooms
     .superRefine((v, ctx) => {
-      // Every guest row on a new request needs a bed — infants are the
-      // `has_infant` switch, not rows — so the row count is the bed count.
-      // (Stored bookings can still hold legacy infant rows; count those with
-      // `countBedGuests`.)
-      const message = requestedRoomsError(v.guests.length, v.rooms_requested);
-      if (message) {
-        ctx.addIssue({ code: "custom", message, path: ["rooms_requested"] });
+      if (!needsRooms(v.service_type)) {
+        // A meals-only booking has no rooms and no guest rows — the kitchen
+        // needs a head count, not a register.
+        if (v.rooms.length > 0) {
+          ctx.addIssue({
+            code: "custom",
+            message: "A meals-only booking does not include a room",
+            path: ["rooms"],
+          });
+        }
+        if (v.meal_guest_count < 1) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Number of guests is required",
+            path: ["meal_guest_count"],
+          });
+        }
+        return;
+      }
+      if (v.meal_guest_count > 0) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A room booking counts its guests from the room cards",
+          path: ["meal_guest_count"],
+        });
+      }
+      if (v.rooms.length === 0) {
+        ctx.addIssue({ code: "custom", message: "Add at least one room", path: ["rooms"] });
       }
     })
     .superRefine((v, ctx) => {
-      if (config.guest_fields.id_number !== "required") return;
-      v.guests.forEach((g, i) => {
-        if ((g.id_number ?? "").length < 4) {
-          ctx.addIssue({
-            code: "custom",
-            message: "Aadhaar / ID number is required",
-            path: ["guests", i, "id_number"],
-          });
+      // The per-room occupancy rule, applied card by card so the message lands
+      // on the room that broke it. Infants are classified from the age typed
+      // into the row, never asked for as a category.
+      v.rooms.forEach((room, i) => {
+        const infants = room.guests.filter((g) => isInfantAge(g.age)).length;
+        const guests = room.guests.length - infants;
+        const message = roomPartyError(guests, infants);
+        if (message) {
+          ctx.addIssue({ code: "custom", message, path: ["rooms", i, "guests"] });
         }
       });
+    })
+    .superRefine((v, ctx) => {
+      // Per-guest citizenship. "Other" makes both fields mandatory; "Indian"
+      // must carry neither, so a value typed before switching back cannot be
+      // submitted against a guest the form no longer shows them for.
+      v.rooms.forEach((room, i) => {
+        room.guests.forEach((g, j) => {
+          const at = (field: string) => ["rooms", i, "guests", j, field];
+          if (g.citizenship === "other") {
+            if (!g.nationality) {
+              ctx.addIssue({
+                code: "custom",
+                message: "Select the guest's country of nationality",
+                path: at("nationality"),
+              });
+            } else if (!isCountryCode(g.nationality)) {
+              ctx.addIssue({
+                code: "custom",
+                message: "Select a country from the list",
+                path: at("nationality"),
+              });
+            }
+            if (!g.passport_number) {
+              ctx.addIssue({
+                code: "custom",
+                message: "Passport number is required for a foreign national",
+                path: at("passport_number"),
+              });
+            } else if (!/^[A-Z0-9]{5,20}$/.test(g.passport_number)) {
+              ctx.addIssue({
+                code: "custom",
+                message: "Enter a valid passport number (5–20 letters and digits)",
+                path: at("passport_number"),
+              });
+            }
+            return;
+          }
+          if (g.nationality || g.passport_number) {
+            ctx.addIssue({
+              code: "custom",
+              message:
+                "Nationality and passport number apply only to a guest who is not an Indian citizen",
+              path: at("nationality"),
+            });
+          }
+        });
+      });
+    })
+    .superRefine((v, ctx) => {
+      if (config.guest_fields.id_number !== "required") return;
+      v.rooms.forEach((room, i) => {
+        room.guests.forEach((g, j) => {
+          // An infant shares a guardian's bed and is not asked for an ID.
+          if (isInfantAge(g.age)) return;
+          // A foreign national has no Aadhaar. Their passport is the identity
+          // document, and it is already mandatory above — demanding an Indian
+          // ID number as well would make them impossible to book at all for
+          // every role whose form requires one, which is most of them.
+          if (g.citizenship === "other") return;
+          if ((g.id_number ?? "").length < 4) {
+            ctx.addIssue({
+              code: "custom",
+              message: "Aadhaar / ID number is required",
+              path: ["rooms", i, "guests", j, "id_number"],
+            });
+          }
+        });
+      });
+    })
+    // ------------------------------------------------------------- meals
+    .superRefine((v, ctx) => {
+      if (!includesMeals(v.service_type)) {
+        if (v.meals.length > 0 || v.meal_preference) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Choose “Room + Meals” to book meals with this stay",
+            path: ["meals"],
+          });
+        }
+        return;
+      }
+      if (!v.meal_preference) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Choose a vegetarian or non-vegetarian meal preference",
+          path: ["meal_preference"],
+        });
+      }
+      if (v.meals.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            v.service_type === "meals_only"
+              ? "Pick at least one meal — a meals-only booking has nothing else in it"
+              : "Pick at least one meal, or change this to a room-only booking",
+          path: ["meals"],
+        });
+      }
     })
     // `check_in` / `check_out` are wall-clock strings, so they are resolved in
     // the institute's timezone — never the runtime's. See `lib/tz.ts`.
@@ -234,6 +436,16 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
       );
       if (message) ctx.addIssue({ code: "custom", message, path: ["meals"] });
     })
+    .superRefine((v, ctx) => {
+      if (checkOutOrderError(v.check_in, v.check_out)) return;
+      const message = stayLengthError(
+        instituteDate(v.check_in),
+        instituteDate(v.check_out),
+        config.role,
+        context.requesterEmail
+      );
+      if (message) ctx.addIssue({ code: "custom", message, path: ["check_out"] });
+    })
     .refine((v) => instituteDate(v.check_in) > new Date(), {
       message: "Check-in must be in the future",
       path: ["check_in"],
@@ -249,17 +461,26 @@ export function bookingPayloadSchema(config: RoleFormConfig) {
       }
     )
     .superRefine((v, ctx) => {
+      // The parent dependency applies across the whole request, not per room:
+      // a sibling in Room 2 is accompanied if a parent is in Room 1.
+      const all = v.rooms.flatMap((r) => r.guests);
       const message = parentDependencyError(
         config,
-        v.guests.map((g) => g.relationship)
+        all.map((g) => g.relationship)
       );
       if (!message) return;
       // Attach the error to every guest that triggered it, so the form
       // highlights the rows the requester has to change.
-      v.guests.forEach((g, i) => {
-        if (g.relationship && config.dependent_relationships.includes(g.relationship)) {
-          ctx.addIssue({ code: "custom", message, path: ["guests", i, "relationship"] });
-        }
+      v.rooms.forEach((room, i) => {
+        room.guests.forEach((g, j) => {
+          if (g.relationship && config.dependent_relationships.includes(g.relationship)) {
+            ctx.addIssue({
+              code: "custom",
+              message,
+              path: ["rooms", i, "guests", j, "relationship"],
+            });
+          }
+        });
       });
     });
 }
@@ -307,5 +528,8 @@ export function advanceWindowMessage(role: RoleFormConfig["role"]): string {
     limit
   )}`;
 }
+
+/** The fine print next to the infant counter, kept with the rule it explains. */
+export const INFANT_HELP_TEXT = `A guest below ${INFANT_AGE_LIMIT} years is an infant: they share a guardian's bed, need no bed of their own and are not asked for an ID. A room takes up to ${MAX_GUESTS_PER_ROOM} guests plus one infant.`;
 
 export type BookingPayload = z.infer<ReturnType<typeof bookingPayloadSchema>>;

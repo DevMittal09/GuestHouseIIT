@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { bookingPayloadSchema } from "@/lib/booking-schema";
 import { needsAlumniDetails } from "@/lib/booking-types";
@@ -15,13 +16,26 @@ import {
   notifyRoomsAllocated,
   notifyTierApproved,
 } from "@/lib/mail/notify";
+import { guestHousePolicyError } from "@/lib/policy";
 import { OFFICIAL_EMAIL_WHITELIST } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { instituteIso } from "@/lib/tz";
-import type { BookingGuest, BookingStatus, CustomFieldValue, Gender } from "@/lib/types";
-import { REQUESTER_ROLES, RoomClashError } from "@/lib/types";
-import { allocationCapacityError, countBedGuests } from "@/lib/occupancy";
+import type {
+  BookingStatus,
+  CustomFieldValue,
+  Gender,
+  NewBookingGuestInput,
+  NewBookingRoomInput,
+} from "@/lib/types";
+import { needsRooms, REQUESTER_ROLES, RoomClashError } from "@/lib/types";
 import {
+  allocationCapacityError,
+  countBedGuests,
+  isInfantAge,
+  roomAssignmentError,
+} from "@/lib/occupancy";
+import {
+  ACTIVE_STATUSES,
   canReview,
   canUpdateLifecycle,
   initialStatusFor,
@@ -35,6 +49,14 @@ export type ActionResult =
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+
+/** A trimmed text field from the form, or null when it is blank or absent. */
+function readText(formData: FormData, key: string): string | null {
+  const value = formData.get(key);
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
 
 function validFile(file: File): string | null {
   if (file.size === 0) return "Uploaded file is empty";
@@ -57,28 +79,77 @@ function toIso(datetimeLocal: string): string {
 export async function createBooking(formData: FormData): Promise<ActionResult> {
   try {
     const user = await requireUser();
-    if (!REQUESTER_ROLES.includes(user.role)) {
+    // The Guest House Manager is not a requester, but they take bookings at
+    // the desk for people who never open the portal. Those are recorded as
+    // theirs with the actual guest named on the booking — see `onBehalfOf`.
+    const onBehalf = canBookOnBehalf(user.role);
+    if (!REQUESTER_ROLES.includes(user.role) && !onBehalf) {
       return { ok: false, error: "Your role cannot submit booking requests" };
     }
     if (user.role === "official" && !OFFICIAL_EMAIL_WHITELIST.includes(user.email)) {
       return { ok: false, error: "This account is not whitelisted for official bookings" };
     }
 
+    // Who the stay is actually for. Required when the manager is booking for
+    // someone else, because otherwise the booking says only that the manager
+    // is staying — and the desk has no way to find out who is arriving.
+    const onBehalfOf = onBehalf
+      ? {
+          name: readText(formData, "on_behalf_of_name"),
+          email: readText(formData, "on_behalf_of_email"),
+          phone: readText(formData, "on_behalf_of_phone"),
+        }
+      : null;
+    if (onBehalfOf && !onBehalfOf.name) {
+      return { ok: false, error: "Enter the name of the guest this booking is for" };
+    }
+
     const config = await getEffectiveFormConfig(user.role);
+    const store = getStore();
+
+    // Whether meals can be booked at all on this account, which decides
+    // whether "Room + Meals" and "Meals only" are options. Computed from the
+    // guest houses the role may book, exactly as the form does.
+    const allGuestHouses = await store.listGuestHouses();
+    const mealsAvailable = allGuestHouses.some(
+      (g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id)
+    );
 
     const rawPayload = formData.get("payload");
     if (typeof rawPayload !== "string") return { ok: false, error: "Malformed submission" };
-    const parsed = bookingPayloadSchema(config).safeParse(JSON.parse(rawPayload));
+    const parsed = bookingPayloadSchema(config, {
+      mealsAvailable,
+      requesterEmail: user.email,
+    }).safeParse(JSON.parse(rawPayload));
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid form data" };
     }
     const payload = parsed.data;
-    const store = getStore();
+    const wantsRooms = needsRooms(payload.service_type);
 
     const guestHouse = await store.getGuestHouse(payload.guest_house_id);
     if (!guestHouse) return { ok: false, error: "Unknown guest house" };
     if (!config.allowed_guest_house_ids.includes(guestHouse.id)) {
       return { ok: false, error: `Your role cannot book ${guestHouse.name}` };
+    }
+    // Alumni are put up at Bageshri. The form locks the selector; this is the
+    // check a crafted request meets.
+    //
+    // The Guest House Manager can set it aside — Bageshri does fill up, and a
+    // rule the manager cannot lift just moves the booking off the portal. The
+    // override goes into the booking's first log entry, so the exception is
+    // visible for as long as the booking is.
+    const policyProblem = guestHousePolicyError(
+      payload.booking_type,
+      guestHouse,
+      allGuestHouses
+    );
+    let overrideNote: string | null = null;
+    if (policyProblem) {
+      if (!canOverrideGuestHousePolicy(user.role)) {
+        return { ok: false, error: policyProblem };
+      }
+      overrideNote = `Booking submitted. Guest house policy overridden by ${user.full_name}: ${policyProblem}`;
     }
     // Meals only where the guest house serves them (Hamsanandi by default,
     // set in the developer console). The form hides the grid elsewhere; this
@@ -87,28 +158,31 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       return { ok: false, error: `Meals are not served at ${guestHouse.name}` };
     }
 
-    // Room limit enforcement: check against total active rooms and date-range availability.
-    const activeRooms = await store.listRooms(payload.guest_house_id);
-    if (payload.rooms_requested > activeRooms.length) {
-      return {
-        ok: false,
-        error: `${guestHouse.name} only has ${activeRooms.length} room(s) available. You requested ${payload.rooms_requested}.`,
-      };
-    }
-
     const checkInIso = toIso(payload.check_in);
     const checkOutIso = toIso(payload.check_out);
-    const occupiedIds = await store.getOccupiedRoomIds(
-      payload.guest_house_id,
-      checkInIso,
-      checkOutIso
-    );
-    const freeRoomCount = activeRooms.length - occupiedIds.length;
-    if (payload.rooms_requested > freeRoomCount) {
-      return {
-        ok: false,
-        error: `Only ${freeRoomCount} room(s) are available at ${guestHouse.name} for the requested dates. You requested ${payload.rooms_requested}.`,
-      };
+
+    // Room limit enforcement: check against total active rooms and date-range
+    // availability. A meals-only booking holds no rooms, so none of it applies.
+    if (wantsRooms) {
+      const activeRooms = await store.listRooms(payload.guest_house_id);
+      if (payload.rooms.length > activeRooms.length) {
+        return {
+          ok: false,
+          error: `${guestHouse.name} only has ${activeRooms.length} room(s) available. You requested ${payload.rooms.length}.`,
+        };
+      }
+      const occupiedIds = await store.getOccupiedRoomIds(
+        payload.guest_house_id,
+        checkInIso,
+        checkOutIso
+      );
+      const freeRoomCount = activeRooms.length - occupiedIds.length;
+      if (payload.rooms.length > freeRoomCount) {
+        return {
+          ok: false,
+          error: `Only ${freeRoomCount} room(s) are available at ${guestHouse.name} for the requested dates. You requested ${payload.rooms.length}.`,
+        };
+      }
     }
 
     // Admin-defined custom fields.
@@ -121,30 +195,41 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       }
     }
 
-    // Per-guest ID documents. Every guest row needs a bed and an ID; infants
-    // are the booking's `has_infant` switch and have no row to upload for.
-    const guests: Omit<BookingGuest, "id" | "booking_id">[] = [];
-    for (let i = 0; i < payload.guests.length; i++) {
-      const g = payload.guests[i];
-      const file = formData.get(`guest_doc_${i}`);
-      let documentUrl: string | null = null;
-      if (file instanceof File && file.size > 0) {
-        const fileError = validFile(file);
-        if (fileError) return { ok: false, error: fileError };
-        documentUrl = await store.saveDocument(file, "guest-ids");
-      } else if (config.guest_fields.id_document === "required") {
-        return { ok: false, error: `ID document upload is required for guest ${i + 1}` };
+    // Per-guest ID documents, uploaded per room card. An infant shares a
+    // guardian's bed and is not asked for an ID, so no document is demanded
+    // for one — `isInfantAge` decides that from the age, the same rule the
+    // schema and the database apply.
+    const rooms: NewBookingRoomInput[] = [];
+    for (const [roomIndex, room] of payload.rooms.entries()) {
+      const guests: NewBookingGuestInput[] = [];
+      for (const [guestIndex, g] of room.guests.entries()) {
+        const infant = isInfantAge(g.age);
+        const file = formData.get(`guest_doc_${roomIndex}_${guestIndex}`);
+        let documentUrl: string | null = null;
+        if (file instanceof File && file.size > 0) {
+          const fileError = validFile(file);
+          if (fileError) return { ok: false, error: fileError };
+          documentUrl = await store.saveDocument(file, "guest-ids");
+        } else if (config.guest_fields.id_document === "required" && !infant) {
+          return {
+            ok: false,
+            error: `ID document upload is required for guest ${guestIndex + 1} in Room ${roomIndex + 1}`,
+          };
+        }
+        guests.push({
+          name: g.name || "Guest",
+          age: g.age,
+          gender: (g.gender as Gender | undefined) ?? "other",
+          relationship: g.relationship ?? null,
+          id_number: infant ? null : (g.id_number ?? null),
+          id_document_url: documentUrl,
+          is_infant: infant,
+          citizenship: g.citizenship,
+          nationality: g.nationality,
+          passport_number: g.passport_number,
+        });
       }
-      guests.push({
-        name: g.name || "Guest",
-        age: g.age ?? null,
-        gender: (g.gender as Gender | undefined) ?? "other",
-        relationship: g.relationship ?? null,
-        id_number: g.id_number ?? null,
-        id_document_url: documentUrl,
-        // Legacy column: infants are `bookings.has_infant` since migration 7.
-        is_infant: false,
-      });
+      rooms.push({ room_type: room.room_type ?? null, guests });
     }
 
     // Alumni ID card. Two things can ask for it: the role's form config, and
@@ -167,19 +252,30 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       user_id: user.id,
       guest_house_id: payload.guest_house_id,
       user_role: user.role,
-      status: initialStatusFor(user.role),
+      // A meals-only booking is the kitchen's business, so it goes straight
+      // to the manager rather than through the room approval chain.
+      status: initialStatusFor(user.role, payload.service_type),
       purpose_of_visit: payload.purpose_of_visit,
       check_in: checkInIso,
       check_out: checkOutIso,
-      rooms_requested: payload.rooms_requested,
       booking_type: payload.booking_type,
+      service_type: payload.service_type,
+      meal_preference: payload.meal_preference ?? null,
+      meal_guest_count: wantsRooms ? null : payload.meal_guest_count,
+      pets_policy_acknowledged: payload.pets_policy_acknowledged,
       alumni_name: forAlumnus ? payload.alumni_name : null,
       alumni_roll_number: forAlumnus ? payload.alumni_roll_number : null,
       alumni_id_url: alumniIdUrl,
       custom_fields: customValues.length > 0 ? customValues : null,
       meals: payload.meals,
-      has_infant: payload.has_infant,
-      guests,
+      rooms,
+      submission_remarks: overrideNote,
+      // Both parties are recorded: the booking hangs off the manager's
+      // account for referential integrity, and names the guest it is for.
+      created_by: onBehalfOf ? user.id : null,
+      on_behalf_of_name: onBehalfOf?.name ?? null,
+      on_behalf_of_email: onBehalfOf?.email ?? null,
+      on_behalf_of_phone: onBehalfOf?.phone ?? null,
     });
 
     // Acknowledge to the requester and tell whoever has to decide. Queued,
@@ -212,7 +308,11 @@ export async function reviewBooking(
     if (action === "reject" && !reason?.trim()) {
       return { ok: false, error: "A rejection reason is mandatory" };
     }
-    if (action === "approve" && user.role === "gh_manager") {
+    // A room booking is approved by allocating a room to it, which is a
+    // different screen. A meals-only booking has no room to allocate, so for
+    // that one the manager's approval *is* the decision.
+    const mealsOnly = booking.service_type === "meals_only";
+    if (action === "approve" && user.role === "gh_manager" && !mealsOnly) {
       return { ok: false, error: "GH Manager approval happens through room allocation" };
     }
 
@@ -263,12 +363,22 @@ export async function allocateRooms(bookingId: string, roomIds: string[]): Promi
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
-    if (booking.status !== "PENDING_GH_MANAGER") {
+    if (booking.service_type === "meals_only") {
+      return { ok: false, error: "A meals-only booking has no room to allocate" };
+    }
+    // The manager is the last stage of the approval chain, so they can also be
+    // the only stage when the request has already been settled off-portal —
+    // an override, recorded as one in the log below.
+    const overriding = booking.status !== "PENDING_GH_MANAGER";
+    if (overriding && !ACTIVE_STATUSES.includes(booking.status)) {
       return { ok: false, error: "This booking is not awaiting allocation" };
     }
     if (roomIds.length === 0) return { ok: false, error: "Select at least one room" };
     if (roomIds.length > booking.rooms_requested) {
       return { ok: false, error: `The request is for ${booking.rooms_requested} room(s)` };
+    }
+    if (new Set(roomIds).size !== roomIds.length) {
+      return { ok: false, error: "The same room cannot be allocated twice on one booking" };
     }
 
     const rooms = await store.listRooms(booking.guest_house_id);
@@ -286,6 +396,20 @@ export async function allocateRooms(bookingId: string, roomIds: string[]): Promi
     );
     if (capacityProblem) return { ok: false, error: capacityProblem };
 
+    // The aggregate check above can pass while one room card still does not
+    // fit — three guests given a single room, say. Rooms are allocated in card
+    // order, so card N gets `roomIds[N]`.
+    for (const [i, card] of booking.rooms.entries()) {
+      const room = selectedRooms[i];
+      if (!room) continue;
+      const problem = roomAssignmentError(
+        countBedGuests(card.guests),
+        room,
+        `Room ${card.room_index}`
+      );
+      if (problem) return { ok: false, error: problem };
+    }
+
     // No pre-flight occupancy check: the room_holds exclusion constraint is
     // the authority, and checking first would only reintroduce the
     // check-then-act race this replaced. A loser gets RoomClashError below.
@@ -297,7 +421,9 @@ export async function allocateRooms(bookingId: string, roomIds: string[]): Promi
         action_by: user.id,
         action_by_name: user.full_name,
         new_status: "APPROVED",
-        remarks: `Rooms allocated: ${roomNumbers}`,
+        remarks: overriding
+          ? `Approved by the Guest House Manager without the remaining review stages (was ${booking.status}). Rooms allocated: ${roomNumbers}`
+          : `Rooms allocated: ${roomNumbers}`,
       }
     );
     // Administration Section requirement 5: the requester should not have to

@@ -5,6 +5,8 @@ import type {
   BookingStatus,
   BookingWithDetails,
   GuestHouse,
+  MealPlan,
+  MealPreference,
   NewBookingInput,
   Profile,
   Room,
@@ -27,7 +29,31 @@ export type NewProfileInput = Omit<Profile, "id">;
 export interface StatusUpdate {
   status: BookingStatus;
   rejection_reason?: string | null;
+  /**
+   * The physical rooms this booking holds, **in room-card order**: the first
+   * id is for Room 1, the second for Room 2, and so on. The store writes both
+   * the `room_holds` rows (which are what prevent a double booking) and each
+   * `booking_rooms.assigned_room_id` (which is what tells the desk who is in
+   * which room) from this one array, so the two cannot disagree.
+   *
+   * An empty array releases every room.
+   */
   assigned_room_ids?: string[];
+}
+
+/**
+ * Fields the Guest House Manager can change on a booking that already exists.
+ *
+ * Moving the dates moves the room holds with them, and the exclusion
+ * constraint decides whether that is allowed — so a stay cannot be extended
+ * over a room someone else already has.
+ */
+export interface BookingDetailsPatch {
+  check_in?: string;
+  check_out?: string;
+  purpose_of_visit?: string;
+  meals?: MealPlan;
+  meal_preference?: MealPreference | null;
 }
 
 export type NewLogInput = Omit<BookingLog, "id" | "booking_id" | "timestamp" | "previous_status">;
@@ -56,6 +82,24 @@ export interface DataStore {
    */
   searchBookings(criteria: BookingSearchCriteria): Promise<BookingSearchResult>;
   updateBookingStatus(id: string, update: StatusUpdate, log: NewLogInput): Promise<void>;
+
+  /**
+   * Change a stored booking's dates, purpose or meals — the Guest House
+   * Manager fixing a booking rather than deciding on it. Room holds follow
+   * the dates, so this throws `RoomClashError` if the new dates collide with
+   * a room someone else holds.
+   */
+  updateBookingDetails(
+    id: string,
+    patch: BookingDetailsPatch,
+    log: NewLogInput
+  ): Promise<void>;
+
+  /**
+   * Bookings with at least one meal on `day` ("yyyy-MM-dd"), for the kitchen's
+   * head count. Pass a guest house to narrow it to one kitchen.
+   */
+  listBookingsWithMealsOn(day: string, guestHouseId?: string): Promise<BookingWithDetails[]>;
 
   /** Room ids held by bookings in ROOM_HOLDING_STATUSES overlapping [checkIn, checkOut). */
   getOccupiedRoomIds(

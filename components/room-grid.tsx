@@ -13,6 +13,7 @@ import {
   describeCapacity,
   describeParty,
   extraBedsFor,
+  roomAssignmentError,
   ROOM_TYPE_LABELS,
 } from "@/lib/occupancy";
 import { cn } from "@/lib/utils";
@@ -58,7 +59,13 @@ export function RoomGrid({
   const checkIn = booking.check_in;
   const checkOut = booking.check_out;
   const [occupied, setOccupied] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /**
+   * The picked rooms **in order**, because the order is meaningful: the first
+   * is Room 1's, the second Room 2's. A Set would have carried that meaning
+   * only by accident of insertion order, and nothing on screen would have said
+   * so — the manager needs to see which party ends up where.
+   */
+  const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isPending, startTransition] = useTransition();
@@ -69,7 +76,7 @@ export function RoomGrid({
       .then((ids) => {
         if (cancelled) return;
         setOccupied(new Set(ids));
-        setSelected((prev) => new Set([...prev].filter((id) => !ids.includes(id))));
+        setSelected((prev) => prev.filter((id) => !ids.includes(id)));
         setLoading(false);
       })
       .catch(() => {
@@ -90,23 +97,18 @@ export function RoomGrid({
   const toggle = (room: Room) => {
     if (occupied.has(room.id)) return;
     setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(room.id)) {
-        next.delete(room.id);
-      } else {
-        if (next.size >= booking.rooms_requested) {
-          toast.info(`This request is for ${booking.rooms_requested} room(s) — deselect one first`);
-          return prev;
-        }
-        next.add(room.id);
+      if (prev.includes(room.id)) return prev.filter((id) => id !== room.id);
+      if (prev.length >= booking.rooms_requested) {
+        toast.info(`This request is for ${booking.rooms_requested} room(s) — deselect one first`);
+        return prev;
       }
-      return next;
+      return [...prev, room.id];
     });
   };
 
   const confirm = () =>
     startTransition(async () => {
-      const result = await allocateRooms(booking.id, [...selected]);
+      const result = await allocateRooms(booking.id, selected);
       if (result.ok) {
         toast.success(`${booking.booking_reference_id} approved — rooms allocated`);
         onAllocated?.();
@@ -122,10 +124,25 @@ export function RoomGrid({
 
   // Infants share with their guardians, so only the others need a bed.
   const bedGuests = countBedGuests(booking.guests);
-  const selectedRooms = rooms.filter((r) => selected.has(r.id));
+  // In pick order, so index 0 is Room 1's — the same order the server maps
+  // onto the booking's room cards.
+  const selectedRooms = selected
+    .map((id) => rooms.find((r) => r.id === id))
+    .filter((r): r is Room => Boolean(r));
   const selectedCapacity = capacityOf(selectedRooms);
+  // Two different failures, both of which the server also checks: the party as
+  // a whole not fitting the rooms picked, and one room card's party not
+  // fitting the particular room it landed on. The second can happen while the
+  // first passes — three guests and a spare single room add up, but nobody can
+  // sleep three in the single.
   const capacityProblem =
-    selected.size > 0 ? allocationCapacityError(bedGuests, selectedRooms) : null;
+    selected.length > 0 ? allocationCapacityError(bedGuests, selectedRooms) : null;
+  const cardProblem = booking.rooms.some((card, i) => {
+    const room = selectedRooms[i];
+    return room
+      ? roomAssignmentError(countBedGuests(card.guests), room, `Room ${card.room_index}`) !== null
+      : false;
+  });
   // Counted against the rooms actually picked: two guests in one single room
   // need an extra bed, which the pre-selection estimate (doubles) would miss.
   const extraBeds = extraBedsFor(bedGuests, selectedRooms);
@@ -174,36 +191,72 @@ export function RoomGrid({
         <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <SummaryItem
             label="Rooms selected"
-            value={`${selected.size} of ${booking.rooms_requested} requested`}
+            value={`${selected.length} of ${booking.rooms_requested} requested`}
             detail={
-              selected.size > 0 ? selectedRooms.map((r) => r.room_number).join(", ") : undefined
+              selected.length > 0 ? selectedRooms.map((r) => r.room_number).join(", ") : undefined
             }
           />
           <SummaryItem label="Guests" value={describeParty(booking)} />
           <SummaryItem
             label="Capacity of selection"
             value={
-              selected.size > 0
+              selected.length > 0
                 ? `${selectedCapacity.standard} guest${selectedCapacity.standard === 1 ? "" : "s"}`
                 : "—"
             }
             detail={
-              selected.size > 0 && selectedCapacity.withExtraBed > selectedCapacity.standard
+              selected.length > 0 && selectedCapacity.withExtraBed > selectedCapacity.standard
                 ? `Maximum ${selectedCapacity.withExtraBed} with extra beds`
                 : undefined
             }
           />
           <SummaryItem
             label="Extra beds required"
-            value={selected.size > 0 && !capacityProblem ? String(extraBeds) : "—"}
+            value={selected.length > 0 && !capacityProblem ? String(extraBeds) : "—"}
             detail={
-              selected.size > 0 && !capacityProblem && extraBeds > 0
+              selected.length > 0 && !capacityProblem && extraBeds > 0
                 ? "To be arranged before check-in"
                 : undefined
             }
-            attention={selected.size > 0 && !capacityProblem && extraBeds > 0}
+            attention={selected.length > 0 && !capacityProblem && extraBeds > 0}
           />
         </dl>
+
+        {/* Which party ends up in which room. Guests are entered room by room,
+            so an allocation that ignored the cards would put a three-guest
+            party in a single room and leave the desk to discover it. */}
+        {booking.rooms.length > 0 && (
+          <ul className="space-y-1 border-t pt-3 text-sm">
+            {booking.rooms.map((card, i) => {
+              const room = selectedRooms[i];
+              const problem = room
+                ? roomAssignmentError(
+                    countBedGuests(card.guests),
+                    room,
+                    `Room ${card.room_index}`
+                  )
+                : null;
+              return (
+                <li key={card.id} className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-medium">Room {card.room_index}</span>
+                  <span className="text-muted-foreground">
+                    · {describeParty({ guests: card.guests })}
+                  </span>
+                  <span aria-hidden className="text-muted-foreground">
+                    →
+                  </span>
+                  <span className={room ? "font-medium" : "text-muted-foreground"}>
+                    {room
+                      ? `${room.room_number} (${ROOM_TYPE_LABELS[room.room_type].toLowerCase()})`
+                      : "pick a room"}
+                  </span>
+                  {problem && <span className="w-full text-xs text-destructive">{problem}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           {capacityProblem ? (
             <p className="text-sm text-destructive">{capacityProblem}</p>
@@ -212,7 +265,9 @@ export function RoomGrid({
           )}
           <Button
             onClick={confirm}
-            disabled={isPending || selected.size === 0 || capacityProblem !== null}
+            disabled={
+              isPending || selected.length === 0 || capacityProblem !== null || cardProblem
+            }
           >
             {isPending ? "Allocating…" : "Confirm & Allocate"}
           </Button>
@@ -262,7 +317,8 @@ function RoomSection({
   description: string;
   rooms: Room[];
   occupied: Set<string>;
-  selected: Set<string>;
+  /** Picked rooms in card order; the index is the "Room N" shown on the tile. */
+  selected: string[];
   onToggle: (room: Room) => void;
 }) {
   if (rooms.length === 0) return null;
@@ -275,7 +331,8 @@ function RoomSection({
       <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 md:grid-cols-8">
         {rooms.map((room) => {
           const isOccupied = occupied.has(room.id);
-          const isSelected = selected.has(room.id);
+          const pickedAt = selected.indexOf(room.id);
+          const isSelected = pickedAt >= 0;
           return (
             <button
               key={room.id}
@@ -296,7 +353,14 @@ function RoomSection({
                     : "bg-emerald-500 hover:scale-105 hover:bg-emerald-600"
               )}
             >
-              {room.room_number}
+              <span className="flex flex-col items-center leading-tight">
+                {room.room_number}
+                {isSelected && (
+                  <span className="text-[10px] font-normal opacity-90">
+                    Room {pickedAt + 1}
+                  </span>
+                )}
+              </span>
             </button>
           );
         })}

@@ -9,11 +9,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { countryName } from "@/lib/countries";
 import { formatDateTime } from "@/lib/format";
 import { describeMeals, MEAL_KEYS, MEAL_LABELS } from "@/lib/meals";
-import { countBedGuests, describeParty } from "@/lib/occupancy";
+import { countBedGuests, describeParty, ROOM_TYPE_LABELS } from "@/lib/occupancy";
 import { formatDateValue } from "@/lib/tz";
-import { BOOKING_TYPE_LABELS, ROLE_LABELS, type BookingWithDetails } from "@/lib/types";
+import {
+  BOOKING_TYPE_LABELS,
+  CITIZENSHIP_LABELS,
+  MEAL_PREFERENCE_LABELS,
+  ROLE_LABELS,
+  SERVICE_TYPE_LABELS,
+  type BookingGuest,
+  type BookingWithDetails,
+} from "@/lib/types";
 
 function isPdf(url: string) {
   return url.split("?")[0].toLowerCase().endsWith(".pdf");
@@ -46,6 +55,12 @@ export function BookingDetails({
   booking: BookingWithDetails;
   showAlumniCard?: boolean;
 }) {
+  const mealsOnly = booking.service_type === "meals_only";
+  // A meals-only booking has no guest rows, so its head count is the number
+  // the requester gave; every other booking counts the people needing a bed.
+  const mealHeadCount = mealsOnly
+    ? (booking.meal_guest_count ?? 0)
+    : countBedGuests(booking.guests);
   return (
     <div className="space-y-5 text-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -53,6 +68,13 @@ export function BookingDetails({
         <StatusBadge status={booking.status} />
         <Badge variant="outline">{ROLE_LABELS[booking.user_role]}</Badge>
         <Badge variant="secondary">{BOOKING_TYPE_LABELS[booking.booking_type]}</Badge>
+        <Badge variant="outline">{SERVICE_TYPE_LABELS[booking.service_type]}</Badge>
+        {booking.meal_preference && (
+          <Badge variant="outline">{MEAL_PREFERENCE_LABELS[booking.meal_preference]}</Badge>
+        )}
+        {/* The guest house has to report foreign nationals, so it is on the
+            booking itself rather than only inside the guest list. */}
+        {booking.has_foreign_national && <Badge variant="outline">Foreign national</Badge>}
       </div>
 
       <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
@@ -67,11 +89,43 @@ export function BookingDetails({
         {booking.alumni_roll_number && (
           <Field label="Alumnus student / roll no." value={booking.alumni_roll_number} />
         )}
-        <Field label="Check-in" value={formatDateTime(booking.check_in)} />
-        <Field label="Check-out" value={formatDateTime(booking.check_out)} />
-        <Field label="Rooms requested" value={String(booking.rooms_requested)} />
-        <Field label="Party size" value={describeParty(booking)} />
+        {booking.on_behalf_of_name && (
+          <Field
+            label="Booked on behalf of"
+            value={[booking.on_behalf_of_name, booking.on_behalf_of_email, booking.on_behalf_of_phone]
+              .filter(Boolean)
+              .join(" · ")}
+          />
+        )}
+        <Field
+          label={mealsOnly ? "First day of meals" : "Check-in"}
+          value={formatDateTime(booking.check_in)}
+        />
+        <Field
+          label={mealsOnly ? "Last day of meals" : "Check-out"}
+          value={formatDateTime(booking.check_out)}
+        />
+        {!mealsOnly && <Field label="Rooms requested" value={String(booking.rooms_requested)} />}
+        <Field
+          label={mealsOnly ? "Guests" : "Party size"}
+          value={
+            mealsOnly
+              ? `${booking.meal_guest_count ?? 0} guest${booking.meal_guest_count === 1 ? "" : "s"}`
+              : describeParty(booking)
+          }
+        />
         <Field label="Meals requested" value={describeMeals(booking.meals)} />
+        {booking.meal_preference && (
+          <Field label="Meal preference" value={MEAL_PREFERENCE_LABELS[booking.meal_preference]} />
+        )}
+        <Field
+          label="Pets policy"
+          value={
+            booking.pets_policy_acknowledged
+              ? "Acknowledged by the requester"
+              : "Not acknowledged — booking predates the policy checkbox"
+          }
+        />
         {booking.assigned_rooms.length > 0 && (
           <Field
             label="Assigned rooms"
@@ -86,8 +140,11 @@ export function BookingDetails({
         <div>
           <h4 className="mb-1 font-medium">Meals by day</h4>
           <p className="mb-2 text-xs text-muted-foreground">
-            Each ticked meal is for {countBedGuests(booking.guests)} guest
-            {countBedGuests(booking.guests) === 1 ? "" : "s"}.
+            Each ticked meal is for {mealHeadCount} guest{mealHeadCount === 1 ? "" : "s"}
+            {booking.meal_preference
+              ? ` (${MEAL_PREFERENCE_LABELS[booking.meal_preference].toLowerCase()})`
+              : ""}
+            .
           </p>
           <div className="overflow-x-auto rounded-md border">
             <Table>
@@ -143,58 +200,43 @@ export function BookingDetails({
         </div>
       )}
 
-      <div>
-        <h4 className="mb-2 font-medium">Guests ({booking.guests.length})</h4>
-        <div className="overflow-x-auto rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Age</TableHead>
-                <TableHead>Gender</TableHead>
-                <TableHead>Relationship</TableHead>
-                <TableHead>ID Number</TableHead>
-                <TableHead>Document</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {booking.guests.map((g) => (
-                <TableRow key={g.id}>
-                  <TableCell className="font-medium">
-                    {g.name}
-                    {g.is_infant && (
-                      <Badge variant="secondary" className="ml-2 align-middle">
-                        Infant
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>{g.age ?? "—"}</TableCell>
-                  <TableCell className="capitalize">{g.gender}</TableCell>
-                  <TableCell>{g.relationship ?? "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {g.is_infant ? (
-                      <span className="font-sans text-muted-foreground">Not required</span>
-                    ) : (
-                      (g.id_number ?? "—")
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {g.id_document_url ? (
-                      <a href={g.id_document_url} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-4">
-                        View
-                      </a>
-                    ) : g.is_infant ? (
-                      <span className="text-muted-foreground">Not required</span>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+      {/* Guests are shown room by room, because that is how they were entered
+          and how the desk needs them: who is sharing with whom. A booking made
+          before migration 11 has a single room holding everyone, which is what
+          its backfill produced. */}
+      {!mealsOnly &&
+        (booking.rooms.length > 0 ? (
+          <div className="space-y-4">
+            <h4 className="font-medium">Guests by room ({booking.guests.length} in total)</h4>
+            {booking.rooms.map((room) => (
+              <div key={room.id}>
+                <p className="mb-1 text-sm font-medium">
+                  Room {room.room_index}
+                  {room.assigned_room ? (
+                    <span className="ml-2 font-normal text-muted-foreground">
+                      → {room.assigned_room.room_number} (
+                      {ROOM_TYPE_LABELS[room.assigned_room.room_type]})
+                    </span>
+                  ) : (
+                    <span className="ml-2 font-normal text-muted-foreground">
+                      → not yet allocated
+                      {room.room_type && ` · ${ROOM_TYPE_LABELS[room.room_type]} preferred`}
+                    </span>
+                  )}
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    · {describeParty({ guests: room.guests })}
+                  </span>
+                </p>
+                <GuestTable guests={room.guests} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div>
+            <h4 className="mb-2 font-medium">Guests ({booking.guests.length})</h4>
+            <GuestTable guests={booking.guests} />
+          </div>
+        ))}
 
       {showAlumniCard && booking.alumni_id_url && (
         <div>
@@ -226,6 +268,81 @@ export function BookingDetails({
           ))}
         </ol>
       </div>
+    </div>
+  );
+}
+
+/**
+ * One room's guests. Nationality and passport appear only when somebody in
+ * the table is a foreign national, so an all-Indian party is not given two
+ * empty columns to read past.
+ */
+function GuestTable({ guests }: { guests: BookingGuest[] }) {
+  const anyForeign = guests.some((g) => g.citizenship === "other");
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Age</TableHead>
+            <TableHead>Gender</TableHead>
+            <TableHead>Relationship</TableHead>
+            <TableHead>Citizenship</TableHead>
+            {anyForeign && <TableHead>Nationality</TableHead>}
+            {anyForeign && <TableHead>Passport</TableHead>}
+            <TableHead>ID Number</TableHead>
+            <TableHead>Document</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {guests.map((g) => (
+            <TableRow key={g.id}>
+              <TableCell className="font-medium">
+                {g.name}
+                {g.is_infant && (
+                  <Badge variant="secondary" className="ml-2 align-middle">
+                    Infant
+                  </Badge>
+                )}
+              </TableCell>
+              <TableCell>{g.age ?? "—"}</TableCell>
+              <TableCell className="capitalize">{g.gender}</TableCell>
+              <TableCell>{g.relationship ?? "—"}</TableCell>
+              <TableCell>{CITIZENSHIP_LABELS[g.citizenship ?? "indian"]}</TableCell>
+              {anyForeign && (
+                <TableCell>{g.nationality ? countryName(g.nationality) : "—"}</TableCell>
+              )}
+              {anyForeign && (
+                <TableCell className="font-mono text-xs">{g.passport_number ?? "—"}</TableCell>
+              )}
+              <TableCell className="font-mono text-xs">
+                {g.is_infant ? (
+                  <span className="font-sans text-muted-foreground">Not required</span>
+                ) : (
+                  (g.id_number ?? "—")
+                )}
+              </TableCell>
+              <TableCell>
+                {g.id_document_url ? (
+                  <a
+                    href={g.id_document_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary underline underline-offset-4"
+                  >
+                    View
+                  </a>
+                ) : g.is_infant ? (
+                  <span className="text-muted-foreground">Not required</span>
+                ) : (
+                  "—"
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

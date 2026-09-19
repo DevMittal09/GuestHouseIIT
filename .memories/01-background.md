@@ -80,8 +80,9 @@ of **10 Sep 2026**:
 ## Meeting notes — 15 Sep 2026
 
 A third round came out of a meeting with the guest house office
-(`Guest House Meeting Notes.md` in the repo root, untracked). Part of it was
-picked up the same day; everything else in the notes is not started.
+(`Guest House Meeting Notes.md`, kept alongside these files in `.memories/`).
+Part of it was picked up the same day; everything else in the notes is not
+started.
 
 | Requirement | Status | Where |
 | --- | --- | --- |

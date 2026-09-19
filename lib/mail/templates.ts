@@ -1,9 +1,12 @@
 import { formatDateTime, formatDate } from "@/lib/format";
 import { describeMealDays, describeMeals } from "@/lib/meals";
 import { describeParty } from "@/lib/occupancy";
+import { PETS_POLICY_NOTICE } from "@/lib/policy";
 import {
   BOOKING_TYPE_LABELS,
+  MEAL_PREFERENCE_LABELS,
   ROLE_LABELS,
+  SERVICE_TYPE_LABELS,
   STATUS_LABELS,
   type BookingStatus,
   type BookingWithDetails,
@@ -31,16 +34,33 @@ import type { Block, EmailDocument } from "./render";
 
 /** The facts every mail about a booking repeats, so the reader needs no portal. */
 export function bookingFacts(booking: BookingWithDetails): Block {
+  const mealsOnly = booking.service_type === "meals_only";
   const rows: [string, string][] = [
     ["Reference", booking.booking_reference_id],
     ["Guest house", booking.guest_house.name],
-    ["Check-in", formatDateTime(booking.check_in)],
-    ["Check-out", formatDateTime(booking.check_out)],
-    ["Rooms requested", String(booking.rooms_requested)],
-    ["Party", describeParty(booking)],
-    ["Purpose", booking.purpose_of_visit],
-    ["Booking type", BOOKING_TYPE_LABELS[booking.booking_type]],
+    ["Booking", SERVICE_TYPE_LABELS[booking.service_type]],
+    [mealsOnly ? "First day of meals" : "Check-in", formatDateTime(booking.check_in)],
+    [mealsOnly ? "Last day of meals" : "Check-out", formatDateTime(booking.check_out)],
   ];
+  // A meals-only booking has no rooms and no guest list; a head count is the
+  // whole of what the kitchen was told.
+  if (mealsOnly) {
+    const n = booking.meal_guest_count ?? 0;
+    rows.push(["Guests", `${n} guest${n === 1 ? "" : "s"}`]);
+  } else {
+    rows.push(["Rooms requested", String(booking.rooms_requested)]);
+    rows.push(["Party", describeParty(booking)]);
+  }
+  rows.push(["Purpose", booking.purpose_of_visit]);
+  rows.push(["Booking type", BOOKING_TYPE_LABELS[booking.booking_type]]);
+  if (booking.on_behalf_of_name) {
+    // The desk has to know who is actually arriving, not just whose account
+    // the booking hangs off.
+    rows.push(["Booked on behalf of", booking.on_behalf_of_name]);
+  }
+  if (booking.has_foreign_national) {
+    rows.push(["Foreign nationals", "Yes — passport details are on the booking in the portal"]);
+  }
   if (booking.alumni_name) {
     rows.push([
       "For alumnus",
@@ -52,7 +72,13 @@ export function bookingFacts(booking: BookingWithDetails): Block {
   // Only where the guest house serves them — elsewhere the row is a puzzle.
   if (booking.guest_house.serves_meals) {
     rows.push(["Meals", describeMeals(booking.meals)]);
+    if (booking.meal_preference) {
+      rows.push(["Meal preference", MEAL_PREFERENCE_LABELS[booking.meal_preference]]);
+    }
   }
+  // Repeated on every booking mail rather than only the confirmation: it is
+  // the one rule a guest can breach before anyone at the desk can stop them.
+  rows.push(["Pets", PETS_POLICY_NOTICE]);
   return { kind: "facts", rows };
 }
 

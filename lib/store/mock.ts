@@ -6,6 +6,8 @@ import type {
   BookingFilter,
   BookingGuest,
   BookingLog,
+  BookingRoom,
+  BookingRoomWithGuests,
   BookingWithDetails,
   GuestHouse,
   NewBookingInput,
@@ -16,7 +18,9 @@ import type {
 } from "@/lib/types";
 import { RoomClashError } from "@/lib/types";
 import type { Role, RoomType } from "@/lib/types";
-import { normalizeMeals } from "@/lib/meals";
+import { mealsOn, normalizeMeals } from "@/lib/meals";
+import { isInfantAge } from "@/lib/occupancy";
+import { deriveFromRooms } from "./derive";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
@@ -29,8 +33,15 @@ import type {
 } from "@/lib/mail/types";
 import { MAIL_STATUSES } from "@/lib/mail/types";
 import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
-import type { DataStore, NewLogInput, NewProfileInput, StatusUpdate } from "./types";
+import type {
+  BookingDetailsPatch,
+  DataStore,
+  NewLogInput,
+  NewProfileInput,
+  StatusUpdate,
+} from "./types";
 import {
+  seedBookingRooms,
   seedBookings,
   seedGuestHouses,
   seedGuests,
@@ -45,6 +56,8 @@ interface Db {
   guest_houses: GuestHouse[];
   rooms: Room[];
   bookings: Booking[];
+  /** Migration 11's counterpart: one row per room card on a booking. */
+  booking_rooms?: BookingRoom[];
   booking_guests: BookingGuest[];
   booking_logs: BookingLog[];
   form_configs: RoleFormConfig[];
@@ -133,6 +146,74 @@ function loadDb(): Db {
         b.alumni_roll_number = null;
         dirty = true;
       }
+      // Migration 11's counterpart. A booking made before rooms had cards was
+      // a room booking, unless it had meals.
+      if (b.service_type === undefined) {
+        b.service_type = (b.meals?.length ?? 0) > 0 ? "room_meals" : "room";
+        dirty = true;
+      }
+      if (b.meal_preference === undefined) {
+        // Old bookings recorded meals without a preference. "Unknown" is the
+        // honest answer, and the kitchen asks rather than assuming veg.
+        b.meal_preference = null;
+        dirty = true;
+      }
+      if (b.pets_policy_acknowledged === undefined) {
+        // False means "never asked", not "refused" — the question did not
+        // exist when these were submitted.
+        b.pets_policy_acknowledged = false;
+        b.pets_policy_acknowledged_at = null;
+        dirty = true;
+      }
+      if (b.has_foreign_national === undefined) {
+        b.has_foreign_national = false;
+        dirty = true;
+      }
+      if (b.created_by === undefined) {
+        b.created_by = null;
+        b.on_behalf_of_name = null;
+        b.on_behalf_of_email = null;
+        b.on_behalf_of_phone = null;
+        dirty = true;
+      }
+    }
+    // Migration 11's backfill: one synthetic room per booking, holding every
+    // guest it already had. Those rooms can hold more than the per-room limit
+    // allows — the limit is enforced when a booking is submitted, so a stay
+    // the office already honoured is never retroactively invalid.
+    if (!db.booking_rooms) {
+      const bookingRooms: BookingRoom[] = [];
+      for (const b of db.bookings) {
+        if (b.service_type === "meals_only") continue;
+        const room: BookingRoom = {
+          id: `${b.id}-room-1`,
+          booking_id: b.id,
+          room_index: 1,
+          room_type: null,
+          assigned_room_id: db.room_holds.find((h) => h.booking_id === b.id)?.room_id ?? null,
+        };
+        bookingRooms.push(room);
+        for (const g of db.booking_guests) {
+          if (g.booking_id === b.id) g.booking_room_id = room.id;
+        }
+        b.rooms_requested = 1;
+      }
+      db.booking_rooms = bookingRooms;
+      dirty = true;
+    }
+    for (const g of db.booking_guests) {
+      // Citizenship is new; everything already stored was entered on a form
+      // that could only express an Indian citizen.
+      if (g.citizenship === undefined) {
+        g.citizenship = "indian";
+        g.nationality = null;
+        g.passport_number = null;
+        dirty = true;
+      }
+      if (g.booking_room_id === undefined) {
+        g.booking_room_id = null;
+        dirty = true;
+      }
     }
     for (const seeded of seedProfiles) {
       if (!db.profiles.some((p) => p.id === seeded.id || p.email === seeded.email)) {
@@ -148,6 +229,7 @@ function loadDb(): Db {
     guest_houses: seedGuestHouses,
     rooms: seedRooms,
     bookings: seedBookings,
+    booking_rooms: seedBookingRooms,
     booking_guests: seedGuests,
     booking_logs: seedLogs,
     form_configs: [],
@@ -182,6 +264,24 @@ function assertNoClash(db: Db, bookingId: string, roomIds: string[], from: strin
   }
 }
 
+/**
+ * Spread the allocated rooms across the booking's room cards, in card order:
+ * the first id is Room 1's, the second Room 2's. Cards past the end of the
+ * list are cleared, which is what releasing rooms looks like.
+ *
+ * `room_holds` is still the authority on whether a room is held; this only
+ * records which card each hold was for, so the desk can tell one party from
+ * another when a booking has more than one room.
+ */
+function assignRoomsToCards(db: Db, bookingId: string, roomIds: string[]) {
+  const cards = (db.booking_rooms ?? [])
+    .filter((r) => r.booking_id === bookingId)
+    .sort((a, b) => a.room_index - b.room_index);
+  cards.forEach((card, i) => {
+    card.assigned_room_id = roomIds[i] ?? null;
+  });
+}
+
 function saveDb(db: Db) {
   fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 }
@@ -212,6 +312,7 @@ export class MockStore implements DataStore {
   async createBooking(input: NewBookingInput): Promise<Booking> {
     const db = loadDb();
     const nowIso = new Date().toISOString();
+    const derived = deriveFromRooms(input);
     const booking: Booking = {
       id: randomUUID(),
       booking_reference_id: makeReference(),
@@ -222,23 +323,54 @@ export class MockStore implements DataStore {
       purpose_of_visit: input.purpose_of_visit,
       check_in: input.check_in,
       check_out: input.check_out,
-      rooms_requested: input.rooms_requested,
+      // Counted from the room cards, never passed in: a count beside the rows
+      // is a count that can disagree with them.
+      rooms_requested: derived.rooms_requested,
       assigned_room_ids: [],
       rejection_reason: null,
       booking_type: input.booking_type,
+      service_type: input.service_type,
+      meal_preference: input.meal_preference,
+      meal_guest_count: derived.meal_guest_count,
+      pets_policy_acknowledged: input.pets_policy_acknowledged,
+      pets_policy_acknowledged_at: input.pets_policy_acknowledged ? nowIso : null,
+      has_foreign_national: derived.has_foreign_national,
+      created_by: input.created_by ?? null,
+      on_behalf_of_name: input.on_behalf_of_name ?? null,
+      on_behalf_of_email: input.on_behalf_of_email ?? null,
+      on_behalf_of_phone: input.on_behalf_of_phone ?? null,
       alumni_name: input.alumni_name,
       alumni_roll_number: input.alumni_roll_number,
       alumni_id_url: input.alumni_id_url,
       custom_fields: input.custom_fields,
       meals: normalizeMeals(input.meals),
-      has_infant: input.has_infant,
+      has_infant: derived.has_infant,
       created_at: nowIso,
       updated_at: nowIso,
     };
     db.bookings.push(booking);
-    for (const g of input.guests) {
-      db.booking_guests.push({ ...g, id: randomUUID(), booking_id: booking.id });
-    }
+    const bookingRooms = db.booking_rooms ?? (db.booking_rooms = []);
+    input.rooms.forEach((room, index) => {
+      const roomRow: BookingRoom = {
+        id: randomUUID(),
+        booking_id: booking.id,
+        room_index: index + 1,
+        room_type: room.room_type,
+        assigned_room_id: null,
+      };
+      bookingRooms.push(roomRow);
+      for (const g of room.guests) {
+        db.booking_guests.push({
+          ...g,
+          id: randomUUID(),
+          booking_id: booking.id,
+          booking_room_id: roomRow.id,
+          // The database derives this in a trigger; the mock derives it here,
+          // from the same rule, so the two backends classify identically.
+          is_infant: isInfantAge(g.age),
+        });
+      }
+    });
     const requester = db.profiles.find((p) => p.id === input.user_id);
     db.booking_logs.push({
       id: randomUUID(),
@@ -247,7 +379,7 @@ export class MockStore implements DataStore {
       action_by_name: requester?.full_name ?? "Unknown",
       previous_status: null,
       new_status: input.status,
-      remarks: "Booking submitted",
+      remarks: input.submission_remarks ?? "Booking submitted",
       timestamp: nowIso,
     });
     saveDb(db);
@@ -260,13 +392,25 @@ export class MockStore implements DataStore {
     const assignedRoomIds = db.room_holds
       .filter((h) => h.booking_id === b.id)
       .map((h) => h.room_id);
+    const roomCards = (db.booking_rooms ?? [])
+      .filter((r) => r.booking_id === b.id)
+      .sort((a, c) => a.room_index - c.room_index);
+    const guests = db.booking_guests.filter((g) => g.booking_id === b.id);
+    const rooms: BookingRoomWithGuests[] = roomCards.map((card) => ({
+      ...card,
+      guests: guests.filter((g) => g.booking_room_id === card.id),
+      assigned_room: db.rooms.find((r) => r.id === card.assigned_room_id) ?? null,
+    }));
     return {
       ...b,
       meals: normalizeMeals(b.meals, b),
       assigned_room_ids: assignedRoomIds,
       requester: db.profiles.find((p) => p.id === b.user_id)!,
       guest_house: db.guest_houses.find((g) => g.id === b.guest_house_id)!,
-      guests: db.booking_guests.filter((g) => g.booking_id === b.id),
+      // Room order first, then any guest whose room card is missing — a
+      // hand-edited mock database should still show its guests.
+      guests: [...rooms.flatMap((r) => r.guests), ...guests.filter((g) => !g.booking_room_id)],
+      rooms,
       logs: db.booking_logs
         .filter((l) => l.booking_id === b.id)
         .sort((a, c) => a.timestamp.localeCompare(c.timestamp)),
@@ -332,6 +476,7 @@ export class MockStore implements DataStore {
           check_out: b.check_out,
         });
       }
+      assignRoomsToCards(db, id, update.assigned_room_ids);
     }
 
     const previous = b.status;
@@ -341,6 +486,7 @@ export class MockStore implements DataStore {
     // ROOM_HOLDING_STATUSES releases the rooms with no caller involvement.
     if (!ROOM_HOLDING_STATUSES.includes(update.status)) {
       db.room_holds = db.room_holds.filter((h) => h.booking_id !== id);
+      assignRoomsToCards(db, id, []);
     }
     b.updated_at = new Date().toISOString();
     db.booking_logs.push({
@@ -351,6 +497,59 @@ export class MockStore implements DataStore {
       timestamp: b.updated_at,
     });
     saveDb(db);
+  }
+
+  async updateBookingDetails(
+    id: string,
+    patch: BookingDetailsPatch,
+    log: NewLogInput
+  ): Promise<void> {
+    const db = loadDb();
+    const b = db.bookings.find((x) => x.id === id);
+    if (!b) throw new Error("Booking not found");
+
+    const checkIn = patch.check_in ?? b.check_in;
+    const checkOut = patch.check_out ?? b.check_out;
+    const movingDates = checkIn !== b.check_in || checkOut !== b.check_out;
+    if (movingDates) {
+      // The holds carry the period, so moving the stay moves them — and the
+      // move has to be refused if the rooms are not free over the new dates.
+      // Checked before anything is written, so a clash leaves the booking as
+      // it was.
+      const held = db.room_holds.filter((h) => h.booking_id === id).map((h) => h.room_id);
+      assertNoClash(db, id, held, checkIn, checkOut);
+      for (const hold of db.room_holds) {
+        if (hold.booking_id !== id) continue;
+        hold.check_in = checkIn;
+        hold.check_out = checkOut;
+      }
+      b.check_in = checkIn;
+      b.check_out = checkOut;
+    }
+    if (patch.purpose_of_visit !== undefined) b.purpose_of_visit = patch.purpose_of_visit;
+    if (patch.meals !== undefined) b.meals = normalizeMeals(patch.meals);
+    if (patch.meal_preference !== undefined) b.meal_preference = patch.meal_preference;
+
+    b.updated_at = new Date().toISOString();
+    db.booking_logs.push({
+      ...log,
+      id: randomUUID(),
+      booking_id: id,
+      previous_status: b.status,
+      timestamp: b.updated_at,
+    });
+    saveDb(db);
+  }
+
+  async listBookingsWithMealsOn(day: string, guestHouseId?: string): Promise<BookingWithDetails[]> {
+    const db = loadDb();
+    return db.bookings
+      .filter((b) => {
+        if (guestHouseId && b.guest_house_id !== guestHouseId) return false;
+        return mealsOn(normalizeMeals(b.meals, b), day).length > 0;
+      })
+      .sort((a, b) => a.check_in.localeCompare(b.check_in))
+      .map((b) => this.hydrate(db, b));
   }
 
   async getOccupiedRoomIds(

@@ -1,6 +1,6 @@
 import { addMonths } from "date-fns";
 import type { BookingSearchCriteria } from "./booking-search";
-import type { BookingStatus, Profile, Role } from "./types";
+import type { BookingStatus, Profile, Role, ServiceType } from "./types";
 
 /** How far ahead of today a stay may be booked. */
 export const ADVANCE_BOOKING_WINDOW_MONTHS = 1;
@@ -34,12 +34,15 @@ export function latestCheckIn(role: Role, from: Date = new Date()): Date | null 
  * them to `PENDING_IAR` would have it approve itself, which is not a control
  * at all. Those go straight to the manager.
  *
- * The route is a function of the role alone today. It takes no booking type
- * because none of the current pipelines branch on one — if HOD approval for a
- * faculty member's *personal* booking is ever added (it is in the meeting
- * notes but was not asked for), this is where the type becomes an argument.
+ * A **meals-only** booking skips the chain entirely and goes straight to the
+ * Guest House Manager. The intermediate stages exist to vouch for someone
+ * staying overnight in institute accommodation — a warden for their student's
+ * family, an advisor for their club. Lunch for a visitor is the kitchen's
+ * business and nobody else's, and routing it through a warden would leave the
+ * kitchen waiting on an approval for a head count.
  */
-export function initialStatusFor(role: Role): BookingStatus {
+export function initialStatusFor(role: Role, service: ServiceType = "room"): BookingStatus {
+  if (service === "meals_only") return "PENDING_GH_MANAGER";
   switch (role) {
     case "student":
       return "PENDING_WARDEN";
@@ -53,6 +56,11 @@ export function initialStatusFor(role: Role): BookingStatus {
     case "iar_cell":
     case "employee":
     case "official":
+    // The manager booking at the desk on someone's behalf. It still lands in
+    // their own allocation queue rather than being approved on the spot: the
+    // room has to be picked, and the booking has to appear in the log like
+    // any other.
+    case "gh_manager":
       return "PENDING_GH_MANAGER";
     default:
       throw new Error(`Role ${role} cannot create bookings`);

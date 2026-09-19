@@ -274,14 +274,7 @@ named `withExtraBed` rather than `max` deliberately — the third occupant is no
 a property of the room, it is a bed somebody has to arrange, and
 `extraBedsNeeded()` puts that number in front of the manager at allocation time.
 
-**Infants** — under 10, sharing a guardian's bed — are one switch on the
-booking, `has_infant` (migration 7), saying whether any are coming. They have no
-guest row, no count and no ID, and occupy no bed, so on a new booking every guest
-row is a bed. Bookings made before migration 7 recorded infants as guest rows
-carrying `is_infant`, and those rows still exist — so capacity for a *stored*
-booking counts `countBedGuests(guests)` rather than `guests.length`, and
-`hasInfant(booking)` reads either the switch or a legacy row.
-
+**Infants** — under 5 years, sharing a guardian's bed — are entered as guest rows within a room card (migration 11), with their `is_infant` flag computed automatically based on age. They occupy no bed, but count towards a maximum of 1 infant per room. Prior to migration 11, infants were just a boolean switch on the booking, so legacy bookings were migrated into synthetic room cards while retaining their original infant flags. `describeParty(booking)` supports both shapes.
 It is checked twice because two different things are known at the two moments:
 `requestedRoomsError()` at submission, when only a room *count* exists, and
 `allocationCapacityError()` at allocation, when the manager has picked actual

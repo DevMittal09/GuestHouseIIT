@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ManagerQueue } from "@/components/manager-queue";
+import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
 import { getStore } from "@/lib/store";
@@ -43,9 +44,13 @@ export default async function ManagerPage({
   // approved booking for next week and a guest currently in the building are
   // two different jobs for the manager, and lumping them together was reading
   // as "this future booking is occupied".
-  const stays = [...allApproved, ...allOccupied].sort((a, b) =>
-    a.check_in.localeCompare(b.check_in)
-  );
+  // A meals-only booking is not a stay: nobody arrives, nobody is checked in
+  // or out, and no room comes back. Listing one under "Upcoming stays" would
+  // put a room-less row in a table whose whole job is rooms — those belong on
+  // the kitchen's day view instead (`/manager/meals`).
+  const stays = [...allApproved, ...allOccupied]
+    .filter((b) => b.service_type !== "meals_only")
+    .sort((a, b) => a.check_in.localeCompare(b.check_in));
   const currentStays = stays.filter((b) => stayPhase(b, now) === "current");
   const upcomingStays = stays.filter((b) => stayPhase(b, now) === "upcoming");
   // A stay past its check-out that was never marked Vacated still needs
@@ -76,11 +81,27 @@ export default async function ManagerPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Guest House Manager Console</h1>
-        <p className="text-muted-foreground">
-          Review pre-approved and direct requests, then allocate rooms per guest house.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Guest House Manager Console</h1>
+          <p className="text-muted-foreground">
+            Review pre-approved and direct requests, then allocate rooms per guest house.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {/* Taking a booking at the desk for someone who cannot use the
+              portal, and the kitchen's head count for a given day. */}
+          <Button asChild variant="outline">
+            <Link href="/book">New booking for a guest</Link>
+          </Button>
+          {current.serves_meals && (
+            <Button asChild variant="outline">
+              <Link href={`/manager/meals?gh=${encodeURIComponent(current.name)}`}>
+                Meal counts
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Separate queue per guest house */}

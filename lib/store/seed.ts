@@ -3,6 +3,7 @@ import type {
   Booking,
   BookingGuest,
   BookingLog,
+  BookingRoom,
   GuestHouse,
   MealKey,
   MealPlan,
@@ -66,9 +67,29 @@ const iso = (daysFromNow: number, hour: number) => {
   return d.toISOString();
 };
 
+/**
+ * The demo bookings, written without the fields migration 11 added — they are
+ * the same on almost every row, so `withDefaults` below fills them in rather
+ * than repeating them nine times. A row that differs says so explicitly.
+ */
+type DemoBooking = Omit<
+  Booking,
+  | "service_type"
+  | "meal_preference"
+  | "meal_guest_count"
+  | "pets_policy_acknowledged"
+  | "pets_policy_acknowledged_at"
+  | "has_foreign_national"
+  | "created_by"
+  | "on_behalf_of_name"
+  | "on_behalf_of_email"
+  | "on_behalf_of_phone"
+> &
+  Partial<Booking>;
+
 // Demo bookings so every portal has something in its queue on first run.
 // Meals are filled in below, from the stay dates.
-const demoBookings: Booking[] = [
+const demoBookings: DemoBooking[] = [
   {
     id: "bk-demo-1",
     booking_reference_id: "IITPKD-GH-2026-DM001",
@@ -173,6 +194,9 @@ const demoBookings: Booking[] = [
     alumni_name: null,
     alumni_roll_number: null,
     purpose_of_visit: "Visit of NIRF inspection committee",
+    // One committee member is a foreign national, so the desk's report has
+    // something in it on first run.
+    has_foreign_national: true,
     check_in: iso(6, 12),
     check_out: iso(9, 11),
     rooms_requested: 2,
@@ -185,7 +209,57 @@ const demoBookings: Booking[] = [
     created_at: iso(-5, 10),
     updated_at: iso(-4, 16),
   },
+  // Meals without a room: a department hosting an examiner for the day. It
+  // holds no rooms and no guest rows — the kitchen needs a head count — and
+  // goes straight to the manager rather than through an approval chain.
+  {
+    id: "bk-demo-6",
+    booking_reference_id: "IITPKD-GH-2026-DM006",
+    user_id: "employee-priya",
+    guest_house_id: GH_HAMSANANDI,
+    user_role: "employee",
+    status: "PENDING_GH_MANAGER",
+    booking_type: "official",
+    service_type: "meals_only",
+    meal_preference: "veg",
+    meal_guest_count: 8,
+    alumni_name: null,
+    alumni_roll_number: null,
+    purpose_of_visit: "Lunch for the PhD thesis examination committee",
+    check_in: iso(4, 0),
+    check_out: iso(4, 23),
+    rooms_requested: 0,
+    assigned_room_ids: [],
+    rejection_reason: null,
+    alumni_id_url: null,
+    custom_fields: null,
+    meals: [],
+    has_infant: false,
+    created_at: iso(-1, 12),
+    updated_at: iso(-1, 12),
+  },
 ];
+
+/**
+ * Fields every demo booking shares. Pets were acknowledged because the form
+ * will not submit without it; `has_foreign_national` is recomputed from the
+ * guest rows below, so it is not guessed here.
+ */
+function withDefaults(b: DemoBooking): Booking {
+  return {
+    service_type: "room",
+    meal_preference: null,
+    meal_guest_count: null,
+    pets_policy_acknowledged: true,
+    pets_policy_acknowledged_at: b.created_at,
+    has_foreign_national: false,
+    created_by: null,
+    on_behalf_of_name: null,
+    on_behalf_of_email: null,
+    on_behalf_of_phone: null,
+    ...b,
+  } as Booking;
+}
 
 /**
  * A meal plan for a demo stay, built day by day so the manager console shows a
@@ -210,21 +284,57 @@ const DEMO_MEALS: Record<string, (b: Booking) => MealPlan> = {
   // A collaborator: breakfast every morning, dinner on the day they arrive.
   "bk-demo-4": (b) =>
     demoMeals(b, (meal, day) => meal === "breakfast" || (meal === "dinner" && day === 0)),
+  // The meals-only booking: one lunch, which is the whole booking.
+  "bk-demo-6": (b) => demoMeals(b, (meal) => meal === "lunch"),
 };
 
-export const seedBookings: Booking[] = demoBookings.map((b) => ({
-  ...b,
-  meals: DEMO_MEALS[b.id]?.(b) ?? [],
-}));
+/** Veg unless the stay says otherwise — the kitchen's usual default. */
+const DEMO_MEAL_PREFERENCE: Record<string, "veg" | "non_veg"> = {
+  "bk-demo-2": "non_veg",
+  "bk-demo-4": "veg",
+};
+
+export const seedBookings: Booking[] = demoBookings.map(withDefaults).map((b) => {
+  const meals = DEMO_MEALS[b.id]?.(b) ?? [];
+  // A booking with meals and a room is a room-and-meals booking; the
+  // meals-only one already says what it is.
+  const service_type = b.service_type === "meals_only" || meals.length === 0 ? b.service_type : "room_meals";
+  return {
+    ...b,
+    meals,
+    service_type,
+    meal_preference: b.meal_preference ?? DEMO_MEAL_PREFERENCE[b.id] ?? null,
+  };
+});
+
+/**
+ * The room cards for the demo bookings. Guests are entered inside a card, so
+ * a two-room booking has two cards and its guests are split between them.
+ * bk-demo-6 has none: it is meals-only.
+ */
+export const seedBookingRooms: BookingRoom[] = [
+  { id: "br-1", booking_id: "bk-demo-1", room_index: 1, room_type: "double_sharing", assigned_room_id: null },
+  { id: "br-2", booking_id: "bk-demo-2", room_index: 1, room_type: "single", assigned_room_id: null },
+  { id: "br-3", booking_id: "bk-demo-2", room_index: 2, room_type: "single", assigned_room_id: null },
+  { id: "br-4", booking_id: "bk-demo-3", room_index: 1, room_type: "single", assigned_room_id: null },
+  { id: "br-5", booking_id: "bk-demo-4", room_index: 1, room_type: "double_sharing", assigned_room_id: null },
+  { id: "br-6", booking_id: "bk-demo-5", room_index: 1, room_type: "single", assigned_room_id: `${GH_BAGESHRI}-B-201` },
+  { id: "br-7", booking_id: "bk-demo-5", room_index: 2, room_type: "single", assigned_room_id: `${GH_BAGESHRI}-B-202` },
+];
 
 export const seedGuests: BookingGuest[] = [
-  { id: "g-1", booking_id: "bk-demo-1", name: "Sunitha Menon", age: 52, gender: "female", relationship: "Mother", id_number: "XXXX-XXXX-4821", id_document_url: null, is_infant: false },
-  { id: "g-2", booking_id: "bk-demo-1", name: "Ravi Menon", age: 56, gender: "male", relationship: "Father", id_number: "XXXX-XXXX-9130", id_document_url: null, is_infant: false },
-  { id: "g-3", booking_id: "bk-demo-2", name: "Arjun Das", age: 31, gender: "male", relationship: null, id_number: null, id_document_url: null, is_infant: false },
-  { id: "g-4", booking_id: "bk-demo-2", name: "Meera Krishnan", age: 28, gender: "female", relationship: null, id_number: null, id_document_url: null, is_infant: false },
-  { id: "g-5", booking_id: "bk-demo-3", name: "Vikram Iyer", age: 29, gender: "male", relationship: null, id_number: "XXXX-XXXX-7754", id_document_url: null, is_infant: false },
-  { id: "g-6", booking_id: "bk-demo-4", name: "Prof. Ananya Bose", age: 45, gender: "female", relationship: "Research collaborator", id_number: "XXXX-XXXX-2216", id_document_url: null, is_infant: false },
-  { id: "g-7", booking_id: "bk-demo-5", name: "NIRF Committee (2 members)", age: null, gender: "male", relationship: null, id_number: null, id_document_url: null, is_infant: false },
+  { id: "g-1", booking_id: "bk-demo-1", booking_room_id: "br-1", name: "Sunitha Menon", age: 52, gender: "female", relationship: "Mother", id_number: "XXXX-XXXX-4821", id_document_url: null, is_infant: false, citizenship: "indian", nationality: null, passport_number: null },
+  { id: "g-2", booking_id: "bk-demo-1", booking_room_id: "br-1", name: "Ravi Menon", age: 56, gender: "male", relationship: "Father", id_number: "XXXX-XXXX-9130", id_document_url: null, is_infant: false, citizenship: "indian", nationality: null, passport_number: null },
+  { id: "g-3", booking_id: "bk-demo-2", booking_room_id: "br-2", name: "Arjun Das", age: 31, gender: "male", relationship: null, id_number: null, id_document_url: null, is_infant: false, citizenship: "indian", nationality: null, passport_number: null },
+  { id: "g-4", booking_id: "bk-demo-2", booking_room_id: "br-3", name: "Meera Krishnan", age: 28, gender: "female", relationship: null, id_number: null, id_document_url: null, is_infant: false, citizenship: "indian", nationality: null, passport_number: null },
+  { id: "g-5", booking_id: "bk-demo-3", booking_room_id: "br-4", name: "Vikram Iyer", age: 29, gender: "male", relationship: null, id_number: "XXXX-XXXX-7754", id_document_url: null, is_infant: false, citizenship: "indian", nationality: null, passport_number: null },
+  { id: "g-6", booking_id: "bk-demo-4", booking_room_id: "br-5", name: "Prof. Ananya Bose", age: 45, gender: "female", relationship: "Research collaborator", id_number: "XXXX-XXXX-2216", id_document_url: null, is_infant: false, citizenship: "indian", nationality: null, passport_number: null },
+  // Under five, so the age alone makes this row an infant: no bed, no ID.
+  { id: "g-8", booking_id: "bk-demo-4", booking_room_id: "br-5", name: "Ishaan Bose", age: 3, gender: "male", relationship: "Son", id_number: null, id_document_url: null, is_infant: true, citizenship: "indian", nationality: null, passport_number: null },
+  { id: "g-7", booking_id: "bk-demo-5", booking_room_id: "br-6", name: "Dr. R. Subramanian", age: 61, gender: "male", relationship: null, id_number: "XXXX-XXXX-5540", id_document_url: null, is_infant: false, citizenship: "indian", nationality: null, passport_number: null },
+  // A foreign national on the committee, so the register and the admin views
+  // have a passport to show on first run.
+  { id: "g-9", booking_id: "bk-demo-5", booking_room_id: "br-7", name: "Dr. Kenji Sato", age: 54, gender: "male", relationship: null, id_number: null, id_document_url: null, is_infant: false, citizenship: "other", nationality: "JP", passport_number: "TK1234567" },
 ];
 
 /**

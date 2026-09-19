@@ -174,6 +174,7 @@ cannot drift.
 - Rejection requires a non-empty reason everywhere (enforced server-side).
 - `official` bookings are restricted to `OFFICIAL_EMAIL_WHITELIST` in
   `lib/routes.ts`, and are highlighted + sorted to the top of the manager queue.
+- **Manager Overrides**: `lib/access.ts` grants `gh_manager` powers to book on behalf of others, override approvals, edit meals post-approval, and bypass guest house restrictions (like the alumni/Bageshri rule).
 
 ### Time is institute time — `lib/tz.ts`
 
@@ -417,25 +418,11 @@ physically do.
   double rooms and is only for the booking form, before rooms exist — using it
   in the dialog under-counted a single room holding two guests.
 
-**Infants** (under `INFANT_AGE_LIMIT` = 10) are **one switch per booking —
-`bookings.has_infant`** (migration 7): an infant is coming, however many. No
-names, no count, no ID; they share a guardian's bed and take no room or bed.
-The switch sits beside "+ Add guest" in the booking form
-(`components/ui/switch.tsx`), so every guest row on a new booking is a
-bed-occupying guest with the role's usual ID requirement.
+**Infants** (under `INFANT_AGE_LIMIT` = 5) are entered as normal guests in a room card. They are classified as infants based on the age typed in. They share a guardian's bed and take no bed capacity, but they count towards a maximum of 1 infant per room.
 
-> **Stored bookings can still hold legacy infant guest rows** — migration 4
-> made infants rows, migration 7 replaced that. Those rows share a bed, so for
-> any *stored* booking measure capacity with `countBedGuests(guests)`, never
-> `guests.length`, and read the flag through `hasInfant(booking)`, which also
-> sees a legacy row. `booking_guests.is_infant` stays for them; new bookings
-> write `false`. `describeParty(booking)` renders both shapes.
+> **Stored bookings can still hold legacy synthetic rooms** — migration 11 migrated older bookings into single synthetic rooms and left their infant flags unchanged.
 
-Checked twice, because different things are known: `requestedRoomsError()` at
-submission (only a room count exists) and `allocationCapacityError()` at
-allocation (actual room types known). The booking form additionally caps how
-many guests can be added to what the chosen rooms accommodate — so picking rooms
-first, then guests, is the intended order.
+Checked server-side via triggers on `booking_guests` (max 3 guests + 1 infant per room). The booking form additionally caps how many guests can be added to a room card.
 
 ## Meals — `lib/meals.ts`
 
@@ -751,6 +738,7 @@ Migration files, applied sequentially:
    defaulted and safe to re-run. **Until it is applied, queueing throws** —
    `notify*()` catches and logs it, so bookings still work and only the mail is
    missing.
+11. `supabase/migrations/00000000000011_rooms_guests_and_services.sql` (Sep 2026). Room-scoped guests (`booking_rooms`), citizenship, meals-only service types, and `booking_meals` view. Existing bookings are migrated into a single synthetic legacy room. Safe to re-run.
 
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are
 not applied automatically. Read the header of each before running it.

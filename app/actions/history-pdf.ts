@@ -6,8 +6,15 @@ import {
   criteriaFromParams,
   parseHistoryParams,
 } from "@/lib/booking-search";
+import { countryName } from "@/lib/countries";
 import { getStore } from "@/lib/store";
-import { ROLE_LABELS, STATUS_LABELS, type BookingWithDetails } from "@/lib/types";
+import {
+  MEAL_PREFERENCE_LABELS,
+  ROLE_LABELS,
+  SERVICE_TYPE_LABELS,
+  STATUS_LABELS,
+  type BookingWithDetails,
+} from "@/lib/types";
 import { countBedGuests, countInfants, hasInfant } from "@/lib/occupancy";
 import { canExportPdf, historyScope } from "@/lib/workflow";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -34,6 +41,16 @@ export interface ReportRow {
   purpose: string;
   submitted: string;
   remarks: string;
+  /** Room, room + meals, or meals with no room. */
+  service: string;
+  /** Veg / non-veg, or blank when no meals were asked for. */
+  mealPreference: string;
+  /**
+   * Foreign nationals on the booking, with nationality and passport. The guest
+   * house has to report these, and they are the reason the column exists at
+   * all — it is blank on the great majority of rows.
+   */
+  foreignNationals: string;
 }
 
 export interface HistoryReport {
@@ -64,10 +81,17 @@ function nightsBetween(checkIn: string, checkOut: string): number {
 
 function toReportRow(b: BookingWithDetails): ReportRow {
   const beds = countBedGuests(b.guests);
-  // Older bookings listed their infants; newer ones say only whether any came.
+  // Bookings made between migrations 7 and 11 say only *whether* an infant
+  // came; before and after that, infants are rows that can be counted.
   const listed = countInfants(b.guests);
-  const party =
-    listed > 0 ? `${beds} + ${listed} inf` : hasInfant(b) ? `${beds} + inf` : String(beds);
+  const mealsOnly = b.service_type === "meals_only";
+  const party = mealsOnly
+    ? `${b.meal_guest_count ?? 0} (meals)`
+    : listed > 0
+      ? `${beds} + ${listed} inf`
+      : hasInfant(b)
+        ? `${beds} + inf`
+        : String(beds);
   return {
     reference: b.booking_reference_id,
     requester: b.requester?.full_name ?? "—",
@@ -76,8 +100,9 @@ function toReportRow(b: BookingWithDetails): ReportRow {
     checkIn: formatDateTime(b.check_in),
     checkOut: formatDateTime(b.check_out),
     nights: nightsBetween(b.check_in, b.check_out),
-    rooms:
-      b.assigned_rooms.length > 0
+    rooms: mealsOnly
+      ? "—"
+      : b.assigned_rooms.length > 0
         ? b.assigned_rooms.map((r) => r.room_number).join(", ")
         : `${b.rooms_requested} requested`,
     status: STATUS_LABELS[b.status],
@@ -86,6 +111,17 @@ function toReportRow(b: BookingWithDetails): ReportRow {
     purpose: b.purpose_of_visit,
     submitted: formatDate(b.created_at),
     remarks: b.rejection_reason ?? "",
+    service: SERVICE_TYPE_LABELS[b.service_type],
+    mealPreference: b.meal_preference ? MEAL_PREFERENCE_LABELS[b.meal_preference] : "",
+    foreignNationals: b.guests
+      .filter((g) => g.citizenship === "other")
+      .map(
+        (g) =>
+          `${g.name} (${g.nationality ? countryName(g.nationality) : "nationality not recorded"}${
+            g.passport_number ? `, ${g.passport_number}` : ""
+          })`
+      )
+      .join("; "),
   };
 }
 

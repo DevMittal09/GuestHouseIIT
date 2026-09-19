@@ -7,9 +7,16 @@ import {
   latestReviewerActionOn,
   parseHistoryParams,
 } from "@/lib/booking-search";
+import { countryName } from "@/lib/countries";
 import { getStore } from "@/lib/store";
 import { toInstituteDateValue } from "@/lib/tz";
-import { ROLE_LABELS, STATUS_LABELS, type BookingWithDetails } from "@/lib/types";
+import {
+  MEAL_PREFERENCE_LABELS,
+  ROLE_LABELS,
+  SERVICE_TYPE_LABELS,
+  STATUS_LABELS,
+  type BookingWithDetails,
+} from "@/lib/types";
 import { historyScope, isRequesterHistory } from "@/lib/workflow";
 import { formatDateTime } from "@/lib/format";
 
@@ -25,11 +32,17 @@ const COLUMNS = [
   "Category",
   "Hostel / Club",
   "Guest House",
+  "Booking",
   "Check-in",
   "Check-out",
   "Rooms requested",
   "Assigned rooms",
   "Guests",
+  "Infants",
+  "Meal preference",
+  "Foreign nationals",
+  "Pets policy acknowledged",
+  "Booked on behalf of",
   "Purpose",
   "Submitted",
   "My action",
@@ -58,11 +71,36 @@ function csvRow(booking: BookingWithDetails, userId: string): string {
     ROLE_LABELS[booking.user_role],
     booking.requester?.hostel_name ?? booking.requester?.department_or_club ?? "",
     booking.guest_house?.name,
+    SERVICE_TYPE_LABELS[booking.service_type],
     formatDateTime(booking.check_in),
     formatDateTime(booking.check_out),
-    booking.rooms_requested,
+    // A meals-only booking has no rooms and no guest list — the head count is
+    // the whole of it, so it goes in the Guests column rather than leaving the
+    // row looking like an empty booking.
+    booking.service_type === "meals_only" ? "" : booking.rooms_requested,
     booking.assigned_rooms.map((r) => r.room_number).join(" / "),
-    booking.guests.map((g) => g.name).join(" / "),
+    booking.service_type === "meals_only"
+      ? `${booking.meal_guest_count ?? 0} (head count)`
+      : booking.guests
+          .filter((g) => !g.is_infant)
+          .map((g) => g.name)
+          .join(" / "),
+    booking.guests
+      .filter((g) => g.is_infant)
+      .map((g) => g.name)
+      .join(" / "),
+    booking.meal_preference ? MEAL_PREFERENCE_LABELS[booking.meal_preference] : "",
+    booking.guests
+      .filter((g) => g.citizenship === "other")
+      .map(
+        (g) =>
+          `${g.name} (${g.nationality ? countryName(g.nationality) : "nationality not recorded"}${
+            g.passport_number ? `, ${g.passport_number}` : ""
+          })`
+      )
+      .join(" / "),
+    booking.pets_policy_acknowledged ? "Yes" : "Not asked",
+    booking.on_behalf_of_name ?? "",
     booking.purpose_of_visit,
     formatDateTime(booking.created_at),
     action ? STATUS_LABELS[action.log.new_status] : "",

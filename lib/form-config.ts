@@ -129,7 +129,8 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
         ...base,
         guest_fields: {
           name: "optional",
-          age: "optional",
+          // Required everywhere; see `sanitizeFormConfig`.
+          age: "required",
           gender: "required",
           relationship: "hidden",
           id_number: "optional",
@@ -173,6 +174,15 @@ export function sanitizeFormConfig(
   return {
     ...config,
     allowed_guest_house_ids: ids.length > 0 ? ids : guestHouses.map((g) => g.id),
+    guest_fields: {
+      ...config.guest_fields,
+      // Age is not configurable, whatever a stored config says. A guest below
+      // `INFANT_AGE_LIMIT` is an infant, and the per-room limit counts guests
+      // and infants separately — with the age hidden or blank, neither the
+      // form nor the server could tell which a guest is. Pinning it here means
+      // a configuration saved before the rule existed cannot switch it off.
+      age: "required",
+    },
     parent_relationships: dependents.length === 0 ? [] : parents,
     dependent_relationships: dependents,
   };

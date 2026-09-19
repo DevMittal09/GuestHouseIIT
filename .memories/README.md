@@ -18,6 +18,7 @@ one.
 | [07-troubleshooting.md](07-troubleshooting.md) | Errors already hit and their fixes |
 | [08-roadmap.md](08-roadmap.md) | Known gaps and what to build next |
 | [09-production-plan.md](09-production-plan.md) | Demo → production, in dependency order |
+| [Guest House Meeting Notes.md](Guest%20House%20Meeting%20Notes.md) | The guest house office's own notes, verbatim — the source for the 15 Sep requirements. Tracked against them in [01-background.md](01-background.md) |
 
 **Also in the repo root:** `AGENTS.md` is the terse operational brief that agent
 tools load automatically. It is the hard rules; these files are the reasoning.
@@ -28,11 +29,12 @@ Keep them in step.
 ## 1. What this is
 
 A booking and multi-stage approval portal for IIT Palakkad's two guest houses,
-**Bageshri** and **Hamsanandi**. Five kinds of requester submit bookings, each
-routed through a different approval chain, all ending at a **Guest House
-Manager** who assigns real rooms on a visual grid. A **developer** superadmin
-can reconfigure users, guest houses, rooms and even the booking forms from the
-UI.
+**Bageshri** and **Hamsanandi**. Six kinds of requester submit bookings — each
+routed through a different approval chain, and each stating *why* the stay is
+being booked (§4.1a) — all ending at a **Guest House Manager** who assigns real
+rooms on a visual grid, with a **caretaker** working the reception desk. A
+**developer** superadmin can reconfigure users, guest houses, rooms and even the
+booking forms from the UI.
 
 **Status:** feature-complete for the specified workflows. **Not deployed** and
 **not using real authentication** — those are the two gates before production.
@@ -81,9 +83,10 @@ and `lib/store/index.ts` picks one **from the environment**:
 
 The mock store rewrites the whole JSON file on every mutation — single-process,
 not concurrency-safe, fine for dev only. It **self-heals** on load: missing
-seeded profiles, a missing `form_configs` key, missing `room_holds` and a
-missing `infants` field are all added to older files, so new features never
-require deleting the database.
+seeded profiles and missing `form_configs`, `room_holds` and `email_outbox`
+keys are added, and older bookings gain the fields later migrations introduced
+(`has_infant`, `meals`, `booking_type`, and `is_infant` on guest rows), so a
+new feature never requires deleting the database.
 
 ### 3.2 Auth is mocked, with exactly one swap point
 
@@ -358,7 +361,8 @@ can only narrow, never widen. Do not reorder that spread.
 
 | Route | Who | What |
 | --- | --- | --- |
-| `/` | anyone | Persona picker (stands in for SSO) |
+| `/` | anyone | Sign in with an institute email + `DEMO_PASSWORD` (`components/login-form.tsx`) |
+| `/mock-login` | anyone | One-click persona picker, for development. The second door onto the same cookie |
 | `/dashboard` | requesters | Own bookings, status, assigned rooms, cancellation |
 | `/book` | requesters | The config-driven booking form, opening with the booking type, a **browsable** availability panel (day/week/month), a per-day meal grid (where the guest house serves meals) and an "Infant accompanying" switch |
 | `/warden` `/fa` `/iar` | reviewers | One `ReviewQueue` component, three scopings |

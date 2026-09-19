@@ -2,8 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useFieldArray, useForm, useWatch, type FieldPath } from "react-hook-form";
-import { Trash2Icon } from "lucide-react";
+import {
+  useFieldArray,
+  useForm,
+  useWatch,
+  type Control,
+  type FieldPath,
+  type UseFormRegister,
+  type UseFormRegisterReturn,
+} from "react-hook-form";
+import { PlusIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import { createBooking } from "@/app/actions/bookings";
 import { BookingAvailability } from "@/components/booking-availability";
@@ -16,25 +24,28 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { QuantityInput } from "@/components/ui/quantity-input";
-import { Switch } from "@/components/ui/switch";
 import { TimeSelect } from "@/components/ui/time-select";
 import { Textarea } from "@/components/ui/textarea";
+import { COUNTRIES } from "@/lib/countries";
 import {
-  DEFAULT_ROOM_MAX,
-  DEFAULT_ROOM_STANDARD,
-  extraBedsNeeded,
+  addGuestBlockedReason,
+  addInfantBlockedReason,
+  countInfants,
+  describeTotals,
   INFANT_AGE_LIMIT,
-  maxGuestsFor,
-  roomsNeededFor,
+  ROOM_OCCUPANCY_NOTICE,
+  ROOM_TYPE_LABELS,
 } from "@/lib/occupancy";
 import {
   advanceWindowMessage,
   bookingPayloadSchema,
   checkOutOrderError,
+  INFANT_HELP_TEXT,
 } from "@/lib/booking-schema";
 import {
   hasQualifyingParent,
@@ -47,31 +58,79 @@ import {
   bookingTypesFor,
   defaultBookingTypeFor,
   describeBookingType,
+  describeServiceType,
   needsAlumniDetails,
+  serviceTypesFor,
 } from "@/lib/booking-types";
-import { describeMeals, mealPlanFromSlots, stayMealDays } from "@/lib/meals";
+import {
+  guestHousesForBookingType,
+  latestCheckOutDate,
+  MANAGER_HELP_LINE,
+  PETS_POLICY_ACKNOWLEDGEMENT,
+  PETS_POLICY_NOTICE,
+  stayLengthHint,
+  ALUMNI_GUEST_HOUSE_NOTE,
+} from "@/lib/policy";
+import {
+  applyMealPreferenceDefaults,
+  describeMeals,
+  MEAL_KEYS,
+  mealPlanFromSlots,
+  mealSlot,
+  stayMealDays,
+} from "@/lib/meals";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { latestCheckIn } from "@/lib/workflow";
+import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import {
   BOOKING_TYPE_LABELS,
+  CITIZENSHIP_LABELS,
+  includesMeals,
+  MEAL_PREFERENCE_LABELS,
+  needsRooms,
   ROLE_LABELS,
+  SERVICE_TYPE_LABELS,
   type BookingType,
+  type Citizenship,
   type GuestHouse,
+  type MealPreference,
   type Profile,
+  type ServiceType,
 } from "@/lib/types";
 
 interface GuestFields {
+  /**
+   * A stable id for this row, used to key its uploaded file. Field-array
+   * indices shift when a row above is removed, so they cannot be the key —
+   * removing Room 1's first guest would otherwise hand their ID document to
+   * the person below them.
+   */
+  key: string;
   name: string;
   age: string;
   gender: "" | "male" | "female" | "other";
   relationship: string;
   id_number: string;
+  citizenship: Citizenship;
+  nationality: string;
+  passport_number: string;
+}
+
+interface RoomFields {
+  room_type: "" | "single" | "double_sharing";
+  guests: GuestFields[];
 }
 
 interface FormValues {
-  /** Asked first: it decides the approval route and how the stay is settled. */
+  /** Asked first: whether a room is involved changes the rest of the form. */
+  service_type: ServiceType;
+  /** Asked next: it decides the approval route and how the stay is settled. */
   booking_type: BookingType;
+  /** Only when the Guest House Manager is booking for somebody else. */
+  on_behalf_of_name: string;
+  on_behalf_of_email: string;
+  on_behalf_of_phone: string;
   /** Both only apply to a booking raised for an alumnus. */
   alumni_name: string;
   alumni_roll_number: string;
@@ -81,23 +140,37 @@ interface FormValues {
   check_in_time: string;
   check_out_date: string;
   check_out_time: string;
-  rooms_requested: string;
-  /** One switch for the booking: are any infants coming, however many. */
-  has_infant: boolean;
-  guests: GuestFields[];
+  /** Head count for a meals-only booking, which has no guest rows. */
+  meal_guest_count: string;
+  meal_preference: "" | MealPreference;
+  pets_policy_acknowledged: boolean;
+  rooms: RoomFields[];
   custom: Record<string, string | boolean>;
 }
 
-const EMPTY_GUEST: GuestFields = {
-  name: "",
-  age: "",
-  gender: "",
-  relationship: "",
-  id_number: "",
-};
+function newGuest(): GuestFields {
+  return {
+    key: crypto.randomUUID(),
+    name: "",
+    age: "",
+    gender: "",
+    relationship: "",
+    id_number: "",
+    citizenship: "indian",
+    nationality: "",
+    passport_number: "",
+  };
+}
 
-/** Hard ceiling regardless of rooms, so the form cannot grow unbounded. */
-const MAX_GUESTS = 15;
+function newRoom(): RoomFields {
+  return { room_type: "", guests: [newGuest()] };
+}
+
+/** Hard ceiling regardless of guests, so the form cannot grow unbounded. */
+const MAX_ROOMS = 10;
+
+/** A meals-only booking has no check-in time; it covers whole days. */
+const MEALS_ONLY_DAY = { start: "00:00", end: "23:59" };
 
 export function BookingForm({
   user,
@@ -110,7 +183,7 @@ export function BookingForm({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  // Files live outside RHF: a stable Map keyed by field-array row id.
+  // Files live outside RHF: a stable Map keyed by each guest row's own `key`.
   const [guestFiles] = useState(() => new Map<string, File>());
   const [alumniCard, setAlumniCard] = useState<File | null>(null);
   const [alumniCardError, setAlumniCardError] = useState<string | null>(null);
@@ -118,16 +191,33 @@ export function BookingForm({
   // Meal choices live outside react-hook-form as "date|meal" keys (`mealSlot`):
   // the grid's rows follow the stay dates, which fixed field paths cannot.
   const [mealSlots, setMealSlots] = useState<Set<string>>(() => new Set());
+  // Dates the requester has already been shown. Picking a preference ticks
+  // every meal on a day they have *not* seen, which is what makes "tick the
+  // whole stay, then untick what you will miss" survive a change of dates.
+  const [mealCovered, setMealCovered] = useState<Set<string>>(() => new Set());
   const [mealsError, setMealsError] = useState<string | null>(null);
+  const [roomsToDrop, setRoomsToDrop] = useState<number | null>(null);
 
   const gf = config.guest_fields;
   const idDocRequired = gf.id_document === "required";
+  const onBehalf = canBookOnBehalf(user.role);
+
+  // Whether meals can be booked at all on this account. It decides which
+  // service types exist, so it is computed before the form's defaults.
+  const [mealsAvailable] = useState(() =>
+    guestHouses.some((g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id))
+  );
+  const [serviceOptions] = useState(() => serviceTypesFor(config.role, mealsAvailable));
 
   const form = useForm<FormValues>({
     defaultValues: {
+      service_type: serviceOptions[0] ?? "room",
       // "Official" for staff, because that is the common case; a role with one
       // option is never shown the question at all.
       booking_type: defaultBookingTypeFor(config.role) ?? "official",
+      on_behalf_of_name: "",
+      on_behalf_of_email: "",
+      on_behalf_of_phone: "",
       alumni_name: "",
       alumni_roll_number: "",
       guest_house_id: guestHouses.length === 1 ? guestHouses[0].id : "",
@@ -136,21 +226,31 @@ export function BookingForm({
       check_in_time: "12:00",
       check_out_date: "",
       check_out_time: "10:00",
-      rooms_requested: "1",
-      has_infant: false,
-      guests: [{ ...EMPTY_GUEST }],
+      meal_guest_count: "1",
+      meal_preference: "",
+      pets_policy_acknowledged: false,
+      rooms: [newRoom()],
       custom: {},
     },
   });
   const { register, handleSubmit, control, setError, clearErrors, formState, setValue } = form;
-  const { fields, append, remove } = useFieldArray({ control, name: "guests" });
+  const { fields: roomFields, append: appendRoom, remove: removeRoom } =
+    useFieldArray({ control, name: "rooms" });
+
+  const serviceType = useWatch({ control, name: "service_type" });
+  const wantsRooms = needsRooms(serviceType);
+  const wantsMeals = includesMeals(serviceType);
   const checkInTime = useWatch({ control, name: "check_in_time" });
   const checkOutTime = useWatch({ control, name: "check_out_time" });
-  const roomsRequested = useWatch({ control, name: "rooms_requested" });
   // The availability panel follows the guest house and check-in date as they
   // are picked, so the requester sees the day they are actually choosing.
   const selectedGuestHouseId = useWatch({ control, name: "guest_house_id" });
   const bookingType = useWatch({ control, name: "booking_type" });
+  const mealPreference = useWatch({ control, name: "meal_preference" });
+  const petsAcknowledged = useWatch({ control, name: "pets_policy_acknowledged" });
+  // Watched unconditionally — it is only *shown* on a meals-only booking, but
+  // a hook cannot be called inside a branch.
+  const mealGuestCount = useWatch({ control, name: "meal_guest_count" }) ?? "";
   // Which booking types this role may pick, and whether the question is worth
   // asking — a club only ever books officially.
   const [bookingTypeOptions] = useState(() => bookingTypesFor(config.role));
@@ -163,35 +263,48 @@ export function BookingForm({
   const checkInDate = useWatch({ control, name: "check_in_date" });
   const checkOutDate = useWatch({ control, name: "check_out_date" });
 
-  // Siblings / grandparents stay locked until a parent is on the request.
-  const watchedGuests = useWatch({ control, name: "guests" });
+  // Alumni are accommodated at Bageshri, so the selector narrows to it rather
+  // than letting a requester pick a guest house the server will refuse. The
+  // manager keeps the full list: they are allowed to make an exception, and
+  // the server records it in the booking's log when they do.
+  const canOverrideHouse = canOverrideGuestHousePolicy(user.role);
+  const offeredGuestHouses = canOverrideHouse
+    ? guestHouses
+    : guestHousesForBookingType(guestHouses, bookingType);
+  const guestHouseLocked = offeredGuestHouses.length === 1;
+  const overridingHouse =
+    canOverrideHouse &&
+    forAlumnus &&
+    selectedGuestHouseId !== "" &&
+    !guestHousesForBookingType(guestHouses, bookingType).some(
+      (g) => g.id === selectedGuestHouseId
+    );
+
+  // Siblings / grandparents stay locked until a parent is on the request. The
+  // rule spans the whole booking, so a parent in Room 1 unlocks Room 2.
+  const watchedRooms = useWatch({ control, name: "rooms" });
+  const allGuests = (watchedRooms ?? []).flatMap((r) => r?.guests ?? []);
   const parentPresent = hasQualifyingParent(
     config,
-    (watchedGuests ?? []).map((g) => g?.relationship)
+    allGuests.map((g) => g?.relationship)
   );
   const dependencyHint = parentDependencyHint(config);
-  const isLockedRelationship = (option: string) =>
-    !parentPresent && config.dependent_relationships.includes(option);
 
-  // Every guest row needs a bed. Infants are not rows at all: one switch says
-  // whether any are coming, and they share a guardian's bed.
-  const hasInfant = useWatch({ control, name: "has_infant" });
-  const bedGuests = fields.length;
-  const roomsNeeded = roomsNeededFor(bedGuests);
-  const roomsPicked = Number(roomsRequested) || 0;
-  const bedsAvailable = maxGuestsFor(roomsPicked);
-  const extraBeds = extraBedsNeeded(bedGuests, roomsPicked);
-  // "In accordance with the rooms": no more guests than those rooms can take.
-  const guestCeiling = Math.min(bedsAvailable, MAX_GUESTS);
-  const overCapacity = roomsPicked > 0 && bedGuests > bedsAvailable;
+  const totals = describeTotals({
+    rooms: (watchedRooms ?? []).length,
+    guests: allGuests.filter((g) => !isInfantEntry(g)).length,
+    infants: allGuests.filter((g) => isInfantEntry(g)).length,
+  });
 
   // A live reading of the stay, so a mis-set AM/PM is caught while filling the
   // form rather than by a validation error after submitting. `checkOutOrderError`
   // is the same function the schema uses, so the two cannot disagree.
+  const effectiveCheckInTime = wantsRooms ? checkInTime : MEALS_ONLY_DAY.start;
+  const effectiveCheckOutTime = wantsRooms ? checkOutTime : MEALS_ONLY_DAY.end;
   const stay = (() => {
     if (!checkInDate || !checkOutDate) return null;
-    const from = `${checkInDate}T${checkInTime}`;
-    const to = `${checkOutDate}T${checkOutTime}`;
+    const from = `${checkInDate}T${effectiveCheckInTime}`;
+    const to = `${checkOutDate}T${effectiveCheckOutTime}`;
     const fromAt = instituteDate(from);
     const toAt = instituteDate(to);
     if (Number.isNaN(fromAt.getTime()) || Number.isNaN(toAt.getTime())) return null;
@@ -219,11 +332,29 @@ export function BookingForm({
   const mealHouseNames = guestHouses.filter((g) => g.serves_meals).map((g) => g.name);
   const mealCheckIn = stay && !stay.problem ? stay.fromAt : null;
   const mealDays = stay && !stay.problem ? stayMealDays(stay.fromAt, stay.toAt) : [];
-  const mealPlan = servesMeals ? mealPlanFromSlots(mealSlots, mealDays) : [];
+  // Derived, never stored: picking a preference means "we are eating here",
+  // so every day the requester has not yet seen is ticked. Committing it to
+  // state in an effect would fight the React Compiler and, worse, re-tick
+  // meals the requester had just cleared.
+  const effectiveMealSlots = mealPreference
+    ? applyMealPreferenceDefaults(mealSlots, mealDays, mealCovered).slots
+    : mealSlots;
+  const mealPlan = servesMeals ? mealPlanFromSlots(effectiveMealSlots, mealDays) : [];
+  const mealHeadCount = wantsRooms
+    ? allGuests.filter((g) => !isInfantEntry(g)).length
+    : Number(mealGuestCount) || 0;
   const mealSummary =
     mealPlan.length === 0
-      ? "No meals requested — guests will make their own arrangements."
-      : `${describeMeals(mealPlan)}, for ${fields.length} guest${fields.length === 1 ? "" : "s"}.`;
+      ? "No meals requested yet — pick a preference to fill in the whole stay."
+      : `${describeMeals(mealPlan)}, for ${mealHeadCount} guest${mealHeadCount === 1 ? "" : "s"}${
+          mealPreference ? ` (${MEAL_PREFERENCE_LABELS[mealPreference].toLowerCase()})` : ""
+        }.`;
+
+  /** Ticking or clearing a meal commits both the slots and the days seen. */
+  const onMealSlotsChange = (next: Set<string>) => {
+    setMealSlots(next);
+    setMealCovered(new Set(mealDays.map((d) => d.date)));
+  };
 
   // Advance-booking window: officials are exempt, so the cap can be absent.
   const [checkInLimits] = useState(() => {
@@ -234,58 +365,70 @@ export function BookingForm({
       note: advanceWindowMessage(config.role),
     };
   });
+  // The 14-night cap, applied to the check-out picker. The picker blocking it
+  // is a courtesy; the schema is the rule, on the client and again on the
+  // server.
+  const durationHint = stayLengthHint(config.role, user.email);
+  const latestCheckOut = checkInDate
+    ? latestCheckOutDate(checkInDate, config.role, user.email)
+    : null;
 
-  // The guest count is its own text state rather than being read off
-  // `fields.length`, so the box can be cleared and retyped. The field array is
-  // only resized once a valid number is in it.
-  const [guestCountRaw, setGuestCountRaw] = useState("1");
-  const [guestCountError, setGuestCountError] = useState<string | null>(null);
+  // The room count is its own text state rather than being read off
+  // `roomFields.length`, so the box can be cleared and retyped.
+  const [roomCountRaw, setRoomCountRaw] = useState("1");
+  const [roomCountError, setRoomCountError] = useState<string | null>(null);
 
-  const setGuestCount = (count: number) => {
-    const target = Math.min(Math.max(count, 1), MAX_GUESTS);
-    if (target > fields.length) {
-      for (let i = fields.length; i < target; i++) append({ ...EMPTY_GUEST }, { shouldFocus: false });
-    } else {
-      for (let i = fields.length - 1; i >= target; i--) {
-        guestFiles.delete(fields[i].id);
-        remove(i);
-      }
+  const growRooms = (target: number) => {
+    for (let i = roomFields.length; i < target; i++) appendRoom(newRoom(), { shouldFocus: false });
+  };
+
+  const shrinkRooms = (target: number) => {
+    for (let i = roomFields.length - 1; i >= target; i--) {
+      for (const g of form.getValues(`rooms.${i}.guests`) ?? []) guestFiles.delete(g.key);
+      removeRoom(i);
     }
   };
 
-  const onGuestCountChange = (raw: string) => {
-    setGuestCountRaw(raw);
+  /** Whether the rooms about to be dropped have anything typed into them. */
+  const roomsHaveData = (fromIndex: number) =>
+    (form.getValues("rooms") ?? [])
+      .slice(fromIndex)
+      .some((room) => room.guests.some((g) => g.name.trim() || g.age.trim() || g.id_number.trim()));
+
+  const onRoomCountChange = (raw: string) => {
+    setRoomCountRaw(raw);
     if (raw.trim() === "") {
-      setGuestCountError("Number of guests is required");
+      setRoomCountError("Number of rooms is required");
       return;
     }
     const n = Number(raw);
     if (!Number.isInteger(n) || n < 1) {
-      setGuestCountError("At least 1 guest");
+      setRoomCountError("At least 1 room");
       return;
     }
-    if (n > MAX_GUESTS) {
-      setGuestCountError(`Maximum ${MAX_GUESTS} guests per request`);
+    if (n > MAX_ROOMS) {
+      setRoomCountError(`Maximum ${MAX_ROOMS} rooms per request`);
       return;
     }
-    // The rooms already chosen decide how many guests can be added. Infants
-    // are not guests here, so they never count against it.
-    if (n > guestCeiling) {
-      setGuestCountError(
-        `${roomsPicked === 1 ? "1 room accommodates" : `${roomsPicked} rooms accommodate`} up to ${bedsAvailable} guests. Add another room. Infants are not counted — use the “Infant accompanying” switch for them.`
-      );
+    setRoomCountError(null);
+    if (n > roomFields.length) {
+      growRooms(n);
       return;
     }
-    setGuestCountError(null);
-    setGuestCount(n);
+    if (n < roomFields.length) {
+      // Removing a room takes its guests with it, so say so before doing it.
+      if (roomsHaveData(n)) {
+        setRoomsToDrop(n);
+        return;
+      }
+      shrinkRooms(n);
+    }
   };
 
-  /** Keep the box in step when a guest row is removed with its own button. */
-  const removeGuestAt = (index: number, fieldId: string) => {
-    guestFiles.delete(fieldId);
-    remove(index);
-    setGuestCountRaw(String(fields.length - 1));
-    setGuestCountError(null);
+  const confirmShrink = () => {
+    if (roomsToDrop === null) return;
+    shrinkRooms(roomsToDrop);
+    setRoomsToDrop(null);
   };
 
   const onSubmit = handleSubmit((values) => {
@@ -293,7 +436,11 @@ export function BookingForm({
     setAlumniCardError(null);
     setMealsError(null);
 
+    const checkIn = `${values.check_in_date}T${wantsRooms ? values.check_in_time : MEALS_ONLY_DAY.start}`;
+    const checkOut = `${values.check_out_date}T${wantsRooms ? values.check_out_time : MEALS_ONLY_DAY.end}`;
+
     const payload = {
+      service_type: values.service_type,
       booking_type: values.booking_type,
       // Sent only when they apply; the schema rejects them on any other kind
       // of booking, so a stale value cannot ride along.
@@ -301,26 +448,45 @@ export function BookingForm({
       alumni_roll_number: forAlumnus ? values.alumni_roll_number : undefined,
       guest_house_id: values.guest_house_id,
       purpose_of_visit: values.purpose_of_visit,
-      check_in: `${values.check_in_date}T${values.check_in_time}`,
-      check_out: `${values.check_out_date}T${values.check_out_time}`,
-      rooms_requested: values.rooms_requested,
-      meals: mealPlan,
-      has_infant: values.has_infant,
-      guests: values.guests.map((g) => ({
-        name: g.name,
-        age: g.age === "" ? undefined : g.age,
-        gender: g.gender === "" ? undefined : g.gender,
-        relationship: g.relationship === "" ? undefined : g.relationship,
-        id_number: g.id_number === "" ? undefined : g.id_number,
-      })),
+      check_in: checkIn,
+      check_out: checkOut,
+      meal_guest_count: wantsRooms ? "" : values.meal_guest_count,
+      meal_preference: values.meal_preference === "" ? null : values.meal_preference,
+      meals: wantsMeals ? mealPlan : [],
+      pets_policy_acknowledged: values.pets_policy_acknowledged,
+      // A meals-only booking has no rooms and no guest rows at all.
+      rooms: wantsRooms
+        ? values.rooms.map((room) => ({
+            room_type: room.room_type === "" ? null : room.room_type,
+            guests: room.guests.map((g) => ({
+              name: g.name,
+              age: g.age,
+              gender: g.gender === "" ? undefined : g.gender,
+              relationship: g.relationship === "" ? undefined : g.relationship,
+              // Not sent for a foreign national: the field is hidden for one,
+              // so anything still in it was typed before the answer changed.
+              id_number:
+                g.citizenship === "other" || g.id_number === "" ? undefined : g.id_number,
+              citizenship: g.citizenship,
+              // Cleared rather than sent: the schema refuses a nationality on
+              // an Indian citizen, so a value typed before switching back
+              // would fail validation on a field the form no longer shows.
+              nationality: g.citizenship === "other" ? g.nationality : undefined,
+              passport_number: g.citizenship === "other" ? g.passport_number : undefined,
+            })),
+          }))
+        : [],
       custom: values.custom,
     };
 
-    const parsed = bookingPayloadSchema(config).safeParse(payload);
+    const parsed = bookingPayloadSchema(config, {
+      mealsAvailable,
+      requesterEmail: user.email,
+    }).safeParse(payload);
     let hasError = false;
-    if (guestCountRaw.trim() === "") {
+    if (wantsRooms && roomCountRaw.trim() === "") {
       hasError = true;
-      setGuestCountError("Number of guests is required");
+      setRoomCountError("Number of rooms is required");
     }
     if (!parsed.success) {
       hasError = true;
@@ -335,15 +501,21 @@ export function BookingForm({
     }
 
     // File + custom-field requirements are enforced outside zod.
-    fields.forEach((f, i) => {
-      if (idDocRequired && !guestFiles.get(f.id)) {
-        hasError = true;
-        setError(`guests.${i}.name` as FieldPath<FormValues>, {
-          type: "file",
-          message: "ID document upload is required for this guest",
+    if (wantsRooms && idDocRequired) {
+      values.rooms.forEach((room, i) => {
+        room.guests.forEach((g, j) => {
+          // An infant needs no ID, so none is demanded for one.
+          if (isInfantEntry(g)) return;
+          if (!guestFiles.get(g.key)) {
+            hasError = true;
+            setError(`rooms.${i}.guests.${j}.name` as FieldPath<FormValues>, {
+              type: "file",
+              message: "ID document upload is required for this guest",
+            });
+          }
         });
-      }
-    });
+      });
+    }
     if (alumniCardRequired && !alumniCard) {
       hasError = true;
       setAlumniCardError("Alumni ID card upload is mandatory");
@@ -364,11 +536,20 @@ export function BookingForm({
 
     const formData = new FormData();
     formData.set("payload", JSON.stringify(parsed.data));
-    fields.forEach((f, i) => {
-      const file = guestFiles.get(f.id);
-      if (file) formData.set(`guest_doc_${i}`, file);
-    });
+    if (wantsRooms) {
+      values.rooms.forEach((room, i) => {
+        room.guests.forEach((g, j) => {
+          const file = guestFiles.get(g.key);
+          if (file) formData.set(`guest_doc_${i}_${j}`, file);
+        });
+      });
+    }
     if (alumniCard) formData.set("alumni_card", alumniCard);
+    if (onBehalf) {
+      formData.set("on_behalf_of_name", values.on_behalf_of_name);
+      formData.set("on_behalf_of_email", values.on_behalf_of_email);
+      formData.set("on_behalf_of_phone", values.on_behalf_of_phone);
+    }
 
     startTransition(async () => {
       const result = await createBooking(formData);
@@ -391,14 +572,39 @@ export function BookingForm({
     return (node as { message?: string } | undefined)?.message;
   };
 
-  const star = (mode: "required" | "optional" | "hidden") => (mode === "required" ? " *" : "");
-
   return (
     <form onSubmit={onSubmit} className="space-y-6">
-      {/* The first question, because it decides the approval route and how the
+      {/* What is being booked. A role that can only book a room is not asked. */}
+      {serviceOptions.length > 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>What would you like to book?</CardTitle>
+            <CardDescription>
+              Meals are cooked to a head count, so the kitchen needs to know about them whether or
+              not a room is involved.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {serviceOptions.map((option) => (
+                <RadioCard
+                  key={option}
+                  value={option}
+                  title={SERVICE_TYPE_LABELS[option]}
+                  description={describeServiceType(option)}
+                  register={register("service_type")}
+                />
+              ))}
+            </div>
+            <FieldError message={err("service_type")} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Why the stay is booked. It decides the approval route and how the
           stay is settled. Roles with a single option are not asked — the value
           is still recorded on the booking. */}
-      {bookingTypeOptions.length > 1 && (
+      {bookingTypeOptions.length > 1 ? (
         <Card>
           <CardHeader>
             <CardTitle>Type of booking</CardTitle>
@@ -410,29 +616,58 @@ export function BookingForm({
           <CardContent className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               {bookingTypeOptions.map((option) => (
-                <label
+                <RadioCard
                   key={option}
-                  className={cn(
-                    "flex cursor-pointer gap-3 rounded-lg border p-3 text-sm transition-colors",
-                    "has-checked:border-primary has-checked:bg-primary/5"
-                  )}
-                >
-                  <input
-                    type="radio"
-                    value={option}
-                    className="mt-0.5 size-4 shrink-0 accent-primary"
-                    {...register("booking_type")}
-                  />
-                  <span className="min-w-0">
-                    <span className="block font-medium">{BOOKING_TYPE_LABELS[option]}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {describeBookingType(config.role, option)}
-                    </span>
-                  </span>
-                </label>
+                  value={option}
+                  title={BOOKING_TYPE_LABELS[option]}
+                  description={describeBookingType(config.role, option)}
+                  register={register("booking_type")}
+                />
               ))}
             </div>
             <FieldError message={err("booking_type")} />
+          </CardContent>
+        </Card>
+      ) : (
+        bookingTypeOptions.length === 1 && (
+          // One option is not a choice, so it is stated rather than asked.
+          // The IAR Student Cell raises alumni requests and nothing else.
+          <Card>
+            <CardHeader>
+              <CardTitle>Type of booking</CardTitle>
+              <CardDescription>{describeBookingType(config.role, bookingTypeOptions[0])}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium">
+                {BOOKING_TYPE_LABELS[bookingTypeOptions[0]]}
+              </p>
+            </CardContent>
+          </Card>
+        )
+      )}
+
+      {onBehalf && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Booking on behalf of</CardTitle>
+            <CardDescription>
+              You are raising this booking for someone else. The booking is recorded against your
+              account and names them as the guest, so the desk knows who is arriving.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="on_behalf_of_name">Guest&apos;s name *</Label>
+              <Input id="on_behalf_of_name" {...register("on_behalf_of_name")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="on_behalf_of_email">Email</Label>
+              <Input id="on_behalf_of_email" type="email" {...register("on_behalf_of_email")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="on_behalf_of_phone">Phone</Label>
+              <Input id="on_behalf_of_phone" {...register("on_behalf_of_phone")} />
+            </div>
           </CardContent>
         </Card>
       )}
@@ -456,10 +691,12 @@ export function BookingForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Stay details</CardTitle>
-          {guestHouses.length === 1 && (
+          <CardTitle>{wantsRooms ? "Stay details" : "Meal dates"}</CardTitle>
+          {offeredGuestHouses.length === 1 && (
             <CardDescription>
-              Your role can book the {guestHouses[0].name} guest house only.
+              {forAlumnus
+                ? ALUMNI_GUEST_HOUSE_NOTE
+                : `Your role can book the ${offeredGuestHouses[0].name} guest house only.`}
             </CardDescription>
           )}
         </CardHeader>
@@ -469,48 +706,67 @@ export function BookingForm({
             <NativeSelect
               id="guest_house_id"
               {...register("guest_house_id")}
-              disabled={guestHouses.length === 1}
+              disabled={guestHouseLocked}
             >
-              {guestHouses.length > 1 && <option value="">Select guest house…</option>}
-              {guestHouses.map((g) => (
+              {offeredGuestHouses.length > 1 && <option value="">Select guest house…</option>}
+              {offeredGuestHouses.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.name}
                 </option>
               ))}
             </NativeSelect>
+            {forAlumnus && <p className="text-xs text-muted-foreground">{ALUMNI_GUEST_HOUSE_NOTE}</p>}
+            {overridingHouse && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                This is an exception to the alumni policy. It will be allowed, and recorded in the
+                booking&apos;s log as an override by you.
+              </p>
+            )}
             <FieldError message={err("guest_house_id")} />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="rooms_requested">Number of rooms *</Label>
-            <QuantityInput
-              id="rooms_requested"
-              aria-label="Number of rooms"
-              min={1}
-              max={10}
-              value={roomsRequested}
-              onChange={(raw) => setValue("rooms_requested", raw, { shouldValidate: false })}
-            />
-            <p className="text-xs text-muted-foreground">
-              Each double sharing room accommodates {DEFAULT_ROOM_STANDARD} guests, or{" "}
-              {DEFAULT_ROOM_MAX} with an extra bed.{" "}
-              {roomsPicked > 0 && (
-                <>
-                  {roomsPicked === 1 ? "1 room accommodates" : `${roomsPicked} rooms accommodate`}{" "}
-                  up to {bedsAvailable} guest{bedsAvailable === 1 ? "" : "s"}.
-                </>
+          {wantsRooms ? (
+            <div className="space-y-2">
+              <Label htmlFor="rooms_requested">Number of rooms *</Label>
+              <QuantityInput
+                id="rooms_requested"
+                aria-label="Number of rooms"
+                min={1}
+                max={MAX_ROOMS}
+                value={roomCountRaw}
+                onChange={onRoomCountChange}
+              />
+              <p className="text-xs text-muted-foreground">{ROOM_OCCUPANCY_NOTICE}</p>
+              <FieldError message={roomCountError ?? undefined} />
+              <FieldError message={err("rooms")} />
+              {config.banner_text && (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                  {config.banner_text}
+                </p>
               )}
-            </p>
-            <FieldError message={err("rooms_requested")} />
-            {config.banner_text && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                {config.banner_text}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="meal_guest_count">Number of guests *</Label>
+              <QuantityInput
+                id="meal_guest_count"
+                aria-label="Number of guests"
+                min={1}
+                max={100}
+                value={mealGuestCount}
+                onChange={(raw) => setValue("meal_guest_count", raw, { shouldValidate: false })}
+              />
+              <p className="text-xs text-muted-foreground">
+                How many people the kitchen is cooking for. A meals booking needs no guest list.
               </p>
-            )}
-          </div>
+              <FieldError message={err("meal_guest_count")} />
+            </div>
+          )}
 
           <div className="space-y-2">
-            <Label htmlFor="check_in_date">Check-in date &amp; time *</Label>
+            <Label htmlFor="check_in_date">
+              {wantsRooms ? "Check-in date & time *" : "First day of meals *"}
+            </Label>
             <Input
               id="check_in_date"
               type="date"
@@ -518,29 +774,37 @@ export function BookingForm({
               max={checkInLimits.max}
               {...register("check_in_date")}
             />
-            <TimeSelect
-              label="Check-in"
-              value={checkInTime}
-              onChange={(v) => setValue("check_in_time", v)}
-            />
+            {wantsRooms && (
+              <TimeSelect
+                label="Check-in"
+                value={checkInTime}
+                onChange={(v) => setValue("check_in_time", v)}
+              />
+            )}
             {checkInLimits.note && (
               <p className="text-xs text-muted-foreground">{checkInLimits.note}.</p>
             )}
             <FieldError message={err("check_in")} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="check_out_date">Check-out date &amp; time *</Label>
+            <Label htmlFor="check_out_date">
+              {wantsRooms ? "Check-out date & time *" : "Last day of meals *"}
+            </Label>
             <Input
               id="check_out_date"
               type="date"
-              min={checkInLimits.min}
+              min={checkInDate || checkInLimits.min}
+              max={latestCheckOut ?? undefined}
               {...register("check_out_date")}
             />
-            <TimeSelect
-              label="Check-out"
-              value={checkOutTime}
-              onChange={(v) => setValue("check_out_time", v)}
-            />
+            {wantsRooms && (
+              <TimeSelect
+                label="Check-out"
+                value={checkOutTime}
+                onChange={(v) => setValue("check_out_time", v)}
+              />
+            )}
+            {durationHint && <p className="text-xs text-muted-foreground">{durationHint}</p>}
             <FieldError message={err("check_out")} />
           </div>
 
@@ -554,13 +818,13 @@ export function BookingForm({
             >
               <p>
                 <span className="text-xs tracking-wide text-muted-foreground uppercase">
-                  Your stay
+                  {wantsRooms ? "Your stay" : "Meal dates"}
                 </span>
                 <br />
                 <span className="font-medium">{stay.from}</span>
                 <span className="text-muted-foreground"> → </span>
                 <span className="font-medium">{stay.to}</span>
-                {!stay.problem && (
+                {!stay.problem && wantsRooms && (
                   <span className="text-muted-foreground"> · {stay.duration}</span>
                 )}
               </p>
@@ -581,52 +845,132 @@ export function BookingForm({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Room availability</CardTitle>
-          <CardDescription>
-            What is already booked at your chosen guest house on your check-in date, hour by
-            hour. Use it to pick a day with room to spare — nothing here is reserved for you
-            until the Guest House Manager allocates a room.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <BookingAvailability
-            guestHouseId={selectedGuestHouseId}
-            date={checkInDate}
-            guestHouseName={
-              guestHouses.find((g) => g.id === selectedGuestHouseId)?.name
-            }
-          />
+      {/* Not fine print: a guest who arrives with an animal has to be turned
+          away at the desk, and this is the only chance to prevent that. */}
+      <Card className="border-amber-300 dark:border-amber-900">
+        <CardContent className="space-y-3 pt-6">
+          <div className="flex gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+            <TriangleAlertIcon className="mt-0.5 size-5 shrink-0" aria-hidden />
+            <div>
+              <p className="font-semibold">{PETS_POLICY_NOTICE}</p>
+              <p className="mt-1 text-sm">
+                There are no kennels on the premises and no way to isolate an animal, so a guest
+                arriving with a pet cannot be accommodated.
+              </p>
+            </div>
+          </div>
+          <label
+            htmlFor="pets_policy_acknowledged"
+            className="flex cursor-pointer items-start gap-2.5 text-sm"
+          >
+            <input
+              id="pets_policy_acknowledged"
+              type="checkbox"
+              className="mt-0.5 size-4 shrink-0 accent-primary"
+              {...register("pets_policy_acknowledged")}
+            />
+            <span>{PETS_POLICY_ACKNOWLEDGEMENT} *</span>
+          </label>
+          <FieldError message={err("pets_policy_acknowledged")} />
         </CardContent>
       </Card>
 
-      {/* Only for roles that can book a guest house serving meals at all. */}
-      {mealHouseNames.length > 0 && (
+      {wantsRooms && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Room availability</CardTitle>
+            <CardDescription>
+              What is already booked at your chosen guest house on your check-in date, hour by
+              hour. Use it to pick a day with room to spare — nothing here is reserved for you
+              until the Guest House Manager allocates a room.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BookingAvailability
+              guestHouseId={selectedGuestHouseId}
+              date={checkInDate}
+              guestHouseName={guestHouses.find((g) => g.id === selectedGuestHouseId)?.name}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {wantsMeals && (
         <Card>
           <CardHeader>
             <CardTitle>Meals</CardTitle>
             <CardDescription>
-              Meals are served at {joinNames(mealHouseNames)} only. Tick the meals your party would
-              like on each day of the stay — optional, so leave the table empty if guests will make
-              their own arrangements. The kitchen uses this for head counts, so tell the manager if
-              plans change after booking.
+              Meals are served at {joinNames(mealHouseNames)} only. Choose a preference and the
+              whole stay is ticked for you — then clear any meal your party will miss. The kitchen
+              uses this for head counts, so tell the manager if plans change after booking.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Meal preference *</Label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(["veg", "non_veg"] as const).map((option) => (
+                  <RadioCard
+                    key={option}
+                    value={option}
+                    title={MEAL_PREFERENCE_LABELS[option]}
+                    description={
+                      option === "veg"
+                        ? "Vegetarian meals for the whole party."
+                        : "Non-vegetarian meals for the whole party."
+                    }
+                    register={register("meal_preference")}
+                  />
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Changing the preference keeps the meals you have already ticked — it only changes
+                what is cooked.
+              </p>
+              <FieldError message={err("meal_preference")} />
+            </div>
+
             {!selectedGuestHouse ? (
               <EmptyNote>Choose a guest house above to see the meal options.</EmptyNote>
             ) : !servesMeals ? (
               <EmptyNote>Meals are not served at {selectedGuestHouse.name}.</EmptyNote>
             ) : !mealCheckIn ? (
-              <EmptyNote>Choose your check-in and check-out to pick meals for each day.</EmptyNote>
+              <EmptyNote>Choose your dates to pick meals for each day.</EmptyNote>
             ) : (
               <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      onMealSlotsChange(
+                        new Set(
+                          mealDays.flatMap((day) =>
+                            MEAL_KEYS.filter((meal) => day.available[meal]).map((meal) =>
+                              mealSlot(day.date, meal)
+                            )
+                          )
+                        )
+                      )
+                    }
+                  >
+                    Select all
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onMealSlotsChange(new Set())}
+                  >
+                    Clear all
+                  </Button>
+                </div>
                 <MealPlanGrid
                   days={mealDays}
                   checkIn={mealCheckIn}
-                  slots={mealSlots}
-                  onChange={setMealSlots}
+                  slots={effectiveMealSlots}
+                  onChange={onMealSlotsChange}
                 />
                 <p className="text-sm text-muted-foreground">{mealSummary}</p>
               </>
@@ -636,202 +980,59 @@ export function BookingForm({
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Guest details</CardTitle>
-          <CardDescription>
-            {idDocRequired
-              ? "Every guest needs an Aadhaar / ID number and a document upload (JPG, PNG, WEBP or PDF, max 5 MB)."
-              : "Fields marked * are mandatory."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="num_guests">Number of guests *</Label>
-              <QuantityInput
-                id="num_guests"
-                aria-label="Number of guests"
-                min={1}
-                max={guestCeiling}
-                value={guestCountRaw}
-                onChange={onGuestCountChange}
-              />
-              <FieldError message={guestCountError ?? undefined} />
+      {wantsRooms && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Guests, room by room</CardTitle>
+            <CardDescription>
+              Fill in who is staying in each room. {INFANT_HELP_TEXT}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{totals}</span> on this request.
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={fields.length >= guestCeiling}
-              onClick={() => onGuestCountChange(String(fields.length + 1))}
-            >
-              + Add guest
-            </Button>
-            <label
-              htmlFor="has_infant"
-              className="flex h-9 cursor-pointer items-center gap-2.5 rounded-md border px-3 text-sm transition-colors has-checked:border-primary has-checked:bg-primary/5"
-            >
-              <Switch id="has_infant" {...register("has_infant")} />
-              Infant accompanying
-            </label>
-          </div>
-          {hasInfant && (
-            <p className="-mt-1 text-xs text-muted-foreground">
-              Children under {INFANT_AGE_LIMIT} share a guardian&apos;s bed, so they need no room,
-              bed or ID of their own — this one switch covers however many are coming. Add only
-              the guests who need a bed below.
-            </p>
-          )}
 
-          <div
-            className={
-              overCapacity
-                ? "rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-                : "rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
-            }
-          >
-            <span className="font-medium text-foreground">{bedGuests}</span> guest
-            {bedGuests === 1 ? "" : "s"} requiring a bed
-            {hasInfant && <>, with infant(s) sharing a guardian&apos;s bed</>}
-            {roomsPicked > 0 && (
-              <>
-                {" "}
-                · {roomsPicked === 1 ? "1 room accommodates" : `${roomsPicked} rooms accommodate`}{" "}
-                up to <span className="font-medium text-foreground">{bedsAvailable}</span> guest
-                {bedsAvailable === 1 ? "" : "s"}
-                {extraBeds > 0 && !overCapacity && (
-                  <>
-                    {" "}
-                    · {extraBeds} extra bed{extraBeds === 1 ? "" : "s"} required
-                  </>
-                )}
-              </>
+            {dependencyHint && (
+              <p
+                className={
+                  parentPresent
+                    ? "rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+                    : "rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                }
+              >
+                {dependencyHint}
+              </p>
             )}
-            {overCapacity && (
-              <>
-                {" "}
-                — please add {roomsNeeded - roomsPicked} more room
-                {roomsNeeded - roomsPicked === 1 ? "" : "s"}.
-              </>
-            )}
-          </div>
 
-          {dependencyHint && (
-            <p
-              className={
-                parentPresent
-                  ? "rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
-                  : "rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
-              }
-            >
-              {dependencyHint}
-            </p>
-          )}
+            {roomFields.map((room, roomIndex) => (
+              <RoomCard
+                key={room.id}
+                roomIndex={roomIndex}
+                control={control}
+                register={register}
+                config={config}
+                parentPresent={parentPresent}
+                idDocRequired={idDocRequired}
+                guestFiles={guestFiles}
+                err={err}
+              />
+            ))}
 
-          {fields.map((field, i) => (
-            <fieldset key={field.id} className="rounded-lg border p-4">
-              <legend className="px-1 text-sm font-medium text-muted-foreground">
-                Guest {i + 1}
-              </legend>
-
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {gf.name !== "hidden" && (
-                  <div className="space-y-2">
-                    <Label>Name{star(gf.name)}</Label>
-                    <Input placeholder="Full name" {...register(`guests.${i}.name`)} />
-                    <FieldError message={err(`guests.${i}.name`)} />
-                  </div>
-                )}
-                {gf.age !== "hidden" && (
-                  <div className="space-y-2">
-                    <Label>Age{star(gf.age)}</Label>
-                    <Input type="number" min={1} max={120} {...register(`guests.${i}.age`)} />
-                    <FieldError message={err(`guests.${i}.age`)} />
-                  </div>
-                )}
-                {gf.gender !== "hidden" && (
-                  <div className="space-y-2">
-                    <Label>Gender{star(gf.gender)}</Label>
-                    <NativeSelect {...register(`guests.${i}.gender`)}>
-                      <option value="">Select…</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </NativeSelect>
-                    <FieldError message={err(`guests.${i}.gender`)} />
-                  </div>
-                )}
-                {gf.relationship !== "hidden" && (
-                  <div className="space-y-2">
-                    <Label>Relationship{star(gf.relationship)}</Label>
-                    {config.relationship_style === "dropdown" ? (
-                      <NativeSelect {...register(`guests.${i}.relationship`)}>
-                        <option value="">Select…</option>
-                        {config.relationship_options.map((r) => {
-                          const locked = isLockedRelationship(r);
-                          return (
-                            <option
-                              key={r}
-                              value={r}
-                              disabled={locked}
-                              className={locked ? "text-muted-foreground opacity-50" : undefined}
-                            >
-                              {locked ? `${r} — needs a parent on this request` : r}
-                            </option>
-                          );
-                        })}
-                      </NativeSelect>
-                    ) : (
-                      <Input
-                        placeholder="e.g. Colleague, collaborator…"
-                        {...register(`guests.${i}.relationship`)}
-                      />
-                    )}
-                    <FieldError message={err(`guests.${i}.relationship`)} />
-                  </div>
-                )}
-                {gf.id_number !== "hidden" && (
-                  <div className="space-y-2">
-                    <Label>Aadhaar / ID number{star(gf.id_number)}</Label>
-                    <Input placeholder="XXXX-XXXX-XXXX" {...register(`guests.${i}.id_number`)} />
-                    <FieldError message={err(`guests.${i}.id_number`)} />
-                  </div>
-                )}
-                {gf.id_document !== "hidden" && (
-                  <div className="space-y-2">
-                    <Label>ID document{idDocRequired ? " *" : " (optional)"}</Label>
-                    <Input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,application/pdf"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) guestFiles.set(field.id, file);
-                        else guestFiles.delete(field.id);
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-              {fields.length > 1 && (
-                <div className="mt-4 flex justify-end border-t pt-3">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    aria-label={`Remove guest ${i + 1}`}
-                    className="border-destructive/30"
-                    onClick={() => removeGuestAt(i, field.id)}
-                  >
-                    <Trash2Icon />
-                    Remove guest {i + 1}
-                  </Button>
-                </div>
-              )}
-            </fieldset>
-          ))}
-          <FieldError message={err("guests")} />
-        </CardContent>
-      </Card>
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={roomFields.length >= MAX_ROOMS}
+                onClick={() => onRoomCountChange(String(roomFields.length + 1))}
+              >
+                <PlusIcon />
+                Add room
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {config.custom_fields.length > 0 && (
         <Card>
@@ -903,15 +1104,401 @@ export function BookingForm({
         </Card>
       )}
 
+      <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+        {MANAGER_HELP_LINE}
+      </p>
+
       <div className="flex justify-end gap-3">
         <Button type="button" variant="outline" onClick={() => router.push("/dashboard")}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isPending}>
+        <Button type="submit" disabled={isPending || !petsAcknowledged}>
           {isPending ? "Submitting…" : "Submit booking request"}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={roomsToDrop !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRoomsToDrop(null);
+            // The box still shows the number that was typed, so put it back
+            // to what the form actually has.
+            setRoomCountRaw(String(roomFields.length));
+          }
+        }}
+        title="Remove rooms and their guests?"
+        description={
+          roomsToDrop === null
+            ? ""
+            : `Reducing this booking to ${roomsToDrop} room${roomsToDrop === 1 ? "" : "s"} removes the guests entered in the rooms below it.`
+        }
+        consequences={
+          roomsToDrop === null
+            ? undefined
+            : roomFields
+                .slice(roomsToDrop)
+                .map((_, i) => `Room ${roomsToDrop + i + 1} and everyone entered in it`)
+        }
+        confirmLabel="Remove rooms"
+        onConfirm={confirmShrink}
+      />
     </form>
+  );
+}
+
+/**
+ * One room's card: the occupancy rule, its guests, and the two Add buttons
+ * that stop when the rule is reached.
+ *
+ * Its own field array, nested under `rooms.<i>.guests`, so adding a guest to
+ * Room 2 leaves Room 1 alone.
+ */
+function RoomCard({
+  roomIndex,
+  control,
+  register,
+  config,
+  parentPresent,
+  idDocRequired,
+  guestFiles,
+  err,
+}: {
+  roomIndex: number;
+  control: Control<FormValues>;
+  register: UseFormRegister<FormValues>;
+  config: RoleFormConfig;
+  parentPresent: boolean;
+  idDocRequired: boolean;
+  guestFiles: Map<string, File>;
+  err: (path: string) => string | undefined;
+}) {
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `rooms.${roomIndex}.guests`,
+  });
+  const watched = useWatch({ control, name: `rooms.${roomIndex}.guests` }) ?? [];
+  const infants = countInfants(watched.map((g) => ({ is_infant: isInfantEntry(g) })));
+  const guests = watched.length - infants;
+
+  const guestBlocked = addGuestBlockedReason(guests);
+  const infantBlocked = addInfantBlockedReason(infants);
+
+  return (
+    <fieldset className="rounded-lg border p-4">
+      <legend className="px-1 text-sm font-semibold">Room {roomIndex + 1}</legend>
+
+      <p className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        {ROOM_OCCUPANCY_NOTICE}
+      </p>
+
+      <div className="mb-4 grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Room type preference</Label>
+          <NativeSelect {...register(`rooms.${roomIndex}.room_type`)}>
+            <option value="">No preference</option>
+            {(["double_sharing", "single"] as const).map((t) => (
+              <option key={t} value={t}>
+                {ROOM_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </NativeSelect>
+          <p className="text-xs text-muted-foreground">
+            The Guest House Manager allocates the actual room.
+          </p>
+        </div>
+        <div className="flex items-end">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{guests}</span> guest
+            {guests === 1 ? "" : "s"}
+            {infants > 0 && (
+              <>
+                {" "}
+                + <span className="font-medium text-foreground">{infants}</span> infant
+              </>
+            )}{" "}
+            in this room.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {fields.map((field, guestIndex) => (
+          <GuestRow
+            key={field.id}
+            roomIndex={roomIndex}
+            guestIndex={guestIndex}
+            control={control}
+            register={register}
+            config={config}
+            parentPresent={parentPresent}
+            idDocRequired={idDocRequired}
+            guestKey={watched[guestIndex]?.key ?? field.id}
+            guestFiles={guestFiles}
+            err={err}
+            canRemove={fields.length > 1}
+            onRemove={() => {
+              const key = watched[guestIndex]?.key;
+              if (key) guestFiles.delete(key);
+              remove(guestIndex);
+            }}
+          />
+        ))}
+      </div>
+
+      <FieldError message={err(`rooms.${roomIndex}.guests`)} />
+
+      <div className="mt-4 flex flex-wrap items-center gap-3 border-t pt-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={Boolean(guestBlocked)}
+          onClick={() => append(newGuest(), { shouldFocus: false })}
+        >
+          <PlusIcon />
+          Add guest
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={Boolean(infantBlocked)}
+          onClick={() => append(newGuest(), { shouldFocus: false })}
+        >
+          <PlusIcon />
+          Add infant (below {INFANT_AGE_LIMIT})
+        </Button>
+        {(guestBlocked || infantBlocked) && (
+          <p className="text-xs text-muted-foreground">{guestBlocked ?? infantBlocked}</p>
+        )}
+      </div>
+    </fieldset>
+  );
+}
+
+/** One guest inside a room card, including their citizenship. */
+function GuestRow({
+  roomIndex,
+  guestIndex,
+  control,
+  register,
+  config,
+  parentPresent,
+  idDocRequired,
+  guestKey,
+  guestFiles,
+  err,
+  canRemove,
+  onRemove,
+}: {
+  roomIndex: number;
+  guestIndex: number;
+  control: Control<FormValues>;
+  register: UseFormRegister<FormValues>;
+  config: RoleFormConfig;
+  parentPresent: boolean;
+  idDocRequired: boolean;
+  guestKey: string;
+  guestFiles: Map<string, File>;
+  err: (path: string) => string | undefined;
+  canRemove: boolean;
+  onRemove: () => void;
+}) {
+  const base = `rooms.${roomIndex}.guests.${guestIndex}` as const;
+  const gf = config.guest_fields;
+  const citizenship = useWatch({ control, name: `${base}.citizenship` });
+  const age = useWatch({ control, name: `${base}.age` });
+  const isInfant = isInfantEntry({ age });
+  const star = (mode: "required" | "optional" | "hidden") => (mode === "required" ? " *" : "");
+  const isLocked = (option: string) =>
+    !parentPresent && config.dependent_relationships.includes(option);
+
+  return (
+    <div className="rounded-md border bg-muted/20 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-sm font-medium">
+          Guest {guestIndex + 1}
+          {isInfant && (
+            <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-normal text-primary">
+              Infant — shares a bed, no ID needed
+            </span>
+          )}
+        </p>
+        {canRemove && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={`Remove guest ${guestIndex + 1} from room ${roomIndex + 1}`}
+            onClick={onRemove}
+          >
+            <Trash2Icon />
+          </Button>
+        )}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {gf.name !== "hidden" && (
+          <div className="space-y-2">
+            <Label>Name{star(gf.name)}</Label>
+            <Input placeholder="Full name" {...register(`${base}.name`)} />
+            <FieldError message={err(`${base}.name`)} />
+          </div>
+        )}
+        <div className="space-y-2">
+          {/* Always asked: the age is what decides whether this person is an
+              infant, and the per-room limit counts the two separately. */}
+          <Label>Age *</Label>
+          <Input type="number" min={0} max={120} {...register(`${base}.age`)} />
+          <FieldError message={err(`${base}.age`)} />
+        </div>
+        {gf.gender !== "hidden" && (
+          <div className="space-y-2">
+            <Label>Gender{star(gf.gender)}</Label>
+            <NativeSelect {...register(`${base}.gender`)}>
+              <option value="">Select…</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </NativeSelect>
+            <FieldError message={err(`${base}.gender`)} />
+          </div>
+        )}
+        {gf.relationship !== "hidden" && (
+          <div className="space-y-2">
+            <Label>Relationship{star(gf.relationship)}</Label>
+            {config.relationship_style === "dropdown" ? (
+              <NativeSelect {...register(`${base}.relationship`)}>
+                <option value="">Select…</option>
+                {config.relationship_options.map((r) => {
+                  const locked = isLocked(r);
+                  return (
+                    <option
+                      key={r}
+                      value={r}
+                      disabled={locked}
+                      className={locked ? "text-muted-foreground opacity-50" : undefined}
+                    >
+                      {locked ? `${r} — needs a parent on this request` : r}
+                    </option>
+                  );
+                })}
+              </NativeSelect>
+            ) : (
+              <Input
+                placeholder="e.g. Colleague, collaborator…"
+                {...register(`${base}.relationship`)}
+              />
+            )}
+            <FieldError message={err(`${base}.relationship`)} />
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label>Citizenship *</Label>
+          <NativeSelect {...register(`${base}.citizenship`)}>
+            <option value="indian">{CITIZENSHIP_LABELS.indian}</option>
+            <option value="other">{CITIZENSHIP_LABELS.other}</option>
+          </NativeSelect>
+          <FieldError message={err(`${base}.citizenship`)} />
+        </div>
+
+        {/* Rendered only for a foreign national, and cleared on submit when
+            the answer changes back, so a stale value cannot ride along. */}
+        {citizenship === "other" && (
+          <>
+            <div className="space-y-2">
+              <Label>Nationality / Country *</Label>
+              <NativeSelect {...register(`${base}.nationality`)}>
+                <option value="">Select country…</option>
+                {COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name}
+                  </option>
+                ))}
+              </NativeSelect>
+              <FieldError message={err(`${base}.nationality`)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Passport number *</Label>
+              <Input
+                placeholder="As printed on the passport"
+                className="uppercase"
+                {...register(`${base}.passport_number`)}
+              />
+              <FieldError message={err(`${base}.passport_number`)} />
+            </div>
+          </>
+        )}
+
+        {/* A foreign national's passport is their identity document, so the
+            Aadhaar field is not shown for one — asking for both would make a
+            foreign guest unbookable on every form that requires an ID. */}
+        {gf.id_number !== "hidden" && !isInfant && citizenship !== "other" && (
+          <div className="space-y-2">
+            <Label>Aadhaar / ID number{star(gf.id_number)}</Label>
+            <Input placeholder="XXXX-XXXX-XXXX" {...register(`${base}.id_number`)} />
+            <FieldError message={err(`${base}.id_number`)} />
+          </div>
+        )}
+        {gf.id_document !== "hidden" && !isInfant && (
+          <div className="space-y-2">
+            <Label>ID document{idDocRequired ? " *" : " (optional)"}</Label>
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) guestFiles.set(guestKey, file);
+                else guestFiles.delete(guestKey);
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Whether a form row's typed age makes it an infant. */
+function isInfantEntry(guest: { age?: string } | undefined): boolean {
+  const raw = guest?.age?.trim();
+  if (!raw) return false;
+  const n = Number(raw);
+  return Number.isFinite(n) && n < INFANT_AGE_LIMIT;
+}
+
+/** A radio rendered as a selectable card, used for all three top-level choices. */
+function RadioCard({
+  value,
+  title,
+  description,
+  register,
+}: {
+  value: string;
+  title: string;
+  description: string;
+  register: UseFormRegisterReturn;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer gap-3 rounded-lg border p-3 text-sm transition-colors",
+        "has-checked:border-primary has-checked:bg-primary/5"
+      )}
+    >
+      <input
+        type="radio"
+        value={value}
+        className="mt-0.5 size-4 shrink-0 accent-primary"
+        {...register}
+      />
+      <span className="min-w-0">
+        <span className="block font-medium">{title}</span>
+        <span className="block text-xs text-muted-foreground">{description}</span>
+      </span>
+    </label>
   );
 }
 
@@ -921,7 +1508,7 @@ function CustomFieldInput({
   error,
 }: {
   field: CustomField;
-  register: ReturnType<typeof useForm<FormValues>>["register"];
+  register: UseFormRegister<FormValues>;
   error?: string;
 }) {
   const name = `custom.${field.id}` as FieldPath<FormValues>;

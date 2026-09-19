@@ -12,7 +12,8 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 | `guest_houses` | `name` (free-form, unique), `total_rooms` (recounted from active rooms) and `serves_meals` (migration 8 — whether the booking form offers meals there; Hamsanandi on by default). |
 | `rooms` | `guest_house_id`, `room_number`, `room_type`, `is_active`. Unique per (guest house, room number). |
 | `bookings` | The core record — see below. |
-| `booking_guests` | One row per guest: name, age, gender, relationship, id number, `id_document_url`, `is_infant` (legacy since migration 7 — see `has_infant` below). |
+| `booking_rooms` | (Migration 11) One row per room card on the form. Guests are entered inside a card because the occupancy limit is per room. |
+| `booking_guests` | One row per guest: name, age, gender, relationship, id number, `id_document_url`, `booking_room_id`, `citizenship`, `nationality`, `passport_number`, `is_infant`. |
 | `booking_logs` | Append-only audit trail of status changes. |
 | `form_configs` | One row per requester role: `role` (PK), `config` jsonb, `updated_at`. |
 | `room_holds` | Which room each booking occupies, and when. See below — this is the interesting one. |
@@ -25,6 +26,12 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 - `user_role` — the requester's role *at submission time*, snapshotted so later
   role changes do not rewrite history.
 - `status` — see enum below.
+- `service_type` (migration 11) — `room`, `room_meals`, or `meals_only`. Determines if rooms are requested.
+- `meal_preference` (migration 11) — `veg` or `non_veg`, or null if no meals requested.
+- `meal_guest_count` (migration 11) — number of guests for `meals_only` bookings.
+- `pets_policy_acknowledged` (migration 11) — true if the requester acknowledged the no pets policy.
+- `has_foreign_national` (migration 11) — derived from guests' citizenship, used for quick filtering.
+- `created_by`, `on_behalf_of_name`, `on_behalf_of_email`, `on_behalf_of_phone` (migration 11) — for bookings created by a manager on behalf of someone else.
 - `rejection_reason`, `alumni_id_url`.
 - `custom_fields jsonb` — snapshot of admin-defined field answers, each with its
   `label` preserved so reviewers see the original question text.
@@ -36,10 +43,7 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
   `{breakfast, lunch, dinner}` object for the whole stay; migration 8 converted
   those rows day by day with the serving windows from `lib/meals.ts`.
 - `has_infant boolean` (migration 7) — whether any infants accompany the party.
-  One flag however many; infants have no guest row. It was backfilled from
-  legacy `booking_guests.is_infant` rows, which stay: they are still infants
-  sharing a bed, so capacity for those bookings uses `countBedGuests`, and new
-  bookings write `is_infant = false`.
+  One flag however many. From migration 11, infants also have `booking_guests` rows with `is_infant` set (derived from age < 5).
 
 > **There is no `assigned_room_ids` column.** It was dropped in migration 3.
 > `Booking.assigned_room_ids` still exists in the domain type but is **derived
@@ -94,11 +98,16 @@ constraint exists to stop cannot occur in a single-process JSON store.
 
 ```sql
 user_role:      student, employee, official, club, alumni,
-                warden, faculty_advisor, iar_cell, gh_manager, developer
+                warden, faculty_advisor, iar_cell, gh_manager, developer,
+                iar_student_cell, gh_caretaker
 booking_status: PENDING_WARDEN, PENDING_FA, PENDING_IAR, PENDING_GH_MANAGER,
                 APPROVED, OCCUPIED, VACATED, REJECTED, CANCELLED,
                 CANCELLATION_REQUESTED, CANCELLATION_APPROVED
 room_type:      single, double_sharing
+booking_type:   official, personal, alumni
+citizenship:    indian, other
+service_type:   room, room_meals, meals_only
+meal_preference: veg, non_veg
 ```
 
 > `guest_houses.name` has **no `check` constraint**. It originally allowed only
@@ -166,6 +175,11 @@ that can drift. If this ever moves to per-user sessions and RLS, note that the
 grid is read by every role, so the existing `can_access_booking(b)` helper is
 *too narrow* for it — availability needs a policy exposing occupancy without
 booking detail, or it stays a service-role read behind the action's own check.
+
+## `booking_meals` view (Migration 11)
+
+Part of the same request as `bookings.meals`: the kitchen wants "what is being served on the 18th", which the per-booking jsonb cannot answer efficiently.
+It is deliberately a **view, not a table**. `bookings.meals` is the single source of truth; a copy would risk drift. The view gives the relational shape — one row per (booking, date, meal). It is created with `security_invoker = true` so the view obeys the caller's row-level security on `bookings`.
 
 ## `email_outbox` — the notification queue
 
@@ -253,11 +267,12 @@ Current migrations:
    Converts data, but nothing is lost: an old answer becomes the plan it
    implied. Safe to re-run.
 10. `00000000000010_email_outbox.sql` (`email_outbox` + `email_status` enum +
-   `claim_queued_emails()`). Additive, defaulted and safe to re-run. **Until it
-   is applied, queueing throws** — every `notify*()` in `lib/mail/notify.ts`
-   catches it and logs, so bookings and approvals still work and only the mail
-   is missing. `/api/mail/dispatch` and `/api/mail/cron` return a 500 naming
-   this file.
+    `claim_queued_emails()`). Additive, defaulted and safe to re-run. **Until it
+    is applied, queueing throws** — every `notify*()` in `lib/mail/notify.ts`
+    catches it and logs, so bookings and approvals still work and only the mail
+    is missing. `/api/mail/dispatch` and `/api/mail/cron` return a 500 naming
+    this file.
+11. `00000000000011_rooms_guests_and_services.sql` (Sep 2026). Room-scoped guests (`booking_rooms`), citizenship, meals-only service types, and `booking_meals` view. Existing bookings are migrated into a single synthetic legacy room. Safe to re-run.
 
 > **Migrations 6, 7 and 8 must be applied before bookings can be created against
 > Supabase.** The insert names `meals` and `has_infant`, and until migration 8

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { approveCancellation, rejectCancellation } from "@/app/actions/bookings";
+import { approveCancellation, rejectCancellation, reviewBooking } from "@/app/actions/bookings";
 import { RejectDialog } from "@/components/review-queue";
 import { BookingDetails } from "@/components/booking-details";
 import { CheckoutsToday } from "@/components/checkouts-today";
@@ -30,7 +30,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
-import { BOOKING_TYPE_LABELS, ROLE_LABELS, type BookingWithDetails, type Room } from "@/lib/types";
+import { describeMeals } from "@/lib/meals";
+import {
+  BOOKING_TYPE_LABELS,
+  MEAL_PREFERENCE_LABELS,
+  ROLE_LABELS,
+  SERVICE_TYPE_LABELS,
+  type BookingWithDetails,
+  type Room,
+} from "@/lib/types";
 
 export function ManagerQueue({
   pending,
@@ -222,6 +230,7 @@ function ManagerRow({
   occupancyVersion: string;
 }) {
   const [open, setOpen] = useState(false);
+  const mealsOnly = booking.service_type === "meals_only";
   return (
     <TableRow className={booking.user_role === "official" ? "bg-amber-50/60 dark:bg-amber-950/20" : undefined}>
       <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
@@ -237,40 +246,94 @@ function ManagerRow({
             needs both — a staff member books officially one week and privately
             the next. */}
         <span className="mt-0.5 block text-xs text-muted-foreground">
-          {BOOKING_TYPE_LABELS[booking.booking_type]}
+          {BOOKING_TYPE_LABELS[booking.booking_type]} · {SERVICE_TYPE_LABELS[booking.service_type]}
         </span>
       </TableCell>
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
       <TableCell>{formatDateTime(booking.check_out)}</TableCell>
-      <TableCell>{booking.rooms_requested}</TableCell>
+      <TableCell>{mealsOnly ? "—" : booking.rooms_requested}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button size="sm">Review &amp; Allocate</Button>
+              {/* A meals-only booking has no room to allocate, so for that one
+                  the manager's approval *is* the decision. */}
+              <Button size="sm">{mealsOnly ? "Review & Approve" : "Review & Allocate"}</Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
               <DialogHeader>
-                <DialogTitle>Allocate rooms — {booking.booking_reference_id}</DialogTitle>
+                <DialogTitle>
+                  {mealsOnly ? "Approve meals" : "Allocate rooms"} —{" "}
+                  {booking.booking_reference_id}
+                </DialogTitle>
                 <DialogDescription>
-                  Pick available rooms for the requested dates, then confirm to approve the
-                  booking.
+                  {mealsOnly
+                    ? "Confirm the kitchen can serve these meals. No room is held for a meals-only booking."
+                    : "Pick available rooms for the requested dates, then confirm to approve the booking."}
                 </DialogDescription>
               </DialogHeader>
               <BookingDetails booking={booking} showAlumniCard />
               <Separator />
-              <RoomGrid
-                booking={booking}
-                rooms={rooms}
-                occupancyVersion={occupancyVersion}
-                onAllocated={() => setOpen(false)}
-              />
+              {mealsOnly ? (
+                <ApproveMeals booking={booking} onApproved={() => setOpen(false)} />
+              ) : (
+                <RoomGrid
+                  booking={booking}
+                  rooms={rooms}
+                  occupancyVersion={occupancyVersion}
+                  onAllocated={() => setOpen(false)}
+                />
+              )}
             </DialogContent>
           </Dialog>
           <RejectDialog booking={booking} small />
         </div>
       </TableCell>
     </TableRow>
+  );
+}
+
+/** Confirm a meals-only booking. There is nothing to allocate, only to agree to. */
+function ApproveMeals({
+  booking,
+  onApproved,
+}: {
+  booking: BookingWithDetails;
+  onApproved: () => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const headCount = booking.meal_guest_count ?? 0;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        {describeMeals(booking.meals)} for {headCount} guest{headCount === 1 ? "" : "s"}
+        {booking.meal_preference
+          ? ` (${MEAL_PREFERENCE_LABELS[booking.meal_preference].toLowerCase()})`
+          : ""}
+        .
+      </p>
+      <div className="flex justify-end">
+        <Button
+          disabled={isPending}
+          onClick={() =>
+            startTransition(async () => {
+              const result = await reviewBooking(booking.id, "approve");
+              if (result.ok) {
+                toast.success("Meals approved");
+                onApproved();
+                router.refresh();
+              } else {
+                toast.error(result.error);
+              }
+            })
+          }
+        >
+          {isPending ? "Approving…" : "Approve meals"}
+        </Button>
+      </div>
+    </div>
   );
 }
 

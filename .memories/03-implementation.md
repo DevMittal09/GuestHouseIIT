@@ -55,34 +55,17 @@ Two panels sit between the stay details and the guest list:
   the submitted `MealPlan` through `mealPlanFromSlots`; a meals error from the
   schema appears under the card. Always optional. See `lib/meals.ts`.
 
-Guest count is dynamic (1–15) via `useFieldArray`. Each guest row past the first
-carries a **Remove guest N** button — a real destructive-styled button with a
-trash icon above the fold of the fieldset, not the ghost text it used to be,
-which read as a label rather than a control. Uploaded files are held in a
-`Map` keyed by field-array row id, outside react-hook-form, because `File`
-objects do not belong in form state.
+Rooms are added as individual cards via `useFieldArray`. Each room card holds its own guests via a nested `useFieldArray`. The **Remove room** button deletes the room and its guests. Uploaded files are held in a `Map` keyed by field-array row id, outside react-hook-form, because `File` objects do not belong in form state.
 
-**Counts use `components/ui/quantity-input.tsx`**, not a raw number input —
-guests and rooms. It keeps the typed string so the box can be cleared
-and retyped; the old `Number(value) || 1` pattern made it uneditable. The guest
-count is its own `useState` string rather than being read off `fields.length`,
-and the field array is resized only once a valid number is present. An empty box
-blocks submit with "Number of guests is required".
+**Counts use `components/ui/quantity-input.tsx`**, not a raw number input. It keeps the typed string so the box can be cleared and retyped.
 
-Three policy rules are applied here as well as in the schema:
+Several policy rules are applied here as well as in the schema:
 
-- **Room capacity.** A hint under the room count says what a double sharing
-  room accommodates and how many guests the chosen rooms take. The guest-count
-  input is **capped at what those rooms accommodate**, and a live summary band
-  shows the guests requiring a bed against that, and how many extra beds it
-  implies. `requestedRoomsError` in the schema is what actually enforces it.
-- **Infants.** One **"Infant accompanying"** switch beside "+ Add guest"
-  (`has_infant`), not a checkbox per guest and not a count — the office asked
-  for a single yes/no however many infants come. Infants are not guest rows, so
-  every row needs a bed (and an ID wherever the role requires one), and the
-  switch never changes the guest ceiling. Turning it on shows a one-line note
-  that under-10s share a guardian's bed. Bookings made before migration 7 still
-  show per-guest "Infant" badges in `BookingDetails`.
+- **Service Type & Meals Preference.** The form first asks what is being booked: "Room", "Room & Meals", or "Meals Only" (depending on role). "Meals Only" hides the room cards entirely and asks for a guest count instead. A "Meal preference" (Veg/Non-Veg) is asked if meals are requested.
+- **Pets Policy.** A mandatory "I have read and understood that pets are not allowed" checkbox must be ticked before submission.
+- **Room capacity.** A room can hold up to 3 guests + 1 infant. The "+ Add guest" button inside a room card disables itself when this cap is reached. `roomOccupancyError` in the schema enforces this server-side.
+- **Infants.** Infants are added as regular guest rows, and are classified as infants based on the age typed in (under 5 years).
+- **Citizenship.** Asked per guest: Indian or Other. If "Other" is selected, Nationality and Passport Number become mandatory fields.
 
 - **Relationship dependency.** The form watches every guest's relationship with
   `useWatch` (never `watch()` — React Compiler lint). Until some guest is marked
@@ -94,6 +77,7 @@ Three policy rules are applied here as well as in the schema:
 - **Advance-booking window.** `latestCheckIn(config.role)` sets `max` on the
   check-in date input and prints the last bookable date under it. For
   `official` the helper returns null, so no `max` is emitted at all.
+- **Max Stay Duration.** `stayLengthError` limits bookings to a maximum of 14 nights, with exemptions for official bookings and managers.
 
 Both limits are computed once in a `useState` initializer rather than on every
 render, so the value cannot drift mid-session.
@@ -144,6 +128,9 @@ for.
   offered rooms already allotted to someone else. Occupied rooms are rendered
   `disabled` and cannot be picked at all.
 - Rejection requires a reason.
+- **Book on behalf**: The manager can submit bookings on behalf of other guests, optionally capturing the name/email/phone of a guest without a portal account.
+- **Overrides**: The manager can override normal approval flows (approve instantly), override guest house policies (e.g. book alumni at Hamsanandi), and view occupancy across all guest houses.
+- **Meal Editing**: The manager can edit the meal preference of a booking after it has been approved.
 - Rooms are grouped under **Double sharing rooms** and **Single rooms**, each
   with its formal occupancy line from `describeCapacity()` ("Occupancy: 2
   guests (maximum 3 with an extra bed)"). The allocation summary is four

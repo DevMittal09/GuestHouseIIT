@@ -40,19 +40,31 @@ function pdfSafe(text: string): string {
     .replace(/[^\x00-\xFF]/g, "");
 }
 
+/**
+ * The table's columns and their millimetre widths, which must add up to the
+ * content width of an A4 landscape page (273 mm) — autoTable will not shrink
+ * them for you, it overflows the margin instead.
+ *
+ * "Svc" and "Meals" were added when meals became bookable without a room; the
+ * widths either side of them were trimmed to pay for it. Passport details are
+ * **not** a column: they are blank on almost every row, so they go in their
+ * own appendix after the table.
+ */
 const COLUMNS: { header: string; key: keyof ReportRow; width: number }[] = [
   { header: "Reference", key: "reference", width: 25 },
-  { header: "Requester", key: "requester", width: 28 },
-  { header: "Category", key: "category", width: 20 },
+  { header: "Requester", key: "requester", width: 24 },
+  { header: "Category", key: "category", width: 16 },
   { header: "House", key: "guestHouse", width: 18 },
-  { header: "Check-in", key: "checkIn", width: 25 },
-  { header: "Check-out", key: "checkOut", width: 25 },
+  { header: "Svc", key: "service", width: 13 },
+  { header: "Check-in", key: "checkIn", width: 23 },
+  { header: "Check-out", key: "checkOut", width: 23 },
   { header: "Nt", key: "nights", width: 8 },
-  { header: "Rooms", key: "rooms", width: 20 },
+  { header: "Rooms", key: "rooms", width: 18 },
   { header: "Party", key: "party", width: 11 },
-  { header: "Status", key: "status", width: 24 },
-  { header: "Guests", key: "guestNames", width: 34 },
-  { header: "Purpose", key: "purpose", width: 35 },
+  { header: "Meals", key: "mealPreference", width: 12 },
+  { header: "Status", key: "status", width: 20 },
+  { header: "Guests", key: "guestNames", width: 31 },
+  { header: "Purpose", key: "purpose", width: 31 },
 ];
 
 const STATUS_COLUMN = COLUMNS.findIndex((c) => c.key === "status");
@@ -214,6 +226,58 @@ export async function downloadHistoryPdf(report: HistoryReport, filename: string
       doc.text(pdfSafe(report.subtitle), pageWidth - margin, margin + 2, { align: "right" });
     },
   });
+
+  // -------------------------------------------------- foreign nationals
+  //
+  // Its own section rather than a column: the great majority of bookings have
+  // none, so a column would be 95% empty, and the guest house has to be able
+  // to hand this over as a list in its own right.
+  const foreign = report.rows.filter((row) => row.foreignNationals);
+  if (foreign.length > 0) {
+    doc.addPage();
+    doc.setFillColor(...AMBER);
+    doc.rect(margin, margin, contentWidth, 1.6, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(...INK);
+    doc.text("Foreign nationals", margin, margin + 8);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    doc.text(
+      `${foreign.length} booking${foreign.length === 1 ? "" : "s"} in this report include a guest who is not an Indian citizen.`,
+      margin,
+      margin + 13
+    );
+
+    autoTable(doc, {
+      head: [["Reference", "Requester", "Check-in", "Check-out", "Guest (nationality, passport)"]],
+      body: foreign.map((row) => [
+        pdfSafe(row.reference),
+        pdfSafe(row.requester),
+        pdfSafe(row.checkIn),
+        pdfSafe(row.checkOut),
+        pdfSafe(row.foreignNationals),
+      ]),
+      startY: margin + 17,
+      margin: { left: margin, right: margin, top: 18, bottom: 14 },
+      tableWidth: contentWidth,
+      styles: {
+        font: "helvetica",
+        fontSize: 7,
+        cellPadding: 1.5,
+        overflow: "linebreak",
+        valign: "top",
+        lineColor: RULE,
+        lineWidth: 0.1,
+        textColor: INK,
+      },
+      headStyles: { fillColor: AMBER, textColor: [40, 26, 0], fontStyle: "bold", fontSize: 7.2 },
+      alternateRowStyles: { fillColor: BAND },
+      columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 40 }, 2: { cellWidth: 28 }, 3: { cellWidth: 28 }, 4: { cellWidth: 147 } },
+      rowPageBreak: "avoid",
+    });
+  }
 
   // ---------------------------------------------------------------- footer
   const pages = doc.getNumberOfPages();

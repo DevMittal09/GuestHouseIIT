@@ -198,6 +198,54 @@ export function mealPlanFromSlots(slots: ReadonlySet<string>, days: StayMealDay[
     .filter(hasAnyMeal);
 }
 
+/** Every meal slot the stay actually covers — the default when a preference is picked. */
+export function allAvailableSlots(days: StayMealDay[]): Set<string> {
+  const slots = new Set<string>();
+  for (const { date, available } of days) {
+    for (const meal of MEAL_KEYS) {
+      if (available[meal]) slots.add(mealSlot(date, meal));
+    }
+  }
+  return slots;
+}
+
+/**
+ * Tick every meal on days the requester has not seen yet.
+ *
+ * Picking Veg or Non-Veg means "we are eating here", so the whole stay is
+ * ticked and the requester unticks the meals they will miss. That has to
+ * survive two things:
+ *
+ * - **Unticking a meal.** The slot is simply absent from `slots`; days already
+ *   in `covered` are left exactly as they are, so nothing is re-ticked behind
+ *   the requester.
+ * - **Changing the dates.** New days are ticked (they are part of "the whole
+ *   stay" too), while the unticks on days that survive the change are kept.
+ *   A day that drops out of the stay is not forgotten either — its slots stay
+ *   in `slots` but `mealPlanFromSlots` ignores them, so moving the dates back
+ *   restores what was there.
+ *
+ * `covered` is the set of dates that have been offered so far; pass back the
+ * one this returns.
+ */
+export function applyMealPreferenceDefaults(
+  slots: ReadonlySet<string>,
+  days: StayMealDay[],
+  covered: ReadonlySet<string>
+): { slots: Set<string>; covered: Set<string> } {
+  const next = new Set(slots);
+  const nextCovered = new Set(covered);
+  for (const { date, available } of days) {
+    if (!covered.has(date)) {
+      for (const meal of MEAL_KEYS) {
+        if (available[meal]) next.add(mealSlot(date, meal));
+      }
+    }
+    nextCovered.add(date);
+  }
+  return { slots: next, covered: nextCovered };
+}
+
 /** On how many days each meal was asked for. */
 export function mealDayCounts(plan: MealPlan): Record<MealKey, number> {
   const counts: Record<MealKey, number> = { breakfast: 0, lunch: 0, dinner: 0 };
@@ -216,6 +264,18 @@ export function describeMeals(plan: MealPlan): string {
     (meal) => `${MEAL_LABELS[meal]} (${counts[meal]} day${counts[meal] === 1 ? "" : "s"})`
   );
   return parts.length === 0 ? "None requested" : parts.join(", ");
+}
+
+/** How many individual meals the plan covers, across every day and type. */
+export function totalMeals(plan: MealPlan): number {
+  const counts = mealDayCounts(plan);
+  return MEAL_KEYS.reduce((n, meal) => n + counts[meal], 0);
+}
+
+/** The meals asked for on one institute calendar date. */
+export function mealsOn(plan: MealPlan, date: string): MealKey[] {
+  const day = plan.find((d) => d.date === date);
+  return day ? MEAL_KEYS.filter((meal) => day[meal]) : [];
 }
 
 /** One line per day, e.g. "Tue 15 Sep: Lunch, Dinner". */

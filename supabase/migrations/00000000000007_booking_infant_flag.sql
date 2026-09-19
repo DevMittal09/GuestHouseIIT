@@ -1,5 +1,4 @@
-nvm install 20
-nvm use 20-- Migration 7: one "infant accompanying" flag per booking.
+-- Migration 7: one "infant accompanying" flag per booking.
 --
 -- Migration 4 made infants guest rows (`booking_guests.is_infant`) so that
 -- their name, age and gender reached the register. The guest house office has
