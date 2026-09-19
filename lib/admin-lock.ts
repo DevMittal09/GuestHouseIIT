@@ -168,6 +168,9 @@ export async function revokeAdminUnlock(): Promise<void> {
  * so this at least stops a naive script. In-memory and per-process: it resets
  * on restart and does not span instances — real rate limiting belongs at the
  * edge (see .memories/09-production-plan.md).
+ *
+ * Keys are the caller's choice and share one map: the console lock counts per
+ * profile id, LDAP sign-in (`app/actions/auth.ts`) per `ldap:<uid>`.
  */
 const attempts = new Map<string, { count: number; firstAt: number }>();
 const WINDOW_MS = 5 * 60 * 1000;

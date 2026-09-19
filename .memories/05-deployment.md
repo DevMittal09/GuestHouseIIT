@@ -8,7 +8,9 @@ npm run dev            # http://localhost:3000
 ```
 
 With no Supabase variables set, the app uses the mock store: data in
-`.local-db.json`, uploads in `public/uploads/`, login via the persona picker.
+`.local-db.json`, uploads in `public/uploads/`, login with the dummy LDAP
+accounts ([11-ldap-accounts.md](11-ldap-accounts.md)) or "Sign in with Google"
+(the persona picker).
 Everything works — all five booking forms, all approval tiers, the room grid, the
 developer console.
 
@@ -248,20 +250,23 @@ Not yet deployed. The intended path is Vercel + hosted Supabase.
 
 **Blocking items — do these first:**
 
-1. **Replace mock authentication.** Swap `getCurrentUser()` in `lib/auth.ts` for
-   Supabase Auth or institute SSO. Until then anyone can impersonate anyone by
-   setting a cookie. This is the single most important gate.
+1. **Replace the mock session and connect the directory.** Set `LDAP_URL` and
+   friends (`.env.example`) so LDAP sign-in checks the institute directory, load
+   the real usernames onto profiles (migration 11, then the console import —
+   [11-ldap-accounts.md](11-ldap-accounts.md) §3), and make the session
+   something a client cannot forge (signed cookie or Supabase session). Until
+   then anyone can impersonate anyone by setting a cookie. This is the single
+   most important gate.
 2. **Stop using the service-role key for request-scoped reads.** Once real
    sessions exist, use the anon key with a per-request client so RLS becomes the
    enforcement boundary. Keep the service-role client only for genuine admin
    operations.
-3. **Remove both sign-in doors** — the credential form
-   (`components/login-form.tsx`, rendered on `/sign-in`, `/book-room` and
-   `/book-meal`) and the persona picker at `/mock-login`. Keep the pages and
-   `SignInPanel`; swap the form for the SSO button. Not
-   behind a flag; see 09-production-plan.md step 5.
-4. **Change the seeded password** (`password123`) and re-seed, or delete the demo
-   accounts entirely.
+3. **Replace the Google placeholder** — `/mock-login` and `loginAs` — with real
+   Google OAuth (institute domain only, `isInstituteEmail()`), and delete the
+   dummy-directory sample note under the card. Not behind a flag; see
+   09-production-plan.md step 5. The LDAP form stays.
+4. **Delete the demo personas**, or at least never deploy without `LDAP_URL`:
+   the dummy LDAP passwords are published in this repo.
 
 **Deployment steps once those are done:**
 

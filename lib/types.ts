@@ -123,6 +123,12 @@ export type Profile = {
   hostel_name: string | null;
   department_or_club: string | null;
   roll_number: string | null;
+  /**
+   * The person's institute LDAP username (migration 11) — what the LDAP
+   * sign-in form matches against. `null` means they cannot sign in with LDAP
+   * until a developer sets it. Unique, compared lowercased.
+   */
+  ldap_uid: string | null;
 }
 
 export type GuestHouse = {

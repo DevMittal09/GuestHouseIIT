@@ -4,12 +4,24 @@ Ordered roughly by priority.
 
 ## 1. Real authentication (blocks production)
 
-Replace `getCurrentUser()` in `lib/auth.ts` with Supabase Auth or institute SSO,
-delete both sign-in doors (the credential form on `/sign-in`, `/book-room` and
-`/book-meal` — keep those pages, swap the form for SSO — and the persona picker at
-`/mock-login`) along with `DEMO_PASSWORD`, and switch request-scoped database
-access to the anon key so RLS becomes the real boundary. Everything else in the
-app already re-checks authorization server-side, so this change is contained.
+**Partly done (19 Sep 2026):** sign-in is LDAP. The real directory client
+(`LDAP_URL`), `profiles.ldap_uid` (migration 11), the bulk import and opt-in
+link-by-email are built and tested against OpenLDAP. It runs on dummy accounts
+until the institute's LDAP details arrive
+([11-ldap-accounts.md](11-ldap-accounts.md)). `DEMO_PASSWORD` is gone.
+
+Still to do:
+
+- **Connect the institute directory** (env only) and load the real usernames.
+- **Replace the "Sign in with Google" placeholder** (`/mock-login` +
+  `loginAs`) with real Google OAuth, restricted to `isInstituteEmail()`.
+- **Make the session unforgeable.** Today it is an unsigned cookie holding a
+  profile id; use a signed cookie or a Supabase session.
+- **Switch request-scoped database access to the anon key** so RLS becomes the
+  real boundary.
+
+Everything else in the app already re-checks authorization server-side, so
+this change is contained.
 
 ## 2. ~~Notifications and the day-wise occupancy report~~ ✅ Done
 

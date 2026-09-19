@@ -47,6 +47,74 @@ because `/` became the public guest house website. The "every guard redirects
 to `/`" constraint was resolved by pointing every guard at `SIGN_IN_PATH`
 instead. Everything else here still holds. See the UI redesign entry below.
 
+**Superseded (19 Sep 2026, later).** The email + `DEMO_PASSWORD` form was
+replaced by LDAP sign-in, and the picker became the "Sign in with Google"
+placeholder. See the next entry.
+
+## LDAP sign-in, with a mocked Google door (19 Sep 2026)
+
+**Decision.** The sign-in card asks for an **LDAP username and password**, with
+**"Sign in with Google"** beneath it. Google is a placeholder: it opens the
+persona picker (`/mock-login`, carrying `next`) until OAuth is set up, because
+development needs one-click role switching.
+
+LDAP is real code behind an environment switch, like the store and the mailer.
+`LDAP_URL` selects `LdapDirectory` (`ldapts`, search-then-bind). Without it,
+`MockDirectory` serves one dummy account per persona, listed with passwords in
+[11-ldap-accounts.md](11-ldap-accounts.md) as the user asked.
+
+**Identity is split in two.** The directory proves the password;
+`profiles.ldap_uid` (migration 11) says which portal account that is. The user
+said the real LDAP logins will be "added to the database", and the directory
+knows nothing of roles, hostels or clubs.
+
+**How the real usernames get loaded.** The user asked for a provision to work
+with the original LDAP accounts once they are in the database. Four ways:
+
+- the Users & Roles field, one user at a time;
+- an all-or-nothing bulk import (`email, ldap username` lines);
+- SQL;
+- opt-in `LDAP_LINK_BY_EMAIL`, which links a first sign-in to the profile whose
+  email is the directory's `mail`.
+
+**Why not match LDAP users by email automatically?** A guessed identity mapping
+signs one person in as another, so migration 11 does not backfill, and
+link-by-email is off until someone confirms users cannot edit their own `mail`.
+It also never overwrites an existing `ldap_uid`.
+
+**Why search-then-bind rather than a DN template?** Students and staff are
+likely in different OUs, and the layout is unknown. A subtree search for the
+username works for any layout, at the cost of perhaps needing a read-only
+service account (`LDAP_BIND_DN`).
+
+**Details worth keeping:**
+
+- **An empty password is refused before binding.** An empty password is an
+  unauthenticated bind, which many servers report as success.
+- **Unknown user and wrong password share one message.** "Not registered" only
+  appears after the password is proven.
+- **`LDAP_URL` without `LDAP_BASE_DN` throws** rather than falling back to the
+  published dummy passwords.
+- **Usernames may contain `@`,** because some directories log in by `mail` or
+  `userPrincipalName`. The "not your email address" hint only appears when the
+  attribute is not one of those.
+- **The per-username throttle reuses the console lock's in-process counter.**
+
+**Cost.**
+
+- **The session is still an unsigned cookie**, so LDAP proves who typed a
+  password, not who holds the cookie. Signing it remains roadmap item 1.
+- **Anyone who reads the repo has the dummy passwords.** Deploying without
+  `LDAP_URL` is as open as the picker ever was.
+- **Hosted Supabase needs migration 11** before LDAP sign-in finds anyone there.
+
+**Rejected alternatives:**
+
+- **Keeping the email form alongside LDAP.** Two password forms for one
+  institute is confusing, and the user asked for LDAP + Google.
+- **Wiring Google OAuth now.** The user asked for the mock to stay while
+  developing.
+
 ## Two data stores behind one interface
 
 **Decision.** Define `DataStore` and implement it twice (JSON mock, Supabase).
@@ -1036,6 +1104,11 @@ a UI for it would be building the feature. **Rejected:** hiding the tab — the
 design and the office both expect it.
 
 ### Institute domain enforced in `signIn()`, subdomains included
+
+> **Superseded (19 Sep 2026):** `signIn()` and the email form are gone (LDAP
+> sign-in takes a username). `isInstituteEmail()` is kept for real Google
+> sign-in, which must enforce it on the verified address.
+
 
 **Decision.** `isInstituteEmail()` accepts `@iitpkd.ac.in` and any
 `@*.iitpkd.ac.in`; `signIn()` enforces it, the form repeats it.

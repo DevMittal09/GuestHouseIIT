@@ -48,7 +48,7 @@ export interface Database {
     Tables: {
       profiles: {
         Row: Profile;
-        Insert: Insertable<Profile, "hostel_name" | "department_or_club" | "roll_number">;
+        Insert: Insertable<Profile, "hostel_name" | "department_or_club" | "roll_number" | "ldap_uid">;
         Update: Partial<Profile>;
         Relationships: [];
       };

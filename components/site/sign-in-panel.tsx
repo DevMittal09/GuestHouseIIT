@@ -2,7 +2,8 @@ import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 import { LoginForm } from "@/components/login-form";
 import { NoticeBox, PageTitle, siteButton } from "@/components/site/site-ui";
-import { DEMO_PASSWORD } from "@/lib/auth";
+import { isMockDirectory } from "@/lib/ldap";
+import { SAMPLE_ACCOUNT } from "@/lib/ldap/mock-directory";
 import { LOGIN_DOMAIN } from "@/lib/site";
 import { ROLE_LABELS, type Profile } from "@/lib/types";
 
@@ -41,9 +42,9 @@ export function SignInPanel({
         <PageTitle intro={intro}>{title}</PageTitle>
         <div className="mt-[26px] space-y-6">
           <NoticeBox label="Please note">
-            Use your <strong>@{LOGIN_DOMAIN}</strong> credentials only (students sign in with
-            their <strong>@smail.{LOGIN_DOMAIN}</strong> address). Personal email accounts cannot be
-            used to book.
+            Sign in with your institute <strong>LDAP username and password</strong>, or with
+            Google using your <strong>@{LOGIN_DOMAIN}</strong> account (students:{" "}
+            <strong>@smail.{LOGIN_DOMAIN}</strong>). Personal accounts cannot be used to book.
           </NoticeBox>
           {aside}
         </div>
@@ -70,7 +71,7 @@ export function SignInPanel({
         </div>
       ) : (
         <LoginForm
-          demoPassword={DEMO_PASSWORD}
+          sampleAccount={isMockDirectory() ? SAMPLE_ACCOUNT : null}
           next={next}
           submitLabel={submitLabel}
           footnote={footnote}

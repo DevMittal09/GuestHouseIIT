@@ -137,8 +137,11 @@ what is still waiting on the office: [10-ui-design.md](10-ui-design.md).
   optional without a developer. That drove the configurable form system and the
   admin console, which are now the most distinctive parts of the project.
 - **Authentication was deliberately deferred.** See
-  [06-decisions.md](06-decisions.md) — the app uses a mock persona picker with a
-  single, well-marked swap point so institute SSO can be dropped in later.
+  [06-decisions.md](06-decisions.md) — the app used a mock persona picker with a
+  single, well-marked swap point. Since 19 Sep 2026 sign-in is **LDAP**, against
+  dummy accounts until the institute directory is connected (`LDAP_URL`), with a
+  "Sign in with Google" button that opens the persona picker as a placeholder.
+  See [11-ldap-accounts.md](11-ldap-accounts.md).
 - **Email notifications are built; SMS is not.** `lib/mail/` covers every
   workflow transition plus daily digests, reminders and escalations. SMS would
   be a second `Mailer`-shaped seam and has not been asked for.

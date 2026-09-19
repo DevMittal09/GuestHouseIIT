@@ -8,7 +8,7 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 
 | Table | Purpose |
 | --- | --- |
-| `profiles` | One row per user. `id` references `auth.users`. Holds `email`, `full_name`, `role`, `hostel_name`, `department_or_club`, `roll_number`. |
+| `profiles` | One row per user. `id` references `auth.users`. Holds `email`, `full_name`, `role`, `hostel_name`, `department_or_club`, `roll_number`, and `ldap_uid` (migration 11: the LDAP username sign-in matches, unique on `lower(ldap_uid)`, null = no LDAP sign-in). |
 | `guest_houses` | `name` (free-form, unique), `total_rooms` (recounted from active rooms) and `serves_meals` (migration 8 — whether the booking form offers meals there; Hamsanandi on by default). |
 | `rooms` | `guest_house_id`, `room_number`, `room_type`, `is_active`. Unique per (guest house, room number). |
 | `bookings` | The core record — see below. |
@@ -258,6 +258,17 @@ Current migrations:
    catches it and logs, so bookings and approvals still work and only the mail
    is missing. `/api/mail/dispatch` and `/api/mail/cron` return a 500 naming
    this file.
+11. `00000000000011_profile_ldap_uid.sql` (`profiles.ldap_uid` + unique index
+   on `lower(ldap_uid)`). Additive, nullable, safe to re-run. **Not backfilled
+   from email on purpose** — a guessed identity mapping signs one person in as
+   another; the office loads real usernames by console import or SQL
+   ([11-ldap-accounts.md](11-ldap-accounts.md) §3). **Until it is applied, LDAP
+   sign-in finds nobody on Supabase and saving a user in the console fails**
+   (the update names the column). `supabase/seed.sql` sets the demo personas'
+   usernames with an idempotent `update`, so re-run it afterwards. Verified in a
+   throwaway `postgres:16-alpine`: re-runnable, `PRIYA` refused beside `priya`.
+   The mock store self-heals the same way (seeded personas get theirs back by
+   email; everyone else `null`).
 
 > **Migrations 6, 7 and 8 must be applied before bookings can be created against
 > Supabase.** The insert names `meals` and `has_infant`, and until migration 8

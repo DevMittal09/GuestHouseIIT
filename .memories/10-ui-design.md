@@ -57,6 +57,20 @@ would go stale until the next build.
 
 ## Sign-in: what changed and what did not
 
+> **Superseded in part (19 Sep 2026, later the same day):** the card now asks
+> for an **LDAP username + password** (`signInWithLdap`) and has a **"Sign in
+> with Google"** button (Google's "G" mark, white outlined button under an "or"
+> rule) that opens `/mock-login?next=…` as a placeholder. `/mock-login` is
+> titled "Sign in with Google" and says Google is not connected yet. The
+> domain notice now names both doors. The dashed note under the card shows one
+> dummy LDAP login (`priya` / `Priya@2026`) only while the dummy directory is
+> in use, and says what the Google button does. The username placeholder is
+> `e.g. 142301026`, the real format the user gave for students. The email
+> form, its client domain check and `DEMO_PASSWORD` are gone. See
+> [11-ldap-accounts.md](11-ldap-accounts.md). The bullets below describe the
+> email form as it was; `next` and `safeNextPath()` still work the same way,
+> and `isInstituteEmail()` is kept for real Google sign-in.
+
 Still mock auth with one swap point (`lib/auth.ts`). The credential form
 (`components/login-form.tsx`) is now shared by `/sign-in`, `/book-room` and
 `/book-meal` through `components/site/sign-in-panel.tsx`.
@@ -133,7 +147,7 @@ the base layer, and shadcn's `CardTitle` / `DialogTitle` already use
 | `components/site/site-nav.tsx` | `NavBar` — the navy bar with the gold active underline, **shared by the site and the portal**. Client component (`usePathname`). `exact` paths only light on themselves (`/`); others also cover sub-paths (`/admin/users` lights Developer Console) |
 | `components/site/sign-in-panel.tsx` | Two-column title + domain notice + sign-in card, or the signed-in "Continue" card |
 | `components/page-header.tsx` | Portal page title block: serif `h1`, gold rule, description, optional `actions`. Used by every portal page |
-| `components/login-form.tsx` | The sign-in card (design styling), client domain check, `next`, `submitLabel`, `footnote` |
+| `components/login-form.tsx` | The sign-in card: LDAP username + password, "or", "Sign in with Google" (→ `/mock-login?next=`), `next`, `submitLabel`, `footnote`, dummy-login note (`sampleAccount`) |
 
 `components/auth-masthead.tsx` was deleted (only the old `/` and `/mock-login`
 used it).
@@ -265,8 +279,9 @@ address and the footer link to it too. To pin the guest house itself, replace
 
 - Everything tagged `TODO(site)`: contact details, map pin, guidelines PDF URL,
   amenity lines, house rules, photo attribution.
-- The design asks for SSO on the booking pages; that is roadmap item 1, and the
-  pages are ready for it — only `signIn()` / `LoginForm` change.
+- The design asks for SSO on the booking pages. LDAP is in (dummy accounts
+  until `LDAP_URL`); real Google OAuth replaces only the button's target,
+  `/mock-login` and `loginAs` — roadmap item 1.
 - Mail templates (`lib/mail/render.ts`) still use the old amber header styling;
   they are inline-styled HTML and were out of scope. Align them if the office
   wants the emails to match.

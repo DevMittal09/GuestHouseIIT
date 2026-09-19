@@ -7,9 +7,10 @@ What exists today, with file paths.
 | Concern | File |
 | --- | --- |
 | Public website (home, booking entry points, guidelines, gallery, contact) | `app/(site)/*`, `components/site/*` — see [10-ui-design.md](10-ui-design.md) |
-| Sign-in (credentials) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` → `components/login-form.tsx` |
-| Mock sign-in (persona picker) | `app/(site)/mock-login/page.tsx` |
-| Login / logout actions | `app/actions/auth.ts` (`signIn` — institute domain + safe `next`; `loginAs`; `logout` → `/sign-in`) |
+| Sign-in (LDAP + Google button) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` → `components/login-form.tsx` |
+| "Sign in with Google" placeholder (persona picker, honours `next`) | `app/(site)/mock-login/page.tsx` |
+| Login / logout actions | `app/actions/auth.ts` (`signInWithLdap` — directory check, `ldap:<uid>` throttle, profile by `ldap_uid`, safe `next`; `loginAs(id, next)`; `logout` → `/sign-in`) |
+| LDAP directory | `lib/ldap/` — `index.ts` (`getDirectory()` from env), `ldap-directory.ts` (real), `mock-directory.ts` (dummy accounts), `link.ts` (entry → profile, opt-in link by email), `import.ts` (bulk import planner), `uid.ts` (client-safe rules). See [11-ldap-accounts.md](11-ldap-accounts.md) |
 | Where signed-out visitors go | `SIGN_IN_PATH` in `lib/routes.ts` (`/` is the public home page) |
 | Session read | `lib/auth.ts` (`getCurrentUser`, `requireUser`) |
 | Post-login landing per role | `lib/routes.ts` (`homeForRole`) |
@@ -362,7 +363,7 @@ Layout and tabs in `app/(portal)/admin/layout.tsx`; all actions in
 
 | Tab | UI | Capabilities |
 | --- | --- | --- |
-| Users & Roles | `components/admin/users-manager.tsx` | Create/edit/delete profiles; assign any of the 10 roles; set hostel, department/club, roll number (these drive warden and FA scoping). Cannot delete yourself or drop your own developer role. In Supabase mode, creating a user also creates a Supabase Auth user (password `password123`) — needs the service-role key. |
+| Users & Roles | `components/admin/users-manager.tsx` | Create/edit/delete profiles; assign any of the 10 roles; set hostel, department/club, roll number (these drive warden and FA scoping) and **LDAP username**. **Import LDAP usernames** bulk-loads `email, ldap username` pairs, all or nothing. Cannot delete yourself or drop your own developer role. In Supabase mode, creating a user also creates a Supabase Auth user (password `password123`) — needs the service-role key. |
 | Guest Houses & Rooms | `components/admin/guest-houses-manager.tsx` | Create/rename/delete guest houses; add, enable/disable, delete rooms. `total_rooms` is recounted from active rooms automatically. Deleting is blocked when bookings reference the guest house, or when a room is assigned to a booking (disable it instead). A **Serves meals** switch per guest house (`setGuestHouseMealsAction` → `updateGuestHouse`) decides whether the booking form offers meals there; new guest houses start with it off. |
 | Form Builder | `components/admin/form-config-editor.tsx` | Per requester role: allowed guest houses, every guest field's mode, relationship style and options, the relationship dependency (two checkbox lists — which options unlock, which are restricted), alumni-card mode, banner text, and custom fields. Editing the option list re-filters both dependency lists so they cannot reference a deleted option; save is blocked when a restriction has nothing to unlock it. "Reset to spec defaults" deletes the saved row. |
 | All Bookings | `components/admin/bookings-manager.tsx` | Every booking with status filters, an audit-logged force-status override (remark required), and hard delete. |
@@ -647,7 +648,8 @@ templates (`lib/mail/render.ts`) still carry their own inline amber header.
 ## Demo data
 
 Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase, auth
-password `password123`): 13 personas and 5 bookings positioned so every queue has
+password `password123` — not a portal login; each persona signs in with its
+dummy LDAP account from [11-ldap-accounts.md](11-ldap-accounts.md)): 13 personas and 5 bookings positioned so every queue has
 something in it. Rooms: Bageshri 10 double + 10 single, Hamsanandi 8 + 8.
 Hamsanandi serves meals and Bageshri does not; the two Hamsanandi demo bookings
 carry per-day meal plans built from their dates (`demoMeals` in

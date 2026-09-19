@@ -426,13 +426,18 @@ export class SupabaseStore implements DataStore {
       .insert({ ...input, id: created.user.id })
       .select()
       .single();
-    if (error) throw error;
+    if (error) {
+      // The profile failed, so the auth user it was for must go too, or the
+      // email is taken by an account nobody can see in the console.
+      await this.db.auth.admin.deleteUser(created.user.id).catch(() => undefined);
+      throw profileWriteError(error);
+    }
     return data;
   }
 
   async updateProfile(id: string, patch: Partial<NewProfileInput>): Promise<void> {
     const { error } = await this.db.from("profiles").update(patch).eq("id", id);
-    if (error) throw error;
+    if (error) throw profileWriteError(error);
   }
 
   async deleteProfile(id: string): Promise<void> {
@@ -712,4 +717,15 @@ function makeReference(): string {
     "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".charAt(Math.floor(Math.random() * 32))
   ).join("");
   return `IITPKD-GH-${year}-${rand}`;
+}
+
+/**
+ * Migration 11's unique index on `lower(ldap_uid)`, reported the way the mock
+ * store reports it rather than as a raw constraint name.
+ */
+function profileWriteError(error: { code?: string; message: string }): Error | typeof error {
+  if (error.code === "23505" && error.message.includes("ldap_uid")) {
+    return new Error("Another user already has this LDAP username");
+  }
+  return error;
 }

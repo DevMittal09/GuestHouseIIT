@@ -22,7 +22,7 @@ There is **no test framework installed**. Verification approach is described in
 ```
 app/
   (site)/                  PUBLIC website (19 Sep 2026): / home, book-room, book-meal,
-                           guidelines, gallery, contact, sign-in, mock-login
+                           guidelines, gallery, contact, sign-in, mock-login (Google placeholder)
                            — see 10-ui-design.md
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
@@ -71,14 +71,29 @@ not require deleting the database.
 
 `lib/auth.ts` exposes `getCurrentUser()` / `requireUser()`. `getCurrentUser()`
 reads the `gh_mock_user` cookie (a profile id) and looks the profile up. The
-sign-in page (`/sign-in`, also embedded in the public `/book-room` and
-`/book-meal`) is a credential form over the same cookie, with the persona
-picker one link away at `/mock-login`. `/` is the public website, so signed-out
-guards redirect to `SIGN_IN_PATH`, not `/`.
+sign-in card (`/sign-in`, also embedded in the public `/book-room` and
+`/book-meal`) sets that cookie through two doors: **LDAP** username + password,
+and **"Sign in with Google"**, which is a placeholder that opens the persona
+picker at `/mock-login`. `/` is the public website, so signed-out guards
+redirect to `SIGN_IN_PATH`, not `/`.
 
-**No other module contains auth logic.** Replacing that one function with
-Supabase Auth or institute SSO is the entire production migration. Resist the
-temptation to read cookies or sessions anywhere else.
+LDAP is the third environment-selected seam, alongside the store and the
+mailer:
+
+| Condition | Directory | Accounts come from |
+| --- | --- | --- |
+| `LDAP_URL` set | `lib/ldap/ldap-directory.ts` (`ldapts`, search-then-bind) | the institute LDAP server |
+| otherwise | `lib/ldap/mock-directory.ts` | dummy accounts ([11-ldap-accounts.md](11-ldap-accounts.md)) |
+
+The directory only answers "is this the password for this username". Identity
+inside the portal (role, hostel, club) stays in `profiles`, joined by
+`profiles.ldap_uid` (migration 11). So the directory never needs to know about
+the portal's roles, and a directory login with no profile gets in nowhere.
+
+**No other module contains auth logic.** The cookie is still unsigned, so a
+signed or server-side session plus real Google OAuth is the remaining
+production migration. Resist the temptation to read cookies or sessions
+anywhere else.
 
 Authorization is separate and always server-side: every server action re-checks
 the caller (`requireUser`, explicit role checks, `canReview`, `requireDeveloper`).

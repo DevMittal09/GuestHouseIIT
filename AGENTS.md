@@ -101,23 +101,48 @@ as `assertNoClash`.
   **service-role key**. Never commit it, never log it, never send it anywhere.
   `.env.example` documents the variables.
 
-## Auth is mocked — one swap point
+## Sign-in: LDAP + a mocked Google door — one session swap point
 
 `lib/auth.ts` `getCurrentUser()` reads the `gh_mock_user` cookie and looks up a
-profile. `/sign-in` is a credential form (any seeded address + the shared demo
-password `password123`, `DEMO_PASSWORD` in the same module) — the same form is
-embedded in the public `/book-room` and `/book-meal` — and `/mock-login` is the
-one-click persona picker it links to — two doors onto the same cookie.
+profile. Two doors set it (`app/actions/auth.ts`), and both are on the card at
+`/sign-in`, which is also embedded in the public `/book-room` and `/book-meal`:
+
+- **LDAP username + password** → `signInWithLdap()`. The *directory* checks the
+  password (`lib/ldap/`: `getDirectory()` returns the real `LdapDirectory`
+  when `LDAP_URL` is set, otherwise the dummy `MockDirectory`). Then
+  **`profiles.ldap_uid`** (migration 11) says which portal account that is.
+  A valid LDAP login with no profile gets in nowhere. The dummy logins, and
+  how to switch to the real accounts, are in
+  **`.memories/11-ldap-accounts.md`**. Keep that file and
+  `lib/ldap/mock-directory.ts` in step.
+- **"Sign in with Google"** → `/mock-login` (the persona picker) → `loginAs()`.
+  This is a **placeholder** for Google OAuth, and it is also the one-click role
+  switcher for development. Real Google replaces the page and `loginAs`, and
+  must enforce `isInstituteEmail()` on the verified address.
+
+Rules for the LDAP door:
+
+- **Refuse empty passwords before binding.** An empty password is an
+  unauthenticated bind, and many servers report that as success.
+- **Unknown user and wrong password get one message** ("Incorrect username or
+  password"), so the page cannot be used to find out which usernames exist.
+- **Attempts are throttled** per `ldap:<uid>`.
+- **`LDAP_URL` without `LDAP_BASE_DN` fails sign-in** rather than falling back
+  to the published dummy passwords.
+- **`LDAP_LINK_BY_EMAIL=true` is opt-in.** It links a first sign-in by the
+  directory's `mail` and never overwrites an existing `ldap_uid`.
+- **Bulk-loading the real usernames** is Users & Roles → Import LDAP usernames
+  (`lib/ldap/import.ts`, all or nothing).
+
 **`/` is the public website, not a sign-in page:** signed-out guards
-`redirect(SIGN_IN_PATH)` (`lib/routes.ts`), never `redirect("/")`. `signIn()`
-refuses addresses outside `@iitpkd.ac.in` and its subdomains (students are
-`@smail.`) and redirects to a `next` path only via `safeNextPath()`.
-**Everything else in the app only
-calls `getCurrentUser()`/`requireUser()`**, so replacing that function with
-Supabase Auth or institute SSO is the whole production migration. Do not scatter
-auth logic elsewhere. Both doors go together when real auth lands; the
-credential form is for showing the institute, the picker for jumping between
-the ten roles in development.
+`redirect(SIGN_IN_PATH)` (`lib/routes.ts`), never `redirect("/")`. Redirects go
+to a `next` path only via `safeNextPath()`.
+
+**Everything else in the app only calls
+`getCurrentUser()`/`requireUser()`.** The cookie is still unsigned, so anyone
+can claim any profile id. LDAP proves who typed a password, not who holds the
+cookie. A signed or server-side session plus real Google OAuth is the
+remaining production migration. Do not scatter auth logic elsewhere.
 
 Every server action re-checks authorization server-side (`requireUser`, role
 checks, `canReview`). Keep it that way: the UI hiding a button is never the
@@ -630,6 +655,8 @@ until a developer sets one from **Console Access**.
   roll number (these drive warden and FA scoping). Cannot delete yourself or
   drop your own developer role. In Supabase mode, creating a user also creates a
   Supabase Auth user (password `password123`) — needs the service-role key.
+  The **LDAP username** field and **Import LDAP usernames** (paste
+  `email, ldap username` lines) are how real LDAP logins get onto profiles.
 - **Guest Houses & Rooms** — CRUD guest houses and rooms; `total_rooms` is
   recounted automatically from active rooms. Deleting is blocked when bookings
   reference the guest house, or when a room is assigned to a booking (deactivate
@@ -766,7 +793,8 @@ Since 19 Sep 2026, built from `design_handoff/` (a reference, not code to copy).
 ## Demo personas
 
 Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase auth
-password `password123`): two students in different hostels (Malhar, Saveri),
+password `password123`, which is *not* a portal login — each persona signs in
+with its dummy LDAP account, listed in `.memories/11-ldap-accounts.md`): two students in different hostels (Malhar, Saveri),
 an employee, a whitelisted official (`admin@iitpkd.ac.in`), the Petrichor club,
 the IAR Student Cell, two wardens, a Petrichor faculty advisor, the IAR Office,
 a GH manager, a GH caretaker (`gh.reception@iitpkd.ac.in`), and
@@ -797,6 +825,12 @@ Migration files, applied sequentially:
    defaulted and safe to re-run. **Until it is applied, queueing throws** —
    `notify*()` catches and logs it, so bookings still work and only the mail is
    missing.
+11. `supabase/migrations/00000000000011_profile_ldap_uid.sql` (`profiles.ldap_uid`
+   + a unique index on `lower(ldap_uid)`). Additive, nullable, safe to re-run,
+   and deliberately **not** backfilled from email. **Until it is applied, LDAP
+   sign-in finds nobody on Supabase and saving a user in the console fails.**
+   Re-run `supabase/seed.sql` afterwards to give the demo personas their
+   usernames.
 
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are
 not applied automatically. Read the header of each before running it.

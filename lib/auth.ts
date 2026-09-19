@@ -6,9 +6,12 @@ import type { Profile } from "@/lib/types";
 export const SESSION_COOKIE = "gh_mock_user";
 
 /**
- * Mock authentication: the "session" is a cookie holding a seeded profile id.
- * Swap this module for a Supabase Auth (or LDAP/SSO) lookup in production —
- * everything else consumes only `getCurrentUser()`.
+ * The session is a cookie holding a profile id. Two doors set it
+ * (`app/actions/auth.ts`): LDAP sign-in, which checks the password against the
+ * directory (`lib/ldap/`), and the mock Google door, which picks a persona.
+ * The cookie itself is unsigned, so anyone can still claim any id — making it
+ * a signed or server-side session is part of going to production. Everything
+ * else consumes only `getCurrentUser()`.
  */
 export const getCurrentUser = cache(async (): Promise<Profile | null> => {
   const cookieStore = await cookies();
@@ -30,20 +33,4 @@ export async function requireUser(): Promise<Profile> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
   return user;
-}
-
-/**
- * The one password every seeded account shares while authentication is mocked.
- * It matches the password `supabase/seed.sql` gives its auth users, so the
- * credential form on `/` behaves the same against either backend.
- *
- * A plain comparison is deliberate: this constant is published in the README
- * and shown on the sign-in page, so there is no secret for a timing attack to
- * recover. When `getCurrentUser()` is swapped for institute SSO, this and the
- * `loginAs` persona path both go — see .memories/08-roadmap.md item 1.
- */
-export const DEMO_PASSWORD = "password123";
-
-export function verifyDemoPassword(password: string): boolean {
-  return password === DEMO_PASSWORD;
 }

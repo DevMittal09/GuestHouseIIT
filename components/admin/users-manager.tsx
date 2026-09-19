@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   createUserAction,
   deleteUserAction,
+  importLdapUidsAction,
   updateUserAction,
   type UserFormInput,
 } from "@/app/actions/admin";
@@ -23,6 +24,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -42,6 +44,7 @@ const EMPTY: UserFormInput = {
   hostel_name: "",
   department_or_club: "",
   roll_number: "",
+  ldap_uid: "",
 };
 
 export function UsersManager({ profiles }: { profiles: Profile[] }) {
@@ -51,6 +54,9 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
   const [editing, setEditing] = useState<Profile | null>(null);
   const [values, setValues] = useState<UserFormInput>(EMPTY);
   const [toDelete, setToDelete] = useState<Profile | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importProblems, setImportProblems] = useState<string[]>([]);
 
   const openCreate = () => {
     setEditing(null);
@@ -67,6 +73,7 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
       hostel_name: p.hostel_name ?? "",
       department_or_club: p.department_or_club ?? "",
       roll_number: p.roll_number ?? "",
+      ldap_uid: p.ldap_uid ?? "",
     });
     setDialogOpen(true);
   };
@@ -96,6 +103,28 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
       }
     });
 
+  const openImport = () => {
+    setImportText("");
+    setImportProblems([]);
+    setImportOpen(true);
+  };
+
+  const runImport = () =>
+    startTransition(async () => {
+      const result = await importLdapUidsAction(importText);
+      if (result.ok) {
+        toast.success(
+          `LDAP usernames set for ${result.updated} user${result.updated === 1 ? "" : "s"}` +
+            (result.unchanged ? ` (${result.unchanged} already up to date)` : "")
+        );
+        setImportOpen(false);
+        router.refresh();
+      } else {
+        setImportProblems(result.problems ?? []);
+        toast.error(result.error);
+      }
+    });
+
   const set = (key: keyof UserFormInput) => (v: string) =>
     setValues((prev) => ({ ...prev, [key]: v }));
 
@@ -106,7 +135,12 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
           {profiles.length} accounts — assign any role to any email, including additional wardens,
           advisors and developers.
         </p>
-        <Button onClick={openCreate}>+ Add user</Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={openImport}>
+            Import LDAP usernames
+          </Button>
+          <Button onClick={openCreate}>+ Add user</Button>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg border">
@@ -119,6 +153,7 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
               <TableHead>Hostel</TableHead>
               <TableHead>Dept / Club</TableHead>
               <TableHead>Roll No.</TableHead>
+              <TableHead>LDAP username</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -135,6 +170,7 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
                 <TableCell>{p.hostel_name ?? "—"}</TableCell>
                 <TableCell>{p.department_or_club ?? "—"}</TableCell>
                 <TableCell className="font-mono text-xs">{p.roll_number ?? "—"}</TableCell>
+                <TableCell className="font-mono text-xs">{p.ldap_uid ?? "—"}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={() => openEdit(p)}>
@@ -179,6 +215,51 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
           if (p) remove(p);
         }}
       />
+
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Import LDAP usernames</DialogTitle>
+            <DialogDescription>
+              Links institute LDAP logins to existing accounts, matched by email. One{" "}
+              <code className="font-mono">email, LDAP username</code> pair per line — a two-column
+              spreadsheet paste works. If any line is wrong, nothing is changed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="ldap-import">Email and LDAP username</Label>
+            <Textarea
+              id="ldap-import"
+              rows={8}
+              spellCheck={false}
+              className="font-mono text-xs"
+              placeholder={"112201001@smail.iitpkd.ac.in, 112201001\npriya@iitpkd.ac.in, priya"}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              aria-describedby={importProblems.length ? "ldap-import-problems" : undefined}
+            />
+            {importProblems.length > 0 && (
+              <ul
+                id="ldap-import-problems"
+                role="alert"
+                className="max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-sm text-destructive"
+              >
+                {importProblems.map((problem, i) => (
+                  <li key={i}>{problem}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={runImport} disabled={isPending || importText.trim() === ""}>
+              {isPending ? "Importing…" : "Import"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -236,6 +317,22 @@ export function UsersManager({ profiles }: { profiles: Profile[] }) {
                 value={values.roll_number}
                 onChange={(e) => set("roll_number")(e.target.value)}
               />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="user-ldap-uid">LDAP username</Label>
+              <Input
+                id="user-ldap-uid"
+                autoCapitalize="none"
+                spellCheck={false}
+                className="font-mono"
+                value={values.ldap_uid}
+                onChange={(e) => set("ldap_uid")(e.target.value)}
+                aria-describedby="user-ldap-uid-help"
+              />
+              <p id="user-ldap-uid-help" className="text-xs text-muted-foreground">
+                The institute LDAP login this account signs in with. Leave blank and the
+                person can only use Google sign-in.
+              </p>
             </div>
           </div>
           <DialogFooter>

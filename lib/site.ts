@@ -9,8 +9,10 @@
 
 /**
  * Institute domain for sign-in. Subdomains are accepted too, because students
- * sign in as `<roll>@smail.iitpkd.ac.in`. Enforced by the form *and* by
- * `signIn()` on the server — the form is convenience, the action is the rule.
+ * are `<roll>@smail.iitpkd.ac.in`. Named on the sign-in page. `isInstituteEmail`
+ * is the rule real Google sign-in must enforce on the verified address; the
+ * mock Google door lists only portal accounts, and LDAP sign-in takes a
+ * username, so neither needs it today.
  */
 export const LOGIN_DOMAIN = "iitpkd.ac.in";
 

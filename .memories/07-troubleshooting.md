@@ -363,15 +363,33 @@ public website.
 **Fix.** `redirect(SIGN_IN_PATH)` from `lib/routes.ts`. `grep -rn 'redirect("/")' app`
 should find nothing.
 
-## "I can't sign in" with a personal or test address
+## "I can't sign in" with LDAP
 
-**Cause.** `signIn()` refuses addresses outside `@iitpkd.ac.in` and its
-subdomains (19 Sep 2026), with "Use your @iitpkd.ac.in email address…". A
-developer-created profile on a gmail address hits this.
+Since 19 Sep 2026 the card takes an LDAP username, not an email address.
 
-**Fix.** Give the profile an institute address in Users & Roles, or use
-`/mock-login` for development. Do not loosen `isInstituteEmail()` — the domain
-rule is the design's requirement and the server is where it is enforced.
+- **"Enter your LDAP username, not your email address"**: the username contains
+  `@`, and the directory's `LDAP_UID_ATTRIBUTE` is not `mail` or
+  `userPrincipalName`.
+- **"Incorrect username or password"**: the directory refused the login. With
+  no `LDAP_URL`, only the dummy accounts in
+  [11-ldap-accounts.md](11-ldap-accounts.md) exist. `password123` is **not** a
+  portal password any more.
+- **"…valid but is not registered on the guest house portal"**: the password
+  was right, but no profile has that `ldap_uid`. Set it in Users & Roles (Edit,
+  or Import LDAP usernames). On Supabase, check that migration 11 is applied
+  and the seed's `update` has been run.
+- **"The institute directory could not be reached"**: the directory threw. The
+  cause is in the server log (`[auth] LDAP sign-in failed:`). The usual
+  suspects:
+  - `LDAP_URL` set without `LDAP_BASE_DN`
+  - a wrong service password
+  - anonymous search refused, which shows up as `noSuchObject` (code 0x20)
+  - an untrusted TLS certificate (use `NODE_EXTRA_CA_CERTS`)
+- **"Too many attempts"**: 10 failures in 5 minutes for that username. The
+  count is in-process, so a server restart clears it.
+
+A developer-created account with no LDAP username can still use "Sign in with
+Google" (the persona picker) in development.
 
 ## Resizing the camera photos gets killed (exit 137)
 
