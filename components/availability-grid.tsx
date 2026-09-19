@@ -62,7 +62,7 @@ const PERIOD: Record<AvailabilityView, string> = { day: "day", week: "week", mon
  */
 export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] }) {
   const [guestHouseId, setGuestHouseId] = useState(guestHouses[0]?.id ?? "");
-  const [view, setView] = useState<AvailabilityView>("day");
+  const [view, setView] = useState<AvailabilityView>("week");
   const [date, setDate] = useState(todayValue);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);

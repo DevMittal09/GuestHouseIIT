@@ -13,7 +13,7 @@ import {
   MAX_GUESTS_PER_ROOM,
   roomPartyError,
 } from "./occupancy";
-import { PETS_POLICY_ACKNOWLEDGEMENT, stayLengthError } from "./policy";
+import { stayLengthError } from "./policy";
 import { formatInstituteDate, formatInstituteDateTime, instituteDate } from "./tz";
 import { includesMeals, needsRooms } from "./types";
 import { latestCheckIn } from "./workflow";
@@ -225,13 +225,18 @@ export function bookingPayloadSchema(
         .max(MAX_MEAL_DAYS, "Too many days of meals for one booking")
         .optional()
         .transform((v) => normalizeMeals(v ?? [])),
-      // Not a formality: the guest house has no kennels and no way to isolate
-      // an animal, so a guest arriving with one has to be turned away at the
-      // desk. Asking here is the only chance to prevent that.
-      pets_policy_acknowledged: z
-        .boolean()
-        .optional()
-        .transform((v) => v === true),
+      /**
+        * Kept so a stored payload still parses, but nothing is required of it.
+        * The no-pets rule is *told* to the requester — a prominent notice on
+        * the form and a line in every booking mail — rather than signed for.
+        * The office asked for the tick box to go: it was one more thing to
+        * click on a form that already refuses submission for eight other
+        * reasons, and a tick proves nothing a notice does not.
+        */
+       pets_policy_acknowledged: z
+         .boolean()
+         .optional()
+         .transform((v) => v === true),
       custom: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
     })
     .superRefine((v, ctx) => {
@@ -241,14 +246,6 @@ export function bookingPayloadSchema(
     .superRefine((v, ctx) => {
       const message = bookingTypeError(config.role, v.booking_type);
       if (message) ctx.addIssue({ code: "custom", message, path: ["booking_type"] });
-    })
-    .superRefine((v, ctx) => {
-      if (v.pets_policy_acknowledged) return;
-      ctx.addIssue({
-        code: "custom",
-        message: `Please confirm: “${PETS_POLICY_ACKNOWLEDGEMENT}”`,
-        path: ["pets_policy_acknowledged"],
-      });
     })
     .superRefine((v, ctx) => {
       // An alumnus cannot log in to speak for themselves, so the request
@@ -369,9 +366,13 @@ export function bookingPayloadSchema(
       });
     })
     .superRefine((v, ctx) => {
-      if (config.guest_fields.id_number !== "required") return;
+      // Runs whatever the role's configuration says, because the two questions
+      // are different: whether an Aadhaar number is *demanded* is per role,
+      // but a number that has been typed must be a real one either way.
+      const required = config.guest_fields.id_number === "required";
       v.rooms.forEach((room, i) => {
         room.guests.forEach((g, j) => {
+          const path = ["rooms", i, "guests", j, "id_number"];
           // An infant shares a guardian's bed and is not asked for an ID.
           if (isInfantAge(g.age)) return;
           // A foreign national has no Aadhaar. Their passport is the identity
@@ -379,12 +380,15 @@ export function bookingPayloadSchema(
           // ID number as well would make them impossible to book at all for
           // every role whose form requires one, which is most of them.
           if (g.citizenship === "other") return;
-          if ((g.id_number ?? "").length < 4) {
-            ctx.addIssue({
-              code: "custom",
-              message: "Aadhaar / ID number is required",
-              path: ["rooms", i, "guests", j, "id_number"],
-            });
+          const typed = g.id_number ?? "";
+          if (!typed) {
+            if (required) {
+              ctx.addIssue({ code: "custom", message: "Aadhaar number is required", path });
+            }
+            return;
+          }
+          if (!isAadhaarNumber(typed)) {
+            ctx.addIssue({ code: "custom", message: AADHAAR_FORMAT_ERROR, path });
           }
         });
       });
@@ -527,6 +531,23 @@ export function advanceWindowMessage(role: RoleFormConfig["role"]): string {
   return `Bookings open one month in advance — the latest check-in you can request is ${formatInstituteDate(
     limit
   )}`;
+}
+
+/**
+ * An Aadhaar number is exactly twelve digits. People type them in groups of
+ * four, so the separators are ignored rather than rejected.
+ */
+export const AADHAAR_DIGITS = 12;
+
+export const AADHAAR_FORMAT_ERROR = `Aadhaar number must be ${AADHAAR_DIGITS} digits`;
+
+/** Just the digits of what was typed — "1234 5678 9012" is twelve. */
+export function aadhaarDigits(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+export function isAadhaarNumber(value: string): boolean {
+  return aadhaarDigits(value).length === AADHAAR_DIGITS;
 }
 
 /** The fine print next to the infant counter, kept with the rule it explains. */

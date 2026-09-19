@@ -42,6 +42,7 @@ import {
   ROOM_TYPE_LABELS,
 } from "@/lib/occupancy";
 import {
+  AADHAAR_DIGITS,
   advanceWindowMessage,
   bookingPayloadSchema,
   checkOutOrderError,
@@ -66,7 +67,6 @@ import {
   guestHousesForBookingType,
   latestCheckOutDate,
   MANAGER_HELP_LINE,
-  PETS_POLICY_ACKNOWLEDGEMENT,
   PETS_POLICY_NOTICE,
   stayLengthHint,
   ALUMNI_GUEST_HOUSE_NOTE,
@@ -144,7 +144,6 @@ interface FormValues {
   /** Head count for a meals-only booking, which has no guest rows. */
   meal_guest_count: string;
   meal_preference: "" | MealPreference;
-  pets_policy_acknowledged: boolean;
   rooms: RoomFields[];
   custom: Record<string, string | boolean>;
 }
@@ -177,10 +176,18 @@ export function BookingForm({
   user,
   guestHouses,
   config,
+  initialServiceType,
 }: {
   user: Profile;
   guestHouses: GuestHouse[];
   config: RoleFormConfig;
+  /**
+   * Which kind of booking the form opens on. The portal home offers meals and
+   * rooms as two separate doors, because someone booking lunch for a visiting
+   * examiner should not have to work out that it lives inside "New Booking".
+   * The selector is still there, so the door is a starting point, not a trap.
+   */
+  initialServiceType?: ServiceType;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -213,7 +220,10 @@ export function BookingForm({
 
   const form = useForm<FormValues>({
     defaultValues: {
-      service_type: serviceOptions[0] ?? "room",
+      service_type:
+        initialServiceType && serviceOptions.includes(initialServiceType)
+          ? initialServiceType
+          : (serviceOptions[0] ?? "room"),
       // "Official" for staff, because that is the common case; a role with one
       // option is never shown the question at all.
       booking_type: defaultBookingTypeFor(config.role) ?? "official",
@@ -230,7 +240,6 @@ export function BookingForm({
       check_out_time: "10:00",
       meal_guest_count: "1",
       meal_preference: "",
-      pets_policy_acknowledged: false,
       rooms: [newRoom()],
       custom: {},
     },
@@ -249,7 +258,6 @@ export function BookingForm({
   const selectedGuestHouseId = useWatch({ control, name: "guest_house_id" });
   const bookingType = useWatch({ control, name: "booking_type" });
   const mealPreference = useWatch({ control, name: "meal_preference" });
-  const petsAcknowledged = useWatch({ control, name: "pets_policy_acknowledged" });
   // Watched unconditionally — it is only *shown* on a meals-only booking, but
   // a hook cannot be called inside a branch.
   const mealGuestCount = useWatch({ control, name: "meal_guest_count" }) ?? "";
@@ -457,7 +465,6 @@ export function BookingForm({
       meal_guest_count: wantsRooms ? "" : values.meal_guest_count,
       meal_preference: values.meal_preference === "" ? null : values.meal_preference,
       meals: wantsMeals ? mealPlan : [],
-      pets_policy_acknowledged: values.pets_policy_acknowledged,
       // A meals-only booking has no rooms and no guest rows at all.
       rooms: wantsRooms
         ? values.rooms.map((room) => ({
@@ -849,8 +856,10 @@ export function BookingForm({
         </CardContent>
       </Card>
 
-      {/* Not fine print: a guest who arrives with an animal has to be turned
-          away at the desk, and this is the only chance to prevent that. */}
+      {/* Told, not signed for. A guest who arrives with an animal has to be
+          turned away at the desk, so the notice is given prominence here and
+          repeated in every booking mail — but there is no tick box: a tick
+          proves nothing a notice does not, and the office asked for it to go. */}
       <Card className="border-amber-300 dark:border-amber-900">
         <CardContent className="space-y-3 pt-6">
           <div className="flex gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
@@ -863,19 +872,6 @@ export function BookingForm({
               </p>
             </div>
           </div>
-          <label
-            htmlFor="pets_policy_acknowledged"
-            className="flex cursor-pointer items-start gap-2.5 text-sm"
-          >
-            <input
-              id="pets_policy_acknowledged"
-              type="checkbox"
-              className="mt-0.5 size-4 shrink-0 accent-primary"
-              {...register("pets_policy_acknowledged")}
-            />
-            <span>{PETS_POLICY_ACKNOWLEDGEMENT} *</span>
-          </label>
-          <FieldError message={err("pets_policy_acknowledged")} />
         </CardContent>
       </Card>
 
@@ -1117,7 +1113,7 @@ export function BookingForm({
         <Button type="button" variant="outline" onClick={() => router.push("/dashboard")}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isPending || !petsAcknowledged}>
+        <Button type="submit" disabled={isPending}>
           {isPending ? "Submitting…" : "Submit booking request"}
         </Button>
       </div>
@@ -1442,8 +1438,15 @@ function GuestRow({
             foreign guest unbookable on every form that requires an ID. */}
         {gf.id_number !== "hidden" && !isInfant && citizenship !== "other" && (
           <div className="space-y-2">
-            <Label>Aadhaar / ID number{star(gf.id_number)}</Label>
-            <Input placeholder="XXXX-XXXX-XXXX" {...register(`${base}.id_number`)} />
+            <Label>Aadhaar number{star(gf.id_number)}</Label>
+            <Input
+              inputMode="numeric"
+              placeholder="1234 5678 9012"
+              {...register(`${base}.id_number`)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {AADHAAR_DIGITS} digits. Spaces and hyphens are ignored.
+            </p>
             <FieldError message={err(`${base}.id_number`)} />
           </div>
         )}

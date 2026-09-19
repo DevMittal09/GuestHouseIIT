@@ -60,7 +60,7 @@ export function BookingAvailability({
   date: string;
   guestHouseName?: string;
 }) {
-  const [view, setView] = useState<AvailabilityView>("day");
+  const [view, setView] = useState<AvailabilityView>("week");
   const [refreshKey, setRefreshKey] = useState(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   /**

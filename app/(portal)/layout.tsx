@@ -47,7 +47,7 @@ export default async function PortalLayout({ children }: { children: React.React
                 <NavLink href="/book">New Booking</NavLink>
               </>
             )}
-            {user.role === "warden" && <NavLink href="/warden">Warden Queue</NavLink>}
+            {user.role === "warden" && <NavLink href="/warden">Assistant Warden Queue</NavLink>}
             {user.role === "faculty_advisor" && <NavLink href="/fa">FA Queue</NavLink>}
             {user.role === "iar_cell" && <NavLink href="/iar">IAR Queue</NavLink>}
             {user.role === "gh_manager" && <NavLink href="/manager">Manager Console</NavLink>}

@@ -6,11 +6,16 @@ import type { BookingStatus, Profile, Role, ServiceType } from "./types";
 export const ADVANCE_BOOKING_WINDOW_MONTHS = 1;
 
 /**
- * Official / dignitary visits are arranged by the institute on its own notice
- * and are the one category exempt from the advance-booking window.
+ * Who may book outside the one-month advance window.
+ *
+ * Official / dignitary visits are arranged by the institute on its own notice.
+ * The Guest House Manager is exempt because they take bookings at the desk for
+ * whatever the institute has already committed to — a window they could not
+ * reach past would simply move those bookings off the portal — and the
+ * developer because the console bypasses everything anyway.
  */
 export function isAdvanceWindowExempt(role: Role): boolean {
-  return role === "official";
+  return role === "official" || role === "gh_manager" || role === "developer";
 }
 
 /**

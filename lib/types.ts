@@ -473,7 +473,7 @@ export class RoomClashError extends Error {
 }
 
 export const STATUS_LABELS: Record<BookingStatus, string> = {
-  PENDING_WARDEN: "Pending Warden Review",
+  PENDING_WARDEN: "Pending Assistant Warden Review",
   PENDING_FA: "Pending Faculty Advisor Review",
   PENDING_IAR: "Pending IAR Cell Review",
   PENDING_GH_MANAGER: "Pending GH Manager",
@@ -494,7 +494,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   // Named as retired so an old booking in the archive is not mistaken for a
   // category anyone can still submit under.
   alumni: "Alumni (via IAR, legacy)",
-  warden: "Hostel Warden",
+  warden: "Assistant Warden",
   faculty_advisor: "Faculty Advisor",
   iar_cell: "IAR Office",
   iar_student_cell: "IAR Student Cell",

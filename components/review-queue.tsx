@@ -79,11 +79,17 @@ function ReviewRow({
   const [isPending, startTransition] = useTransition();
   const [detailOpen, setDetailOpen] = useState(false);
 
+  /**
+   * A reviewer's only forward move. It is called "forward", not "approve",
+   * because that is what it does: the request goes to the Guest House
+   * Manager, who is the one who actually approves it by allocating a room.
+   * The Assistant Warden has nowhere else to send it.
+   */
   const approve = () =>
     startTransition(async () => {
       const result = await reviewBooking(booking.id, "approve");
       if (result.ok) {
-        toast.success(`${booking.booking_reference_id} approved and forwarded to the GH Manager`);
+        toast.success(`${booking.booking_reference_id} forwarded to the Guest House Manager`);
         setDetailOpen(false);
         router.refresh();
       } else {
@@ -114,20 +120,21 @@ function ReviewRow({
               <DialogHeader>
                 <DialogTitle>Review {booking.booking_reference_id}</DialogTitle>
                 <DialogDescription>
-                  Approving forwards this request to the Guest House Manager for room allocation.
+                  Forwarding sends this request to the Guest House Manager for room allocation.
+                  That is the only place it can go — you either forward it or reject it.
                 </DialogDescription>
               </DialogHeader>
               <BookingDetails booking={booking} showAlumniCard={showAlumniCard} />
               <DialogFooter className="gap-2">
                 <RejectDialog booking={booking} onDone={() => setDetailOpen(false)} />
                 <Button onClick={approve} disabled={isPending}>
-                  {isPending ? "Approving…" : "Approve & Forward"}
+                  {isPending ? "Forwarding…" : "Forward to GH Manager"}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
           <Button size="sm" onClick={approve} disabled={isPending}>
-            Approve
+            Forward
           </Button>
           <RejectDialog booking={booking} small />
         </div>

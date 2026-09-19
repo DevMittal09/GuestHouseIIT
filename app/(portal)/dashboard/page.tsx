@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MyBookings } from "@/components/my-bookings";
 import { getCurrentUser } from "@/lib/auth";
+import { serviceTypesFor } from "@/lib/booking-types";
+import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import { MANAGER_HELP_LINE } from "@/lib/policy";
 import { homeForRole } from "@/lib/routes";
 import { getStore } from "@/lib/store";
@@ -13,7 +15,20 @@ export default async function DashboardPage() {
   if (!user) redirect("/");
   if (!REQUESTER_ROLES.includes(user.role)) redirect(homeForRole(user.role));
 
-  const bookings = await getStore().listBookingsForUser(user.id);
+  const store = getStore();
+  const [bookings, config, guestHouses] = await Promise.all([
+    store.listBookingsForUser(user.id),
+    getEffectiveFormConfig(user.role),
+    store.listGuestHouses(),
+  ]);
+
+  // Meals get their own door rather than living inside "New Booking": a
+  // department booking lunch for a visiting examiner has no room to ask for,
+  // and having to start a room booking to find the option was the complaint.
+  const canBookMeals = serviceTypesFor(
+    user.role,
+    guestHouses.some((g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id))
+  ).includes("meals_only");
 
   return (
     <div className="space-y-6">
@@ -24,9 +39,16 @@ export default async function DashboardPage() {
             Track your guest house requests through the approval pipeline.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/book">New Booking</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {canBookMeals && (
+            <Button asChild variant="outline">
+              <Link href="/book?service=meals_only">Meal / Dining Booking</Link>
+            </Button>
+          )}
+          <Button asChild>
+            <Link href="/book">New Booking (Room)</Link>
+          </Button>
+        </div>
       </div>
       <MyBookings bookings={bookings} />
       {/* The way out when the form will not do what the requester needs — a

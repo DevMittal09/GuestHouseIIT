@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
-import { bookingPayloadSchema } from "@/lib/booking-schema";
+import { aadhaarDigits, bookingPayloadSchema } from "@/lib/booking-schema";
 import { needsAlumniDetails } from "@/lib/booking-types";
 import { validateCustomValue } from "@/lib/form-config";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
@@ -221,7 +221,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
           age: g.age,
           gender: (g.gender as Gender | undefined) ?? "other",
           relationship: g.relationship ?? null,
-          id_number: infant ? null : (g.id_number ?? null),
+          id_number: infant || !g.id_number ? null : aadhaarDigits(g.id_number),
           id_document_url: documentUrl,
           is_infant: infant,
           citizenship: g.citizenship,

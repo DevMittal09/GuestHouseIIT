@@ -118,14 +118,6 @@ export function BookingDetails({
         {booking.meal_preference && (
           <Field label="Meal preference" value={MEAL_PREFERENCE_LABELS[booking.meal_preference]} />
         )}
-        <Field
-          label="Pets policy"
-          value={
-            booking.pets_policy_acknowledged
-              ? "Acknowledged by the requester"
-              : "Not acknowledged — booking predates the policy checkbox"
-          }
-        />
         {booking.assigned_rooms.length > 0 && (
           <Field
             label="Assigned rooms"
