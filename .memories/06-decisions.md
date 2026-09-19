@@ -725,9 +725,20 @@ dates, so RHF field paths would shift under the user as dates change. A `Set` of
 `"date|meal"` keys survives that, and `mealPlanFromSlots` drops whatever the stay
 no longer covers at submit time; changing the dates back restores earlier ticks.
 
-**Not done.** The meeting notes also said meals should be ticked by default. It
-was not in the request that implemented this, so nothing is pre-ticked; the
-"Every day" boxes make ticking a whole stay one click per meal.
+**Why every meal starts ticked.** The meeting notes asked for it, and it is the
+common case — a guest staying in the guest house usually eats there, so the
+kitchen would rather correct a head count than be surprised by one. Done in a
+later round than the grid itself.
+
+**Why the form holds the opt-outs, not the ticks.** The grid's rows follow the
+stay dates, so a default of "on" has to survive a date change. Holding the
+declined slots makes that fall out: a day that comes into range has nothing
+against it and arrives ticked. Holding ticks instead would mean back-filling
+them whenever the stay grew, and back-filling cannot tell a meal the requester
+unticked from one that was never offered — it would silently re-tick the first.
+`declinedFromMealSlots` only reconsiders slots currently on screen, so an
+opt-out for dates the stay no longer covers survives and comes back with them,
+mirroring what `mealPlanFromSlots` already does for ticks.
 
 **Cost.** A bigger form card, a data-converting migration, and a jsonpath check
 constraint instead of three key checks.

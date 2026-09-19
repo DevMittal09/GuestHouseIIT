@@ -49,7 +49,13 @@ import {
   describeBookingType,
   needsAlumniDetails,
 } from "@/lib/booking-types";
-import { describeMeals, mealPlanFromSlots, stayMealDays } from "@/lib/meals";
+import {
+  declinedFromMealSlots,
+  describeMeals,
+  mealPlanFromSlots,
+  mealSlotsFromDeclined,
+  stayMealDays,
+} from "@/lib/meals";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { latestCheckIn } from "@/lib/workflow";
@@ -116,8 +122,10 @@ export function BookingForm({
   const [alumniCardError, setAlumniCardError] = useState<string | null>(null);
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   // Meal choices live outside react-hook-form as "date|meal" keys (`mealSlot`):
-  // the grid's rows follow the stay dates, which fixed field paths cannot.
-  const [mealSlots, setMealSlots] = useState<Set<string>>(() => new Set());
+  // the grid's rows follow the stay dates, which fixed field paths cannot. What
+  // is held is the meals turned *off*, because every meal the stay covers is
+  // ticked by default — see `mealSlotsFromDeclined`.
+  const [declinedMealSlots, setDeclinedMealSlots] = useState<Set<string>>(() => new Set());
   const [mealsError, setMealsError] = useState<string | null>(null);
 
   const gf = config.guest_fields;
@@ -219,6 +227,7 @@ export function BookingForm({
   const mealHouseNames = guestHouses.filter((g) => g.serves_meals).map((g) => g.name);
   const mealCheckIn = stay && !stay.problem ? stay.fromAt : null;
   const mealDays = stay && !stay.problem ? stayMealDays(stay.fromAt, stay.toAt) : [];
+  const mealSlots = mealSlotsFromDeclined(mealDays, declinedMealSlots);
   const mealPlan = servesMeals ? mealPlanFromSlots(mealSlots, mealDays) : [];
   const mealSummary =
     mealPlan.length === 0
@@ -607,10 +616,10 @@ export function BookingForm({
           <CardHeader>
             <CardTitle>Meals</CardTitle>
             <CardDescription>
-              Meals are served at {joinNames(mealHouseNames)} only. Tick the meals your party would
-              like on each day of the stay — optional, so leave the table empty if guests will make
-              their own arrangements. The kitchen uses this for head counts, so tell the manager if
-              plans change after booking.
+              Meals are served at {joinNames(mealHouseNames)} only. Every meal of the stay is
+              included by default — untick the ones your party will not need, or clear the table
+              entirely if guests will make their own arrangements. The kitchen uses this for head
+              counts, so tell the manager if plans change after booking.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -626,7 +635,9 @@ export function BookingForm({
                   days={mealDays}
                   checkIn={mealCheckIn}
                   slots={mealSlots}
-                  onChange={setMealSlots}
+                  onChange={(next) =>
+                    setDeclinedMealSlots((prev) => declinedFromMealSlots(mealDays, next, prev))
+                  }
                 />
                 <p className="text-sm text-muted-foreground">{mealSummary}</p>
               </>

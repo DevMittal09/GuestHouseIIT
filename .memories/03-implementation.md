@@ -51,9 +51,13 @@ Two panels sit between the stay details and the guest list:
   Until a guest house and valid dates are chosen — or when the chosen guest
   house serves no meals — the card says so instead of showing the table. A line
   under it summarises the plan ("Breakfast (2 days), Dinner (1 day), for 3
-  guests"). Ticks live as `"date|meal"` slots outside react-hook-form and become
-  the submitted `MealPlan` through `mealPlanFromSlots`; a meals error from the
-  schema appears under the card. Always optional. See `lib/meals.ts`.
+  guests"). Every meal the stay covers starts ticked, so the form state is the
+  set of meals turned *off*: `mealSlotsFromDeclined` derives the ticks from the
+  days, `declinedFromMealSlots` folds the grid's change back, and a day that
+  comes into range arrives ticked. Ticks live as `"date|meal"` slots outside
+  react-hook-form and become the submitted `MealPlan` through
+  `mealPlanFromSlots`; a meals error from the schema appears under the card.
+  Still optional — clearing the table submits no plan. See `lib/meals.ts`.
 
 Guest count is dynamic (1–15) via `useFieldArray`. Each guest row past the first
 carries a **Remove guest N** button — a real destructive-styled button with a
@@ -380,7 +384,7 @@ faceting, sorting, paging, query-string parsing. Shared by both stores. |
 | `lib/routes.ts` | Role landing pages, official email whitelist. |
 | `lib/format.ts` | Date/time formatting helpers, all delegating to `lib/tz.ts`. |
 | `lib/tz.ts` | The institute timezone (`Asia/Kolkata`): `instituteIso` to parse a typed wall-clock time, `formatInstitute*` / `instituteHour` / `instituteDayBounds` to read instants back. Nothing else may parse a naked datetime string or format without a zone. Also calendar-date helpers for `"yyyy-MM-dd"` strings — `parseDateValue`, `dateValueOf`, `addDaysToDateValue`, `weekdayOfDateValue`, `formatDateValue` ("Tue 15 Sep"), `formatMonthOfDateValue` — which do day arithmetic in UTC because a calendar date has no zone. |
-| `lib/meals.ts` | Meal keys and labels; `MEAL_SERVING_WINDOWS` and the `MEAL_TIMES` labels derived from them; `stayMealDays` / `mealUnavailableReason` (which meals a stay can have); `normalizeMeals` (the only reader — cleans arrays, expands the legacy whole-stay object); `mealPlanError` (the schema's rule); `mealSlot` / `mealPlanFromSlots` (the form's selection); `describeMeals` / `describeMealDays` / `mealDayCounts`. |
+| `lib/meals.ts` | Meal keys and labels; `MEAL_SERVING_WINDOWS` and the `MEAL_TIMES` labels derived from them; `stayMealDays` / `mealUnavailableReason` (which meals a stay can have); `normalizeMeals` (the only reader — cleans arrays, expands the legacy whole-stay object); `mealPlanError` (the schema's rule); `mealSlot` / `mealPlanFromSlots` / `mealSlotsFromDeclined` / `declinedFromMealSlots` (the form's selection, which defaults to every meal); `describeMeals` / `describeMealDays` / `mealDayCounts`. |
 
 ## UI primitives
 

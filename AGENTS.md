@@ -469,8 +469,15 @@ it as one `{breakfast, lunch, dinner}` answer for the whole stay.)
 - The form keeps ticks as `"date|meal"` slots outside react-hook-form
   (`mealSlot` / `mealPlanFromSlots`), because the rows follow the dates. Slots
   the stay no longer covers are ignored rather than deleted, so changing the
-  dates back restores them. Nothing is ticked by default; each column's "Every
-  day" box ticks that meal for the whole stay. Meals are always optional.
+  dates back restores them. **Every meal the stay covers is ticked by
+  default** — the meeting asked for it, and most guests eat. So what the form
+  holds is the meals turned *off*: `mealSlotsFromDeclined(days, declined)`
+  derives the ticks, `declinedFromMealSlots` folds a change from the grid back
+  into the opt-outs, and only the slots on screen are reconsidered. Storing the
+  ticks instead would need back-filling whenever the stay grew, and could not
+  tell a meal the requester unticked from one that was never offered. Each
+  column's "Every day" box still ticks or clears that meal for the whole stay,
+  and meals remain optional — clearing the table submits no plan.
 - Shown on `BookingDetails` as a per-day table with the head count (so every
   reviewer sees them) and as "Breakfast (2 days), Dinner (1 day)" in the
   manager's stays tables, with the per-day list in the cell's tooltip.
