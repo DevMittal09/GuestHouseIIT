@@ -5,6 +5,7 @@ import { z } from "zod";
 import { canUseConsoleSection } from "@/lib/access";
 import { isAdminUnlocked } from "@/lib/admin-lock";
 import { requireUser } from "@/lib/auth";
+import { recordAudit } from "@/lib/audit-server";
 import { getStore } from "@/lib/store";
 import { parentError, type Unit } from "@/lib/units";
 import type { ActionResult } from "./bookings";
@@ -54,16 +55,26 @@ const unitSchema = z.object({
   parent_id: blankToNull,
   head_id: blankToNull,
   acting_head_id: blankToNull,
+  // Offices only: officer (Institute Grant) or department (its Department).
+  office_class: z
+    .enum(["officer", "department", ""])
+    .nullish()
+    .transform((v) => (v ? v : null)),
 });
 
 export type UnitInput = z.input<typeof unitSchema>;
 
 export async function createUnitAction(input: UnitInput): Promise<ActionResult> {
   try {
-    await requireUnitsConsole();
+    const user = await requireUnitsConsole();
     const parsed = unitSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid unit" };
-    await getStore().createUnit(parsed.data as Omit<Unit, "id">);
+    const unit = {
+      ...parsed.data,
+      office_class: parsed.data.kind === "office" ? (parsed.data.office_class ?? null) : null,
+    };
+    await getStore().createUnit(unit as Omit<Unit, "id">);
+    await recordAudit(user, "settings.changed", `unit:${unit.name}`, { created: unit });
     return done();
   } catch (e) {
     return fail(e);
@@ -80,14 +91,32 @@ export async function updateUnitAction(
   patch: Partial<UnitInput>
 ): Promise<ActionResult> {
   try {
-    await requireUnitsConsole();
+    const user = await requireUnitsConsole();
     const parsed = unitSchema.partial().safeParse(patch);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid unit" };
+    const units = await getStore().listUnits();
+    const before = units.find((u) => u.id === id);
+    if (!before) return { ok: false, error: "Unit not found" };
     if (parsed.data.parent_id !== undefined) {
-      const loop = parentError(id, parsed.data.parent_id, await getStore().listUnits());
+      const loop = parentError(id, parsed.data.parent_id, units);
       if (loop) return { ok: false, error: loop };
     }
-    await getStore().updateUnit(id, parsed.data as Partial<Omit<Unit, "id">>);
+    // The database refuses an office class on anything but an office; say so
+    // in words rather than as a constraint name.
+    const kind = parsed.data.kind ?? before.kind;
+    if (parsed.data.office_class && kind !== "office") {
+      return { ok: false, error: "Only an office can be an officer or department office" };
+    }
+    const next = { ...parsed.data } as Partial<Omit<Unit, "id">>;
+    if (parsed.data.kind && parsed.data.kind !== "office") next.office_class = null;
+    await getStore().updateUnit(id, next);
+    // Who heads a unit decides who approves its requests, so an appointment
+    // is a security-relevant change and goes in the audit log.
+    await recordAudit(user, "settings.changed", `unit:${before.name}`, {
+      changes: Object.fromEntries(
+        Object.entries(next).map(([k, v]) => [k, { from: before[k as keyof Unit] ?? null, to: v }])
+      ),
+    });
     return done();
   } catch (e) {
     return fail(e);
@@ -96,8 +125,10 @@ export async function updateUnitAction(
 
 export async function deleteUnitAction(id: string): Promise<ActionResult> {
   try {
-    await requireUnitsConsole();
+    const user = await requireUnitsConsole();
+    const before = (await getStore().listUnits()).find((u) => u.id === id);
     await getStore().deleteUnit(id);
+    await recordAudit(user, "settings.changed", `unit:${before?.name ?? id}`, { deleted: before ?? id });
     return done();
   } catch (e) {
     return fail(e);

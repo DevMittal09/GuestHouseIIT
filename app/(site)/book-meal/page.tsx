@@ -6,6 +6,7 @@ import { MEALS_ONLY_AUDIENCE } from "@/lib/booking-types";
 import { homeForRole } from "@/lib/routes";
 import { joinNames, mealTimeLines, servingHouses } from "@/lib/site-content";
 import { getSiteGuestHouses } from "@/lib/site-data";
+import { getRules } from "@/lib/settings-server";
 import { canBookOnBehalf } from "@/lib/access";
 import { REQUESTER_ROLES } from "@/lib/types";
 
@@ -25,7 +26,11 @@ const MEAL_BOOKING_PATH = "/book?service=meals_only";
  * chosen day by day, and only at guest houses flagged `serves_meals`.
  */
 export default async function BookMealPage() {
-  const [user, houses] = await Promise.all([getCurrentUser(), getSiteGuestHouses()]);
+  const [user, houses, rules] = await Promise.all([
+    getCurrentUser(),
+    getSiteGuestHouses(),
+    getRules(),
+  ]);
   const canBook =
     user !== null && (REQUESTER_ROLES.includes(user.role) || canBookOnBehalf(user.role));
   const serving = servingHouses(houses);
@@ -45,7 +50,7 @@ export default async function BookMealPage() {
             <div className="rounded-[2px] border border-border px-5 py-[18px]">
               <Eyebrow className="mb-2">Serving times</Eyebrow>
               <ul className="space-y-1 text-[15.5px] text-body">
-                {mealTimeLines().map((line) => (
+                {mealTimeLines(rules).map((line) => (
                   <li key={line}>{line}</li>
                 ))}
               </ul>

@@ -18,7 +18,8 @@ import {
   notifyTierApproved,
 } from "@/lib/mail/notify";
 import { guestHousePolicyError } from "@/lib/policy";
-import { OFFICIAL_EMAIL_WHITELIST } from "@/lib/routes";
+import { isWhitelistedOfficial } from "@/lib/settings";
+import { getOfficialEmails, getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
 import { formatDateTime } from "@/lib/format";
 import { instituteIso } from "@/lib/tz";
@@ -94,7 +95,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     if (!REQUESTER_ROLES.includes(user.role) && !onBehalf) {
       return { ok: false, error: "Your role cannot submit booking requests" };
     }
-    if (user.role === "official" && !OFFICIAL_EMAIL_WHITELIST.includes(user.email)) {
+    if (user.role === "official" && !isWhitelistedOfficial(user.email, await getOfficialEmails())) {
       return { ok: false, error: "This account is not whitelisted for official bookings" };
     }
 
@@ -125,9 +126,12 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
 
     const rawPayload = formData.get("payload");
     if (typeof rawPayload !== "string") return { ok: false, error: "Malformed submission" };
+    // The same Settings the page handed the form, so the two validate alike.
+    const rules = await getRules();
     const parsed = bookingPayloadSchema(config, {
       mealsAvailable,
       requesterEmail: user.email,
+      rules,
     }).safeParse(JSON.parse(rawPayload));
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid form data" };
@@ -485,9 +489,11 @@ export async function allocateRooms(
     // Do the picked rooms actually sleep the party? Infants share with their
     // guardians, so they need no bed and are excluded from the head count.
     const selectedRooms = roomIds.map((id) => roomsById.get(id)!);
+    const { capacity } = await getRules();
     const capacityProblem = allocationCapacityError(
       countBedGuests(booking.guests),
-      selectedRooms
+      selectedRooms,
+      capacity
     );
     if (capacityProblem) return { ok: false, error: capacityProblem };
 
@@ -500,7 +506,8 @@ export async function allocateRooms(
       const problem = roomAssignmentError(
         countBedGuests(card.guests),
         room,
-        `Room ${card.room_index}`
+        `Room ${card.room_index}`,
+        capacity
       );
       if (problem) return { ok: false, error: problem };
     }

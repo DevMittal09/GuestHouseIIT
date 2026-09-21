@@ -1,0 +1,21 @@
+import path from "path";
+import { defineConfig } from "vitest/config";
+
+/**
+ * Unit and store tests (`tests/**`). Run with `npm test`.
+ *
+ * - `TZ=UTC` on purpose: the app must behave as institute time whatever the
+ *   process zone is (`lib/tz.ts`), and a UTC host is where that bug bit.
+ * - Store tests use the mock store on a throwaway file (`MOCK_DB_PATH`, set per
+ *   test file), never the developer's `.local-db.json`.
+ */
+export default defineConfig({
+  resolve: { alias: { "@": path.resolve(__dirname, ".") } },
+  test: {
+    environment: "node",
+    include: ["tests/**/*.test.ts"],
+    env: { TZ: "UTC", NEXT_PUBLIC_SUPABASE_URL: "" },
+    // Store tests share one JSON file per worker; keep files isolated.
+    pool: "forks",
+  },
+});

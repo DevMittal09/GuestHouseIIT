@@ -7,6 +7,7 @@ import { approveCancellation, rejectCancellation, reviewBooking } from "@/app/ac
 import { RejectDialog } from "@/components/review-queue";
 import { BookingDetails } from "@/components/booking-details";
 import { CheckoutsToday } from "@/components/checkouts-today";
+import type { CapacityRules } from "@/lib/settings";
 import { RoomGrid } from "@/components/room-grid";
 import { StaysTable } from "@/components/stays-table";
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +52,10 @@ export function ManagerQueue({
   rooms,
   occupancyVersion,
   nowIso,
+  capacity,
 }: {
+  /** Room capacity from Settings, for the allocation grid. */
+  capacity?: CapacityRules;
   pending: BookingWithDetails[];
   /** Stays happening right now — check-in has passed, check-out has not. */
   current: BookingWithDetails[];
@@ -148,6 +152,7 @@ export function ManagerQueue({
                       booking={b}
                       rooms={rooms}
                       occupancyVersion={occupancyVersion}
+                      capacity={capacity}
                     />
                   ))}
               </TableBody>
@@ -226,10 +231,12 @@ function ManagerRow({
   booking,
   rooms,
   occupancyVersion,
+  capacity,
 }: {
   booking: BookingWithDetails;
   rooms: Room[];
   occupancyVersion: string;
+  capacity?: CapacityRules;
 }) {
   const [open, setOpen] = useState(false);
   const mealsOnly = booking.service_type === "meals_only";
@@ -294,6 +301,7 @@ function ManagerRow({
                   rooms={rooms}
                   occupancyVersion={occupancyVersion}
                   onAllocated={() => setOpen(false)}
+                  capacity={capacity}
                 />
               )}
             </DialogContent>

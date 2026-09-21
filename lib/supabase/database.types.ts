@@ -13,6 +13,10 @@ import type {
 import type { RoleFormConfig } from "@/lib/form-config";
 import type { EmailMessage } from "@/lib/mail/types";
 import type { Unit } from "@/lib/units";
+import type { AuditEvent } from "@/lib/audit";
+
+/** Any value a jsonb column can hold. */
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 type FormConfigRow = {
   role: Role;
@@ -54,11 +58,26 @@ type RoomHoldRow = {
   guard: string;
 };
 
-/** `value` is jsonb; the app stores plain strings in it. */
+/**
+ * `value` is jsonb. The console password hash is stored as a plain string;
+ * the Settings groups (`rules.<group>`, migration 16) as objects.
+ */
 type AppSettingRow = {
   key: string;
-  value: string;
+  value: Json;
   updated_at: string;
+};
+
+/** `hostels` (migration 16). `profiles.hostel_name` references `name`. */
+type HostelRow = { name: string; created_at: string };
+
+/** `official_email_whitelist` (migration 16). Stored lowercased. */
+type OfficialEmailRow = { email: string; created_at: string };
+
+/** `security_audit` (migration 16). `id` is a bigint identity, read as a string. */
+type SecurityAuditRow = Omit<AuditEvent, "event" | "details"> & {
+  event: string;
+  details: Json;
 };
 
 /**
@@ -182,8 +201,29 @@ export interface Database {
       };
       units: {
         Row: Unit;
-        Insert: Insertable<Unit, "id" | "parent_id" | "head_id" | "acting_head_id">;
+        Insert: Insertable<Unit, "id" | "parent_id" | "head_id" | "acting_head_id" | "office_class">;
         Update: Partial<Unit>;
+        Relationships: [];
+      };
+      hostels: {
+        Row: HostelRow;
+        Insert: Insertable<HostelRow, "created_at">;
+        Update: Partial<HostelRow>;
+        Relationships: [];
+      };
+      official_email_whitelist: {
+        Row: OfficialEmailRow;
+        Insert: Insertable<OfficialEmailRow, "created_at">;
+        Update: Partial<OfficialEmailRow>;
+        Relationships: [];
+      };
+      security_audit: {
+        Row: SecurityAuditRow;
+        Insert: Insertable<
+          SecurityAuditRow,
+          "id" | "at" | "actor_id" | "actor_role" | "target" | "details" | "ip" | "user_agent"
+        >;
+        Update: Partial<SecurityAuditRow>;
         Relationships: [];
       };
       form_configs: {

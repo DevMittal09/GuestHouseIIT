@@ -26,6 +26,7 @@ import type {
 import type { MailTemplateOverride } from "@/lib/mail/template-config";
 import type { Role } from "@/lib/types";
 import type { Unit } from "@/lib/units";
+import type { AuditEvent, AuditFilter, NewAuditEvent } from "@/lib/audit";
 
 export type NewProfileInput = Omit<Profile, "id">;
 
@@ -172,6 +173,36 @@ export interface DataStore {
    */
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
+
+  // ---- Settings (migration 16) ----------------------------------------
+  //
+  // The rules the console can change. Scalar groups are jsonb rows in
+  // `app_settings` (`rules.<group>`), read through `lib/settings-server.ts`;
+  // lists have tables of their own. Validation — including refusing a change
+  // that would break stored data — is the action's job, not the store's.
+
+  /** A jsonb setting as stored, or null when no row exists. */
+  getJsonSetting(key: string): Promise<unknown | null>;
+  setJsonSetting(key: string, value: unknown): Promise<void>;
+
+  listHostels(): Promise<string[]>;
+  addHostel(name: string): Promise<void>;
+  /** Renames the hostel and every profile in it, in one step. */
+  renameHostel(from: string, to: string): Promise<void>;
+  /** Throws while any profile still names the hostel. */
+  removeHostel(name: string): Promise<void>;
+
+  /** Accounts allowed to submit Official / Dignitary bookings, lowercased. */
+  listOfficialEmails(): Promise<string[]>;
+  addOfficialEmail(email: string): Promise<void>;
+  removeOfficialEmail(email: string): Promise<void>;
+
+  // ---- security audit log (migration 16) ------------------------------
+
+  /** Append one event. The table refuses updates, so this is the only write. */
+  appendAudit(event: NewAuditEvent): Promise<void>;
+  /** Newest first. */
+  listAudit(filter: AuditFilter): Promise<AuditEvent[]>;
 
   deleteBooking(id: string): Promise<void>;
 

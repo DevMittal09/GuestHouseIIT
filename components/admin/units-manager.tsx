@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { createUnitAction, deleteUnitAction, updateUnitAction } from "@/app/actions/units";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -19,8 +20,10 @@ import {
 } from "@/components/ui/table";
 import {
   approversOf,
+  OFFICE_CLASS_LABELS,
   UNIT_HEAD_TITLES,
   UNIT_KIND_LABELS,
+  type OfficeClass,
   type Unit,
   type UnitKind,
 } from "@/lib/units";
@@ -39,6 +42,8 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
   const [name, setName] = useState("");
   const [kind, setKind] = useState<UnitKind>("department");
   const [parentId, setParentId] = useState("");
+  const [officeClass, setOfficeClass] = useState<OfficeClass>("department");
+  const [deleting, setDeleting] = useState<Unit | null>(null);
 
   const people = [...profiles].sort((a, b) => a.full_name.localeCompare(b.full_name));
   const byId = new Map(profiles.map((p) => [p.id, p]));
@@ -57,7 +62,12 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
 
   const add = () =>
     run(async () => {
-      const result = await createUnitAction({ name, kind, parent_id: parentId });
+      const result = await createUnitAction({
+        name,
+        kind,
+        parent_id: parentId,
+        office_class: kind === "office" ? officeClass : null,
+      });
       if (result.ok) {
         setName("");
         setParentId("");
@@ -115,6 +125,22 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
             ))}
           </NativeSelect>
         </div>
+        {kind === "office" && (
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="unit-office-class">Kind of office</Label>
+            <NativeSelect
+              id="unit-office-class"
+              value={officeClass}
+              onChange={(e) => setOfficeClass(e.target.value as OfficeClass)}
+            >
+              {(Object.keys(OFFICE_CLASS_LABELS) as OfficeClass[]).map((c) => (
+                <option key={c} value={c}>
+                  {OFFICE_CLASS_LABELS[c]}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+        )}
         <div className="sm:col-span-4 flex justify-end">
           <Button onClick={add} disabled={isPending || name.trim().length < 2}>
             Add
@@ -133,6 +159,7 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
             <TableHeader>
               <TableRow>
                 <TableHead>Unit</TableHead>
+                <TableHead>Office class</TableHead>
                 <TableHead>Sits under</TableHead>
                 <TableHead>Head</TableHead>
                 <TableHead>Acting head</TableHead>
@@ -151,6 +178,33 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                       <Badge variant="outline" className="ml-2 align-middle">
                         {UNIT_KIND_LABELS[u.kind]}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {u.kind === "office" ? (
+                        <NativeSelect
+                          aria-label={`Kind of office: ${u.name}`}
+                          value={u.office_class ?? ""}
+                          disabled={isPending}
+                          onChange={(e) =>
+                            run(
+                              () =>
+                                updateUnitAction(u.id, {
+                                  office_class: (e.target.value || null) as OfficeClass | null,
+                                }),
+                              `${u.name} updated`
+                            )
+                          }
+                        >
+                          <option value="">Not set (treated as a department office)</option>
+                          {(Object.keys(OFFICE_CLASS_LABELS) as OfficeClass[]).map((c) => (
+                            <option key={c} value={c}>
+                              {OFFICE_CLASS_LABELS[c]}
+                            </option>
+                          ))}
+                        </NativeSelect>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <NativeSelect
@@ -219,7 +273,7 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                         size="sm"
                         variant="destructive"
                         disabled={isPending}
-                        onClick={() => run(() => deleteUnitAction(u.id), `${u.name} removed`)}
+                        onClick={() => setDeleting(u)}
                       >
                         Delete
                       </Button>
@@ -231,6 +285,23 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
           </Table>
         </div>
       )}
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        title="Delete this unit?"
+        description={`${deleting?.name ?? ""} will be removed. Its requests will no longer be routed to its head. A unit that still has members or sub-units cannot be deleted — move them first.`}
+        confirmPhrase={deleting?.name}
+        pending={isPending}
+        onConfirm={() => {
+          const target = deleting;
+          if (!target) return;
+          run(async () => {
+            const result = await deleteUnitAction(target.id);
+            if (result.ok) setDeleting(null);
+            return result;
+          }, `${target.name} removed`);
+        }}
+      />
     </section>
   );
 }

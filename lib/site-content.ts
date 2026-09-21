@@ -1,8 +1,8 @@
-import { MEAL_KEYS, MEAL_LABELS, MEAL_TIMES } from "./meals";
-import { INFANT_AGE_LIMIT, ROOM_CAPACITY, ROOM_TYPE_LABELS } from "./occupancy";
+import { MEAL_KEYS, MEAL_LABELS, mealTimes } from "./meals";
+import { INFANT_AGE_LIMIT, ROOM_TYPE_LABELS } from "./occupancy";
+import { DEFAULT_RULES, type Rules } from "./settings";
 import type { SiteGuestHouse, SitePolicies } from "./site-data";
 import type { RoomType } from "./types";
-import { ADVANCE_BOOKING_WINDOW_MONTHS } from "./workflow";
 
 /**
  * Copy for the public website, built from the same constants the portal
@@ -25,8 +25,8 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-function capacityLine(type: RoomType): string {
-  const { standard, withExtraBed } = ROOM_CAPACITY[type];
+function capacityLine(type: RoomType, rules: Rules): string {
+  const { standard, withExtraBed } = rules.capacity.room_types[type];
   return `${ROOM_TYPE_LABELS[type]} rooms for ${plural(standard, "guest")}, or ${withExtraBed} with an extra bed`;
 }
 
@@ -44,11 +44,13 @@ export function servingHouses(houses: SiteGuestHouse[]): SiteGuestHouse[] {
   return houses.filter((h) => h.serves_meals);
 }
 
-export function mealTimeLines(): string[] {
-  return MEAL_KEYS.map((meal) => `${MEAL_LABELS[meal]}, ${MEAL_TIMES[meal]}`);
+/** The serving times the office set in Settings (`getRules()`), one line per meal. */
+export function mealTimeLines(rules: Rules = DEFAULT_RULES): string[] {
+  const times = mealTimes(rules.meals.windows);
+  return MEAL_KEYS.map((meal) => `${MEAL_LABELS[meal]}, ${times[meal]}`);
 }
 
-export function facilityCards(houses: SiteGuestHouse[]): ContentCard[] {
+export function facilityCards(houses: SiteGuestHouse[], rules: Rules = DEFAULT_RULES): ContentCard[] {
   const roomTypes = (["double_sharing", "single"] as const).filter((type) =>
     houses.some((h) => h.roomsByType[type] > 0)
   );
@@ -59,7 +61,7 @@ export function facilityCards(houses: SiteGuestHouse[]): ContentCard[] {
       kicker: "Rooms",
       title: "Stay",
       items: [
-        ...roomTypes.map(capacityLine),
+        ...roomTypes.map((type) => capacityLine(type, rules)),
         `Children under ${INFANT_AGE_LIMIT} share a guardian's bed and need no room of their own`,
         // TODO(site): amenities from the guest house page on iitpkd.ac.in;
         // confirm they hold for every guest house.
@@ -74,7 +76,7 @@ export function facilityCards(houses: SiteGuestHouse[]): ContentCard[] {
         serving.length > 0
           ? [
               `Meals served at ${joinNames(serving.map((h) => h.name))}`,
-              ...mealTimeLines(),
+              ...mealTimeLines(rules),
               "Chosen day by day when you request your room",
             ]
           : ["Meals are not being served at the guest houses at present"],
@@ -126,7 +128,7 @@ export function guidelineCards(houses: SiteGuestHouse[], policies: SitePolicies)
       title: "Booking and approval",
       items: [
         ...policies.routes.map((r) => `${r.label}: ${r.approvers.join(" → ")}`),
-        `Check-in must fall within ${plural(ADVANCE_BOOKING_WINDOW_MONTHS, "month")} of the request${
+        `Check-in must fall within ${plural(policies.rules.booking.advance_booking_months, "month")} of the request${
           exempt.length > 0 ? ` (${joinNames(exempt)} exempt)` : ""
         }`,
         "Rooms are allotted by the Guest House Manager on approval; a particular room is not guaranteed",
@@ -148,7 +150,7 @@ export function guidelineCards(houses: SiteGuestHouse[], policies: SitePolicies)
         serving.length > 0
           ? [
               `Served at ${joinNames(serving.map((h) => h.name))}`,
-              ...mealTimeLines(),
+              ...mealTimeLines(policies.rules),
               "Every meal your stay covers is ticked by default; untick the ones you will not need",
             ]
           : ["Meals are not being served at the guest houses at present"],

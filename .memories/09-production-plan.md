@@ -187,7 +187,7 @@ create table account_directory (
 Rows you seed: every warden, every faculty advisor, the IAR cell mailbox, the GH
 manager, you (developer), every club mailbox with `role = 'club'`, and every
 office mailbox with `role = 'official'`. That is maybe 60 rows total, and
-`lib/routes.ts`'s `OFFICIAL_EMAIL_WHITELIST` disappears into it.
+the official whitelist (already a table, `official_email_whitelist`, since migration 16) can be folded into it.
 
 Resolution on login: `account_directory` row if one exists, else
 `baselineRoleFor(email)`, else reject. Same shape as your form-config resolution,
@@ -711,8 +711,9 @@ mail before pilot, `room_holds` before real booking volume.
 2. Send the Computer Centre email. It has the longest lead time of anything here.
 3. Ask the Administration Section for the tariff card, the retention period, and
    the authoritative hostel and warden list.
-4. Write the `hostels` / `clubs` / `account_directory` migration and move
-   `OFFICIAL_EMAIL_WHITELIST` into it.
+4. ~~Write the `hostels` / `clubs` migration and move the official whitelist
+   into it~~ — done: `hostels`, `units` and `official_email_whitelist`
+   (migrations 15–16). `account_directory` is still open.
 5. Spike Google OAuth against a throwaway Supabase project with your own
    `@smail.iitpkd.ac.in` account, so you know exactly what Phase 1 costs before
    you commit to it.

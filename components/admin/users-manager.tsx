@@ -58,10 +58,13 @@ const EMPTY: UserFormInput = {
 export function UsersManager({
   profiles,
   units = [],
+  hostels = [],
   roles = ALL_ROLES,
   actorRole = "developer",
 }: {
   profiles: Profile[];
+  /** Hostels on the Settings list — the only values `hostel_name` may take. */
+  hostels?: string[];
   /** Departments, clubs and offices a person can be placed in. */
   units?: Unit[];
   /** The roles this console user may hand out — see `assignableRoles`. */
@@ -332,11 +335,22 @@ export function UsersManager({
             </div>
             <div className="space-y-2">
               <Label>Hostel</Label>
-              <Input
-                placeholder="e.g. Malhar"
+              {/* A pick from the Settings list: wardens are scoped by this
+                  name, so a typo here used to leave a student outside every
+                  warden's queue. */}
+              <NativeSelect
                 value={values.hostel_name}
                 onChange={(e) => set("hostel_name")(e.target.value)}
-              />
+              >
+                <option value="">None</option>
+                {[...new Set([...hostels, ...(values.hostel_name ? [values.hostel_name] : [])])].map(
+                  (h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  )
+                )}
+              </NativeSelect>
             </div>
             <div className="space-y-2">
               <Label>Department / Club</Label>

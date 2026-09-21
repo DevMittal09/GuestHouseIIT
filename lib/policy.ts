@@ -9,13 +9,18 @@
  * changing it changes every place that shows or applies it.
  */
 
+import { DEFAULT_RULES } from "./settings";
 import { addDaysToDateValue, parseDateValue, toInstituteDateValue } from "./tz";
 import type { BookingType, GuestHouse, Role } from "./types";
 
 // ------------------------------------------------------------------ duration
 
-/** The longest ordinary stay, in nights. */
-export const MAX_BOOKING_NIGHTS = 14;
+/**
+ * The longest ordinary stay, in nights, under the default rules. The office's
+ * own value is Settings (`rules.booking.max_stay_nights`, 0 = no limit) and is
+ * passed as `maxNights` below.
+ */
+export const MAX_BOOKING_NIGHTS = DEFAULT_RULES.booking.max_stay_nights;
 
 /**
  * Roles that may book any length of stay.
@@ -71,21 +76,26 @@ export function stayLengthError(
   checkIn: Date,
   checkOut: Date,
   role: Role,
-  email?: string | null
+  email?: string | null,
+  maxNights: number = MAX_BOOKING_NIGHTS
 ): string | null {
-  if (isDurationExempt(role, email)) return null;
+  if (isDurationExempt(role, email) || maxNights <= 0) return null;
   const nights = stayNights(checkIn, checkOut);
-  if (nights <= MAX_BOOKING_NIGHTS) return null;
-  return `Bookings are limited to a maximum of ${MAX_BOOKING_NIGHTS} nights — this stay is ${nights} nights. ${CONTACT_FOR_LONGER_STAYS}`;
+  if (nights <= maxNights) return null;
+  return `Bookings are limited to a maximum of ${maxNights} nights — this stay is ${nights} nights. ${CONTACT_FOR_LONGER_STAYS}`;
 }
 
 export const CONTACT_FOR_LONGER_STAYS =
   "For longer stays, contact the Guest House Manager.";
 
 /** Helper text under the date range on the booking form. */
-export function stayLengthHint(role: Role, email?: string | null): string | null {
-  if (isDurationExempt(role, email)) return null;
-  return `Bookings are limited to a maximum of ${MAX_BOOKING_NIGHTS} nights. ${CONTACT_FOR_LONGER_STAYS}`;
+export function stayLengthHint(
+  role: Role,
+  email?: string | null,
+  maxNights: number = MAX_BOOKING_NIGHTS
+): string | null {
+  if (isDurationExempt(role, email) || maxNights <= 0) return null;
+  return `Bookings are limited to a maximum of ${maxNights} nights. ${CONTACT_FOR_LONGER_STAYS}`;
 }
 
 /**
@@ -96,11 +106,12 @@ export function stayLengthHint(role: Role, email?: string | null): string | null
 export function latestCheckOutDate(
   checkInDate: string,
   role: Role,
-  email?: string | null
+  email?: string | null,
+  maxNights: number = MAX_BOOKING_NIGHTS
 ): string | null {
-  if (isDurationExempt(role, email)) return null;
+  if (isDurationExempt(role, email) || maxNights <= 0) return null;
   if (!parseDateValue(checkInDate)) return null;
-  return addDaysToDateValue(checkInDate, MAX_BOOKING_NIGHTS);
+  return addDaysToDateValue(checkInDate, maxNights);
 }
 
 // ------------------------------------------------------------------ alumni

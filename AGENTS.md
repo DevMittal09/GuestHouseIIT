@@ -31,10 +31,13 @@ npm install
 npm run dev          # http://localhost:3000
 npm run build        # tsc typecheck runs here — always run before finishing
 npm run lint         # must stay clean
+npm test             # Vitest (tests/), must stay clean
 ```
 
-There is **no test framework installed**. Behaviour was verified two ways, and
-you should do the same rather than assuming:
+**`npm test`** runs the Vitest suite in `tests/`. Store tests use the mock
+store on a throwaway file (`MOCK_DB_PATH`, see `tests/helpers.ts`) with
+`TZ=UTC`; they never touch `.local-db.json`. Add a test for any rule you change.
+Beyond the suite, behaviour is verified these ways:
 
 1. **Ad-hoc TypeScript tests** run with
    `npx tsx --tsconfig ./tsconfig.json <file>.ts` (write them outside the repo,
@@ -225,8 +228,11 @@ cannot drift.
   approval happens through `allocateRooms()`, which assigns rooms and sets
   `APPROVED` in one step. `reviewBooking` explicitly rejects manager approvals.
 - Rejection requires a non-empty reason everywhere (enforced server-side).
-- `official` bookings are restricted to `OFFICIAL_EMAIL_WHITELIST` in
-  `lib/routes.ts`, and are highlighted + sorted to the top of the manager queue.
+- `official` bookings are restricted to the **official whitelist**, a Setting
+  (`official_email_whitelist` table, migration 16; read with
+  `getOfficialEmails()`, matched with `isWhitelistedOfficial`). It used to be a
+  constant in `lib/routes.ts`. They are highlighted + sorted to the top of the
+  manager queue.
 - **Manager Overrides**: `lib/access.ts` grants `gh_manager` powers to book on behalf of others, override approvals, edit meals post-approval, and bypass guest house restrictions (like the alumni/Bageshri rule).
 
 ### Time is institute time — `lib/tz.ts`
@@ -252,8 +258,10 @@ user typed and rendering it back are zoned.
 
 ### Advance-booking window
 
-Check-in must be within **one month** of today. `latestCheckIn(role)` in
-`lib/workflow.ts` is the single source of truth; `isAdvanceWindowExempt()`
+Check-in must be within **one month** of today by default — a Setting
+(`rules.booking.advance_booking_months`), passed as `latestCheckIn(role, from,
+months)`; the 14-night maximum stay is `rules.booking.max_stay_nights` (0 = no
+limit). `latestCheckIn` in `lib/workflow.ts` is the single source of truth; `isAdvanceWindowExempt()`
 exempts **`official` only**, because dignitary visits are arranged on the
 institute's own notice. The limit applies to `check_in` only — a stay that
 starts inside the window may run past it.
@@ -452,6 +460,13 @@ booking; a banner says so. Same action, chart and bucketing as `/availability`.
 
 ### Capacity and infants — `lib/occupancy.ts`
 
+**Two rules, both applied, at different moments** (confirmed 21 Sep 2026):
+the **per room type** table below is checked at **allocation**; the flat
+**3 guests + 1 infant per room card** is checked at **submission** (schema and
+the `booking_guests` trigger). Every number is a Setting (`rules.capacity`);
+rule functions take a `CapacityRules` parameter defaulting to these values, and
+the trigger reads the same row through `rule_int()` (migration 16).
+
 | Room type | Own beds | With one extra bed |
 | --- | --- | --- |
 | `double_sharing` | 2 | 3 |
@@ -475,7 +490,7 @@ physically do.
 
 > **Stored bookings can still hold legacy synthetic rooms** — migration 11 migrated older bookings into single synthetic rooms and left their infant flags unchanged.
 
-Checked server-side via triggers on `booking_guests` (max 3 guests + 1 infant per room). The booking form additionally caps how many guests can be added to a room card.
+Checked server-side via triggers on `booking_guests` (the per-card limits from Settings, 3 guests + 1 infant by default). The booking form additionally caps how many guests can be added to a room card.
 
 ## Meals — `lib/meals.ts`
 
@@ -638,6 +653,32 @@ booked / Booked badge for the whole period shown.
   date being chosen. Requesters were otherwise picking dates blind. One chart,
   one action, one bucketing — so what the requester sees and what the manager
   sees cannot drift.
+
+## Settings — the rules the console can change (`lib/settings.ts`)
+
+Developer console → **Settings** (developer only; Departments & Clubs stays
+manager + developer). Every value defaults to what the code did before.
+
+- **Scalar groups** are jsonb rows in `app_settings` — `rules.capacity`,
+  `rules.booking`, `rules.meals` — merged over `DEFAULT_RULES` by
+  `parseRuleGroup`, so a row saved before a field existed still reads. **Lists**
+  are tables: `hostels` (with `profiles_hostel_fk`, on update cascade / on
+  delete restrict) and `official_email_whitelist`. Departments, clubs and
+  offices are `units`, now with `office_class` (officer / department).
+- **Read them with `getRules()` / `getOfficialEmails()` / `getHostels()`**
+  (`lib/settings-server.ts`, React `cache()`, fall back to defaults on any
+  error). **Rule functions take the rules as a parameter** — never import a
+  "current settings" singleton. A page reads the rules once and hands the same
+  object to its client component, which builds `bookingPayloadSchema` with
+  `{ rules }` exactly as `createBooking` does.
+- **Refuse, don't adjust.** `lib/settings-impact.ts` names the live bookings or
+  accounts a change would break; the action returns that list and saves
+  nothing.
+- **Every change is audited** (`recordAudit` in `lib/audit-server.ts`, table
+  `security_audit`, append-only by trigger) *after* it succeeds. Unit and HOD
+  changes too.
+- Legacy whole-stay meals keep migration 8's windows (`normalizeMeals`), not
+  the Settings.
 
 ## Developer console lock
 
@@ -852,6 +893,18 @@ Migration files, applied sequentially:
    sign-in finds nobody on Supabase and saving a user in the console fails.**
    Re-run `supabase/seed.sql` afterwards to give the demo personas their
    usernames.
+13. `00000000000013_mail_templates.sql` — editable mail wording (`mail_templates`).
+14. `00000000000014_turnover_override.sql` — `room_holds.guard` / `override_by`;
+   the exclusion constraint compares `guard`, not `during`.
+15. `00000000000015_units_and_debit_heads.sql` — `units`, `PENDING_HOD`,
+   `profiles.unit_id` / `staff_category`, `bookings.debit_head`.
+16. `00000000000016_settings_and_audit.sql` — `hostels`,
+   `official_email_whitelist`, `units.office_class`, the occupancy trigger
+   reading Settings, `security_audit`.
+
+Full notes per migration in `.memories/04-database.md`. Migrations are tested
+in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine
+without it (`.memories/05-deployment.md`) — never the hosted project.
 
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are
 not applied automatically. Read the header of each before running it.

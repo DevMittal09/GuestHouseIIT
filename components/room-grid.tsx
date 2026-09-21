@@ -18,6 +18,7 @@ import {
 } from "@/lib/occupancy";
 import { OVERRIDE_NOTICE, TURNOVER_GRACE_HOURS, type ConflictKind } from "@/lib/turnover";
 import { cn } from "@/lib/utils";
+import { DEFAULT_RULES, type CapacityRules } from "@/lib/settings";
 import type { BookingWithDetails, Room } from "@/lib/types";
 
 /**
@@ -34,9 +35,12 @@ export function RoomGrid({
   rooms,
   occupancyVersion,
   onAllocated,
+  capacity = DEFAULT_RULES.capacity,
 }: {
   booking: BookingWithDetails;
   rooms: Room[];
+  /** Room capacity from Settings — the same values `allocateRooms` checks. */
+  capacity?: CapacityRules;
   /**
    * Changes whenever any booking's room holds change, server-side. The grid
    * loads occupancy once when the dialog opens, so without this it never
@@ -142,23 +146,23 @@ export function RoomGrid({
   const selectedRooms = selected
     .map((id) => rooms.find((r) => r.id === id))
     .filter((r): r is Room => Boolean(r));
-  const selectedCapacity = capacityOf(selectedRooms);
+  const selectedCapacity = capacityOf(selectedRooms, capacity);
   // Two different failures, both of which the server also checks: the party as
   // a whole not fitting the rooms picked, and one room card's party not
   // fitting the particular room it landed on. The second can happen while the
   // first passes — three guests and a spare single room add up, but nobody can
   // sleep three in the single.
   const capacityProblem =
-    selected.length > 0 ? allocationCapacityError(bedGuests, selectedRooms) : null;
+    selected.length > 0 ? allocationCapacityError(bedGuests, selectedRooms, capacity) : null;
   const cardProblem = booking.rooms.some((card, i) => {
     const room = selectedRooms[i];
     return room
-      ? roomAssignmentError(countBedGuests(card.guests), room, `Room ${card.room_index}`) !== null
+      ? roomAssignmentError(countBedGuests(card.guests), room, `Room ${card.room_index}`, capacity) !== null
       : false;
   });
   // Counted against the rooms actually picked: two guests in one single room
   // need an extra bed, which the pre-selection estimate (doubles) would miss.
-  const extraBeds = extraBedsFor(bedGuests, selectedRooms);
+  const extraBeds = extraBedsFor(bedGuests, selectedRooms, capacity);
 
   return (
     <div className="space-y-4">
@@ -189,16 +193,18 @@ export function RoomGrid({
 
       <RoomSection
         title={`${ROOM_TYPE_LABELS.double_sharing} rooms`}
-        description={describeCapacity("double_sharing")}
+        description={describeCapacity("double_sharing", capacity)}
         rooms={doubles}
+        capacity={capacity}
         conflicts={conflicts}
         selected={selected}
         onToggle={toggle}
       />
       <RoomSection
         title={`${ROOM_TYPE_LABELS.single} rooms`}
-        description={describeCapacity("single")}
+        description={describeCapacity("single", capacity)}
         rooms={singles}
+        capacity={capacity}
         conflicts={conflicts}
         selected={selected}
         onToggle={toggle}
@@ -250,7 +256,8 @@ export function RoomGrid({
                 ? roomAssignmentError(
                     countBedGuests(card.guests),
                     room,
-                    `Room ${card.room_index}`
+                    `Room ${card.room_index}`,
+                    capacity
                   )
                 : null;
               return (
@@ -348,10 +355,12 @@ function RoomSection({
   conflicts,
   selected,
   onToggle,
+  capacity,
 }: {
   title: string;
   description: string;
   rooms: Room[];
+  capacity: CapacityRules;
   conflicts: Record<string, ConflictKind>;
   /** Picked rooms in card order; the index is the "Room N" shown on the tile. */
   selected: string[];
@@ -382,7 +391,7 @@ function RoomSection({
                   ? `${room.room_number} — already allotted for these dates`
                   : isTurnover
                     ? `${room.room_number} — another stay overlaps by up to ${TURNOVER_GRACE_HOURS} hours. Pick it to accept the changeover.`
-                    : `${room.room_number} — ${ROOM_TYPE_LABELS[room.room_type]}. ${describeCapacity(room.room_type)}`
+                    : `${room.room_number} — ${ROOM_TYPE_LABELS[room.room_type]}. ${describeCapacity(room.room_type, capacity)}`
               }
               className={cn(
                 "flex h-12 items-center justify-center rounded-md border text-xs font-semibold text-white transition-transform",

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
+import { getRules } from "@/lib/settings-server";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
@@ -138,6 +139,7 @@ export default async function ManagerPage({
         rooms={rooms}
         occupancyVersion={occupancyVersion}
         nowIso={now.toISOString()}
+        capacity={(await getRules()).capacity}
       />
     </div>
   );

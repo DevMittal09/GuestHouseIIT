@@ -11,6 +11,7 @@ import {
 import { GUEST_HOUSE_PHOTOS, guestHouseSlug, HOME_PHOTOS } from "@/lib/site";
 import { describeRooms, facilityCards, joinNames } from "@/lib/site-content";
 import { getSiteGuestHouses } from "@/lib/site-data";
+import { getRules } from "@/lib/settings-server";
 
 const LINK_CARDS = [
   {
@@ -25,7 +26,7 @@ const LINK_CARDS = [
 const COUNT_WORDS = ["no", "one", "two", "three", "four", "five", "six"];
 
 export default async function HomePage() {
-  const houses = await getSiteGuestHouses();
+  const [houses, rules] = await Promise.all([getSiteGuestHouses(), getRules()]);
 
   return (
     <>
@@ -110,7 +111,7 @@ export default async function HomePage() {
         <Container className="pt-14 pb-16">
           <SectionTitle id="facilities">Facilities available</SectionTitle>
           <div className="mt-8 grid grid-cols-[repeat(auto-fit,minmax(min(240px,100%),1fr))] gap-[18px]">
-            {facilityCards(houses).map((card) => (
+            {facilityCards(houses, rules).map((card) => (
               <div
                 key={card.title}
                 className="rounded-[2px] border border-t-[3px] border-border border-t-gold bg-white px-[22px] pt-6 pb-7"

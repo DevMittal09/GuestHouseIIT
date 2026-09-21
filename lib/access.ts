@@ -92,6 +92,7 @@ export type ConsoleSection =
   | "mail_templates"
   | "mail_outbox"
   | "bookings"
+  | "settings"
   | "console_access";
 
 export const CONSOLE_SECTIONS: Record<
@@ -139,6 +140,13 @@ export const CONSOLE_SECTIONS: Record<
     href: "/admin/bookings",
     roles: ["developer"],
     blurb: "Force a booking's status or delete it outright. Developer only.",
+  },
+  settings: {
+    label: "Settings",
+    href: "/admin/settings",
+    roles: ["developer"],
+    blurb:
+      "The rules: official whitelist, hostels, room capacity, the booking window, stay length and meal times. Developer only.",
   },
   console_access: {
     label: "Console Access",

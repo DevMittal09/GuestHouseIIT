@@ -34,6 +34,13 @@ import { getSupabase } from "@/lib/supabase/client";
 import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
 import { deriveFromRooms } from "./derive";
 import type { Unit } from "@/lib/units";
+import {
+  auditMatches,
+  type AuditEvent,
+  type AuditFilter,
+  type NewAuditEvent,
+} from "@/lib/audit";
+import type { Json } from "@/lib/supabase/database.types";
 import type {
   BookingDetailsPatch,
   DataStore,
@@ -833,7 +840,121 @@ export class SupabaseStore implements DataStore {
       .eq("key", key)
       .maybeSingle();
     if (error) throw error;
+    return typeof data?.value === "string" ? data.value : null;
+  }
+
+  async getJsonSetting(key: string): Promise<unknown | null> {
+    const { data, error } = await this.db
+      .from("app_settings")
+      .select("value")
+      .eq("key", key)
+      .maybeSingle();
+    if (error) throw error;
     return data?.value ?? null;
+  }
+
+  async setJsonSetting(key: string, value: unknown): Promise<void> {
+    const { error } = await this.db
+      .from("app_settings")
+      .upsert({ key, value: value as Json, updated_at: new Date().toISOString() });
+    if (error) throw error;
+  }
+
+  async listHostels(): Promise<string[]> {
+    const { data, error } = await this.db.from("hostels").select("name").order("name");
+    if (error) throw error;
+    return (data ?? []).map((r) => r.name);
+  }
+
+  async addHostel(name: string): Promise<void> {
+    const { error } = await this.db.from("hostels").insert({ name });
+    if (error) {
+      if (error.code === "23505") throw new Error(`${name} is already on the list`);
+      throw error;
+    }
+  }
+
+  async renameHostel(from: string, to: string): Promise<void> {
+    // `profiles_hostel_fk` is `on update cascade`, so every account in the
+    // hostel follows the rename inside this one statement.
+    const { error } = await this.db.from("hostels").update({ name: to }).eq("name", from);
+    if (error) {
+      if (error.code === "23505") throw new Error(`${to} is already on the list`);
+      throw error;
+    }
+  }
+
+  async removeHostel(name: string): Promise<void> {
+    const { error } = await this.db.from("hostels").delete().eq("name", name);
+    if (error) {
+      // 23503 = foreign_key_violation: an account still names it.
+      if (error.code === "23503") {
+        throw new Error(`Accounts still name ${name} — move them first`);
+      }
+      throw error;
+    }
+  }
+
+  async listOfficialEmails(): Promise<string[]> {
+    const { data, error } = await this.db
+      .from("official_email_whitelist")
+      .select("email")
+      .order("email");
+    if (error) throw error;
+    return (data ?? []).map((r) => r.email);
+  }
+
+  async addOfficialEmail(email: string): Promise<void> {
+    const wanted = email.trim().toLowerCase();
+    const { error } = await this.db.from("official_email_whitelist").insert({ email: wanted });
+    if (error) {
+      if (error.code === "23505") throw new Error(`${wanted} is already on the list`);
+      throw error;
+    }
+  }
+
+  async removeOfficialEmail(email: string): Promise<void> {
+    const { error } = await this.db
+      .from("official_email_whitelist")
+      .delete()
+      .eq("email", email.trim().toLowerCase());
+    if (error) throw error;
+  }
+
+  async appendAudit(event: NewAuditEvent): Promise<void> {
+    const { error } = await this.db.from("security_audit").insert({
+      ...event,
+      details: event.details as Json,
+    });
+    if (error) throw error;
+  }
+
+  async listAudit(filter: AuditFilter): Promise<AuditEvent[]> {
+    const limit = filter.limit ?? 200;
+    let query = this.db
+      .from("security_audit")
+      .select("*")
+      .order("at", { ascending: false })
+      // Free text spans jsonb details, so it is matched after the read; pull
+      // a wider page when it is in play so a match is not cut off.
+      .limit(filter.q ? Math.max(limit * 5, 1000) : limit);
+    if (filter.event) query = query.eq("event", filter.event);
+    if (filter.actorId) query = query.eq("actor_id", filter.actorId);
+    if (filter.from) query = query.gte("at", filter.from);
+    if (filter.to) query = query.lt("at", filter.to);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? [])
+      .map(
+        (row): AuditEvent => ({
+          ...row,
+          id: String(row.id),
+          event: row.event as AuditEvent["event"],
+          details: (row.details ?? {}) as Record<string, unknown>,
+        })
+      )
+      .filter((e) => auditMatches(e, filter))
+      .slice(0, limit);
   }
 
   async setSetting(key: string, value: string): Promise<void> {
@@ -1017,6 +1138,10 @@ function makeReference(): string {
 function profileWriteError(error: { code?: string; message: string }): Error | typeof error {
   if (error.code === "23505" && error.message.includes("ldap_uid")) {
     return new Error("Another user already has this LDAP username");
+  }
+  // Migration 16: `profiles.hostel_name` must name a hostel on the list.
+  if (error.code === "23503" && error.message.includes("profiles_hostel_fk")) {
+    return new Error("That hostel is not on the list — add it in Settings first");
   }
   return error;
 }

@@ -11,9 +11,11 @@ import {
 import {
   MEAL_KEYS,
   MEAL_LABELS,
-  MEAL_TIMES,
+  MEAL_SERVING_WINDOWS,
   mealSlot,
+  mealTimes,
   mealUnavailableReason,
+  type MealWindows,
   type StayMealDay,
 } from "@/lib/meals";
 import { formatDateValue } from "@/lib/tz";
@@ -32,12 +34,16 @@ export function MealPlanGrid({
   checkIn,
   slots,
   onChange,
+  windows = MEAL_SERVING_WINDOWS,
 }: {
   days: StayMealDay[];
   checkIn: Date;
   slots: ReadonlySet<string>;
   onChange: (next: Set<string>) => void;
+  /** The kitchen's serving times (Settings), for the column labels and the dashes. */
+  windows?: MealWindows;
 }) {
+  const times = mealTimes(windows);
   const update = (keys: string[], on: boolean) => {
     const next = new Set(slots);
     for (const key of keys) {
@@ -63,7 +69,7 @@ export function MealPlanGrid({
                 <TableHead key={meal} className="h-auto py-2 text-center align-bottom">
                   <span className="block text-foreground">{MEAL_LABELS[meal]}</span>
                   <span className="block text-xs font-normal text-muted-foreground">
-                    {MEAL_TIMES[meal]}
+                    {times[meal]}
                   </span>
                   <label className="mt-1 inline-flex cursor-pointer items-center gap-1.5 text-xs font-normal text-muted-foreground">
                     <input
@@ -92,7 +98,7 @@ export function MealPlanGrid({
               {MEAL_KEYS.map((meal) => {
                 if (!day.available[meal]) {
                   const reason =
-                    mealUnavailableReason(day.date, meal, checkIn) === "before-check-in"
+                    mealUnavailableReason(day.date, meal, checkIn, windows) === "before-check-in"
                       ? "Served before check-in"
                       : "Served after check-out";
                   return (

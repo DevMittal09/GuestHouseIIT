@@ -51,10 +51,13 @@ import {
   seedLogs,
   seedProfiles,
   seedRoomHolds,
+  seedHostels,
   seedRooms,
   seedUnits,
 } from "./seed";
 import type { Unit } from "@/lib/units";
+import { auditMatches, type AuditEvent, type AuditFilter, type NewAuditEvent } from "@/lib/audit";
+import { DEFAULT_OFFICIAL_EMAILS } from "@/lib/settings";
 
 interface Db {
   profiles: Profile[];
@@ -68,8 +71,17 @@ interface Db {
   form_configs: RoleFormConfig[];
   /** Source of truth for occupancy; `Booking.assigned_room_ids` is derived. */
   room_holds: RoomHold[];
-  /** Runtime settings, e.g. the developer console password hash. */
-  app_settings?: Record<string, string>;
+  /**
+   * Runtime settings: the developer console password hash (a string) and,
+   * since migration 16, the `rules.<group>` Settings (objects).
+   */
+  app_settings?: Record<string, unknown>;
+  /** Migration 16: hostels, which `profiles.hostel_name` must name. */
+  hostels?: string[];
+  /** Migration 16: accounts allowed to submit official bookings, lowercased. */
+  official_emails?: string[];
+  /** Migration 16: the append-only security audit log. */
+  security_audit?: AuditEvent[];
   /** Queued notifications; see `lib/mail/dispatch.ts`. */
   email_outbox?: EmailMessage[];
   /** Only the mails whose wording has actually been edited (migration 13). */
@@ -78,12 +90,14 @@ interface Db {
   units?: Unit[];
 }
 
-const DB_PATH = path.join(process.cwd(), ".local-db.json");
+// `MOCK_DB_PATH` lets the test suite run against a throwaway file instead of
+// the developer's working data.
+const DB_PATH = process.env.MOCK_DB_PATH || path.join(process.cwd(), ".local-db.json");
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 
 function loadDb(): Db {
-  if (fs.existsSync(DB_PATH)) {
-    const db = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as Db;
+  if (fs.existsSync(/*turbopackIgnore: true*/ DB_PATH)) {
+    const db = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ DB_PATH, "utf8")) as Db;
     // Self-heal databases created before newer features existed.
     let dirty = false;
     if (!db.form_configs) {
@@ -259,6 +273,48 @@ function loadDb(): Db {
       db.units = seedUnits;
       dirty = true;
     }
+    // Migration 16's counterparts. A seeded unit added since the file was
+    // written (the demo offices) is added, as seeded profiles are; a unit
+    // from before office classes existed has none.
+    for (const seeded of seedUnits) {
+      if (!db.units.some((u) => u.id === seeded.id)) {
+        db.units.push(seeded);
+        dirty = true;
+      }
+    }
+    for (const u of db.units) {
+      if (u.office_class === undefined) {
+        u.office_class = seedUnits.find((s) => s.id === u.id)?.office_class ?? null;
+        dirty = true;
+      }
+    }
+    // Demo personas that gained a unit since (the Director's and IAR
+    // offices). Only a *null* unit is filled, and only for a seeded persona,
+    // so a unit someone chose in the console is never overwritten.
+    for (const p of db.profiles) {
+      const seeded = seedProfiles.find((s) => s.id === p.id);
+      if (seeded?.unit_id && p.unit_id === null) {
+        p.unit_id = seeded.unit_id;
+        dirty = true;
+      }
+    }
+    if (!db.hostels) {
+      // Seeded from what the profiles already say, exactly as the migration
+      // does, so no stored account is left naming a hostel that is not there.
+      const named = db.profiles
+        .map((p) => p.hostel_name?.trim())
+        .filter((h): h is string => Boolean(h));
+      db.hostels = [...new Set([...seedHostels, ...named])].sort();
+      dirty = true;
+    }
+    if (!db.official_emails) {
+      db.official_emails = [...DEFAULT_OFFICIAL_EMAILS];
+      dirty = true;
+    }
+    if (!db.security_audit) {
+      db.security_audit = [];
+      dirty = true;
+    }
     if (dirty) saveDb(db);
     return db;
   }
@@ -274,6 +330,9 @@ function loadDb(): Db {
     room_holds: seedRoomHolds,
     email_outbox: [],
     units: seedUnits,
+    hostels: [...seedHostels],
+    official_emails: [...DEFAULT_OFFICIAL_EMAILS],
+    security_audit: [],
   };
   saveDb(db);
   return db;
@@ -334,7 +393,7 @@ function assignRoomsToCards(db: Db, bookingId: string, roomIds: string[]) {
 }
 
 function saveDb(db: Db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+  fs.writeFileSync(/*turbopackIgnore: true*/ DB_PATH, JSON.stringify(db, null, 2));
 }
 
 export class MockStore implements DataStore {
@@ -678,6 +737,7 @@ export class MockStore implements DataStore {
       throw new Error("A user with this email already exists");
     }
     assertLdapUidFree(db, input.ldap_uid, null);
+    assertHostelExists(db, input.hostel_name);
     const profile: Profile = { ...input, id: randomUUID() };
     db.profiles.push(profile);
     saveDb(db);
@@ -695,6 +755,7 @@ export class MockStore implements DataStore {
       throw new Error("A user with this email already exists");
     }
     if (patch.ldap_uid !== undefined) assertLdapUidFree(db, patch.ldap_uid, id);
+    if (patch.hostel_name !== undefined) assertHostelExists(db, patch.hostel_name);
     Object.assign(p, patch);
     saveDb(db);
   }
@@ -849,7 +910,96 @@ export class MockStore implements DataStore {
   }
 
   async getSetting(key: string): Promise<string | null> {
+    const value = loadDb().app_settings?.[key];
+    return typeof value === "string" ? value : null;
+  }
+
+  async getJsonSetting(key: string): Promise<unknown | null> {
     return loadDb().app_settings?.[key] ?? null;
+  }
+
+  async setJsonSetting(key: string, value: unknown): Promise<void> {
+    const db = loadDb();
+    db.app_settings = { ...(db.app_settings ?? {}), [key]: value };
+    saveDb(db);
+  }
+
+  async listHostels(): Promise<string[]> {
+    return [...(loadDb().hostels ?? [])].sort((a, b) => a.localeCompare(b));
+  }
+
+  async addHostel(name: string): Promise<void> {
+    const db = loadDb();
+    const hostels = (db.hostels ??= []);
+    if (hostels.some((h) => h.toLowerCase() === name.toLowerCase())) {
+      throw new Error(`${name} is already on the list`);
+    }
+    hostels.push(name);
+    saveDb(db);
+  }
+
+  async renameHostel(from: string, to: string): Promise<void> {
+    const db = loadDb();
+    const hostels = (db.hostels ??= []);
+    const at = hostels.indexOf(from);
+    if (at < 0) throw new Error(`${from} is not on the list`);
+    if (hostels.some((h) => h !== from && h.toLowerCase() === to.toLowerCase())) {
+      throw new Error(`${to} is already on the list`);
+    }
+    hostels[at] = to;
+    // `on update cascade`, as the foreign key does in Postgres.
+    for (const p of db.profiles) if (p.hostel_name === from) p.hostel_name = to;
+    saveDb(db);
+  }
+
+  async removeHostel(name: string): Promise<void> {
+    const db = loadDb();
+    // `on delete restrict`: a hostel someone still lives in stays.
+    const inUse = db.profiles.filter((p) => p.hostel_name === name);
+    if (inUse.length > 0) {
+      throw new Error(
+        `${inUse.length} account${inUse.length === 1 ? "" : "s"} still name ${name} — move ${inUse.length === 1 ? "it" : "them"} first`
+      );
+    }
+    db.hostels = (db.hostels ?? []).filter((h) => h !== name);
+    saveDb(db);
+  }
+
+  async listOfficialEmails(): Promise<string[]> {
+    return [...(loadDb().official_emails ?? [])].sort();
+  }
+
+  async addOfficialEmail(email: string): Promise<void> {
+    const db = loadDb();
+    const list = (db.official_emails ??= []);
+    const wanted = email.trim().toLowerCase();
+    if (list.includes(wanted)) throw new Error(`${wanted} is already on the list`);
+    list.push(wanted);
+    saveDb(db);
+  }
+
+  async removeOfficialEmail(email: string): Promise<void> {
+    const db = loadDb();
+    const wanted = email.trim().toLowerCase();
+    db.official_emails = (db.official_emails ?? []).filter((e) => e !== wanted);
+    saveDb(db);
+  }
+
+  async appendAudit(event: NewAuditEvent): Promise<void> {
+    const db = loadDb();
+    (db.security_audit ??= []).push({
+      ...event,
+      id: randomUUID(),
+      at: new Date().toISOString(),
+    });
+    saveDb(db);
+  }
+
+  async listAudit(filter: AuditFilter): Promise<AuditEvent[]> {
+    return (loadDb().security_audit ?? [])
+      .filter((e) => auditMatches(e, filter))
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, filter.limit ?? 200);
   }
 
   async setSetting(key: string, value: string): Promise<void> {
@@ -1007,6 +1157,17 @@ function makeReference(): string {
     "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".charAt(Math.floor(Math.random() * 32))
   ).join("");
   return `IITPKD-GH-${year}-${rand}`;
+}
+
+/**
+ * `profiles_hostel_fk` (migration 16), emulated: an account can only name a
+ * hostel that is on the list.
+ */
+function assertHostelExists(db: Db, hostel: string | null | undefined): void {
+  if (!hostel) return;
+  if (!(db.hostels ?? []).includes(hostel)) {
+    throw new Error(`${hostel} is not a hostel on the list — add it in Settings first`);
+  }
 }
 
 /**

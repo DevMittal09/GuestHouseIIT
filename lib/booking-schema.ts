@@ -8,13 +8,9 @@ import { debitDetailsPrompt, debitHeadError } from "./debit-heads";
 import { isCountryCode } from "./countries";
 import { parentDependencyError, type FieldMode, type RoleFormConfig } from "./form-config";
 import { MAX_MEAL_DAYS, mealPlanError, normalizeMeals } from "./meals";
-import {
-  INFANT_AGE_LIMIT,
-  isInfantAge,
-  MAX_GUESTS_PER_ROOM,
-  roomPartyError,
-} from "./occupancy";
+import { INFANT_AGE_LIMIT, isInfantAge, roomPartyError } from "./occupancy";
 import { stayLengthError } from "./policy";
+import { DEFAULT_RULES, type CapacityRules, type Rules } from "./settings";
 import { formatInstituteDate, formatInstituteDateTime, instituteDate } from "./tz";
 import { includesMeals, needsRooms } from "./types";
 import { latestCheckIn } from "./workflow";
@@ -166,12 +162,19 @@ export interface BookingSchemaContext {
   mealsAvailable: boolean;
   /** The requester's address, for the duration exemptions in `lib/policy.ts`. */
   requesterEmail?: string | null;
+  /**
+   * The office's Settings (`lib/settings.ts`). The booking page reads them
+   * once and hands the same object to the form, so the client and the server
+   * validate against identical values. Defaults to today's rules.
+   */
+  rules?: Rules;
 }
 
 export function bookingPayloadSchema(
   config: RoleFormConfig,
   context: BookingSchemaContext = { mealsAvailable: true }
 ) {
+  const rules = context.rules ?? DEFAULT_RULES;
   return z
     .object({
       guest_house_id: z.string().min(1, "Select a guest house"),
@@ -352,7 +355,7 @@ export function bookingPayloadSchema(
       v.rooms.forEach((room, i) => {
         const infants = room.guests.filter((g) => isInfantAge(g.age)).length;
         const guests = room.guests.length - infants;
-        const message = roomPartyError(guests, infants);
+        const message = roomPartyError(guests, infants, rules.capacity);
         if (message) {
           ctx.addIssue({ code: "custom", message, path: ["rooms", i, "guests"] });
         }
@@ -476,7 +479,8 @@ export function bookingPayloadSchema(
       const message = mealPlanError(
         v.meals,
         instituteDate(v.check_in),
-        instituteDate(v.check_out)
+        instituteDate(v.check_out),
+        rules.meals.windows
       );
       if (message) ctx.addIssue({ code: "custom", message, path: ["meals"] });
     })
@@ -486,7 +490,8 @@ export function bookingPayloadSchema(
         instituteDate(v.check_in),
         instituteDate(v.check_out),
         config.role,
-        context.requesterEmail
+        context.requesterEmail,
+        rules.booking.max_stay_nights
       );
       if (message) ctx.addIssue({ code: "custom", message, path: ["check_out"] });
     })
@@ -496,11 +501,11 @@ export function bookingPayloadSchema(
     })
     .refine(
       (v) => {
-        const limit = latestCheckIn(config.role);
+        const limit = latestCheckIn(config.role, new Date(), rules.booking.advance_booking_months);
         return !limit || instituteDate(v.check_in) <= limit;
       },
       {
-        message: advanceWindowMessage(config.role),
+        message: advanceWindowMessage(config.role, rules.booking.advance_booking_months),
         path: ["check_in"],
       }
     )
@@ -565,10 +570,14 @@ export function checkOutOrderError(checkIn: string, checkOut: string): string | 
 }
 
 /** Wording for the advance-booking limit, with the actual last bookable date. */
-export function advanceWindowMessage(role: RoleFormConfig["role"]): string {
-  const limit = latestCheckIn(role);
+export function advanceWindowMessage(
+  role: RoleFormConfig["role"],
+  months: number = DEFAULT_RULES.booking.advance_booking_months
+): string {
+  const limit = latestCheckIn(role, new Date(), months);
   if (!limit) return "";
-  return `Bookings open one month in advance — the latest check-in you can request is ${formatInstituteDate(
+  const window = months === 1 ? "one month" : `${months} months`;
+  return `Bookings open ${window} in advance — the latest check-in you can request is ${formatInstituteDate(
     limit
   )}`;
 }
@@ -591,6 +600,13 @@ export function isAadhaarNumber(value: string): boolean {
 }
 
 /** The fine print next to the infant counter, kept with the rule it explains. */
-export const INFANT_HELP_TEXT = `A guest below ${INFANT_AGE_LIMIT} years is an infant: they share a guardian's bed, need no bed of their own and are not asked for an ID. A room takes up to ${MAX_GUESTS_PER_ROOM} guests plus one infant.`;
+export function infantHelpText(capacity: CapacityRules = DEFAULT_RULES.capacity): string {
+  const infants = capacity.max_infants_per_room;
+  return `A guest below ${INFANT_AGE_LIMIT} years is an infant: they share a guardian's bed, need no bed of their own and are not asked for an ID. A room takes up to ${capacity.max_guests_per_room} guests${
+    infants > 0 ? ` plus ${infants === 1 ? "one infant" : `${infants} infants`}` : ""
+  }.`;
+}
+
+export const INFANT_HELP_TEXT = infantHelpText();
 
 export type BookingPayload = z.infer<ReturnType<typeof bookingPayloadSchema>>;

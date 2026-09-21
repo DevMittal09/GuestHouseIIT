@@ -17,7 +17,11 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 | `booking_logs` | Append-only audit trail of status changes. |
 | `form_configs` | One row per requester role: `role` (PK), `config` jsonb, `updated_at`. |
 | `room_holds` | Which room each booking occupies, and when. See below — this is the interesting one. |
-| `app_settings` | Runtime key/value. Currently one key: the developer console password hash. **Service-role only — no `authenticated` policy**, because a developer policy would expose the hash to anyone who can set their own role. |
+| `app_settings` | Runtime key/value (`value` is jsonb). Holds the developer console password hash (a string) and, since migration 16, the **Settings** groups as objects: `rules.capacity`, `rules.booking`, `rules.meals` (and later phases' groups). A missing row means "the defaults in `lib/settings.ts`". **Service-role only — no `authenticated` policy**, because a developer policy would expose the hash to anyone who can set their own role. |
+| `units` | (Migration 15) Departments, clubs, councils and offices: `name`, `kind`, `parent_id`, `head_id`, `acting_head_id`, and (migration 16) `office_class` — `officer` / `department`, offices only. Approvers are resolved through it (`lib/units.ts`). |
+| `hostels` | (Migration 16) The hostel list. `profiles.hostel_name` references `hostels(name)` **on update cascade, on delete restrict**: a rename moves everyone, a hostel in use cannot be removed. |
+| `official_email_whitelist` | (Migration 16) Accounts allowed to submit Official / Dignitary bookings, lowercased. Replaced the constant in `lib/routes.ts`. Service-role only. |
+| `security_audit` | (Migration 16) The append-only security audit log. A trigger refuses every UPDATE, every DELETE except through `purge_security_audit(days)` (never under 180 days, CERT-In), and TRUNCATE. Service-role only. |
 | `email_outbox` | The notification queue (migration 10). One row per message: recipients, rendered HTML and text, status, attempts, backoff. **Service-role only, like `app_settings`** — the rendered bodies quote guest names, purposes of visit and rejection reasons, which makes this table more sensitive than the bookings it describes. |
 
 ### `bookings` columns worth knowing
@@ -284,6 +288,52 @@ Current migrations:
    throwaway `postgres:16-alpine`: re-runnable, `PRIYA` refused beside `priya`.
    The mock store self-heals the same way (seeded personas get theirs back by
    email; everyone else `null`).
+
+9. `00000000000009_booking_types_and_roles.sql` — see "Migration 9" below
+   (`bookings.booking_type`, the alumni fields, and the `iar_student_cell` /
+   `gh_caretaker` roles).
+13. `00000000000013_mail_templates.sql` (Sep 2026). `mail_templates`: per-event
+   overrides of the automatic mails — `subject`, an `intro` paragraph, an
+   `outro` note, extra `cc_emails`, and an `enabled` switch. **Only edited events
+   have a row**; deleting the row is the console's Reset, and the built-in
+   wording in `lib/mail/templates.ts` stays the single source of the default.
+   The facts inside a mail (dates, rooms, the party, the approval trail) are
+   still assembled in code. Readable by `gh_manager` / `developer`, written
+   through the service role. Additive, safe to re-run.
+14. `00000000000014_turnover_override.sql` (Sep 2026). The Guest House Manager
+   may accept a **turnover overlap**. `room_holds` gains `override_by` (who
+   accepted it) and `guard`, the range the exclusion constraint now compares:
+   `during` for an ordinary hold, and `during` shrunk by two hours at each end
+   when overridden (a sliver at the midpoint for a stay shorter than four
+   hours, so an override is bounded, never unlimited). `guard` is maintained by
+   a trigger — never write it. The constraint moves from `room_holds_no_overlap`
+   to `room_holds_no_overlap_guard`, and `set_room_holds()` gains
+   `p_override_room_ids` / `p_override_by` (the three-argument overload is
+   dropped so it cannot silently ignore overrides). `during` stays truthful,
+   so the grid and reports still show when a room is really taken. Safe to
+   re-run.
+15. `00000000000015_units_and_debit_heads.sql` (Sep 2026). Approval by
+   appointment and who pays: the `PENDING_HOD` status; `units` (departments,
+   clubs, councils, offices, each with a head and an acting head, a parent
+   whose head approves when a unit has none); `profiles.unit_id` and
+   `staff_category` (faculty / staff); `bookings.debit_head`, `debit_details`,
+   `debit_document_url`, with personal bookings backfilled to `personal_funds`
+   and older official ones left null rather than guessed. `can_access_booking()`
+   lets a unit head read the bookings they are asked to approve. Safe to
+   re-run.
+16. `00000000000016_settings_and_audit.sql` (Phase 1, Sep 2026). Settings and
+   the security audit log: `hostels` (seeded from what profiles already say,
+   after trimming them) with the `profiles_hostel_fk` foreign key;
+   `official_email_whitelist` (seeded once, into an empty table, with the three
+   formerly hardcoded addresses, so a re-run never resurrects a removed one);
+   `units.office_class`; `rule_int()`, and `check_room_occupancy()` reading its
+   3 + 1 limits from `rules.capacity`; `security_audit` with its append-only
+   triggers and `purge_security_audit()`. Verified in a throwaway Postgres 16
+   with old-shape rows (untrimmed and blank hostel names), applied three times,
+   plus the seed twice — see [05-deployment.md](05-deployment.md#verifying-changes).
+
+> Migrations 1–5 are **not** re-runnable (they `create` without `if not
+> exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.
 
 > **Migrations 6, 7 and 8 must be applied before bookings can be created against
 > Supabase.** The insert names `meals` and `has_infant`, and until migration 8

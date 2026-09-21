@@ -1,5 +1,7 @@
 import { cache } from "react";
 import { getEffectiveFormConfig } from "./form-config-server";
+import { DEFAULT_RULES, type Rules } from "./settings";
+import { getRules } from "./settings-server";
 import { getStore } from "./store";
 import {
   REQUESTER_ROLES,
@@ -58,6 +60,8 @@ export type SitePolicies = {
   routes: BookingRoute[];
   /** The student parent rule, when the saved student form still carries it. */
   studentDependency: { parents: string[]; dependents: string[] } | null;
+  /** The office's Settings — the advance window and meal times the site quotes. */
+  rules: Rules;
 };
 
 /** Who reviews a booking that enters the pipeline at `role`'s entry status. */
@@ -96,9 +100,9 @@ export const getSitePolicies = cache(async (): Promise<SitePolicies> => {
         ? { parents: student.parent_relationships, dependents: student.dependent_relationships }
         : null;
 
-    return { routes, studentDependency };
+    return { routes, studentDependency, rules: await getRules() };
   } catch (err) {
     console.error("[site] could not load booking policies", err);
-    return { routes: [], studentDependency: null };
+    return { routes: [], studentDependency: null, rules: DEFAULT_RULES };
   }
 });

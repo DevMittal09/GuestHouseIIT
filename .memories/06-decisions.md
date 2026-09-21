@@ -1223,3 +1223,96 @@ to show.
 
 Wardens never open New Booking, but their fields were on the list. The card
 sits below their queue, because the queue is what they come to the page for.
+
+## Production-readiness programme — Phase 1: Settings (21 Sep 2026)
+
+The owner's brief: make the portal production-ready as the public website of
+an Institute of National Importance, in ten phases, with no clarifying
+questions — pick the sensible option, make it configurable from the developer
+console, and log the assumption here. Each phase below records what was
+decided and what was assumed.
+
+### Room capacity: both rules, not one or the other (confirmed in the code)
+
+The brief asked whether capacity is per room type (double 2/3, single 1/2) or
+the flat "3 guests + 1 infant per room" from migration 11. **It is both, at
+different moments**: the flat per-card rule at submission (no room exists yet),
+the per-type rule at allocation (the manager has picked rooms). A card of 3 is
+accepted, and must then be given a double. Recorded in
+[README.md §4.3](README.md). Both are now Settings.
+
+### Scalar rules are jsonb rows; lists are tables
+
+`app_settings` already existed with a jsonb `value`, so each group of scalar
+rules is one row (`rules.capacity`, `rules.booking`, `rules.meals`), merged
+over the code defaults on read (`parseRuleGroup`). A row saved before a field
+existed still reads, so a new setting never needs a data migration. **Lists**
+— hostels, the official whitelist — got tables, as the brief asked, because a
+list is edited an item at a time and the database can enforce things about it:
+`profiles.hostel_name` references `hostels(name)` so a rename cascades and a
+hostel in use cannot be removed.
+
+### Rule functions take the rules as a parameter
+
+Rather than a module-level "current settings" (unsafe across requests, and a
+second copy on the client), every rule function takes the rules explicitly,
+defaulting to `DEFAULT_RULES`. Server pages read them once with `getRules()`
+(React `cache()`) and pass the *same object* to the client form and the server
+action, so `bookingPayloadSchema` still validates identically on both sides.
+The database trigger for the per-card rule reads the same row via
+`rule_int()`.
+
+### Legacy meal conversion keeps migration 8's windows
+
+`normalizeMeals` expands the pre-migration-8 whole-stay object. It is pinned to
+the original serving windows (`LEGACY_CONVERSION_WINDOWS`), not the Settings,
+because the SQL conversion used those; a stored row must keep reading back as
+the plan it was converted to.
+
+### A change that would break stored data is refused, naming it
+
+`lib/settings-impact.ts`: lowering a per-card or per-type limit below a live
+booking's party, or moving meal times so a booked meal falls outside its stay,
+or removing a whitelisted address that an `official` account uses. "Live" =
+still pending, or holding rooms for a stay not yet over; past stays are never
+re-judged. Nothing is ever silently adjusted to fit.
+
+### Who may change Settings
+
+The console is shared with the Guest House Manager, but the brief says
+*developer* console, and these rules can lock people out (the whitelist) or
+invalidate bookings. **Settings is developer-only.** Tariffs and invoice
+settings (Phase 5) will be a separate section the manager can also use,
+because pricing is the office's to run. Departments, clubs and offices stay in
+the existing Departments & Clubs section (manager + developer), now with the
+office class, a typed-name confirmation on delete, and every change — including
+a change of HOD — written to the audit log, because who heads a unit decides
+who approves.
+
+**Assumed:** an office nobody has classified is treated as a *department*
+office — the narrower debit rule (Department only) rather than the Institute
+Grant.
+
+### The audit table arrives in Phase 1, not Phase 8
+
+The brief requires every settings change to write to the security audit log,
+which Phase 8 specifies. The table (`security_audit`, append-only by trigger,
+180-day minimum) is created by migration 16 so that the first commit able to
+change a setting also records it. Audit rows are written *after* the change
+succeeds, and a failed audit write is logged, not raised — the change has
+happened, and failing the request would only mislead the operator.
+
+### Throwaway Postgres without Docker
+
+This development machine (Windows) has no Docker. Migrations are tested on a
+real **PostgreSQL 16** server from the `embedded-postgres` npm package, in a
+fresh temporary cluster per run (UTF-8, `C` locale — the Windows default code
+page broke on migration 12's arrows), with the same Supabase stand-ins, never
+the hosted project. Recipe in [05-deployment.md](05-deployment.md#verifying-changes).
+
+### Vitest installed in Phase 1
+
+The brief requires `npm test` to be clean after every phase, so Vitest went in
+with the first phase instead of Phase 9. Store tests point the mock store at a
+throwaway file through `MOCK_DB_PATH` and never touch `.local-db.json`; the
+suite runs with `TZ=UTC` so a zone bug shows up.

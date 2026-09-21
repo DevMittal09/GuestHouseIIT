@@ -26,9 +26,10 @@ import { getCurrentUser } from "@/lib/auth";
 import {
   MEAL_KEYS,
   MEAL_LABELS,
-  MEAL_TIMES,
+  mealTimes,
   mealsOn,
 } from "@/lib/meals";
+import { getRules } from "@/lib/settings-server";
 import { countBedGuests } from "@/lib/occupancy";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
@@ -71,6 +72,8 @@ export default async function DailyMealsPage({
     rawDate && parseDateValue(rawDate) ? rawDate : toInstituteDateValue(new Date());
 
   const store = getStore();
+  // The kitchen's serving times as the office set them in Settings.
+  const times = mealTimes((await getRules()).meals.windows);
   const guestHouses = (await store.listGuestHouses()).filter((g) => g.serves_meals);
   if (guestHouses.length === 0) {
     return (
@@ -136,7 +139,7 @@ export default async function DailyMealsPage({
             <Card key={meal}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">{MEAL_LABELS[meal]}</CardTitle>
-                <CardDescription>{MEAL_TIMES[meal]}</CardDescription>
+                <CardDescription>{times[meal]}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-1">
                 <p className="text-3xl font-semibold">{counts.veg + counts.non_veg + counts.unknown}</p>

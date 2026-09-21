@@ -78,8 +78,10 @@ particular would shift already-correct rows a second time if re-run.
 
 ## Verifying changes
 
-There is no test framework. Two techniques were used throughout and both work
-well:
+**`npm test`** runs the Vitest suite in `tests/` (installed 21 Sep 2026). It
+uses the mock store on a throwaway file (`MOCK_DB_PATH`) and `TZ=UTC`, so it
+never touches `.local-db.json`. The techniques below are still how UI, HTTP
+and migrations are checked:
 
 **1. Ad-hoc TypeScript tests**
 
@@ -126,6 +128,25 @@ docker run -d --name gh-migtest -e POSTGRES_PASSWORD=pw postgres:16-alpine
   | docker exec -i gh-migtest psql -U postgres -v ON_ERROR_STOP=1 -q -X
 docker rm -f gh-migtest
 ```
+
+**Without Docker (Windows, since 21 Sep 2026).** The same test on a real
+PostgreSQL 16 server from the `embedded-postgres` npm package, installed in a
+scratch directory (never in the repo):
+
+```bash
+npm install embedded-postgres@16.14.0-beta.17 pg   # in a scratch dir
+```
+
+A ~60-line Node script starts a cluster in a fresh temp directory with
+`initdbFlags: ["--encoding=UTF8", "--locale=C"]` (the Windows default code page
+rejects migration 12's `→`), runs a list of SQL steps in order with `pg`
+(stand-ins, migrations, fixtures, checks — a step can be marked "must fail
+with …"), prints result tables, then stops the server and deletes the
+directory. The stand-ins above work unchanged; to run `supabase/seed.sql` as
+well, add `create extension pgcrypto`, the extra `auth.users` columns the seed
+names, and an `auth.identities` table. `auth.uid()` can read
+`current_setting('request.jwt.claim.sub', true)` so RLS policies can be tested
+per user with `set_config`.
 
 Insert old-shape rows between the migration that created a shape and the one
 that converts it, set `timezone` to something other than IST before converting,

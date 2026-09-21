@@ -49,7 +49,8 @@ export const seedProfiles: Profile[] = [
   { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student", hostel_name: "Saveri", department_or_club: null, roll_number: "142202014", ldap_uid: "142202014" },
   // Faculty in CSE: her official bookings go to the CSE HOD first.
   { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "priya", unit_id: "unit-cse", staff_category: "faculty" },
-  { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: "Administration", roll_number: null, ldap_uid: "admin" },
+  // An officer office: its bookings are debited to the Institute Grant.
+  { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: "Administration", roll_number: null, ldap_uid: "admin", unit_id: "unit-director-office" },
   // Belongs to Petrichor, which sits under the Cultural Council, so its
   // requests go to the council secretary.
   { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "petrichor", unit_id: "unit-petrichor" },
@@ -66,7 +67,7 @@ export const seedProfiles: Profile[] = [
   { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Assistant Warden, Malhar)", role: "warden", hostel_name: "Malhar", department_or_club: null, roll_number: null, ldap_uid: "warden.malhar" },
   { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Assistant Warden, Saveri)", role: "warden", hostel_name: "Saveri", department_or_club: null, roll_number: null, ldap_uid: "warden.saveri" },
   { id: "fa-petrichor", email: "fa.petrichor@iitpkd.ac.in", full_name: "Dr. Arun Prasad (FA, Petrichor)", role: "faculty_advisor", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "fa.petrichor" },
-  { id: "iar-cell", email: "iar@iitpkd.ac.in", full_name: "IAR Office", role: "iar_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "iar" },
+  { id: "iar-cell", email: "iar@iitpkd.ac.in", full_name: "IAR Office", role: "iar_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "iar", unit_id: "unit-iar-office" },
   { id: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "guesthouse" },
   { id: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "gh.reception" },
   { id: "developer", email: "developer@iitpkd.ac.in", full_name: "Portal Developer", role: "developer", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "developer" },
@@ -77,11 +78,17 @@ export const seedProfiles: Profile[] = [
  * secretary approves for it: the two ways approval by appointment works.
  */
 export const seedUnits: Unit[] = [
-  { id: "unit-cse", name: "Computer Science & Engineering", kind: "department", parent_id: null, head_id: "hod-cse", acting_head_id: null },
-  { id: "unit-cultural", name: "Cultural Council", kind: "council", parent_id: null, head_id: "secretary-cultural", acting_head_id: null },
+  { id: "unit-cse", name: "Computer Science & Engineering", kind: "department", parent_id: null, head_id: "hod-cse", acting_head_id: null, office_class: null },
+  { id: "unit-cultural", name: "Cultural Council", kind: "council", parent_id: null, head_id: "secretary-cultural", acting_head_id: null, office_class: null },
   // No head of its own: the council secretary approves.
-  { id: "unit-petrichor", name: "Petrichor", kind: "club", parent_id: "unit-cultural", head_id: null, acting_head_id: null },
+  { id: "unit-petrichor", name: "Petrichor", kind: "club", parent_id: "unit-cultural", head_id: null, acting_head_id: null, office_class: null },
+  // Officer offices (migration 16): booked against the Institute Grant.
+  { id: "unit-director-office", name: "Director's Office", kind: "office", parent_id: null, head_id: null, acting_head_id: null, office_class: "officer" },
+  { id: "unit-iar-office", name: "International & Alumni Relations", kind: "office", parent_id: null, head_id: null, acting_head_id: null, office_class: "officer" },
 ];
+
+/** Hostels the demo personas live in (migration 16's `hostels` table). */
+export const seedHostels: string[] = ["Malhar", "Saveri"];
 
 const now = new Date();
 const iso = (daysFromNow: number, hour: number) => {

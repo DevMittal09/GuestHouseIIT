@@ -1,3 +1,4 @@
+import { DEFAULT_RULES, type MealWindow } from "./settings";
 import type { MealDay, MealKey, MealPlan, MealPreferences } from "./types";
 import {
   addDaysToDateValue,
@@ -30,21 +31,38 @@ export const MEAL_LABELS: Record<MealKey, string> = {
  * When each meal is served, as institute wall-clock "HH:mm" with the end
  * exclusive. A meal can be booked on a day only if the stay covers part of its
  * window, so a noon arrival is not offered that morning's breakfast and a
- * 10 AM check-out is not offered lunch. Migration 8 converted old bookings with
- * these same windows — change them together.
+ * 10 AM check-out is not offered lunch.
+ *
+ * These are the **defaults**; the office's own times are Settings
+ * (`rules.meals`, `lib/settings.ts`), passed as `windows` to the functions
+ * below.
  */
-export const MEAL_SERVING_WINDOWS: Record<MealKey, { start: string; end: string }> = {
+export type MealWindows = Record<MealKey, MealWindow>;
+
+export const MEAL_SERVING_WINDOWS: MealWindows = DEFAULT_RULES.meals.windows;
+
+/**
+ * The windows migration 8 used to convert the old whole-stay answers. Pinned,
+ * not read from Settings: a legacy row has to keep reading back as the plan
+ * that migration produced, whatever the kitchen's hours are now.
+ */
+const LEGACY_CONVERSION_WINDOWS: MealWindows = {
   breakfast: { start: "07:30", end: "09:30" },
   lunch: { start: "12:30", end: "14:00" },
   dinner: { start: "19:30", end: "21:00" },
 };
 
-/** "7:30 – 9:30 AM", derived from the windows so the label cannot drift from the rule. */
-export const MEAL_TIMES: Record<MealKey, string> = {
-  breakfast: formatWindow(MEAL_SERVING_WINDOWS.breakfast),
-  lunch: formatWindow(MEAL_SERVING_WINDOWS.lunch),
-  dinner: formatWindow(MEAL_SERVING_WINDOWS.dinner),
-};
+/** "7:30 – 9:30 AM" per meal, derived from the windows so the label cannot drift from the rule. */
+export function mealTimes(windows: MealWindows = MEAL_SERVING_WINDOWS): Record<MealKey, string> {
+  return {
+    breakfast: formatWindow(windows.breakfast),
+    lunch: formatWindow(windows.lunch),
+    dinner: formatWindow(windows.dinner),
+  };
+}
+
+/** The labels under the default windows. */
+export const MEAL_TIMES: Record<MealKey, string> = mealTimes();
 
 export const NO_MEALS: MealPreferences = { breakfast: false, lunch: false, dinner: false };
 
@@ -67,7 +85,11 @@ export interface StayMealDay {
  * the same half-open rule as room holds: checking out at 07:30 misses
  * breakfast, and a stay ending at midnight does not touch the next day.
  */
-export function stayMealDays(checkIn: Date, checkOut: Date): StayMealDay[] {
+export function stayMealDays(
+  checkIn: Date,
+  checkOut: Date,
+  windows: MealWindows = MEAL_SERVING_WINDOWS
+): StayMealDay[] {
   const from = checkIn.getTime();
   const to = checkOut.getTime();
   if (!(to > from)) return [];
@@ -82,7 +104,7 @@ export function stayMealDays(checkIn: Date, checkOut: Date): StayMealDay[] {
   ) {
     const available = { ...NO_MEALS };
     for (const meal of MEAL_KEYS) {
-      const { start, end } = MEAL_SERVING_WINDOWS[meal];
+      const { start, end } = windows[meal];
       available[meal] =
         from < instituteDate(`${date}T${end}`).getTime() &&
         to > instituteDate(`${date}T${start}`).getTime();
@@ -96,9 +118,10 @@ export function stayMealDays(checkIn: Date, checkOut: Date): StayMealDay[] {
 export function mealUnavailableReason(
   date: string,
   meal: MealKey,
-  checkIn: Date
+  checkIn: Date,
+  windows: MealWindows = MEAL_SERVING_WINDOWS
 ): "before-check-in" | "after-check-out" {
-  const servedUntil = instituteDate(`${date}T${MEAL_SERVING_WINDOWS[meal].end}`).getTime();
+  const servedUntil = instituteDate(`${date}T${windows[meal].end}`).getTime();
   return servedUntil <= checkIn.getTime() ? "before-check-in" : "after-check-out";
 }
 
@@ -140,7 +163,7 @@ export function normalizeMeals(
 
   if (value && typeof value === "object" && stay) {
     const legacy = value as Record<string, unknown>;
-    return stayMealDays(new Date(stay.check_in), new Date(stay.check_out))
+    return stayMealDays(new Date(stay.check_in), new Date(stay.check_out), LEGACY_CONVERSION_WINDOWS)
       .map(({ date, available }) => ({
         date,
         breakfast: legacy.breakfast === true && available.breakfast,
@@ -158,8 +181,13 @@ export function normalizeMeals(
  * before check-in or after check-out — or null when it fits. The booking
  * schema runs it on the client and again on the server.
  */
-export function mealPlanError(plan: MealPlan, checkIn: Date, checkOut: Date): string | null {
-  const days = new Map(stayMealDays(checkIn, checkOut).map((d) => [d.date, d.available]));
+export function mealPlanError(
+  plan: MealPlan,
+  checkIn: Date,
+  checkOut: Date,
+  windows: MealWindows = MEAL_SERVING_WINDOWS
+): string | null {
+  const days = new Map(stayMealDays(checkIn, checkOut, windows).map((d) => [d.date, d.available]));
   for (const day of plan) {
     const label = formatDateValue(day.date, { year: true });
     const available = days.get(day.date);
@@ -167,7 +195,7 @@ export function mealPlanError(plan: MealPlan, checkIn: Date, checkOut: Date): st
     for (const meal of MEAL_KEYS) {
       if (day[meal] && !available[meal]) {
         const when =
-          mealUnavailableReason(day.date, meal, checkIn) === "before-check-in"
+          mealUnavailableReason(day.date, meal, checkIn, windows) === "before-check-in"
             ? "before you check in"
             : "after you check out";
         return `${MEAL_LABELS[meal]} on ${label} is served ${when}`;

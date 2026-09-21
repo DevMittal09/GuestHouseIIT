@@ -4,9 +4,14 @@ import type { BookingStatus, Profile, Role, ServiceType, StaffCategory } from ".
 import { approversOf, type Unit } from "./units";
 import { formatDateTime } from "./format";
 import { TURNOVER_GRACE_HOURS } from "./turnover";
+import { DEFAULT_RULES } from "./settings";
 
-/** How far ahead of today a stay may be booked. */
-export const ADVANCE_BOOKING_WINDOW_MONTHS = 1;
+/**
+ * How far ahead of today a stay may be booked, under the default rules. The
+ * office's value is Settings (`rules.booking.advance_booking_months`) and is
+ * passed as `months` to `latestCheckIn`.
+ */
+export const ADVANCE_BOOKING_WINDOW_MONTHS = DEFAULT_RULES.booking.advance_booking_months;
 
 /**
  * Who may book outside the one-month advance window.
@@ -27,9 +32,13 @@ export function isAdvanceWindowExempt(role: Role): boolean {
  * it. Both the client and the server build the booking schema from this, so
  * the limit cannot be bypassed by a crafted request.
  */
-export function latestCheckIn(role: Role, from: Date = new Date()): Date | null {
+export function latestCheckIn(
+  role: Role,
+  from: Date = new Date(),
+  months: number = ADVANCE_BOOKING_WINDOW_MONTHS
+): Date | null {
   if (isAdvanceWindowExempt(role)) return null;
-  return addMonths(from, ADVANCE_BOOKING_WINDOW_MONTHS);
+  return addMonths(from, months);
 }
 
 /**

@@ -53,6 +53,21 @@ export type Unit = {
   head_id: string | null;
   /** Stands in for the head while set. Both may approve. */
   acting_head_id: string | null;
+  /**
+   * Offices only (migration 16): an **officer** office (Director, Registrar,
+   * the Deans) books against the Institute Grant; a **department** office
+   * (a department's own office) against its Department. Null for every other
+   * kind of unit, and for an office nobody has classified yet — which is
+   * treated as a department office, the narrower of the two.
+   */
+  office_class?: OfficeClass | null;
+};
+
+export type OfficeClass = "officer" | "department";
+
+export const OFFICE_CLASS_LABELS: Record<OfficeClass, string> = {
+  officer: "Officer office (Director, Registrar, Deans…)",
+  department: "Department office",
 };
 
 /** The longest chain of parents followed — a guard against a cycle someone typed in. */

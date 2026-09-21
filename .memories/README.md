@@ -46,8 +46,7 @@ booking forms from the UI.
 
 Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind v4 ·
 shadcn/ui (radix base, "nova" preset) · zod 4 · react-hook-form · Supabase
-(optional) · date-fns · jsPDF · nodemailer. **No test framework is installed**
-— see §9.
+(optional) · date-fns · jsPDF · nodemailer · Vitest (`npm test`, see §9).
 
 ```
 app/
@@ -233,8 +232,8 @@ becomes untestable:
   advisors their `department_or_club`. It also refuses
   `reviewer.id === requester.id` — the IAR Office both books and approves, so
   self-approval has to be impossible by construction, not just by routing.
-- `official` bookings are restricted to `OFFICIAL_EMAIL_WHITELIST`
-  (`lib/routes.ts`) and sort to the top of the manager queue.
+- `official` bookings are restricted to the official whitelist, a Setting
+  (`official_email_whitelist`, migration 16) and sort to the top of the manager queue.
 
 **Post-approval lifecycle**, controlled by the manager:
 
@@ -305,10 +304,20 @@ the gated options) and by the zod schema (which enforces it).
 
 ### 4.3 Room capacity and infants — `lib/occupancy.ts`
 
-| Room type | Own beds | With one extra bed |
-| --- | --- | --- |
-| `double_sharing` | 2 | 3 |
-| `single` | 1 | 2 |
+**Confirmed against the code (21 Sep 2026): there are two capacity rules, and
+both apply — at different moments.** Neither replaced the other.
+
+| Rule | Value (default) | Checked when | Where |
+| --- | --- | --- | --- |
+| Per **room type** | double sharing 2 beds, **3** with an extra bed; single 1 bed, **2** with an extra bed | **Allocation** — the manager has picked physical rooms, so their types are known | `allocationCapacityError`, `roomAssignmentError` (and the grid) |
+| Per **room card** on the form | **3 guests + 1 infant** per card | **Submission** — the requester has filled in "Room 1", "Room 2" but no room exists yet | `roomPartyError` in the zod schema, plus the `booking_guests` trigger (migration 11, reads Settings since migration 16) |
+
+So a card with 3 guests is accepted at submission, and the manager must then
+give it a double room (3 with an extra bed) — a single (max 2) is refused at
+allocation. Since Phase 1 **all of these numbers are Settings**
+(`rules.capacity`, developer console → Settings); every function takes them as
+a parameter defaulting to the values above, and the database trigger reads the
+same row through `rule_int()`.
 
 The third occupant of a double is on a rolled-in extra bed, which is why the
 field is called `withExtraBed` and the UI says so — the allocation dialog tells
@@ -317,23 +326,17 @@ actually picked). Keep that copy formal: "Occupancy: 2 guests (maximum 3 with
 an extra bed)", never "sleeps 2, 3 with an extra bed", which the office called
 too informal.
 
-**Infants** are children under `INFANT_AGE_LIMIT` (10) sharing a guardian's
-bed. Since migration 7 a booking records them as **one switch, `has_infant`** —
-whether any are coming, not how many, with no names and no ID — because the
-office asked for exactly one option. Bookings made earlier can still carry
-**legacy infant guest rows** (`booking_guests.is_infant`), so for a stored
-booking capacity is measured with `countBedGuests()` — never `guests.length` —
-and the flag is read through `hasInfant()`.
-
-Capacity is checked twice, because different things are known at each point:
-`requestedRoomsError()` at submission, when only a room *count* exists, and
-`allocationCapacityError()` at allocation, when the actual room types are
-known. The booking form also caps how many guests can be added to what the
-chosen rooms accommodate.
-
-> **Trap:** infants are not guests. Giving them guest rows again would put them
-> back into the capacity count and the ID requirement; the switch exists so
-> they are in neither.
+**Infants** are guests under `INFANT_AGE_LIMIT` (**5**; it was 10 until Sep
+2026). Since migration 11 they are **guest rows again**, entered in a room card
+like anyone else and classified from the age typed (`isInfantAge`; the
+database derives `booking_guests.is_infant` in a trigger with the same
+threshold). They share a guardian's bed, take no bed capacity, are not asked
+for an ID, and count toward the per-card infant limit. `bookings.has_infant`
+is now a summary derived from the rows. Bookings made between migrations 7 and
+11 recorded only the switch, with no row, which `describeParty` still reads.
+Capacity is always measured with `countBedGuests()` (reads the stored
+`is_infant`, never re-derives it from the age, because the threshold has
+changed once) — never `guests.length`.
 
 ### 4.4 Meals
 
@@ -351,7 +354,9 @@ requested", so nothing downstream needs a null check. Always optional.
 
 ### 4.5 Advance-booking window
 
-Check-in must be within **one month** of today. `latestCheckIn(role)` is the
+Check-in must be within **one month** of today by default — a Setting since
+Phase 1 (`rules.booking.advance_booking_months`), as is the 14-night maximum
+stay (`max_stay_nights`, 0 = no limit). `latestCheckIn(role, from, months)` is the
 source of truth and `isAdvanceWindowExempt()` exempts **`official` only** —
 dignitary visits are arranged on the institute's own notice. The cap applies to
 check-in, not check-out. Use date-fns `addMonths`, never `setMonth` (31 Jan + 1
@@ -503,7 +508,7 @@ booking on behalf of Vikram Iyer, sitting in the IAR Office's queue.
 
 ## 9. How to verify a change
 
-There is **no test framework**. Both of these are proven to work:
+`npm test` runs the Vitest suite (`tests/`, mock store on a throwaway file, `TZ=UTC`). Beyond it, these are proven to work:
 
 1. **Ad-hoc TypeScript tests** — `npx tsx --tsconfig ./tsconfig.json <file>.ts`.
    Note that `@/` aliases resolve but **bare package imports only resolve from

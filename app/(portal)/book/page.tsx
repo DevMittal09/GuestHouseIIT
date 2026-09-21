@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { BookingForm } from "@/components/booking-form";
 import { getCurrentUser } from "@/lib/auth";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
-import { homeForRole, OFFICIAL_EMAIL_WHITELIST, SIGN_IN_PATH } from "@/lib/routes";
+import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
+import { isWhitelistedOfficial } from "@/lib/settings";
+import { getOfficialEmails, getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
 import { canBookOnBehalf } from "@/lib/access";
 import { serviceTypesFor } from "@/lib/booking-types";
@@ -22,11 +24,11 @@ export default async function BookPage({
   // stay is for and records both parties.
   const onBehalf = canBookOnBehalf(user.role);
   if (!REQUESTER_ROLES.includes(user.role) && !onBehalf) redirect(homeForRole(user.role));
-  if (user.role === "official" && !OFFICIAL_EMAIL_WHITELIST.includes(user.email)) {
+  if (user.role === "official" && !isWhitelistedOfficial(user.email, await getOfficialEmails())) {
     redirect("/dashboard");
   }
 
-  const config = await getEffectiveFormConfig(user.role);
+  const [config, rules] = await Promise.all([getEffectiveFormConfig(user.role), getRules()]);
   const guestHouses = (await getStore().listGuestHouses()).filter((g) =>
     config.allowed_guest_house_ids.includes(g.id)
   );
@@ -71,6 +73,7 @@ export default async function BookPage({
         guestHouses={guestHouses}
         config={config}
         initialServiceType={initialServiceType}
+        rules={rules}
       />
     </div>
   );

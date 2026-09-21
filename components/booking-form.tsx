@@ -38,7 +38,7 @@ import {
   countInfants,
   describeTotals,
   INFANT_AGE_LIMIT,
-  ROOM_OCCUPANCY_NOTICE,
+  roomOccupancyNotice,
   ROOM_TYPE_LABELS,
 } from "@/lib/occupancy";
 import {
@@ -46,8 +46,9 @@ import {
   advanceWindowMessage,
   bookingPayloadSchema,
   checkOutOrderError,
-  INFANT_HELP_TEXT,
+  infantHelpText,
 } from "@/lib/booking-schema";
+import { DEFAULT_RULES, type CapacityRules, type Rules } from "@/lib/settings";
 import {
   hasQualifyingParent,
   parentDependencyHint,
@@ -184,10 +185,17 @@ export function BookingForm({
   guestHouses,
   config,
   initialServiceType,
+  rules = DEFAULT_RULES,
 }: {
   user: Profile;
   guestHouses: GuestHouse[];
   config: RoleFormConfig;
+  /**
+   * The office's Settings, read by the page. The schema below is built from
+   * the same object the server action uses, so what the form allows and what
+   * the server accepts cannot differ.
+   */
+  rules?: Rules;
   /**
    * Which kind of booking the form opens on. The portal home offers meals and
    * rooms as two separate doors, because someone booking lunch for a visiting
@@ -379,7 +387,8 @@ export function BookingForm({
    */
   const offerMeals = Boolean(selectedGuestHouse) && servesMeals;
   const mealCheckIn = stay && !stay.problem ? stay.fromAt : null;
-  const mealDays = stay && !stay.problem ? stayMealDays(stay.fromAt, stay.toAt) : [];
+  const mealDays =
+    stay && !stay.problem ? stayMealDays(stay.fromAt, stay.toAt, rules.meals.windows) : [];
   // Derived, never stored. Picking Veg or Non-Veg means "we are eating here",
   // so the whole stay is ticked and the requester clears what they will miss;
   // before that, nothing is ticked, because no preference has been given. The
@@ -418,19 +427,21 @@ export function BookingForm({
 
   // Advance-booking window: officials are exempt, so the cap can be absent.
   const [checkInLimits] = useState(() => {
-    const limit = latestCheckIn(config.role);
+    const months = rules.booking.advance_booking_months;
+    const limit = latestCheckIn(config.role, new Date(), months);
     return {
       min: toInstituteDateValue(new Date()),
       max: limit ? toInstituteDateValue(limit) : undefined,
-      note: advanceWindowMessage(config.role),
+      note: advanceWindowMessage(config.role, months),
     };
   });
-  // The 14-night cap, applied to the check-out picker. The picker blocking it
-  // is a courtesy; the schema is the rule, on the client and again on the
-  // server.
-  const durationHint = stayLengthHint(config.role, user.email);
+  // The stay-length cap (Settings), applied to the check-out picker. The
+  // picker blocking it is a courtesy; the schema is the rule, on the client
+  // and again on the server.
+  const maxNights = rules.booking.max_stay_nights;
+  const durationHint = stayLengthHint(config.role, user.email, maxNights);
   const latestCheckOut = checkInDate
-    ? latestCheckOutDate(checkInDate, config.role, user.email)
+    ? latestCheckOutDate(checkInDate, config.role, user.email, maxNights)
     : null;
 
   // The room count is its own text state rather than being read off
@@ -550,6 +561,7 @@ export function BookingForm({
     const parsed = bookingPayloadSchema(config, {
       mealsAvailable,
       requesterEmail: user.email,
+      rules,
     }).safeParse(payload);
     let hasError = false;
     if (wantsRooms && roomCountRaw.trim() === "") {
@@ -849,7 +861,7 @@ export function BookingForm({
                 value={roomCountRaw}
                 onChange={onRoomCountChange}
               />
-              <p className="text-xs text-muted-foreground">{ROOM_OCCUPANCY_NOTICE}</p>
+              <p className="text-xs text-muted-foreground">{roomOccupancyNotice(rules.capacity)}</p>
               <FieldError message={roomCountError ?? undefined} />
               <FieldError message={err("rooms")} />
               {config.banner_text && (
@@ -1071,6 +1083,7 @@ export function BookingForm({
                   checkIn={mealCheckIn}
                   slots={mealSlots}
                   onChange={onMealSlotsChange}
+                  windows={rules.meals.windows}
                 />
                 <p className="text-sm text-muted-foreground">{mealSummary}</p>
               </>
@@ -1085,7 +1098,7 @@ export function BookingForm({
           <CardHeader>
             <CardTitle>Guests, room by room</CardTitle>
             <CardDescription>
-              Fill in who is staying in each room. {INFANT_HELP_TEXT}
+              Fill in who is staying in each room. {infantHelpText(rules.capacity)}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1116,6 +1129,7 @@ export function BookingForm({
                 idDocRequired={idDocRequired}
                 guestFiles={guestFiles}
                 err={err}
+                capacity={rules.capacity}
               />
             ))}
 
@@ -1263,6 +1277,7 @@ function RoomCard({
   idDocRequired,
   guestFiles,
   err,
+  capacity,
 }: {
   roomIndex: number;
   control: Control<FormValues>;
@@ -1272,6 +1287,7 @@ function RoomCard({
   idDocRequired: boolean;
   guestFiles: Map<string, File>;
   err: (path: string) => string | undefined;
+  capacity: CapacityRules;
 }) {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -1281,15 +1297,15 @@ function RoomCard({
   const infants = countInfants(watched.map((g) => ({ is_infant: isInfantEntry(g) })));
   const guests = watched.length - infants;
 
-  const guestBlocked = addGuestBlockedReason(guests);
-  const infantBlocked = addInfantBlockedReason(infants);
+  const guestBlocked = addGuestBlockedReason(guests, capacity);
+  const infantBlocked = addInfantBlockedReason(infants, capacity);
 
   return (
     <fieldset className="rounded-lg border p-4">
       <legend className="px-1 text-sm font-semibold">Room {roomIndex + 1}</legend>
 
       <p className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-        {ROOM_OCCUPANCY_NOTICE}
+        {roomOccupancyNotice(capacity)}
       </p>
 
       <div className="mb-4 grid gap-4 sm:grid-cols-2">

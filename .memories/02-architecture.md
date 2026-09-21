@@ -14,7 +14,7 @@
 | Backend | Supabase (Postgres + Storage), optional | @supabase/supabase-js 2.x |
 | Toasts | sonner | 2.x |
 
-There is **no test framework installed**. Verification approach is described in
+The test suite is Vitest (`npm test`, `tests/`, since 21 Sep 2026). The rest of the verification approach is described in
 [05-deployment.md](05-deployment.md#verifying-changes).
 
 ## Shape of the app

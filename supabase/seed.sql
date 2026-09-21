@@ -44,6 +44,14 @@ select pg_temp.seed_user('11111111-1111-1111-1111-111111111111', 'guesthouse@iit
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111112', 'developer@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111113', 'alumnicell@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111114', 'gh.reception@iitpkd.ac.in');
+select pg_temp.seed_user('11111111-1111-1111-1111-111111111115', 'hod.cse@iitpkd.ac.in');
+select pg_temp.seed_user('11111111-1111-1111-1111-111111111116', '112301045@smail.iitpkd.ac.in');
+
+-- ---------------------------------------------------------------- hostels
+-- Migration 16: profiles.hostel_name references hostels(name), so the
+-- hostels go in before anyone who lives in one.
+insert into public.hostels (name) values ('Malhar'), ('Saveri')
+on conflict (name) do nothing;
 
 -- ---------------------------------------------------------------- profiles
 insert into public.profiles (id, email, full_name, role, hostel_name, department_or_club, roll_number) values
@@ -59,8 +67,33 @@ insert into public.profiles (id, email, full_name, role, hostel_name, department
   ('11111111-1111-1111-1111-111111111111', 'guesthouse@iitpkd.ac.in', 'Guest House Manager', 'gh_manager', null, null, null),
   ('11111111-1111-1111-1111-111111111112', 'developer@iitpkd.ac.in', 'Portal Developer', 'developer', null, null, null),
   ('11111111-1111-1111-1111-111111111113', 'alumnicell@iitpkd.ac.in', 'IAR Student Cell', 'iar_student_cell', null, 'International & Alumni Relations', null),
-  ('11111111-1111-1111-1111-111111111114', 'gh.reception@iitpkd.ac.in', 'Guest House Caretaker', 'gh_caretaker', null, null, null)
+  ('11111111-1111-1111-1111-111111111114', 'gh.reception@iitpkd.ac.in', 'Guest House Caretaker', 'gh_caretaker', null, null, null),
+  -- Unit heads (migration 15): approvers by appointment, not by role.
+  ('11111111-1111-1111-1111-111111111115', 'hod.cse@iitpkd.ac.in', 'Prof. R. Venkatesh (HOD, CSE)', 'employee', null, 'Computer Science & Engineering', null),
+  ('11111111-1111-1111-1111-111111111116', '112301045@smail.iitpkd.ac.in', 'Meera Nair (Cultural Secretary)', 'student', 'Malhar', null, '112301045')
 on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------- units
+-- Migrations 15 and 16: a department with its HOD, a council whose secretary
+-- approves for the club under it, and two officer offices. The same demo
+-- units as lib/store/seed.ts.
+insert into public.units (id, name, kind, parent_id, head_id, office_class) values
+  ('33333333-3333-3333-3333-333333333301', 'Computer Science & Engineering', 'department', null, '11111111-1111-1111-1111-111111111115', null),
+  ('33333333-3333-3333-3333-333333333302', 'Cultural Council', 'council', null, '11111111-1111-1111-1111-111111111116', null),
+  ('33333333-3333-3333-3333-333333333303', 'Petrichor', 'club', '33333333-3333-3333-3333-333333333302', null, null),
+  ('33333333-3333-3333-3333-333333333304', 'Director''s Office', 'office', null, null, 'officer'),
+  ('33333333-3333-3333-3333-333333333305', 'International & Alumni Relations', 'office', null, null, 'officer')
+on conflict (id) do nothing;
+
+update public.profiles p set unit_id = v.unit_id::uuid, staff_category = v.category
+from (values
+  ('priya@iitpkd.ac.in', '33333333-3333-3333-3333-333333333301', 'faculty'),
+  ('hod.cse@iitpkd.ac.in', '33333333-3333-3333-3333-333333333301', 'faculty'),
+  ('petrichor@iitpkd.ac.in', '33333333-3333-3333-3333-333333333303', null),
+  ('admin@iitpkd.ac.in', '33333333-3333-3333-3333-333333333304', null),
+  ('iar@iitpkd.ac.in', '33333333-3333-3333-3333-333333333305', null)
+) as v(email, unit_id, category)
+where p.email = v.email and p.unit_id is null;
 
 -- LDAP usernames (migration 12) — the dummy directory's uids, whose passwords
 -- are in lib/ldap/mock-directory.ts and .memories/11-ldap-accounts.md. An
@@ -80,7 +113,9 @@ from (values
   ('iar@iitpkd.ac.in', 'iar'),
   ('guesthouse@iitpkd.ac.in', 'guesthouse'),
   ('gh.reception@iitpkd.ac.in', 'gh.reception'),
-  ('developer@iitpkd.ac.in', 'developer')
+  ('developer@iitpkd.ac.in', 'developer'),
+  ('hod.cse@iitpkd.ac.in', 'hod.cse'),
+  ('112301045@smail.iitpkd.ac.in', '112301045')
 ) as v(email, uid)
 where p.email = v.email and p.ldap_uid is null;
 

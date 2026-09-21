@@ -1,16 +1,39 @@
+import { DEFAULT_RULES, type CapacityRules } from "./settings";
 import type { Room, RoomType } from "./types";
 
 /**
- * How many people a room sleeps.
+ * Room capacity and the per-room party rule.
+ *
+ * **Two rules, applied at different moments** — they are not alternatives:
+ *
+ * - **Per room type** (`capacity.room_types`): a double sharing room sleeps 2,
+ *   3 with an extra bed; a single sleeps 1, 2 with an extra bed. Checked at
+ *   **allocation**, when the manager picks actual rooms and their types are
+ *   known (`allocationCapacityError`, `roomAssignmentError`).
+ * - **Per room card** (`capacity.max_guests_per_room` /
+ *   `max_infants_per_room`, 3 + 1 by default): checked at **submission**, when
+ *   the requester has filled in "Room 1", "Room 2" but no physical room exists
+ *   yet (`roomPartyError`), and again by the database trigger on
+ *   `booking_guests` (migration 11, reading Settings since migration 16).
+ *
+ * All the numbers are Settings (`lib/settings.ts`). Every function takes them
+ * as a parameter defaulting to `DEFAULT_RULES.capacity` — what the portal did
+ * before they were configurable — so the booking form and the server action
+ * are handed the same values and cannot disagree.
+ */
+
+const DEFAULT_CAPACITY: CapacityRules = DEFAULT_RULES.capacity;
+
+/**
+ * How many people a room sleeps, under the default rules.
  *
  * `standard` is the room's own beds; `withExtraBed` is what it takes once an
  * extra bed is rolled in — a double sharing room is 2 + 1, a single is 1 + 1.
- * Infants share with their guardians and occupy neither.
+ * Infants share with their guardians and occupy neither. The office's own
+ * values come from Settings; pass them as `capacity` to the functions below.
  */
-export const ROOM_CAPACITY: Record<RoomType, { standard: number; withExtraBed: number }> = {
-  single: { standard: 1, withExtraBed: 2 },
-  double_sharing: { standard: 2, withExtraBed: 3 },
-};
+export const ROOM_CAPACITY: Record<RoomType, { standard: number; withExtraBed: number }> =
+  DEFAULT_CAPACITY.room_types;
 
 /**
  * Children under this age are infants: they share a guardian's bed, need no
@@ -19,27 +42,48 @@ export const ROOM_CAPACITY: Record<RoomType, { standard: number; withExtraBed: n
  * The threshold was 10 until the office reset it to 5 (Sep 2026). Existing
  * bookings are **not** reclassified — a guest recorded as an infant under the
  * old rule stays one, because their stay was agreed on that basis. Only new
- * bookings are classified by this number; see migration 11.
+ * bookings are classified by this number; see migration 11, whose trigger
+ * applies the same threshold in the database.
  */
 export const INFANT_AGE_LIMIT = 5;
 
-/** Most bed-occupying guests allowed in one room, extra bed included. */
-export const MAX_GUESTS_PER_ROOM = 3;
+/** Default: most bed-occupying guests allowed in one room card, extra bed included. */
+export const MAX_GUESTS_PER_ROOM = DEFAULT_CAPACITY.max_guests_per_room;
 
-/** Most infants allowed in one room. They share a guardian's bed. */
-export const MAX_INFANTS_PER_ROOM = 1;
-
-/** The rule, in the requester's words. Shown inside every room card. */
-export const ROOM_OCCUPANCY_NOTICE = `Maximum ${MAX_GUESTS_PER_ROOM} guests + ${MAX_INFANTS_PER_ROOM} infant (below ${INFANT_AGE_LIMIT} years) per room.`;
-
-/** Capacity used before rooms are picked, when their types are not yet known. */
-export const DEFAULT_ROOM_MAX = ROOM_CAPACITY.double_sharing.withExtraBed;
-export const DEFAULT_ROOM_STANDARD = ROOM_CAPACITY.double_sharing.standard;
+/** Default: most infants allowed in one room card. They share a guardian's bed. */
+export const MAX_INFANTS_PER_ROOM = DEFAULT_CAPACITY.max_infants_per_room;
 
 export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   single: "Single",
   double_sharing: "Double sharing",
 };
+
+const guestCount = (n: number) => `${n} guest${n === 1 ? "" : "s"}`;
+const infantCount = (n: number) => `${n} infant${n === 1 ? "" : "s"}`;
+
+/** The rule, in the requester's words. Shown inside every room card. */
+export function roomOccupancyNotice(capacity: CapacityRules = DEFAULT_CAPACITY): string {
+  const infants = capacity.max_infants_per_room;
+  const infantPart =
+    infants > 0 ? ` + ${infantCount(infants)} (below ${INFANT_AGE_LIMIT} years)` : "";
+  return `Maximum ${guestCount(capacity.max_guests_per_room)}${infantPart} per room.`;
+}
+
+/** The notice under the default rules, for places with no settings to hand. */
+export const ROOM_OCCUPANCY_NOTICE = roomOccupancyNotice();
+
+/**
+ * Beds per room before rooms are picked, when their types are not yet known:
+ * the roomier type's own beds. The requester is told how many rooms they need
+ * on the assumption that the manager can give them that kind.
+ */
+function standardBeds(capacity: CapacityRules): number {
+  return Math.max(...Object.values(capacity.room_types).map((c) => c.standard));
+}
+
+/** Capacity used before rooms are picked, under the default rules. */
+export const DEFAULT_ROOM_MAX = ROOM_CAPACITY.double_sharing.withExtraBed;
+export const DEFAULT_ROOM_STANDARD = ROOM_CAPACITY.double_sharing.standard;
 
 /**
  * Whether an age makes this person an infant.
@@ -76,9 +120,6 @@ export function hasInfant(booking: PartyBooking): boolean {
   return booking.guests.some((g) => g.is_infant) || booking.has_infant === true;
 }
 
-const guestCount = (n: number) => `${n} guest${n === 1 ? "" : "s"}`;
-const infantCount = (n: number) => `${n} infant${n === 1 ? "" : "s"}`;
-
 /** "3 guests", or "3 guests + 1 infant". */
 export function describeParty(booking: PartyBooking): string {
   const beds = countBedGuests(booking.guests);
@@ -97,15 +138,21 @@ export function describeParty(booking: PartyBooking): string {
  *
  * Enforced in three places that must agree: the room card disables its own
  * Add buttons, the booking schema refuses the submission, and a database
- * trigger refuses the row (migration 11). The form is a courtesy; the other
- * two are the rule.
+ * trigger refuses the row (migrations 11 and 16). The form is a courtesy; the
+ * other two are the rule.
  */
-export function roomPartyError(guests: number, infants: number): string | null {
-  if (guests > MAX_GUESTS_PER_ROOM) {
-    return `A room takes at most ${guestCount(MAX_GUESTS_PER_ROOM)} (${DEFAULT_ROOM_STANDARD} beds plus one extra bed). Move the extra guests to another room.`;
+export function roomPartyError(
+  guests: number,
+  infants: number,
+  capacity: CapacityRules = DEFAULT_CAPACITY
+): string | null {
+  if (guests > capacity.max_guests_per_room) {
+    return `A room takes at most ${guestCount(capacity.max_guests_per_room)}, including an extra bed. Move the extra guests to another room.`;
   }
-  if (infants > MAX_INFANTS_PER_ROOM) {
-    return `A room takes at most ${infantCount(MAX_INFANTS_PER_ROOM)} under ${INFANT_AGE_LIMIT}. Move the extra infant to another room.`;
+  if (infants > capacity.max_infants_per_room) {
+    return capacity.max_infants_per_room === 0
+      ? `Infants under ${INFANT_AGE_LIMIT} cannot be booked into a room at present — contact the Guest House Manager.`
+      : `A room takes at most ${infantCount(capacity.max_infants_per_room)} under ${INFANT_AGE_LIMIT}. Move the extra infant to another room.`;
   }
   if (guests === 0 && infants > 0) {
     return `An infant cannot be booked into a room on their own — add the guest they are staying with.`;
@@ -115,16 +162,23 @@ export function roomPartyError(guests: number, infants: number): string | null {
 }
 
 /** Why no more bed-occupying guests can be added to this room, or null. */
-export function addGuestBlockedReason(guests: number): string | null {
-  return guests >= MAX_GUESTS_PER_ROOM
-    ? `This room is full — ${guestCount(MAX_GUESTS_PER_ROOM)} is the maximum. Add another room for more guests.`
+export function addGuestBlockedReason(
+  guests: number,
+  capacity: CapacityRules = DEFAULT_CAPACITY
+): string | null {
+  return guests >= capacity.max_guests_per_room
+    ? `This room is full — ${guestCount(capacity.max_guests_per_room)} is the maximum. Add another room for more guests.`
     : null;
 }
 
 /** Why no more infants can be added to this room, or null. */
-export function addInfantBlockedReason(infants: number): string | null {
-  return infants >= MAX_INFANTS_PER_ROOM
-    ? `This room already has ${infantCount(MAX_INFANTS_PER_ROOM)}, which is the maximum per room.`
+export function addInfantBlockedReason(
+  infants: number,
+  capacity: CapacityRules = DEFAULT_CAPACITY
+): string | null {
+  if (capacity.max_infants_per_room === 0) return "Infants cannot be added to a room at present.";
+  return infants >= capacity.max_infants_per_room
+    ? `This room already has ${infantCount(capacity.max_infants_per_room)}, which is the maximum per room.`
     : null;
 }
 
@@ -151,10 +205,13 @@ export function describeTotals(totals: { rooms: number; guests: number; infants:
 // ------------------------------------------------------------- allocation
 
 /** Total a set of rooms sleeps, on their own beds and with extra beds added. */
-export function capacityOf(rooms: Room[]): { standard: number; withExtraBed: number } {
+export function capacityOf(
+  rooms: Room[],
+  rules: CapacityRules = DEFAULT_CAPACITY
+): { standard: number; withExtraBed: number } {
   return rooms.reduce(
     (total, room) => {
-      const capacity = ROOM_CAPACITY[room.room_type];
+      const capacity = rules.room_types[room.room_type];
       return {
         standard: total.standard + capacity.standard,
         withExtraBed: total.withExtraBed + capacity.withExtraBed,
@@ -165,45 +222,62 @@ export function capacityOf(rooms: Room[]): { standard: number; withExtraBed: num
 }
 
 /** Fewest rooms that hold `guests` on the rooms' own beds (what to request). */
-export function roomsNeededFor(guests: number): number {
-  return Math.max(1, Math.ceil(guests / DEFAULT_ROOM_STANDARD));
+export function roomsNeededFor(guests: number, capacity: CapacityRules = DEFAULT_CAPACITY): number {
+  return Math.max(1, Math.ceil(guests / standardBeds(capacity)));
 }
 
-/** Most bed-occupying guests `rooms` rooms hold, extra beds included. */
-export function maxGuestsFor(rooms: number): number {
-  return rooms * MAX_GUESTS_PER_ROOM;
+/** Most bed-occupying guests `rooms` room cards hold, extra beds included. */
+export function maxGuestsFor(rooms: number, capacity: CapacityRules = DEFAULT_CAPACITY): number {
+  return rooms * capacity.max_guests_per_room;
 }
 
 /**
  * How many of the guests in `rooms` rooms would be on an extra bed, before the
- * rooms are chosen — so it assumes double sharing rooms. Once the actual rooms
- * are known, use `extraBedsFor`.
+ * rooms are chosen — so it assumes the roomier type. Once the actual rooms are
+ * known, use `extraBedsFor`.
  */
-export function extraBedsNeeded(guests: number, rooms: number): number {
-  return Math.max(0, guests - rooms * DEFAULT_ROOM_STANDARD);
+export function extraBedsNeeded(
+  guests: number,
+  rooms: number,
+  capacity: CapacityRules = DEFAULT_CAPACITY
+): number {
+  return Math.max(0, guests - rooms * standardBeds(capacity));
 }
 
 /** Extra beds needed to fit `guests` into these particular rooms. */
-export function extraBedsFor(guests: number, rooms: Room[]): number {
-  return Math.max(0, guests - capacityOf(rooms).standard);
+export function extraBedsFor(
+  guests: number,
+  rooms: Room[],
+  capacity: CapacityRules = DEFAULT_CAPACITY
+): number {
+  return Math.max(0, guests - capacityOf(rooms, capacity).standard);
 }
 
 /**
  * Checked at submission, before rooms exist: does the requested room count
  * hold the guest list? `guests` must already exclude infants.
  */
-export function requestedRoomsError(guests: number, rooms: number): string | null {
-  if (guests <= maxGuestsFor(rooms)) return null;
-  const needed = Math.ceil(guests / MAX_GUESTS_PER_ROOM);
-  return `${rooms} room${rooms === 1 ? "" : "s"} can accommodate at most ${guestCount(maxGuestsFor(rooms))} (${MAX_GUESTS_PER_ROOM} per room, including an extra bed). ${guestCount(guests)} require at least ${needed} rooms. Infants under ${INFANT_AGE_LIMIT} share a guardian's bed and are not counted.`;
+export function requestedRoomsError(
+  guests: number,
+  rooms: number,
+  capacity: CapacityRules = DEFAULT_CAPACITY
+): string | null {
+  const max = maxGuestsFor(rooms, capacity);
+  if (guests <= max) return null;
+  const needed = Math.ceil(guests / capacity.max_guests_per_room);
+  return `${rooms} room${rooms === 1 ? "" : "s"} can accommodate at most ${guestCount(max)} (${capacity.max_guests_per_room} per room, including an extra bed). ${guestCount(guests)} require at least ${needed} rooms. Infants under ${INFANT_AGE_LIMIT} share a guardian's bed and are not counted.`;
 }
 
 /**
  * Checked at allocation, when the actual rooms and their types are known.
  * `guests` must already exclude infants.
  */
-export function allocationCapacityError(guests: number, rooms: Room[]): string | null {
-  const capacity = capacityOf(rooms);
+export function allocationCapacityError(
+  guests: number,
+  rooms: Room[],
+  rules: CapacityRules = DEFAULT_CAPACITY
+): string | null {
+  const capacity = capacityOf(rooms, rules);
   if (guests <= capacity.withExtraBed) return null;
   return `The selected room${rooms.length === 1 ? "" : "s"} can accommodate at most ${guestCount(capacity.withExtraBed)}, including extra beds, but this booking has ${guestCount(guests)} requiring a bed. Please select an additional room.`;
 }
@@ -214,8 +288,13 @@ export function allocationCapacityError(guests: number, rooms: Room[]): string |
  * not fit — three guests allocated a single room, say — so allocation checks
  * card by card as well.
  */
-export function roomAssignmentError(guests: number, room: Room, label: string): string | null {
-  const capacity = ROOM_CAPACITY[room.room_type];
+export function roomAssignmentError(
+  guests: number,
+  room: Room,
+  label: string,
+  rules: CapacityRules = DEFAULT_CAPACITY
+): string | null {
+  const capacity = rules.room_types[room.room_type];
   if (guests <= capacity.withExtraBed) return null;
   return `${label} has ${guestCount(guests)}, but ${room.room_number} (${ROOM_TYPE_LABELS[
     room.room_type
@@ -228,8 +307,11 @@ export function roomAssignmentError(guests: number, room: Room, label: string): 
  * Review & Allocate dialog, where "sleeps 2, 3 with an extra bed" was read as
  * too informal — so it is phrased like a specification, not a remark.
  */
-export function describeCapacity(roomType: RoomType): string {
-  const { standard, withExtraBed } = ROOM_CAPACITY[roomType];
+export function describeCapacity(
+  roomType: RoomType,
+  rules: CapacityRules = DEFAULT_CAPACITY
+): string {
+  const { standard, withExtraBed } = rules.room_types[roomType];
   const base = `Occupancy: ${guestCount(standard)}`;
   if (withExtraBed <= standard) return base;
   return `${base} (maximum ${withExtraBed} with an extra bed)`;

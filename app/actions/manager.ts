@@ -16,6 +16,7 @@ import {
 } from "@/lib/occupancy";
 import { notifyCancelled } from "@/lib/mail/notify";
 import { getStore } from "@/lib/store";
+import { getRules } from "@/lib/settings-server";
 import { instituteDate, instituteIso, toInstituteDateTimeValue } from "@/lib/tz";
 import type { BookingStatus, MealPlan, MealPreference } from "@/lib/types";
 import { includesMeals, RoomClashError } from "@/lib/types";
@@ -65,7 +66,8 @@ export async function updateBookingStay(
       const mealProblem = mealPlanError(
         booking.meals,
         new Date(checkIn),
-        new Date(checkOut)
+        new Date(checkOut),
+        (await getRules()).meals.windows
       );
       if (mealProblem) {
         return {
@@ -128,7 +130,8 @@ export async function updateBookingMeals(
     const problem = mealPlanError(
       meals,
       new Date(booking.check_in),
-      new Date(booking.check_out)
+      new Date(booking.check_out),
+      (await getRules()).meals.windows
     );
     if (problem) return { ok: false, error: problem };
     if (meals.length > 0 && !input.meal_preference) {
