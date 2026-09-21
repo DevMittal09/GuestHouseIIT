@@ -624,8 +624,9 @@ Source Serif 4 headings and Source Sans 3 body via `next/font`. Tokens and the
 brand utilities (`bg-navy`, `text-gold-dark`, `bg-band`, …) live in
 `app/globals.css`. Full table and rules in [10-ui-design.md](10-ui-design.md).
 
-Logos: `public/iitpkd-web-logo.jpg` (the wide institute web logo, in both
-headers) and `public/iitpkd-logo.png` (the emblem; `app/icon.png` is the same
+Logos: `public/IITPKD_NEW_LOGO.png` (the stacked institute logo on a
+transparent background, in both headers since 21 Sep 2026; it replaced the
+wide `iitpkd-web-logo.jpg`) and `public/iitpkd-logo.png` (the emblem; `app/icon.png` is the same
 file serving as the favicon).
 
 The earlier amber-on-off-white palette copied from dashboard.iitpkd.ac.in, and

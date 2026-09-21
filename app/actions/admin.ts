@@ -591,7 +591,7 @@ export async function sendTestEmail(): Promise<ActionResult> {
         booking: null,
         to: [dev.email],
         subjectText: "Guest house portal — mail test",
-        threadRoot: null,
+        standalone: true,
         // The instant, so a second test is a second message rather than a
         // duplicate the idempotency key swallows.
         stamp: `test:${now.toISOString()}`,

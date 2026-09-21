@@ -47,20 +47,48 @@ function errorText(error: unknown): string {
   return String(error).slice(0, 500);
 }
 
+/**
+ * Whether this message opens its thread: the first one of the thread to be
+ * sent claims the root id. Decided here rather than at queue time because
+ * which message goes first is only known now — the day's first approval might
+ * fail and retry after the second has gone. Checking for a *sent* sibling
+ * means a failed opener simply hands the role on.
+ *
+ * Rows from before daily threads that were queued as a thread's opener still
+ * open it.
+ */
+async function opensThread(row: EmailMessage): Promise<boolean> {
+  if (!row.thread_root) return false;
+  if (row.is_thread_root) return true;
+  try {
+    const sent = await getStore().listEmails({
+      threadRoot: row.thread_root,
+      status: "SENT",
+      limit: 1,
+    });
+    return sent.length === 0;
+  } catch (error) {
+    // Replying to a root the mailbox has not seen still threads by subject in
+    // most clients; not sending at all would be worse.
+    console.error("[mail] could not check the thread; sending as a reply", error);
+    return false;
+  }
+}
+
 /** Turn an outbox row into a message for the transport, threading headers and all. */
-function toOutbound(row: EmailMessage): OutboundMessage {
+function toOutbound(row: EmailMessage, isRoot: boolean): OutboundMessage {
   return {
     to: row.to_emails,
     cc: row.cc_emails,
     subject: row.subject,
     html: row.body_html,
     text: row.body_text,
-    // The message that opens a booking's thread claims the deterministic root
-    // id; every later one gets a fresh id and points at the root, which is
-    // what makes mail clients group them.
-    messageId: row.is_thread_root && row.thread_root ? row.thread_root : freshMessageId(),
-    inReplyTo: row.is_thread_root ? undefined : (row.thread_root ?? undefined),
-    references: !row.is_thread_root && row.thread_root ? [row.thread_root] : undefined,
+    // The message that opens a thread claims the deterministic root id; every
+    // later one gets a fresh id and points at the root, which is what makes
+    // mail clients group them. Standalone mail has no threading headers.
+    messageId: isRoot && row.thread_root ? row.thread_root : freshMessageId(),
+    inReplyTo: !isRoot && row.thread_root ? row.thread_root : undefined,
+    references: !isRoot && row.thread_root ? [row.thread_root] : undefined,
   };
 }
 
@@ -97,7 +125,10 @@ export async function dispatchOutbox(
     for (const row of claimed) {
       // The redirect is applied here, not at queue time, so the outbox keeps a
       // record of who the message was genuinely for.
-      const { message, originalRecipients } = applyRedirect(toOutbound(row), config.redirectAllTo);
+      const { message, originalRecipients } = applyRedirect(
+        toOutbound(row, await opensThread(row)),
+        config.redirectAllTo
+      );
       if (message.to.length === 0) {
         // Nobody to send to — a profile without an address, most likely.
         // Failing it outright is right: a retry would find the same nobody.

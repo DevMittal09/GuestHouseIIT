@@ -99,7 +99,6 @@ export async function queueReviewerDigests(now: Date): Promise<number> {
         doc: t.reviewerDigest(reviewer, mine, day),
         // The date is the whole key: one digest per reviewer per day.
         stamp: `${day}:${reviewer.id}`,
-        threadRoot: null,
       },
     ]);
   }
@@ -209,7 +208,6 @@ export async function queueDailyDeskReports(now: Date): Promise<number> {
           { rooms: rooms.length, held: held.length }
         ),
         stamp: `${day}:${guestHouse.id}`,
-        threadRoot: null,
       },
     ]);
   }
@@ -255,7 +253,6 @@ export async function queueEscalations(now: Date): Promise<number> {
         doc: t.escalationToReviewer(reviewer, mine, ESCALATION_HOURS),
         // Re-nudge daily while it stays unanswered, not once and forgotten.
         stamp: `${day}:${reviewer.id}`,
-        threadRoot: null,
       },
     ]);
   }

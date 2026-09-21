@@ -60,6 +60,26 @@ export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
   "queue.escalation.reviewer": "Pending-too-long escalation",
 };
 
+/**
+ * The daily thread a kind of mail joins; anything not listed is standalone.
+ * Why, and how the thread is built, is in `lib/mail/thread.ts` — this lives
+ * here only so the console can say which mails are threaded without pulling
+ * server code into the browser.
+ */
+export type MailThreadKind = "approvals" | "daily_log";
+
+export const MAIL_THREAD_OF: Partial<Record<MailEventKey, MailThreadKind>> = {
+  "booking.submitted.reviewer": "approvals",
+  "booking.pending.reviewer": "approvals",
+  "booking.allocated.desk": "approvals",
+  "booking.cancellation_requested.manager": "approvals",
+  "booking.cancellation_requested.reviewer": "approvals",
+  "booking.cancelled.desk": "approvals",
+  "queue.digest.reviewer": "daily_log",
+  "queue.escalation.reviewer": "daily_log",
+  "desk.daily_report": "daily_log",
+};
+
 /** A message ready to hand to a transport. */
 export interface OutboundMessage {
   to: string[];
@@ -68,10 +88,10 @@ export interface OutboundMessage {
   html: string;
   text: string;
   /**
-   * RFC 5322 threading headers. The Guest House meeting asked for mail about
-   * one booking to arrive as a single thread rather than a pile of standalone
-   * messages, so every message after the first references the booking's root
-   * id — see `threadRootFor` in `lib/mail/thread.ts`.
+   * RFC 5322 threading headers. The Guest House meeting asked for staff mail
+   * to arrive as a single thread per day rather than a pile of standalone
+   * messages, so every message after the first references the thread's root
+   * id — see `lib/mail/thread.ts`.
    */
   messageId?: string;
   inReplyTo?: string;
@@ -106,9 +126,13 @@ export interface NewEmailInput {
   subject: string;
   body_html: string;
   body_text: string;
-  /** The booking thread this message belongs to, or null for standalone mail. */
+  /** The daily thread this message belongs to, or null for standalone mail. */
   thread_root: string | null;
-  /** True for the message that *opens* a thread; it claims `thread_root` as its own Message-ID. */
+  /**
+   * Written false. Kept for rows queued before threads were daily, when the
+   * opening message was fixed at queue time; the dispatcher now decides that
+   * when it sends.
+   */
   is_thread_root: boolean;
   /** Earliest the worker may send it. Defaults to now. */
   scheduled_for?: string;
@@ -128,6 +152,8 @@ export interface EmailMessage extends NewEmailInput {
 export interface EmailOutboxFilter {
   status?: MailStatus;
   bookingId?: string;
+  /** Messages in one thread — how the dispatcher tells whether a thread has started. */
+  threadRoot?: string;
   limit?: number;
 }
 

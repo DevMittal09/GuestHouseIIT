@@ -874,6 +874,7 @@ export class SupabaseStore implements DataStore {
       .limit(filter.limit ?? 100);
     if (filter.status) query = query.eq("status", filter.status);
     if (filter.bookingId) query = query.eq("booking_id", filter.bookingId);
+    if (filter.threadRoot) query = query.eq("thread_root", filter.threadRoot);
     const { data, error } = await query;
     if (error) throw error;
     return (data ?? []).map(hydrateEmail);

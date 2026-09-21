@@ -879,9 +879,9 @@ export function BookingForm({
           <CardHeader>
             <CardTitle>Room availability</CardTitle>
             <CardDescription>
-              What is already booked at your chosen guest house on your check-in date, hour by
-              hour. Use it to pick a day with room to spare — nothing here is reserved for you
-              until the Guest House Manager allocates a room.
+              What is already booked at your chosen guest house in the week of your check-in
+              date — switch to Day or Month, or move to other dates, to find room to spare.
+              Nothing here is reserved for you until the Guest House Manager allocates a room.
             </CardDescription>
           </CardHeader>
           <CardContent>

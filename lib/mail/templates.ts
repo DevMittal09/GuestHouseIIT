@@ -116,7 +116,7 @@ export function submittedToRequester(booking: BookingWithDetails): EmailDocument
     blocks: [
       {
         kind: "paragraph",
-        text: `Your request for ${booking.guest_house.name} has been recorded. Nothing is needed from you at this stage — you will get an email at each step, in this same thread.`,
+        text: `Your request for ${booking.guest_house.name} has been recorded. Nothing is needed from you at this stage — you will get an email at each step.`,
       },
       bookingFacts(booking),
       {

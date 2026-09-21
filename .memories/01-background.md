@@ -113,7 +113,7 @@ The remainder of the same meeting notes. Status as of **16 Sep 2026**:
 | ±4 hour buffer on bookings | Not started | Would change the overlap rule, so it touches `room_holds.during` and every occupancy query at once |
 | HOD approval for a faculty member's booking; debitable heads (dept / project / personal fund) | Not started | The routing hook is `initialStatusFor()`, which takes only the role today — its doc comment marks where the booking type becomes an argument |
 | Dining/lunch booking at the guest house with debitable heads | Not started | Distinct from the per-day meal plan, which is about head counts, not billing |
-| Email in a single thread rather than standalone messages | **Done** | `lib/mail/thread.ts`. Every message about a booking references a deterministic root Message-ID derived from the booking id, and every subject leads with the booking reference — mail clients need *both* to group a thread |
+| Email in a single thread rather than standalone messages | **Done** (reworked 21 Sep 2026) | `lib/mail/thread.ts`. Staff (approvers, forwardees, GHM, desk) get one **approvals** thread per day for booking mail and a separate **daily log** thread for the digest/escalation/day-wise log, so they are not spammed; a new day starts a new thread. Requesters get a standalone mail for each step. Threads need both a shared root Message-ID (claimed by the first message sent) and an identical subject |
 | Documentation for every booking workflow | Not started | |
 
 ## Design handoff — 19 Sep 2026
