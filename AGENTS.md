@@ -546,9 +546,17 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
 - **HTML and plain text are rendered from one block list** (`lib/mail/render.ts`).
   Do not hand-write either body. Tables and inline styles only, no external
   images, and **never a link to an ID document** — mail points at the portal.
-- **One thread per booking** (`lib/mail/thread.ts`) needs both a deterministic
-  `Message-ID` and a subject that always leads with the booking reference; mail
-  clients split a thread when the subject changes.
+- **Staff mail is threaded per person per day; requester mail stands alone**
+  (`lib/mail/thread.ts`, `MAIL_THREAD_OF` in `types.ts`). Reviewer and desk
+  mail about bookings joins that recipient's daily **approvals** thread; the
+  digest, escalation and day-wise log join a separate **daily log** thread. A
+  new institute day starts new threads. Threaded mail is queued **one message
+  per address** (a message carries one `References`), shares a fixed subject
+  (`Guest house approvals — Mon 21 Sep 2026`; the per-item subject moves to
+  the preview line), and the **first one actually sent** claims the root
+  `Message-ID` — decided in `dispatch.ts` by looking for a SENT sibling, not
+  at queue time, so a failed opener hands the role on. Requester mail has no
+  threading headers and a `[reference]`-led subject.
 - `nodemailer` is in `serverExternalPackages` (dynamic requires + Node
   built-ins). Gmail app passwords are shown in four groups of four and people
   paste the spaces, so `mailConfig()` strips whitespace from

@@ -20,7 +20,7 @@ import {
   SUBJECT_TOKENS,
   type MailTemplateOverride,
 } from "@/lib/mail/template-config";
-import type { MailEventKey } from "@/lib/mail/types";
+import { MAIL_THREAD_OF, type MailEventKey } from "@/lib/mail/types";
 
 /**
  * What every automatic email says, and the four things about it the guest
@@ -159,6 +159,15 @@ function TemplateRow({ template }: { template: MailTemplateOverride }) {
                 </span>
               ))}
               .
+              {MAIL_THREAD_OF[template.event_key] && (
+                <>
+                  {" "}
+                  This email joins the recipient&rsquo;s daily{" "}
+                  {MAIL_THREAD_OF[template.event_key] === "approvals" ? "approvals" : "log"} thread,
+                  whose subject stays the same all day so mail clients keep it together — a custom
+                  subject is shown as the message&rsquo;s preview line instead.
+                </>
+              )}
             </p>
           </div>
 

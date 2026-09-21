@@ -16,7 +16,8 @@ import {
   fillTokens,
   type MailTemplateOverride,
 } from "./template-config";
-import { bookingSubject, threadRootFor } from "./thread";
+import { toInstituteDateValue } from "@/lib/tz";
+import { MAIL_THREAD_OF, bookingSubject, dailyThreadRoot, dailyThreadSubject } from "./thread";
 import type { MailEventKey, NewEmailInput } from "./types";
 
 /**
@@ -94,35 +95,48 @@ interface QueueOne {
    * still can; for a digest it is the date, which gives "once a day" for free.
    */
   stamp: string;
-  /** True only for the message that opens a booking's mail thread. */
-  isThreadRoot?: boolean;
   scheduledFor?: string;
-  /** Standalone mail (digests, reports) that should not join a booking thread. */
-  threadRoot?: string | null;
+  /**
+   * Send this one on its own even though its event normally joins a daily
+   * thread — the console's test message, which borrows an event key.
+   */
+  standalone?: boolean;
 }
 
-function buildInput(
+function buildInputs(
   params: QueueOne,
   overrides: Map<MailEventKey, MailTemplateOverride>
-): NewEmailInput | null {
+): NewEmailInput[] {
   // What the guest house has changed about this kind of mail, if anything.
   // Applied here, at the single point every message passes through, so no
   // template can be edited in the console and then quietly ignored.
   const edit = overrides.get(params.eventKey) ?? defaultOverride(params.eventKey);
-  if (!edit.enabled) return null;
+  if (!edit.enabled) return [];
 
   const to = [...new Set(params.to.filter(Boolean))];
-  if (to.length === 0) return null;
+  if (to.length === 0) return [];
   const cc = [
     ...new Set(
       [...(params.cc ?? []), ...edit.cc].filter((address) => address && !to.includes(address))
     ),
   ];
+  // A custom subject replaces the built-in one wholesale, tokens and all —
+  // including the "[IITPKD-GH-…]" prefix, because an office that wants its
+  // own subject usually wants the whole line.
+  const itemSubject = edit.subject
+    ? fillTokens(edit.subject, params.booking)
+    : params.booking
+      ? bookingSubject(params.booking.booking_reference_id, params.subjectText)
+      : params.subjectText;
+  const thread = params.standalone ? undefined : MAIL_THREAD_OF[params.eventKey];
   // The intro goes above everything, the outro below it as small print — the
   // two places a standing sentence belongs without disturbing the facts the
   // template assembled from the booking.
   const doc: EmailDocument = {
     ...params.doc,
+    // In a thread every message shares the thread's subject, so what this one
+    // is about moves to the inbox preview, where it is still read first.
+    ...(thread ? { preheader: `${itemSubject} — ${params.doc.preheader}` } : {}),
     blocks: [
       ...(edit.intro ? [{ kind: "paragraph" as const, text: fillTokens(edit.intro, params.booking) }] : []),
       ...params.doc.blocks,
@@ -131,36 +145,42 @@ function buildInput(
   };
   const { html, text } = renderEmail(doc, { footerLines: FOOTER });
   const bookingId = params.booking?.id ?? null;
-  const threadRoot =
-    params.threadRoot !== undefined
-      ? params.threadRoot
-      : bookingId
-        ? threadRootFor(bookingId)
-        : null;
 
-  return {
+  const input = (
+    recipients: string[],
+    copied: string[],
+    threadRoot: string | null,
+    subject: string
+  ): NewEmailInput => ({
     booking_id: bookingId,
     event_key: params.eventKey,
     // Recipients are in the key: a warden and a manager both told about the
     // same transition are two messages, and one failing must not suppress the
     // other's retry.
-    idempotency_key: `${params.eventKey}:${bookingId ?? "none"}:${params.stamp}:${to.join(",")}`,
-    to_emails: to,
-    cc_emails: cc,
-    // A custom subject replaces the built-in one wholesale, tokens and all —
-    // including the "[IITPKD-GH-…]" prefix, because an office that wants its
-    // own subject usually wants the whole line.
-    subject: edit.subject
-      ? fillTokens(edit.subject, params.booking)
-      : params.booking
-        ? bookingSubject(params.booking.booking_reference_id, params.subjectText)
-        : params.subjectText,
+    idempotency_key: `${params.eventKey}:${bookingId ?? "none"}:${params.stamp}:${recipients.join(",")}`,
+    to_emails: recipients,
+    cc_emails: copied,
+    subject,
     body_html: html,
     body_text: text,
     thread_root: threadRoot,
-    is_thread_root: params.isThreadRoot ?? false,
+    // Which message opens a thread is decided when it is sent — see dispatch.ts.
+    is_thread_root: false,
     ...(params.scheduledFor ? { scheduled_for: params.scheduledFor } : {}),
-  };
+  });
+
+  if (!thread) return [input(to, cc, null, itemSubject)];
+
+  // One message per address: the thread root is per mailbox, and a message can
+  // reference only one root. The day is the institute date it was queued on,
+  // so only the same day's mail shares a thread.
+  const day = toInstituteDateValue(new Date());
+  const subject = dailyThreadSubject(thread, day);
+  // Anyone copied is copied once, on the first recipient's message, not on
+  // every one of them.
+  return to.map((address, i) =>
+    input([address], i === 0 ? cc : [], dailyThreadRoot(thread, day, address), subject)
+  );
 }
 
 /** Queue a batch and kick the worker. Returns how many messages were new. */
@@ -170,9 +190,7 @@ export async function queueMessages(messages: (QueueOne | null)[]): Promise<numb
   // Read once for the batch: a transition queues two or three messages and
   // they share the same overrides.
   const overrides = await loadMailOverrides();
-  const inputs = pending
-    .map((m) => buildInput(m, overrides))
-    .filter((i): i is NewEmailInput => i !== null);
+  const inputs = pending.flatMap((m) => buildInputs(m, overrides));
   if (inputs.length === 0) return 0;
 
   const queued = await getStore().enqueueEmails(inputs);
@@ -223,9 +241,6 @@ export async function notifyBookingSubmitted(bookingId: string): Promise<void> {
         subjectText: "Booking request received",
         doc: t.submittedToRequester(booking),
         stamp,
-        // The requester's acknowledgement opens the thread, because it is the
-        // first message about this booking and the one they will reply to.
-        isThreadRoot: true,
       },
       reviewers.length > 0
         ? {

@@ -890,6 +890,7 @@ export class MockStore implements DataStore {
       .filter((m) => {
         if (filter.status && m.status !== filter.status) return false;
         if (filter.bookingId && m.booking_id !== filter.bookingId) return false;
+        if (filter.threadRoot && m.thread_root !== filter.threadRoot) return false;
         return true;
       })
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
