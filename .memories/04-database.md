@@ -332,6 +332,21 @@ Current migrations:
    with old-shape rows (untrimmed and blank hostel names), applied three times,
    plus the seed twice — see [05-deployment.md](05-deployment.md#verifying-changes).
 
+17. `00000000000017_turnaround_buffer.sql` (Phase 3, Sep 2026). The turnaround
+   buffer: `room_hold_guard(during, overridden, buffer)` (ordinary
+   `[in, out + buffer)`; accepted turnover `[in + 2h + buffer, out − 2h)`, or a
+   2-second sliver), `booking_buffer()` from `rules.booking.buffer_minutes`
+   (default 240), the guard trigger rewritten to use them (and to fire on a
+   direct write to `guard`, which never sticks), `buffer_clashes(interval)`,
+   `rebuild_room_holds()` and `set_booking_buffer(minutes)`. **It lists existing
+   holds that would clash under the buffer and stops with a readable error**,
+   changing nothing — the header shows how to set a smaller buffer first. It
+   then makes `room_holds_no_overlap_guard` `DEFERRABLE INITIALLY IMMEDIATE`
+   and rebuilds every hold through `set_room_holds()` in one `DO` block.
+   Verified in a throwaway Postgres 16: refusal message, escape hatch, three
+   runs, console refusal (`BUFFER_CLASH|…`), accepted 1 h turnover allowed and
+   3 h refused under the buffer.
+
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.
 

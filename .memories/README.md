@@ -157,9 +157,16 @@ constraint room_holds_no_overlap
   exclude using gist (room_id with =, during with &&)
 ```
 
-`during` is a half-open `[check_in, check_out)` range, which is exactly the
-app's strict-overlap rule: a checkout and a same-instant check-in do **not**
-clash.
+`during` is a half-open `[check_in, check_out)` range. Since migrations 14 and
+17 the constraint compares a trigger-maintained `guard` instead, which adds the
+**turnaround buffer** (Phase 3, migration 17; a Setting,
+`rules.booking.buffer_minutes`, 4 hours by default, 0 = off): the constraint
+compares each hold's `guard`, which is `[check_in, check_out + buffer)` — only
+the end padded, so the real gap is the buffer, not twice it — and, for a
+turnover the manager accepted, `[check_in + 2 h + buffer, check_out − 2 h)`, so
+an accepted overlap is still at most two hours. `during` stays the truthful
+stay. With the buffer at 0, a checkout and a same-instant check-in do not
+clash, as before.
 
 - **`Booking.assigned_room_ids` is derived from holds on read.** There is no
   such column any more. Both stores fill it in during hydration.

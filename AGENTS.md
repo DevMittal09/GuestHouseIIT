@@ -425,8 +425,24 @@ the same room. This replaced a check-then-act race in `allocateRooms()`.
 - Supabase writes go through the `set_room_holds()` plpgsql function so
   delete+insert is one transaction. The mock store emulates the constraint in
   `assertNoClash` (safe there: single process, synchronous write).
-- `during` is half-open `[check_in, check_out)`, so a checkout and a
-  same-instant check-in do **not** clash.
+- `during` is half-open `[check_in, check_out)` and stays the truthful stay.
+  The constraint compares `guard` instead (migrations 14 and 17), which adds the
+  **turnaround buffer** (Phase 3, migration 17; a Setting,
+  `rules.booking.buffer_minutes`, 4 hours by default, 0 = off): the constraint
+  compares each hold's `guard`, which is `[check_in, check_out + buffer)` — only
+  the end padded, so the real gap is the buffer, not twice it — and, for a
+  turnover the manager accepted, `[check_in + 2 h + buffer, check_out − 2 h)`, so
+  an accepted overlap is still at most two hours. `during` stays the truthful
+  stay. With the buffer at 0, a checkout and a same-instant check-in do not
+  clash, as before.
+- **Changing the buffer rebuilds every hold** (`applyBookingBuffer` → the
+  `set_booking_buffer()` RPC, one transaction; the constraint is `DEFERRABLE
+  INITIALLY IMMEDIATE` for exactly this) and is refused with `BufferClashError`
+  naming the stays when two would clash. `lib/turnover.ts` `holdGuard` is the
+  same formula in JS; the mock store uses it to emulate the constraint.
+- Conflict kinds for the allocation grid: `free`, `turnaround` (a gap shorter
+  than the buffer — hatched), `soft` (an overlap within 2 h — amber), `hard`.
+  The manager may accept the first two (`isOverridable`).
 
 `components/room-grid.tsx` — cinema-style grid, green available / red occupied /
 blue selected, grouped into double-sharing and single.
@@ -633,11 +649,15 @@ booked / Booked badge for the whole period shown.
   check caught nothing, but that is exactly where the backends drift.
 - **All the calendar maths lives in `lib/availability.ts`, not the
   components**, so the boundary behaviour is testable: `bucketOccupancyByHour`
-  (a stay checking out at 11:00 releases the 11 AM hour, and a same-instant
-  back-to-back booking picks it up), `availabilityRange` / `shiftAnchor` (weeks
+  (a stay checking out at 11:00 releases the 11 AM hour; its turnaround buffer
+  is a separate `turnaround` band, drawn hatched — the booked bar always ends at
+  check-out), `availabilityRange` / `shiftAnchor` (weeks
   run Monday–Sunday; a month step clamps 31 Jan → 28 Feb), and
-  `bucketOccupancyByDay` (bars as fractions of the range, plus booked minutes
-  per day, which drive the badges and the "N free" figure beside each date).
+  `bucketOccupancyByDay` (bars as fractions of the range, `turnarounds` as
+  separate hatched bars, plus booked minutes per day — which exclude the
+  turnaround — driving the badges and the "N free" figure beside each date).
+  Segments carry `turnaround_until` (null when there is no buffer or the
+  changeover was accepted).
 - Calendar dates (`"yyyy-MM-dd"`) go through `parseDateValue` /
   `addDaysToDateValue` / `formatDateValue` in `lib/tz.ts`. They do the
   arithmetic in UTC because a calendar date has no zone; turning a date into

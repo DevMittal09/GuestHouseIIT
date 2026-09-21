@@ -21,6 +21,7 @@ export default async function ManagerPage({
   if (user.role !== "gh_manager") redirect(homeForRole(user.role));
 
   const store = getStore();
+  const rules = await getRules();
   const guestHouses = await store.listGuestHouses();
   if (guestHouses.length === 0) {
     return (
@@ -139,7 +140,8 @@ export default async function ManagerPage({
         rooms={rooms}
         occupancyVersion={occupancyVersion}
         nowIso={now.toISOString()}
-        capacity={(await getRules()).capacity}
+        capacity={rules.capacity}
+        bufferMinutes={rules.booking.buffer_minutes}
       />
     </div>
   );

@@ -49,6 +49,13 @@ export type BookingRules = {
   advance_booking_months: number;
   /** The longest ordinary stay, in nights; 0 means no limit. */
   max_stay_nights: number;
+  /**
+   * Turnaround buffer (Phase 3): the least time between one stay's check-out
+   * and the next check-in on the same room, in minutes; 0 turns it off. Pads
+   * the end of each hold's guard in the database (migration 17). Changing it
+   * rebuilds every hold, and is refused when that would make two stays clash.
+   */
+  buffer_minutes: number;
 };
 
 export type MealWindow = { start: string; end: string };
@@ -91,6 +98,7 @@ export const DEFAULT_RULES: Rules = {
   booking: {
     advance_booking_months: 1,
     max_stay_nights: 14,
+    buffer_minutes: 240,
   },
   meals: {
     windows: {
@@ -144,6 +152,7 @@ export const capacityRulesSchema = z
 export const bookingRulesSchema = z.object({
   advance_booking_months: whole("Advance-booking window", 1, 24),
   max_stay_nights: whole("Maximum stay", 0, 365),
+  buffer_minutes: whole("Turnaround buffer", 0, 1440),
 });
 
 const windowSchema = (label: string) =>

@@ -134,6 +134,14 @@ export interface DataStore {
     to: string
   ): Promise<RoomOccupancySegment[]>;
 
+  /**
+   * Change the turnaround buffer (Phase 3, migration 17): save
+   * `rules.booking.buffer_minutes` and rebuild every hold's guard with it, in
+   * one transaction. Throws `BufferClashError`, naming the stays, when the new
+   * buffer would make allocated stays clash — and then changes nothing.
+   */
+  applyBookingBuffer(minutes: number): Promise<void>;
+
   /** Persist an uploaded document, returning a browser-loadable URL. */
   saveDocument(file: File, folder: string): Promise<string>;
 

@@ -459,6 +459,13 @@ export type RoomOccupancySegment = {
   status: BookingStatus;
   check_in: string;
   check_out: string;
+  /**
+   * When the room is ready again: check-out plus the turnaround buffer
+   * (Phase 3). The booked bar still ends at `check_out`; the charts draw
+   * `[check_out, turnaround_until)` separately, hatched. Null when there is no
+   * buffer — none configured, or a turnover the manager accepted.
+   */
+  turnaround_until: string | null;
   requester_name: string | null;
   purpose_of_visit: string | null;
 }
@@ -538,6 +545,23 @@ export type RoomHold = {
   override_by?: string | null;
   check_in: string;
   check_out: string;
+}
+
+/**
+ * Raised when a new turnaround buffer would make stays already allocated
+ * clash (Phase 3). The change is refused and nothing moves; `clashes` names
+ * them, one line per pair of bookings.
+ */
+export class BufferClashError extends Error {
+  constructor(
+    readonly count: number,
+    readonly clashes: string
+  ) {
+    super(
+      `A turnaround buffer that long would make ${count} pair${count === 1 ? "" : "s"} of allocated stays clash: ${clashes}. Move or reallocate them first, or choose a shorter buffer.`
+    );
+    this.name = "BufferClashError";
+  }
 }
 
 /** Raised when a hold collides with one written by someone else. */

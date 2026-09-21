@@ -16,11 +16,11 @@ import type {
   RoomHold,
   RoomOccupancySegment,
 } from "@/lib/types";
-import { RoomClashError } from "@/lib/types";
+import { BufferClashError, RoomClashError } from "@/lib/types";
 import type { Role, RoomType } from "@/lib/types";
 import { mealsOn, normalizeMeals } from "@/lib/meals";
 import { isInfantAge } from "@/lib/occupancy";
-import { worstConflict } from "@/lib/turnover";
+import { bufferMs, holdGuard, rangesOverlap } from "@/lib/turnover";
 import { deriveFromRooms } from "./derive";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
@@ -57,7 +57,7 @@ import {
 } from "./seed";
 import type { Unit } from "@/lib/units";
 import { auditMatches, type AuditEvent, type AuditFilter, type NewAuditEvent } from "@/lib/audit";
-import { DEFAULT_OFFICIAL_EMAILS } from "@/lib/settings";
+import { DEFAULT_OFFICIAL_EMAILS, parseRuleGroup } from "@/lib/settings";
 
 interface Db {
   profiles: Profile[];
@@ -343,11 +343,23 @@ function holdOverlaps(hold: RoomHold, from: string, to: string): boolean {
   return hold.check_in < to && hold.check_out > from;
 }
 
+/** The turnaround buffer in force (`rules.booking.buffer_minutes`), in ms. */
+function currentBuffer(db: Db): number {
+  return bufferMs(parseRuleGroup("booking", db.app_settings?.["rules.booking"]).buffer_minutes);
+}
+
+/** A stored hold's guard — `room_hold_guard()` from migration 17, in JS. */
+function guardOf(hold: RoomHold, buffer: number) {
+  return holdGuard({ from: hold.check_in, to: hold.check_out }, Boolean(hold.override_by), buffer);
+}
+
 /**
- * The mock's stand-in for the `room_holds_no_overlap` exclusion constraint.
- * Node is single-threaded and `saveDb` writes synchronously, so a check
- * immediately before the write is genuinely atomic here — unlike the old
- * check-then-act against Postgres.
+ * The mock's stand-in for the `room_holds_no_overlap_guard` exclusion
+ * constraint: every hold is compared on its *guard* — the stay padded by the
+ * turnaround buffer, or shrunk for a turnover the manager accepted — exactly
+ * as Postgres does (`lib/turnover.ts` `holdGuard`). Node is single-threaded
+ * and `saveDb` writes synchronously, so a check immediately before the write
+ * is genuinely atomic here.
  */
 function assertNoClash(
   db: Db,
@@ -357,14 +369,11 @@ function assertNoClash(
   to: string,
   overrideRoomIds: string[] = []
 ) {
-  // Migration 14's guard, in JS. A room the manager has overridden is
-  // compared on its shrunken range, so a turnover overlap of up to the grace
-  // is allowed and anything longer still clashes.
+  const buffer = currentBuffer(db);
   const clash = db.room_holds.find((h) => {
     if (h.booking_id === bookingId || !roomIds.includes(h.room_id)) return false;
-    const overridden = overrideRoomIds.includes(h.room_id) || Boolean(h.override_by);
-    if (!overridden) return holdOverlaps(h, from, to);
-    return worstConflict({ from, to }, [{ from: h.check_in, to: h.check_out }]) === "hard";
+    const incoming = holdGuard({ from, to }, overrideRoomIds.includes(h.room_id), buffer);
+    return rangesOverlap(incoming, guardOf(h, buffer));
   });
   if (clash) {
     const room = db.rooms.find((r) => r.id === clash.room_id);
@@ -637,6 +646,10 @@ export class MockStore implements DataStore {
         if (hold.booking_id !== id) continue;
         hold.check_in = checkIn;
         hold.check_out = checkOut;
+        // A turnover the manager accepted was a judgement about the old
+        // dates; `set_room_holds` rewrites the rows without it, and so does
+        // this.
+        hold.override_by = null;
       }
       b.check_in = checkIn;
       b.check_out = checkOut;
@@ -679,11 +692,16 @@ export class MockStore implements DataStore {
     const roomsHere = new Set(
       db.rooms.filter((r) => r.guest_house_id === guestHouseId).map((r) => r.id)
     );
+    // A room is taken when its guard meets the requested stay's guard — the
+    // stay plus the turnaround buffer — which is what the constraint would
+    // compare if the room were allocated.
+    const buffer = currentBuffer(db);
+    const wanted = holdGuard({ from: checkIn, to: checkOut }, false, buffer);
     const occupied = new Set<string>();
     for (const hold of db.room_holds) {
       if (hold.booking_id === excludeBookingId) continue;
       if (!roomsHere.has(hold.room_id)) continue;
-      if (!holdOverlaps(hold, checkIn, checkOut)) continue;
+      if (!rangesOverlap(wanted, guardOf(hold, buffer))) continue;
       occupied.add(hold.room_id);
     }
     return [...occupied];
@@ -698,10 +716,19 @@ export class MockStore implements DataStore {
     const roomsHere = new Set(
       db.rooms.filter((r) => r.guest_house_id === guestHouseId).map((r) => r.id)
     );
+    const buffer = currentBuffer(db);
     const segments: RoomOccupancySegment[] = [];
     for (const hold of db.room_holds) {
       if (!roomsHere.has(hold.room_id)) continue;
-      if (!holdOverlaps(hold, from, to)) continue;
+      // The turnaround after a stay is drawn too, so a hold is wanted when
+      // either the stay or its buffer falls in the window.
+      const turnaroundUntil =
+        !hold.override_by && buffer > 0
+          ? new Date(Date.parse(hold.check_out) + buffer).toISOString()
+          : null;
+      if (!holdOverlaps(hold, from, to) && !(turnaroundUntil && hold.check_out < to && turnaroundUntil > from)) {
+        continue;
+      }
       const b = db.bookings.find((x) => x.id === hold.booking_id);
       if (!b) continue;
       const requester = db.profiles.find((p) => p.id === b.user_id);
@@ -712,11 +739,41 @@ export class MockStore implements DataStore {
         status: b.status,
         check_in: hold.check_in,
         check_out: hold.check_out,
+        turnaround_until: turnaroundUntil,
         requester_name: requester?.full_name ?? null,
         purpose_of_visit: b.purpose_of_visit,
       });
     }
     return segments;
+  }
+
+  async applyBookingBuffer(minutes: number): Promise<void> {
+    const db = loadDb();
+    const buffer = bufferMs(minutes);
+    // `buffer_clashes()` from migration 17: every pair of holds on one room
+    // whose guards would meet under the new buffer.
+    const clashes: string[] = [];
+    const holds = [...db.room_holds].sort((a, b) => a.check_in.localeCompare(b.check_in));
+    holds.forEach((a, i) => {
+      for (const b of holds.slice(i + 1)) {
+        if (b.room_id !== a.room_id || b.booking_id === a.booking_id) continue;
+        if (!rangesOverlap(guardOf(a, buffer), guardOf(b, buffer))) continue;
+        const ref = (id: string) => db.bookings.find((x) => x.id === id)?.booking_reference_id ?? id;
+        const room = db.rooms.find((r) => r.id === a.room_id)?.room_number ?? a.room_id;
+        clashes.push(`${room}: ${ref(a.booking_id)} and ${ref(b.booking_id)}`);
+      }
+    });
+    if (clashes.length > 0) {
+      throw new BufferClashError(clashes.length, clashes.slice(0, 10).join("; "));
+    }
+    // Guards are computed from the setting on every read here, so saving it
+    // *is* the rebuild.
+    const current = parseRuleGroup("booking", db.app_settings?.["rules.booking"]);
+    db.app_settings = {
+      ...(db.app_settings ?? {}),
+      "rules.booking": { ...current, buffer_minutes: minutes },
+    };
+    saveDb(db);
   }
 
   async saveDocument(file: File, folder: string): Promise<string> {

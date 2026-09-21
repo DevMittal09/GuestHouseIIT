@@ -500,19 +500,21 @@ function BookingWindowSection({ current }: { current: Rules["booking"] }) {
   const initial = () => ({
     advance_booking_months: String(current.advance_booking_months),
     max_stay_nights: String(current.max_stay_nights),
+    buffer_minutes: String(current.buffer_minutes),
   });
   const [raw, setRaw] = useState(initial);
   const months = toInt(raw.advance_booking_months);
   const nights = toInt(raw.max_stay_nights);
+  const buffer = toInt(raw.buffer_minutes);
   const parsed =
-    months === null || nights === null
+    months === null || nights === null || buffer === null
       ? null
-      : { advance_booking_months: months, max_stay_nights: nights };
+      : { advance_booking_months: months, max_stay_nights: nights, buffer_minutes: buffer };
 
   return (
     <SettingCard
-      title="Booking window and stay length"
-      description="How far ahead a check-in may be requested, and the longest ordinary stay. Official / Dignitary bookings, the Guest House Manager and the developer are exempt from both. Only new requests are checked; stays already booked keep their dates."
+      title="Booking window, stay length and turnaround"
+      description="How far ahead a check-in may be requested, and the longest ordinary stay — Official / Dignitary bookings, the Guest House Manager and the developer are exempt from both, and only new requests are checked. The turnaround buffer is the least time between one guest checking out and the next checking in to the same room, for housekeeping; changing it re-checks every allocated stay and is refused, naming them, if any two would clash."
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <NumberField
@@ -531,6 +533,15 @@ function BookingWindowSection({ current }: { current: Rules["booking"] }) {
           max={365}
           hint="0 means no limit."
           onChange={(v) => setRaw({ ...raw, max_stay_nights: v })}
+        />
+        <NumberField
+          id="booking-buffer"
+          label="Turnaround buffer (minutes)"
+          value={raw.buffer_minutes}
+          min={0}
+          max={1440}
+          hint="240 = 4 hours. 0 turns it off. The manager can still accept a tighter changeover on a room."
+          onChange={(v) => setRaw({ ...raw, buffer_minutes: v })}
         />
       </div>
       <RuleGroupActions

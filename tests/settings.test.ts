@@ -39,7 +39,7 @@ describe("reading stored settings", () => {
 
   it("merges a partial row over the defaults (a field added later)", () => {
     const parsed = parseRuleGroup("booking", { advance_booking_months: 3 });
-    expect(parsed).toEqual({ advance_booking_months: 3, max_stay_nights: 14 });
+    expect(parsed).toEqual({ advance_booking_months: 3, max_stay_nights: 14, buffer_minutes: 240 });
   });
 
   it("ignores a malformed row rather than throwing", () => {
@@ -51,7 +51,7 @@ describe("reading stored settings", () => {
 
   it("ignores keys it does not know", () => {
     const parsed = parseRuleGroup("booking", { max_stay_nights: 7, surprise: true });
-    expect(parsed).toEqual({ advance_booking_months: 1, max_stay_nights: 7 });
+    expect(parsed).toEqual({ advance_booking_months: 1, max_stay_nights: 7, buffer_minutes: 240 });
   });
 });
 
@@ -84,7 +84,7 @@ describe("validating a proposed change", () => {
   });
 
   it("refuses an advance window of zero months", () => {
-    expect(ruleGroupError("booking", { advance_booking_months: 0, max_stay_nights: 14 })).toMatch(
+    expect(ruleGroupError("booking", { advance_booking_months: 0, max_stay_nights: 14, buffer_minutes: 240 })).toMatch(
       /at least 1/
     );
   });
@@ -211,7 +211,7 @@ describe("the booking schema uses the settings on both sides", () => {
   });
 
   it("a stay over the configured maximum is refused", () => {
-    const rules: Rules = { ...DEFAULT_RULES, booking: { advance_booking_months: 1, max_stay_nights: 0 } };
+    const rules: Rules = { ...DEFAULT_RULES, booking: { ...DEFAULT_RULES.booking, max_stay_nights: 0 } };
     const long = { ...payload(1), check_out: `${addDaysToDateValue(checkInDate, 20)}T10:00` };
     expect(bookingPayloadSchema(config, { mealsAvailable: true }).safeParse(long).success).toBe(false);
     expect(bookingPayloadSchema(config, { mealsAvailable: true, rules }).safeParse(long).success).toBe(true);

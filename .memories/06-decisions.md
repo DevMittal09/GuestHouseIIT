@@ -1352,3 +1352,40 @@ must act next. It supersedes "Displayed, not mailed" above.
   emptied.
 - **Threads:** unchanged — one message per To address, CC on the first message
   only, so a CC recipient receives it once and joins that To's daily thread.
+
+## Phase 3: the turnaround buffer (21 Sep 2026)
+
+Meeting note: "±4 hr buffer for bookings" — read as a minimum gap between one
+stay's check-out and the next check-in on the same room. Default 4 hours
+(`rules.booking.buffer_minutes`), 0 disables it.
+
+- **Only the end is padded.** "±4 hr" padded at both ends would make the real
+  gap 8 hours.
+- **The padding is in `guard`, not `during`.** The brief said "pad
+  `room_holds.during`", but since migration 14 the exclusion constraint
+  compares `guard`, and `during` is what the charts, the reports and (Phase 5)
+  the invoice read as the truthful stay. Padding `guard` gives the same clash
+  rule while keeping `during` honest. The exclusion constraint is still the
+  only clash check.
+- **The turnover override survives the buffer.** An accepted turnover's guard
+  starts at `check_in + 2 h + buffer`, so it clears the previous stay's padded
+  end exactly when the real overlap is at most 2 h — migration 14's promise,
+  unchanged. A manager can therefore accept any gap shorter than the buffer
+  (a "turnaround" conflict, hatched in the grid) or an overlap of up to 2 h
+  ("soft", amber). A neighbour of an already-overridden hold is judged by the
+  app as if it were ordinary, which is stricter than the database — the safe
+  direction.
+- **Rebuilds are atomic.** The constraint became `DEFERRABLE INITIALLY
+  IMMEDIATE` (ordinary writes still checked immediately) so the migration and
+  `set_booking_buffer()` can rebuild every hold through `set_room_holds()` in
+  one transaction, checked at commit. Both first list clashes and stop,
+  changing nothing, rather than dropping or moving a booking.
+- **All holds, not only future ones, are rebuilt.** A hold exists only while a
+  booking holds its room (past stays are Vacated and have none), so "future
+  holds" and "all holds" are the same set except for stays awaiting check-out —
+  and those are exactly the ones whose next guest the buffer protects.
+- **Assumed:** the availability panel on the booking form shows the turnaround
+  to requesters too (hatched, labelled "Turnaround"), since a requester
+  choosing dates needs to know the room is not free at 11:00 just because the
+  previous guest leaves then. The public guidelines state the buffer from the
+  setting.

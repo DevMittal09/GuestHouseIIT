@@ -16,7 +16,13 @@ import {
   roomAssignmentError,
   ROOM_TYPE_LABELS,
 } from "@/lib/occupancy";
-import { OVERRIDE_NOTICE, TURNOVER_GRACE_HOURS, type ConflictKind } from "@/lib/turnover";
+import {
+  describeBuffer,
+  isOverridable,
+  overrideNotice,
+  TURNOVER_GRACE_HOURS,
+  type ConflictKind,
+} from "@/lib/turnover";
 import { cn } from "@/lib/utils";
 import { DEFAULT_RULES, type CapacityRules } from "@/lib/settings";
 import type { BookingWithDetails, Room } from "@/lib/types";
@@ -36,7 +42,10 @@ export function RoomGrid({
   occupancyVersion,
   onAllocated,
   capacity = DEFAULT_RULES.capacity,
+  bufferMinutes = DEFAULT_RULES.booking.buffer_minutes,
 }: {
+  /** The turnaround buffer from Settings, for the legend and the override notice. */
+  bufferMinutes?: number;
   booking: BookingWithDetails;
   rooms: Room[];
   /** Room capacity from Settings — the same values `allocateRooms` checks. */
@@ -139,7 +148,7 @@ export function RoomGrid({
   // Which of the picked rooms the manager is accepting an overlap on. Derived
   // from the selection rather than tracked separately, so the two cannot
   // disagree about what is being overridden.
-  const overridden = selected.filter((id) => conflicts[id] === "soft");
+  const overridden = selected.filter((id) => isOverridable(conflicts[id]));
   const bedGuests = countBedGuests(booking.guests);
   // In pick order, so index 0 is Room 1's — the same order the server maps
   // onto the booking's room cards.
@@ -182,9 +191,15 @@ export function RoomGrid({
 
       <div className="flex flex-wrap items-center gap-4 text-xs">
         <LegendSwatch className="bg-emerald-500" label="Available" />
+        {bufferMinutes > 0 && (
+          <LegendSwatch
+            className="bg-turnaround"
+            label={`Turnaround — within ${describeBuffer(bufferMinutes)} of another stay, yours to override`}
+          />
+        )}
         <LegendSwatch
           className="bg-amber-400"
-          label={`Changeover — free within ${TURNOVER_GRACE_HOURS}h, yours to override`}
+          label={`Changeover — overlaps by up to ${TURNOVER_GRACE_HOURS}h, yours to override`}
         />
         <LegendSwatch className="bg-red-500" label="Already allotted — cannot be picked" />
         <LegendSwatch className="bg-blue-500" label="Selected for this booking" />
@@ -196,6 +211,7 @@ export function RoomGrid({
         description={describeCapacity("double_sharing", capacity)}
         rooms={doubles}
         capacity={capacity}
+        bufferMinutes={bufferMinutes}
         conflicts={conflicts}
         selected={selected}
         onToggle={toggle}
@@ -205,6 +221,7 @@ export function RoomGrid({
         description={describeCapacity("single", capacity)}
         rooms={singles}
         capacity={capacity}
+        bufferMinutes={bufferMinutes}
         conflicts={conflicts}
         selected={selected}
         onToggle={toggle}
@@ -292,7 +309,7 @@ export function RoomGrid({
                 .map((id) => rooms.find((r) => r.id === id)?.room_number ?? id)
                 .join(", ")}
             </p>
-            <p className="mt-0.5">{OVERRIDE_NOTICE}</p>
+            <p className="mt-0.5">{overrideNotice(bufferMinutes)}</p>
           </div>
         )}
 
@@ -356,11 +373,13 @@ function RoomSection({
   selected,
   onToggle,
   capacity,
+  bufferMinutes,
 }: {
   title: string;
   description: string;
   rooms: Room[];
   capacity: CapacityRules;
+  bufferMinutes: number;
   conflicts: Record<string, ConflictKind>;
   /** Picked rooms in card order; the index is the "Room N" shown on the tile. */
   selected: string[];
@@ -378,6 +397,7 @@ function RoomSection({
           const conflict = conflicts[room.id] ?? "free";
           const isOccupied = conflict === "hard";
           const isTurnover = conflict === "soft";
+          const isTurnaround = conflict === "turnaround";
           const pickedAt = selected.indexOf(room.id);
           const isSelected = pickedAt >= 0;
           return (
@@ -391,19 +411,23 @@ function RoomSection({
                   ? `${room.room_number} — already allotted for these dates`
                   : isTurnover
                     ? `${room.room_number} — another stay overlaps by up to ${TURNOVER_GRACE_HOURS} hours. Pick it to accept the changeover.`
-                    : `${room.room_number} — ${ROOM_TYPE_LABELS[room.room_type]}. ${describeCapacity(room.room_type, capacity)}`
+                    : isTurnaround
+                      ? `${room.room_number} — free, but within the ${describeBuffer(bufferMinutes)} turnaround of another stay. Pick it to accept the tighter changeover.`
+                      : `${room.room_number} — ${ROOM_TYPE_LABELS[room.room_type]}. ${describeCapacity(room.room_type, capacity)}`
               }
               className={cn(
                 "flex h-12 items-center justify-center rounded-md border text-xs font-semibold text-white transition-transform",
                 isOccupied
                   ? "cursor-not-allowed bg-red-500 opacity-90"
                   : isSelected
-                    ? isTurnover
+                    ? isTurnover || isTurnaround
                       ? "bg-blue-500 ring-2 ring-amber-400 hover:scale-105"
                       : "bg-blue-500 ring-2 ring-blue-300 hover:scale-105"
                     : isTurnover
                       ? "bg-amber-400 text-amber-950 hover:scale-105 hover:bg-amber-500"
-                      : "bg-emerald-500 hover:scale-105 hover:bg-emerald-600"
+                      : isTurnaround
+                        ? "bg-turnaround text-slate-900 hover:scale-105"
+                        : "bg-emerald-500 hover:scale-105 hover:bg-emerald-600"
               )}
             >
               <span className="flex flex-col items-center leading-tight">

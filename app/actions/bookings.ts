@@ -38,6 +38,7 @@ import {
   roomAssignmentError,
 } from "@/lib/occupancy";
 import {
+  bufferMs,
   conflictsByRoom,
   TURNOVER_GRACE_HOURS,
   type ConflictKind,
@@ -435,16 +436,18 @@ export async function getRoomConflicts(
   const booking = await store.getBooking(bookingId);
   if (!booking) return {};
 
-  // Widened by the grace at each end, so a stay that ends just before this
-  // one begins is still returned and can be classified as a turnover.
-  const graceMs = TURNOVER_GRACE_HOURS * 3_600_000;
-  const from = new Date(Date.parse(booking.check_in) - graceMs).toISOString();
-  const to = new Date(Date.parse(booking.check_out) + graceMs).toISOString();
+  // Widened by the grace and the turnaround buffer at each end, so a stay
+  // that ends just before this one begins — or begins just after it ends — is
+  // still returned and can be classified.
+  const buffer = bufferMs((await getRules()).booking.buffer_minutes);
+  const widen = TURNOVER_GRACE_HOURS * 3_600_000 + buffer;
+  const from = new Date(Date.parse(booking.check_in) - widen).toISOString();
+  const to = new Date(Date.parse(booking.check_out) + widen).toISOString();
   const segments = (
     await store.listRoomOccupancy(booking.guest_house_id, from, to)
   ).filter((seg) => seg.booking_id !== bookingId);
 
-  return conflictsByRoom({ from: booking.check_in, to: booking.check_out }, segments);
+  return conflictsByRoom({ from: booking.check_in, to: booking.check_out }, segments, buffer);
 }
 
 export async function allocateRooms(

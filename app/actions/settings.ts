@@ -23,7 +23,7 @@ import {
 import { getOfficialEmails, getRules } from "@/lib/settings-server";
 import { isInstituteEmail } from "@/lib/site";
 import { getStore } from "@/lib/store";
-import type { Profile } from "@/lib/types";
+import { BufferClashError, type Profile } from "@/lib/types";
 import type { ActionResult } from "./bookings";
 
 /**
@@ -146,6 +146,23 @@ export async function saveRuleGroup(group: RuleGroup, proposed: unknown): Promis
             blockers
           ),
         };
+      }
+    }
+
+    // The turnaround buffer is enforced by the database's exclusion
+    // constraint, so changing it rebuilds every hold — in Postgres, in one
+    // transaction that refuses (naming the stays) if any two would clash.
+    // That comes first: if it is refused, nothing in the group is saved.
+    if (group === "booking") {
+      const before = current as Rules["booking"];
+      const after = next as Rules["booking"];
+      if (before.buffer_minutes !== after.buffer_minutes) {
+        try {
+          await store.applyBookingBuffer(after.buffer_minutes);
+        } catch (e) {
+          if (e instanceof BufferClashError) return { ok: false, error: e.message };
+          throw e;
+        }
       }
     }
 

@@ -1,6 +1,7 @@
 import { MEAL_KEYS, MEAL_LABELS, mealTimes } from "./meals";
 import { INFANT_AGE_LIMIT, ROOM_TYPE_LABELS } from "./occupancy";
 import { DEFAULT_RULES, type Rules } from "./settings";
+import { describeBuffer } from "./turnover";
 import type { SiteGuestHouse, SitePolicies } from "./site-data";
 import type { RoomType } from "./types";
 
@@ -139,7 +140,9 @@ export function guidelineCards(houses: SiteGuestHouse[], policies: SitePolicies)
       title: "Check-in and check-out",
       items: [
         "Arrival and departure times are chosen on the request, and the room is held for exactly that period",
-        "A room becomes free again at the booked check-out time",
+        policies.rules.booking.buffer_minutes > 0
+          ? `A room is held for ${describeBuffer(policies.rules.booking.buffer_minutes)} after the booked check-out time so it can be made ready for the next guest`
+          : "A room becomes free again at the booked check-out time",
         "Reception marks guests in on arrival — never before the booked check-in",
         "Carry the identity document named on the request",
       ],

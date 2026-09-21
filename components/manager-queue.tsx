@@ -53,9 +53,12 @@ export function ManagerQueue({
   occupancyVersion,
   nowIso,
   capacity,
+  bufferMinutes,
 }: {
   /** Room capacity from Settings, for the allocation grid. */
   capacity?: CapacityRules;
+  /** The turnaround buffer from Settings, for the allocation grid. */
+  bufferMinutes?: number;
   pending: BookingWithDetails[];
   /** Stays happening right now — check-in has passed, check-out has not. */
   current: BookingWithDetails[];
@@ -153,6 +156,7 @@ export function ManagerQueue({
                       rooms={rooms}
                       occupancyVersion={occupancyVersion}
                       capacity={capacity}
+                      bufferMinutes={bufferMinutes}
                     />
                   ))}
               </TableBody>
@@ -232,11 +236,13 @@ function ManagerRow({
   rooms,
   occupancyVersion,
   capacity,
+  bufferMinutes,
 }: {
   booking: BookingWithDetails;
   rooms: Room[];
   occupancyVersion: string;
   capacity?: CapacityRules;
+  bufferMinutes?: number;
 }) {
   const [open, setOpen] = useState(false);
   const mealsOnly = booking.service_type === "meals_only";
@@ -302,6 +308,7 @@ function ManagerRow({
                   occupancyVersion={occupancyVersion}
                   onAllocated={() => setOpen(false)}
                   capacity={capacity}
+                  bufferMinutes={bufferMinutes}
                 />
               )}
             </DialogContent>

@@ -12,7 +12,9 @@ import type {
   RoomOccupancySegment,
   RoomType,
 } from "@/lib/types";
-import { RoomClashError } from "@/lib/types";
+import { BufferClashError, RoomClashError } from "@/lib/types";
+import { parseRuleGroup } from "@/lib/settings";
+import { bufferMs } from "@/lib/turnover";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
@@ -84,6 +86,7 @@ type OccupancyRow = {
   room_id: string;
   booking_id: string;
   during: string;
+  override_by: string | null;
   bookings: {
     booking_reference_id: string;
     status: Booking["status"];
@@ -109,6 +112,19 @@ function rangeLiteral(from: string, to: string): string {
 
 export class SupabaseStore implements DataStore {
   private db = getSupabase();
+
+  /**
+   * The turnaround buffer in force, in ms. The holds' guards were built with
+   * it (migration 17 rebuilds them whenever it changes), so a requested stay
+   * padded by the same amount is compared like for like.
+   */
+  private async bufferNow(): Promise<number> {
+    try {
+      return bufferMs(parseRuleGroup("booking", await this.getJsonSetting("rules.booking")).buffer_minutes);
+    } catch {
+      return bufferMs(parseRuleGroup("booking", null).buffer_minutes);
+    }
+  }
 
   async listProfiles(): Promise<Profile[]> {
     const { data, error } = await this.db.from("profiles").select("*").order("role");
@@ -575,12 +591,15 @@ export class SupabaseStore implements DataStore {
     excludeBookingId?: string
   ): Promise<string[]> {
     // Straight off the holds — no status filter needed, because a hold row
-    // only exists while the booking is actually holding the room.
+    // only exists while the booking is actually holding the room. Compared on
+    // the guard, against the requested stay padded by the turnaround buffer:
+    // what the exclusion constraint would compare on allocation.
+    const padded = new Date(Date.parse(checkOut) + (await this.bufferNow())).toISOString();
     let query = this.db
       .from("room_holds")
       .select("room_id, rooms!inner(guest_house_id)")
       .eq("rooms.guest_house_id", guestHouseId)
-      .overlaps("during", rangeLiteral(checkIn, checkOut));
+      .overlaps("guard", rangeLiteral(checkIn, padded));
     if (excludeBookingId) query = query.neq("booking_id", excludeBookingId);
     const { data, error } = await query;
     if (error) throw error;
@@ -592,22 +611,30 @@ export class SupabaseStore implements DataStore {
     from: string,
     to: string
   ): Promise<RoomOccupancySegment[]> {
-    const { data, error } = await this.db
-      .from("room_holds")
-      .select(
-        `room_id, booking_id, during,
+    const select = `room_id, booking_id, during, override_by,
          rooms!inner(guest_house_id),
          bookings!inner(booking_reference_id, status, check_in, check_out, purpose_of_visit,
-                        requester:profiles!bookings_user_id_fkey(full_name))`
-      )
-      .eq("rooms.guest_house_id", guestHouseId)
-      .overlaps("during", rangeLiteral(from, to));
-    if (error) throw error;
+                        requester:profiles!bookings_user_id_fkey(full_name))`;
+    // Two reads rather than one `or`: the turnaround after a stay is drawn
+    // too, so a hold is wanted when its stay *or* its guard (the stay plus
+    // the buffer) falls in the window, and range literals do not survive
+    // PostgREST's `or=` quoting cleanly.
+    const window = rangeLiteral(from, to);
+    const [byStay, byGuard, buffer] = await Promise.all([
+      this.db.from("room_holds").select(select).eq("rooms.guest_house_id", guestHouseId).overlaps("during", window),
+      this.db.from("room_holds").select(select).eq("rooms.guest_house_id", guestHouseId).overlaps("guard", window),
+      this.bufferNow(),
+    ]);
+    if (byStay.error) throw byStay.error;
+    if (byGuard.error) throw byGuard.error;
 
-    const rows = (data ?? []) as unknown as OccupancyRow[];
+    const seen = new Set<string>();
+    const rows = [...(byStay.data ?? []), ...(byGuard.data ?? [])] as unknown as OccupancyRow[];
     return rows.flatMap((hold) => {
       const b = hold.bookings;
-      if (!b) return [];
+      const key = `${hold.booking_id}:${hold.room_id}`;
+      if (!b || seen.has(key)) return [];
+      seen.add(key);
       return [
         {
           room_id: hold.room_id,
@@ -616,11 +643,25 @@ export class SupabaseStore implements DataStore {
           status: b.status,
           check_in: b.check_in,
           check_out: b.check_out,
+          turnaround_until:
+            !hold.override_by && buffer > 0
+              ? new Date(Date.parse(b.check_out) + buffer).toISOString()
+              : null,
           requester_name: b.requester?.full_name ?? null,
           purpose_of_visit: b.purpose_of_visit,
         },
       ];
     });
+  }
+
+  async applyBookingBuffer(minutes: number): Promise<void> {
+    // One transaction in Postgres: refuse on a clash, otherwise save the
+    // setting and rebuild every hold (migration 17).
+    const { error } = await this.db.rpc("set_booking_buffer", { p_minutes: minutes });
+    if (!error) return;
+    const match = /BUFFER_CLASH\|(\d+)\|(.*)/.exec(error.message);
+    if (match) throw new BufferClashError(Number(match[1]), match[2]);
+    throw error;
   }
 
   async saveDocument(file: File, folder: string): Promise<string> {

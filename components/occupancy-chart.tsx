@@ -102,6 +102,7 @@ function HourRow({
       </div>
       {rooms.map((room) => {
         const segment = occupancy.get(room.id)?.hours[hour] ?? null;
+        const turnaround = segment ? null : (occupancy.get(room.id)?.turnaround[hour] ?? null);
         return (
           <div
             key={room.id}
@@ -110,12 +111,14 @@ function HourRow({
                 ? `${room.room_number} — booked at ${hourLabel(hour)} · ${
                     segment.booking_reference_id
                   }${segment.requester_name ? ` · ${segment.requester_name}` : ""}`
-                : `${room.room_number} — free at ${hourLabel(hour)}`
+                : turnaround
+                  ? `${room.room_number} — turnaround at ${hourLabel(hour)} (housekeeping after ${turnaround.booking_reference_id})`
+                  : `${room.room_number} — free at ${hourLabel(hour)}`
             }
             className={cn(
               "border-r border-b",
               rowHeight,
-              segment ? "bg-red-500" : "bg-background",
+              segment ? "bg-red-500" : turnaround ? "bg-turnaround" : "bg-background",
               isCurrent && "border-t-2 border-t-primary"
             )}
           />
@@ -214,6 +217,18 @@ export function RangeOccupancyChart({
                 key={day}
                 className={cn("border-b", day === today && "bg-primary/10")}
                 style={{ height: rowHeight }}
+              />
+            ))}
+            {/* The turnaround first, so a stay that begins inside another's
+                buffer (an accepted changeover) is drawn over it. */}
+            {occupancy.get(room.id)?.turnarounds.map(({ segment, from, to }) => (
+              <div
+                key={`t-${segment.booking_id}`}
+                title={`${room.room_number} — turnaround after ${segment.booking_reference_id}, until ${formatDateTime(
+                  segment.turnaround_until ?? segment.check_out
+                )}`}
+                className="bg-turnaround absolute inset-x-1 rounded-sm"
+                style={{ top: `${from * 100}%`, height: `max(${(to - from) * 100}%, 2px)` }}
               />
             ))}
             {occupancy.get(room.id)?.bars.map(({ segment, from, to }) => (

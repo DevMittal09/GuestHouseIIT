@@ -469,8 +469,9 @@ create table room_holds (
 ```
 
 Build `during` as `tstzrange(check_in, check_out, '[)')` — the half-open range
-gives you exactly the strict-overlap semantics you already implement, where a
-checkout and a same-instant check-in do not clash. A row exists only while the
+gives you exactly the strict-overlap semantics you already implement. (Built
+in migration 3; since migrations 14 and 17 the constraint compares a `guard`
+column that adds the turnaround buffer after each stay.) A row exists only while the
 booking holds the room, so `VACATED`, `CANCELLED` and `CANCELLATION_APPROVED`
 delete it. `ROOM_HOLDING_STATUSES` stops being a rule you remember to apply and
 becomes a table that cannot lie.

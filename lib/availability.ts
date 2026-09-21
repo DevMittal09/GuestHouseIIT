@@ -18,6 +18,13 @@ const MINUTE_MS = 60_000;
 export interface RoomDayOccupancy {
   /** 24 entries, midnight-first, in institute time (`lib/tz.ts`). */
   hours: (RoomOccupancySegment | null)[];
+  /**
+   * The turnaround after a stay (Phase 3), per hour: the booking whose
+   * housekeeping buffer covers the hour, when no booking holds it. Drawn
+   * hatched, separately from the booked hours — the stay itself still ends at
+   * check-out.
+   */
+  turnaround: (RoomOccupancySegment | null)[];
   segments: RoomOccupancySegment[];
 }
 
@@ -75,21 +82,35 @@ export function bucketOccupancyByHour(
 ): Map<string, RoomDayOccupancy> {
   const byRoom = new Map<string, RoomDayOccupancy>();
   for (const room of rooms) {
-    byRoom.set(room.id, { hours: Array(HOURS_IN_DAY).fill(null), segments: [] });
+    byRoom.set(room.id, {
+      hours: Array(HOURS_IN_DAY).fill(null),
+      turnaround: Array(HOURS_IN_DAY).fill(null),
+      segments: [],
+    });
   }
 
   for (const segment of segments) {
     const entry = byRoom.get(segment.room_id);
     if (!entry) continue;
-    entry.segments.push(segment);
     const segStart = new Date(segment.check_in).getTime();
     const segEnd = new Date(segment.check_out).getTime();
+    const turnEnd = segment.turnaround_until ? new Date(segment.turnaround_until).getTime() : segEnd;
+    const dayEnd = dayStart.getTime() + HOURS_IN_DAY * HOUR_MS;
+    // Only the stay makes a segment "on this day"; a turnaround spilling in
+    // from yesterday draws its band but is not listed as a booking.
+    if (segStart < dayEnd && segEnd > dayStart.getTime()) entry.segments.push(segment);
     for (let hour = 0; hour < HOURS_IN_DAY; hour++) {
       const hourStart = dayStart.getTime() + hour * HOUR_MS;
       if (segStart < hourStart + HOUR_MS && segEnd > hourStart) {
         entry.hours[hour] = segment;
+      } else if (turnEnd > segEnd && segEnd < hourStart + HOUR_MS && turnEnd > hourStart) {
+        entry.turnaround[hour] = segment;
       }
     }
+  }
+  // A booked hour is booked, whatever turnaround also touches it.
+  for (const entry of byRoom.values()) {
+    entry.turnaround = entry.turnaround.map((t, hour) => (entry.hours[hour] ? null : t));
   }
 
   return byRoom;
@@ -197,6 +218,11 @@ export interface RoomRangeOccupancy {
    * three-night stay reads as one booking rather than three.
    */
   bars: { segment: RoomOccupancySegment; from: number; to: number }[];
+  /**
+   * The turnaround after each stay, `[check_out, turnaround_until)` clipped to
+   * the range, drawn hatched beneath the next bar. Not counted as booked.
+   */
+  turnarounds: { segment: RoomOccupancySegment; from: number; to: number }[];
   /** Minutes booked on each day of the range, in `range.days` order. */
   bookedMinutes: number[];
   /** The bookings themselves, in check-in order. */
@@ -224,12 +250,28 @@ export function bucketOccupancyByDay(
 
   const byRoom = new Map<string, RoomRangeOccupancy>();
   for (const room of rooms) {
-    byRoom.set(room.id, { bars: [], bookedMinutes: range.days.map(() => 0), segments: [] });
+    byRoom.set(room.id, {
+      bars: [],
+      turnarounds: [],
+      bookedMinutes: range.days.map(() => 0),
+      segments: [],
+    });
   }
 
   for (const segment of segments) {
     const entry = byRoom.get(segment.room_id);
     if (!entry) continue;
+    if (segment.turnaround_until) {
+      const tFrom = Math.max(new Date(segment.check_out).getTime(), rangeStart);
+      const tTo = Math.min(new Date(segment.turnaround_until).getTime(), rangeEnd);
+      if (tTo > tFrom) {
+        entry.turnarounds.push({
+          segment,
+          from: (tFrom - rangeStart) / span,
+          to: (tTo - rangeStart) / span,
+        });
+      }
+    }
     const from = Math.max(new Date(segment.check_in).getTime(), rangeStart);
     const to = Math.min(new Date(segment.check_out).getTime(), rangeEnd);
     // Written as a negation so an unparseable time (NaN) is skipped as well.

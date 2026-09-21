@@ -277,6 +277,14 @@ export interface Database {
         Returns: undefined;
       };
       /**
+       * Changes the turnaround buffer and rebuilds every hold (migration 17).
+       * Raises `BUFFER_CLASH|count|listing` when stays would clash.
+       */
+      set_booking_buffer: {
+        Args: { p_minutes: number };
+        Returns: number;
+      };
+      /**
        * Claims due outbox rows with `for update skip locked` (migration 10),
        * so two dispatchers cannot send the same message.
        */

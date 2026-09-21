@@ -280,9 +280,16 @@ which collapses a lot of incidental complexity:
 - `Booking.assigned_room_ids` is **derived from holds on read** — the column is
   gone, so the two cannot disagree.
 
-`during` is half-open `[check_in, check_out)`, which is exactly the strict
-overlap the app always applied: a checkout and a same-instant check-in do
-**not** clash.
+`during` is half-open `[check_in, check_out)`. Since migrations 14 and 17 the
+constraint compares a derived `guard` column instead, which adds the
+**turnaround buffer** (Phase 3, migration 17; a Setting,
+`rules.booking.buffer_minutes`, 4 hours by default, 0 = off): the constraint
+compares each hold's `guard`, which is `[check_in, check_out + buffer)` — only
+the end padded, so the real gap is the buffer, not twice it — and, for a
+turnover the manager accepted, `[check_in + 2 h + buffer, check_out − 2 h)`, so
+an accepted overlap is still at most two hours. `during` stays the truthful
+stay. With the buffer at 0, a checkout and a same-instant check-in do not
+clash, as before.
 
 ### Capacity
 
@@ -338,9 +345,9 @@ Three things are worth knowing:
   clips each booking to the range as a bar and counts booked minutes per day.
   Putting it in `lib/` follows the same reasoning as `lib/booking-search.ts`:
   the boundary behaviour is where the bugs are, so it has to be reachable by a
-  test. A stay checking out at 11:00 releases the 11 AM hour, and a back-to-back
-  booking starting at that instant picks it up — the same half-open semantics
-  as allocation. Day arithmetic on `"yyyy-MM-dd"` strings runs in UTC
+  test. A stay checking out at 11:00 releases the 11 AM hour — the same
+  half-open semantics as allocation — and the turnaround buffer after it is
+  bucketed separately (`turnaround`) and drawn hatched, never as booked. Day arithmetic on `"yyyy-MM-dd"` strings runs in UTC
   (`addDaysToDateValue` in `lib/tz.ts`) because a calendar date has no zone.
 - **Identity is stripped per viewer, in the action.** `getRoomAvailability`
   returns `requester_name` and `purpose_of_visit` only to `gh_manager` and
