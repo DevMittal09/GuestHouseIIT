@@ -1,5 +1,6 @@
 "use client";
 
+import { describeDebit } from "@/lib/debit-heads";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -133,7 +134,12 @@ function StayRow({
   return (
     <TableRow className={overdue ? "bg-amber-50/60 dark:bg-amber-950/20" : undefined}>
       <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
-      <TableCell>{booking.requester.full_name}</TableCell>
+      <TableCell>
+        {booking.requester.full_name}
+        <span className="block text-xs text-muted-foreground">
+          Head: {describeDebit(booking)}
+        </span>
+      </TableCell>
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
       <TableCell>
         {formatDateTime(booking.check_out)}

@@ -43,6 +43,7 @@ import {
   type NewAuditEvent,
 } from "@/lib/audit";
 import type { Json } from "@/lib/supabase/database.types";
+import type { NewProjectInput, Project } from "@/lib/projects";
 import type {
   BookingDetailsPatch,
   DataStore,
@@ -319,6 +320,11 @@ export class SupabaseStore implements DataStore {
           r.debit_head ?? (r.booking_type === "personal" ? "personal_funds" : null),
         debit_details: r.debit_details ?? null,
         debit_document_url: r.debit_document_url ?? null,
+        // Before migration 18: no project, and an office booking was direct.
+        project_id: r.project_id ?? null,
+        office_approval:
+          r.office_approval ??
+          (r.user_role === "official" || r.user_role === "iar_cell" ? "direct" : null),
         on_behalf_of_name: r.on_behalf_of_name ?? null,
         on_behalf_of_email: r.on_behalf_of_email ?? null,
         on_behalf_of_phone: r.on_behalf_of_phone ?? null,
@@ -960,6 +966,40 @@ export class SupabaseStore implements DataStore {
       .delete()
       .eq("email", email.trim().toLowerCase());
     if (error) throw error;
+  }
+
+  async listProjects(): Promise<Project[]> {
+    const { data, error } = await this.db.from("projects").select("*").order("project_number");
+    if (error) throw error;
+    return (data ?? []) as Project[];
+  }
+
+  async createProjects(inputs: NewProjectInput[]): Promise<void> {
+    if (inputs.length === 0) return;
+    // One statement: the paste import is all or nothing.
+    const { error } = await this.db.from("projects").insert(inputs);
+    if (error) {
+      if (error.code === "23505") throw new Error("One of those project numbers is already on the list");
+      throw error;
+    }
+  }
+
+  async updateProject(id: string, patch: Partial<NewProjectInput>): Promise<void> {
+    const { error } = await this.db.from("projects").update(patch).eq("id", id);
+    if (error) {
+      if (error.code === "23505") throw new Error("Another project already has that number");
+      throw error;
+    }
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    const { error } = await this.db.from("projects").delete().eq("id", id);
+    if (error) {
+      if (error.code === "23503") {
+        throw new Error("A booking is debited to this project — deactivate it instead");
+      }
+      throw error;
+    }
   }
 
   async appendAudit(event: NewAuditEvent): Promise<void> {

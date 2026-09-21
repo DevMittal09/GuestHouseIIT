@@ -44,9 +44,10 @@ describe("self-healing an old database file", () => {
     expect(await store.listHostels()).toEqual(["Malhar", "Saveri", "Tilang"]);
   });
 
-  it("seeds the whitelist with the addresses that used to be hardcoded", async () => {
+  it("seeds the whitelist with the addresses that used to be hardcoded (and the demo office)", async () => {
     expect(await store.listOfficialEmails()).toEqual([
       "admin@iitpkd.ac.in",
+      "cse.office@iitpkd.ac.in",
       "director.office@iitpkd.ac.in",
       "registrar@iitpkd.ac.in",
     ]);

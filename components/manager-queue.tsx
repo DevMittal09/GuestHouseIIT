@@ -1,5 +1,6 @@
 "use client";
 
+import { describeDebit } from "@/lib/debit-heads";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -261,6 +262,9 @@ function ManagerRow({
       </TableCell>
       <TableCell>
         <span className="font-medium">{booking.requester.full_name}</span>
+        <span className="block text-xs text-muted-foreground">
+          Head: {describeDebit(booking)}
+        </span>
         <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>
       </TableCell>
       <TableCell>
@@ -401,6 +405,9 @@ function CancellationRow({ booking }: { booking: BookingWithDetails }) {
       <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
       <TableCell>
         <span className="font-medium">{booking.requester.full_name}</span>
+        <span className="block text-xs text-muted-foreground">
+          Head: {describeDebit(booking)}
+        </span>
         <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>
       </TableCell>
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>

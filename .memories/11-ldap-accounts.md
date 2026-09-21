@@ -27,6 +27,10 @@ Used whenever `LDAP_URL` is **unset** (the default). They live in
 | Dr. Suresh Kumar | Hostel Warden (Malhar) | `warden.malhar` | `Malhar@2026` |
 | Dr. Lakshmi Devi | Hostel Warden (Saveri) | `warden.saveri` | `Saveri@2026` |
 | Dr. Arun Prasad | Faculty Advisor (Petrichor) | `fa.petrichor` | `Advisor@2026` |
+| Prof. R. Venkatesh | **HOD, CSE** — employee (faculty) who heads the CSE unit; sees **HOD Queue** (`/hod`) | `hod.cse` | `HodCse@2026` |
+| Meera Nair | Student — **Cultural Council secretary**, approves Petrichor at the club stage (`/approvals`) | `112301045` | `Meera@2026` |
+| CSE Department Office | Official — a **department office** (Direct or Requires HOD approval → CSE HOD; debited to Department) | `cse.office` | `CseOffice@2026` |
+| Ravi K. | Employee — **non-teaching staff**, CSE (official bookings go to the HOD; Department head only) | `ravi.k` | `Ravi@2026` |
 | IAR Office | IAR Office | `iar` | `IarOffice@2026` |
 | Guest House Manager | Guest House Manager | `guesthouse` | `Manager@2026` |
 | Guest House Caretaker | Guest House Caretaker | `gh.reception` | `Reception@2026` |

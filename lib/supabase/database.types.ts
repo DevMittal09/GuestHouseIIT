@@ -14,6 +14,7 @@ import type { RoleFormConfig } from "@/lib/form-config";
 import type { EmailMessage } from "@/lib/mail/types";
 import type { Unit } from "@/lib/units";
 import type { AuditEvent } from "@/lib/audit";
+import type { Project } from "@/lib/projects";
 
 /** Any value a jsonb column can hold. */
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -150,6 +151,8 @@ export interface Database {
           | "debit_head"
           | "debit_details"
           | "debit_document_url"
+          | "project_id"
+          | "office_approval"
           | "created_at"
           | "updated_at"
         >;
@@ -201,8 +204,14 @@ export interface Database {
       };
       units: {
         Row: Unit;
-        Insert: Insertable<Unit, "id" | "parent_id" | "head_id" | "acting_head_id" | "office_class">;
+        Insert: Insertable<Unit, "id" | "parent_id" | "head_id" | "acting_head_id" | "office_class" | "hod_unit_id">;
         Update: Partial<Unit>;
+        Relationships: [];
+      };
+      projects: {
+        Row: Project & { created_at: string; updated_at: string };
+        Insert: Insertable<Project & { created_at: string; updated_at: string }, "id" | "pi_name" | "active" | "created_at" | "updated_at">;
+        Update: Partial<Project>;
         Relationships: [];
       };
       hostels: {

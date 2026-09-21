@@ -183,13 +183,19 @@ because the rendered string no longer depends on which machine rendered it.
 
 `lib/workflow.ts` is the single source of truth.
 
-| Requester | Entry status | Path |
-| --- | --- | --- |
-| student | `PENDING_WARDEN` | warden → manager |
-| club | `PENDING_FA` | faculty advisor → manager |
-| alumni | `PENDING_IAR` | IAR cell → manager |
-| employee | `PENDING_GH_MANAGER` | manager |
-| official | `PENDING_GH_MANAGER` | manager (direct, highest priority) |
+| Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
+| --- | --- | --- | --- |
+| student | personal | Assistant Warden → GH Manager | Personal |
+| club | official | Faculty Advisor / council secretary → **HOD** (if the club has an HOD unit) → GH Manager | Department |
+| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF |
+| employee — staff | official | **HOD** → GH Manager | Department |
+| employee | personal | GH Manager | Personal |
+| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute |
+| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department |
+| iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | Institute (alumni: Institute / Personal) |
+| iar_student_cell | alumni | IAR Office → GH Manager | Institute / Personal |
+| any | meals only | GH Manager | dining heads (Phase 6) |
+| alumni | *retired* | kept only for stored bookings | — |
 
 Rules encoded there:
 

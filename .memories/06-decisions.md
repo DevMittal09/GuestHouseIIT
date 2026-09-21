@@ -1389,3 +1389,45 @@ stay's check-out and the next check-in on the same room. Default 4 hours
   choosing dates needs to know the room is not free at 11:00 just because the
   previous guest leaves then. The public guidelines state the buffer from the
   setting.
+
+## Phase 4: HOD approval and debitable heads (22 Sep 2026)
+
+Built on migration 15's units (an HOD is the head of a unit, found when
+someone looks) rather than a new `hod` role — the brief allowed either, and a
+role would have to be kept in step with the units by hand. That is the "HOD
+flag with department scoping": `units.head_id`, scoped by `hodApproversFor`.
+
+- **One route function.** `routeFor(role, service, context)` returns the whole
+  chain; entry status, next stage, Copy-to and the public site read it. Before,
+  "intermediate approval always forwards to the manager" was a separate rule,
+  which cannot express club → FA → HOD.
+- **Staff official bookings now go to the HOD too** — the brief says
+  "faculty/staff". Migration 15 had routed staff straight to the manager.
+- **Self-approval:** `hodApproversFor` never includes the requester. An HOD's
+  own official booking therefore has no HOD stage (logged as skipped) unless an
+  acting HOD is set; `canReview` still refuses self-approval as a backstop.
+- **Office route is stored per booking** (`office_approval`), so changing units
+  later cannot move a waiting request to a different stage.
+- **Assumed — whose HOD:** a department is its own; a department office answers
+  to its parent department; an officer office (Director, Registrar) to its own
+  head ("Requires HOD approval" for the Director's office means its head);
+  clubs have **no** HOD stage until the console names one (`hod_unit_id`), so
+  today's club route is unchanged by default. Club → FA → HOD, as the brief
+  asks ("put the HOD after the FA").
+- **Assumed — clubs' debitable head:** Department (the brief lists none). IAR
+  Student Cell: Institute. On behalf of an alumnus: Institute or Personal.
+  All configurable in Settings → Debitable heads.
+- **Debit head values kept from migration 15.** The five invoice heads map onto
+  existing values (department_budget, institute_grant,
+  professional_development_fund, personal_funds, project_grant); the legacy
+  ones (special budget, alumni/student/hostel funds) stay valid for stored rows
+  and can be re-enabled in Settings, but are not offered by default.
+- **Projects** are picked, not typed; `debit_details` snapshots number and
+  title so an edited project list never rewrites a booking. A used project can
+  be deactivated, never deleted (foreign key, on delete restrict).
+- **Queues:** `/hod` for HOD approval, `/approvals` renamed "Club Approvals"
+  for the FA / council-secretary stage, each shown only to people who hold that
+  appointment. Mail to an HOD links to `/hod`.
+- **Display:** the head is a second line under the requester in the manager and
+  caretaker tables, the history list, a column in the PDF export, the CSV
+  column "Debitable head", and "Debitable head" in every booking mail's facts.

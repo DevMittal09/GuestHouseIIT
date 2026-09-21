@@ -4,7 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { isWhitelistedOfficial } from "@/lib/settings";
-import { getOfficialEmails, getRules } from "@/lib/settings-server";
+import { getOfficialEmails } from "@/lib/settings-server";
+import { bookingContextFor } from "@/lib/booking-context-server";
 import { getStore } from "@/lib/store";
 import { canBookOnBehalf } from "@/lib/access";
 import { serviceTypesFor } from "@/lib/booking-types";
@@ -28,7 +29,12 @@ export default async function BookPage({
     redirect("/dashboard");
   }
 
-  const [config, rules] = await Promise.all([getEffectiveFormConfig(user.role), getRules()]);
+  // The same context `createBooking` builds, so the form offers exactly what
+  // the server accepts: Settings, debitable heads, projects, the HOD.
+  const [config, context] = await Promise.all([
+    getEffectiveFormConfig(user.role),
+    bookingContextFor(user),
+  ]);
   const guestHouses = (await getStore().listGuestHouses()).filter((g) =>
     config.allowed_guest_house_ids.includes(g.id)
   );
@@ -73,7 +79,10 @@ export default async function BookPage({
         guestHouses={guestHouses}
         config={config}
         initialServiceType={initialServiceType}
-        rules={rules}
+        rules={context.rules}
+        debitHeads={context.debitHeads}
+        projects={context.projects}
+        hodApprovers={context.hodApprovers}
       />
     </div>
   );

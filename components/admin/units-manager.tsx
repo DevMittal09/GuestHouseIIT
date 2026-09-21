@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/table";
 import {
   approversOf,
+  hodApproversFor,
+  hodUnitIdFor,
   OFFICE_CLASS_LABELS,
   UNIT_HEAD_TITLES,
   UNIT_KIND_LABELS,
@@ -164,6 +166,7 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                 <TableHead>Head</TableHead>
                 <TableHead>Acting head</TableHead>
                 <TableHead>Approved by</TableHead>
+                <TableHead>HOD approval by</TableHead>
                 <TableHead className="text-right">Members</TableHead>
                 <TableHead />
               </TableRow>
@@ -267,6 +270,30 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                         </span>
                       )}
                     </TableCell>
+                    <TableCell>
+                      <NativeSelect
+                        aria-label={`HOD approval for ${u.name}`}
+                        value={u.hod_unit_id ?? ""}
+                        disabled={isPending}
+                        onChange={(e) =>
+                          run(
+                            () => updateUnitAction(u.id, { hod_unit_id: e.target.value }),
+                            `HOD approval for ${u.name} updated`
+                          )
+                        }
+                      >
+                        <option value="">
+                          {defaultHodLabel(u, units, byId)}
+                        </option>
+                        {units
+                          .filter((other) => other.id !== u.id && (other.kind === "department" || other.kind === "office"))
+                          .map((other) => (
+                            <option key={other.id} value={other.id}>
+                              {other.name}
+                            </option>
+                          ))}
+                      </NativeSelect>
+                    </TableCell>
                     <TableCell className="text-right">{members(u.id)}</TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -334,4 +361,19 @@ function PersonSelect({
       ))}
     </NativeSelect>
   );
+}
+
+/**
+ * What "Default" means for a unit's HOD approval, so the option names who it
+ * actually resolves to rather than leaving the office to guess.
+ */
+function defaultHodLabel(unit: Unit, units: Unit[], byId: Map<string, Profile>): string {
+  const withDefault = units.map((x) => (x.id === unit.id ? { ...x, hod_unit_id: null } : x));
+  const target = hodUnitIdFor(unit.id, withDefault);
+  if (!target) return "Default — no HOD stage";
+  const names = hodApproversFor({ id: "", unit_id: unit.id }, withDefault).map(
+    (id) => byId.get(id)?.full_name ?? id
+  );
+  const where = units.find((x) => x.id === target)?.name ?? "?";
+  return `Default — ${where}${names.length > 0 ? ` (${names.join(", ")})` : ", nobody set"}`;
 }

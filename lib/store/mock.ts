@@ -52,12 +52,15 @@ import {
   seedProfiles,
   seedRoomHolds,
   seedHostels,
+  seedOfficialEmails,
+  seedProjects,
   seedRooms,
   seedUnits,
 } from "./seed";
+import type { NewProjectInput, Project } from "@/lib/projects";
 import type { Unit } from "@/lib/units";
 import { auditMatches, type AuditEvent, type AuditFilter, type NewAuditEvent } from "@/lib/audit";
-import { DEFAULT_OFFICIAL_EMAILS, parseRuleGroup } from "@/lib/settings";
+import { parseRuleGroup } from "@/lib/settings";
 
 interface Db {
   profiles: Profile[];
@@ -82,6 +85,8 @@ interface Db {
   official_emails?: string[];
   /** Migration 16: the append-only security audit log. */
   security_audit?: AuditEvent[];
+  /** Migration 18: projects a stay can be debited to. */
+  projects?: Project[];
   /** Queued notifications; see `lib/mail/dispatch.ts`. */
   email_outbox?: EmailMessage[];
   /** Only the mails whose wording has actually been edited (migration 13). */
@@ -200,6 +205,16 @@ function loadDb(): Db {
         b.debit_document_url = null;
         dirty = true;
       }
+      // Migration 18's counterpart: office bookings went straight to the
+      // manager before offices could choose; nothing else had a project.
+      if (b.office_approval === undefined) {
+        b.office_approval = b.user_role === "official" || b.user_role === "iar_cell" ? "direct" : null;
+        dirty = true;
+      }
+      if (b.project_id === undefined) {
+        b.project_id = null;
+        dirty = true;
+      }
       if (b.created_by === undefined) {
         b.created_by = null;
         b.on_behalf_of_name = null;
@@ -287,6 +302,10 @@ function loadDb(): Db {
         u.office_class = seedUnits.find((s) => s.id === u.id)?.office_class ?? null;
         dirty = true;
       }
+      if (u.hod_unit_id === undefined) {
+        u.hod_unit_id = null;
+        dirty = true;
+      }
     }
     // Demo personas that gained a unit since (the Director's and IAR
     // offices). Only a *null* unit is filled, and only for a seeded persona,
@@ -308,7 +327,11 @@ function loadDb(): Db {
       dirty = true;
     }
     if (!db.official_emails) {
-      db.official_emails = [...DEFAULT_OFFICIAL_EMAILS];
+      db.official_emails = [...seedOfficialEmails];
+      dirty = true;
+    }
+    if (!db.projects) {
+      db.projects = [...seedProjects];
       dirty = true;
     }
     if (!db.security_audit) {
@@ -331,7 +354,8 @@ function loadDb(): Db {
     email_outbox: [],
     units: seedUnits,
     hostels: [...seedHostels],
-    official_emails: [...DEFAULT_OFFICIAL_EMAILS],
+    official_emails: [...seedOfficialEmails],
+    projects: [...seedProjects],
     security_audit: [],
   };
   saveDb(db);
@@ -452,6 +476,8 @@ export class MockStore implements DataStore {
       debit_head: input.debit_head,
       debit_details: input.debit_details,
       debit_document_url: input.debit_document_url,
+      project_id: input.project_id ?? null,
+      office_approval: input.office_approval ?? null,
       meal_preference: input.meal_preference,
       meal_guest_count: derived.meal_guest_count,
       pets_policy_acknowledged: input.pets_policy_acknowledged,
@@ -1039,6 +1065,50 @@ export class MockStore implements DataStore {
     const db = loadDb();
     const wanted = email.trim().toLowerCase();
     db.official_emails = (db.official_emails ?? []).filter((e) => e !== wanted);
+    saveDb(db);
+  }
+
+  async listProjects(): Promise<Project[]> {
+    return [...(loadDb().projects ?? [])].sort((a, b) => a.project_number.localeCompare(b.project_number));
+  }
+
+  async createProjects(inputs: NewProjectInput[]): Promise<void> {
+    const db = loadDb();
+    const projects = (db.projects ??= []);
+    const taken = new Set(projects.map((p) => p.project_number.toLowerCase()));
+    for (const input of inputs) {
+      // The unique index on lower(project_number), emulated.
+      const key = input.project_number.toLowerCase();
+      if (taken.has(key)) throw new Error(`Project ${input.project_number} is already on the list`);
+      taken.add(key);
+    }
+    for (const input of inputs) projects.push({ ...input, id: randomUUID() });
+    saveDb(db);
+  }
+
+  async updateProject(id: string, patch: Partial<NewProjectInput>): Promise<void> {
+    const db = loadDb();
+    const project = (db.projects ?? []).find((p) => p.id === id);
+    if (!project) throw new Error("Project not found");
+    if (
+      patch.project_number &&
+      (db.projects ?? []).some(
+        (p) => p.id !== id && p.project_number.toLowerCase() === patch.project_number!.toLowerCase()
+      )
+    ) {
+      throw new Error(`Project ${patch.project_number} is already on the list`);
+    }
+    Object.assign(project, patch);
+    saveDb(db);
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    const db = loadDb();
+    // `on delete restrict`, as the foreign key does.
+    if (db.bookings.some((b) => b.project_id === id)) {
+      throw new Error("A booking is debited to this project — deactivate it instead");
+    }
+    db.projects = (db.projects ?? []).filter((p) => p.id !== id);
     saveDb(db);
   }
 

@@ -10,7 +10,9 @@ import {
   type Role,
   type RoomType,
 } from "./types";
-import { initialStatusFor, isAdvanceWindowExempt, REVIEWER_STAGE } from "./workflow";
+import { defaultBookingTypeFor } from "./booking-types";
+import { isAdvanceWindowExempt, isOfficeRole, routeFor } from "./workflow";
+import type { BookingStatus } from "./types";
 
 /**
  * Read-side data for the public website. Everything the site says about the
@@ -64,16 +66,26 @@ export type SitePolicies = {
   rules: Rules;
 };
 
-/** Who reviews a booking that enters the pipeline at `role`'s entry status. */
+/** Who each approval stage is, in the words the public site uses. */
+const STAGE_NAMES: Partial<Record<BookingStatus, string>> = {
+  PENDING_WARDEN: ROLE_LABELS.warden,
+  PENDING_FA: "Faculty Advisor or council secretary",
+  PENDING_HOD: "HOD",
+  PENDING_IAR: ROLE_LABELS.iar_cell,
+};
+
+/**
+ * Who approves a role's usual booking, in order — read from `routeFor`, the
+ * pipeline itself, so the site cannot describe a route the portal does not
+ * take. An HOD stage is shown where the role would have one (an office's is
+ * its own choice, so it is shown as optional).
+ */
 function approversFor(role: Role): string[] {
-  const entry = initialStatusFor(role);
-  const intermediate = (Object.keys(REVIEWER_STAGE) as Role[]).find(
-    (reviewer) => reviewer !== "gh_manager" && REVIEWER_STAGE[reviewer] === entry
-  );
-  return [
-    ...(intermediate ? [ROLE_LABELS[intermediate]] : []),
-    ROLE_LABELS.gh_manager,
-  ];
+  const type = defaultBookingTypeFor(role) ?? "official";
+  const stages = routeFor(role, "room", { bookingType: type, hasHodApprover: true, officeApproval: "direct" });
+  const names = stages.map((s) => STAGE_NAMES[s] ?? s);
+  if (isOfficeRole(role)) names.push("HOD (if the office asks for it)");
+  return [...names, ROLE_LABELS.gh_manager];
 }
 
 export const getSitePolicies = cache(async (): Promise<SitePolicies> => {

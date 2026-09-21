@@ -1,5 +1,6 @@
 "use client";
 
+import { describeDebit } from "@/lib/debit-heads";
 import { useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -662,6 +663,9 @@ function HistoryRow({
       {!isOwnBookings && (
         <TableCell>
           <span className="font-medium">{booking.requester?.full_name ?? "—"}</span>
+          <span className="block text-xs text-muted-foreground">
+          Head: {describeDebit(booking)}
+        </span>
           <span className="block text-xs text-muted-foreground">
             {ROLE_LABELS[booking.user_role]}
             {booking.requester?.hostel_name && ` · ${booking.requester.hostel_name}`}

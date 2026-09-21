@@ -21,7 +21,7 @@ export default async function HistoryPage({
   if (!user) redirect(SIGN_IN_PATH);
   if (!canViewHistory(user.role)) redirect(homeForRole(user.role));
 
-  const scope = historyScope(user);
+  const scope = historyScope(user, await getStore().listUnits().catch(() => []));
 
   if (!scope.ok) {
     return (

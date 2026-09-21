@@ -347,6 +347,16 @@ Current migrations:
    runs, console refusal (`BUFFER_CLASH|…`), accepted 1 h turnover allowed and
    3 h refused under the buffer.
 
+18. `00000000000018_hod_approval_and_projects.sql` (Phase 4, Sep 2026).
+   `units.hod_unit_id` (whose HOD approves a unit when not the default, never
+   itself); `projects` (unique on `lower(project_number)`, readable when
+   active); `bookings.office_approval` ('direct' / 'hod', existing office
+   bookings backfilled 'direct') and `bookings.project_id` (on delete
+   restrict); `can_access_booking()` also admits the head up the chain of the
+   requester's HOD unit. Verified in a throwaway Postgres 16: re-run, the
+   backfill, the checks, and `can_access_booking` true for the Dean reached via
+   `hod_unit_id` and false for an unrelated employee.
+
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.
 

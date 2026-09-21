@@ -28,7 +28,13 @@ import {
   type RuleGroup,
   type Rules,
 } from "@/lib/settings";
-import type { RoomType } from "@/lib/types";
+import { DEBIT_HEAD_LABELS, type DebitHead, type RoomType } from "@/lib/types";
+import {
+  DEBIT_CATEGORIES,
+  DEBIT_CATEGORY_LABELS,
+  STANDARD_DEBIT_HEADS,
+  type DebitRules,
+} from "@/lib/debit-heads";
 
 type Result = { ok: boolean; error?: string };
 
@@ -80,6 +86,7 @@ export function SettingsManager({
       <CapacitySection key={JSON.stringify(data.rules.capacity)} current={data.rules.capacity} />
       <BookingWindowSection key={JSON.stringify(data.rules.booking)} current={data.rules.booking} />
       <MealWindowsSection key={JSON.stringify(data.rules.meals)} current={data.rules.meals} />
+      <DebitHeadsSection key={JSON.stringify(data.rules.debit)} current={data.rules.debit} />
     </section>
   );
 }
@@ -589,6 +596,86 @@ function MealWindowsSection({ current }: { current: Rules["meals"] }) {
         draft={draft}
         valid
         onReset={() => setWindows(current.windows)}
+      />
+    </SettingCard>
+  );
+}
+
+// ------------------------------------------------------------- debitable heads
+
+function DebitHeadsSection({ current }: { current: Rules["debit"] }) {
+  const [draft, setDraft] = useState<DebitRules>(current);
+  // The five heads the invoice names, plus any legacy head a saved row still
+  // uses, so nothing configured disappears from view.
+  const heads: DebitHead[] = [
+    ...STANDARD_DEBIT_HEADS,
+    ...(Object.values({ ...current.room, ...current.dining })
+      .flat()
+      .filter((h) => !STANDARD_DEBIT_HEADS.includes(h)) as DebitHead[]),
+  ].filter((h, i, all) => all.indexOf(h) === i);
+
+  const toggle = (kind: keyof DebitRules, category: (typeof DEBIT_CATEGORIES)[number], head: DebitHead) =>
+    setDraft((d) => {
+      const list = d[kind][category];
+      const next = list.includes(head) ? list.filter((h) => h !== head) : [...list, head];
+      return { ...d, [kind]: { ...d[kind], [category]: next } };
+    });
+
+  const grid = (kind: keyof DebitRules, title: string) => (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">{title}</p>
+      <div className="overflow-x-auto rounded-md border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/40 text-left">
+              <th className="p-2 font-medium">Requester</th>
+              {heads.map((h) => (
+                <th key={h} className="p-2 text-center font-medium">
+                  {DEBIT_HEAD_LABELS[h]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {DEBIT_CATEGORIES.map((category) => (
+              <tr key={category} className="border-b last:border-0">
+                <td className="p-2">{DEBIT_CATEGORY_LABELS[category]}</td>
+                {heads.map((h) => {
+                  const disabled = kind === "dining" && h === "project_grant";
+                  return (
+                    <td key={h} className="p-2 text-center">
+                      <input
+                        type="checkbox"
+                        aria-label={`${DEBIT_CATEGORY_LABELS[category]}: ${DEBIT_HEAD_LABELS[h]} (${title})`}
+                        className="size-4 accent-primary"
+                        disabled={disabled}
+                        checked={draft[kind][category].includes(h)}
+                        onChange={() => toggle(kind, category, h)}
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  return (
+    <SettingCard
+      title="Debitable heads"
+      description="Which budget each kind of requester may charge a booking to. Every official booking must name one; Project also asks for a project from the Projects list. A requester with only one head is not asked — the form states it. Bookings already made keep the head they were made with."
+    >
+      {grid("room", "Room bookings")}
+      {grid("dining", "Dining (meals only)")}
+      <RuleGroupActions
+        group="debit"
+        current={current}
+        draft={draft}
+        valid
+        onReset={() => setDraft(current)}
       />
     </SettingCard>
   );

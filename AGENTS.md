@@ -179,21 +179,49 @@ are in **`.memories/12-academic-records.md`**. Keep that file and
 
 `lib/workflow.ts` is the single source of truth for the pipeline.
 
-| Requester | Pipeline | Entry status |
-| --- | --- | --- |
-| student | → Hostel Warden → GH Manager | `PENDING_WARDEN` |
-| club | → Faculty Advisor → GH Manager | `PENDING_FA` |
-| iar_student_cell | → IAR Office → GH Manager | `PENDING_IAR` |
-| iar_cell (IAR Office) | → GH Manager (direct — it *is* the approver) | `PENDING_GH_MANAGER` |
-| employee | → GH Manager | `PENDING_GH_MANAGER` |
-| official | → GH Manager (direct, highest priority) | `PENDING_GH_MANAGER` |
-| alumni | *retired* — kept only for stored bookings | `PENDING_IAR` |
+| Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
+| --- | --- | --- | --- |
+| student | personal | Assistant Warden → GH Manager | Personal |
+| club | official | Faculty Advisor / council secretary → **HOD** (if the club has an HOD unit) → GH Manager | Department |
+| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF |
+| employee — staff | official | **HOD** → GH Manager | Department |
+| employee | personal | GH Manager | Personal |
+| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute |
+| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department |
+| iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | Institute (alumni: Institute / Personal) |
+| iar_student_cell | alumni | IAR Office → GH Manager | Institute / Personal |
+| any | meals only | GH Manager | dining heads (Phase 6) |
+| alumni | *retired* | kept only for stored bookings | — |
+
+**`routeFor(role, service, context)` is the pipeline** (Phase 4): the entry
+status (`initialStatusFor`), the next stage after each approval
+(`nextStatusAfter` over `approvalStagesFor(booking)`), the Copy-to chain and the
+public site's route descriptions are all read from it. `bookings.office_approval`
+records an office's Direct / HOD choice, so a waiting request's route cannot
+change under it.
+
+**HODs are approvers by appointment**, not a role: `units.head_id` /
+`acting_head_id` of the requester's **HOD unit** (`hodUnitIdFor`: a department
+is its own; a department office → its parent department; an officer office →
+itself; a club → its `hod_unit_id`, none by default). `hodApproversFor`
+**excludes the requester**, so an HOD's own official booking has no HOD stage
+(it skips it, logged) unless an acting HOD is set. HODs work from **`/hod`**;
+club advisors / council secretaries from `/approvals` ("Club Approvals").
 
 Reviewer roles: `warden` (scoped to `profile.hostel_name`), `faculty_advisor`
-(scoped to `profile.department_or_club`), `iar_cell`, `gh_manager`,
-`gh_caretaker`, plus `developer` (superadmin). Scoping lives in `canReview()`,
-which also refuses `reviewer.id === requester.id` — the IAR Office both books
-and approves, so self-approval has to be impossible by construction.
+(scoped to `profile.department_or_club`, the fallback when a club's unit has no
+head), `iar_cell`, `gh_manager`, `gh_caretaker`, plus `developer` (superadmin).
+Scoping lives in `canReview()` (HODs: `hodApproversFor`), which also refuses
+`reviewer.id === requester.id` — self-approval is impossible by construction.
+`historyScope(user, units)` gives an approver by appointment their own bookings
+**plus** their units' (`approverScope`).
+
+**Debitable head** (`lib/debit-heads.ts`): required on every booking; allowed
+heads per requester category are the Setting `rules.debit` (room and dining).
+`bookingContextFor(user)` computes them once for the page and for
+`createBooking`. Project → a project from the Projects console
+(`projects` table, paste import); the number and title are snapshotted into
+`debit_details`.
 
 ### Booking type — `lib/booking-types.ts`
 
@@ -224,7 +252,8 @@ the manager, server-side. It reuses `components/stays-table.tsx` and
 `components/checkouts-today.tsx` rather than owning copies, so the two consoles
 cannot drift.
 
-- Intermediate approval always forwards to `PENDING_GH_MANAGER`.
+- Intermediate approval forwards to the next stage of the booking's route —
+  `PENDING_GH_MANAGER` except a club's FA stage with an HOD after it.
 - The GH Manager does **not** approve via the generic review action —
   approval happens through `allocateRooms()`, which assigns rooms and sets
   `APPROVED` in one step. `reviewBooking` explicitly rejects manager approvals.

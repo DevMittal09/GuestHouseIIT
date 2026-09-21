@@ -185,8 +185,10 @@ export type Profile = {
    */
   unit_id?: string | null;
   /**
-   * Faculty or non-teaching staff, for employees only. Faculty official
-   * bookings need their HOD's approval; staff bookings do not.
+   * Faculty or non-teaching staff, for employees only. Both need their
+   * HOD's approval for an official booking (Phase 4); the category decides
+   * the debitable heads offered (faculty: Department / Project / PDF; staff:
+   * Department).
    */
   staff_category?: StaffCategory | null;
 }
@@ -329,6 +331,18 @@ export type Booking = {
   debit_details: string | null;
   /** The sanction for a Special Budget, uploaded with the request. */
   debit_document_url: string | null;
+  /**
+   * The project debited when the head is Project (migration 18). The
+   * project's number and title are also kept in `debit_details` as they were
+   * at booking, so a later edit to the project list does not rewrite it.
+   */
+  project_id: string | null;
+  /**
+   * An office's choice for this booking (migration 18): straight to the
+   * Guest House Manager ("direct") or through its HOD first ("hod"). Null
+   * for anyone who is not an office.
+   */
+  office_approval: "direct" | "hod" | null;
   /** The alumnus this stay is for — only on `booking_type: "alumni"`. */
   alumni_name: string | null;
   /** That alumnus's student / roll number, for the IAR Office to verify against. */
@@ -500,6 +514,8 @@ export interface NewBookingInput {
   debit_head: DebitHead | null;
   debit_details: string | null;
   debit_document_url: string | null;
+  project_id?: string | null;
+  office_approval?: "direct" | "hod" | null;
   meal_preference: MealPreference | null;
   /** Only on a meals-only booking, which has no guest rows to count. */
   meal_guest_count: number | null;

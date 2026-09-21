@@ -61,6 +61,14 @@ export type Unit = {
    * treated as a department office, the narrower of the two.
    */
   office_class?: OfficeClass | null;
+  /**
+   * Whose HOD approves this unit's official requests (migration 18), when it is
+   * not the obvious one — a club whose bookings go to the Dean of Students'
+   * office, say. Null means the default: a department is its own; a
+   * department office answers to the department above it; an officer office
+   * to its own head; a club or council has no HOD stage.
+   */
+  hod_unit_id?: string | null;
 };
 
 export type OfficeClass = "officer" | "department";
@@ -100,6 +108,69 @@ export function approvingUnit(unitId: string | null | undefined, units: Unit[]):
     current = current.parent_id ? byId.get(current.parent_id) : undefined;
   }
   return null;
+}
+
+/**
+ * The unit whose head gives *HOD approval* for a requester in `unitId`, or
+ * null when requests from there have no HOD stage. See `hod_unit_id`.
+ */
+export function hodUnitIdFor(unitId: string | null | undefined, units: Unit[]): string | null {
+  const unit = unitId ? units.find((u) => u.id === unitId) : undefined;
+  if (!unit) return null;
+  if (unit.hod_unit_id) return unit.hod_unit_id;
+  switch (unit.kind) {
+    case "department":
+      return unit.id;
+    case "office":
+      // A department's own office answers to that department; an officer
+      // office (Director, Registrar) to its own head. An office nobody has
+      // classified is treated as a department office.
+      return unit.office_class === "officer" ? unit.id : (unit.parent_id ?? unit.id);
+    default:
+      return null;
+  }
+}
+
+/**
+ * Who gives HOD approval for this requester, **never the requester
+ * themselves**: an HOD's own official booking is not signed off by its
+ * author. When nobody else can approve, the list is empty and the booking
+ * skips the stage (the submission log says so) rather than waiting forever.
+ */
+export function hodApproversFor(
+  requester: { id: string; unit_id?: string | null },
+  units: Unit[]
+): string[] {
+  return approversOf(hodUnitIdFor(requester.unit_id, units), units).filter((id) => id !== requester.id);
+}
+
+/**
+ * Every unit whose requests this person approves — as its head (or the head
+ * above it) or as its HOD. The archive scope of an approver by appointment.
+ */
+export function unitsGovernedBy(profileId: string, units: Unit[]): string[] {
+  return units
+    .filter(
+      (u) =>
+        approversOf(u.id, units).includes(profileId) ||
+        approversOf(hodUnitIdFor(u.id, units), units).includes(profileId)
+    )
+    .map((u) => u.id);
+}
+
+/** Whether this person gives HOD approval for any unit — who sees `/hod`. */
+export function isHodForAny(profileId: string, units: Unit[]): boolean {
+  return units.some((u) => approversOf(hodUnitIdFor(u.id, units), units).includes(profileId));
+}
+
+/**
+ * Whether this person approves a club or council's requests by appointment
+ * (the Faculty Advisor / secretary stage) — who sees `/approvals`.
+ */
+export function approvesClubsFor(profileId: string, units: Unit[]): boolean {
+  return units.some(
+    (u) => (u.kind === "club" || u.kind === "council") && approversOf(u.id, units).includes(profileId)
+  );
 }
 
 /** Whether this person heads (or acts as head of) any unit at all. */

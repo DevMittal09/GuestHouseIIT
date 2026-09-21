@@ -17,6 +17,7 @@ import {
 } from "@/lib/types";
 import { countBedGuests, countInfants, hasInfant } from "@/lib/occupancy";
 import { canExportPdf, historyScope } from "@/lib/workflow";
+import { invoiceHeadLabel } from "@/lib/debit-heads";
 import { formatDate, formatDateTime } from "@/lib/format";
 
 /**
@@ -45,6 +46,8 @@ export interface ReportRow {
   service: string;
   /** Veg / non-veg, or blank when no meals were asked for. */
   mealPreference: string;
+  /** The debitable head, as the invoice prints it, with the project number. */
+  debitHead: string;
   /**
    * Foreign nationals on the booking, with nationality and passport. The guest
    * house has to report these, and they are the reason the column exists at
@@ -96,6 +99,10 @@ function toReportRow(b: BookingWithDetails): ReportRow {
     reference: b.booking_reference_id,
     requester: b.requester?.full_name ?? "—",
     category: ROLE_LABELS[b.user_role],
+    debitHead:
+      b.debit_head === "project_grant" && b.debit_details
+        ? `Project ${b.debit_details.split(" — ")[0]}`
+        : invoiceHeadLabel(b.debit_head),
     guestHouse: b.guest_house?.name ?? "—",
     checkIn: formatDateTime(b.check_in),
     checkOut: formatDateTime(b.check_out),
@@ -135,7 +142,7 @@ export async function exportHistoryPdf(queryString: string): Promise<PdfExportRe
     if (!canExportPdf(user.role)) {
       return { ok: false, error: "Your role cannot export PDF reports" };
     }
-    const scope = historyScope(user);
+    const scope = historyScope(user, await getStore().listUnits().catch(() => []));
     if (!scope.ok) return { ok: false, error: scope.reason };
 
     const raw = Object.fromEntries(new URLSearchParams(queryString ?? "").entries());

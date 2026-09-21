@@ -220,17 +220,25 @@ becomes untestable:
 
 ### 4.1 Approval pipelines — `lib/workflow.ts`
 
-| Requester | Entry status | Path |
-| --- | --- | --- |
-| student | `PENDING_WARDEN` | warden → manager |
-| club | `PENDING_FA` | faculty advisor → manager |
-| iar_student_cell | `PENDING_IAR` | IAR Office → manager |
-| iar_cell (IAR Office) | `PENDING_GH_MANAGER` | manager (direct — it *is* the approver) |
-| employee | `PENDING_GH_MANAGER` | manager |
-| official | `PENDING_GH_MANAGER` | manager (direct, highest priority) |
-| alumni | *retired* | kept only for bookings already in the archive |
+| Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
+| --- | --- | --- | --- |
+| student | personal | Assistant Warden → GH Manager | Personal |
+| club | official | Faculty Advisor / council secretary → **HOD** (if the club has an HOD unit) → GH Manager | Department |
+| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF |
+| employee — staff | official | **HOD** → GH Manager | Department |
+| employee | personal | GH Manager | Personal |
+| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute |
+| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department |
+| iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | Institute (alumni: Institute / Personal) |
+| iar_student_cell | alumni | IAR Office → GH Manager | Institute / Personal |
+| any | meals only | GH Manager | dining heads (Phase 6) |
+| alumni | *retired* | kept only for stored bookings | — |
 
-- Intermediate approval always forwards to `PENDING_GH_MANAGER`.
+- `routeFor()` is the single source of the chain (Phase 4). HODs are found
+  through the units console (`hodApproversFor`), never the requester; an HOD's
+  own booking skips the HOD stage unless an acting head is set. HODs work from
+  `/hod`.
+- Intermediate approval forwards to the next stage of the booking's own route.
 - The manager does **not** approve through the generic review action. Approval
   happens via `allocateRooms()`, which assigns rooms and sets `APPROVED`
   together — making "approved with no rooms" unrepresentable.

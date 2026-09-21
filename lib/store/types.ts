@@ -27,6 +27,7 @@ import type { MailTemplateOverride } from "@/lib/mail/template-config";
 import type { Role } from "@/lib/types";
 import type { Unit } from "@/lib/units";
 import type { AuditEvent, AuditFilter, NewAuditEvent } from "@/lib/audit";
+import type { NewProjectInput, Project } from "@/lib/projects";
 
 export type NewProfileInput = Omit<Profile, "id">;
 
@@ -204,6 +205,16 @@ export interface DataStore {
   listOfficialEmails(): Promise<string[]>;
   addOfficialEmail(email: string): Promise<void>;
   removeOfficialEmail(email: string): Promise<void>;
+
+  // ---- projects (migration 18) ----------------------------------------
+
+  /** Every project, active or not, by number. */
+  listProjects(): Promise<Project[]>;
+  /** Add several at once — the paste import. Throws on a duplicate number. */
+  createProjects(inputs: NewProjectInput[]): Promise<void>;
+  updateProject(id: string, patch: Partial<NewProjectInput>): Promise<void>;
+  /** Throws while any booking is debited to it — deactivate it instead. */
+  deleteProject(id: string): Promise<void>;
 
   // ---- security audit log (migration 16) ------------------------------
 

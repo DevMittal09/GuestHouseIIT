@@ -32,6 +32,9 @@ const ACCOUNTS: MockAccount[] = [
   { uid: "fa.petrichor", password: "Advisor@2026", mail: "fa.petrichor@iitpkd.ac.in", name: "Dr. Arun Prasad" },
   { uid: "hod.cse", password: "HodCse@2026", mail: "hod.cse@iitpkd.ac.in", name: "Prof. R. Venkatesh" },
   { uid: "112301045", password: "Meera@2026", mail: "112301045@smail.iitpkd.ac.in", name: "Meera Nair" },
+  // Phase 4: a department office (Direct or HOD approval) and non-teaching staff.
+  { uid: "cse.office", password: "CseOffice@2026", mail: "cse.office@iitpkd.ac.in", name: "CSE Department Office" },
+  { uid: "ravi.k", password: "Ravi@2026", mail: "ravi.k@iitpkd.ac.in", name: "Ravi K." },
   { uid: "iar", password: "IarOffice@2026", mail: "iar@iitpkd.ac.in", name: "IAR Office" },
   { uid: "guesthouse", password: "Manager@2026", mail: "guesthouse@iitpkd.ac.in", name: "Guest House Manager" },
   { uid: "gh.reception", password: "Reception@2026", mail: "gh.reception@iitpkd.ac.in", name: "Guest House Caretaker" },

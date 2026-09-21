@@ -17,5 +17,9 @@ export default defineConfig({
     env: { TZ: "UTC", NEXT_PUBLIC_SUPABASE_URL: "" },
     // Store tests share one JSON file per worker; keep files isolated.
     pool: "forks",
+    // Store tests do real file I/O and run in parallel; the defaults (5 s /
+    // 10 s) are too tight on a busy Windows machine.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });

@@ -55,6 +55,8 @@ const unitSchema = z.object({
   parent_id: blankToNull,
   head_id: blankToNull,
   acting_head_id: blankToNull,
+  // Whose HOD approves this unit's official requests, when not the default.
+  hod_unit_id: blankToNull,
   // Offices only: officer (Institute Grant) or department (its Department).
   office_class: z
     .enum(["officer", "department", ""])
@@ -100,6 +102,9 @@ export async function updateUnitAction(
     if (parsed.data.parent_id !== undefined) {
       const loop = parentError(id, parsed.data.parent_id, units);
       if (loop) return { ok: false, error: loop };
+    }
+    if (parsed.data.hod_unit_id && parsed.data.hod_unit_id === id) {
+      return { ok: false, error: "A unit cannot give HOD approval for itself this way — leave it on the default" };
     }
     // The database refuses an office class on anything but an office; say so
     // in words rather than as a constraint name.

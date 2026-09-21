@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_DEBIT_RULES, debitRulesSchema, type DebitRules } from "./debit-heads";
 import type { MealKey, RoomType } from "./types";
 
 /**
@@ -69,11 +70,13 @@ export type Rules = {
   capacity: CapacityRules;
   booking: BookingRules;
   meals: MealRules;
+  /** Which debitable heads each kind of requester may choose (Phase 4). */
+  debit: DebitRules;
 };
 
 export type RuleGroup = keyof Rules;
 
-export const RULE_GROUPS: RuleGroup[] = ["capacity", "booking", "meals"];
+export const RULE_GROUPS: RuleGroup[] = ["capacity", "booking", "meals", "debit"];
 
 /** The `app_settings` key a group is stored under. */
 export function ruleKey(group: RuleGroup): string {
@@ -107,6 +110,7 @@ export const DEFAULT_RULES: Rules = {
       dinner: { start: "19:30", end: "21:00" },
     },
   },
+  debit: DEFAULT_DEBIT_RULES,
 };
 
 // -------------------------------------------------------------- validation
@@ -182,6 +186,7 @@ export const RULE_SCHEMAS = {
   capacity: capacityRulesSchema,
   booking: bookingRulesSchema,
   meals: mealRulesSchema,
+  debit: debitRulesSchema,
 } as const satisfies Record<RuleGroup, z.ZodType>;
 
 /**

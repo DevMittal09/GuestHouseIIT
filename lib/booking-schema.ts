@@ -4,7 +4,13 @@ import {
   needsAlumniDetails,
   serviceTypeError,
 } from "./booking-types";
-import { debitDetailsPrompt, debitHeadError } from "./debit-heads";
+import {
+  debitDetailsPrompt,
+  debitHeadError,
+  needsProject,
+  type DebitHeadsByType,
+} from "./debit-heads";
+import { isOfficeRole } from "./workflow";
 import { isCountryCode } from "./countries";
 import { parentDependencyError, type FieldMode, type RoleFormConfig } from "./form-config";
 import { MAX_MEAL_DAYS, mealPlanError, normalizeMeals } from "./meals";
@@ -168,6 +174,16 @@ export interface BookingSchemaContext {
    * validate against identical values. Defaults to today's rules.
    */
   rules?: Rules;
+  /**
+   * The debitable heads this requester may choose, per booking type, for a
+   * room booking and for dining (`debitHeadsByType`, from Settings and the
+   * requester's category). Computed on the server and handed to the form, so
+   * both sides check against one list. Without it only "a head is chosen" is
+   * checked — never the case for a real submission.
+   */
+  debitHeads?: { room: DebitHeadsByType; dining: DebitHeadsByType };
+  /** Ids of the projects that may be picked (active ones). */
+  projectIds?: string[];
 }
 
 export function bookingPayloadSchema(
@@ -206,6 +222,10 @@ export function bookingPayloadSchema(
         .nullish()
         .default(null),
       debit_details: optionalTrimmed,
+      // The project for a Project head, picked from the console's list.
+      project_id: z.string().nullish().default(null),
+      // An office's choice: straight to the manager, or through its HOD.
+      office_approval: z.enum(["direct", "hod"]).nullish().default(null),
       // Only meaningful on an alumni booking; the refinement below requires
       // them there and rejects them everywhere else.
       alumni_name: optionalTrimmed,
@@ -269,15 +289,41 @@ export function bookingPayloadSchema(
       if (message) ctx.addIssue({ code: "custom", message, path: ["booking_type"] });
     })
     .superRefine((v, ctx) => {
-      const message = debitHeadError(config.role, v.booking_type, v.debit_head);
+      // Which heads this requester may use, for this kind of booking — the
+      // Settings, resolved on the server for their category.
+      const lists = context.debitHeads;
+      const allowed = lists
+        ? (v.service_type === "meals_only" ? lists.dining : lists.room)[v.booking_type]
+        : undefined;
+      const message = lists
+        ? debitHeadError(allowed, v.debit_head)
+        : v.debit_head
+          ? null
+          : "Choose the debitable head this stay is charged to";
       if (message) {
         ctx.addIssue({ code: "custom", message, path: ["debit_head"] });
         return;
       }
-      // A Project Grant has to name the project, a Special Budget has to say
-      // what it is — otherwise the accounts section has nothing to debit. The
-      // sanction document for a Special Budget is checked in `createBooking`,
-      // which has the upload.
+      // Project: a project picked from the list, and only then.
+      if (needsProject(v.debit_head)) {
+        if (!v.project_id) {
+          ctx.addIssue({ code: "custom", message: "Choose the project this stay is charged to", path: ["project_id"] });
+        } else if (context.projectIds && !context.projectIds.includes(v.project_id)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "That project is not on the list of active projects",
+            path: ["project_id"],
+          });
+        }
+      } else if (v.project_id) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A project applies only when the head is Project",
+          path: ["project_id"],
+        });
+      }
+      // A Special Budget has to say what it is. Its sanction document is
+      // checked in `createBooking`, which has the upload.
       const prompt = debitDetailsPrompt(v.debit_head);
       if (prompt && (v.debit_details ?? "").length < 3) {
         ctx.addIssue({ code: "custom", message: `${prompt} is required`, path: ["debit_details"] });
@@ -285,8 +331,26 @@ export function bookingPayloadSchema(
       if (!prompt && v.debit_details) {
         ctx.addIssue({
           code: "custom",
-          message: "Details apply only to a Project Grant or a Special Budget",
+          message: "Details apply only to a Special Budget",
           path: ["debit_details"],
+        });
+      }
+    })
+    .superRefine((v, ctx) => {
+      // Offices choose how their booking is approved; nobody else does.
+      if (isOfficeRole(config.role) && v.service_type !== "meals_only") {
+        if (!v.office_approval) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Choose Direct or Requires HOD approval",
+            path: ["office_approval"],
+          });
+        }
+      } else if (v.office_approval) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Only an office chooses how its booking is approved",
+          path: ["office_approval"],
         });
       }
     })

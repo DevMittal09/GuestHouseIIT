@@ -59,6 +59,13 @@ export interface BookingSearchCriteria {
   actedBy?: string;
   /** Keep only bookings owned by this user id (requester's own log view). */
   userId?: string;
+  /**
+   * An approver by appointment — an HOD, a council secretary — sees their
+   * own bookings **or** those whose requester belongs to a unit they approve
+   * for (`unitsGovernedBy`). Applied in JS, like the other scopes, and never
+   * turned into a `userId` push-down, which would hide the unit's requests.
+   */
+  approverScope?: { userId: string; unitIds: string[] };
   /** ISO instants bounding `check_in`. */
   checkInFrom?: string;
   checkInTo?: string;
@@ -214,6 +221,13 @@ function matchesExceptStatus(
   if (c.club && b.requester?.department_or_club !== c.club) return false;
   if (c.actedBy && !reviewerActionsOn(b, c.actedBy).length) return false;
   if (c.userId && b.user_id !== c.userId) return false;
+  if (
+    c.approverScope &&
+    b.user_id !== c.approverScope.userId &&
+    !(b.requester?.unit_id && c.approverScope.unitIds.includes(b.requester.unit_id))
+  ) {
+    return false;
+  }
   if (c.meals?.length) {
     const asked = new Set(b.meals.flatMap((d) => MEAL_KEYS.filter((m) => d[m])));
     if (!c.meals.some((m) => asked.has(m))) return false;
@@ -662,7 +676,10 @@ export function dayEndIso(day: string): string {
  */
 export function criteriaFromParams(
   params: HistoryParams,
-  scope: Pick<BookingSearchCriteria, "hostelName" | "club" | "userRole" | "userId">,
+  scope: Pick<
+    BookingSearchCriteria,
+    "hostelName" | "club" | "userRole" | "userRoles" | "userId" | "approverScope"
+  >,
   currentUserId: string,
   paging?: { offset?: number; limit?: number }
 ): BookingSearchCriteria {

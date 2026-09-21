@@ -12,6 +12,7 @@ import type {
   RoomHold,
 } from "@/lib/types";
 import type { Unit } from "@/lib/units";
+import type { Project } from "@/lib/projects";
 
 export const GH_BAGESHRI = "gh-bageshri";
 export const GH_HAMSANANDI = "gh-hamsanandi";
@@ -67,6 +68,12 @@ export const seedProfiles: Profile[] = [
   { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Assistant Warden, Malhar)", role: "warden", hostel_name: "Malhar", department_or_club: null, roll_number: null, ldap_uid: "warden.malhar" },
   { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Assistant Warden, Saveri)", role: "warden", hostel_name: "Saveri", department_or_club: null, roll_number: null, ldap_uid: "warden.saveri" },
   { id: "fa-petrichor", email: "fa.petrichor@iitpkd.ac.in", full_name: "Dr. Arun Prasad (FA, Petrichor)", role: "faculty_advisor", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "fa.petrichor" },
+  // A department office (Phase 4): its official bookings go Direct or to
+  // the CSE HOD, as the office chooses, and are debited to the Department.
+  { id: "office-cse", email: "cse.office@iitpkd.ac.in", full_name: "CSE Department Office", role: "official", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "cse.office", unit_id: "unit-cse-office" },
+  // Non-teaching staff in CSE: official bookings go to the HOD too, and are
+  // debited to the Department only.
+  { id: "staff-ravi", email: "ravi.k@iitpkd.ac.in", full_name: "Ravi K. (Technical Staff, CSE)", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "ravi.k", unit_id: "unit-cse", staff_category: "staff" },
   { id: "iar-cell", email: "iar@iitpkd.ac.in", full_name: "IAR Office", role: "iar_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "iar", unit_id: "unit-iar-office" },
   { id: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "guesthouse" },
   { id: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "gh.reception" },
@@ -85,6 +92,26 @@ export const seedUnits: Unit[] = [
   // Officer offices (migration 16): booked against the Institute Grant.
   { id: "unit-director-office", name: "Director's Office", kind: "office", parent_id: null, head_id: null, acting_head_id: null, office_class: "officer" },
   { id: "unit-iar-office", name: "International & Alumni Relations", kind: "office", parent_id: null, head_id: null, acting_head_id: null, office_class: "officer" },
+  // A department office under CSE: "Requires HOD approval" goes to the CSE HOD.
+  { id: "unit-cse-office", name: "CSE Department Office", kind: "office", parent_id: "unit-cse", head_id: null, acting_head_id: null, office_class: "department" },
+];
+
+/**
+ * The whitelist the mock store starts with: the three formerly hardcoded
+ * addresses (`DEFAULT_OFFICIAL_EMAILS`) plus the demo department office.
+ */
+export const seedOfficialEmails: string[] = [
+  "admin@iitpkd.ac.in",
+  "cse.office@iitpkd.ac.in",
+  "director.office@iitpkd.ac.in",
+  "registrar@iitpkd.ac.in",
+];
+
+/** Demo projects for the Project debitable head (migration 18). */
+export const seedProjects: Project[] = [
+  { id: "proj-storage", project_number: "SP/2025/017", title: "Grid-scale energy storage", pi_name: "Dr. Priya Sharma", active: true },
+  { id: "proj-vision", project_number: "CP/2026/004", title: "Machine vision for crop health", pi_name: "Prof. R. Venkatesh", active: true },
+  { id: "proj-old", project_number: "SP/2022/031", title: "Completed: water quality sensors", pi_name: null, active: false },
 ];
 
 /** Hostels the demo personas live in (migration 16's `hostels` table). */
@@ -118,6 +145,8 @@ type DemoBooking = Omit<
   | "debit_head"
   | "debit_details"
   | "debit_document_url"
+  | "project_id"
+  | "office_approval"
 > &
   Partial<Booking>;
 
@@ -279,6 +308,14 @@ const demoBookings: DemoBooking[] = [
  * will not submit without it; `has_foreign_national` is recomputed from the
  * guest rows below, so it is not guessed here.
  */
+const DEMO_DEBIT_HEADS: Partial<Record<Booking["user_role"], Booking["debit_head"]>> = {
+  student: "personal_funds",
+  club: "department_budget",
+  employee: "department_budget",
+  official: "institute_grant",
+  iar_student_cell: "institute_grant",
+};
+
 function withDefaults(b: DemoBooking): Booking {
   return {
     service_type: "room",
@@ -291,12 +328,13 @@ function withDefaults(b: DemoBooking): Booking {
     on_behalf_of_name: null,
     on_behalf_of_email: null,
     on_behalf_of_phone: null,
-    // Demo bookings predate the debit-head question, like real ones before
-    // migration 15, except the personal one — a personal stay is always paid
-    // from personal funds.
-    debit_head: b.booking_type === "personal" ? "personal_funds" : null,
+    // Each demo booking names the head its requester would choose today, so
+    // the consoles, exports and invoices have something to show.
+    debit_head: DEMO_DEBIT_HEADS[b.user_role] ?? (b.booking_type === "personal" ? "personal_funds" : null),
     debit_details: null,
     debit_document_url: null,
+    project_id: null,
+    office_approval: b.user_role === "official" || b.user_role === "iar_cell" ? "direct" : null,
     ...b,
   } as Booking;
 }

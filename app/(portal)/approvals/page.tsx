@@ -4,7 +4,7 @@ import { ReviewQueue } from "@/components/review-queue";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
-import { headsAnyUnit, UNIT_HEAD_TITLES } from "@/lib/units";
+import { approvesClubsFor, UNIT_HEAD_TITLES } from "@/lib/units";
 import { canReview } from "@/lib/workflow";
 
 /**
@@ -24,18 +24,20 @@ export default async function ApprovalsPage() {
   const units = await store.listUnits().catch(() => []);
   // A faculty advisor keeps this page even with no unit set up yet: their
   // club requests still reach them by the old name match.
-  const isApprover = headsAnyUnit(user.id, units) || user.role === "faculty_advisor";
+  const isApprover = approvesClubsFor(user.id, units) || user.role === "faculty_advisor";
   if (!isApprover) redirect(homeForRole(user.role));
 
-  const [hod, club] = await Promise.all([
-    store.listBookings({ status: "PENDING_HOD" }),
-    store.listBookings({ status: "PENDING_FA" }),
-  ]);
-  const mine = [...hod, ...club]
+  // The club stage only; HOD approvals have their own queue at /hod.
+  const club = await store.listBookings({ status: "PENDING_FA" });
+  const mine = club
     .filter((b) => canReview(user, b.status, b.requester, units))
     .sort((a, b) => a.check_in.localeCompare(b.check_in));
 
-  const headed = units.filter((u) => u.head_id === user.id || u.acting_head_id === user.id);
+  const headed = units.filter(
+    (u) =>
+      (u.kind === "club" || u.kind === "council") &&
+      (u.head_id === user.id || u.acting_head_id === user.id)
+  );
   const roles = headed.map(
     (u) =>
       `${u.acting_head_id === user.id && u.head_id !== user.id ? "Acting " : ""}${UNIT_HEAD_TITLES[u.kind]}, ${u.name}`
@@ -43,11 +45,12 @@ export default async function ApprovalsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Approvals">
+      <PageHeader title="Club Approvals">
         {roles.length > 0 ? (
           <>
             Requests waiting on you as <span className="font-medium">{roles.join("; ")}</span>.
-            Forwarding sends them to the Guest House Manager.
+            Forwarding sends them on — to the HOD where the club has one, otherwise to the
+            Guest House Manager.
           </>
         ) : (
           <>Club requests waiting on you as faculty advisor.</>

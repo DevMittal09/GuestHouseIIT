@@ -54,7 +54,7 @@ export function bookingFacts(booking: BookingWithDetails): Block {
   }
   rows.push(["Purpose", booking.purpose_of_visit]);
   rows.push(["Booking type", BOOKING_TYPE_LABELS[booking.booking_type]]);
-  rows.push(["Paid from", describeDebit(booking)]);
+  rows.push(["Debitable head", describeDebit(booking)]);
   if (booking.on_behalf_of_name) {
     // The desk has to know who is actually arriving, not just whose account
     // the booking hangs off.
@@ -99,7 +99,7 @@ function assignedRoomNumbers(booking: BookingWithDetails): string {
 const REVIEW_LINK: Record<string, string> = {
   PENDING_WARDEN: "/warden",
   PENDING_FA: "/approvals",
-  PENDING_HOD: "/approvals",
+  PENDING_HOD: "/hod",
   PENDING_IAR: "/iar",
   PENDING_GH_MANAGER: "/manager",
 };
@@ -145,23 +145,34 @@ export function tierApprovedToRequester(
   approverName: string,
   stageApproved: BookingStatus
 ): EmailDocument {
+  // `booking` is read after the transition, so its status is where the
+  // request is now: the HOD after a club's advisor, otherwise the manager.
+  const withHod = booking.status === "PENDING_HOD";
+  const nowWith = withHod ? "the HOD" : "the Guest House Manager";
   return {
-    heading: "Your booking has cleared its first approval",
-    preheader: `${booking.booking_reference_id} approved by ${approverName}; now with the Guest House Manager.`,
+    heading: "Your booking has cleared an approval",
+    preheader: `${booking.booking_reference_id} approved by ${approverName}; now with ${nowWith}.`,
     blocks: [
       {
         kind: "paragraph",
-        text: `${approverName} has approved your request at the ${STATUS_LABELS[stageApproved].replace(/^Pending /, "")} stage. It is now with the Guest House Manager, who assigns the actual rooms.`,
+        text: `${approverName} has approved your request at the ${STATUS_LABELS[stageApproved].replace(/^Pending /, "")} stage. It is now with ${nowWith}${
+          withHod ? ", who approves it before it goes to the Guest House Manager" : ", who assigns the actual rooms"
+        }.`,
       },
       bookingFacts(booking),
       {
         kind: "callout",
         tone: "info",
         title: "What happens next",
-        lines: [
-          "The Guest House Manager reviews the request and allocates rooms.",
-          "You will be emailed the room numbers as soon as that is done.",
-        ],
+        lines: withHod
+          ? [
+              "The HOD reviews the request, then it goes to the Guest House Manager for rooms.",
+              "You will be emailed at each step.",
+            ]
+          : [
+              "The Guest House Manager reviews the request and allocates rooms.",
+              "You will be emailed the room numbers as soon as that is done.",
+            ],
       },
       { kind: "button", label: "View in the portal", href: portalUrl("/dashboard") },
     ],

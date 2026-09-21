@@ -6,7 +6,9 @@ import { requireUser } from "@/lib/auth";
 import { aadhaarDigits, bookingPayloadSchema } from "@/lib/booking-schema";
 import { needsAlumniDetails } from "@/lib/booking-types";
 import { needsDebitDocument } from "@/lib/debit-heads";
-import { approversOf } from "@/lib/units";
+import { hodApproversFor } from "@/lib/units";
+import { bookingContextFor } from "@/lib/booking-context-server";
+import { describeProject } from "@/lib/projects";
 import { validateCustomValue } from "@/lib/form-config";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import {
@@ -48,8 +50,11 @@ import {
   canReview,
   lapsedError,
   canUpdateLifecycle,
+  approvalStagesFor,
+  hodStageMissing,
   initialStatusFor,
-  nextStatusOnApprove,
+  isOfficeRole,
+  nextStatusAfter,
   occupancyNotStartedError,
 } from "@/lib/workflow";
 
@@ -127,12 +132,15 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
 
     const rawPayload = formData.get("payload");
     if (typeof rawPayload !== "string") return { ok: false, error: "Malformed submission" };
-    // The same Settings the page handed the form, so the two validate alike.
-    const rules = await getRules();
+    // The same Settings, debitable heads and projects the page handed the
+    // form, from the same computation, so the two validate alike.
+    const bookingContext = await bookingContextFor(user);
     const parsed = bookingPayloadSchema(config, {
       mealsAvailable,
       requesterEmail: user.email,
-      rules,
+      rules: bookingContext.rules,
+      debitHeads: bookingContext.debitHeads,
+      projectIds: bookingContext.projects.map((p) => p.id),
     }).safeParse(JSON.parse(rawPayload));
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid form data" };
@@ -274,33 +282,39 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       debitDocumentUrl = await store.saveDocument(document, "debit-documents");
     }
 
-    // Who approves, if anyone: whoever heads the requester's department, club
-    // or council right now — read from the console, not matched by name.
-    const units = await store.listUnits();
-    const unitApprovers = approversOf(user.unit_id, units);
-    const status = initialStatusFor(user.role, payload.service_type, {
+    // Who approves, if anyone: the route for this role and kind of booking
+    // (`routeFor`), with the HOD whoever heads the requester's department or
+    // office right now — read from the console, never the requester.
+    const officeApproval = isOfficeRole(user.role) && wantsRooms ? payload.office_approval : null;
+    const routing = {
       bookingType: payload.booking_type,
       staffCategory: user.staff_category ?? null,
-      hasUnitApprover: unitApprovers.length > 0,
-    });
-    // A faculty member's official booking that should have waited for an HOD,
-    // but could not because nobody is set for the department, says so in its
-    // log - otherwise it looks as if the approval was skipped on purpose.
-    const hodMissing =
-      user.role === "employee" &&
-      payload.service_type !== "meals_only" &&
-      payload.booking_type === "official" &&
-      user.staff_category !== "staff" &&
-      unitApprovers.length === 0;
+      officeApproval,
+      hasHodApprover: hodApproversFor(user, bookingContext.units).length > 0,
+    };
+    const status = initialStatusFor(user.role, payload.service_type, routing);
+    // A request that should have waited for an HOD, but could not because
+    // nobody other than the requester is set to give it, says so in its log —
+    // otherwise it looks as if the approval was skipped on purpose.
+    const hodMissing = hodStageMissing(user.role, payload.service_type, routing);
     const submissionRemarks =
       [
         overrideNote,
         hodMissing
-          ? "Booking submitted. No HOD is set for this department in the console, so it went straight to the Guest House Manager."
+          ? "Booking submitted. Nobody other than the requester is set to give HOD approval for this unit in the console, so the HOD stage was skipped."
           : null,
       ]
         .filter(Boolean)
         .join(" ") || null;
+
+    // A Project head names its project as it is today; the snapshot keeps the
+    // booking's record of it if the project list is edited later.
+    const project = payload.project_id
+      ? bookingContext.allProjects.find((p) => p.id === payload.project_id && p.active)
+      : undefined;
+    if (payload.project_id && !project) {
+      return { ok: false, error: "That project is not on the list of active projects" };
+    }
 
     const booking = await store.createBooking({
       user_id: user.id,
@@ -321,8 +335,10 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       alumni_roll_number: forAlumnus ? payload.alumni_roll_number : null,
       alumni_id_url: alumniIdUrl,
       debit_head: payload.debit_head,
-      debit_details: payload.debit_details,
+      debit_details: project ? describeProject(project) : payload.debit_details,
       debit_document_url: debitDocumentUrl,
+      project_id: project?.id ?? null,
+      office_approval: officeApproval,
       custom_fields: customValues.length > 0 ? customValues : null,
       meals: payload.meals,
       rooms,
@@ -361,7 +377,8 @@ export async function reviewBooking(
     if (!booking) return { ok: false, error: "Booking not found" };
     // Unit approvals (an HOD, a club's advisor or council secretary) are
     // decided by who heads the requester's unit now, so the units come too.
-    if (!canReview(user, booking.status, booking.requester, await store.listUnits())) {
+    const units = await store.listUnits();
+    if (!canReview(user, booking.status, booking.requester, units)) {
       return { ok: false, error: "You are not authorised to review this booking" };
     }
     if (action === "reject" && !reason?.trim()) {
@@ -397,7 +414,12 @@ export async function reviewBooking(
       // different decision, and the reason is the entire point of the mail.
       await notifyRejected(bookingId, user, reason!.trim());
     } else {
-      const next = nextStatusOnApprove(booking.status);
+      // The next stage of this booking's own route: a club's advisor forwards
+      // to its HOD when it has one, everyone else to the manager.
+      const next = nextStatusAfter(
+        booking.status,
+        approvalStagesFor(booking, booking.requester, units)
+      );
       await store.updateBookingStatus(
         bookingId,
         { status: next },
@@ -405,7 +427,12 @@ export async function reviewBooking(
           action_by: user.id,
           action_by_name: user.full_name,
           new_status: next,
-          remarks: next === "PENDING_GH_MANAGER" ? "Approved and forwarded to Guest House Manager" : "Approved",
+          remarks:
+            next === "PENDING_GH_MANAGER"
+              ? "Approved and forwarded to Guest House Manager"
+              : next === "PENDING_HOD"
+                ? "Approved and forwarded to the HOD"
+                : "Approved",
         }
       );
       // Two audiences, one transition: the requester learns it moved, the next

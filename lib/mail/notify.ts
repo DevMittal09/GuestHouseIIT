@@ -284,7 +284,10 @@ export async function notifyTierApproved(
         eventKey: "booking.tier_approved.requester",
         booking,
         to: [requester.email],
-        subjectText: "Approved — now with the Guest House Manager",
+        subjectText:
+          booking.status === "PENDING_HOD"
+            ? "Approved — now with the HOD"
+            : "Approved — now with the Guest House Manager",
         doc: t.tierApprovedToRequester(booking, approver.full_name, stageApproved),
         stamp,
       },

@@ -106,6 +106,8 @@ export function booking(
     debit_head: null,
     debit_details: null,
     debit_document_url: null,
+    project_id: null,
+    office_approval: null,
     alumni_name: null,
     alumni_roll_number: null,
     alumni_id_url: null,

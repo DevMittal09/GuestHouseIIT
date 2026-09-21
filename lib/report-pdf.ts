@@ -63,8 +63,9 @@ const COLUMNS: { header: string; key: keyof ReportRow; width: number }[] = [
   { header: "Party", key: "party", width: 11 },
   { header: "Meals", key: "mealPreference", width: 12 },
   { header: "Status", key: "status", width: 20 },
-  { header: "Guests", key: "guestNames", width: 31 },
-  { header: "Purpose", key: "purpose", width: 31 },
+  { header: "Head", key: "debitHead", width: 14 },
+  { header: "Guests", key: "guestNames", width: 24 },
+  { header: "Purpose", key: "purpose", width: 24 },
 ];
 
 const STATUS_COLUMN = COLUMNS.findIndex((c) => c.key === "status");

@@ -130,7 +130,7 @@ export function BookingDetails({
       <Field label="Purpose of visit" value={booking.purpose_of_visit} block />
 
       <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-        <Field label="Paid from" value={describeDebit(booking)} />
+        <Field label="Debitable head" value={describeDebit(booking)} />
         {booking.debit_document_url && (
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide">

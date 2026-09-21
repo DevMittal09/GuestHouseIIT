@@ -82,13 +82,14 @@ import {
 } from "@/lib/meals";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
-import { latestCheckIn } from "@/lib/workflow";
+import { isOfficeRole, latestCheckIn } from "@/lib/workflow";
 import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import {
   debitDetailsPrompt,
-  debitHeadsFor,
   fixedDebitHead,
   needsDebitDocument,
+  needsProject,
+  type DebitHeadsByType,
   PAY_AT_CHECKOUT_NOTE,
 } from "@/lib/debit-heads";
 import {
@@ -134,8 +135,12 @@ interface FormValues {
   booking_type: BookingType;
   /** Which budget pays. Ignored when the booking can only be paid one way. */
   debit_head: "" | DebitHead;
-  /** The project for a Project Grant, or the case for a Special Budget. */
+  /** The case for a Special Budget. */
   debit_details: string;
+  /** The project for a Project head, from the console's list. */
+  project_id: string;
+  /** An office's choice: straight to the manager, or through its HOD. */
+  office_approval: "" | "direct" | "hod";
   /** Only when the Guest House Manager is booking for somebody else. */
   on_behalf_of_name: string;
   on_behalf_of_email: string;
@@ -186,7 +191,20 @@ export function BookingForm({
   config,
   initialServiceType,
   rules = DEFAULT_RULES,
+  debitHeads = { room: {}, dining: {} },
+  projects = [],
+  hodApprovers = [],
 }: {
+  /**
+   * The debitable heads this requester may use per booking type, for rooms and
+   * for dining — computed on the server (`bookingContextFor`) from Settings, so
+   * the form offers exactly what the server will accept.
+   */
+  debitHeads?: { room: DebitHeadsByType; dining: DebitHeadsByType };
+  /** Active projects, for the Project head. */
+  projects?: { id: string; label: string }[];
+  /** Who would give HOD approval, by name — for an office's choice. */
+  hodApprovers?: string[];
   user: Profile;
   guestHouses: GuestHouse[];
   config: RoleFormConfig;
@@ -257,6 +275,8 @@ export function BookingForm({
       booking_type: defaultBookingTypeFor(config.role) ?? "official",
       debit_head: "",
       debit_details: "",
+      project_id: "",
+      office_approval: "direct",
       on_behalf_of_name: "",
       on_behalf_of_email: "",
       on_behalf_of_phone: "",
@@ -296,8 +316,8 @@ export function BookingForm({
   // Payment follows the kind of booking: one fixed head for a student or a
   // personal stay, a choice otherwise. Derived, so a change of booking type
   // cannot leave a stale answer behind.
-  const fixedHead = fixedDebitHead(config.role, bookingType);
-  const headOptions = debitHeadsFor(config.role, bookingType);
+  const headOptions = (mealsOnly ? debitHeads.dining : debitHeads.room)[bookingType] ?? [];
+  const fixedHead = fixedDebitHead(headOptions);
   const chosenHeadRaw = useWatch({ control, name: "debit_head" });
   const chosenHead: DebitHead | null = fixedHead ?? (chosenHeadRaw || null);
   const paymentHead = chosenHead;
@@ -518,6 +538,10 @@ export function BookingForm({
       // to Personal must not carry a department budget along with it.
       debit_head: paymentHead,
       debit_details: debitPrompt ? values.debit_details : undefined,
+      project_id: needsProject(paymentHead) ? values.project_id || null : null,
+      // Only an office chooses, and only for a stay.
+      office_approval:
+        isOfficeRole(config.role) && !mealsOnly ? values.office_approval || null : null,
       // Sent only when they apply; the schema rejects them on any other kind
       // of booking, so a stale value cannot ride along.
       alumni_name: forAlumnus ? values.alumni_name : undefined,
@@ -707,11 +731,60 @@ export function BookingForm({
         )
       )}
 
+      {/* An office chooses how its booking is approved (Phase 4). */}
+      {isOfficeRole(config.role) && !mealsOnly && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Approval</CardTitle>
+            <CardDescription>
+              Send this booking straight to the Guest House Manager, or have your HOD approve it
+              first.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(
+                [
+                  ["direct", "Direct", "Straight to the Guest House Manager."],
+                  [
+                    "hod",
+                    "Requires HOD approval",
+                    hodApprovers.length > 0
+                      ? `${hodApprovers.join(" or ")} approves it first.`
+                      : "Nobody is set as HOD for your office yet — it would go straight to the manager.",
+                  ],
+                ] as const
+              ).map(([value, label, hint]) => (
+                <label
+                  key={value}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 text-sm transition-colors",
+                    "has-checked:border-primary has-checked:bg-primary/5"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    value={value}
+                    className="mt-0.5 size-4 shrink-0 accent-primary"
+                    {...register("office_approval")}
+                  />
+                  <span>
+                    <span className="font-medium">{label}</span>
+                    <span className="block text-xs text-muted-foreground">{hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <FieldError message={err("office_approval")} />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Who pays. A student, or anyone booking personally, pays at checkout
           and has nothing to choose — so it is stated, not asked. */}
       <Card>
         <CardHeader>
-          <CardTitle>Payment</CardTitle>
+          <CardTitle>Debitable head</CardTitle>
           <CardDescription>
             {fixedHead
               ? "How this stay will be settled."
@@ -746,6 +819,26 @@ export function BookingForm({
                 ))}
               </div>
               <FieldError message={err("debit_head")} />
+
+              {needsProject(chosenHead) && (
+                <div className="space-y-2">
+                  <Label htmlFor="project_id">Project *</Label>
+                  <NativeSelect id="project_id" {...register("project_id")}>
+                    <option value="">Choose the project…</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  {projects.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No projects are on the list yet — ask the Guest House Manager to add yours.
+                    </p>
+                  )}
+                  <FieldError message={err("project_id")} />
+                </div>
+              )}
 
               {debitPrompt && (
                 <div className="space-y-2">

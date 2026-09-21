@@ -24,11 +24,15 @@ app runs against a local mock data layer:
 | Requester | Guest houses | Pipeline |
 | --- | --- | --- |
 | Student | Bageshri only | Student → Hostel Warden → GH Manager |
-| Employee (Faculty & Staff) | Both | Employee → GH Manager |
-| Official / Dignitary | Both | Direct → GH Manager (whitelisted emails only) |
-| Club / Fest Council | Both | Club → Faculty Advisor → GH Manager |
+| Employee (Faculty & Staff) | Both | Official: Employee → **HOD** → GH Manager; personal: → GH Manager |
+| Official / Dignitary (offices) | Both | **Direct** → GH Manager, or **Requires HOD approval** → HOD → GH Manager (whitelisted emails only) |
+| Club / Fest Council | Both | Club → Faculty Advisor / council secretary → HOD (if configured) → GH Manager |
 | IAR Student Cell | Both | IAR Student Cell → IAR Office → GH Manager |
-| IAR Office | Both | Direct → GH Manager (it *is* the approver) |
+| IAR Office | Both | Direct → GH Manager, or → its head (HOD) first |
+
+Every official booking names a **debitable head** (Department / Institute /
+PDF / Project / Personal), configurable per requester category in Settings;
+Project picks from the Projects list. HODs approve from `/hod`.
 
 Form behaviour per role (see `lib/booking-schema.ts`):
 

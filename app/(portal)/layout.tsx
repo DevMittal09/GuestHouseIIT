@@ -11,7 +11,7 @@ import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
 import { isRequesterHistory } from "@/lib/workflow";
 import { getStore } from "@/lib/store";
-import { headsAnyUnit } from "@/lib/units";
+import { approvesClubsFor, isHodForAny } from "@/lib/units";
 
 /**
  * The signed-in shell, in the guest house website's style: a white header with
@@ -33,7 +33,8 @@ export default async function PortalLayout({ children }: { children: React.React
   const units = await getStore()
     .listUnits()
     .catch(() => []);
-  const approves = headsAnyUnit(user.id, units) || user.role === "faculty_advisor";
+  const approves = approvesClubsFor(user.id, units) || user.role === "faculty_advisor";
+  const hod = isHodForAny(user.id, units);
 
   const nav: NavItem[] = [
     ...(canBook
@@ -43,7 +44,8 @@ export default async function PortalLayout({ children }: { children: React.React
         ]
       : []),
     ...(user.role === "warden" ? [{ href: "/warden", label: "Assistant Warden Queue" }] : []),
-    ...(approves ? [{ href: "/approvals", label: "Approvals" }] : []),
+    ...(hod ? [{ href: "/hod", label: "HOD Queue" }] : []),
+    ...(approves ? [{ href: "/approvals", label: "Club Approvals" }] : []),
     ...(user.role === "iar_cell" ? [{ href: "/iar", label: "IAR Queue" }] : []),
     ...(user.role === "gh_manager"
       ? [

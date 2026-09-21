@@ -1,7 +1,7 @@
 import { addMonths } from "date-fns";
 import type { BookingSearchCriteria } from "./booking-search";
 import type { BookingStatus, Profile, Role, ServiceType, StaffCategory } from "./types";
-import { approversOf, type Unit } from "./units";
+import { approversOf, hodApproversFor, unitsGovernedBy, type Unit } from "./units";
 import { formatDateTime } from "./format";
 import { TURNOVER_GRACE_HOURS } from "./turnover";
 import { DEFAULT_RULES } from "./settings";
@@ -42,82 +42,104 @@ export function latestCheckIn(
 }
 
 /**
- * Where a fresh booking enters the approval pipeline.
- *
- * One account can raise requests that answer to different people, so the route
- * is not simply "the requester's boss". The IAR Student Cell's requests — for
- * its own office or for an alumnus — are checked by the IAR Office first. The
- * IAR Office's own requests are not: it *is* the approving body, so routing
- * them to `PENDING_IAR` would have it approve itself, which is not a control
- * at all. Those go straight to the manager.
- *
- * A **meals-only** booking skips the chain entirely and goes straight to the
- * Guest House Manager. The intermediate stages exist to vouch for someone
- * staying overnight in institute accommodation — a warden for their student's
- * family, an advisor for their club. Lunch for a visitor is the kitchen's
- * business and nobody else's, and routing it through a warden would leave the
- * kitchen waiting on an approval for a head count.
+ * How an office's official booking is approved (Phase 4): **direct** to the
+ * Guest House Manager, as before, or through the office's **HOD** first. The
+ * office chooses per booking; it is stored on the booking
+ * (`office_approval`), so the route cannot change under a waiting request.
  */
-export function initialStatusFor(
+export type OfficeApproval = "direct" | "hod";
+
+/** Roles that are offices, and so choose Direct or Requires HOD approval. */
+export const OFFICE_ROLES: Role[] = ["official", "iar_cell"];
+
+export function isOfficeRole(role: Role): boolean {
+  return OFFICE_ROLES.includes(role);
+}
+
+/** What routing needs beyond the role and the service. */
+export interface RoutingContext {
+  bookingType?: string;
+  staffCategory?: StaffCategory | null;
+  /** An office's choice for this booking. Ignored for other roles. */
+  officeApproval?: OfficeApproval | null;
+  /**
+   * Whether anyone other than the requester gives HOD approval for them
+   * (`hodApproversFor`). With nobody, the HOD stage is skipped — and the
+   * submission log says so — rather than waiting forever.
+   */
+  hasHodApprover?: boolean;
+}
+
+/**
+ * The whole approval chain for a request, in order: every intermediate stage
+ * before the Guest House Manager. Empty when it goes straight to the manager.
+ * **The single source of the pipeline** — the entry status, the next stage
+ * after each approval, the Copy-to chain and the public site's description of
+ * the routes are all read from here.
+ *
+ * - **Student** → Assistant Warden.
+ * - **Club** (always official) → its Faculty Advisor / council secretary →
+ *   its HOD, when the club has one (Departments & Clubs → "HOD approval by").
+ * - **Employee, official** → HOD of their department — faculty and
+ *   non-teaching staff alike. **Personal** → straight to the manager: it is
+ *   their own money.
+ * - **Office** (Director's Office, a department's office, the IAR Office) →
+ *   straight to the manager (**Direct**), or HOD first (**Requires HOD
+ *   approval**) — the office's choice per booking.
+ * - **IAR Student Cell** → the IAR Office.
+ * - **Meals only** → straight to the manager: lunch for a visitor is the
+ *   kitchen's business; the stages exist to vouch for an overnight stay.
+ * - The **manager** booking at the desk → their own queue.
+ */
+export function routeFor(
   role: Role,
   service: ServiceType = "room",
   context: RoutingContext = {}
-): BookingStatus {
-  if (service === "meals_only") return "PENDING_GH_MANAGER";
+): BookingStatus[] {
+  if (service === "meals_only") return [];
+  const hod: BookingStatus[] = context.hasHodApprover ? ["PENDING_HOD"] : [];
   switch (role) {
     case "student":
-      return "PENDING_WARDEN";
+      return ["PENDING_WARDEN"];
     case "club":
-      return "PENDING_FA";
-    // A faculty member's *official* booking is institute money being spent in
-    // their department's name, so their HOD signs it off first. A personal
-    // booking is their own money, and non-teaching staff answer to the
-    // manager directly — both go straight there.
+      return ["PENDING_FA", ...hod];
     case "employee":
-      return needsHodApproval(context) ? "PENDING_HOD" : "PENDING_GH_MANAGER";
-    // Retired role, kept so a resubmitted legacy booking still routes sanely.
-    case "alumni":
-      return "PENDING_IAR";
-    case "iar_student_cell":
-      return "PENDING_IAR";
-    case "iar_cell":
+      return context.bookingType === "official" ? hod : [];
     case "official":
-    // The manager booking at the desk on someone's behalf. It still lands in
-    // their own allocation queue rather than being approved on the spot: the
-    // room has to be picked, and the booking has to appear in the log like
-    // any other.
+    case "iar_cell":
+      return context.officeApproval === "hod" ? hod : [];
+    // `alumni` is retired, kept so a resubmitted legacy booking routes sanely.
+    case "alumni":
+    case "iar_student_cell":
+      return ["PENDING_IAR"];
     case "gh_manager":
-      return "PENDING_GH_MANAGER";
+      return [];
     default:
       throw new Error(`Role ${role} cannot create bookings`);
   }
 }
 
-/** What `initialStatusFor` needs beyond the role, to route an employee. */
-export interface RoutingContext {
-  bookingType?: string;
-  staffCategory?: StaffCategory | null;
-  /** Whether anyone is set to approve for the requester's department. */
-  hasUnitApprover?: boolean;
+/** Where a fresh booking enters the pipeline: the first stage of its route. */
+export function initialStatusFor(
+  role: Role,
+  service: ServiceType = "room",
+  context: RoutingContext = {}
+): BookingStatus {
+  return routeFor(role, service, context)[0] ?? "PENDING_GH_MANAGER";
 }
 
 /**
- * Whether an employee's booking waits for their HOD.
- *
- * Only a faculty member's official booking does. A profile nobody has
- * categorised yet is treated as **faculty**: that way an uncategorised staff
- * member's booking takes one extra step, rather than a faculty member's
- * official booking silently skipping the approval it needs.
- *
- * With no HOD set for the department there is nobody to wait for, so the
- * booking goes to the manager — the submission log says why.
+ * Whether the HOD stage *should* apply to this request but cannot, because
+ * nobody other than the requester is set to give it. The booking then skips
+ * the stage and its submission log says why.
  */
-export function needsHodApproval(context: RoutingContext): boolean {
-  return (
-    context.bookingType === "official" &&
-    context.staffCategory !== "staff" &&
-    context.hasUnitApprover === true
-  );
+export function hodStageMissing(
+  role: Role,
+  service: ServiceType,
+  context: RoutingContext
+): boolean {
+  if (context.hasHodApprover) return false;
+  return routeFor(role, service, { ...context, hasHodApprover: true }).includes("PENDING_HOD");
 }
 
 /** Which intermediate status a reviewer role is responsible for. */
@@ -128,53 +150,69 @@ export const REVIEWER_STAGE: Partial<Record<Role, BookingStatus>> = {
   gh_manager: "PENDING_GH_MANAGER",
 };
 
-/** Intermediate approvals all forward to the GH Manager queue. */
-export function nextStatusOnApprove(current: BookingStatus): BookingStatus {
-  switch (current) {
-    case "PENDING_WARDEN":
-    case "PENDING_FA":
-    case "PENDING_HOD":
-    case "PENDING_IAR":
-      return "PENDING_GH_MANAGER";
-    case "PENDING_GH_MANAGER":
-      return "APPROVED";
-    default:
-      throw new Error(`Cannot approve a booking in status ${current}`);
-  }
+/** The routing context of a stored booking, from its requester and the units now. */
+export function routingContextFor(
+  booking: { booking_type?: string; office_approval?: OfficeApproval | null },
+  requester: Pick<Profile, "id" | "staff_category" | "unit_id">,
+  units: Unit[]
+): RoutingContext {
+  return {
+    bookingType: booking.booking_type,
+    staffCategory: requester.staff_category ?? null,
+    officeApproval: booking.office_approval ?? null,
+    hasHodApprover: hodApproversFor(requester, units).length > 0,
+  };
 }
 
 /**
  * Every intermediate stage a booking passes through before the Guest House
- * Manager, in order — the whole approval chain for this request, not just
- * where it is now. Empty when it goes straight to the manager.
- *
- * Used for the "Copy to" line: everyone who signs a request off is copied on
- * the staff mail about it for the rest of its life, so the warden who
- * forwarded a request hears that it was allocated or cancelled.
+ * Manager, in order — its whole chain, not just where it is now. Used for the
+ * Copy-to line (everyone who signs a request off is copied on the staff mail
+ * about it for the rest of its life) and to find the next stage.
  */
 export function approvalStagesFor(
-  booking: { user_role: Role; service_type?: ServiceType; booking_type?: string },
-  requester: Pick<Profile, "staff_category" | "unit_id">,
+  booking: {
+    user_role: Role;
+    service_type?: ServiceType;
+    booking_type?: string;
+    office_approval?: OfficeApproval | null;
+  },
+  requester: Pick<Profile, "id" | "staff_category" | "unit_id">,
   units: Unit[] = []
 ): BookingStatus[] {
-  let status: BookingStatus;
   try {
-    status = initialStatusFor(booking.user_role, booking.service_type ?? "room", {
-      bookingType: booking.booking_type,
-      staffCategory: requester.staff_category ?? null,
-      hasUnitApprover: approversOf(requester.unit_id, units).length > 0,
-    });
+    return routeFor(
+      booking.user_role,
+      booking.service_type ?? "room",
+      routingContextFor(booking, requester, units)
+    );
   } catch {
     // A role that cannot book (a stored booking under a role since removed).
     return [];
   }
-  const stages: BookingStatus[] = [];
-  while (status !== "PENDING_GH_MANAGER" && ACTIVE_STATUSES.includes(status)) {
-    if (stages.includes(status)) break;
-    stages.push(status);
-    status = nextStatusOnApprove(status);
+}
+
+/**
+ * Where a booking goes when the stage it is in approves it: the next stage of
+ * its route, else the Guest House Manager; the manager's approval (through
+ * allocation) makes it APPROVED.
+ */
+export function nextStatusAfter(current: BookingStatus, stages: BookingStatus[]): BookingStatus {
+  if (current === "PENDING_GH_MANAGER") return "APPROVED";
+  if (!ACTIVE_STATUSES.includes(current)) {
+    throw new Error(`Cannot approve a booking in status ${current}`);
   }
-  return stages;
+  const at = stages.indexOf(current);
+  return (at >= 0 ? stages[at + 1] : undefined) ?? "PENDING_GH_MANAGER";
+}
+
+/**
+ * Context-free next stage, for callers with no booking to hand: an
+ * intermediate approval forwards to the manager. Prefer `nextStatusAfter`
+ * with the booking's stages — a club's FA approval goes on to the HOD.
+ */
+export function nextStatusOnApprove(current: BookingStatus): BookingStatus {
+  return nextStatusAfter(current, []);
 }
 
 /**
@@ -182,19 +220,20 @@ export function approvalStagesFor(
  *
  * Two kinds of approval live here:
  *
- * - **By unit** — an HOD for a faculty member's official booking, a club's
- *   advisor or its council's secretary for a club booking. Decided by who
- *   heads the requester's unit *now* (`approversOf`), so it follows a change
- *   of HOD without anyone touching the waiting requests. The approver need
- *   not hold a reviewer role at all: a council secretary is a student.
+ * - **By unit** — a club's advisor or its council's secretary (`PENDING_FA`),
+ *   and the HOD (`PENDING_HOD`) — decided by who heads the unit *now*
+ *   (`approversOf`, `hodApproversFor`), so it follows a change of HOD without
+ *   anyone touching the waiting requests. That is the HOD's department
+ *   scoping: an HOD can act only on requests from units whose HOD they are.
+ *   The approver need not hold a reviewer role at all: a council secretary is
+ *   a student, an HOD an employee.
  * - **By role** — wardens scoped to their hostel, the IAR Office, the manager.
  *
  * A club whose unit has nobody set falls back to the old advisor rule, so a
  * request cannot be stranded because the console was half filled in; the
  * manager can also always approve past any stage.
  *
- * `units` must be passed wherever unit approvals matter. Without it only the
- * role-based rules can match.
+ * Nobody ever approves their own request.
  */
 export function canReview(
   reviewer: Profile,
@@ -203,15 +242,15 @@ export function canReview(
   units: Unit[] = []
 ): boolean {
   // Nobody signs off their own request. The IAR Office both books and reviews,
-  // and its own bookings skip `PENDING_IAR` for that reason — this is the
-  // belt-and-braces check in case one ever lands there anyway.
+  // and an HOD books too — this is the belt-and-braces check behind the
+  // routing that already skips them.
   if (reviewer.id === requester.id) return false;
 
   if (status === "PENDING_HOD") {
-    return approversOf(requester.unit_id, units).includes(reviewer.id);
+    return hodApproversFor(requester, units).includes(reviewer.id);
   }
   if (status === "PENDING_FA") {
-    const byUnit = approversOf(requester.unit_id, units);
+    const byUnit = approversOf(requester.unit_id, units).filter((id) => id !== requester.id);
     if (byUnit.length > 0) return byUnit.includes(reviewer.id);
     // Nobody set for this club: the advisor matched by name, as before.
     return (
@@ -414,7 +453,7 @@ export type HistoryScope =
       /** Applied last when building criteria, so the URL cannot widen it. */
       criteria: Pick<
         BookingSearchCriteria,
-        "hostelName" | "club" | "userRole" | "userRoles" | "userId"
+        "hostelName" | "club" | "userRole" | "userRoles" | "userId" | "approverScope"
       >;
       /** Human-readable description of the boundary, shown in the UI. */
       label: string;
@@ -431,7 +470,21 @@ export type HistoryScope =
  * students, advisors their own club, the IAR cell alumni requests. The manager
  * and the developer see every booking. Requesters see only their own bookings.
  */
-export function historyScope(user: Profile): HistoryScope {
+export function historyScope(user: Profile, units: Unit[] = []): HistoryScope {
+  // An HOD, a council secretary, an office head: they approve by appointment,
+  // so their archive is their own bookings plus the requests of the units
+  // they approve for — found the way `canReview` finds them.
+  const governed = unitsGovernedBy(user.id, units);
+  if (governed.length > 0 && !["warden", "iar_cell", "gh_manager", "gh_caretaker", "developer"].includes(user.role)) {
+    const names = units.filter((u) => governed.includes(u.id)).map((u) => u.name);
+    return {
+      ok: true,
+      criteria: { approverScope: { userId: user.id, unitIds: governed } },
+      label: `Your bookings, and requests from ${names.join(", ")}`,
+      canFilterByRole: true,
+      isOwnBookings: false,
+    };
+  }
   switch (user.role) {
     case "warden":
       if (!user.hostel_name) {

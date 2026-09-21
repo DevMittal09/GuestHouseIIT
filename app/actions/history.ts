@@ -44,7 +44,7 @@ const COLUMNS = [
   "Foreign nationals",
   "Pets policy acknowledged",
   "Booked on behalf of",
-  "Paid from",
+  "Debitable head",
   "Purpose",
   "Submitted",
   "My action",
@@ -123,7 +123,7 @@ function csvRow(booking: BookingWithDetails, userId: string): string {
 export async function exportHistoryCsv(queryString: string): Promise<ExportResult> {
   try {
     const user = await requireUser();
-    const scope = historyScope(user);
+    const scope = historyScope(user, await getStore().listUnits().catch(() => []));
     if (!scope.ok) return { ok: false, error: scope.reason };
 
     const isRequester = isRequesterHistory(user.role);
