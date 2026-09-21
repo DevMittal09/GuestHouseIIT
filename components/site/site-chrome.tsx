@@ -63,14 +63,16 @@ export function BrandBlock({
   return (
     <Link href={href} className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3 no-underline">
       <Image
-        src="/iitpkd-web-logo.jpg"
+        src="/IITPKD_NEW_LOGO.png"
         alt="IIT Palakkad"
-        width={1339}
-        height={254}
+        width={1912}
+        height={1456}
         priority
         className={cn(
+          // A stacked logo (emblem over the name), so it needs more height
+          // than the old wide banner did for the name to stay legible.
           "w-auto max-w-full object-contain",
-          compact ? "h-[clamp(36px,9vw,46px)]" : "h-[clamp(44px,11vw,62px)]"
+          compact ? "h-[clamp(44px,11vw,56px)]" : "h-[clamp(56px,14vw,76px)]"
         )}
       />
       <span className="block border-l border-[#dde1e8] pl-[clamp(12px,3vw,20px)]">

@@ -704,7 +704,8 @@ Since 19 Sep 2026, built from `design_handoff/` (a reference, not code to copy).
   2000px, metadata-stripped copies from `public/site/photos/`. Resize one photo
   per process with PIL `draft()` or it gets OOM-killed. Their guest house is
   unconfirmed, so the Gallery groups by subject — don't attribute them.
-- Logos: `public/iitpkd-web-logo.jpg` (wide, in both headers) and
+- Logos: `public/IITPKD_NEW_LOGO.png` (stacked, transparent, in both headers;
+  replaced the wide `iitpkd-web-logo.jpg` on 21 Sep 2026) and
   `public/iitpkd-logo.png` (emblem; `app/icon.png` is the favicon).
 - Verified at **320 px**: no page-level horizontal scroll, one `<h1>` per page.
   Keep grids as `repeat(auto-fit|auto-fill, minmax(min(Npx,100%),1fr))`.
