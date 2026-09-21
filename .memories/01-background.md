@@ -116,6 +116,24 @@ The remainder of the same meeting notes. Status as of **16 Sep 2026**:
 | Email in a single thread rather than standalone messages | **Done** (reworked 21 Sep 2026) | `lib/mail/thread.ts`. Staff (approvers, forwardees, GHM, desk) get one **approvals** thread per day for booking mail and a separate **daily log** thread for the digest/escalation/day-wise log, so they are not spammed; a new day starts a new thread. Requesters get a standalone mail for each step. Threads need both a shared root Message-ID (claimed by the first message sent) and an identical subject |
 | Documentation for every booking workflow | Not started | |
 
+## Requester details from the academic database — 21 Sep 2026
+
+The owner: student (and staff) data is to be fetched from the **institute's
+academic database** and shown at the top of New Booking, with a fixed list of
+fields per kind of account — students, faculty and non-faculty, offices,
+student representatives, the alumni office, and wardens — plus a **"Copy to"**
+line (the approver for students and student representatives, the HOD for
+offices). Dummy values for now, with the provision to plug in the real
+database and written instructions for doing so.
+
+| Requirement | Status | Where |
+| --- | --- | --- |
+| Show each kind of account's listed fields at the top of New Booking | **Done** (dummy data) | `lib/academic/`, `components/academic-details.tsx`; field list and role mapping in [12-academic-records.md](12-academic-records.md) §1 |
+| Guardian's name only when father's and mother's are empty | **Done** | `parentRows` in `lib/academic/fields.ts` |
+| Copy to: the approver (students, student reps), the HOD (offices) | **Done** — displayed, not mailed | `lib/academic/details.ts`; approvers through `canReview()`. Whether the HOD should get mail, or approve, is open — [12-academic-records.md](12-academic-records.md) §5 |
+| Wardens' fields | **Done** | Wardens never open New Booking, so the card is on `/warden`, below the queue |
+| Provision for the real database, and how-to | **Done** | `ACADEMIC_DB_URL` / `ACADEMIC_DB_TOKEN` → `HttpAcademicSource`; [12-academic-records.md](12-academic-records.md) §4 |
+
 ## Design handoff — 19 Sep 2026
 
 The institute's designer supplied `design_handoff/` — an HTML prototype and

@@ -87,7 +87,6 @@ import {
   BOOKING_TYPE_LABELS,
   CITIZENSHIP_LABELS,
   MEAL_PREFERENCE_LABELS,
-  ROLE_LABELS,
   type BookingType,
   type Citizenship,
   type GuestHouse,
@@ -681,23 +680,6 @@ export function BookingForm({
           </CardContent>
         </Card>
       )}
-
-      {/* Simulated LDAP profile — read-only */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Requester details</CardTitle>
-          <CardDescription>Pre-filled from your institute profile ({ROLE_LABELS[user.role]}).</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <ReadOnly label="Name" value={user.full_name} />
-          <ReadOnly label="Email" value={user.email} />
-          {user.roll_number && <ReadOnly label="Roll Number" value={user.roll_number} />}
-          {user.hostel_name && <ReadOnly label="Hostel" value={user.hostel_name} />}
-          {user.department_or_club && (
-            <ReadOnly label="Department / Club" value={user.department_or_club} />
-          )}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -1550,15 +1532,6 @@ function CustomFieldInput({
         />
       )}
       <FieldError message={error} />
-    </div>
-  );
-}
-
-function ReadOnly({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className="font-medium">{value}</p>
     </div>
   );
 }

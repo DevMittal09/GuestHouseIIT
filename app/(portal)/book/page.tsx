@@ -8,6 +8,7 @@ import { canBookOnBehalf } from "@/lib/access";
 import { serviceTypesFor } from "@/lib/booking-types";
 import { REQUESTER_ROLES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
+import { AcademicDetailsCard } from "@/components/academic-details";
 
 export default async function BookPage({
   searchParams,
@@ -61,6 +62,10 @@ export default async function BookPage({
             ? "Take a booking for someone who cannot use the portal themselves. It is recorded against your account and names them as the guest."
             : "Fill in the stay and guest details — the request enters the approval pipeline for your role automatically."}
       </PageHeader>
+      {/* Who is asking, from the academic database. Outside the form because
+          nothing in it is editable, and above it so the requester checks it
+          first. */}
+      <AcademicDetailsCard user={user} title="Requester details" />
       <BookingForm
         user={user}
         guestHouses={guestHouses}

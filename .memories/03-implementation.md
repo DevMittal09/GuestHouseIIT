@@ -10,6 +10,7 @@ What exists today, with file paths.
 | Sign-in (LDAP + Google button) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` → `components/login-form.tsx` |
 | "Sign in with Google" placeholder (persona picker, honours `next`) | `app/(site)/mock-login/page.tsx` |
 | Login / logout actions | `app/actions/auth.ts` (`signInWithLdap` — directory check, `ldap:<uid>` throttle, profile by `ldap_uid`, safe `next`; `loginAs(id, next)`; `logout` → `/sign-in`) |
+| Academic records (the Requester details card) | `lib/academic/` — `index.ts` (`getAcademicSource()` from env; `academicRecordFor()`, cached and never throwing), `http-source.ts` (real; `recordFromJson` is the field mapping), `mock-source.ts` (dummy records), `fields.ts` (role → kind, display order, guardian and Copy-to rules), `details.ts` (rows + Copy to for the card). See [12-academic-records.md](12-academic-records.md) |
 | LDAP directory | `lib/ldap/` — `index.ts` (`getDirectory()` from env), `ldap-directory.ts` (real), `mock-directory.ts` (dummy accounts), `link.ts` (entry → profile, opt-in link by email), `import.ts` (bulk import planner), `uid.ts` (client-safe rules). See [11-ldap-accounts.md](11-ldap-accounts.md) |
 | Where signed-out visitors go | `SIGN_IN_PATH` in `lib/routes.ts` (`/` is the public home page) |
 | Session read | `lib/auth.ts` (`getCurrentUser`, `requireUser`) |
@@ -25,6 +26,11 @@ shown to every role**, between the role-specific links and the log.
 
 - **Page:** `app/(portal)/book/page.tsx` — loads the effective form config, then
   filters guest houses to those the role may book.
+- **Requester details:** `components/academic-details.tsx`, above the form and
+  outside it. The signed-in person's record from the academic database
+  (`lib/academic/`), streamed in behind Suspense, with a Copy-to line; falls
+  back to the portal profile when there is no record or the database is down.
+  The same card is on `/warden`. See [12-academic-records.md](12-academic-records.md).
 - **Form:** `components/booking-form.tsx` — renders entirely from the config:
   fields appear, become optional, or vanish per `FieldMode`; relationship is a
   dropdown or a text input; custom fields render in an "Additional information"

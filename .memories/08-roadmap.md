@@ -13,6 +13,10 @@ until the institute's LDAP details arrive
 Still to do:
 
 - **Connect the institute directory** (env only) and load the real usernames.
+- **Connect the academic database** behind the Requester details card —
+  `ACADEMIC_DB_URL` for an API on the documented contract, or a new
+  `AcademicSource` for anything else. Dummy records until then
+  ([12-academic-records.md](12-academic-records.md) §4).
 - **Replace the "Sign in with Google" placeholder** (`/mock-login` +
   `loginAs`) with real Google OAuth, restricted to `isInstituteEmail()`.
 - **Make the session unforgeable.** Today it is an unsigned cookie holding a
@@ -112,6 +116,12 @@ Vitest fits the stack. Until then, the ad-hoc `npx tsx` approach in
 - **Manager reassignment of rooms** after approval. `set_room_holds()` already
   replaces a booking's holds transactionally, so this is mostly UI.
 - **Bulk room creation** — adding 20 rooms one at a time is tedious.
+- **"Copy to" as real mail, or HOD approval for offices.** The Requester
+  details card shows Copy to but sends nothing; the office's HOD hears nothing
+  today. Also: snapshot the academic record onto the booking if reviewers need
+  the requester's phone, and fill `hostel_name` from the record at sign-in so
+  warden routing stops depending on a hand-typed profile field
+  ([12-academic-records.md](12-academic-records.md) §5).
 - **Attachments on rejection** so reviewers can explain with a document.
 - **Per-guest-house managers.** The `gh_manager` role currently sees every guest
   house; the original spec hinted at separate managers per property. The data

@@ -148,6 +148,29 @@ Every server action re-checks authorization server-side (`requireUser`, role
 checks, `canReview`). Keep it that way: the UI hiding a button is never the
 security boundary.
 
+## Requester details come from the academic database — `lib/academic/`
+
+The card at the top of `/book` (and on `/warden`) shows the person's record
+from the **institute's academic database**, with a per-kind field list and a
+**Copy to** line. The fields, dummy data and how to connect the real database
+are in **`.memories/12-academic-records.md`**. Keep that file and
+`lib/academic/mock-source.ts` in step.
+
+- **Same seam as the store / mailer / directory:** `getAcademicSource()` is the
+  real `HttpAcademicSource` when `ACADEMIC_DB_URL` is set, and dummy records
+  otherwise. Field names meet ours only in `recordFromJson`.
+- **Role → kind is `KIND_FOR_ROLE`** in `lib/academic/fields.ts`: `official`
+  and `iar_cell` are Offices, `club` is Student Representative, and
+  `iar_student_cell` is the Alumni Office.
+- **`academicRecordFor()` never throws** and caches answers (10 min) because
+  `/book` polls. On no record or an outage the card falls back to the profile.
+  A down database must never stop a booking.
+- **Copy-to approvers come from `canReview()`** (`reviewersOfRequester`), never
+  from the record. The offices' HOD comes from the record. Copy to is **shown,
+  not mailed**.
+- **The record is never stored, logged or mailed.** It holds parents' names
+  and phone numbers.
+
 ## Roles, pipelines, and where they are encoded
 
 `lib/workflow.ts` is the single source of truth for the pipeline.

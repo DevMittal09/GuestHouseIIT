@@ -1165,3 +1165,61 @@ is a one-line change once the office supplies coordinates.
 - `service_type` (`room`, `room_meals`, `meals_only`) dictates whether rooms and guests are collected at all, or just a head count for meals.
 - `booking_meals` view created to provide the kitchen with a relational shape of meal plans without duplicating data from the JSON column.
 - Existing bookings were migrated into a single "legacy" synthetic room to preserve backwards compatibility, and legacy infant flags were retained untouched.
+
+## Requester details from the academic database (21 Sep 2026)
+
+The owner asked for each kind of account's record in the institute's academic
+database to be shown at the top of New Booking, with dummy data until the
+database is connected. Full detail: [12-academic-records.md](12-academic-records.md).
+
+### A source seam, like the store, the mailer and the directory
+
+`AcademicSource` has one method (`find(kind, email)`) and two implementations,
+picked from `ACADEMIC_DB_URL`. **Rejected:** putting the fields on `profiles`
+and seeding dummy values into both stores. That would mean a migration, and a
+second copy of data the academic database owns that would go stale every
+semester. It would also make "connect the real database" a data-migration job
+instead of an environment variable.
+
+### The real source is HTTP on a contract the portal defines
+
+The academic database's shape is unknown, so the portal defines
+`GET {url}/records/{kind}?email=` with snake_case fields, and puts every name
+mapping in `recordFromJson`. **Rejected:** a direct database driver. It would
+be a dependency for a database we have never seen, and a hosted portal is
+unlikely to reach a campus database through the firewall. A different
+transport is one class away (§4 of the memory file).
+
+### Keyed by institute email
+
+Email is the one identifier every profile and every kind of record carries.
+Roll numbers cover students only, and employee ids cover staff only.
+
+### Copy-to approvers come from `canReview()`, not the academic record
+
+The card must name the person the request will actually reach. Routing uses
+the portal profile's `hostel_name` / `department_or_club`, so Copy to does
+too. It goes through `reviewersOfRequester` (split out of
+`reviewersForStatus`), the same rule mail uses. **Rejected:** deriving the
+warden from the academic record's hostel. When the two disagree, the card would
+name a warden who never sees the request.
+
+### Displayed, not mailed
+
+Per-submission mail to the warden or FA would reverse the "one digest, not one
+mail per request" decision above. Mailing the office's HOD is new behaviour
+nobody has specified, and the 15 Sep notes suggest the HOD should *approve*
+office bookings, which is a pipeline change. Left for the office to decide.
+
+### It must never block a booking
+
+The lookup returns a status instead of throwing. The card falls back to the
+profile and streams behind Suspense with a 3 s timeout. Answers are cached in
+memory (10 min, or 1 min for an outage) because `/book` re-renders every 5 s.
+The cost is that a correction in the academic database takes up to 10 minutes
+to show.
+
+### Wardens' card on `/warden`
+
+Wardens never open New Booking, but their fields were on the list. The card
+sits below their queue, because the queue is what they come to the page for.

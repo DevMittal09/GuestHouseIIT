@@ -48,10 +48,19 @@ export async function reviewersForStatus(
   booking: BookingWithDetails,
   status: BookingStatus
 ): Promise<Profile[]> {
+  return reviewersOfRequester(booking.requester, status);
+}
+
+/**
+ * As `reviewersForStatus`, before any booking exists — the "Copy to" line at
+ * the top of New Booking names who will approve the request being filled in.
+ */
+export async function reviewersOfRequester(
+  requester: Profile,
+  status: BookingStatus
+): Promise<Profile[]> {
   const profiles = await getStore().listProfiles();
-  return profiles.filter(
-    (profile) => mailable(profile) && canReview(profile, status, booking.requester)
-  );
+  return profiles.filter((profile) => mailable(profile) && canReview(profile, status, requester));
 }
 
 /** Everyone holding a role, for the desk copies and the daily report. */

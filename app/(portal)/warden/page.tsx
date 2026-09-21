@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { PageHeader } from "@/components/page-header";
+import { AcademicDetailsCard } from "@/components/academic-details";
 
 export default async function WardenPage() {
   const user = await getCurrentUser();
@@ -25,6 +26,9 @@ export default async function WardenPage() {
         bookings={bookings}
         emptyMessage={`No pending requests from ${user.hostel_name} hostel.`}
       />
+      {/* Wardens never open New Booking, so their academic record is shown
+          here — below the queue, which is what they came for. */}
+      <AcademicDetailsCard user={user} title="Your details" />
     </div>
   );
 }

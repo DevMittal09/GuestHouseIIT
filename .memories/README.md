@@ -21,6 +21,7 @@ one.
 | [Guest House Meeting Notes.md](Guest%20House%20Meeting%20Notes.md) | The guest house office's own notes, verbatim — the source for the 15 Sep requirements. Tracked against them in [01-background.md](01-background.md) |
 | [10-ui-design.md](10-ui-design.md) | The public website, the design tokens, sign-in pages, photos and map — read before any visual change |
 | [11-ldap-accounts.md](11-ldap-accounts.md) | **Dummy LDAP logins for every persona**, how LDAP sign-in works, and how to switch to the institute's real LDAP accounts |
+| [12-academic-records.md](12-academic-records.md) | **The Requester details card**: the fields the academic database supplies for each kind of account, the Copy-to rules, the dummy records, and **how to connect the real academic database** |
 
 **Also in the repo root:** `AGENTS.md` is the terse operational brief that agent
 tools load automatically. It is the hard rules; these files are the reasoning.
@@ -380,8 +381,8 @@ can only narrow, never widen. Do not reorder that spread.
 | `/sign-in` | anyone | LDAP sign-in + "Sign in with Google"; every portal guard redirects here |
 | `/mock-login` | anyone | Google placeholder: persona picker (development) |
 | `/dashboard` | requesters | Own bookings, status, assigned rooms, cancellation |
-| `/book` | requesters | The config-driven booking form, opening with the booking type, a **browsable** availability panel (day/week/month), a per-day meal grid (where the guest house serves meals) and an "Infant accompanying" switch |
-| `/warden` `/fa` `/iar` | reviewers | One `ReviewQueue` component, three scopings |
+| `/book` | requesters | The config-driven booking form, under a **Requester details** card from the academic database (with Copy to; [12-academic-records.md](12-academic-records.md)), opening with the booking type, a **browsable** availability panel (day/week/month), a per-day meal grid (where the guest house serves meals) and an "Infant accompanying" switch |
+| `/warden` `/fa` `/iar` | reviewers | One `ReviewQueue` component, three scopings. `/warden` also shows the warden's own academic record |
 | `/availability` | **every role** | Read-only time × room occupancy chart, by day, week or month |
 | `/history` | **every role** | Booking history / approval log, CSV + PDF export |
 | `/manager` | gh_manager | Cinema-style allocation grid, today's checkouts, lifecycle controls |
@@ -428,6 +429,10 @@ mail per request. `lib/mail/` — see
   caller may see. Keep it that way.
 - CSV cells starting with `= + - @` are apostrophe-prefixed; every text field is
   user-supplied and spreadsheets execute formula cells.
+- **Academic records** (the Requester details card) include parents' names and
+  phone numbers. They are shown only to the person they describe, fetched per
+  request (cached in memory), and never stored on a booking, logged, or mailed —
+  see [12-academic-records.md](12-academic-records.md).
 - The app stores Aadhaar scans with no retention policy. That is the item with
   real legal exposure — see [09-production-plan.md](09-production-plan.md) §5.
 
