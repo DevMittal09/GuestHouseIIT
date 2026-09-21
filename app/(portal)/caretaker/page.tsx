@@ -1,11 +1,13 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BedDouble, CalendarClock, DoorOpen, LogOut, UsersRound } from "lucide-react";
 import { CaretakerConsole } from "@/components/caretaker-console";
+import { EmptyState } from "@/components/empty-state";
+import { GuestHouseSwitcher } from "@/components/portal/guest-house-switcher";
+import { StatGrid, StatTile } from "@/components/portal/stat-tiles";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
-import { cn } from "@/lib/utils";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
 import { PageHeader } from "@/components/page-header";
 
@@ -22,9 +24,9 @@ export default async function CaretakerPage({
   const guestHouses = await store.listGuestHouses();
   if (guestHouses.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
-        No guest houses configured yet — ask a developer to add one in the admin console.
-      </p>
+      <EmptyState icon={BedDouble} title="No guest houses configured yet">
+        Ask a developer to add one in the admin console.
+      </EmptyState>
     );
   }
   const { gh } = await searchParams;
@@ -53,31 +55,38 @@ export default async function CaretakerPage({
     .sort((a, b) => a.check_out.localeCompare(b.check_out));
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Guest House Reception">
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Reception desk"
+        title="Guest house reception"
+        actions={
+          guestHouses.length > 1 && (
+            <GuestHouseSwitcher basePath="/caretaker" guestHouses={guestHouses} currentId={current.id} />
+          )
+        }
+      >
         Who is in the building, who arrives next, and who leaves today. Room allocation and
         approvals are handled by the Guest House Manager.
       </PageHeader>
 
-      {guestHouses.length > 1 && (
-        <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
-          {guestHouses.map((g) => (
-            <Link
-              key={g.id}
-              href={`/caretaker?gh=${g.name.toLowerCase()}`}
-              className={cn(
-                "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
-                g.id === current.id
-                  ? "bg-background shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {g.name}
-              <span className="ml-1.5 text-xs text-muted-foreground">({g.total_rooms} rooms)</span>
-            </Link>
-          ))}
-        </div>
-      )}
+      <StatGrid>
+        <StatTile
+          icon={LogOut}
+          label="Checking out today"
+          value={checkoutsToday.length}
+          highlight={checkoutsToday.length > 0}
+          tone="saffron"
+        />
+        <StatTile icon={UsersRound} tone="violet" label="In residence" value={currentStays.length} hint="Stays under way" />
+        <StatTile icon={CalendarClock} tone="sky" label="Upcoming arrivals" value={upcomingStays.length} />
+        <StatTile
+          icon={DoorOpen}
+          tone="vermilion"
+          label="Awaiting check-out"
+          value={overdueStays.length}
+          hint={overdueStays.length > 0 ? "Past check-out, still holding rooms" : "None overdue"}
+        />
+      </StatGrid>
 
       <CaretakerConsole
         current={currentStays}

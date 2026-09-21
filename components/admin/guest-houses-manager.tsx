@@ -229,7 +229,7 @@ function GuestHouseCard({
         </div>
 
         {rooms.length === 0 ? (
-          <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-xl border border-dashed border-border-strong bg-card/60 p-6 text-center text-sm text-muted-foreground">
             No rooms yet.
           </p>
         ) : (

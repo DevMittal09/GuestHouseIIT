@@ -127,11 +127,16 @@ export function formatInstituteDate(iso: string | Date): string {
   return `${p.day} ${MONTHS[p.month - 1]} ${p.year}`;
 }
 
-/** "10 Sep 2026, 12:00 PM" in institute time. */
-export function formatInstituteDateTime(iso: string | Date): string {
+/** "12:00 PM" in institute time. */
+export function formatInstituteTime(iso: string | Date): string {
   const p = instituteParts(iso instanceof Date ? iso : new Date(iso));
   const hour12 = p.hour % 12 === 0 ? 12 : p.hour % 12;
-  return `${formatInstituteDate(iso)}, ${hour12}:${pad(p.minute)} ${p.hour < 12 ? "AM" : "PM"}`;
+  return `${hour12}:${pad(p.minute)} ${p.hour < 12 ? "AM" : "PM"}`;
+}
+
+/** "10 Sep 2026, 12:00 PM" in institute time. */
+export function formatInstituteDateTime(iso: string | Date): string {
+  return `${formatInstituteDate(iso)}, ${formatInstituteTime(iso)}`;
 }
 
 /** The hour (0-23) an instant falls in, in institute time. */

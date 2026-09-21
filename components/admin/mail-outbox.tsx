@@ -198,7 +198,7 @@ export function MailOutbox() {
           )}
 
           {data && data.rows.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            <p className="rounded-2xl border border-dashed border-border-strong bg-card/60 p-8 text-center text-sm text-muted-foreground">
               {total === 0
                 ? "No mail has been queued yet. Submit or approve a booking and it will appear here."
                 : "No messages with that status."}

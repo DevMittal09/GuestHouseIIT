@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SignInPanel } from "@/components/site/sign-in-panel";
-import { Container } from "@/components/site/site-ui";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
+import { PHOTOS } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -17,14 +17,13 @@ export default async function SignInPage() {
   if (user) redirect(homeForRole(user.role));
 
   return (
-    <Container className="pt-11 pb-[88px]">
-      <SignInPanel
-        title="Sign in"
-        intro="Sign in to the guest house portal to raise and track booking requests, review requests awaiting your approval, or run the guest house desk."
-        user={null}
-        continueTo="/"
-        continueLabel=""
-      />
-    </Container>
+    <SignInPanel
+      title="Welcome to the booking portal"
+      photo={PHOTOS.courtyard}
+      intro="Raise and track booking requests, review requests awaiting your approval, or run the guest house desk."
+      user={null}
+      continueTo="/"
+      continueLabel=""
+    />
   );
 }

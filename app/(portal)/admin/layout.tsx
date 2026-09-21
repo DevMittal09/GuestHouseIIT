@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminLock } from "@/components/admin/admin-lock";
+import { AdminTabs } from "@/components/admin/admin-tabs";
 import { isAdminUnlocked, isDefaultAdminPassword } from "@/lib/admin-lock";
 import {
   canUseConsole,
@@ -21,7 +21,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!canUseConsole(user.role)) redirect(homeForRole(user.role));
   const sections = consoleSectionsFor(user.role);
   const isDeveloper = user.role === "developer";
-  const title = isDeveloper ? "Developer Console" : "Guest House Console";
+  const title = isDeveloper ? "Developer console" : "Guest house console";
+  const eyebrow = isDeveloper ? "Superadmin" : "Settings";
   const blurb = isDeveloper
     ? "Full control over users, guest houses, rooms, booking forms and every booking."
     : "Accounts, guest houses and rooms, booking forms, and what the automatic emails say.";
@@ -29,28 +30,26 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // The real gate is in `requireDeveloper()` — this only decides what to draw.
   if (!(await isAdminUnlocked())) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={title}>{blurb}</PageHeader>
+      <div className="space-y-7">
+        <PageHeader eyebrow={eyebrow} title={title}>
+          {blurb}
+        </PageHeader>
         <AdminLock usingDefault={await isDefaultAdminPassword()} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={title}>{blurb}</PageHeader>
-      <nav className="flex flex-wrap gap-1 rounded-lg bg-muted p-1 w-fit">
-        {sections.map((section) => CONSOLE_SECTIONS[section]).map((t) => (
-          <Link
-            key={t.href}
-            href={t.href}
-            title={t.blurb}
-            className="rounded-md px-4 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-background hover:text-foreground hover:shadow-sm"
-          >
-            {t.label}
-          </Link>
-        ))}
-      </nav>
+    <div className="space-y-7">
+      <PageHeader eyebrow={eyebrow} title={title}>
+        {blurb}
+      </PageHeader>
+      <AdminTabs
+        tabs={sections.map((section) => {
+          const { href, label, blurb: hint } = CONSOLE_SECTIONS[section];
+          return { href, label, blurb: hint };
+        })}
+      />
       {children}
     </div>
   );

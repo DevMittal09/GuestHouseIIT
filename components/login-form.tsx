@@ -2,11 +2,14 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, UserRound } from "lucide-react";
 import { signInWithLdap } from "@/app/actions/auth";
 
-const LABEL = "mb-[7px] block text-[13px] font-bold tracking-[0.03em] text-body";
+const LABEL = "mb-2 block text-[13px] font-semibold text-foreground/90";
+const FIELD = "relative";
+const ICON = "pointer-events-none absolute top-1/2 left-4 size-[18px] -translate-y-1/2 text-muted-foreground";
 const INPUT =
-  "block w-full rounded-[2px] border border-border-strong bg-white px-3.5 py-[13px] text-[15.5px] text-navy placeholder:text-[#8390a5] focus-visible:border-navy focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gold aria-invalid:border-destructive";
+  "block h-12 w-full rounded-xl border border-input bg-white pr-4 pl-11 text-[15.5px] text-foreground shadow-xs transition-[border-color,box-shadow] outline-none placeholder:text-muted-foreground/70 hover:border-border-strong focus-visible:border-vermilion focus-visible:ring-4 focus-visible:ring-ring/15 aria-invalid:border-destructive aria-invalid:ring-destructive/15";
 
 /** The Google "G", as Google's sign-in button guidelines draw it. */
 function GoogleMark() {
@@ -21,16 +24,16 @@ function GoogleMark() {
 }
 
 /**
- * The sign-in card the institute sees, on `/sign-in`, `/book-room` and
+ * The sign-in form the institute sees, on `/sign-in`, `/book-room` and
  * `/book-meal`: an LDAP username and password, or Google. `signInWithLdap`
  * redirects on success, so the only state this holds is the error from a
- * failed attempt.
+ * failed attempt (and whether the password is shown).
  *
  * "Sign in with Google" is a placeholder: it opens the mock account picker at
  * `/mock-login` until Google OAuth is connected, carrying `next` along so both
- * doors land in the same place. "Keep me signed in" and "Forgot password" from
- * the design are deliberately absent — passwords belong to the directory, and a
- * control that does nothing is worse than none.
+ * doors land in the same place. "Keep me signed in" and "Forgot password" are
+ * deliberately absent — passwords belong to the directory, and a control that
+ * does nothing is worse than none.
  */
 export function LoginForm({
   sampleAccount,
@@ -47,6 +50,7 @@ export function LoginForm({
 }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -67,95 +71,117 @@ export function LoginForm({
 
   return (
     <div className="min-w-0">
-      <div className="rounded-[2px] border border-t-[3px] border-border border-t-navy bg-white px-[clamp(18px,5vw,30px)] pt-8 pb-[34px]">
-        <h2 className="mb-1.5 text-[25px] font-semibold text-navy">Sign in</h2>
-        <p className="mb-[22px] text-[14.5px] text-muted-foreground">
-          With your institute LDAP account
-        </p>
-        <form onSubmit={submit} noValidate>
+      <h2 className="text-[30px] leading-tight font-semibold text-foreground">Sign in</h2>
+      <p className="mt-1.5 mb-7 text-[15px] text-muted-foreground">
+        Sign in with your institute LDAP account.
+      </p>
+      <form onSubmit={submit} noValidate className="space-y-5">
+        <div>
           <label htmlFor="login-username" className={LABEL}>
             LDAP username
           </label>
-          <input
-            id="login-username"
-            name="username"
-            type="text"
-            autoComplete="username"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            placeholder="e.g. 142301026"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? "login-error" : undefined}
-            className={`${INPUT} mb-[18px]`}
-          />
+          <div className={FIELD}>
+            <UserRound aria-hidden className={ICON} />
+            <input
+              id="login-username"
+              name="username"
+              type="text"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="e.g. 142301026"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "login-error" : undefined}
+              className={INPUT}
+            />
+          </div>
+        </div>
 
+        <div>
           <label htmlFor="login-password" className={LABEL}>
             LDAP password
           </label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? "login-error" : undefined}
-            className={`${INPUT} mb-[22px]`}
-          />
-
-          {error && (
-            <p id="login-error" role="alert" className="-mt-2 mb-4 text-sm text-destructive">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={isPending || username.trim() === "" || password === ""}
-            className="w-full cursor-pointer rounded-[3px] bg-navy p-3.5 text-[15.5px] font-bold text-white transition-colors duration-150 hover:bg-navy-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPending ? "Signing in…" : submitLabel}
-          </button>
-        </form>
-
-        <div className="my-6 flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden="true">
-          <span className="h-px flex-1 bg-border" />
-          or
-          <span className="h-px flex-1 bg-border" />
+          <div className={FIELD}>
+            <LockKeyhole aria-hidden className={ICON} />
+            <input
+              id="login-password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "login-error" : undefined}
+              className={`${INPUT} pr-12`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-pressed={showPassword}
+              className="absolute top-1/2 right-2 inline-flex size-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-band hover:text-foreground"
+            >
+              {showPassword ? <EyeOff aria-hidden className="size-[18px]" /> : <Eye aria-hidden className="size-[18px]" />}
+              <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
+            </button>
+          </div>
         </div>
 
-        <Link
-          href={googleHref}
-          className="flex w-full items-center justify-center gap-3 rounded-[3px] border border-border-strong bg-white p-3 text-[15.5px] font-semibold text-navy transition-colors duration-150 hover:border-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
-        >
-          <GoogleMark />
-          Sign in with Google
-        </Link>
-
-        {footnote && (
-          <p className="mt-4 text-sm leading-normal text-muted-foreground">{footnote}</p>
+        {error && (
+          <p
+            id="login-error"
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+          >
+            {error}
+          </p>
         )}
+
+        <button
+          type="submit"
+          disabled={isPending || username.trim() === "" || password === ""}
+          className="inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-vermilion-deep text-[15.5px] font-semibold text-white shadow-glow transition-all duration-200 hover:bg-vermilion-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion active:translate-y-px disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none"
+        >
+          {isPending ? "Signing in…" : submitLabel}
+          {!isPending && <ArrowRight aria-hidden className="size-4" />}
+        </button>
+      </form>
+
+      <div className="my-6 flex items-center gap-3 text-[12px] font-semibold tracking-[0.14em] text-muted-foreground uppercase" aria-hidden="true">
+        <span className="h-px flex-1 bg-border" />
+        or
+        <span className="h-px flex-1 bg-border" />
       </div>
+
+      <Link
+        href={googleHref}
+        className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-input bg-white text-[15px] font-semibold text-foreground shadow-xs transition-colors duration-150 hover:border-border-strong hover:bg-band/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion"
+      >
+        <GoogleMark />
+        Sign in with Google
+      </Link>
+
+      {footnote && (
+        <p className="mt-5 text-[13.5px] leading-normal text-muted-foreground">{footnote}</p>
+      )}
 
       {/*
         Everything below is for development and demos, and goes when real
         authentication lands — see .memories/08-roadmap.md item 1.
       */}
-      <div className="mt-5 border border-dashed border-border-strong bg-band px-4 py-3 text-center text-[13px] leading-normal text-muted-foreground">
+      <div className="mt-6 rounded-xl border border-dashed border-border-strong bg-band/60 px-4 py-3 text-center text-[12.5px] leading-normal text-muted-foreground">
         Demo build —{" "}
         {sampleAccount ? (
           <>
             LDAP accounts are dummy ones, e.g.{" "}
-            <code className="rounded-[2px] bg-white px-1 py-0.5 font-mono text-navy">
+            <code className="rounded-md bg-white px-1.5 py-0.5 font-mono text-foreground ring-1 ring-border">
               {sampleAccount.uid}
             </code>{" "}
             /{" "}
-            <code className="rounded-[2px] bg-white px-1 py-0.5 font-mono text-navy">
+            <code className="rounded-md bg-white px-1.5 py-0.5 font-mono text-foreground ring-1 ring-border">
               {sampleAccount.password}
             </code>
             .{" "}

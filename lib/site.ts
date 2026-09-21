@@ -85,7 +85,12 @@ export const GUEST_HOUSE_MAP = {
  * A photograph on the public site. `src` is under `public/`; `null` renders a
  * labelled placeholder of the same shape, for slots still waiting on a photo.
  */
-export type SitePhoto = { src: string | null; alt: string };
+export type SitePhoto = {
+  src: string | null;
+  alt: string;
+  /** Taller than wide — the gallery gives it a tall tile rather than cropping it. */
+  portrait?: boolean;
+};
 
 /**
  * The photographs supplied by the guest house office (`Images/` in the repo
@@ -94,8 +99,8 @@ export type SitePhoto = { src: string | null; alt: string };
  * metadata stripped — see .memories/10-ui-design.md for the recipe when adding
  * more.
  */
-function photo(file: string, alt: string): SitePhoto {
-  return { src: `/site/photos/${file}`, alt };
+function photo(file: string, alt: string, portrait = false): SitePhoto {
+  return { src: `/site/photos/${file}`, alt, ...(portrait ? { portrait } : {}) };
 }
 
 export const PHOTOS = {
@@ -109,8 +114,8 @@ export const PHOTOS = {
   lounge: photo("suite-lounge.jpg", "Lounge seating by the windows"),
   bedroomWardrobe: photo("bedroom-wardrobe.jpg", "Bedroom with double bed and wardrobe"),
   bedroom: photo("bedroom.jpg", "Bedroom with double bed, bedside table and work desk"),
-  dressingTable: photo("dressing-table.jpg", "Dressing table and mirror"),
-  bathroom: photo("bathroom.jpg", "Bathroom with glass-screened shower"),
+  dressingTable: photo("dressing-table.jpg", "Dressing table and mirror", true),
+  bathroom: photo("bathroom.jpg", "Bathroom with glass-screened shower", true),
   hall: photo("common-hall.jpg", "Hall set with long tables and chairs"),
   meetingHall: photo("meeting-hall.jpg", "Meeting hall with projector screen and seating"),
 } as const;

@@ -81,6 +81,7 @@ import {
 } from "@/lib/meals";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
+import type { StayQuery } from "@/lib/stay-query";
 import { latestCheckIn } from "@/lib/workflow";
 import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import {
@@ -184,6 +185,7 @@ export function BookingForm({
   guestHouses,
   config,
   initialServiceType,
+  initial,
 }: {
   user: Profile;
   guestHouses: GuestHouse[];
@@ -195,6 +197,12 @@ export function BookingForm({
    * The selector is still there, so the door is a starting point, not a trap.
    */
   initialServiceType?: ServiceType;
+  /**
+   * A stay picked on the public site's booking bar, already checked against
+   * this role's guest houses by the page (`lib/stay-query.ts`). Only a
+   * starting point: the schema validates the dates on submit as usual.
+   */
+  initial?: StayQuery;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -254,11 +262,11 @@ export function BookingForm({
       on_behalf_of_phone: "",
       alumni_name: "",
       alumni_roll_number: "",
-      guest_house_id: guestHouses.length === 1 ? guestHouses[0].id : "",
+      guest_house_id: initial?.guestHouseId ?? (guestHouses.length === 1 ? guestHouses[0].id : ""),
       purpose_of_visit: "",
-      check_in_date: "",
+      check_in_date: initial?.checkIn ?? "",
       check_in_time: "12:00",
-      check_out_date: "",
+      check_out_date: initial?.checkOut ?? "",
       check_out_time: "10:00",
       meal_guest_count: "1",
       meal_preference: "",
@@ -1209,10 +1217,10 @@ export function BookingForm({
       </p>
 
       <div className="flex justify-end gap-3">
-        <Button type="button" variant="outline" onClick={() => router.push("/dashboard")}>
+        <Button type="button" variant="outline" size="lg" onClick={() => router.push("/dashboard")}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isPending}>
+        <Button type="submit" variant="brand" size="lg" disabled={isPending}>
           {isPending ? "Submitting…" : "Submit booking request"}
         </Button>
       </div>
@@ -1664,7 +1672,7 @@ function FieldError({ message }: { message?: string }) {
 
 function EmptyNote({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+    <p className="rounded-xl border border-dashed border-border-strong bg-card/60 p-6 text-center text-sm text-muted-foreground">
       {children}
     </p>
   );

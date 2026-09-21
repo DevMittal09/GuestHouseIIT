@@ -1,12 +1,25 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import {
+  BedDouble,
+  CalendarClock,
+  CalendarPlus,
+  DoorOpen,
+  Inbox,
+  LogOut,
+  Settings2,
+  Undo2,
+  UtensilsCrossed,
+} from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 import { ManagerQueue } from "@/components/manager-queue";
+import { GuestHouseSwitcher } from "@/components/portal/guest-house-switcher";
+import { StatGrid, StatTile } from "@/components/portal/stat-tiles";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
-import { cn } from "@/lib/utils";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
 import { PageHeader } from "@/components/page-header";
 
@@ -23,9 +36,9 @@ export default async function ManagerPage({
   const guestHouses = await store.listGuestHouses();
   if (guestHouses.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
-        No guest houses configured yet — ask a developer to add one in the admin console.
-      </p>
+      <EmptyState icon={BedDouble} title="No guest houses configured yet">
+        Ask a developer to add one in the admin console.
+      </EmptyState>
     );
   }
   const { gh } = await searchParams;
@@ -80,20 +93,30 @@ export default async function ManagerPage({
     .sort()
     .join("|");
 
+  // Rooms held right now by guests in the building (or overdue to leave),
+  // against the guest house's active rooms.
+  const activeRooms = rooms.filter((r) => r.is_active).length;
+  const roomsInUse = new Set([...currentStays, ...overdueStays].flatMap((b) => b.assigned_room_ids)).size;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
-        title="Guest House Manager Console"
+        eyebrow="Guest House Manager"
+        title="Manager console"
         actions={
-          <div className="flex flex-wrap gap-2">
+          <>
             {/* Taking a booking at the desk for someone who cannot use the
                 portal, and the kitchen's head count for a given day. */}
-            <Button asChild variant="outline">
-              <Link href="/book">New booking for a guest</Link>
+            <Button asChild variant="brand">
+              <Link href="/book">
+                <CalendarPlus data-icon="inline-start" />
+                New booking for a guest
+              </Link>
             </Button>
             {current.serves_meals && (
               <Button asChild variant="outline">
                 <Link href={`/manager/meals?gh=${encodeURIComponent(current.name)}`}>
+                  <UtensilsCrossed data-icon="inline-start" />
                   Meal counts
                 </Link>
               </Button>
@@ -101,32 +124,56 @@ export default async function ManagerPage({
             {/* Rooms, accounts, booking forms and the wording of the automatic
                 emails — all of it the manager's to change. */}
             <Button asChild variant="outline">
-              <Link href="/admin/users">Settings</Link>
+              <Link href="/admin/users">
+                <Settings2 data-icon="inline-start" />
+                Settings
+              </Link>
             </Button>
-          </div>
+          </>
         }
       >
         Review pre-approved and direct requests, then allocate rooms per guest house.
       </PageHeader>
 
-      {/* Separate queue per guest house */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
-        {guestHouses.map((g) => (
-          <Link
-            key={g.id}
-            href={`/manager?gh=${g.name.toLowerCase()}`}
-            className={cn(
-              "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
-              g.id === current.id
-                ? "bg-background shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {g.name}
-            <span className="ml-1.5 text-xs text-muted-foreground">({g.total_rooms} rooms)</span>
-          </Link>
-        ))}
-      </div>
+      <GuestHouseSwitcher basePath="/manager" guestHouses={guestHouses} currentId={current.id} />
+
+      <StatGrid>
+        <StatTile
+          icon={Inbox}
+          label="Awaiting allocation"
+          value={pending.length}
+          hint={pending.length > 0 ? "Review and allot rooms" : "Queue is clear"}
+          highlight={pending.length > 0}
+          tone="vermilion"
+        />
+        <StatTile
+          icon={BedDouble}
+          tone="violet"
+          label="Rooms in use now"
+          value={
+            <>
+              {roomsInUse}
+              <span className="text-[18px] text-muted-foreground"> / {activeRooms}</span>
+            </>
+          }
+          progress={activeRooms > 0 ? roomsInUse / activeRooms : 0}
+          hint={`${currentStays.length} stay${currentStays.length === 1 ? "" : "s"} under way`}
+        />
+        <StatTile icon={CalendarClock} tone="sky" label="Upcoming stays" value={upcomingStays.length} hint="Rooms already held" />
+        <StatTile
+          icon={LogOut}
+          tone="saffron"
+          label="Checking out today"
+          value={checkoutsToday.length}
+          hint={overdueStays.length > 0 ? `${overdueStays.length} past check-out` : undefined}
+        />
+        {cancellationRequests.length > 0 && (
+          <StatTile icon={Undo2} tone="vermilion" label="Cancellation requests" value={cancellationRequests.length} hint="Awaiting your decision" />
+        )}
+        {cancellationRequests.length === 0 && overdueStays.length > 0 && (
+          <StatTile icon={DoorOpen} tone="vermilion" label="Awaiting check-out" value={overdueStays.length} hint="Still holding rooms" />
+        )}
+      </StatGrid>
 
       <ManagerQueue
         pending={pending}

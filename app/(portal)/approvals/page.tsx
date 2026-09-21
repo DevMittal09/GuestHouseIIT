@@ -42,8 +42,8 @@ export default async function ApprovalsPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Approvals">
+    <div className="space-y-7">
+      <PageHeader eyebrow="Approvals" title="Requests to review">
         {roles.length > 0 ? (
           <>
             Requests waiting on you as <span className="font-medium">{roles.join("; ")}</span>.

@@ -13,8 +13,8 @@ export default async function AvailabilityPage() {
   const guestHouses = await getStore().listGuestHouses();
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Room Availability">
+    <div className="space-y-7">
+      <PageHeader eyebrow="Every guest house" title="Room availability">
         Check which rooms are free before you request a booking. Pick a guest house and a date to
         see every room&rsquo;s occupancy across the day.
       </PageHeader>

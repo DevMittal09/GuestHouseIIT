@@ -124,7 +124,7 @@ export function BookingAvailability({
 
   if (!guestHouseId || !date) {
     return (
-      <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-xl border border-dashed border-border-strong bg-card/60 p-6 text-center text-sm text-muted-foreground">
         Pick a guest house and a check-in date to see which rooms are free.
       </p>
     );
@@ -275,7 +275,7 @@ export function BookingAvailability({
       )}
 
       {!loading && rooms.length === 0 && !loaded?.failed && (
-        <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed border-border-strong bg-card/60 p-6 text-center text-sm text-muted-foreground">
           This guest house has no active rooms.
         </p>
       )}

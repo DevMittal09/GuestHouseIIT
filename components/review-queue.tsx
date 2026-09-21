@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { reviewBooking } from "@/app/actions/bookings";
 import { BookingDetails } from "@/components/booking-details";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,14 +41,10 @@ export function ReviewQueue({
   showAlumniCard?: boolean;
 }) {
   if (bookings.length === 0) {
-    return (
-      <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
-        {emptyMessage}
-      </p>
-    );
+    return <EmptyState title="All caught up">{emptyMessage}</EmptyState>;
   }
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-x-auto rounded-2xl bg-card shadow-soft ring-1 ring-border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -114,7 +111,7 @@ function ReviewRow({
         )}
       </TableCell>
       <TableCell>
-        <span className="font-medium">{booking.requester.full_name}</span>
+        <span className="font-semibold text-foreground">{booking.requester.full_name}</span>
         <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>
       </TableCell>
       <TableCell>{booking.guest_house.name}</TableCell>

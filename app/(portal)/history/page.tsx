@@ -25,9 +25,9 @@ export default async function HistoryPage({
 
   if (!scope.ok) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-7">
         <Heading scopeLabel={null} isRequester={false} />
-        <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-border-strong bg-card/60 p-10 text-center text-muted-foreground">
           {scope.reason}
         </p>
       </div>
@@ -53,7 +53,7 @@ export default async function HistoryPage({
   ]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <Heading scopeLabel={scope.label} isRequester={isRequester} />
       <BookingHistory
         rows={result.rows}
@@ -77,7 +77,7 @@ export default async function HistoryPage({
 
 function Heading({ scopeLabel, isRequester }: { scopeLabel: string | null; isRequester: boolean }) {
   return (
-    <PageHeader title={isRequester ? "Booking History" : "Approval Log"}>
+    <PageHeader eyebrow="Archive" title={isRequester ? "Booking history" : "Approval log"}>
       {isRequester
         ? "A complete record of all your guest house booking requests and their status."
         : "Every request you have approved or rejected, and a searchable archive of past bookings."}

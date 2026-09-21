@@ -61,11 +61,11 @@ export function BookingsManager({ bookings }: { bookings: BookingWithDetails[] }
       </div>
 
       {visible.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-border-strong bg-card/60 p-10 text-center text-muted-foreground">
           No bookings match this filter.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-2xl bg-card shadow-soft ring-1 ring-border">
           <Table>
             <TableHeader>
               <TableRow>

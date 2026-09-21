@@ -165,7 +165,7 @@ export function UsersManager({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto rounded-2xl bg-card shadow-soft ring-1 ring-border">
         <Table>
           <TableHeader>
             <TableRow>

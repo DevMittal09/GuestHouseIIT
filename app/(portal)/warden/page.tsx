@@ -17,8 +17,8 @@ export default async function WardenPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Assistant Warden Portal">
+    <div className="space-y-7">
+      <PageHeader eyebrow={`Assistant Warden · ${user.hostel_name ?? ""}`} title="Requests to review">
         Student booking requests from <span className="font-medium">{user.hostel_name}</span>{" "}
         hostel awaiting your review.
       </PageHeader>

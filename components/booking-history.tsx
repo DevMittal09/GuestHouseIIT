@@ -508,7 +508,7 @@ export function BookingHistory({
       </div>
 
       {total === 0 ? (
-        <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-border-strong bg-card/60 p-10 text-center text-muted-foreground">
           {isOwnBookings
             ? "You have not submitted any booking requests yet."
             : params.actor === "me"
@@ -518,7 +518,7 @@ export function BookingHistory({
       ) : (
         <div
           className={cn(
-            "overflow-x-auto rounded-lg border transition-opacity",
+            "overflow-x-auto rounded-2xl bg-card shadow-soft ring-1 ring-border transition-opacity",
             isPending && "opacity-60"
           )}
         >

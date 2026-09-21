@@ -45,7 +45,8 @@ export function CheckoutsToday({
   nowIso: string;
 }) {
   return (
-    <Card>
+    <Card className="relative">
+      <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-saffron to-vermilion" />
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2">
           Checking out today
@@ -60,11 +61,11 @@ export function CheckoutsToday({
       </CardHeader>
       <CardContent>
         {bookings.length === 0 ? (
-          <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-xl border border-dashed border-border-strong bg-card/60 p-6 text-center text-sm text-muted-foreground">
             Nobody is due to check out today.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto rounded-xl ring-1 ring-border">
             <Table>
               <TableHeader>
                 <TableRow>

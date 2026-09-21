@@ -1,8 +1,9 @@
 "use client";
 
 import { CheckoutsToday } from "@/components/checkouts-today";
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/portal/section-header";
 import { StaysTable } from "@/components/stays-table";
-import { Badge } from "@/components/ui/badge";
 import type { BookingWithDetails } from "@/lib/types";
 
 /**
@@ -37,20 +38,14 @@ export function CaretakerConsole({
       <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} />
 
       <section>
-        <h2 className="mb-1 text-lg font-semibold">
-          Current occupants{" "}
-          <Badge variant="secondary" className="align-middle">
-            {current.length}
-          </Badge>
-        </h2>
-        <p className="mb-3 text-sm text-muted-foreground">
+        <SectionHeader title="Current occupants" count={current.length}>
           Guests in the building now. Mark a guest as Occupied when they arrive at the desk, and
           Vacated when they leave.
-        </p>
+        </SectionHeader>
         {current.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+          <EmptyState compact title="Nobody in residence">
             Nobody is staying at this guest house right now.
-          </p>
+          </EmptyState>
         ) : (
           <StaysTable bookings={current} />
         )}
@@ -58,36 +53,24 @@ export function CaretakerConsole({
 
       {overdue.length > 0 && (
         <section>
-          <h2 className="mb-1 text-lg font-semibold">
-            Awaiting check-out{" "}
-            <Badge variant="destructive" className="align-middle">
-              {overdue.length}
-            </Badge>
-          </h2>
-          <p className="mb-3 text-sm text-muted-foreground">
+          <SectionHeader title="Awaiting check-out" count={overdue.length} tone="alert">
             Past their check-out time and never marked Vacated, so they are still holding their
             rooms. Close them off once the room is handed back.
-          </p>
+          </SectionHeader>
           <StaysTable bookings={overdue} showOverdue />
         </section>
       )}
 
       <section>
-        <h2 className="mb-1 text-lg font-semibold">
-          Upcoming stays{" "}
-          <Badge variant="secondary" className="align-middle">
-            {upcoming.length}
-          </Badge>
-        </h2>
-        <p className="mb-3 text-sm text-muted-foreground">
+        <SectionHeader title="Upcoming stays" count={upcoming.length}>
           Rooms are already held for these bookings. If a guest turns up before their booked
           time, use <span className="font-medium">Early check-in</span> — the arrival is
           recorded as early rather than pretending it was on time.
-        </p>
+        </SectionHeader>
         {upcoming.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+          <EmptyState compact title="No upcoming stays">
             No upcoming stays for this guest house.
-          </p>
+          </EmptyState>
         ) : (
           <StaysTable bookings={upcoming} />
         )}

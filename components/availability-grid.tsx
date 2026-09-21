@@ -119,7 +119,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
 
   if (guestHouses.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+      <p className="rounded-2xl border border-dashed border-border-strong bg-card/60 p-10 text-center text-muted-foreground">
         No guest houses have been set up yet.
       </p>
     );
@@ -246,11 +246,11 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           </div>
 
           {!range ? (
-            <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+            <p className="rounded-2xl border border-dashed border-border-strong bg-card/60 p-10 text-center text-muted-foreground">
               Pick a date to see room availability.
             </p>
           ) : rooms.length === 0 && !loading ? (
-            <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+            <p className="rounded-2xl border border-dashed border-border-strong bg-card/60 p-10 text-center text-muted-foreground">
               This guest house has no active rooms.
             </p>
           ) : (

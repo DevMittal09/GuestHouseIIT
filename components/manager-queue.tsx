@@ -7,6 +7,8 @@ import { approveCancellation, rejectCancellation, reviewBooking } from "@/app/ac
 import { RejectDialog } from "@/components/review-queue";
 import { BookingDetails } from "@/components/booking-details";
 import { CheckoutsToday } from "@/components/checkouts-today";
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/portal/section-header";
 import { RoomGrid } from "@/components/room-grid";
 import { StaysTable } from "@/components/stays-table";
 import { Badge } from "@/components/ui/badge";
@@ -80,13 +82,10 @@ export function ManagerQueue({
       {/* Cancellation Requests Section */}
       {cancellationRequests.length > 0 && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">
-            Cancellation requests{" "}
-            <Badge variant="destructive" className="align-middle">
-              {cancellationRequests.length}
-            </Badge>
-          </h2>
-          <div className="overflow-x-auto rounded-lg border border-orange-200 dark:border-orange-900">
+          <SectionHeader title="Cancellation requests" count={cancellationRequests.length} tone="warn">
+            Approving releases the rooms at once; declining restores the booking.
+          </SectionHeader>
+          <div className="overflow-x-auto rounded-2xl bg-card shadow-soft ring-1 ring-orange-200">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -111,18 +110,13 @@ export function ManagerQueue({
 
       {/* Incoming requests */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold">
-          Incoming requests{" "}
-          <Badge variant="secondary" className="align-middle">
-            {pending.length}
-          </Badge>
-        </h2>
+        <SectionHeader title="Incoming requests" count={pending.length} tone="alert">
+          Official requests are listed first. Allocating rooms approves the booking.
+        </SectionHeader>
         {pending.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
-            No requests waiting for allocation.
-          </p>
+          <EmptyState title="The queue is clear">No requests waiting for allocation.</EmptyState>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto rounded-2xl bg-card shadow-soft ring-1 ring-border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -158,20 +152,14 @@ export function ManagerQueue({
 
       {/* Current occupants — guests physically in the building now */}
       <section>
-        <h2 className="mb-1 text-lg font-semibold">
-          Current occupants{" "}
-          <Badge variant="secondary" className="align-middle">
-            {current.length}
-          </Badge>
-        </h2>
-        <p className="mb-3 text-sm text-muted-foreground">
+        <SectionHeader title="Current occupants" count={current.length}>
           Stays that have started and not yet reached their check-out time. Mark a guest as
           Occupied when they arrive at the desk, and Vacated when they leave.
-        </p>
+        </SectionHeader>
         {current.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+          <EmptyState compact title="Nobody in residence">
             Nobody is staying at this guest house right now.
-          </p>
+          </EmptyState>
         ) : (
           <StaysTable bookings={current} />
         )}
@@ -182,37 +170,25 @@ export function ManagerQueue({
           this split exists to remove. */}
       {overdue.length > 0 && (
         <section>
-          <h2 className="mb-1 text-lg font-semibold">
-            Awaiting check-out{" "}
-            <Badge variant="destructive" className="align-middle">
-              {overdue.length}
-            </Badge>
-          </h2>
-          <p className="mb-3 text-sm text-muted-foreground">
+          <SectionHeader title="Awaiting check-out" count={overdue.length} tone="alert">
             These stays are past their check-out time and were never marked Vacated, so they are
             still holding their rooms. Close them off to release the rooms.
-          </p>
+          </SectionHeader>
           <StaysTable bookings={overdue} showOverdue />
         </section>
       )}
 
       {/* Upcoming — allocated, not started */}
       <section>
-        <h2 className="mb-1 text-lg font-semibold">
-          Upcoming stays{" "}
-          <Badge variant="secondary" className="align-middle">
-            {upcoming.length}
-          </Badge>
-        </h2>
-        <p className="mb-3 text-sm text-muted-foreground">
+        <SectionHeader title="Upcoming stays" count={upcoming.length}>
           Rooms are already held for these bookings. A guest who arrives ahead of their booked
           time is checked in with <span className="font-medium">Early check-in</span>, which
           says so in the log.
-        </p>
+        </SectionHeader>
         {upcoming.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+          <EmptyState compact title="No upcoming stays">
             No upcoming stays for this guest house.
-          </p>
+          </EmptyState>
         ) : (
           <StaysTable bookings={upcoming} />
         )}
@@ -237,7 +213,7 @@ function ManagerRow({
   // for dates in the past; moving the dates or rejecting are the ways out.
   const lapsed = lapsedError(booking);
   return (
-    <TableRow className={booking.user_role === "official" ? "bg-amber-50/60 dark:bg-amber-950/20" : undefined}>
+    <TableRow className={booking.user_role === "official" ? "bg-saffron-soft/60 hover:bg-saffron-soft" : undefined}>
       <TableCell className="font-mono text-xs">
         {booking.booking_reference_id}
         {lapsed && (
@@ -247,7 +223,7 @@ function ManagerRow({
         )}
       </TableCell>
       <TableCell>
-        <span className="font-medium">{booking.requester.full_name}</span>
+        <span className="font-semibold text-foreground">{booking.requester.full_name}</span>
         <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>
       </TableCell>
       <TableCell>
@@ -382,7 +358,7 @@ function CancellationRow({ booking }: { booking: BookingWithDetails }) {
     });
 
   return (
-    <TableRow className="bg-orange-50/40 dark:bg-orange-950/10">
+    <TableRow className="bg-orange-50/40">
       <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
       <TableCell>
         <span className="font-medium">{booking.requester.full_name}</span>
@@ -410,11 +386,11 @@ function CancellationRow({ booking }: { booking: BookingWithDetails }) {
                 </DialogHeader>
                 <BookingDetails booking={booking} showAlumniCard />
                 {booking.rejection_reason && (
-                  <div className="rounded-md border border-orange-300 bg-orange-50 p-3 text-sm dark:border-orange-900 dark:bg-orange-950">
-                    <p className="font-medium text-orange-900 dark:text-orange-200">
+                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm">
+                    <p className="font-semibold text-orange-900">
                       Cancellation reason
                     </p>
-                    <p className="text-orange-800 dark:text-orange-300">
+                    <p className="text-orange-800">
                       {booking.rejection_reason}
                     </p>
                   </div>
@@ -439,7 +415,7 @@ function CancellationRow({ booking }: { booking: BookingWithDetails }) {
             </Button>
           </div>
           {showRejectForm && (
-            <div className="w-full max-w-xs space-y-2 rounded-md border p-2 text-left">
+            <div className="w-full max-w-xs space-y-2 rounded-xl border bg-card p-3 text-left shadow-soft">
               <Label htmlFor="cancel-reject-reason" className="text-xs">
                 Why are you rejecting this cancellation?
               </Label>
@@ -449,7 +425,7 @@ function CancellationRow({ booking }: { booking: BookingWithDetails }) {
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="Reason…"
-                className="w-full rounded-md border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="w-full rounded-lg border border-input bg-white px-2.5 py-1.5 text-xs outline-none focus-visible:border-vermilion focus-visible:ring-4 focus-visible:ring-ring/15"
               />
               <Button
                 size="sm"

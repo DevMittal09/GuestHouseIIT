@@ -7,23 +7,28 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-heading: var(--font-source-serif), Georgia, serif;
-  --color-navy: var(--navy);
-  --color-navy-dark: var(--navy-dark);
-  --color-navy-hover: var(--navy-hover);
-  --color-gold: var(--gold);
-  --color-gold-hover: var(--gold-hover);
-  --color-gold-dark: var(--gold-dark);
-  --color-gold-darkest: var(--gold-darkest);
-  --color-body: var(--body-text);
+
+  /* Brand — see the palette comment on :root. */
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-line: var(--ink-line);
+  --color-ink-muted: var(--ink-muted);
+  --color-vermilion: var(--vermilion);
+  --color-vermilion-deep: var(--vermilion-deep);
+  --color-vermilion-hover: var(--vermilion-hover);
+  --color-vermilion-soft: var(--vermilion-soft);
+  --color-saffron: var(--saffron);
+  --color-saffron-soft: var(--saffron-soft);
+  --color-paper: var(--paper);
   --color-band: var(--band);
+  --color-body: var(--body-text);
   --color-notice: var(--notice);
   --color-notice-border: var(--notice-border);
   --color-border-strong: var(--border-strong);
-  --color-footer-text: var(--footer-text);
-  --color-footer-muted: var(--footer-muted);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -62,135 +67,269 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Elevation and motion — `shadow-soft`, `shadow-lift`, `animate-rise`. */
+@theme {
+  --shadow-soft: 0 1px 2px rgb(28 25 23 / 0.04), 0 2px 10px -2px rgb(28 25 23 / 0.06);
+  --shadow-lift: 0 2px 6px rgb(28 25 23 / 0.05), 0 24px 48px -16px rgb(28 25 23 / 0.22);
+  --shadow-glow: 0 10px 30px -10px rgb(199 62 29 / 0.55);
+
+  --animate-rise: rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-drift: drift 24s ease-in-out infinite alternate;
+}
+
+/* Top level rather than inside @theme, so `.reveal` can use them too. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes drift {
+  from {
+    transform: scale(1.02);
+  }
+  to {
+    transform: scale(1.09) translate3d(-1%, -1%, 0);
+  }
+}
+
 /*
- * Palette from the guest house design handoff (design_handoff/README.md),
- * which sits the portal visually alongside iitpkd.ac.in: navy #12284C for
- * structure and primary actions, gold #E8A317 for accents, focus rings and the
- * public call to action, body text #41506A, borders #E1E5EC. Corners are
- * near-square (3px) and nothing carries a shadow.
+ * Palette from iitpkd.ac.in itself (its theme CSS, read September 2026) and
+ * the institute emblem:
  *
- * This replaced the amber-on-off-white palette copied from
- * dashboard.iitpkd.ac.in. Primary buttons are now white on navy (12.9:1),
- * which also retires the white-on-amber contrast failure on the roadmap.
- * Gold is never used behind white text — gold buttons carry navy text.
+ *   vermilion #E94C26 — the site's accent: links, active menu, buttons, rules
+ *   ink       #1A1A1A — its top bar and footer
+ *   saffron   #F5A300 — the emblem and the wordmark
+ *
+ * Warm paper and sand neutrals sit under them, so the portal reads as the
+ * institute's own rather than a generic dashboard.
+ *
+ * Contrast rules — keep them:
+ * - White text goes on `vermilion-deep` (#C73E1D, 5.1:1), never on the bright
+ *   #E94C26 (3.8:1), which is for icons, rules and large display type only.
+ * - Saffron carries ink text (8.4:1) and is a highlight on ink backgrounds.
+ *   Never white on saffron.
+ * - `--muted-foreground` #6B645E holds 5:1 even on the sand band.
+ *
+ * `--primary` is ink, not vermilion: the portal's tables put Approve beside a
+ * red Reject, and a vermilion primary read as a second red. Vermilion is the
+ * brand call to action (`Button variant="brand"`), the focus ring and the
+ * active state.
  */
 :root {
-  /* Brand tokens, exposed as `bg-navy`, `text-gold-dark`, `bg-band`, … */
-  --navy: #12284c;
-  --navy-dark: #0c1d38;
-  --navy-hover: #1b3765;
-  --gold: #e8a317;
-  --gold-hover: #d2910c;
-  --gold-dark: #b8790c;
-  --gold-darkest: #8a5b08;
-  --body-text: #41506a;
-  --band: #f1f3f6;
-  --notice: #fdf7e8;
-  --notice-border: #e8d5a6;
-  --border-strong: #c9d0db;
-  --footer-text: #c6cfdd;
-  --footer-muted: #9daabd;
+  --ink: #1a1a1a;
+  --ink-soft: #262320;
+  --ink-line: rgb(255 255 255 / 0.1);
+  --ink-muted: #a8a29e;
+  --vermilion: #e94c26;
+  --vermilion-deep: #c73e1d;
+  --vermilion-hover: #a93318;
+  --vermilion-soft: #fdf0eb;
+  --saffron: #f5a300;
+  --saffron-soft: #fff5e0;
+  --paper: #faf8f5;
+  --band: #f4f0ea;
+  --body-text: #57534e;
+  --notice: #fff8ea;
+  --notice-border: #f3d9a4;
+  --border-strong: #d6cec2;
 
   --background: #ffffff;
-  --foreground: #12284c;
+  --foreground: #1c1917;
   --card: #ffffff;
-  --card-foreground: #12284c;
+  --card-foreground: #1c1917;
   --popover: #ffffff;
-  --popover-foreground: #12284c;
-  --primary: #12284c;
+  --popover-foreground: #1c1917;
+  --primary: #1c1917;
   --primary-foreground: #ffffff;
-  --secondary: #f1f3f6;
-  --secondary-foreground: #12284c;
-  --muted: #f1f3f6;
-  --muted-foreground: #5a6880;
-  --accent: #fdf7e8;
-  --accent-foreground: #12284c;
+  --secondary: #f4f0ea;
+  --secondary-foreground: #1c1917;
+  --muted: #f5f2ee;
+  --muted-foreground: #6b645e;
+  --accent: #fdf0eb;
+  --accent-foreground: #8f2d14;
   --destructive: #dc2626;
-  --border: #e1e5ec;
-  --input: #c9d0db;
-  --ring: #e8a317;
-  --chart-1: #12284c;
-  --chart-2: #e8a317;
-  --chart-3: #06b6d4;
-  --chart-4: #22c55e;
-  --chart-5: #ef4444;
-  --radius: 0.1875rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #12284c;
-  --sidebar-primary: #12284c;
+  --border: #e8e2d9;
+  --input: #d9d1c5;
+  --ring: #e94c26;
+  --chart-1: #c73e1d;
+  --chart-2: #f5a300;
+  --chart-3: #0e7490;
+  --chart-4: #15803d;
+  --chart-5: #1c1917;
+  --radius: 0.75rem;
+  --sidebar: #1a1a1a;
+  --sidebar-foreground: #f5f5f4;
+  --sidebar-primary: #e94c26;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #fdf7e8;
-  --sidebar-accent-foreground: #12284c;
-  --sidebar-border: #e1e5ec;
-  --sidebar-ring: #e8a317;
+  --sidebar-accent: rgb(255 255 255 / 0.08);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.1);
+  --sidebar-ring: #e94c26;
 }
 
 /* Not currently switched on anywhere (no theme provider), kept coherent. */
 .dark {
-  --body-text: #c6cfdd;
-  --band: #111f36;
+  --paper: #121110;
+  --band: #1c1a18;
+  --body-text: #d6d3d1;
   --notice: #2a2210;
   --notice-border: #5c4718;
-  --border-strong: rgba(255, 255, 255, 0.2);
+  --border-strong: rgb(255 255 255 / 0.2);
 
-  --background: #0b1628;
-  --foreground: #e6ebf3;
-  --card: #111f36;
-  --card-foreground: #e6ebf3;
-  --popover: #111f36;
-  --popover-foreground: #e6ebf3;
-  --primary: #e8a317;
-  --primary-foreground: #12284c;
-  --secondary: #16263f;
-  --secondary-foreground: #e6ebf3;
-  --muted: #16263f;
-  --muted-foreground: #9daabd;
-  --accent: #1b3765;
-  --accent-foreground: #f3c766;
+  --background: #121110;
+  --foreground: #f5f5f4;
+  --card: #1c1a18;
+  --card-foreground: #f5f5f4;
+  --popover: #1c1a18;
+  --popover-foreground: #f5f5f4;
+  --primary: #f5f5f4;
+  --primary-foreground: #1c1917;
+  --secondary: #262320;
+  --secondary-foreground: #f5f5f4;
+  --muted: #262320;
+  --muted-foreground: #a8a29e;
+  --accent: #3a1d14;
+  --accent-foreground: #fdba9f;
   --destructive: #f87171;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.18);
-  --ring: #e8a317;
-  --chart-1: #9db7e6;
-  --chart-2: #f3c766;
-  --chart-3: #22d3ee;
-  --chart-4: #4ade80;
-  --chart-5: #f87171;
-  --sidebar: #111f36;
-  --sidebar-foreground: #e6ebf3;
-  --sidebar-primary: #e8a317;
-  --sidebar-primary-foreground: #12284c;
-  --sidebar-accent: #1b3765;
-  --sidebar-accent-foreground: #f3c766;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #e8a317;
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.18);
+  --ring: #e94c26;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
   h1,
   h2,
   h3,
   h4 {
-    @apply font-heading;
-    text-wrap: pretty;
+    @apply font-heading tracking-[-0.01em];
+    text-wrap: balance;
+  }
+  ::selection {
+    background: rgb(233 76 38 / 0.18);
+  }
+  /* Native checkboxes and radios pick up the brand without restyling each. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--vermilion-deep);
   }
   /*
-   * A visible gold focus ring on plain links and summaries. shadcn controls
-   * draw their own ring from `--ring`, which is the same gold.
+   * A visible vermilion focus ring on plain links and summaries. shadcn
+   * controls draw their own ring from `--ring`, which is the same colour.
    */
   a:focus-visible,
   summary:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* Native <select> with a drawn chevron — see components/ui/native-select.tsx. */
+  .select-chevron {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b645e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.7rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem;
+    padding-right: 2.25rem;
+  }
+
+  /*
+   * Numbered step badges on a form's section cards (the booking form). CSS
+   * counters, so a section the role's form config hides simply takes no
+   * number instead of leaving a gap.
+   *
+   * The count is kept on the card, not the title: `CardHeader` is a CSS
+   * container, and container queries imply style containment, which scopes
+   * any `counter-increment` inside the header to that header — every title
+   * read "01". Reading the counter from inside is not affected. A card with
+   * no title (a notice) takes no number.
+   */
+  .form-steps {
+    counter-reset: form-step;
+  }
+  .form-steps [data-slot="card"]:has([data-slot="card-title"]) {
+    counter-increment: form-step;
+  }
+  .form-steps [data-slot="card-title"]::before {
+    content: counter(form-step, decimal-leading-zero);
+    display: inline-grid;
+    place-items: center;
+    min-width: 2rem;
+    height: 1.5rem;
+    margin-right: 0.65rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: var(--vermilion-soft);
+    color: var(--vermilion-deep);
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    vertical-align: 0.15em;
+  }
+
+  /* The emblem's interlaced rings as a faint watermark on dark panels. */
+  .emblem-watermark {
+    background-image: url("/iitpkd-logo.png");
+    background-repeat: no-repeat;
+    background-size: contain;
+    opacity: 0.07;
+    pointer-events: none;
+  }
+
+  /* Fine grain over photographs and ink panels, so flat fills do not band. */
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.06;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.8'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+  }
+}
+
+/*
+ * Sections rise into place as they scroll into view — CSS scroll-driven
+ * animations, no JavaScript. Browsers without `animation-timeline` simply show
+ * the content, and reduced-motion turns it off below.
+ */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: rise linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 35%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

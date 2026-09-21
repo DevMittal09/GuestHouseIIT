@@ -17,7 +17,7 @@ export function Switch({ className, ...props }: Omit<React.ComponentProps<"input
       />
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-full bg-input transition-colors peer-checked:bg-primary peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 peer-disabled:opacity-50"
+        className="pointer-events-none absolute inset-0 rounded-full bg-input transition-colors peer-checked:bg-vermilion-deep peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 peer-disabled:opacity-50"
       />
       <span
         aria-hidden
