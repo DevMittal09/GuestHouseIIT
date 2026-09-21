@@ -43,6 +43,9 @@ next-env.d.ts
 
 # local mock data layer
 .local-db.json
+# Snapshots taken before clearing the mock database. They hold whatever guest
+# details were typed in while testing, so they never go near the repository.
+.local-db.backup-*.json
 /public/uploads/
 
 # mail written to disk by the FileMailer when no SMTP credentials are set

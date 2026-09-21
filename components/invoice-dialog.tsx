@@ -100,18 +100,22 @@ export function InvoiceDialog({ booking }: { booking: BookingWithDetails }) {
           </div>
         )}
 
-        {/* A total the desk cannot rely on has to say so where the desk is
-            looking, not only in the small print at the bottom. */}
-        {invoice.unpriced && (
-          <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
-            No room tariff is on record for {invoice.unpriced}. The room lines are zero — price
-            them by hand before giving this to the guest.
-          </p>
-        )}
-        {invoice.provisional && !invoice.unpriced && (
-          <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-            Some rates on this invoice are provisional — see the note below.
-          </p>
+        {/* Anything the tariff sheet leaves for the desk to decide belongs
+            where the desk is looking, not in the small print. */}
+        {invoice.openCharges.length > 0 && (
+          <div
+            className={
+              invoice.unpriced
+                ? "rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100"
+                : "rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100"
+            }
+          >
+            <ul className="list-disc space-y-0.5 pl-4">
+              {invoice.openCharges.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <p className="text-xs text-muted-foreground">{invoice.note}</p>
