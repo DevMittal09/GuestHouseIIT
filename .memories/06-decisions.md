@@ -1204,7 +1204,7 @@ too. It goes through `reviewersOfRequester` (split out of
 warden from the academic record's hostel. When the two disagree, the card would
 name a warden who never sees the request.
 
-### Displayed, not mailed
+### Displayed, not mailed (superseded 21 Sep 2026 — Copy to is now CC; see Phase 2 below)
 
 Per-submission mail to the warden or FA would reverse the "one digest, not one
 mail per request" decision above. Mailing the office's HOD is new behaviour
@@ -1316,3 +1316,39 @@ The brief requires `npm test` to be clean after every phase, so Vitest went in
 with the first phase instead of Phase 9. Store tests point the mock store at a
 throwaway file through `MOCK_DB_PATH` and never touch `.local-db.json`; the
 suite runs with `TZ=UTC` so a zone bug shows up.
+
+## Phase 2: To is the actioner, Copy to is CC (21 Sep 2026)
+
+**Owner's decision:** "Copy to" means CC, and the To line is the one person who
+must act next. It supersedes "Displayed, not mailed" above.
+
+- **To** = `reviewersForStatus(booking, status)` — `canReview()` for the stage
+  the booking is in — or the desk for a desk record. When the booking moves
+  on, the next mail's To moves with it.
+- **CC** = the Copy-to list, one rule in `lib/academic/copy-to.ts` shared by the
+  form's card: every approver of **every stage of the chain**
+  (`approvalStagesFor`, new in `lib/workflow.ts`), plus an office's head. The
+  chain rather than the current stage, so the warden who forwarded a request
+  is still copied when it is allocated or cancelled. Anyone already in To is
+  removed; both lines are de-duplicated ignoring case (`addressStaffMail`).
+- **Assumed:** Copy to now has an approver rule for **employees** (their HOD on
+  an official booking; nobody on a personal one) and for the **IAR Student
+  Cell** (the IAR Office), which previously had none — the brief says CC follows
+  the routing, and those are the routed approvers. An office's head comes from
+  the Departments & Clubs console first (the office unit's head, or the unit
+  above it) and the academic record only as a fallback, because the console
+  is where the office maintains it.
+- **The reviewers' separate "Cancellation requested — for your information"
+  mail is retired** — they are CC on the manager's mail, which says the same
+  thing to the same people in one message. Kept in `MailEventKey` for old outbox
+  rows, hidden from the template editor (`RETIRED_MAIL_EVENTS`).
+- **No migration.** The brief asked for `cc` in `email_outbox` in a new
+  migration, but `cc_emails text[]` has existed since migration 10 and every
+  transport already sent CC; adding a second column would have split one fact
+  in two.
+- **Redirect:** `X-Original-To` keeps the original To and `X-Original-Cc` the
+  original CC (two headers, rather than folding CC into `X-Original-To`, so a
+  filter can still tell who was asked to act); the banner names both, and CC is
+  emptied.
+- **Threads:** unchanged — one message per To address, CC on the first message
+  only, so a CC recipient receives it once and joins that To's daily thread.

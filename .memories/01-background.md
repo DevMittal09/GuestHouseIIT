@@ -130,7 +130,7 @@ database and written instructions for doing so.
 | --- | --- | --- |
 | Show each kind of account's listed fields at the top of New Booking | **Done** (dummy data) | `lib/academic/`, `components/academic-details.tsx`; field list and role mapping in [12-academic-records.md](12-academic-records.md) §1 |
 | Guardian's name only when father's and mother's are empty | **Done** | `parentRows` in `lib/academic/fields.ts` |
-| Copy to: the approver (students, student reps), the HOD (offices) | **Done** — displayed, not mailed | `lib/academic/details.ts`; approvers through `canReview()`. Whether the HOD should get mail, or approve, is open — [12-academic-records.md](12-academic-records.md) §5 |
+| Copy to: the approver (students, student reps), the HOD (offices) | **Done** — shown on the form and **CC on every staff mail** (Phase 2: To = the actioner, Copy to = CC) | `lib/academic/copy-to.ts`, `lib/mail/addressing.ts`; approvers through `canReview()`. HOD *approval* is Phase 4 |
 | Wardens' fields | **Done** | Wardens never open New Booking, so the card is on `/warden`, below the queue |
 | Provision for the real database, and how-to | **Done** | `ACADEMIC_DB_URL` / `ACADEMIC_DB_TOKEN` → `HttpAcademicSource`; [12-academic-records.md](12-academic-records.md) §4 |
 

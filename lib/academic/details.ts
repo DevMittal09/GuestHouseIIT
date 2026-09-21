@@ -1,6 +1,5 @@
-import { reviewersOfRequester } from "@/lib/mail/recipients";
-import { ROLE_LABELS, type Profile, type Role } from "@/lib/types";
-import { initialStatusFor, REVIEWER_STAGE } from "@/lib/workflow";
+import type { Profile } from "@/lib/types";
+import { copyToFor as copyToRecipients, formRouteFor, type CopyToEntry } from "./copy-to";
 import {
   academicRecordKindFor,
   academicRecordRows,
@@ -9,9 +8,9 @@ import {
   type DetailRow,
 } from "./fields";
 import { academicRecordFor, isMockAcademicSource, type AcademicLookup } from "./index";
-import type { AcademicRecord, AcademicRecordKind } from "./types";
+import type { AcademicRecordKind } from "./types";
 
-export type CopyToEntry = { name: string | null; email: string | null };
+export type { CopyToEntry };
 
 export type CopyTo = {
   entries: CopyToEntry[];
@@ -39,46 +38,23 @@ export async function academicDetailsFor(profile: Profile): Promise<AcademicDeta
     kind,
     status: lookup.status,
     rows: record ? academicRecordRows(record) : profileRows(profile),
-    copyTo: kind ? await copyToFor(profile, kind, record) : null,
+    copyTo: kind ? await copyToFor(profile, kind) : null,
     sample: record !== null && isMockAcademicSource(),
   };
 }
 
 async function copyToFor(
   profile: Profile,
-  kind: AcademicRecordKind,
-  record: AcademicRecord | null
+  kind: AcademicRecordKind
 ): Promise<CopyTo | null> {
-  const rule = COPY_TO_RULE[kind];
-  if (rule === "head_of_department") {
-    const head =
-      record?.kind === "office" && (record.head_name || record.head_email)
-        ? [{ name: record.head_name, email: record.head_email }]
-        : [];
-    return { entries: head, emptyNote: "Not on record" };
-  }
-  if (rule === "approver") {
-    // Whoever approves the request on the portal, found the way the request
-    // itself is routed — so the card cannot name someone the request will
-    // never reach. It follows the portal profile, not the academic record.
-    const status = initialStatusFor(profile.role);
-    const approverRole = (Object.keys(REVIEWER_STAGE) as Role[]).find(
-      (role) => REVIEWER_STAGE[role] === status
-    );
-    const scope =
-      approverRole === "warden"
-        ? (profile.hostel_name ?? "your hostel")
-        : (profile.department_or_club ?? "you");
-    try {
-      const approvers = await reviewersOfRequester(profile, status);
-      return {
-        entries: approvers.map((p) => ({ name: p.full_name, email: p.email })),
-        emptyNote: `No ${approverRole ? ROLE_LABELS[approverRole] : "approver"} is set up on the portal for ${scope} yet.`,
-      };
-    } catch (e) {
-      console.error("[academic] copy-to lookup failed:", e instanceof Error ? e.message : e);
-      return { entries: [], emptyNote: "Could not be looked up right now." };
-    }
-  }
-  return null;
+  if (COPY_TO_RULE[kind].length === 0) return null;
+  // The same rule the staff mail uses for CC (`lib/academic/copy-to.ts`), for
+  // the request as the form opens — the role's default booking type.
+  const { entries, failed } = await copyToRecipients(profile, formRouteFor(profile));
+  return {
+    entries,
+    emptyNote: failed
+      ? "Could not be looked up right now."
+      : "Nobody — this request goes straight to the Guest House Manager, or nobody is set up to approve it yet.",
+  };
 }

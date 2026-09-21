@@ -57,9 +57,15 @@ compile until someone decides its kind.
            │          ACADEMIC_DB_URL set → HttpAcademicSource   (lib/academic/http-source.ts)
            │          otherwise           → MockAcademicSource   (lib/academic/mock-source.ts)
            ├─ rows: academicRecordRows(record)  or  profileRows(profile)   (lib/academic/fields.ts)
-           └─ copyTo: COPY_TO_RULE[kind]
-                "approver"           → reviewersOfRequester(user, initialStatusFor(role))  (lib/mail/recipients.ts → canReview)
-                "head_of_department" → record.head_name / head_email
+           └─ copyTo: copyToFor(user, formRouteFor(user))       lib/academic/copy-to.ts
+                COPY_TO_RULE[kind] is a list:
+                "approver"           → every profile canReview() lets act on ANY stage of
+                                       the request's chain (approvalStagesFor, lib/workflow.ts)
+                "head_of_department" → the office unit's head in Departments & Clubs
+                                       (or the unit above it), else record.head_name / head_email
+
+Staff mail about a booking: CC = copyToFor(booking.requester, booking)   (lib/mail/recipients.ts
+copyToAddresses → lib/mail/addressing.ts addressStaffMail removes anyone in To)
 ```
 
 The same seam as `getStore()`, `getMailer()` and `getDirectory()`: **one
@@ -88,15 +94,21 @@ Rules worth keeping:
 - **Copy-to approvers come from `canReview()` on the portal profile, never
   from the academic record.** The card must name the person the request will
   actually reach. The warden and the FA are found by the same rule that routes
-  the request and that mail uses (`reviewersOfRequester`, split out of
-  `reviewersForStatus`). So if the academic record says hostel X but the
+  the request and that mail uses (`copyToFor` in `lib/academic/copy-to.ts`,
+  over `approvalStagesFor` + `canReview`). So if the academic record says hostel X but the
   profile says Y, the card shows X under Hostel, and the Y warden under
   Copy to, because the Y warden is who approves. If nobody is set up to
   approve, the card says so ("No Assistant Warden is set up on the portal for
   Brindavani yet").
-- **Copy to is displayed only.** Nothing extra is mailed. The warden and the
-  FA already get the request through their queue and daily digest. **The
-  office's HOD is not mailed at all.** See §5.
+- **Copy to is CC (Phase 2, owner's decision).** The same list the card shows
+  is CC on every staff mail about the booking — submission, forwarding,
+  allocation, cancellation — while **To is whoever must act next**. Anyone in
+  To is removed from CC, and addresses are de-duplicated. The card uses the
+  role's default booking type; the mail uses the booking's own, so an
+  employee's *personal* booking copies nobody. Rules by kind: student,
+  student rep, employee and alumni office → the approvers of the chain;
+  office → the approvers (if its route has any) plus its head. Requester mail
+  carries no CC, and the record itself is still never mailed.
 - **The card is outside the `<form>`** on `/book`. It is read-only and
   submits nothing, and nothing from the record is stored on the booking.
 - **Personal data.** The student record holds parents' names and a phone
@@ -256,17 +268,10 @@ This is what was done on 21 Sep 2026, and it is quick to repeat:
 
 ## 5. Not built (deliberately), and what to do next
 
-- **Copy to is not mailed.** The office's list says "Copy to", and the card
-  shows it. The warden and FA already receive the request as approvers, through
-  their queue and the daily digest. Mailing them on every submission would undo
-  the "one digest, not one mail per request" decision
-  ([06-decisions.md](06-decisions.md), email). **The office's HOD receives
-  nothing today.** If the office wants the HOD to actually get a copy, add a
-  `notify*()` on submission in `lib/mail/notify.ts`, re-deriving the head from
-  `academicRecordFor` at send time. Also decide whether that makes the HOD an
-  approver: the 15 Sep notes ask for an office booking type "that requires
-  approval from a body (HODs like that)", which would be a new pipeline stage,
-  not a copy.
+- ~~Copy to is not mailed~~ — **built in Phase 2**: Copy to is CC on staff
+  mail (§2). An office's head is CC'd on every staff mail about its bookings;
+  whether the head also *approves* is the office's per-booking choice
+  ("Requires HOD approval", Phase 4).
 - **Nothing from the record is stored on the booking.** Reviewers do not see
   the requester's phone or parents. If they need to, snapshot the rows onto
   the booking at submission (as `custom_fields` snapshots its labels), so a

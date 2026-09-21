@@ -42,22 +42,30 @@ export const ACADEMIC_KIND_LABELS: Record<AcademicRecordKind, string> = {
 };
 
 /**
- * Who a request is copied to, by kind of account.
+ * Who a request is copied to, by kind of account. Since Phase 2 "Copy to" is
+ * **CC on every staff mail about the booking** (`lib/academic/copy-to.ts`,
+ * `lib/mail/addressing.ts`), not just a line on the form.
  *
- * - `approver`: whoever approves it on the portal — found through `canReview()`
- *   on the requester's profile, the same rule that routes the request.
- * - `head_of_department`: the head named on the office's own record. Not a
- *   portal approver; offices go straight to the Guest House Manager.
+ * - `approver`: everyone who approves any stage of the request's chain on the
+ *   portal — found through `canReview()` on the requester's profile, the same
+ *   rule that routes the request. A student's warden, a club's advisor or
+ *   council secretary, a faculty member's HOD on an official booking, the IAR
+ *   Office for the Student Cell.
+ * - `head_of_department`: the head of an office — the Departments & Clubs
+ *   console first (the office's unit, or the unit above it), else the head
+ *   named on the office's academic record.
  */
 export type CopyToRule = "approver" | "head_of_department";
 
-export const COPY_TO_RULE: Record<AcademicRecordKind, CopyToRule | null> = {
-  student: "approver",
-  employee: null,
-  office: "head_of_department",
-  student_rep: "approver",
-  alumni_office: null,
-  warden: null,
+export const COPY_TO_RULE: Record<AcademicRecordKind, CopyToRule[]> = {
+  student: ["approver"],
+  // Only official bookings have an approver (the HOD); a personal one is
+  // copied to nobody.
+  employee: ["approver"],
+  office: ["approver", "head_of_department"],
+  student_rep: ["approver"],
+  alumni_office: ["approver"],
+  warden: [],
 };
 
 export type DetailRow = { label: string; value: string | null };

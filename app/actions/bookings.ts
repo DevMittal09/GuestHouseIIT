@@ -626,7 +626,7 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
     );
     // The manager decides; whoever was reviewing it is told at the same
     // moment, for information only — see `notifyCancellationRequested`.
-    await notifyCancellationRequested(bookingId, reason.trim(), stageWhenAsked);
+    await notifyCancellationRequested(bookingId, reason.trim());
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {

@@ -2,8 +2,10 @@ import { getStore } from "@/lib/store";
 import type { BookingStatus, BookingWithDetails, Profile } from "@/lib/types";
 import { mailConfig, portalUrl } from "./config";
 import { dispatchOutbox } from "./dispatch";
+import { addressStaffMail } from "./addressing";
 import {
   addressesOf,
+  copyToAddresses,
   deskRecipients,
   managerRecipients,
   requesterRecipient,
@@ -113,13 +115,11 @@ function buildInputs(
   const edit = overrides.get(params.eventKey) ?? defaultOverride(params.eventKey);
   if (!edit.enabled) return [];
 
-  const to = [...new Set(params.to.filter(Boolean))];
+  // To is whoever must act; CC is the Copy-to list plus any address the
+  // office added to this template. Anyone in To is dropped from CC, and both
+  // are de-duplicated ignoring case — see `lib/mail/addressing.ts`.
+  const { to, cc } = addressStaffMail(params.to, [...(params.cc ?? []), ...edit.cc]);
   if (to.length === 0) return [];
-  const cc = [
-    ...new Set(
-      [...(params.cc ?? []), ...edit.cc].filter((address) => address && !to.includes(address))
-    ),
-  ];
   // A custom subject replaces the built-in one wholesale, tokens and all —
   // including the "[IITPKD-GH-…]" prefix, because an office that wants its
   // own subject usually wants the whole line.
@@ -177,7 +177,9 @@ function buildInputs(
   const day = toInstituteDateValue(new Date());
   const subject = dailyThreadSubject(thread, day);
   // Anyone copied is copied once, on the first recipient's message, not on
-  // every one of them.
+  // every one of them — and so joins that recipient's thread: the message
+  // carries its References, and every later message about the day's
+  // approvals to the same To carries the same root.
   return to.map((address, i) =>
     input([address], i === 0 ? cc : [], dailyThreadRoot(thread, day, address), subject)
   );
@@ -231,6 +233,7 @@ export async function notifyBookingSubmitted(bookingId: string): Promise<void> {
     if (!booking) return;
     const requester = requesterRecipient(booking);
     const reviewers = await reviewersForStatus(booking, booking.status);
+    const copyTo = await copyToAddresses(booking);
     const stamp = booking.created_at;
 
     await queueMessages([
@@ -247,6 +250,7 @@ export async function notifyBookingSubmitted(bookingId: string): Promise<void> {
             eventKey: "booking.submitted.reviewer",
             booking,
             to: addressesOf(reviewers),
+            cc: copyTo,
             subjectText: "New request awaiting your review",
             doc: t.awaitingReview(booking, reviewers[0]),
             stamp,
@@ -269,7 +273,10 @@ export async function notifyTierApproved(
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const requester = requesterRecipient(booking);
+    // To moves with the booking: whoever `canReview()` lets act on the stage
+    // it has just entered. The approver who forwarded it stays in CC.
     const nextReviewers = await reviewersForStatus(booking, booking.status);
+    const copyTo = await copyToAddresses(booking);
     const stamp = booking.updated_at;
 
     await queueMessages([
@@ -286,6 +293,7 @@ export async function notifyTierApproved(
             eventKey: "booking.pending.reviewer",
             booking,
             to: addressesOf(nextReviewers),
+            cc: copyTo,
             subjectText: "Forwarded for your review",
             doc: t.awaitingReview(booking, nextReviewers[0], {
               forwardedBy: approver.full_name,
@@ -332,6 +340,7 @@ export async function notifyRoomsAllocated(bookingId: string, manager: Profile):
     if (!booking) return;
     const requester = requesterRecipient(booking);
     const desk = await deskRecipients();
+    const copyTo = await copyToAddresses(booking);
     const stamp = booking.updated_at;
 
     await queueMessages([
@@ -348,6 +357,7 @@ export async function notifyRoomsAllocated(bookingId: string, manager: Profile):
             eventKey: "booking.allocated.desk",
             booking,
             to: addressesOf(desk),
+            cc: copyTo,
             subjectText: "Allocation recorded",
             doc: t.allocatedToDesk(booking, manager.full_name),
             stamp,
@@ -357,55 +367,36 @@ export async function notifyRoomsAllocated(bookingId: string, manager: Profile):
   });
 }
 
-/** A requester asked to cancel an approved stay: only the manager can decide. */
 /**
  * Someone has asked to cancel.
  *
- * Two audiences, two different things to say. The **manager** has to decide,
- * whatever stage the booking had reached. Whoever **reviewed** it — the
- * Assistant Warden, the advisor, the IAR Office — is told at the same moment,
- * because they signed it off and would otherwise find out never; but they are
- * told, not asked. Routing a cancellation through the review chain again
- * would leave a guest waiting on two approvals to undo one booking.
+ * Only the **manager** decides, whatever stage the booking had reached, so the
+ * manager is To. Whoever **reviewed** it — the Assistant Warden, the advisor,
+ * the HOD, the IAR Office — is on the Copy-to list and so in CC: told at the
+ * same moment, because they signed it off and would otherwise never find out,
+ * but not asked. Routing a cancellation through the review chain again would
+ * leave a guest waiting on two approvals to undo one booking.
  *
- * `reviewedBy` is the stage the booking was at when the cancellation was
- * raised, which is who to inform. On a booking already approved there is no
- * pending stage, so the reviewers of the stage it passed through are used.
+ * Until Phase 2 the reviewers got a separate "for your information" mail
+ * (`booking.cancellation_requested.reviewer`); CC replaced it, so the key is
+ * kept only so old outbox rows still have a label.
  */
-export async function notifyCancellationRequested(
-  bookingId: string,
-  reason: string,
-  reviewedStatus?: BookingStatus
-): Promise<void> {
+export async function notifyCancellationRequested(bookingId: string, reason: string): Promise<void> {
   await safely("booking.cancellation_requested", async () => {
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const managers = await managerRecipients();
-    const reviewers = reviewedStatus
-      ? await reviewersForStatus(booking, reviewedStatus)
-      : [];
-    const managerAddresses = addressesOf(managers);
-    // A manager who is also the reviewer gets the decision mail, not both.
-    const informOnly = addressesOf(reviewers).filter((a) => !managerAddresses.includes(a));
+    const copyTo = await copyToAddresses(booking);
 
     await queueMessages([
       managers.length > 0
         ? {
             eventKey: "booking.cancellation_requested.manager",
             booking,
-            to: managerAddresses,
+            to: addressesOf(managers),
+            cc: copyTo,
             subjectText: "Cancellation requested",
             doc: t.cancellationRequestedToManager(booking, reason),
-            stamp: booking.updated_at,
-          }
-        : null,
-      informOnly.length > 0
-        ? {
-            eventKey: "booking.cancellation_requested.reviewer",
-            booking,
-            to: informOnly,
-            subjectText: "Cancellation requested — for your information",
-            doc: t.cancellationRequestedToReviewer(booking, reason),
             stamp: booking.updated_at,
           }
         : null,
@@ -455,6 +446,7 @@ export async function notifyCancelled(
     if (!booking) return;
     const requester = requesterRecipient(booking);
     const desk = heldRooms ? await deskRecipients() : [];
+    const copyTo = desk.length > 0 ? await copyToAddresses(booking) : [];
     const stamp = booking.updated_at;
 
     await queueMessages([
@@ -476,6 +468,7 @@ export async function notifyCancelled(
             eventKey: "booking.cancelled.desk",
             booking,
             to: addressesOf(desk),
+            cc: copyTo,
             subjectText: "Booking cancelled — rooms released",
             doc: t.cancellationToDesk(booking, actor.full_name),
             stamp,

@@ -470,8 +470,9 @@ which needed the same missing piece.
 | `redirect.ts` | `MAIL_REDIRECT_ALL_TO`, applied at **send** time |
 | `render.ts` | Blocks → HTML **and** plain text, from one description |
 | `templates.ts` | What each mail says. Pure functions, no store access |
-| `thread.ts` | Deterministic per-booking Message-ID + subject prefix |
-| `recipients.ts` | Who gets told — via `canReview()`, never a re-derived rule |
+| `thread.ts` | Daily per-person thread roots and subjects; the `[reference]` subject for standalone mail |
+| `recipients.ts` | Who gets told — via `canReview()`, never a re-derived rule; `copyToAddresses()` for CC |
+| `addressing.ts` | `addressStaffMail(to, copyTo)`: CC minus anyone in To, de-duplicated ignoring case |
 | `notify.ts` | `notify*()` per workflow event: queue, then `after()` a dispatch |
 | `dispatch.ts` | The worker: claim → send → settle, with backoff |
 | `digest.ts` | The scheduled jobs (digests, reminders, desk report, escalations) |
@@ -515,24 +516,46 @@ reconstructing intent from a status transition, and would also mail on the
 developer console's **force-status override**, which is a repair tool: a
 developer fixing a bad row should not send a parent a confirmation.
 
-### What is sent
+### What is sent — To is the actioner, "Copy to" is CC
 
-| Event | To | Carries |
-| --- | --- | --- |
-| Submitted | Requester | Reference, summary, "nothing needed yet" |
-| Submitted | First-tier reviewer | Who asked, a link to their queue |
-| Tier approved | Requester | Progress, what happens next |
-| Tier approved | Next tier (manager) | Who forwarded it |
-| Rejected | Requester | **The reason, verbatim** |
-| Rooms allocated | Requester | Room numbers, check-in, what ID to carry |
-| Rooms allocated | Manager + caretaker | Copy for the desk register |
-| Cancellation requested | Manager | Reason; rooms stay held until they decide |
-| Cancellation decided | Requester | Outcome, and that the booking stands if declined |
-| Cancelled | Requester (unless they did it) + desk if rooms were held | Reason |
-| Day before check-in | Requester | Rooms, directions, what to bring |
-| Daily | Each reviewer with a non-empty queue | One digest, not one mail per request |
-| Daily | Manager + caretaker | Per guest house: the day-wise log |
-| Pending > 48 h | Reviewer, cc manager | Escalation nudge |
+The owner's rule (Phase 2, 21 Sep 2026): on every **staff** mail about a
+booking, **To is the one person who must act next** — found through
+`canReview()` for the booking's current status (`reviewersForStatus`), or the
+desk for a desk record — and **CC is the booking's Copy-to list**
+(`lib/academic/copy-to.ts`): everyone who approves any stage of its chain
+(`approvalStagesFor`) and, for an office, its head (Departments & Clubs
+console first, else the academic record). `addressStaffMail` removes anyone
+already in To from CC and de-duplicates both ignoring case. When the booking
+moves on, the next mail's To moves with it and the approver who forwarded it
+stays in CC. Requester mail has no CC.
+
+| Event | To | CC | Carries |
+| --- | --- | --- | --- |
+| Submitted | Requester | — | Reference, summary, "nothing needed yet" |
+| Submitted | First actioner (warden / advisor or council secretary / HOD / IAR Office / manager) | Copy to | Who asked, a link to their queue |
+| Tier approved | Requester | — | Progress, what happens next |
+| Tier approved | Next actioner | Copy to (incl. who forwarded it) | Who forwarded it |
+| Rejected | Requester | — | **The reason, verbatim** |
+| Rooms allocated | Requester | — | Room numbers, check-in, what ID to carry |
+| Rooms allocated | Manager + caretaker | Copy to | Copy for the desk register |
+| Cancellation requested | Manager (decides) | Copy to (whoever reviewed it) | Reason; rooms stay held until they decide |
+| Cancellation decided | Requester | — | Outcome, and that the booking stands if declined |
+| Cancelled | Requester (unless they did it); desk if rooms were held | Copy to, on the desk mail | Reason |
+| Day before check-in | Requester | — | Rooms, directions, what to bring |
+| Daily | Each reviewer with a non-empty queue | — | One digest, not one mail per request |
+| Daily | Manager + caretaker | — | Per guest house: the day-wise log |
+| Pending > 48 h | Reviewer | Manager | Escalation nudge |
+
+The separate "Cancellation requested — for your information" mail to
+reviewers (`booking.cancellation_requested.reviewer`) was retired: they are CC
+on the manager's mail instead. The key stays in the union for old outbox rows
+and is hidden from the template editor (`RETIRED_MAIL_EVENTS`).
+
+`email_outbox.cc_emails` has existed since migration 10, and every transport
+already sent CC (`SmtpMailer`, `FileMailer` writes a `Cc:` header,
+`DryRunMailer` logs it), so Phase 2 needed **no migration** — the change is who
+goes in it. Addresses the office adds to a template's CC in Email Templates are
+merged into the same CC line.
 
 **Digests matter more than they look.** Per-request mail to a warden during
 fest week trains them to filter the portal into spam, and then the portal stops
@@ -550,17 +573,25 @@ correctly, being unable to act on them. `canReview` also refuses
 `reviewer.id === requester.id`, so the IAR Office is never asked to approve its
 own booking.
 
-### One thread per booking
+### Threads: per person per day for staff, standalone for requesters
 
 From the meeting notes: *"Email — try to send in a single thread instead of a
-standalone email."* Two things must line up, and mail clients need **both**:
+standalone email."* Staff mail joins one **approvals** thread per person per
+institute day (per-booking mail) or one **daily log** thread (digest,
+escalation, desk report); requester mail stands alone with a `[reference]`-led
+subject. Two things must line up for mail clients to group messages:
 
-1. `threadRootFor(bookingId)` is a deterministic `Message-ID`. The requester's
-   acknowledgement claims it; every later message sets `In-Reply-To` and
-   `References` to it. Derived from the booking id, so it needs no storage.
-2. Every subject leads with the reference — `[IITPKD-GH-2026-AB12C] …`. Gmail
-   splits a thread when the subject changes, and it also means searching a
-   mailbox for a reference finds every message about it.
+1. `dailyThreadRoot(kind, day, address)` is a deterministic root `Message-ID`;
+   the first message actually **sent** claims it (decided in `dispatch.ts`),
+   and every later one sets `In-Reply-To` / `References` to it.
+2. Every message in a thread shares the thread's subject
+   (`Guest house approvals — Mon 21 Sep 2026`); what the message is about moves
+   to its heading and inbox preview.
+
+Threaded mail is queued **one message per To address** (a message carries one
+`References`). **CC rides on the first To's message only**, so a copied
+warden or HOD receives it once and it joins that recipient's thread — every
+later message about the day's approvals to the same To carries the same root.
 
 ### HTML and text from one description
 
@@ -586,7 +617,9 @@ mail goes without rewriting history, and the console's outbox still answers
 "was the warden *supposed* to get this?". The redirected copy carries an
 `X-Original-To` header and a banner in the body, because the header is exactly
 what nobody looks at when wondering why a test mailbox is full of other
-people's bookings.
+people's bookings. **CC is swallowed too**: the redirected message has an empty
+CC, `X-Original-To` holds the original To and `X-Original-Cc` the original CC,
+and the banner names both.
 
 Set it on every non-production deployment. Without it, one person pointing a
 staging server at real data mails a real parent.

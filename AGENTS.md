@@ -168,9 +168,10 @@ are in **`.memories/12-academic-records.md`**. Keep that file and
 - **`academicRecordFor()` never throws** and caches answers (10 min) because
   `/book` polls. On no record or an outage the card falls back to the profile.
   A down database must never stop a booking.
-- **Copy-to approvers come from `canReview()`** (`reviewersOfRequester`), never
-  from the record. The offices' HOD comes from the record. Copy to is **shown,
-  not mailed**.
+- **Copy to is one rule, `lib/academic/copy-to.ts`**: the approvers of every
+  stage of the request's chain (`approvalStagesFor` + `canReview()`), never
+  from the record, plus an office's head (Departments & Clubs, else the
+  record). The card shows it; **staff mail puts it in CC** (Phase 2).
 - **The record is never stored, logged or mailed.** It holds parents' names
   and phone numbers.
 
@@ -569,8 +570,15 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
 - **Recipients come from `canReview()`** (`lib/mail/recipients.ts`), never a
   re-derived hostel/club match. A second copy of the scoping rule would drift
   and start mailing wardens about other hostels' students.
+- **To is the actioner; "Copy to" is CC** on every staff mail about a booking
+  (owner's decision, Phase 2). To = `reviewersForStatus(booking, status)` (or
+  the desk); CC = `copyToAddresses(booking)`; `addressStaffMail` drops anyone in
+  To from CC and de-duplicates ignoring case. Requester mail has no CC. The
+  reviewers' separate cancellation "for information" mail is retired
+  (`RETIRED_MAIL_EVENTS`) — they are CC on the manager's.
 - **`MAIL_REDIRECT_ALL_TO` is applied at send time**, so the outbox keeps an
-  honest record of the real recipients. Set it on every non-production
+  honest record of the real recipients. It swallows CC too (`X-Original-To` /
+  `X-Original-Cc` headers and a banner name the originals). Set it on every non-production
   deployment: without it, one person pointing staging at real data mails a real
   parent.
 - **Idempotency does the heavy lifting.** `idempotency_key` is unique and
@@ -589,7 +597,8 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
   mail about bookings joins that recipient's daily **approvals** thread; the
   digest, escalation and day-wise log join a separate **daily log** thread. A
   new institute day starts new threads. Threaded mail is queued **one message
-  per address** (a message carries one `References`), shares a fixed subject
+  per To address**, with CC on the first one only (so a CC recipient joins
+  that thread once) (a message carries one `References`), shares a fixed subject
   (`Guest house approvals — Mon 21 Sep 2026`; the per-item subject moves to
   the preview line), and the **first one actually sent** claims the root
   `Message-ID` — decided in `dispatch.ts` by looking for a SENT sibling, not

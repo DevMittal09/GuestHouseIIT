@@ -1,3 +1,4 @@
+import { copyToFor } from "@/lib/academic/copy-to";
 import { getStore } from "@/lib/store";
 import type { BookingStatus, BookingWithDetails, Profile, Role } from "@/lib/types";
 import { canReview } from "@/lib/workflow";
@@ -85,6 +86,23 @@ export async function deskRecipients(): Promise<Profile[]> {
 
 export async function managerRecipients(): Promise<Profile[]> {
   return profilesWithRole("gh_manager");
+}
+
+/**
+ * The booking's Copy-to list as addresses — CC on every staff mail about it.
+ * The rule is `lib/academic/copy-to.ts`, shared with the form's card; this
+ * never throws, so a failed lookup costs the CC, not the mail.
+ */
+export async function copyToAddresses(booking: BookingWithDetails): Promise<string[]> {
+  try {
+    const { entries } = await copyToFor(booking.requester, booking);
+    return entries
+      .map((e) => e.email)
+      .filter((email): email is string => Boolean(email && /^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)));
+  } catch (error) {
+    console.error("[mail] could not resolve Copy to; sending without CC", error);
+    return [];
+  }
 }
 
 export function addressesOf(profiles: Profile[]): string[] {

@@ -11,7 +11,7 @@ import {
   parseAddressList,
   type MailTemplateOverride,
 } from "@/lib/mail/template-config";
-import { MAIL_EVENT_LABELS, type MailEventKey } from "@/lib/mail/types";
+import { MAIL_EVENT_LABELS, RETIRED_MAIL_EVENTS, type MailEventKey } from "@/lib/mail/types";
 import { getStore } from "@/lib/store";
 import type { ActionResult } from "./bookings";
 
@@ -75,7 +75,9 @@ export async function listMailTemplates(): Promise<MailTemplateList> {
     );
     return {
       ok: true,
-      templates: (Object.keys(MAIL_EVENT_LABELS) as MailEventKey[]).map(
+      templates: (Object.keys(MAIL_EVENT_LABELS) as MailEventKey[])
+        .filter((key) => !RETIRED_MAIL_EVENTS.includes(key))
+        .map(
         (key) => stored.get(key) ?? defaultOverride(key)
       ),
     };

@@ -50,7 +50,7 @@ export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
   "booking.allocated.requester": "Rooms allocated",
   "booking.allocated.desk": "Allocation record (desk)",
   "booking.cancellation_requested.manager": "Cancellation requested",
-  "booking.cancellation_requested.reviewer": "Cancellation requested (for information)",
+  "booking.cancellation_requested.reviewer": "Cancellation requested (for information — retired, now CC)",
   "booking.cancellation_decided.requester": "Cancellation decided",
   "booking.cancelled.requester": "Booking cancelled",
   "booking.cancelled.desk": "Cancellation record (desk)",
@@ -59,6 +59,14 @@ export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
   "desk.daily_report": "Daily guest house report",
   "queue.escalation.reviewer": "Pending-too-long escalation",
 };
+
+/**
+ * Kinds of mail no longer sent. Kept in the union so outbox rows written
+ * before still have a label, but not offered in the template editor.
+ * `booking.cancellation_requested.reviewer` became CC on the manager's mail in
+ * Phase 2 ("Copy to" is CC).
+ */
+export const RETIRED_MAIL_EVENTS: MailEventKey[] = ["booking.cancellation_requested.reviewer"];
 
 /**
  * The daily thread a kind of mail joins; anything not listed is standalone.

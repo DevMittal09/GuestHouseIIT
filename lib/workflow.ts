@@ -144,6 +144,40 @@ export function nextStatusOnApprove(current: BookingStatus): BookingStatus {
 }
 
 /**
+ * Every intermediate stage a booking passes through before the Guest House
+ * Manager, in order — the whole approval chain for this request, not just
+ * where it is now. Empty when it goes straight to the manager.
+ *
+ * Used for the "Copy to" line: everyone who signs a request off is copied on
+ * the staff mail about it for the rest of its life, so the warden who
+ * forwarded a request hears that it was allocated or cancelled.
+ */
+export function approvalStagesFor(
+  booking: { user_role: Role; service_type?: ServiceType; booking_type?: string },
+  requester: Pick<Profile, "staff_category" | "unit_id">,
+  units: Unit[] = []
+): BookingStatus[] {
+  let status: BookingStatus;
+  try {
+    status = initialStatusFor(booking.user_role, booking.service_type ?? "room", {
+      bookingType: booking.booking_type,
+      staffCategory: requester.staff_category ?? null,
+      hasUnitApprover: approversOf(requester.unit_id, units).length > 0,
+    });
+  } catch {
+    // A role that cannot book (a stored booking under a role since removed).
+    return [];
+  }
+  const stages: BookingStatus[] = [];
+  while (status !== "PENDING_GH_MANAGER" && ACTIVE_STATUSES.includes(status)) {
+    if (stages.includes(status)) break;
+    stages.push(status);
+    status = nextStatusOnApprove(status);
+  }
+  return stages;
+}
+
+/**
  * Can `reviewer` act on a booking currently in `status`, submitted by `requester`?
  *
  * Two kinds of approval live here:

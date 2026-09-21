@@ -64,7 +64,8 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
     when: "Immediately after a request is submitted.",
   },
   "booking.submitted.reviewer": {
-    audience: "Whoever has to decide first — Assistant Warden, Faculty Advisor, IAR or the Manager",
+    audience:
+      "To: whoever has to decide first (Assistant Warden, Faculty Advisor, HOD, IAR or the Manager). CC: the Copy-to list.",
     when: "Immediately after a request is submitted.",
   },
   "booking.tier_approved.requester": {
@@ -72,7 +73,7 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
     when: "When a reviewer forwards the request onward.",
   },
   "booking.pending.reviewer": {
-    audience: "The Guest House Manager",
+    audience: "To: whoever must act at the new stage (the next approver, or the Manager). CC: the Copy-to list, including who forwarded it.",
     when: "When a request reaches them from an earlier stage.",
   },
   "booking.rejected.requester": {
@@ -84,16 +85,16 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
     when: "When the Manager allocates rooms and the booking is confirmed.",
   },
   "booking.allocated.desk": {
-    audience: "The guest house desk",
+    audience: "To: the guest house desk. CC: the Copy-to list.",
     when: "Alongside the requester's confirmation, as the desk's record.",
   },
   "booking.cancellation_requested.manager": {
-    audience: "The Guest House Manager",
+    audience: "To: the Guest House Manager, who decides. CC: the Copy-to list (whoever reviewed it).",
     when: "When a requester asks to cancel a booking that is holding rooms.",
   },
   "booking.cancellation_requested.reviewer": {
-    audience: "Whoever reviewed the request — Assistant Warden, Faculty Advisor or IAR",
-    when: "The moment a requester asks to cancel. For information only: the Guest House Manager decides.",
+    audience: "Retired — reviewers are now CC on the manager's mail",
+    when: "No longer sent.",
   },
   "booking.cancellation_decided.requester": {
     audience: "The person who made the booking",
@@ -104,7 +105,7 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
     when: "When a booking is cancelled outright.",
   },
   "booking.cancelled.desk": {
-    audience: "The guest house desk",
+    audience: "To: the guest house desk. CC: the Copy-to list.",
     when: "When a cancellation frees rooms the desk was holding.",
   },
   "stay.reminder.requester": {
