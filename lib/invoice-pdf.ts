@@ -72,6 +72,7 @@ export async function downloadInvoicePdf(invoice: Invoice, filename: string): Pr
     ["Category", invoice.category],
     ["Check-in", invoice.checkIn],
     ["Check-out", invoice.checkOut],
+    ["Days charged", String(invoice.days)],
   ];
   facts.forEach(([label, value], i) => {
     const x = margin + 5 + (i % 2) * (contentWidth / 2);
@@ -124,7 +125,11 @@ export async function downloadInvoicePdf(invoice: Invoice, filename: string): Pr
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text(doc.splitTextToSize(pdfSafe(invoice.note), contentWidth), margin, noteY);
+  // The open charges first — they are what the desk still has to act on —
+  // then the standing note about how the tariff is applied.
+  const openLines = invoice.openCharges.map((c) => `- ${c}`);
+  const body = [...openLines, invoice.note].join("\n");
+  doc.text(doc.splitTextToSize(pdfSafe(body), contentWidth), margin, noteY);
 
   doc.setDrawColor(...RULE);
   doc.line(margin, pageHeight - 14, pageWidth - margin, pageHeight - 14);

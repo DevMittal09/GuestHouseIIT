@@ -1,85 +1,156 @@
-import { describeMeals, mealDayCounts, MEAL_KEYS, MEAL_LABELS } from "./meals";
+import { mealDayCounts, MEAL_KEYS, MEAL_LABELS } from "./meals";
 import { countBedGuests, countInfants, ROOM_TYPE_LABELS } from "./occupancy";
-import { stayNights } from "./policy";
 import { formatDateTime } from "./format";
-import type { BookingType, BookingWithDetails, MealKey } from "./types";
+import type { BookingWithDetails, MealKey, Role } from "./types";
 
 /**
- * What a stay costs, worked out from the booking.
+ * The institute's guest house tariff, and what a given stay costs under it.
  *
- * The room rate depends on the **guest house** and on **why the stay was
- * booked** — and not on the room type. That is the institute's schedule, not
- * a modelling choice: Hamsanandi costs more than Bageshri, and an official
- * visitor costs more than a personal guest, whatever room they are put in.
+ * Transcribed from the office's TARIFF DETAILS sheet. Two guest houses charge
+ * on different principles, which is why this is not one table:
+ *
+ * - **Bageshri** is a flat rate per room per day, whoever the guest is.
+ * - **Hamsanandi** is per room per day too, but the rate depends on the
+ *   *category of guest* — and the only distinction that moves the price is
+ *   whether they are a government officer from outside the institute.
  *
  * The invoice is a **statement of what was used**, not a payment record: the
  * portal takes no money and knows nothing about what was actually settled.
  * That is why it prints "not a receipt".
  */
 
+/** Bageshri: one room, one rate, everybody. */
+export const BAGESHRI_DAY_RATE = 750;
+
 /**
- * Room tariff, per room per night, by guest house and then by booking type.
+ * Hamsanandi, by the sheet's three categories.
  *
- * Keyed by **name** because guest houses are created and renamed from the
- * console and have no stable id — the same reason `ALUMNI_GUEST_HOUSE_NAME`
- * is. A guest house with no entry here has no tariff, and the invoice says so
- * rather than quietly charging nothing.
+ * Types 1 and 2 are both ₹2,000, so the academic/personal distinction does
+ * not change what is charged — it is kept only because the invoice should say
+ * which basis was applied, and because the office may price them apart later.
  */
-export const ROOM_TARIFF: Record<string, Partial<Record<BookingType, number>>> = {
-  Bageshri: { personal: 750, official: 3000 },
-  Hamsanandi: { personal: 1500, official: 4000 },
-};
-
-/**
- * Rates the institute has not supplied yet, kept apart from the ones it has
- * so that nobody mistakes an estimate for the schedule. Any invoice using one
- * says so, on screen and in the PDF.
- */
-export const PROVISIONAL_RATES = {
-  /** Per person, per sitting. */
-  mealPerHead: { breakfast: 80, lunch: 150, dinner: 150 } as Record<MealKey, number>,
-  /** Per extra bed, per night. */
-  extraBedPerNight: 300,
-};
-
-export const TARIFF = {
-  currency: "INR",
-  currencySymbol: "₹",
+export const HAMSANANDI_DAY_RATES = {
+  /** Type 1 — official visitors of the Office / HOD / Faculty. */
+  academic: 2000,
+  /** Type 2 — staff and faculty, staying personally. */
+  personal: 2000,
+  /** Type 3 — government officers other than the above. */
+  government: 4000,
 } as const;
 
+export type TariffCategory = keyof typeof HAMSANANDI_DAY_RATES | "flat";
+
+/** Dining at Hamsanandi, per head per sitting. */
+export const MEAL_RATES: Record<MealKey, number> = {
+  breakfast: 80,
+  lunch: 120,
+  dinner: 100,
+};
+
 /**
- * The nightly room rate for this booking, or null when the guest house has no
- * tariff on record.
- *
- * A stay booked **on behalf of an alumnus** is charged as a personal guest: an
- * alumnus visiting campus is not institute business, whoever raised the
- * request for them. Stated here rather than left for the reader to infer.
+ * Extra non-vegetarian items at lunch carry a further charge — but the sheet
+ * gives a *range*, "approximately ₹70–₹90 … depending on the prevailing
+ * market rate". A range is not a price, so nothing is added to the total; the
+ * invoice says it may be levied and the desk fills in the figure.
  */
-export function roomRateFor(guestHouseName: string, bookingType: BookingType): number | null {
-  const house = ROOM_TARIFF[guestHouseName];
-  if (!house) return null;
-  return house[chargeCategory(bookingType)] ?? null;
+export const NON_VEG_LUNCH_SURCHARGE = { min: 70, max: 90 };
+
+/**
+ * A charged day is 24 hours, with a permissible variation of ±4 hours.
+ *
+ * So a stay may run up to 28 hours before a second day is charged, and a
+ * short stay is still one day. The sheet states this under Bageshri; it is
+ * applied to both guest houses because "per day" has to mean something
+ * definite at each, and there is no competing rule for Hamsanandi.
+ */
+export const CHARGED_DAY_HOURS = 24;
+export const DAY_GRACE_HOURS = 4;
+
+/**
+ * Who eats free.
+ *
+ * "Applicable to all guests except Students and Alumni" — so a student's
+ * family and an alumnus are fed without charge, and everyone else pays per
+ * sitting.
+ */
+export function mealsAreChargeable(userRole: Role, bookingType: string): boolean {
+  return userRole !== "student" && bookingType !== "alumni";
 }
 
-function chargeCategory(bookingType: BookingType): Exclude<BookingType, "alumni"> {
-  return bookingType === "alumni" ? "personal" : bookingType;
+export const TARIFF = { currency: "INR", currencySymbol: "₹" } as const;
+
+export function formatMoney(amount: number): string {
+  return `${TARIFF.currencySymbol}${amount.toLocaleString("en-IN")}`;
 }
 
-/** How the rate is described on the invoice line. */
-export function rateBasis(guestHouseName: string, bookingType: BookingType): string {
-  const category = chargeCategory(bookingType);
-  return `${guestHouseName} ${category === "official" ? "official" : "personal guest"} rate`;
+/**
+ * Days charged for a stay: 24-hour blocks, with the ±4 hour variation applied
+ * before the next one starts. Never less than one — a guest who used a room
+ * for an afternoon still used it for a day.
+ */
+export function chargedDays(checkIn: string, checkOut: string): number {
+  const hours = (Date.parse(checkOut) - Date.parse(checkIn)) / 3_600_000;
+  if (!Number.isFinite(hours) || hours <= 0) return 1;
+  return Math.max(1, Math.ceil((hours - DAY_GRACE_HOURS) / CHARGED_DAY_HOURS));
+}
+
+export interface RoomTariff {
+  rate: number;
+  category: TariffCategory;
+  /** How the basis reads on the invoice line. */
+  label: string;
+}
+
+/**
+ * The nightly room rate for this booking, or null when the guest house is not
+ * on the tariff sheet.
+ *
+ * Hamsanandi's Type 3 is "government officers other than the above" — someone
+ * from outside the institute, which in this portal is the `official` role
+ * (the whitelisted dignitary and Director's Office accounts). Everyone else
+ * staying there is institute staff or their guest, which is Types 1 and 2 at
+ * the same ₹2,000. **That mapping is an inference from the sheet's wording,
+ * not something the sheet states in portal terms** — it is the one line to
+ * revisit if the office prices a case differently.
+ */
+export function roomTariffFor(booking: {
+  guest_house?: { name?: string } | null;
+  user_role: Role;
+  booking_type: string;
+}): RoomTariff | null {
+  const house = booking.guest_house?.name ?? "";
+  if (house === "Bageshri") {
+    return { rate: BAGESHRI_DAY_RATE, category: "flat", label: "Bageshri room rate" };
+  }
+  if (house === "Hamsanandi") {
+    if (booking.user_role === "official") {
+      return {
+        rate: HAMSANANDI_DAY_RATES.government,
+        category: "government",
+        label: "Hamsanandi — Type 3, government officer",
+      };
+    }
+    if (booking.booking_type === "personal") {
+      return {
+        rate: HAMSANANDI_DAY_RATES.personal,
+        category: "personal",
+        label: "Hamsanandi — Type 2, personal (staff / faculty)",
+      };
+    }
+    return {
+      rate: HAMSANANDI_DAY_RATES.academic,
+      category: "academic",
+      label: "Hamsanandi — Type 1, academic visitor",
+    };
+  }
+  return null;
 }
 
 export const TARIFF_NOTE =
-  "Room rates are the guest house's standard tariff for this category of booking. This statement lists what was used during the stay; it is not a receipt and records no payment.";
-
-export const PROVISIONAL_NOTE =
-  "Meal and extra-bed rates are provisional, pending the institute's schedule — confirm them before settling.";
+  "Charged per room per day, a day being 24 hours with a permissible variation of ±4 hours. This statement lists what was used during the stay; it is not a receipt and records no payment.";
 
 export interface InvoiceLine {
   description: string;
-  /** Nights, head-meals, or bed-nights — whatever the rate is per. */
   quantity: number;
   unit: string;
   rate: number;
@@ -90,121 +161,115 @@ export interface Invoice {
   reference: string;
   guestName: string;
   guestHouse: string;
-  /** "Official" or "Personal guest" — what decided the room rate. */
+  /** The tariff basis applied, in the sheet's own words. */
   category: string;
   checkIn: string;
   checkOut: string;
-  nights: number;
+  /** Days charged, after the ±4 hour rule. */
+  days: number;
   lines: InvoiceLine[];
   total: number;
   currency: string;
-  /** True when any line is priced from a guess rather than the schedule. */
-  provisional: boolean;
-  /** The guest house with no tariff on record, or null when all is priced. */
+  /** The guest house is not on the tariff sheet — the desk must price it. */
   unpriced: string | null;
+  /** Charges the sheet leaves open, which the desk adds by hand. */
+  openCharges: string[];
   note: string;
-}
-
-export function formatMoney(amount: number): string {
-  return `${TARIFF.currencySymbol}${amount.toLocaleString("en-IN")}`;
 }
 
 /**
  * Build the invoice for a booking.
  *
- * Rooms are charged per room per night at the guest house's rate for this
- * category. A meals-only booking has no rooms and no nights, so it is meals
- * alone.
+ * Rooms are charged per allocated room per day. A meals-only booking has no
+ * rooms, so it is dining alone.
  */
 export function buildInvoice(booking: BookingWithDetails): Invoice {
-  const nights = Math.max(
-    booking.service_type === "meals_only" ? 0 : 1,
-    stayNights(new Date(booking.check_in), new Date(booking.check_out))
-  );
   const lines: InvoiceLine[] = [];
+  const openCharges: string[] = [];
 
   const house = booking.guest_house?.name ?? "";
-  const rate = roomRateFor(house, booking.booking_type);
-  const basis = rateBasis(house, booking.booking_type);
+  const tariff = roomTariffFor(booking);
+  const days = chargedDays(booking.check_in, booking.check_out);
 
   for (const room of booking.assigned_rooms) {
     lines.push({
-      // The room type is still named: it is what the guest slept in, even
-      // though it does not change the price.
-      description: `Room ${room.room_number} (${ROOM_TYPE_LABELS[room.room_type]}) — ${basis}`,
-      quantity: nights,
-      unit: nights === 1 ? "night" : "nights",
-      rate: rate ?? 0,
-      amount: (rate ?? 0) * nights,
+      // The room type is named because it is what the guest slept in, even
+      // though the tariff is per room and does not depend on it.
+      description: `Room ${room.room_number} (${ROOM_TYPE_LABELS[room.room_type]}) — ${tariff?.label ?? "rate not on the tariff sheet"}`,
+      quantity: days,
+      unit: days === 1 ? "day" : "days",
+      rate: tariff?.rate ?? 0,
+      amount: (tariff?.rate ?? 0) * days,
     });
   }
 
-  // Extra beds are charged where the party exceeds what the allocated rooms
-  // sleep on their own beds. Infants share a guardian's bed and are never
-  // counted — the same rule the booking form applies.
+  // Dining is Hamsanandi's, and the sheet exempts students and alumni. An
+  // infant sharing a guardian's plate is not a head, the same way they are
+  // not a bed.
   const beds = countBedGuests(booking.guests);
-  const standard = booking.assigned_rooms.reduce(
-    (n, r) => n + (r.room_type === "single" ? 1 : 2),
-    0
-  );
-  const extraBeds = Math.max(0, beds - standard);
-  if (extraBeds > 0 && booking.assigned_rooms.length > 0) {
-    lines.push({
-      description: "Extra bed (provisional rate)",
-      quantity: extraBeds * nights,
-      unit: "bed-nights",
-      rate: PROVISIONAL_RATES.extraBedPerNight,
-      amount: PROVISIONAL_RATES.extraBedPerNight * extraBeds * nights,
-    });
-  }
-
-  // Meals are per head per sitting. A meals-only booking carries its own head
-  // count; everything else feeds the guests who needed a bed.
   const heads =
     booking.service_type === "meals_only" ? (booking.meal_guest_count ?? 0) : beds;
+  const charged = mealsAreChargeable(booking.user_role, booking.booking_type);
   const mealDays = mealDayCounts(booking.meals);
-  for (const meal of MEAL_KEYS) {
-    const days = mealDays[meal];
-    if (days === 0 || heads === 0) continue;
-    const mealRate = PROVISIONAL_RATES.mealPerHead[meal];
-    lines.push({
-      description: `${MEAL_LABELS[meal]} — ${heads} guest${heads === 1 ? "" : "s"} x ${days} day${days === 1 ? "" : "s"} (provisional rate)`,
-      quantity: heads * days,
-      unit: "meals",
-      rate: mealRate,
-      amount: mealRate * heads * days,
-    });
+  const mealsTaken = MEAL_KEYS.filter((meal) => mealDays[meal] > 0);
+
+  if (mealsTaken.length > 0 && heads > 0) {
+    if (!charged) {
+      openCharges.push(
+        booking.user_role === "student"
+          ? "Meals are not charged to students under the tariff sheet."
+          : "Meals are not charged to alumni under the tariff sheet."
+      );
+    } else {
+      for (const meal of mealsTaken) {
+        const sittings = mealDays[meal];
+        const rate = MEAL_RATES[meal];
+        lines.push({
+          description: `${MEAL_LABELS[meal]} — ${heads} guest${heads === 1 ? "" : "s"} x ${sittings} day${sittings === 1 ? "" : "s"}`,
+          quantity: heads * sittings,
+          unit: "servings",
+          rate,
+          amount: rate * heads * sittings,
+        });
+      }
+      // A range is not a price, so it is flagged rather than totalled.
+      if (booking.meal_preference === "non_veg" && mealDays.lunch > 0) {
+        openCharges.push(
+          `Additional non-vegetarian items at lunch may carry a further ${formatMoney(
+            NON_VEG_LUNCH_SURCHARGE.min
+          )}–${formatMoney(NON_VEG_LUNCH_SURCHARGE.max)} per head, at the prevailing market rate — add it by hand if it applies.`
+        );
+      }
+    }
   }
 
-  const unpriced = booking.assigned_rooms.length > 0 && rate === null ? house : null;
-  const provisional = lines.some((l) => l.description.includes("provisional"));
+  const unpriced = booking.assigned_rooms.length > 0 && tariff === null ? house : null;
+  if (unpriced) {
+    openCharges.push(
+      `${unpriced} is not on the tariff sheet — the room lines above show zero and must be priced by hand.`
+    );
+  }
+
   const infants = countInfants(booking.guests);
+  if (infants > 0) {
+    openCharges.push(
+      `${infants} infant${infants === 1 ? "" : "s"} shared a guardian's bed and ${infants === 1 ? "is" : "are"} not charged.`
+    );
+  }
 
   return {
     reference: booking.booking_reference_id,
     guestName: booking.on_behalf_of_name ?? booking.requester?.full_name ?? "Guest",
     guestHouse: house,
-    category: chargeCategory(booking.booking_type) === "official" ? "Official" : "Personal guest",
+    category: tariff?.label ?? "Not on the tariff sheet",
     checkIn: formatDateTime(booking.check_in),
     checkOut: formatDateTime(booking.check_out),
-    nights,
+    days,
     lines,
     total: lines.reduce((sum, l) => sum + l.amount, 0),
     currency: TARIFF.currency,
-    provisional,
     unpriced,
-    note: [
-      TARIFF_NOTE,
-      unpriced
-        ? `No room tariff is on record for ${unpriced || "this guest house"} — the room lines above show zero and must be priced by hand.`
-        : "",
-      provisional ? PROVISIONAL_NOTE : "",
-      infants > 0
-        ? `${infants} infant${infants === 1 ? "" : "s"} shared a guardian's bed and ${infants === 1 ? "is" : "are"} not charged.`
-        : "",
-      booking.meals.length > 0 ? `Meals taken: ${describeMeals(booking.meals)}.` : "",
-    ]
-      .filter(Boolean)
-      .join(" "),
+    openCharges,
+    note: TARIFF_NOTE,
   };
 }
