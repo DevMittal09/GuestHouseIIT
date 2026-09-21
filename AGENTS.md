@@ -697,13 +697,28 @@ null`).
 
 ## Public website and branding — read `.memories/10-ui-design.md` first
 
-Since 19 Sep 2026, built from `design_handoff/` (a reference, not code to copy).
+Built 19 Sep 2026 from `design_handoff/`; **redesigned 21 Sep 2026** on the
+institute's own palette (the `ui` branch) — the navy/gold look is retired.
 
 - **`app/(site)/`** is the public site: `/` home, `/book-room`, `/book-meal`,
   `/guidelines`, `/gallery`, `/contact` (Google Maps embed), `/sign-in`,
-  `/mock-login`. Chrome in `components/site/`; the navy `NavBar`
-  (`components/site/site-nav.tsx`) is shared with the portal shell, and every
-  portal page title is `components/page-header.tsx`.
+  `/mock-login`. Chrome in `components/site/` (sticky frosted header with the
+  nav inside, Radix-dialog mobile menu, ink footer).
+- **The portal shell** is an ink sidebar (`components/portal/portal-nav.tsx`;
+  a drawer below `lg`) plus a frosted top bar. Nav items and role gating stay
+  in `app/(portal)/layout.tsx`; the client component only draws them (icons
+  are looked up by `href`, since components cannot cross to the client).
+  Every page title is `components/page-header.tsx` (with an `eyebrow`); consoles
+  use `StatTile`, `SectionHeader`, `EmptyState` and `GuestHouseSwitcher` from
+  `components/portal/` and `components/empty-state.tsx`.
+- **The home page's booking bar is a real GET form** to `/book-room?gh=&in=&out=`,
+  carried through sign-in as `next=/book?…` and pre-filled by `BookingForm`'s
+  `initial`. `lib/stay-query.ts` re-validates it on both pages — against the
+  **role's** guest houses on `/book` — and the schema still validates on
+  submit. Never let it decide anything.
+- **My Bookings' progress track** (`lib/booking-progress.ts`) reads the route
+  from the booking's **logs** (the submission log's `new_status`), not the
+  role — routing depends on booking type, staff category and units now.
 - **Facts come from the backend.** Guest houses, room counts, who may book
   where, approval chains, meal times, the advance window and cancellation rules
   are rendered from `lib/` by `lib/site-data.ts` / `lib/site-content.ts`. Never
@@ -714,15 +729,28 @@ Since 19 Sep 2026, built from `design_handoff/` (a reference, not code to copy).
 - **Book Meal has no page of its own** — meals are chosen per day inside the
   booking request (`/book`), only where `serves_meals`; `MEALS_ONLY_ROLES`
   can pick service type `meals_only` there to book meals without a room.
-  `/book-meal` only explains this and signs in to `/book`.
-- **Palette:** navy `#12284C` primary (white text), gold `#E8A317` accents and
-  focus ring (gold buttons take **navy** text — never white), body `#41506A`,
-  borders `#E1E5EC`, white background, 3px radius, no shadows; Source Serif 4
-  headings / Source Sans 3 body via `next/font`. Tokens and brand utilities
-  (`bg-navy`, `text-gold-dark`, `bg-band`, `text-body`, …) in
-  `app/globals.css`. The portal is restyled **through the shadcn tokens** —
-  change a token, not forty components. This retired the old amber palette and
-  its white-on-amber contrast failure.
+  `/book-meal` explains this and signs in to `/book?service=meals_only`.
+- **Palette (from iitpkd.ac.in's own CSS):** vermilion `#E94C26` accents,
+  focus ring and gradients; **white text only on `vermilion-deep` `#C73E1D`**
+  (5.1:1, never on the bright shade); ink `#1A1A1A` for the utility strip,
+  footer, sidebar and dark bands; saffron `#F5A300` (the emblem) as a highlight
+  on ink — **never white on saffron**; warm paper `#FAF8F5` / sand `#F4F0EA`
+  neutrals, body `#57534E`. `--primary` is **ink** (a vermilion primary read as
+  a second red beside Reject); the vermilion CTA is `Button variant="brand"`.
+  12px radius, `shadow-soft` / `shadow-lift` / `shadow-glow`. Source Serif 4
+  display (optical sizes, italics) + Plus Jakarta Sans body via `next/font`.
+  Tokens in `app/globals.css`; the portal is still restyled **through the
+  shadcn tokens** — change a token, not forty components.
+- **Motion is CSS only** — `animate-rise`, `animate-drift`, and `.reveal`
+  (scroll-driven, `@supports`-guarded, off under reduced motion). Inject
+  `.reveal{animation:none}` before a full-page screenshot or off-screen
+  sections capture transparent.
+- **`CardHeader` is a CSS container, so style containment scopes counters.**
+  `.form-steps` (the booking form's 01, 02… badges) increments on the *card*
+  and only reads the counter in the title — incrementing in the title made
+  every badge "01".
+- **Next 16 `next/image`:** `priority` is deprecated — use `preload` /
+  `loading="eager"`; leave `quality` unset (must be in `images.qualities`).
 - **Photos:** originals in `Images/` (gitignored, ~180 MB); the site serves
   2000px, metadata-stripped copies from `public/site/photos/`. Resize one photo
   per process with PIL `draft()` or it gets OOM-killed. Their guest house is

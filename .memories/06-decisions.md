@@ -1223,3 +1223,104 @@ to show.
 
 Wardens never open New Booking, but their fields were on the list. The card
 sits below their queue, because the queue is what they come to the page for.
+
+## UI redesign on the institute's palette (21 Sep 2026)
+
+The owner judged the 19 Sep look (navy/gold, 3px corners, no shadows) "too
+basic" and asked for a redesign using **iitpkd.ac.in's colours**, informed by
+good hotel and guest house booking sites, compatible with the backend, on the
+`ui` branch.
+
+### Palette from the institute's CSS, not the handoff
+
+**Decision.** Vermilion `#E94C26`, ink `#1A1A1A`, the emblem's saffron
+`#F5A300`, over warm paper/sand neutrals.
+
+**Why.** The owner named iitpkd.ac.in as the reference, and its theme CSS
+(`typo-colors.css`, `menu.css`) uses exactly vermilion for links, active menu
+and buttons and `#1A1A1A` for its top bar and footer. Navy/gold appears nowhere
+there — it was the designer's invention. Reading the CSS rather than eyeballing
+screenshots avoided Foundation's framework defaults (`#1779BA`, `#CC4B37`),
+which dominate a naive colour count of the page.
+
+### Ink is `--primary`; vermilion is an explicit variant
+
+**Options.** (a) vermilion primary everywhere; (b) ink primary plus a `brand`
+variant.
+
+**Decision.** (b).
+
+**Why.** Portal tables put Forward/Approve beside a soft-red Reject; with a
+vermilion primary the two read as two reds. White on the bright vermilion is
+also only 3.8:1, so the CTA uses `vermilion-deep` (5.1:1) anyway. Vermilion
+stays the focus ring, the active state and the public site's CTA colour.
+
+### Radius, shadows and motion come back
+
+**Decision.** 12px radius, three shadow tokens, CSS-only motion (load-in
+rise, slow photo drift, scroll-driven reveals with `@supports` and
+reduced-motion guards).
+
+**Why.** The flat, near-square handoff look is what read as "basic". Motion is
+CSS only, so nothing depends on client JavaScript and nothing moves for people
+who asked their OS not to.
+
+### A booking bar that works, not a search that pretends
+
+**Options.** (a) a decorative search widget; (b) a public availability search;
+(c) a GET form that pre-fills the booking request.
+
+**Decision.** (c) — `/book-room?gh=&in=&out=` → sign-in `next` → `/book?…` →
+`BookingForm initial`.
+
+**Why.** A widget that does nothing breaks the 19 Sep rule ("a control that
+does nothing is worse than none"). A public availability search would expose
+what `getRoomAvailability` deliberately limits to signed-in users. Pre-filling
+decides nothing: `lib/stay-query.ts` drops anything the page cannot offer
+(including guest houses outside the role's form config), and the booking schema
+validates on submit as it always has.
+
+### The portal gets a sidebar shell
+
+**Decision.** A fixed ink sidebar (Radix-dialog drawer on narrow screens) and
+a frosted top bar, replacing the header plus navy tab bar.
+
+**Why.** Managers and wardens live in the portal all day; a sidebar keeps every
+section one click away without a wrapping row of tabs, and it gives the
+institute's ink a place in the portal. Nav gating is untouched — still computed
+in the server layout.
+
+### The requester's progress track reads the logs, not the role
+
+**Decision.** `lib/booking-progress.ts` takes the entry status from the
+booking's submission log.
+
+**Why.** The first version derived the route from `initialStatusFor(role)`.
+Rebasing onto `main` showed routing now depends on booking type, staff
+category, units and service type (HOD approval for a faculty member's official
+booking; meals-only straight to the manager), so a role-derived track would be
+wrong for exactly the bookings that take the extra step. Both stores already
+record the entry status in the submission log.
+
+### My Bookings' cancel control follows the server
+
+**Decision.** Always "Request cancellation", for exactly the statuses
+`cancelBooking` accepts (pending ones including `PENDING_HOD`, and `APPROVED`),
+never for `OCCUPIED`.
+
+**Why.** `main` changed `cancelBooking` so every pre-arrival cancellation is a
+request the manager decides and occupied stays are refused, but the UI still
+offered "Cancel booking" with a "Booking cancelled" toast and a button that the
+server would reject. The card was being rebuilt anyway; showing the wrong
+outcome is a UI bug.
+
+### The `ui` branch was fast-forwarded to `main` first
+
+**Decision.** Stash the work, `git merge --ff-only origin/main`, re-apply,
+resolve 15 conflicts by folding `main`'s behaviour into the new markup.
+
+**Why.** `ui` sat 16 commits behind `main` with nothing of its own. Building
+the redesign on it would have meant restyling code that no longer existed and
+a large, risky merge later (invoices, units, HOD approvals, meals-only
+bookings, the new logo, a much larger booking form).
+

@@ -102,13 +102,15 @@ banned.
 
 ## Requester dashboard
 
-`app/(portal)/dashboard/page.tsx` + `components/my-bookings.tsx`: the user's own
-bookings, current status, assigned rooms once approved, rejection reason when
-rejected, and the full status history. Cancellation is allowed while a booking is
-still pending (`cancelBooking`). For already-approved bookings, the requester can
-submit a **cancellation request** (`requestCancellation` in
-`app/actions/bookings.ts`) with a mandatory reason — this sets the status to
-`CANCELLATION_REQUESTED` and the GH Manager reviews it.
+`app/(portal)/dashboard/page.tsx` + `components/my-bookings.tsx`: stat tiles,
+a "next stay" card, and the user's own bookings as **cards** — guest house,
+status, dates and nights, rooms (or "Meals only"), the reason when closed, and
+a progress track built by `lib/booking-progress.ts` from the booking's logs.
+The full status history is in the details dialog. Cancellation is always a
+**request** with a mandatory reason (`cancelBooking` sets
+`CANCELLATION_REQUESTED` at any pre-arrival stage and the GH Manager decides);
+it is not offered for a stay that has started. Since 21 Sep 2026 — see
+[10-ui-design.md](10-ui-design.md).
 
 ## Reviewer portals
 
@@ -381,6 +383,8 @@ faceting, sorting, paging, query-string parsing. Shared by both stores. |
 | `lib/routes.ts` | Role landing pages, official email whitelist. |
 | `lib/format.ts` | Date/time formatting helpers, all delegating to `lib/tz.ts`. |
 | `lib/tz.ts` | The institute timezone (`Asia/Kolkata`): `instituteIso` to parse a typed wall-clock time, `formatInstitute*` / `instituteHour` / `instituteDayBounds` to read instants back. Nothing else may parse a naked datetime string or format without a zone. Also calendar-date helpers for `"yyyy-MM-dd"` strings — `parseDateValue`, `dateValueOf`, `addDaysToDateValue`, `weekdayOfDateValue`, `formatDateValue` ("Tue 15 Sep"), `formatMonthOfDateValue` — which do day arithmetic in UTC because a calendar date has no zone. |
+| `lib/stay-query.ts` | The home page booking bar's `?gh=&in=&out=`: `parseStayQuery` (drops what the page cannot offer, impossible dates, a check-out not after the check-in), `stayQueryString`, `hasStay` |
+| `lib/booking-progress.ts` | The requester's progress track: `entryStatus` (from the submission log), `bookingProgress`, `isInReview`, `INTERMEDIATE_STATUSES` |
 | `lib/meals.ts` | Meal keys and labels; `MEAL_SERVING_WINDOWS` and the `MEAL_TIMES` labels derived from them; `stayMealDays` / `mealUnavailableReason` (which meals a stay can have); `normalizeMeals` (the only reader — cleans arrays, expands the legacy whole-stay object); `mealPlanError` (the schema's rule); `mealSlot` / `mealPlanFromSlots` / `mealSlotsFromDeclined` / `declinedFromMealSlots` (the form's selection, which defaults to every meal); `describeMeals` / `describeMealDays` / `mealDayCounts`. |
 
 ## UI primitives
@@ -395,6 +399,14 @@ faceting, sorting, paging, query-string parsing. Shared by both stores. |
   "Infant accompanying" in the booking form.
 - **`time-select.tsx`** — the hour/minute/AM-PM picker. Exports `parseTime` and
   `toTimeValue`, which handle the 12 AM = `00:00` and 12 PM = `12:00` traps.
+- **`button.tsx`** — adds `variant="brand"` (vermilion, white text on the deep
+  shade) for a page's call to action; the default variant is ink.
+
+Portal building blocks outside `components/ui/` (21 Sep 2026):
+`components/portal/` (`portal-nav.tsx` sidebar + drawer, `stat-tiles.tsx`,
+`section-header.tsx`, `guest-house-switcher.tsx`),
+`components/empty-state.tsx`, `components/admin/admin-tabs.tsx`. See
+[10-ui-design.md](10-ui-design.md).
 
 ## Booking type and the IAR pipeline
 
@@ -622,22 +634,24 @@ delivery, and the content is the booking, one click away in All Bookings.
 
 ## Branding
 
-**Since 19 Sep 2026 the palette comes from the guest house design handoff**
-(`design_handoff/README.md`): navy `#12284C` (primary, white text), gold
-`#E8A317` (accents, focus ring, the public CTA with navy text), body text
-`#41506A`, borders `#E1E5EC`, white background, 3px corners, no shadows;
-Source Serif 4 headings and Source Sans 3 body via `next/font`. Tokens and the
-brand utilities (`bg-navy`, `text-gold-dark`, `bg-band`, …) live in
-`app/globals.css`. Full table and rules in [10-ui-design.md](10-ui-design.md).
+**Since 21 Sep 2026 the palette is iitpkd.ac.in's own**: vermilion `#E94C26`
+(accents, focus ring; white text only on `vermilion-deep` `#C73E1D`), ink
+`#1A1A1A` (`--primary`, sidebar, footer, dark bands), the emblem's saffron
+`#F5A300` (highlights on ink, never under white text), warm paper/sand
+neutrals; 12px radius and soft shadows; Source Serif 4 display and Plus
+Jakarta Sans body via `next/font`. Tokens and brand utilities (`bg-ink`,
+`bg-vermilion-deep`, `text-saffron`, `bg-paper`, `bg-band`, `text-body`, …)
+live in `app/globals.css`. It replaced the 19 Sep navy/gold look from the
+design handoff. Full table and rules in [10-ui-design.md](10-ui-design.md).
 
 Logos: `public/IITPKD_NEW_LOGO.png` (the stacked institute logo on a
 transparent background, in both headers since 21 Sep 2026; it replaced the
 wide `iitpkd-web-logo.jpg`) and `public/iitpkd-logo.png` (the emblem; `app/icon.png` is the same
 file serving as the favicon).
 
-The earlier amber-on-off-white palette copied from dashboard.iitpkd.ac.in, and
-its white-on-amber WCAG failure, are gone — white on navy is ≈13:1. Mail
-templates (`lib/mail/render.ts`) still carry their own inline amber header.
+The earlier amber-on-off-white palette and its white-on-amber WCAG failure are
+long gone. Mail templates (`lib/mail/render.ts`) still carry their own inline
+amber header.
 
 ## Demo data
 

@@ -19,7 +19,7 @@ one.
 | [08-roadmap.md](08-roadmap.md) | Known gaps and what to build next |
 | [09-production-plan.md](09-production-plan.md) | Demo → production, in dependency order |
 | [Guest House Meeting Notes.md](Guest%20House%20Meeting%20Notes.md) | The guest house office's own notes, verbatim — the source for the 15 Sep requirements. Tracked against them in [01-background.md](01-background.md) |
-| [10-ui-design.md](10-ui-design.md) | The public website, the design tokens, sign-in pages, photos and map — read before any visual change |
+| [10-ui-design.md](10-ui-design.md) | The look (institute vermilion/ink/saffron palette), the public website, the portal shell, the booking bar, photos and map — read before any visual change |
 | [11-ldap-accounts.md](11-ldap-accounts.md) | **Dummy LDAP logins for every persona**, how LDAP sign-in works, and how to switch to the institute's real LDAP accounts |
 | [12-academic-records.md](12-academic-records.md) | **The Requester details card**: the fields the academic database supplies for each kind of account, the Copy-to rules, the dummy records, and **how to connect the real academic database** |
 
@@ -550,7 +550,21 @@ against a throwaway Postgres before being written down — see
 `supabase/repairs/` holds one-off data fixes that are not migrations and are
 never applied automatically. Read each file's header before running it.
 
-Last substantive update: 2026-09-19 — the UI redesign from `design_handoff/`
+Last substantive update: 2026-09-21 — **the UI redesign on the institute's own
+palette** ([10-ui-design.md](10-ui-design.md)), on the `ui` branch (first
+fast-forwarded to `main`, which was 16 commits ahead). Vermilion `#E94C26`,
+ink `#1A1A1A` and the emblem's saffron, taken from iitpkd.ac.in's CSS, replace
+the handoff's navy/gold; ink is `--primary` and vermilion is
+`Button variant="brand"`. The public site has a photographic hero with a
+working booking bar (guest house + dates carried through sign-in into a
+pre-filled `/book`, re-validated per role by `lib/stay-query.ts`), guest house
+cards showing who may request each, a bento, the approval routes, a gallery
+lightbox and split sign-in pages. The portal has an ink sidebar shell, stat
+tiles on the consoles, and My Bookings as cards with a progress track read
+from each booking's logs (`lib/booking-progress.ts`). My Bookings' cancel
+control now matches `cancelBooking` (always a request; not for occupied stays).
+
+Previous update: 2026-09-19 — the UI redesign from `design_handoff/`
 ([10-ui-design.md](10-ui-design.md)): a public guest house website at `/`
 (home, Book a Room, Book Meal, Guidelines, Gallery, Contact with the Google
 Maps location) in a new `app/(site)/` route group; sign-in moved to `/sign-in`
