@@ -59,8 +59,11 @@ export async function reviewersOfRequester(
   requester: Profile,
   status: BookingStatus
 ): Promise<Profile[]> {
-  const profiles = await getStore().listProfiles();
-  return profiles.filter((profile) => mailable(profile) && canReview(profile, status, requester));
+  const store = getStore();
+  const [profiles, units] = await Promise.all([store.listProfiles(), store.listUnits()]);
+  return profiles.filter(
+    (profile) => mailable(profile) && canReview(profile, status, requester, units)
+  );
 }
 
 /** Everyone holding a role, for the desk copies and the daily report. */

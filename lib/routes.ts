@@ -12,7 +12,7 @@ export function homeForRole(role: Role): string {
     case "warden":
       return "/warden";
     case "faculty_advisor":
-      return "/fa";
+      return "/approvals";
     case "iar_cell":
       return "/iar";
     case "gh_manager":

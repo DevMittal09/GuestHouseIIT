@@ -56,6 +56,7 @@ export function InvoiceDialog({ booking }: { booking: BookingWithDetails }) {
           <DialogDescription>
             {invoice.guestName} · {invoice.guestHouse} · {invoice.category} · {invoice.checkIn} →{" "}
             {invoice.checkOut}
+            <span className="mt-1 block">Paid from: {invoice.paidFrom}</span>
           </DialogDescription>
         </DialogHeader>
 

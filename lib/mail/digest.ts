@@ -5,6 +5,7 @@ import {
   toInstituteDateValue,
 } from "@/lib/tz";
 import type { BookingStatus, BookingWithDetails, Profile } from "@/lib/types";
+import { headsAnyUnit, type Unit } from "@/lib/units";
 import {
   ACTIVE_STATUSES,
   ROOM_HOLDING_STATUSES,
@@ -36,6 +37,25 @@ import * as t from "./templates";
 
 /** How long a request may sit in one queue before the nudge goes out. */
 export const ESCALATION_HOURS = 48;
+
+/**
+ * Everyone who heads a department, club, council or office, with the units
+ * themselves. They approve by appointment rather than by role - an HOD is an
+ * employee, a council secretary a student - so a role list alone would never
+ * send them their digest.
+ */
+async function unitHeads(): Promise<{ profiles: Profile[]; units: Unit[] }> {
+  const store = getStore();
+  const [profiles, units] = await Promise.all([store.listProfiles(), store.listUnits()]);
+  return { profiles: profiles.filter((p) => headsAnyUnit(p.id, units)), units };
+}
+
+/** Two lists of people as one, each person once. */
+function mergeProfiles(a: Profile[], b: Profile[]): Profile[] {
+  const seen = new Map(a.map((p) => [p.id, p]));
+  for (const p of b) if (!seen.has(p.id)) seen.set(p.id, p);
+  return [...seen.values()];
+}
 
 /** Roles that get the morning approval digest. */
 const DIGEST_ROLES = ["warden", "faculty_advisor", "iar_cell"] as const;
@@ -75,17 +95,20 @@ async function holdingBookings(): Promise<BookingWithDetails[]> {
  */
 export async function queueReviewerDigests(now: Date): Promise<number> {
   const day = toInstituteDateValue(now);
-  const [reviewers, pending] = await Promise.all([
+  const [byRole, pending, heads] = await Promise.all([
     profilesWithRole(...DIGEST_ROLES),
     pendingBookings(),
+    unitHeads(),
   ]);
+  const reviewers = mergeProfiles(byRole, heads.profiles);
+  const units = heads.units;
 
   let queued = 0;
   for (const reviewer of reviewers) {
     // `canReview` again, not a hand-rolled hostel or club match: the digest
     // must list exactly what this person's buttons can act on.
     const mine = pending
-      .filter((booking) => canReview(reviewer, booking.status, booking.requester))
+      .filter((booking) => canReview(reviewer, booking.status, booking.requester, units))
       .sort((a, b) => a.check_in.localeCompare(b.check_in));
     // Silence is the right mail for an empty queue.
     if (mine.length === 0) continue;
@@ -223,11 +246,14 @@ export async function queueEscalations(now: Date): Promise<number> {
   const day = toInstituteDateValue(now);
   const cutoff = new Date(now.getTime() - ESCALATION_HOURS * 3_600_000).toISOString();
 
-  const [reviewers, managers, pending] = await Promise.all([
+  const [byRole, managers, pending, heads] = await Promise.all([
     profilesWithRole("warden", "faculty_advisor", "iar_cell", "gh_manager"),
     managerRecipients(),
     pendingBookings(),
+    unitHeads(),
   ]);
+  const reviewers = mergeProfiles(byRole, heads.profiles);
+  const units = heads.units;
 
   // Time in *this* queue, not since submission: a request a warden forwarded
   // this morning has not been waiting on the manager for three days.
@@ -237,7 +263,7 @@ export async function queueEscalations(now: Date): Promise<number> {
   let queued = 0;
   for (const reviewer of reviewers) {
     const mine = stale
-      .filter((booking) => canReview(reviewer, booking.status, booking.requester))
+      .filter((booking) => canReview(reviewer, booking.status, booking.requester, units))
       .sort((a, b) => (a.updated_at ?? a.created_at).localeCompare(b.updated_at ?? b.created_at));
     if (mine.length === 0) continue;
 

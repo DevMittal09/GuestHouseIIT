@@ -322,6 +322,17 @@ const userSchema = z.object({
   hostel_name: z.string().trim().transform((v) => v || null),
   department_or_club: z.string().trim().transform((v) => v || null),
   roll_number: z.string().trim().transform((v) => v || null),
+  // The unit decides who approves for this person (lib/units.ts); blank means
+  // they belong to none, and their requests route as if nobody were set.
+  unit_id: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.trim() ? v.trim() : null)),
+  // Only meaningful for employees: faculty official bookings wait for the HOD.
+  staff_category: z
+    .enum(["", "faculty", "staff"])
+    .optional()
+    .transform((v) => (v ? v : null)),
   // Optional: without one the person signs in only through the Google door.
   ldap_uid: z
     .string()

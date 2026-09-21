@@ -10,6 +10,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
 import { isRequesterHistory } from "@/lib/workflow";
+import { getStore } from "@/lib/store";
+import { headsAnyUnit } from "@/lib/units";
 
 /**
  * The signed-in shell, in the guest house website's style: a white header with
@@ -25,6 +27,13 @@ export default async function PortalLayout({ children }: { children: React.React
   // questions now that the IAR Office does both.
   const canBook = REQUESTER_ROLES.includes(user.role);
   const readsOwnHistory = isRequesterHistory(user.role);
+  // Approvers by appointment - an HOD, a council secretary - hold no reviewer
+  // role, so the nav asks the units rather than the role. A missing units
+  // table (before migration 15) just means nobody is one yet.
+  const units = await getStore()
+    .listUnits()
+    .catch(() => []);
+  const approves = headsAnyUnit(user.id, units) || user.role === "faculty_advisor";
 
   const nav: NavItem[] = [
     ...(canBook
@@ -34,7 +43,7 @@ export default async function PortalLayout({ children }: { children: React.React
         ]
       : []),
     ...(user.role === "warden" ? [{ href: "/warden", label: "Assistant Warden Queue" }] : []),
-    ...(user.role === "faculty_advisor" ? [{ href: "/fa", label: "FA Queue" }] : []),
+    ...(approves ? [{ href: "/approvals", label: "Approvals" }] : []),
     ...(user.role === "iar_cell" ? [{ href: "/iar", label: "IAR Queue" }] : []),
     ...(user.role === "gh_manager"
       ? [

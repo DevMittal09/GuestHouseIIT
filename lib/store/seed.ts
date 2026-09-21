@@ -11,6 +11,7 @@ import type {
   Room,
   RoomHold,
 } from "@/lib/types";
+import type { Unit } from "@/lib/units";
 
 export const GH_BAGESHRI = "gh-bageshri";
 export const GH_HAMSANANDI = "gh-hamsanandi";
@@ -46,12 +47,21 @@ export const seedProfiles: Profile[] = [
   // ----- Requesters -----
   { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112201001", ldap_uid: "112201001" },
   { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student", hostel_name: "Saveri", department_or_club: null, roll_number: "142202014", ldap_uid: "142202014" },
-  { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "priya" },
+  // Faculty in CSE: her official bookings go to the CSE HOD first.
+  { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "priya", unit_id: "unit-cse", staff_category: "faculty" },
   { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: "Administration", roll_number: null, ldap_uid: "admin" },
-  { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "petrichor" },
+  // Belongs to Petrichor, which sits under the Cultural Council, so its
+  // requests go to the council secretary.
+  { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "petrichor", unit_id: "unit-petrichor" },
   // No alumni persona: alumni have no institute login, so the IAR Office and
   // the IAR Student Cell raise those bookings for them (migration 9).
   { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "alumnicell" },
+  // ----- Unit heads (migration 15) -----
+  // Approvers by appointment rather than by role: the HOD is an employee, the
+  // council secretary a student. Change who heads a unit in the console and
+  // their queue moves with it.
+  { id: "hod-cse", email: "hod.cse@iitpkd.ac.in", full_name: "Prof. R. Venkatesh (HOD, CSE)", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "hod.cse", unit_id: "unit-cse", staff_category: "faculty" },
+  { id: "secretary-cultural", email: "112301045@smail.iitpkd.ac.in", full_name: "Meera Nair (Cultural Secretary)", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112301045", ldap_uid: "112301045" },
   // ----- Reviewers / Admins -----
   { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Assistant Warden, Malhar)", role: "warden", hostel_name: "Malhar", department_or_club: null, roll_number: null, ldap_uid: "warden.malhar" },
   { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Assistant Warden, Saveri)", role: "warden", hostel_name: "Saveri", department_or_club: null, roll_number: null, ldap_uid: "warden.saveri" },
@@ -60,6 +70,17 @@ export const seedProfiles: Profile[] = [
   { id: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "guesthouse" },
   { id: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "gh.reception" },
   { id: "developer", email: "developer@iitpkd.ac.in", full_name: "Portal Developer", role: "developer", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "developer" },
+];
+
+/**
+ * The demo units. A department with an HOD, and a club under a council whose
+ * secretary approves for it: the two ways approval by appointment works.
+ */
+export const seedUnits: Unit[] = [
+  { id: "unit-cse", name: "Computer Science & Engineering", kind: "department", parent_id: null, head_id: "hod-cse", acting_head_id: null },
+  { id: "unit-cultural", name: "Cultural Council", kind: "council", parent_id: null, head_id: "secretary-cultural", acting_head_id: null },
+  // No head of its own: the council secretary approves.
+  { id: "unit-petrichor", name: "Petrichor", kind: "club", parent_id: "unit-cultural", head_id: null, acting_head_id: null },
 ];
 
 const now = new Date();
@@ -87,6 +108,9 @@ type DemoBooking = Omit<
   | "on_behalf_of_name"
   | "on_behalf_of_email"
   | "on_behalf_of_phone"
+  | "debit_head"
+  | "debit_details"
+  | "debit_document_url"
 > &
   Partial<Booking>;
 
@@ -260,6 +284,12 @@ function withDefaults(b: DemoBooking): Booking {
     on_behalf_of_name: null,
     on_behalf_of_email: null,
     on_behalf_of_phone: null,
+    // Demo bookings predate the debit-head question, like real ones before
+    // migration 15, except the personal one — a personal stay is always paid
+    // from personal funds.
+    debit_head: b.booking_type === "personal" ? "personal_funds" : null,
+    debit_details: null,
+    debit_document_url: null,
     ...b,
   } as Booking;
 }

@@ -84,10 +84,19 @@ import { cn } from "@/lib/utils";
 import { latestCheckIn } from "@/lib/workflow";
 import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import {
+  debitDetailsPrompt,
+  debitHeadsFor,
+  fixedDebitHead,
+  needsDebitDocument,
+  PAY_AT_CHECKOUT_NOTE,
+} from "@/lib/debit-heads";
+import {
   BOOKING_TYPE_LABELS,
   CITIZENSHIP_LABELS,
+  DEBIT_HEAD_LABELS,
   MEAL_PREFERENCE_LABELS,
   type BookingType,
+  type DebitHead,
   type Citizenship,
   type GuestHouse,
   type MealPreference,
@@ -122,6 +131,10 @@ interface FormValues {
   /** Asked first: whether a room is involved changes the rest of the form. */
   /** Asked next: it decides the approval route and how the stay is settled. */
   booking_type: BookingType;
+  /** Which budget pays. Ignored when the booking can only be paid one way. */
+  debit_head: "" | DebitHead;
+  /** The project for a Project Grant, or the case for a Special Budget. */
+  debit_details: string;
   /** Only when the Guest House Manager is booking for somebody else. */
   on_behalf_of_name: string;
   on_behalf_of_email: string;
@@ -188,6 +201,9 @@ export function BookingForm({
   // Files live outside RHF: a stable Map keyed by each guest row's own `key`.
   const [guestFiles] = useState(() => new Map<string, File>());
   const [alumniCard, setAlumniCard] = useState<File | null>(null);
+  // The sanction behind a Special Budget, uploaded with the request.
+  const [debitDocument, setDebitDocument] = useState<File | null>(null);
+  const [debitDocumentError, setDebitDocumentError] = useState<string | null>(null);
   const [alumniCardError, setAlumniCardError] = useState<string | null>(null);
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   // Meal choices live outside react-hook-form as "date|meal" keys (`mealSlot`):
@@ -231,6 +247,8 @@ export function BookingForm({
       // "Official" for staff, because that is the common case; a role with one
       // option is never shown the question at all.
       booking_type: defaultBookingTypeFor(config.role) ?? "official",
+      debit_head: "",
+      debit_details: "",
       on_behalf_of_name: "",
       on_behalf_of_email: "",
       on_behalf_of_phone: "",
@@ -267,6 +285,15 @@ export function BookingForm({
   // asking — a club only ever books officially.
   const [bookingTypeOptions] = useState(() => bookingTypesFor(config.role));
   const forAlumnus = needsAlumniDetails(bookingType);
+  // Payment follows the kind of booking: one fixed head for a student or a
+  // personal stay, a choice otherwise. Derived, so a change of booking type
+  // cannot leave a stale answer behind.
+  const fixedHead = fixedDebitHead(config.role, bookingType);
+  const headOptions = debitHeadsFor(config.role, bookingType);
+  const chosenHeadRaw = useWatch({ control, name: "debit_head" });
+  const chosenHead: DebitHead | null = fixedHead ?? (chosenHeadRaw || null);
+  const paymentHead = chosenHead;
+  const debitPrompt = debitDetailsPrompt(chosenHead);
   // The Alumni ID card is demanded by the role's form config *or* by this
   // request being raised for an alumnus, since the IAR accounts book both ways
   // from one form.
@@ -475,6 +502,11 @@ export function BookingForm({
     const payload = {
       service_type: serviceType,
       booking_type: values.booking_type,
+      // A student or personal booking can only be paid one way, so the fixed
+      // head is sent whatever the radio last held — switching from Official
+      // to Personal must not carry a department budget along with it.
+      debit_head: paymentHead,
+      debit_details: debitPrompt ? values.debit_details : undefined,
       // Sent only when they apply; the schema rejects them on any other kind
       // of booking, so a stale value cannot ride along.
       alumni_name: forAlumnus ? values.alumni_name : undefined,
@@ -565,6 +597,11 @@ export function BookingForm({
       }
     }
     setCustomErrors(nextCustomErrors);
+    setDebitDocumentError(null);
+    if (needsDebitDocument(paymentHead) && !debitDocument) {
+      hasError = true;
+      setDebitDocumentError("Upload the sanction document for the Special Budget");
+    }
     if (hasError || !parsed.success) {
       toast.error("Please fix the highlighted fields");
       return;
@@ -581,6 +618,9 @@ export function BookingForm({
       });
     }
     if (alumniCard) formData.set("alumni_card", alumniCard);
+    if (needsDebitDocument(paymentHead) && debitDocument) {
+      formData.set("debit_document", debitDocument);
+    }
     if (onBehalf) {
       formData.set("on_behalf_of_name", values.on_behalf_of_name);
       formData.set("on_behalf_of_email", values.on_behalf_of_email);
@@ -654,6 +694,87 @@ export function BookingForm({
           </Card>
         )
       )}
+
+      {/* Who pays. A student, or anyone booking personally, pays at checkout
+          and has nothing to choose — so it is stated, not asked. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment</CardTitle>
+          <CardDescription>
+            {fixedHead
+              ? "How this stay will be settled."
+              : "The budget this stay will be charged to. The accounts section debits it after checkout."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {fixedHead ? (
+            <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <span className="font-medium">{DEBIT_HEAD_LABELS[fixedHead]}</span> —{" "}
+              {PAY_AT_CHECKOUT_NOTE.replace(/^Personal — /, "")}
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {headOptions.map((head) => (
+                  <label
+                    key={head}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2.5 rounded-lg border p-3 text-sm transition-colors",
+                      "has-checked:border-primary has-checked:bg-primary/5"
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      value={head}
+                      className="size-4 shrink-0 accent-primary"
+                      {...register("debit_head")}
+                    />
+                    {DEBIT_HEAD_LABELS[head]}
+                  </label>
+                ))}
+              </div>
+              <FieldError message={err("debit_head")} />
+
+              {debitPrompt && (
+                <div className="space-y-2">
+                  <Label htmlFor="debit_details">{debitPrompt} *</Label>
+                  {chosenHead === "special_budget" ? (
+                    <Textarea
+                      id="debit_details"
+                      rows={3}
+                      placeholder="What the special budget is, who sanctioned it, and the reference number"
+                      {...register("debit_details")}
+                    />
+                  ) : (
+                    <Input
+                      id="debit_details"
+                      placeholder="e.g. SP/2025/017 — Autonomous Navigation Testbed"
+                      {...register("debit_details")}
+                    />
+                  )}
+                  <FieldError message={err("debit_details")} />
+                </div>
+              )}
+
+              {needsDebitDocument(chosenHead) && (
+                <div className="space-y-2">
+                  <Label htmlFor="debit_document">Sanction document *</Label>
+                  <Input
+                    id="debit_document"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={(e) => setDebitDocument(e.target.files?.[0] ?? null)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    JPG, PNG, WEBP or PDF, up to 5 MB.
+                  </p>
+                  <FieldError message={debitDocumentError ?? undefined} />
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {onBehalf && (
         <Card>

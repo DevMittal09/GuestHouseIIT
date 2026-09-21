@@ -2,6 +2,7 @@ import { formatDateTime, formatDate } from "@/lib/format";
 import { describeMealDays, describeMeals } from "@/lib/meals";
 import { describeParty } from "@/lib/occupancy";
 import { PETS_POLICY_NOTICE } from "@/lib/policy";
+import { describeDebit } from "@/lib/debit-heads";
 import {
   BOOKING_TYPE_LABELS,
   MEAL_PREFERENCE_LABELS,
@@ -53,6 +54,7 @@ export function bookingFacts(booking: BookingWithDetails): Block {
   }
   rows.push(["Purpose", booking.purpose_of_visit]);
   rows.push(["Booking type", BOOKING_TYPE_LABELS[booking.booking_type]]);
+  rows.push(["Paid from", describeDebit(booking)]);
   if (booking.on_behalf_of_name) {
     // The desk has to know who is actually arriving, not just whose account
     // the booking hangs off.
@@ -96,7 +98,8 @@ function assignedRoomNumbers(booking: BookingWithDetails): string {
 
 const REVIEW_LINK: Record<string, string> = {
   PENDING_WARDEN: "/warden",
-  PENDING_FA: "/fa",
+  PENDING_FA: "/approvals",
+  PENDING_HOD: "/approvals",
   PENDING_IAR: "/iar",
   PENDING_GH_MANAGER: "/manager",
 };

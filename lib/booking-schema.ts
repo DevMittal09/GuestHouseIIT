@@ -4,6 +4,7 @@ import {
   needsAlumniDetails,
   serviceTypeError,
 } from "./booking-types";
+import { debitDetailsPrompt, debitHeadError } from "./debit-heads";
 import { isCountryCode } from "./countries";
 import { parentDependencyError, type FieldMode, type RoleFormConfig } from "./form-config";
 import { MAX_MEAL_DAYS, mealPlanError, normalizeMeals } from "./meals";
@@ -185,6 +186,23 @@ export function bookingPayloadSchema(
       booking_type: z.enum(["official", "personal", "alumni"], {
         message: "Choose whether this is an official or a personal booking",
       }),
+      // Who pays. Checked against the role and the kind of booking below: a
+      // student or a personal booking is always personal funds.
+      debit_head: z
+        .enum([
+          "institute_grant",
+          "professional_development_fund",
+          "project_grant",
+          "department_budget",
+          "special_budget",
+          "personal_funds",
+          "alumni_fund",
+          "student_fund",
+          "hostel_funds",
+        ])
+        .nullish()
+        .default(null),
+      debit_details: optionalTrimmed,
       // Only meaningful on an alumni booking; the refinement below requires
       // them there and rejects them everywhere else.
       alumni_name: optionalTrimmed,
@@ -246,6 +264,28 @@ export function bookingPayloadSchema(
     .superRefine((v, ctx) => {
       const message = bookingTypeError(config.role, v.booking_type);
       if (message) ctx.addIssue({ code: "custom", message, path: ["booking_type"] });
+    })
+    .superRefine((v, ctx) => {
+      const message = debitHeadError(config.role, v.booking_type, v.debit_head);
+      if (message) {
+        ctx.addIssue({ code: "custom", message, path: ["debit_head"] });
+        return;
+      }
+      // A Project Grant has to name the project, a Special Budget has to say
+      // what it is — otherwise the accounts section has nothing to debit. The
+      // sanction document for a Special Budget is checked in `createBooking`,
+      // which has the upload.
+      const prompt = debitDetailsPrompt(v.debit_head);
+      if (prompt && (v.debit_details ?? "").length < 3) {
+        ctx.addIssue({ code: "custom", message: `${prompt} is required`, path: ["debit_details"] });
+      }
+      if (!prompt && v.debit_details) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Details apply only to a Project Grant or a Special Budget",
+          path: ["debit_details"],
+        });
+      }
     })
     .superRefine((v, ctx) => {
       // An alumnus cannot log in to speak for themselves, so the request

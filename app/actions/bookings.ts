@@ -5,6 +5,8 @@ import { canAssignRooms, canBookOnBehalf, canOverrideGuestHousePolicy } from "@/
 import { requireUser } from "@/lib/auth";
 import { aadhaarDigits, bookingPayloadSchema } from "@/lib/booking-schema";
 import { needsAlumniDetails } from "@/lib/booking-types";
+import { needsDebitDocument } from "@/lib/debit-heads";
+import { approversOf } from "@/lib/units";
 import { validateCustomValue } from "@/lib/form-config";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import {
@@ -254,13 +256,54 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       return { ok: false, error: "Alumni ID card upload is mandatory" };
     }
 
+    // The sanction behind a Special Budget. Checked here rather than in the
+    // schema because this is where the upload is.
+    let debitDocumentUrl: string | null = null;
+    if (needsDebitDocument(payload.debit_head)) {
+      const document = formData.get("debit_document");
+      if (!(document instanceof File) || document.size === 0) {
+        return { ok: false, error: "Upload the sanction document for the Special Budget" };
+      }
+      const fileError = validFile(document);
+      if (fileError) return { ok: false, error: fileError };
+      debitDocumentUrl = await store.saveDocument(document, "debit-documents");
+    }
+
+    // Who approves, if anyone: whoever heads the requester's department, club
+    // or council right now — read from the console, not matched by name.
+    const units = await store.listUnits();
+    const unitApprovers = approversOf(user.unit_id, units);
+    const status = initialStatusFor(user.role, payload.service_type, {
+      bookingType: payload.booking_type,
+      staffCategory: user.staff_category ?? null,
+      hasUnitApprover: unitApprovers.length > 0,
+    });
+    // A faculty member's official booking that should have waited for an HOD,
+    // but could not because nobody is set for the department, says so in its
+    // log - otherwise it looks as if the approval was skipped on purpose.
+    const hodMissing =
+      user.role === "employee" &&
+      payload.service_type !== "meals_only" &&
+      payload.booking_type === "official" &&
+      user.staff_category !== "staff" &&
+      unitApprovers.length === 0;
+    const submissionRemarks =
+      [
+        overrideNote,
+        hodMissing
+          ? "Booking submitted. No HOD is set for this department in the console, so it went straight to the Guest House Manager."
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ") || null;
+
     const booking = await store.createBooking({
       user_id: user.id,
       guest_house_id: payload.guest_house_id,
       user_role: user.role,
       // A meals-only booking is the kitchen's business, so it goes straight
       // to the manager rather than through the room approval chain.
-      status: initialStatusFor(user.role, payload.service_type),
+      status,
       purpose_of_visit: payload.purpose_of_visit,
       check_in: checkInIso,
       check_out: checkOutIso,
@@ -272,10 +315,13 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       alumni_name: forAlumnus ? payload.alumni_name : null,
       alumni_roll_number: forAlumnus ? payload.alumni_roll_number : null,
       alumni_id_url: alumniIdUrl,
+      debit_head: payload.debit_head,
+      debit_details: payload.debit_details,
+      debit_document_url: debitDocumentUrl,
       custom_fields: customValues.length > 0 ? customValues : null,
       meals: payload.meals,
       rooms,
-      submission_remarks: overrideNote,
+      submission_remarks: submissionRemarks,
       // Both parties are recorded: the booking hangs off the manager's
       // account for referential integrity, and names the guest it is for.
       created_by: onBehalfOf ? user.id : null,
@@ -308,7 +354,9 @@ export async function reviewBooking(
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
-    if (!canReview(user, booking.status, booking.requester)) {
+    // Unit approvals (an HOD, a club's advisor or council secretary) are
+    // decided by who heads the requester's unit now, so the units come too.
+    if (!canReview(user, booking.status, booking.requester, await store.listUnits())) {
       return { ok: false, error: "You are not authorised to review this booking" };
     }
     if (action === "reject" && !reason?.trim()) {

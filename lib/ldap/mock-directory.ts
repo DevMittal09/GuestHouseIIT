@@ -30,6 +30,8 @@ const ACCOUNTS: MockAccount[] = [
   { uid: "warden.malhar", password: "Malhar@2026", mail: "warden.malhar@iitpkd.ac.in", name: "Dr. Suresh Kumar" },
   { uid: "warden.saveri", password: "Saveri@2026", mail: "warden.saveri@iitpkd.ac.in", name: "Dr. Lakshmi Devi" },
   { uid: "fa.petrichor", password: "Advisor@2026", mail: "fa.petrichor@iitpkd.ac.in", name: "Dr. Arun Prasad" },
+  { uid: "hod.cse", password: "HodCse@2026", mail: "hod.cse@iitpkd.ac.in", name: "Prof. R. Venkatesh" },
+  { uid: "112301045", password: "Meera@2026", mail: "112301045@smail.iitpkd.ac.in", name: "Meera Nair" },
   { uid: "iar", password: "IarOffice@2026", mail: "iar@iitpkd.ac.in", name: "IAR Office" },
   { uid: "guesthouse", password: "Manager@2026", mail: "guesthouse@iitpkd.ac.in", name: "Guest House Manager" },
   { uid: "gh.reception", password: "Reception@2026", mail: "gh.reception@iitpkd.ac.in", name: "Guest House Caretaker" },

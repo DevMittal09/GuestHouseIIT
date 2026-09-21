@@ -33,6 +33,7 @@ import { mealsOn, normalizeMeals } from "@/lib/meals";
 import { getSupabase } from "@/lib/supabase/client";
 import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
 import { deriveFromRooms } from "./derive";
+import type { Unit } from "@/lib/units";
 import type {
   BookingDetailsPatch,
   DataStore,
@@ -289,6 +290,12 @@ export class SupabaseStore implements DataStore {
         has_foreign_national:
           r.has_foreign_national ?? guests.some((g) => g.citizenship === "other"),
         created_by: r.created_by ?? null,
+        // Before migration 15 there is no debit head; a personal booking was
+        // always personal funds, and nothing else is guessed.
+        debit_head:
+          r.debit_head ?? (r.booking_type === "personal" ? "personal_funds" : null),
+        debit_details: r.debit_details ?? null,
+        debit_document_url: r.debit_document_url ?? null,
         on_behalf_of_name: r.on_behalf_of_name ?? null,
         on_behalf_of_email: r.on_behalf_of_email ?? null,
         on_behalf_of_phone: r.on_behalf_of_phone ?? null,
@@ -666,6 +673,37 @@ export class SupabaseStore implements DataStore {
     const { error } = await this.db.from("profiles").delete().eq("id", id);
     if (error) throw error;
     await this.db.auth.admin.deleteUser(id).catch(() => undefined);
+  }
+
+  async listUnits(): Promise<Unit[]> {
+    const { data, error } = await this.db.from("units").select("*").order("name");
+    if (error) throw error;
+    return (data ?? []) as Unit[];
+  }
+
+  async createUnit(input: Omit<Unit, "id">): Promise<Unit> {
+    const { data, error } = await this.db.from("units").insert(input).select().single();
+    if (error) {
+      if (error.code === "23505") throw new Error("A unit with this name already exists");
+      throw error;
+    }
+    return data as Unit;
+  }
+
+  async updateUnit(id: string, patch: Partial<Omit<Unit, "id">>): Promise<void> {
+    const { error } = await this.db.from("units").update(patch).eq("id", id);
+    if (error) throw error;
+  }
+
+  async deleteUnit(id: string): Promise<void> {
+    const { error } = await this.db.from("units").delete().eq("id", id);
+    if (error) {
+      // 23503 = foreign_key_violation: people or sub-units still point here.
+      if (error.code === "23503") {
+        throw new Error("People or other units still belong to this one - move them first");
+      }
+      throw error;
+    }
   }
 
   async createGuestHouse(name: string): Promise<GuestHouse> {

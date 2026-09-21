@@ -12,6 +12,7 @@ import type {
 } from "@/lib/types";
 import type { RoleFormConfig } from "@/lib/form-config";
 import type { EmailMessage } from "@/lib/mail/types";
+import type { Unit } from "@/lib/units";
 
 type FormConfigRow = {
   role: Role;
@@ -127,6 +128,9 @@ export interface Database {
           | "on_behalf_of_name"
           | "on_behalf_of_email"
           | "on_behalf_of_phone"
+          | "debit_head"
+          | "debit_details"
+          | "debit_document_url"
           | "created_at"
           | "updated_at"
         >;
@@ -174,6 +178,12 @@ export interface Database {
         Row: MailTemplateRow;
         Insert: Insertable<MailTemplateRow, "enabled" | "cc_emails" | "updated_at">;
         Update: Partial<MailTemplateRow>;
+        Relationships: [];
+      };
+      units: {
+        Row: Unit;
+        Insert: Insertable<Unit, "id" | "parent_id" | "head_id" | "acting_head_id">;
+        Update: Partial<Unit>;
         Relationships: [];
       };
       form_configs: {

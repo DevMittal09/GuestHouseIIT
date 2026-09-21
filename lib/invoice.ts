@@ -1,6 +1,7 @@
 import { mealDayCounts, MEAL_KEYS, MEAL_LABELS } from "./meals";
 import { countBedGuests, countInfants, ROOM_TYPE_LABELS } from "./occupancy";
 import { formatDateTime } from "./format";
+import { describeDebit } from "./debit-heads";
 import type { BookingWithDetails, MealKey, Role } from "./types";
 
 /**
@@ -163,6 +164,8 @@ export interface Invoice {
   guestHouse: string;
   /** The tariff basis applied, in the sheet's own words. */
   category: string;
+  /** The budget debited: personal funds, a project, a department. */
+  paidFrom: string;
   checkIn: string;
   checkOut: string;
   /** Days charged, after the ±4 hour rule. */
@@ -262,6 +265,7 @@ export function buildInvoice(booking: BookingWithDetails): Invoice {
     guestName: booking.on_behalf_of_name ?? booking.requester?.full_name ?? "Guest",
     guestHouse: house,
     category: tariff?.label ?? "Not on the tariff sheet",
+    paidFrom: describeDebit(booking),
     checkIn: formatDateTime(booking.check_in),
     checkOut: formatDateTime(booking.check_out),
     days,

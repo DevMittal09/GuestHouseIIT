@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { countryName } from "@/lib/countries";
+import { describeDebit } from "@/lib/debit-heads";
 import { formatDateTime } from "@/lib/format";
 import { describeMeals, MEAL_KEYS, MEAL_LABELS } from "@/lib/meals";
 import { countBedGuests, describeParty, ROOM_TYPE_LABELS } from "@/lib/occupancy";
@@ -127,6 +128,25 @@ export function BookingDetails({
       </div>
 
       <Field label="Purpose of visit" value={booking.purpose_of_visit} block />
+
+      <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+        <Field label="Paid from" value={describeDebit(booking)} />
+        {booking.debit_document_url && (
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              Sanction document
+            </p>
+            <a
+              href={booking.debit_document_url}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-primary underline underline-offset-4"
+            >
+              View
+            </a>
+          </div>
+        )}
+      </div>
 
       {booking.meals.length > 0 && (
         <div>

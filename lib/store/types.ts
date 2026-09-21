@@ -25,6 +25,7 @@ import type {
 } from "@/lib/mail/types";
 import type { MailTemplateOverride } from "@/lib/mail/template-config";
 import type { Role } from "@/lib/types";
+import type { Unit } from "@/lib/units";
 
 export type NewProfileInput = Omit<Profile, "id">;
 
@@ -140,6 +141,13 @@ export interface DataStore {
   updateProfile(id: string, patch: Partial<NewProfileInput>): Promise<void>;
   /** Throws if the user still has bookings. */
   deleteProfile(id: string): Promise<void>;
+
+  // ---- departments, clubs, councils and offices (migration 15) ----
+  listUnits(): Promise<Unit[]>;
+  createUnit(input: Omit<Unit, "id">): Promise<Unit>;
+  updateUnit(id: string, patch: Partial<Omit<Unit, "id">>): Promise<void>;
+  /** Throws while people or sub-units still belong to it. */
+  deleteUnit(id: string): Promise<void>;
 
   createGuestHouse(name: string): Promise<GuestHouse>;
   updateGuestHouse(id: string, patch: { name?: string; serves_meals?: boolean }): Promise<void>;

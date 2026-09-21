@@ -52,7 +52,9 @@ import {
   seedProfiles,
   seedRoomHolds,
   seedRooms,
+  seedUnits,
 } from "./seed";
+import type { Unit } from "@/lib/units";
 
 interface Db {
   profiles: Profile[];
@@ -72,6 +74,8 @@ interface Db {
   email_outbox?: EmailMessage[];
   /** Only the mails whose wording has actually been edited (migration 13). */
   mail_templates?: MailTemplateOverride[];
+  /** Departments, clubs, councils and offices, and who heads each (migration 15). */
+  units?: Unit[];
 }
 
 const DB_PATH = path.join(process.cwd(), ".local-db.json");
@@ -174,6 +178,14 @@ function loadDb(): Db {
         b.has_foreign_national = false;
         dirty = true;
       }
+      // Migration 15's counterpart: a personal booking was always paid
+      // personally; the budget of an older official one is not guessed at.
+      if (b.debit_head === undefined) {
+        b.debit_head = b.booking_type === "personal" ? "personal_funds" : null;
+        b.debit_details = null;
+        b.debit_document_url = null;
+        dirty = true;
+      }
       if (b.created_by === undefined) {
         b.created_by = null;
         b.on_behalf_of_name = null;
@@ -234,6 +246,18 @@ function loadDb(): Db {
         p.ldap_uid = seedProfiles.find((s) => s.email === p.email)?.ldap_uid ?? null;
         dirty = true;
       }
+      // Migration 15's counterpart: demo personas get their unit back; anyone
+      // else starts in none, as they would in Postgres.
+      if (p.unit_id === undefined) {
+        const seeded = seedProfiles.find((s) => s.email === p.email);
+        p.unit_id = seeded?.unit_id ?? null;
+        p.staff_category = seeded?.staff_category ?? null;
+        dirty = true;
+      }
+    }
+    if (!db.units) {
+      db.units = seedUnits;
+      dirty = true;
     }
     if (dirty) saveDb(db);
     return db;
@@ -249,6 +273,7 @@ function loadDb(): Db {
     form_configs: [],
     room_holds: seedRoomHolds,
     email_outbox: [],
+    units: seedUnits,
   };
   saveDb(db);
   return db;
@@ -356,6 +381,9 @@ export class MockStore implements DataStore {
       rejection_reason: null,
       booking_type: input.booking_type,
       service_type: input.service_type,
+      debit_head: input.debit_head,
+      debit_details: input.debit_details,
+      debit_document_url: input.debit_document_url,
       meal_preference: input.meal_preference,
       meal_guest_count: derived.meal_guest_count,
       pets_policy_acknowledged: input.pets_policy_acknowledged,
@@ -677,6 +705,42 @@ export class MockStore implements DataStore {
       throw new Error("This user has bookings — delete or reassign those first");
     }
     db.profiles = db.profiles.filter((p) => p.id !== id);
+    saveDb(db);
+  }
+
+  async listUnits(): Promise<Unit[]> {
+    return [...(loadDb().units ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async createUnit(input: Omit<Unit, "id">): Promise<Unit> {
+    const db = loadDb();
+    const units = db.units ?? (db.units = []);
+    if (units.some((u) => u.name.toLowerCase() === input.name.toLowerCase())) {
+      throw new Error("A unit with this name already exists");
+    }
+    const unit: Unit = { ...input, id: randomUUID() };
+    units.push(unit);
+    saveDb(db);
+    return unit;
+  }
+
+  async updateUnit(id: string, patch: Partial<Omit<Unit, "id">>): Promise<void> {
+    const db = loadDb();
+    const unit = (db.units ?? []).find((u) => u.id === id);
+    if (!unit) throw new Error("Unit not found");
+    Object.assign(unit, patch);
+    saveDb(db);
+  }
+
+  async deleteUnit(id: string): Promise<void> {
+    const db = loadDb();
+    if (db.profiles.some((p) => p.unit_id === id)) {
+      throw new Error("People still belong to this unit - move them first");
+    }
+    if ((db.units ?? []).some((u) => u.parent_id === id)) {
+      throw new Error("Other units sit under this one - move them first");
+    }
+    db.units = (db.units ?? []).filter((u) => u.id !== id);
     saveDb(db);
   }
 

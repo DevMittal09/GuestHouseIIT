@@ -8,6 +8,7 @@ import {
   parseHistoryParams,
 } from "@/lib/booking-search";
 import { countryName } from "@/lib/countries";
+import { describeDebit } from "@/lib/debit-heads";
 import { getStore } from "@/lib/store";
 import { toInstituteDateValue } from "@/lib/tz";
 import {
@@ -43,6 +44,7 @@ const COLUMNS = [
   "Foreign nationals",
   "Pets policy acknowledged",
   "Booked on behalf of",
+  "Paid from",
   "Purpose",
   "Submitted",
   "My action",
@@ -101,6 +103,7 @@ function csvRow(booking: BookingWithDetails, userId: string): string {
       .join(" / "),
     booking.pets_policy_acknowledged ? "Yes" : "Not asked",
     booking.on_behalf_of_name ?? "",
+    describeDebit(booking),
     booking.purpose_of_visit,
     formatDateTime(booking.created_at),
     action ? STATUS_LABELS[action.log.new_status] : "",

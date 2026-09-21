@@ -260,6 +260,7 @@ export function emptyStatusCounts(): Record<BookingStatus, number> {
   return {
     PENDING_WARDEN: 0,
     PENDING_FA: 0,
+    PENDING_HOD: 0,
     PENDING_IAR: 0,
     PENDING_GH_MANAGER: 0,
     APPROVED: 0,

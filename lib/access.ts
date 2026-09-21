@@ -86,6 +86,7 @@ export function canViewAllOccupancy(role: Role): boolean {
  */
 export type ConsoleSection =
   | "users"
+  | "units"
   | "guest_houses"
   | "forms"
   | "mail_templates"
@@ -102,6 +103,12 @@ export const CONSOLE_SECTIONS: Record<
     href: "/admin/users",
     roles: ["gh_manager", "developer"],
     blurb: "Accounts and what each one may do, including other managers.",
+  },
+  units: {
+    label: "Departments & Clubs",
+    href: "/admin/units",
+    roles: ["gh_manager", "developer"],
+    blurb: "Departments, clubs, councils and offices, and who approves for each.",
   },
   guest_houses: {
     label: "Guest Houses & Rooms",

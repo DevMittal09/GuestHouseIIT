@@ -65,11 +65,13 @@ export async function downloadInvoicePdf(invoice: Invoice, filename: string): Pr
   doc.setFillColor(...BAND);
   doc.setDrawColor(...RULE);
   doc.setLineWidth(0.2);
-  doc.rect(margin, y, contentWidth, 20, "FD");
+  // Three rows of facts now that the paying budget is one of them.
+  doc.rect(margin, y, contentWidth, 28, "FD");
 
   const facts: [string, string][] = [
     ["Guest", invoice.guestName],
     ["Category", invoice.category],
+    ["Paid from", invoice.paidFrom],
     ["Check-in", invoice.checkIn],
     ["Check-out", invoice.checkOut],
     ["Days charged", String(invoice.days)],
@@ -87,7 +89,7 @@ export async function downloadInvoicePdf(invoice: Invoice, filename: string): Pr
     doc.text(pdfSafe(value), x, row);
   });
 
-  y += 26;
+  y += 34;
 
   autoTable(doc, {
     head: [["Item", "Qty", "Rate", "Amount"]],

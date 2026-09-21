@@ -1,6 +1,7 @@
 import { addMonths } from "date-fns";
 import type { BookingSearchCriteria } from "./booking-search";
-import type { BookingStatus, Profile, Role, ServiceType } from "./types";
+import type { BookingStatus, Profile, Role, ServiceType, StaffCategory } from "./types";
+import { approversOf, type Unit } from "./units";
 import { formatDateTime } from "./format";
 import { TURNOVER_GRACE_HOURS } from "./turnover";
 
@@ -48,20 +49,29 @@ export function latestCheckIn(role: Role, from: Date = new Date()): Date | null 
  * business and nobody else's, and routing it through a warden would leave the
  * kitchen waiting on an approval for a head count.
  */
-export function initialStatusFor(role: Role, service: ServiceType = "room"): BookingStatus {
+export function initialStatusFor(
+  role: Role,
+  service: ServiceType = "room",
+  context: RoutingContext = {}
+): BookingStatus {
   if (service === "meals_only") return "PENDING_GH_MANAGER";
   switch (role) {
     case "student":
       return "PENDING_WARDEN";
     case "club":
       return "PENDING_FA";
+    // A faculty member's *official* booking is institute money being spent in
+    // their department's name, so their HOD signs it off first. A personal
+    // booking is their own money, and non-teaching staff answer to the
+    // manager directly — both go straight there.
+    case "employee":
+      return needsHodApproval(context) ? "PENDING_HOD" : "PENDING_GH_MANAGER";
     // Retired role, kept so a resubmitted legacy booking still routes sanely.
     case "alumni":
       return "PENDING_IAR";
     case "iar_student_cell":
       return "PENDING_IAR";
     case "iar_cell":
-    case "employee":
     case "official":
     // The manager booking at the desk on someone's behalf. It still lands in
     // their own allocation queue rather than being approved on the spot: the
@@ -72,6 +82,33 @@ export function initialStatusFor(role: Role, service: ServiceType = "room"): Boo
     default:
       throw new Error(`Role ${role} cannot create bookings`);
   }
+}
+
+/** What `initialStatusFor` needs beyond the role, to route an employee. */
+export interface RoutingContext {
+  bookingType?: string;
+  staffCategory?: StaffCategory | null;
+  /** Whether anyone is set to approve for the requester's department. */
+  hasUnitApprover?: boolean;
+}
+
+/**
+ * Whether an employee's booking waits for their HOD.
+ *
+ * Only a faculty member's official booking does. A profile nobody has
+ * categorised yet is treated as **faculty**: that way an uncategorised staff
+ * member's booking takes one extra step, rather than a faculty member's
+ * official booking silently skipping the approval it needs.
+ *
+ * With no HOD set for the department there is nobody to wait for, so the
+ * booking goes to the manager — the submission log says why.
+ */
+export function needsHodApproval(context: RoutingContext): boolean {
+  return (
+    context.bookingType === "official" &&
+    context.staffCategory !== "staff" &&
+    context.hasUnitApprover === true
+  );
 }
 
 /** Which intermediate status a reviewer role is responsible for. */
@@ -87,6 +124,7 @@ export function nextStatusOnApprove(current: BookingStatus): BookingStatus {
   switch (current) {
     case "PENDING_WARDEN":
     case "PENDING_FA":
+    case "PENDING_HOD":
     case "PENDING_IAR":
       return "PENDING_GH_MANAGER";
     case "PENDING_GH_MANAGER":
@@ -98,14 +136,49 @@ export function nextStatusOnApprove(current: BookingStatus): BookingStatus {
 
 /**
  * Can `reviewer` act on a booking currently in `status`, submitted by `requester`?
- * Wardens are scoped to their hostel, FAs to their club/council.
+ *
+ * Two kinds of approval live here:
+ *
+ * - **By unit** — an HOD for a faculty member's official booking, a club's
+ *   advisor or its council's secretary for a club booking. Decided by who
+ *   heads the requester's unit *now* (`approversOf`), so it follows a change
+ *   of HOD without anyone touching the waiting requests. The approver need
+ *   not hold a reviewer role at all: a council secretary is a student.
+ * - **By role** — wardens scoped to their hostel, the IAR Office, the manager.
+ *
+ * A club whose unit has nobody set falls back to the old advisor rule, so a
+ * request cannot be stranded because the console was half filled in; the
+ * manager can also always approve past any stage.
+ *
+ * `units` must be passed wherever unit approvals matter. Without it only the
+ * role-based rules can match.
  */
-export function canReview(reviewer: Profile, status: BookingStatus, requester: Profile): boolean {
-  if (REVIEWER_STAGE[reviewer.role] !== status) return false;
+export function canReview(
+  reviewer: Profile,
+  status: BookingStatus,
+  requester: Profile,
+  units: Unit[] = []
+): boolean {
   // Nobody signs off their own request. The IAR Office both books and reviews,
   // and its own bookings skip `PENDING_IAR` for that reason — this is the
   // belt-and-braces check in case one ever lands there anyway.
   if (reviewer.id === requester.id) return false;
+
+  if (status === "PENDING_HOD") {
+    return approversOf(requester.unit_id, units).includes(reviewer.id);
+  }
+  if (status === "PENDING_FA") {
+    const byUnit = approversOf(requester.unit_id, units);
+    if (byUnit.length > 0) return byUnit.includes(reviewer.id);
+    // Nobody set for this club: the advisor matched by name, as before.
+    return (
+      reviewer.role === "faculty_advisor" &&
+      Boolean(reviewer.department_or_club) &&
+      reviewer.department_or_club === requester.department_or_club
+    );
+  }
+
+  if (REVIEWER_STAGE[reviewer.role] !== status) return false;
   if (reviewer.role === "warden") return reviewer.hostel_name === requester.hostel_name;
   if (reviewer.role === "faculty_advisor")
     return reviewer.department_or_club === requester.department_or_club;
@@ -115,6 +188,7 @@ export function canReview(reviewer: Profile, status: BookingStatus, requester: P
 export const ACTIVE_STATUSES: BookingStatus[] = [
   "PENDING_WARDEN",
   "PENDING_FA",
+  "PENDING_HOD",
   "PENDING_IAR",
   "PENDING_GH_MANAGER",
 ];

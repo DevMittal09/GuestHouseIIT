@@ -24,6 +24,8 @@ export type Role =
 export type BookingStatus =
   | "PENDING_WARDEN"
   | "PENDING_FA"
+  /** A faculty member's official booking, awaiting their HOD (migration 15). */
+  | "PENDING_HOD"
   | "PENDING_IAR"
   | "PENDING_GH_MANAGER"
   | "APPROVED"
@@ -176,7 +178,55 @@ export type Profile = {
    * until a developer sets it. Unique, compared lowercased.
    */
   ldap_uid: string | null;
+  /**
+   * The department, club or office this person belongs to (migration 15). It
+   * is what their approver is found through — see `lib/units.ts`. Optional
+   * because profiles written before migration 15 have none.
+   */
+  unit_id?: string | null;
+  /**
+   * Faculty or non-teaching staff, for employees only. Faculty official
+   * bookings need their HOD's approval; staff bookings do not.
+   */
+  staff_category?: StaffCategory | null;
 }
+
+export type StaffCategory = "faculty" | "staff";
+
+export const STAFF_CATEGORY_LABELS: Record<StaffCategory, string> = {
+  faculty: "Faculty",
+  staff: "Non-teaching staff",
+};
+
+/**
+ * Where the money for a stay comes from.
+ *
+ * Recorded on every booking so the accounts section knows which budget to
+ * debit. A personal booking is always `personal_funds` — the guest settles at
+ * checkout; everything else chooses one of these when it is made.
+ */
+export type DebitHead =
+  | "institute_grant"
+  | "professional_development_fund"
+  | "project_grant"
+  | "department_budget"
+  | "special_budget"
+  | "personal_funds"
+  | "alumni_fund"
+  | "student_fund"
+  | "hostel_funds";
+
+export const DEBIT_HEAD_LABELS: Record<DebitHead, string> = {
+  institute_grant: "Institute Grant",
+  professional_development_fund: "Professional Development Fund",
+  project_grant: "Project Grant",
+  department_budget: "Department Budget",
+  special_budget: "Special Budget",
+  personal_funds: "Personal Funds",
+  alumni_fund: "Alumni Fund",
+  student_fund: "Student Fund",
+  hostel_funds: "Hostel Funds",
+};
 
 export type GuestHouse = {
   id: string;
@@ -267,6 +317,18 @@ export type Booking = {
    * `user_role`, so this is never null downstream.
    */
   booking_type: BookingType;
+  /**
+   * The budget this stay is charged to (migration 15). Null only on bookings
+   * made before the question existed.
+   */
+  debit_head: DebitHead | null;
+  /**
+   * What the debit head needs to be traced: the project for a Project Grant,
+   * the justification for a Special Budget. Null otherwise.
+   */
+  debit_details: string | null;
+  /** The sanction for a Special Budget, uploaded with the request. */
+  debit_document_url: string | null;
   /** The alumnus this stay is for — only on `booking_type: "alumni"`. */
   alumni_name: string | null;
   /** That alumnus's student / roll number, for the IAR Office to verify against. */
@@ -428,6 +490,9 @@ export interface NewBookingInput {
   check_out: string;
   booking_type: BookingType;
   service_type: ServiceType;
+  debit_head: DebitHead | null;
+  debit_details: string | null;
+  debit_document_url: string | null;
   meal_preference: MealPreference | null;
   /** Only on a meals-only booking, which has no guest rows to count. */
   meal_guest_count: number | null;
@@ -485,7 +550,8 @@ export class RoomClashError extends Error {
 
 export const STATUS_LABELS: Record<BookingStatus, string> = {
   PENDING_WARDEN: "Pending Assistant Warden Review",
-  PENDING_FA: "Pending Faculty Advisor Review",
+  PENDING_FA: "Pending Club Approval",
+  PENDING_HOD: "Pending HOD Approval",
   PENDING_IAR: "Pending IAR Cell Review",
   PENDING_GH_MANAGER: "Pending GH Manager",
   APPROVED: "Approved",

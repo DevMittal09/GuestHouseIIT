@@ -33,7 +33,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ROLE_LABELS, type Profile, type Role } from "@/lib/types";
+import { ROLE_LABELS, STAFF_CATEGORY_LABELS, type Profile, type Role } from "@/lib/types";
+import { UNIT_KIND_LABELS, type Unit } from "@/lib/units";
 
 const ALL_ROLES = Object.keys(ROLE_LABELS) as Role[];
 
@@ -50,14 +51,19 @@ const EMPTY: UserFormInput = {
   department_or_club: "",
   roll_number: "",
   ldap_uid: "",
+  unit_id: "",
+  staff_category: "",
 };
 
 export function UsersManager({
   profiles,
+  units = [],
   roles = ALL_ROLES,
   actorRole = "developer",
 }: {
   profiles: Profile[];
+  /** Departments, clubs and offices a person can be placed in. */
+  units?: Unit[];
   /** The roles this console user may hand out — see `assignableRoles`. */
   roles?: Role[];
   actorRole?: Role;
@@ -88,6 +94,8 @@ export function UsersManager({
       department_or_club: p.department_or_club ?? "",
       roll_number: p.roll_number ?? "",
       ldap_uid: p.ldap_uid ?? "",
+      unit_id: p.unit_id ?? "",
+      staff_category: p.staff_category ?? "",
     });
     setDialogOpen(true);
   };
@@ -338,6 +346,42 @@ export function UsersManager({
                 onChange={(e) => set("department_or_club")(e.target.value)}
               />
             </div>
+            {/* The unit is what their approver is found through, so it is a
+                pick from the list rather than free text — a typo here used
+                to mean nobody could approve their bookings. */}
+            <div className="space-y-2">
+              <Label htmlFor="user-unit">Belongs to</Label>
+              <NativeSelect
+                id="user-unit"
+                value={values.unit_id ?? ""}
+                onChange={(e) => set("unit_id")(e.target.value)}
+              >
+                <option value="">No department or club</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({UNIT_KIND_LABELS[u.kind]})
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            {values.role === "employee" && (
+              <div className="space-y-2">
+                <Label htmlFor="user-staff-category">Faculty or staff</Label>
+                <NativeSelect
+                  id="user-staff-category"
+                  value={values.staff_category ?? ""}
+                  onChange={(e) => set("staff_category")(e.target.value)}
+                >
+                  <option value="">Not set (treated as faculty)</option>
+                  <option value="faculty">{STAFF_CATEGORY_LABELS.faculty}</option>
+                  <option value="staff">{STAFF_CATEGORY_LABELS.staff}</option>
+                </NativeSelect>
+                <p className="text-xs text-muted-foreground">
+                  Faculty official bookings need their HOD&apos;s approval; staff bookings go
+                  straight to the Guest House Manager.
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Roll number</Label>
               <Input
