@@ -415,6 +415,31 @@ every one with an example value.
 **Must never be set in production:** `DEV_LOGIN` (the server refuses to start)
 and `ALLOW_MOCK_STORE` (it lets a production build run on a JSON file).
 
+## What `vercel.json` may and may not ask for
+
+A deployment that fails **with no build log, and never appears in the
+project's Deployments list**, was rejected before it was built. Vercel does
+that when `vercel.json` asks for something the plan does not include — and it
+reports the failure only as a red check on the commit in GitHub, which is a
+miserable way to find out. It cost us three pushes to work out (23 Sep 2026).
+
+On the **Hobby** plan:
+
+- **Cron jobs run once a day, and there may be two of them.** Anything more
+  frequent — `*/10 * * * *` for the outbox worker, which is what this file
+  asked for first — is refused. Both crons are daily now: `/api/mail/cron` at
+  02:30 UTC (08:00 IST) and `/api/mail/dispatch` at 03:00 UTC. That is enough,
+  because dispatch is only a safety net: mail normally leaves within a second
+  of the action that queued it, through `after()`.
+- **`regions` is a Pro feature.** `["bom1"]` (Mumbai) would put the functions
+  next to the institute and next to a Supabase project in that region; on
+  Hobby it is simply not allowed, so it is out of the file.
+
+**On upgrading to Pro, restore both** — put `"regions": ["bom1"]` back and set
+the dispatch cron to `*/10 * * * *`. Nothing else in the file is plan-specific:
+`installCommand` is there because `npm ci` cannot install this lockfile on
+Linux (see the CI workflow's comment).
+
 ## Settings the office must fill in
 
 Everything below is edited in the portal, not in code, and everything has a
