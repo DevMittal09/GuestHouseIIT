@@ -704,7 +704,7 @@ export function invoiceToAccounts(booking: BookingWithDetails, invoice: InvoiceD
           ["Primary guest", invoice.primary_guest],
           ["Rooms (A)", formatINR(invoice.subtotal_rooms)],
           ["Dining (B)", formatINR(invoice.subtotal_dining)],
-          ["GST", formatINR(invoice.gst)],
+          ["GST (CGST + SGST)", `${formatINR(invoice.gst)} = ${formatINR(invoice.cgst ?? 0)} + ${formatINR(invoice.sgst ?? 0)}`],
           ["Grand total", formatINR(invoice.grand_total)],
         ],
       },

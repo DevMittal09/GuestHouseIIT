@@ -1474,9 +1474,20 @@ template was in `public/`. The header images are `word/media/image1.jpg` and
   zero-rate rows, as the sheet says, so the rows still print.
 - **"Requester category" = the requester's role**, the portal's own category.
   The sheet's Type 3 "government officers" is the `official` role (as before).
-- **Rounding.** GST is computed in basis points on integer paise and rounded
-  half-up to the rupee; the grand total is rounded half-up to the rupee too.
-  GST is 0 by default (the office has not said), and the row still prints.
+- **Rates include GST (user, 22 Sep 2026).** The office's prices are what the
+  guest pays: the Grand Total is exactly the sum of the rates, and the invoice
+  backs the taxable value out (`splitGst`) — the Tariff and Amount columns and
+  Total (A+B) are before GST, "GST on Total (CGST 2.5% + SGST 2.5%)" is the
+  difference, and a breakdown per SAC with CGST / SGST sits under the GSTIN.
+  Rates checked online on 22 Sep 2026: since 22 Sep 2025 (56th GST Council)
+  accommodation up to ₹7,500 a unit a day is 5% without ITC (above it 18%),
+  restaurant service 5% (SAC 996311 accommodation, 996331 food). Kerala GSTIN
+  and a Kerala property, so intra-state: half CGST, half SGST. All of it is a
+  Setting (`prices_include_gst`, room / above-threshold / food rates, threshold,
+  SACs); switching `prices_include_gst` off adds GST on top instead, rounded
+  half-up to the rupee per SAC group. An extra bed takes its room's slab.
+  **Office to confirm** with its accountant that the guest house supplies are
+  taxable at these rates (an institute guest house can have exemptions).
 - **Numbering** is per financial year, `GH/2026-27/0001` (prefix and width are
   Settings), taken by `issue_invoice()` in the same transaction as the insert:
   no gaps, no duplicates, and a refused issue spends no number (verified).

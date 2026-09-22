@@ -27,6 +27,9 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   formatINR,
+  gstBreakdownLines,
+  gstRowLabel,
+  GST_INCLUDED_NOTE,
   INVOICE_STATUS_LABELS,
   PAYMENT_MODE_LABELS,
   PAYMENT_MODES,
@@ -440,7 +443,7 @@ function InvoicePreview({
             {[
               ["Sub Total (B)", doc.subtotal_dining],
               ["Total (A+B)", doc.total],
-              [doc.gst_percent > 0 ? `GST on Total (${doc.gst_percent}%)` : "GST on Total", doc.gst],
+              [gstRowLabel(doc).replace(/:$/, ""), doc.gst],
             ].map(([label, value]) => (
               <tr key={String(label)} className="border-t font-medium">
                 <td colSpan={3} className="p-2 text-right">
@@ -458,6 +461,14 @@ function InvoicePreview({
           </tbody>
         </table>
       </div>
+      {(doc.gst_breakdown?.length ?? 0) > 0 && (
+        <ul className="space-y-0.5 text-xs text-muted-foreground">
+          {gstBreakdownLines(doc).map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+          {doc.prices_include_gst && <li>{GST_INCLUDED_NOTE}</li>}
+        </ul>
+      )}
       {counts && (
         <p className="text-xs text-muted-foreground">
           Meal counts are covers — meals ticked × guests eating (infants excluded). Amounts update after Save counts.

@@ -583,6 +583,27 @@ export function formatInvoiceDate(iso: string): string {
 
 export const INVOICE_TITLE = (guestHouse: string) => `INVOICE - IIT Palakkad ${guestHouse} Guest House`;
 
+/** "GST on Total (CGST 2.5% + SGST 2.5%):" — the rate when there is one. */
+export function gstRowLabel(doc: Pick<InvoiceDocument, "gst_breakdown" | "gst">): string {
+  const rates = [...new Set((doc.gst_breakdown ?? []).map((g) => g.percent))];
+  if (doc.gst === 0 || rates.length === 0) return "GST on Total:";
+  if (rates.length === 1) return `GST on Total (CGST ${rates[0] / 2}% + SGST ${rates[0] / 2}%):`;
+  return "GST on Total (CGST + SGST, see below):";
+}
+
+/**
+ * The tax lines under the table, one per SAC and rate:
+ * "Accommodation, SAC 996311: taxable ₹13,500.00 @ 5% — CGST ₹337.50 + SGST ₹337.50".
+ */
+export function gstBreakdownLines(doc: Pick<InvoiceDocument, "gst_breakdown" | "prices_include_gst">): string[] {
+  return (doc.gst_breakdown ?? []).map(
+    (g) =>
+      `${g.label}, SAC ${g.sac}: taxable ${formatINR(g.taxable)} @ ${g.percent}% — CGST ${formatINR(g.cgst)} + SGST ${formatINR(g.sgst)}`
+  );
+}
+
+export const GST_INCLUDED_NOTE = "The tariff rates include GST; the amounts above are shown before GST.";
+
 /**
  * Why an invoice cannot be issued for this booking now, or null when it can.
  * Issued at check-out — the desk may do it while the guest is still in the

@@ -668,6 +668,8 @@ are in `public/invoice/`. The flow, in the manager's and caretaker's consoles
   guests, or a dining booking's head count), `gstPaise()` (basis points,
   half-up to the rupee), `formatINR()` (₹1,23,456.00, written out, not `Intl`),
   `financialYear()` (1 April rollover, institute time) and
+  `splitGst()` / `roomGstPercent()` (the rates are **GST-inclusive** by default:
+  the grand total is the rates, taxable value and CGST/SGST are backed out),
   `buildInvoiceDocument()`, which assembles every printed field into an
   `InvoiceDocument`. `actualStayTimes()` reads the desk's OCCUPIED / VACATED
   log entries; an occupied stay is billed to its booked check-out.

@@ -10,6 +10,9 @@ import {
 import {
   formatINR,
   formatInvoiceDate,
+  gstBreakdownLines,
+  gstRowLabel,
+  GST_INCLUDED_NOTE,
   INVOICE_TITLE,
   PAYMENT_MODE_LABELS,
   type InvoiceDocument,
@@ -229,10 +232,7 @@ function tariffTables(doc: jsPDF, invoice: InvoiceDocument, top: number): number
   }
   totalRow("Sub Total (B):", formatINR(invoice.subtotal_dining));
   totalRow("Total (A+B)", formatINR(invoice.total));
-  totalRow(
-    invoice.gst_percent > 0 ? `GST on Total (${invoice.gst_percent}%):` : "GST on Total:",
-    formatINR(invoice.gst)
-  );
+  totalRow(gstRowLabel(invoice), formatINR(invoice.gst));
   totalRow("Grand Total (A+B including GST):", formatINR(invoice.grand_total));
   return y;
 }
@@ -240,7 +240,16 @@ function tariffTables(doc: jsPDF, invoice: InvoiceDocument, top: number): number
 function signatures(doc: jsPDF, invoice: InvoiceDocument, top: number, stamp: Stamp | null) {
   font(doc, "bold", 10);
   doc.text(`GSTIN No.:${invoice.gstin}`, MARGIN + 1.3, top + 5);
-  const sigY = top + 18;
+  // The tax breakdown a tax invoice needs: taxable value and CGST / SGST per
+  // SAC and rate. Snapshots from before it existed have none.
+  const lines = [
+    ...gstBreakdownLines(invoice),
+    ...(invoice.prices_include_gst ? [GST_INCLUDED_NOTE] : []),
+  ];
+  font(doc, "normal", 8);
+  lines.forEach((line, i) => doc.text(line, MARGIN + 1.3, top + 9.5 + i * 3.6));
+  const sigY = Math.max(top + 18, top + 9.5 + lines.length * 3.6 + 8);
+  font(doc, "bold", 10);
   doc.text("Signature of the guest", MARGIN + 1.3, sigY);
   doc.text("Authorised signatory", PAGE_W - MARGIN - 1.3, sigY, { align: "right" });
 

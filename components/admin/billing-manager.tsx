@@ -51,7 +51,7 @@ export function BillingManager({
           over.
         </p>
       </div>
-      <TariffsSection tariffs={tariffs} guestHouses={guestHouses} today={today} />
+      <TariffsSection tariffs={tariffs} guestHouses={guestHouses} today={today} inclusive={rules.prices_include_gst} />
       <InvoiceRulesSection key={JSON.stringify(rules)} current={rules} />
     </section>
   );
@@ -63,11 +63,15 @@ function TariffsSection({
   tariffs,
   guestHouses,
   today,
+  inclusive,
 }: {
   tariffs: Tariff[];
   guestHouses: { id: string; name: string }[];
   today: string;
+  /** Whether the rates are GST-inclusive prices (Invoice settings below). */
+  inclusive: boolean;
 }) {
+  const gstNote = inclusive ? "incl. GST" : "before GST";
   const { isPending, run } = useRunner();
   const [deleting, setDeleting] = useState<Tariff | null>(null);
   const names = {
@@ -104,7 +108,7 @@ function TariffsSection({
             <tr>
               <th className="p-2 font-medium">Charge</th>
               <th className="p-2 font-medium">Applies to</th>
-              <th className="p-2 text-right font-medium">Rate</th>
+              <th className="p-2 text-right font-medium">Rate ({gstNote})</th>
               <th className="p-2 font-medium">From</th>
               <th className="p-2" />
             </tr>
@@ -145,7 +149,7 @@ function TariffsSection({
           </tbody>
         </table>
       </div>
-      <NewTariffForm guestHouses={guestHouses} today={today} />
+      <NewTariffForm guestHouses={guestHouses} today={today} gstNote={gstNote} />
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
@@ -163,7 +167,15 @@ function TariffsSection({
   );
 }
 
-function NewTariffForm({ guestHouses, today }: { guestHouses: { id: string; name: string }[]; today: string }) {
+function NewTariffForm({
+  guestHouses,
+  today,
+  gstNote,
+}: {
+  guestHouses: { id: string; name: string }[];
+  today: string;
+  gstNote: string;
+}) {
   const { isPending, run } = useRunner();
   const blank = {
     item: "room" as TariffItem,
@@ -233,7 +245,7 @@ function NewTariffForm({ guestHouses, today }: { guestHouses: { id: string; name
             ))}
           </NativeSelect>
         </Field>
-        <Field label="Rate (₹)" id="t-rate">
+        <Field label={`Rate (₹, ${gstNote})`} id="t-rate">
           <Input id="t-rate" inputMode="decimal" value={draft.rate} onChange={set("rate")} placeholder="2000" />
         </Field>
         <Field label="Applies from" id="t-from">
@@ -291,15 +303,29 @@ function Field({ label, id, children }: { label: string; id: string; children: R
 
 function InvoiceRulesSection({ current }: { current: InvoiceRules }) {
   const [draft, setDraft] = useState<InvoiceRules>(current);
-  const top = (k: "serial_prefix" | "gstin" | "accounts_email") => (e: { target: { value: string } }) =>
+  const top = (k: "serial_prefix" | "gstin" | "accounts_email" | "sac_room" | "sac_meal") => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, [k]: e.target.value }));
-  const num = (k: "serial_digits" | "grace_hours" | "gst_percent") => (e: { target: { value: string } }) =>
+  type NumKey =
+    | "serial_digits"
+    | "grace_hours"
+    | "gst_room_percent"
+    | "gst_room_threshold"
+    | "gst_room_above_percent"
+    | "gst_meal_percent";
+  const num = (k: NumKey) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, [k]: e.target.value === "" ? ("" as unknown as number) : Number(e.target.value) }));
   const bank = (k: keyof InvoiceRules["bank"]) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, bank: { ...d.bank, [k]: e.target.value } }));
   const contact = (k: keyof InvoiceRules["contact"]) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, contact: { ...d.contact, [k]: e.target.value } }));
-  const valid = [draft.serial_digits, draft.grace_hours, draft.gst_percent].every(
+  const valid = [
+    draft.serial_digits,
+    draft.grace_hours,
+    draft.gst_room_percent,
+    draft.gst_room_threshold,
+    draft.gst_room_above_percent,
+    draft.gst_meal_percent,
+  ].every(
     (v) => typeof v === "number" && Number.isFinite(v)
   );
   const sample = `${draft.serial_prefix || "GH"}/2026-27/${"1".padStart(Number(draft.serial_digits) || 4, "0")}`;
@@ -340,9 +366,6 @@ function InvoiceRulesSection({ current }: { current: InvoiceRules }) {
             disabled={draft.day_basis !== "24h"}
           />
         </Field>
-        <Field label="GST on total (%)" id="i-gst">
-          <Input id="i-gst" type="number" min={0} max={28} step="0.01" value={draft.gst_percent} onChange={num("gst_percent")} />
-        </Field>
         <Field label="GSTIN" id="i-gstin">
           <Input id="i-gstin" value={draft.gstin} onChange={top("gstin")} maxLength={15} className="font-mono" />
         </Field>
@@ -355,6 +378,47 @@ function InvoiceRulesSection({ current }: { current: InvoiceRules }) {
             placeholder="accounts@iitpkd.ac.in"
           />
         </Field>
+      </div>
+      <div className="space-y-3 rounded-md border p-3">
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 accent-primary"
+            checked={draft.prices_include_gst}
+            onChange={(e) => setDraft((d) => ({ ...d, prices_include_gst: e.target.checked }))}
+          />
+          <span>
+            <span className="font-medium">Rates include GST</span>
+            <span className="block text-xs text-muted-foreground">
+              On: the Grand Total is exactly the rates; the invoice shows the value before GST and the
+              GST within it. Off: GST is added on top of the rates.
+            </span>
+          </span>
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="GST on rooms (%)" id="i-gst-room">
+            <Input id="i-gst-room" type="number" min={0} max={28} step="0.01" value={draft.gst_room_percent} onChange={num("gst_room_percent")} />
+          </Field>
+          <Field label="…up to a room value of (₹/day)" id="i-gst-threshold">
+            <Input id="i-gst-threshold" type="number" min={0} value={draft.gst_room_threshold} onChange={num("gst_room_threshold")} />
+          </Field>
+          <Field label="GST on rooms above that (%)" id="i-gst-room-above">
+            <Input id="i-gst-room-above" type="number" min={0} max={28} step="0.01" value={draft.gst_room_above_percent} onChange={num("gst_room_above_percent")} />
+          </Field>
+          <Field label="GST on food (%)" id="i-gst-meal">
+            <Input id="i-gst-meal" type="number" min={0} max={28} step="0.01" value={draft.gst_meal_percent} onChange={num("gst_meal_percent")} />
+          </Field>
+          <Field label="SAC — accommodation" id="i-sac-room">
+            <Input id="i-sac-room" value={draft.sac_room} onChange={top("sac_room")} className="font-mono" />
+          </Field>
+          <Field label="SAC — food" id="i-sac-meal">
+            <Input id="i-sac-meal" value={draft.sac_meal} onChange={top("sac_meal")} className="font-mono" />
+          </Field>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Defaults are the rates in force since 22 Sep 2025: accommodation up to ₹7,500 a day 5% (without
+          ITC), above it 18%; food 5%. The guest house is in Kerala, so each is printed as half CGST, half SGST.
+        </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Account holder" id="b-holder">
