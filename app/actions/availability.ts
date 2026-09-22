@@ -3,6 +3,7 @@
 import { requireUser } from "@/lib/auth";
 import { MAX_AVAILABILITY_DAYS } from "@/lib/availability";
 import { getStore } from "@/lib/store";
+import { blockSegment, blockOverlaps } from "@/lib/operations";
 import type { Role, Room, RoomOccupancySegment } from "@/lib/types";
 
 /**
@@ -45,10 +46,16 @@ export async function getRoomAvailability(
   }
 
   const store = getStore();
-  const [rooms, segments] = await Promise.all([
+  const [rooms, stays, blocks] = await Promise.all([
     store.listRooms(guestHouseId),
     store.listRoomOccupancy(guestHouseId, from.toISOString(), to.toISOString()),
+    // Maintenance blocks are drawn too (Phase 7). Before migration 20 there are none.
+    store.listRoomBlocks(guestHouseId).catch(() => []),
   ]);
+  const segments = [
+    ...stays,
+    ...blocks.filter((b) => blockOverlaps(b, from.toISOString(), to.toISOString())).map(blockSegment),
+  ];
 
   const showsOccupant = CAN_SEE_OCCUPANT.includes(user.role);
   const roomIds = new Set(rooms.map((r) => r.id));
@@ -60,7 +67,8 @@ export async function getRoomAvailability(
     segments: segments
       .filter((s) => roomIds.has(s.room_id))
       .map((s) =>
-        showsOccupant ? s : { ...s, requester_name: null, purpose_of_visit: null }
+        // A block's reason is not personal — everyone sees why a room is out.
+        showsOccupant || s.kind === "maintenance" ? s : { ...s, requester_name: null, purpose_of_visit: null }
       ),
     showsOccupant,
   };

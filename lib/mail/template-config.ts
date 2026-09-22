@@ -124,6 +124,18 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
     audience: "A reviewer who has left a request too long",
     when: "When a request has waited past the escalation threshold.",
   },
+  "booking.extension_requested.manager": {
+    audience: "To: the Guest House Manager. CC: the Copy-to list.",
+    when: "When a requester asks to stay longer.",
+  },
+  "booking.extension_decided.requester": {
+    audience: "The person who made the booking",
+    when: "When the manager approves or declines a request to stay longer.",
+  },
+  "booking.no_show.requester": {
+    audience: "The person who made the booking",
+    when: "When a stay is released because the guest did not arrive — by the manager or automatically.",
+  },
   "invoice.issued.accounts": {
     audience:
       "To: the Accounts email (Tariffs & Invoicing). CC: the requester's HOD and the requester. The invoice PDF is attached.",

@@ -39,7 +39,10 @@ export type MailEventKey =
   | "queue.digest.reviewer"
   | "desk.daily_report"
   | "queue.escalation.reviewer"
-  | "invoice.issued.accounts";
+  | "invoice.issued.accounts"
+  | "booking.extension_requested.manager"
+  | "booking.extension_decided.requester"
+  | "booking.no_show.requester";
 
 /** What each event is, for the developer console's outbox table. */
 export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
@@ -60,6 +63,9 @@ export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
   "desk.daily_report": "Daily guest house report",
   "queue.escalation.reviewer": "Pending-too-long escalation",
   "invoice.issued.accounts": "Invoice issued (Accounts)",
+  "booking.extension_requested.manager": "Extension requested",
+  "booking.extension_decided.requester": "Extension decided",
+  "booking.no_show.requester": "Released as a no-show",
 };
 
 /**
@@ -85,6 +91,7 @@ export const MAIL_THREAD_OF: Partial<Record<MailEventKey, MailThreadKind>> = {
   "booking.cancellation_requested.manager": "approvals",
   "booking.cancellation_requested.reviewer": "approvals",
   "booking.cancelled.desk": "approvals",
+  "booking.extension_requested.manager": "approvals",
   "queue.digest.reviewer": "daily_log",
   "queue.escalation.reviewer": "daily_log",
   "desk.daily_report": "daily_log",

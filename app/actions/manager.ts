@@ -7,6 +7,7 @@ import {
   canManageAnyBooking,
 } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
+import { recordAudit } from "@/lib/audit-server";
 import { checkOutOrderError } from "@/lib/booking-schema";
 import { mealPlanError, normalizeMeals } from "@/lib/meals";
 import {
@@ -230,6 +231,12 @@ export async function reassignRooms(
           .join(", ")}: ${reason.trim()}`,
       }
     );
+    // A move mid-stay is audited (Phase 7): who moved whom, from where to where, and why.
+    await recordAudit(user, "booking.room_moved", booking.booking_reference_id, {
+      from: booking.assigned_rooms.map((r) => r.room_number),
+      to: selected.map((r) => r.room_number),
+      reason: reason.trim(),
+    });
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {

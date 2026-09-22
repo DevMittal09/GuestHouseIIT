@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InvoiceDialog } from "@/components/invoice-dialog";
+import { ManageStayDialog } from "@/components/manage-stay-dialog";
 import {
   Table,
   TableBody,
@@ -63,10 +64,13 @@ const LIFECYCLE_ACTIONS: Record<
 export function StaysTable({
   bookings,
   showOverdue = false,
+  isManager = false,
 }: {
   bookings: BookingWithDetails[];
   /** Flag stays past their check-out that were never marked Vacated. */
   showOverdue?: boolean;
+  /** The manager's desk: moves, no-shows and cancellations as well as extensions. */
+  isManager?: boolean;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
@@ -85,7 +89,7 @@ export function StaysTable({
         </TableHeader>
         <TableBody>
           {bookings.map((b) => (
-            <StayRow key={b.id} booking={b} showOverdue={showOverdue} />
+            <StayRow key={b.id} booking={b} showOverdue={showOverdue} isManager={isManager} />
           ))}
         </TableBody>
       </Table>
@@ -97,9 +101,11 @@ export function StaysTable({
 function StayRow({
   booking,
   showOverdue,
+  isManager,
 }: {
   booking: BookingWithDetails;
   showOverdue: boolean;
+  isManager: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -143,6 +149,11 @@ function StayRow({
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
       <TableCell>
         {formatDateTime(booking.check_out)}
+        {booking.extension_requested_until && (
+          <Badge variant="outline" className="ml-2 border-amber-400 align-middle text-amber-800 dark:text-amber-200">
+            ⏳ Extension to {formatDateTime(booking.extension_requested_until)}
+          </Badge>
+        )}
         {overdue && (
           <Badge variant="outline" className="ml-2 align-middle">
             Overdue
@@ -185,6 +196,9 @@ function StayRow({
               is often asked for the bill before they have formally left. */}
           {(booking.status === "OCCUPIED" || booking.status === "VACATED") && (
             <InvoiceDialog booking={booking} />
+          )}
+          {(booking.status === "APPROVED" || booking.status === "OCCUPIED") && (
+            <ManageStayDialog booking={booking} isManager={isManager} />
           )}
         </div>
         {tooEarly && (

@@ -1,5 +1,6 @@
 "use server";
 
+import { blockOverlaps } from "@/lib/operations";
 import { revalidatePath } from "next/cache";
 import { canAssignRooms, canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
@@ -474,7 +475,16 @@ export async function getRoomConflicts(
     await store.listRoomOccupancy(booking.guest_house_id, from, to)
   ).filter((seg) => seg.booking_id !== bookingId);
 
-  return conflictsByRoom({ from: booking.check_in, to: booking.check_out }, segments, buffer);
+  const conflicts = conflictsByRoom({ from: booking.check_in, to: booking.check_out }, segments, buffer);
+  // A room out of service for maintenance is a hard clash (Phase 7): the
+  // database refuses it whatever the manager accepts.
+  const blocks = await store.listRoomBlocks(booking.guest_house_id).catch(() => []);
+  for (const block of blocks) {
+    if (blockOverlaps(block, booking.check_in, new Date(Date.parse(booking.check_out) + buffer).toISOString())) {
+      conflicts[block.room_id] = "hard";
+    }
+  }
+  return conflicts;
 }
 
 export async function allocateRooms(

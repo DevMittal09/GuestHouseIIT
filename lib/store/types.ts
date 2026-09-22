@@ -29,6 +29,7 @@ import type { Unit } from "@/lib/units";
 import type { AuditEvent, AuditFilter, NewAuditEvent } from "@/lib/audit";
 import type { NewProjectInput, Project } from "@/lib/projects";
 import type { NewTariffInput, Tariff } from "@/lib/tariffs";
+import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import type {
   InvoiceFilter,
   InvoiceRecord,
@@ -60,6 +61,8 @@ export interface StatusUpdate {
   override_room_ids?: string[];
   /** Who accepted those overrides. Required when `override_room_ids` is set. */
   override_by?: string | null;
+  /** Mark the stay released as a no-show (migration 20). */
+  no_show_released_at?: string | null;
 }
 
 /**
@@ -75,6 +78,8 @@ export interface BookingDetailsPatch {
   purpose_of_visit?: string;
   meals?: MealPlan;
   meal_preference?: MealPreference | null;
+  /** Set or clear (null) a requester's extension request (migration 20). */
+  extension_request?: { until: string; reason: string } | null;
 }
 
 export type NewLogInput = Omit<BookingLog, "id" | "booking_id" | "timestamp" | "previous_status">;
@@ -230,6 +235,16 @@ export interface DataStore {
   appendAudit(event: NewAuditEvent): Promise<void>;
   /** Newest first. */
   listAudit(filter: AuditFilter): Promise<AuditEvent[]>;
+
+  // ---- maintenance blocks and bulk rooms (migration 20) ----------------
+
+  /** Blocks on a guest house's rooms, earliest first. */
+  listRoomBlocks(guestHouseId: string): Promise<RoomBlock[]>;
+  /** Throws `RoomClashError` when a stay or another block covers that time. */
+  createRoomBlock(input: NewRoomBlockInput): Promise<RoomBlock>;
+  deleteRoomBlock(id: string): Promise<void>;
+  /** All or nothing; throws on a number the guest house already has. */
+  createRooms(guestHouseId: string, rooms: { room_number: string; room_type: RoomType }[]): Promise<number>;
 
   // ---- tariffs and invoices (migration 19) ----------------------------
 

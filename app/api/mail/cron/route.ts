@@ -1,6 +1,8 @@
 import { cronAuthorized, mailConfig } from "@/lib/mail/config";
 import { runDailyMailJobs } from "@/lib/mail/digest";
 import { drainOutbox } from "@/lib/mail/dispatch";
+import { runNoShowRelease } from "@/lib/no-show-server";
+import { getRules } from "@/lib/settings-server";
 
 /**
  * The daily mail jobs: approval digests, check-in reminders, the day-wise
@@ -32,6 +34,9 @@ async function handle(request: Request): Promise<Response> {
   }
 
   try {
+    // Release no-shows first (Phase 7, off unless the Setting is above 0), so
+    // the day's desk report already shows the rooms as free.
+    const noShowsReleased = await runNoShowRelease(new Date(), (await getRules()).booking.no_show_release_hours);
     const queued = await runDailyMailJobs();
     const dispatched = await drainOutbox();
 
@@ -39,6 +44,7 @@ async function handle(request: Request): Promise<Response> {
       ok: true,
       transport: mailConfig().transport,
       queued,
+      noShowsReleased,
       dispatched,
     });
   } catch (error) {

@@ -39,7 +39,7 @@ describe("reading stored settings", () => {
 
   it("merges a partial row over the defaults (a field added later)", () => {
     const parsed = parseRuleGroup("booking", { advance_booking_months: 3 });
-    expect(parsed).toEqual({ advance_booking_months: 3, max_stay_nights: 14, buffer_minutes: 240 });
+    expect(parsed).toEqual({ advance_booking_months: 3, max_stay_nights: 14, buffer_minutes: 240, no_show_release_hours: 0 });
   });
 
   it("ignores a malformed row rather than throwing", () => {
@@ -51,7 +51,7 @@ describe("reading stored settings", () => {
 
   it("ignores keys it does not know", () => {
     const parsed = parseRuleGroup("booking", { max_stay_nights: 7, surprise: true });
-    expect(parsed).toEqual({ advance_booking_months: 1, max_stay_nights: 7, buffer_minutes: 240 });
+    expect(parsed).toEqual({ advance_booking_months: 1, max_stay_nights: 7, buffer_minutes: 240, no_show_release_hours: 0 });
   });
 });
 

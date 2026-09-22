@@ -363,6 +363,15 @@ export type Booking = {
    * them.
    */
   has_infant: boolean;
+  /**
+   * A requester's request to stay longer (migration 20), awaiting the
+   * manager. Null — or absent on an older mock row — when nothing is asked.
+   */
+  extension_requested_until?: string | null;
+  extension_reason?: string | null;
+  extension_requested_at?: string | null;
+  /** Set when the stay was released because the guest never arrived (migration 20). */
+  no_show_released_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -482,6 +491,11 @@ export type RoomOccupancySegment = {
   turnaround_until: string | null;
   requester_name: string | null;
   purpose_of_visit: string | null;
+  /**
+   * "maintenance" for a room block (Phase 7), drawn distinctly and never
+   * allocatable; absent for a stay. A block's `purpose_of_visit` is its reason.
+   */
+  kind?: "stay" | "maintenance";
 }
 
 export interface BookingFilter {

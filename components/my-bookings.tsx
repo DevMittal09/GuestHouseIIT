@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cancelBooking } from "@/app/actions/bookings";
+import { requestExtensionAction } from "@/app/actions/operations";
 import { BookingDetails } from "@/components/booking-details";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -23,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, toDatetimeLocal } from "@/lib/format";
 import type { BookingStatus, BookingWithDetails } from "@/lib/types";
 
 /** Statuses where the requester can initiate cancellation. */
@@ -146,6 +148,7 @@ function BookingRow({ booking, invoice }: { booking: BookingWithDetails; invoice
               <DialogTitle>Booking {booking.booking_reference_id}</DialogTitle>
             </DialogHeader>
             <BookingDetails booking={booking} showAlumniCard />
+            <ExtensionRequest booking={booking} />
 
             {booking.status === "CANCELLATION_REQUESTED" && (
               <div className="rounded-md border border-orange-300 bg-orange-50 p-3 text-sm dark:border-orange-900 dark:bg-orange-950">
@@ -217,5 +220,70 @@ function BookingRow({ booking, invoice }: { booking: BookingWithDetails; invoice
         </Dialog>
       </TableCell>
     </TableRow>
+  );
+}
+
+/**
+ * Ask to stay longer (Phase 7). The manager approves — moving the room holds,
+ * which is refused if someone else has the room by then — or declines, and the
+ * requester is told either way. One request at a time.
+ */
+function ExtensionRequest({ booking }: { booking: BookingWithDetails }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [until, setUntil] = useState(() => toDatetimeLocal(booking.check_out));
+  const [reason, setReason] = useState("");
+  const eligible =
+    booking.service_type !== "meals_only" && (booking.status === "APPROVED" || booking.status === "OCCUPIED");
+  if (!eligible) return null;
+  if (booking.extension_requested_until) {
+    return (
+      <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+        ⏳ You asked to stay until {formatDateTime(booking.extension_requested_until)}. The Guest House Manager
+        will reply by email.
+      </p>
+    );
+  }
+  const submit = () =>
+    startTransition(async () => {
+      const result = await requestExtensionAction(booking.id, until, reason);
+      if (result.ok) {
+        toast.success("Extension requested — the Guest House Manager will reply by email");
+        setReason("");
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <p className="text-sm font-medium">Need to stay longer?</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <Label htmlFor={`ext-until-${booking.id}`}>Stay until</Label>
+          <Input
+            id={`ext-until-${booking.id}`}
+            type="datetime-local"
+            value={until}
+            min={toDatetimeLocal(booking.check_out)}
+            onChange={(e) => setUntil(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor={`ext-reason-${booking.id}`}>Why</Label>
+          <Input
+            id={`ext-reason-${booking.id}`}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. The meeting runs a day longer"
+          />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" disabled={pending || reason.trim().length < 3} onClick={submit}>
+          Request extension
+        </Button>
+      </div>
+    </div>
   );
 }

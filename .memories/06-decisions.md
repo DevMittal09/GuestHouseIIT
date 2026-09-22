@@ -1543,3 +1543,50 @@ the gaps:
   the Invoice button on its row). Covers are the head count × meals; the desk
   corrects them to what was served. No separate dining booking is attached to a
   stay's invoice — each is invoiced on its own.
+
+## Phase 7: operational states (22 Sep 2026)
+
+The manager actions for changing a booking (`app/actions/manager.ts`:
+dates, meals, rooms, cancel, reinstate) existed but **had no UI at all**.
+Phase 7 gives the reception tables a **Manage** dialog per approved or current
+stay, and adds:
+
+- **Extend a stay** — manager and caretaker. The holds move through the same
+  store path as any date change (`set_room_holds` on Supabase), so another
+  stay in the room by then refuses it with the clash message.
+- **Requester asks, manager decides.** "Request extension" in the requester's
+  booking view stores `extension_requested_until` / reason; the list shows
+  "⏳ Extension to …"; the manager approves (moves the holds) or declines with a
+  note (required); both are mailed (`booking.extension_requested.manager`,
+  `booking.extension_decided.requester`). A request the check-out already
+  covers is settled automatically when the dates move.
+- **Move rooms mid-stay** — the existing `reassignRooms`, now reachable, with a
+  required reason, written to the security audit log (`booking.room_moved`).
+  **Simplification:** the holds keep one period per booking, so the new room is
+  held for the whole stay and the old one released entirely; the log records
+  when the move happened, and the invoice prints the room held at issue.
+- **No-shows** — the manager releases a stay whose booked check-in has passed
+  with nobody checked in; the booking is cancelled, its rooms freed,
+  `no_show_released_at` set, audited and mailed. The same release runs from the
+  daily cron when Setting `booking.no_show_release_hours` > 0 (default **0 =
+  off**: the office decides whether to automate it). Idempotent: a released
+  booking is no longer APPROVED, and the mail is keyed on the release time.
+  The release code lives in `lib/no-show-server.ts` (server-only) so the
+  automatic run is never exposed as a server action.
+- **Early check-out** needed nothing new: Vacated deletes the holds, so the
+  room is free from that moment; the actual time is the log entry (tested).
+- **Maintenance blocks** are `room_blocks` rows (migration 20), not holds with
+  no booking — `room_holds` has a booking primary key and its exclusion
+  constraint stays the only check between stays. Triggers on both tables,
+  each locking the room row first, refuse a block over any stay's *guard*
+  (stay + turnaround) and a stay into a block; a buffer change that would
+  push a stay into a block is refused too. Blocks are drawn cross-hatched with
+  🔧, are "hard" in the allocation grid, count as occupied everywhere, and are
+  managed in Guest Houses & Rooms (audited as `room.maintenance`). A block's
+  reason is shown to everyone — it is not personal.
+- **Bulk rooms** — "B-101 to B-120" (also "B-101..B-120", lists, zero-padding
+  kept), previewed with rooms that already exist skipped, then confirmed; all
+  or nothing; at most 200 at once.
+- **Not colour alone** — a ● in booked bars and a 🔧 in maintenance bars,
+  `aria-label`s on the bars, the legend spelled out, and ⏳ on pending
+  extensions.

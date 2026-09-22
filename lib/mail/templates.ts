@@ -751,3 +751,68 @@ export function invoiceToAccounts(booking: BookingWithDetails, invoice: InvoiceD
     ],
   };
 }
+
+// ------------------------------------------------------------- Phase 7
+
+export function extensionRequestedToManager(booking: BookingWithDetails): EmailDocument {
+  const until = booking.extension_requested_until ?? booking.check_out;
+  return {
+    heading: "A guest asks to stay longer",
+    preheader: `${booking.booking_reference_id} — until ${formatDateTime(until)}.`,
+    blocks: [
+      {
+        kind: "paragraph",
+        text: `${requesterLine(booking)} asks to extend the stay at ${booking.guest_house.name} from ${formatDateTime(booking.check_out)} to ${formatDateTime(until)}. Approving moves the rooms' holds; it is refused if someone else has a room by then.`,
+      },
+      ...(booking.extension_reason
+        ? [{ kind: "callout" as const, tone: "info" as const, title: "Reason given", lines: [booking.extension_reason] }]
+        : []),
+      bookingFacts(booking),
+      { kind: "button", label: "Open the reception list", href: portalUrl("/manager") },
+    ],
+  };
+}
+
+export function extensionDecidedToRequester(
+  booking: BookingWithDetails,
+  approved: boolean,
+  until: string,
+  note: string | null
+): EmailDocument {
+  return {
+    heading: approved ? "Your stay has been extended" : "Your extension was not approved",
+    preheader: `${booking.booking_reference_id} — ${approved ? `now until ${formatDateTime(until)}` : "check-out unchanged"}.`,
+    blocks: [
+      {
+        kind: "paragraph",
+        text: approved
+          ? `The Guest House Manager has extended your stay at ${booking.guest_house.name}. Your new check-out is ${formatDateTime(until)}, in the same room${booking.assigned_rooms.length === 1 ? "" : "s"}.`
+          : `The Guest House Manager could not extend your stay to ${formatDateTime(until)}. Your check-out remains ${formatDateTime(booking.check_out)}.`,
+      },
+      ...(note ? [{ kind: "callout" as const, tone: approved ? ("info" as const) : ("warning" as const), title: "Note from the manager", lines: [note] }] : []),
+      bookingFacts(booking),
+    ],
+  };
+}
+
+export function noShowToRequester(booking: BookingWithDetails, automatic: boolean, reason: string | null): EmailDocument {
+  return {
+    heading: "Your booking was released — the guest did not arrive",
+    preheader: `${booking.booking_reference_id} — rooms released.`,
+    blocks: [
+      {
+        kind: "paragraph",
+        text: automatic
+          ? `Nobody had checked in for this booking at ${booking.guest_house.name} some hours after the booked check-in of ${formatDateTime(booking.check_in)}, so the rooms have been released automatically and the booking cancelled.`
+          : `The Guest House Manager has released this booking at ${booking.guest_house.name} because the guest did not arrive for the booked check-in of ${formatDateTime(booking.check_in)}. The rooms are no longer held.`,
+      },
+      ...(reason ? [{ kind: "callout" as const, tone: "warning" as const, title: "Note", lines: [reason] }] : []),
+      bookingFacts(booking),
+      {
+        kind: "paragraph",
+        text: "If the guest is still coming, contact the Guest House office — or make a fresh request from the portal.",
+      },
+      { kind: "button", label: "Open the portal", href: portalUrl("/dashboard") },
+    ],
+  };
+}

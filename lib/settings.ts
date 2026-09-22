@@ -57,6 +57,12 @@ export type BookingRules = {
    * rebuilds every hold, and is refused when that would make two stays clash.
    */
   buffer_minutes: number;
+  /**
+   * Release an approved stay automatically when the guest has not checked in
+   * this many hours after the booked check-in (Phase 7); 0 turns it off. Run
+   * by the daily cron, which mails the requester.
+   */
+  no_show_release_hours: number;
 };
 
 export type MealWindow = { start: string; end: string };
@@ -158,6 +164,7 @@ export const DEFAULT_RULES: Rules = {
     advance_booking_months: 1,
     max_stay_nights: 14,
     buffer_minutes: 240,
+    no_show_release_hours: 0,
   },
   meals: {
     windows: {
@@ -246,6 +253,7 @@ export const bookingRulesSchema = z.object({
   advance_booking_months: whole("Advance-booking window", 1, 24),
   max_stay_nights: whole("Maximum stay", 0, 365),
   buffer_minutes: whole("Turnaround buffer", 0, 1440),
+  no_show_release_hours: whole("No-show release", 0, 168),
 });
 
 const windowSchema = (label: string) =>

@@ -524,3 +524,70 @@ export async function notifyInvoiceIssued(invoiceId: string): Promise<void> {
     ]);
   });
 }
+
+// ------------------------------------------------------------- Phase 7
+
+/** A requester asks to stay longer: To the manager, CC the Copy-to list. */
+export async function notifyExtensionRequested(bookingId: string): Promise<void> {
+  await safely("booking.extension_requested", async () => {
+    const booking = await freshBooking(bookingId);
+    if (!booking?.extension_requested_until) return;
+    const managers = await managerRecipients();
+    const copyTo = await copyToAddresses(booking);
+    await queueMessages([
+      managers.length > 0
+        ? {
+            eventKey: "booking.extension_requested.manager",
+            booking,
+            to: addressesOf(managers),
+            cc: copyTo,
+            subjectText: "Extension requested",
+            doc: t.extensionRequestedToManager(booking),
+            stamp: booking.extension_requested_at ?? booking.updated_at,
+          }
+        : null,
+    ]);
+  });
+}
+
+export async function notifyExtensionDecided(
+  bookingId: string,
+  approved: boolean,
+  until: string,
+  note: string | null
+): Promise<void> {
+  await safely("booking.extension_decided", async () => {
+    const booking = await freshBooking(bookingId);
+    if (!booking) return;
+    const requester = requesterRecipient(booking);
+    await queueMessages([
+      requester && {
+        eventKey: "booking.extension_decided.requester",
+        booking,
+        to: [requester.email],
+        subjectText: approved ? "Stay extended" : "Extension not approved",
+        doc: t.extensionDecidedToRequester(booking, approved, until, note),
+        stamp: `${booking.updated_at}:${approved ? "yes" : "no"}`,
+      },
+    ]);
+  });
+}
+
+export async function notifyNoShowReleased(bookingId: string, automatic: boolean, reason: string | null): Promise<void> {
+  await safely("booking.no_show", async () => {
+    const booking = await freshBooking(bookingId);
+    if (!booking) return;
+    const requester = requesterRecipient(booking);
+    await queueMessages([
+      requester && {
+        eventKey: "booking.no_show.requester",
+        booking,
+        to: [requester.email],
+        subjectText: "Booking released — guest did not arrive",
+        doc: t.noShowToRequester(booking, automatic, reason),
+        // Once per booking: a re-run of the automatic release sends nothing.
+        stamp: booking.no_show_released_at ?? booking.updated_at,
+      },
+    ]);
+  });
+}

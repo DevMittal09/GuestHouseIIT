@@ -12,6 +12,14 @@ import {
   setGuestHouseMealsAction,
   setRoomActiveAction,
 } from "@/app/actions/admin";
+import {
+  createRoomBlockAction,
+  createRoomRangeAction,
+  deleteRoomBlockAction,
+  previewRoomRangeAction,
+} from "@/app/actions/operations";
+import { formatDateTime } from "@/lib/format";
+import type { RoomBlock, RoomRangePlan } from "@/lib/operations";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,9 +41,12 @@ import type { ActionResult } from "@/app/actions/bookings";
 export function GuestHousesManager({
   guestHouses,
   roomsByGh,
+  blocksByGh = {},
 }: {
   guestHouses: GuestHouse[];
   roomsByGh: Record<string, Room[]>;
+  /** Maintenance blocks still to come or in force (Phase 7). */
+  blocksByGh?: Record<string, RoomBlock[]>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -93,6 +104,7 @@ export function GuestHousesManager({
           key={gh.id}
           gh={gh}
           rooms={roomsByGh[gh.id] ?? []}
+          blocks={blocksByGh[gh.id] ?? []}
           isPending={isPending}
           run={run}
         />
@@ -104,14 +116,24 @@ export function GuestHousesManager({
 function GuestHouseCard({
   gh,
   rooms,
+  blocks,
   isPending,
   run,
 }: {
   gh: GuestHouse;
   rooms: Room[];
+  blocks: RoomBlock[];
   isPending: boolean;
   run: (fn: () => Promise<ActionResult>, successMessage: string) => void;
 }) {
+  const [rangeText, setRangeText] = useState("");
+  const [plan, setPlan] = useState<RoomRangePlan | null>(null);
+  const [confirmRange, setConfirmRange] = useState(false);
+  const [blockRoom, setBlockRoom] = useState("");
+  const [blockFrom, setBlockFrom] = useState("");
+  const [blockTo, setBlockTo] = useState("");
+  const [blockReason, setBlockReason] = useState("");
+  const roomNumberOf = (id: string) => rooms.find((r) => r.id === id)?.room_number ?? "?";
   const [name, setName] = useState(gh.name);
   const [roomNumber, setRoomNumber] = useState("");
   const [roomType, setRoomType] = useState<RoomType>("double_sharing");
@@ -226,6 +248,153 @@ function GuestHouseCard({
           >
             + Add room
           </Button>
+        </div>
+
+        {/* Many rooms at once (Phase 7): "B-101 to B-120", previewed first. */}
+        <div className="space-y-2 rounded-md border border-dashed p-3">
+          <Label htmlFor={`range-${gh.id}`}>Add many rooms</Label>
+          <div className="flex flex-wrap items-end gap-2">
+            <Input
+              id={`range-${gh.id}`}
+              placeholder="e.g. B-101 to B-120, or B-301, B-305"
+              className="w-72 max-w-full"
+              value={rangeText}
+              onChange={(e) => {
+                setRangeText(e.target.value);
+                setPlan(null);
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isPending || !rangeText.trim()}
+              onClick={async () => {
+                const result = await previewRoomRangeAction(gh.id, rangeText);
+                if (result.ok) setPlan(result.plan);
+                else toast.error(result.error);
+              }}
+            >
+              Preview
+            </Button>
+            <Button
+              size="sm"
+              disabled={isPending || !plan || plan.problems.length > 0 || plan.create.length === 0}
+              onClick={() => setConfirmRange(true)}
+            >
+              Add {plan?.create.length ?? 0} rooms
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">Uses the type chosen above for all of them.</p>
+          {plan && (
+            <div className="text-sm">
+              {plan.problems.length > 0 ? (
+                <ul className="list-disc pl-5 text-destructive">
+                  {plan.problems.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>
+                  <span className="font-medium">{plan.create.length} new:</span> {plan.create.join(", ") || "none"}
+                  {plan.existing.length > 0 && (
+                    <span className="block text-muted-foreground">Already here, skipped: {plan.existing.join(", ")}</span>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+          <ConfirmDialog
+            open={confirmRange}
+            onOpenChange={setConfirmRange}
+            title={`Add ${plan?.create.length ?? 0} rooms to ${gh.name}?`}
+            description={`${plan?.create.slice(0, 12).join(", ") ?? ""}${(plan?.create.length ?? 0) > 12 ? "…" : ""} — all as ${roomType === "single" ? "single" : "double sharing"} rooms.`}
+            confirmLabel="Add rooms"
+            confirmVariant="default"
+            pending={isPending}
+            onConfirm={() => {
+              setConfirmRange(false);
+              run(async () => {
+                const result = await createRoomRangeAction(gh.id, rangeText, roomType);
+                if (result.ok) {
+                  setRangeText("");
+                  setPlan(null);
+                }
+                return result;
+              }, `${plan?.create.length ?? 0} rooms added`);
+            }}
+          />
+        </div>
+
+        {/* Out of service (Phase 7): never allocatable while blocked, drawn
+            cross-hatched on the charts, and refused over anyone's stay. */}
+        <div className="space-y-2 rounded-md border p-3">
+          <p className="text-sm font-medium">🔧 Maintenance</p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-1">
+              <Label htmlFor={`block-room-${gh.id}`}>Room</Label>
+              <NativeSelect id={`block-room-${gh.id}`} value={blockRoom} onChange={(e) => setBlockRoom(e.target.value)}>
+                <option value="">Choose…</option>
+                {rooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.room_number}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`block-from-${gh.id}`}>Out of service from</Label>
+              <Input id={`block-from-${gh.id}`} type="datetime-local" value={blockFrom} onChange={(e) => setBlockFrom(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`block-to-${gh.id}`}>Back in service</Label>
+              <Input id={`block-to-${gh.id}`} type="datetime-local" value={blockTo} onChange={(e) => setBlockTo(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`block-reason-${gh.id}`}>Reason</Label>
+              <Input
+                id={`block-reason-${gh.id}`}
+                value={blockReason}
+                onChange={(e) => setBlockReason(e.target.value)}
+                placeholder="e.g. Repainting"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending || !blockRoom || !blockFrom || !blockTo || blockReason.trim().length < 3}
+              onClick={() =>
+                run(async () => {
+                  const result = await createRoomBlockAction(blockRoom, blockFrom, blockTo, blockReason);
+                  if (result.ok) setBlockReason("");
+                  return result;
+                }, `Room ${roomNumberOf(blockRoom)} blocked`)
+              }
+            >
+              Block room
+            </Button>
+          </div>
+          {blocks.length > 0 && (
+            <ul className="divide-y rounded-md border text-sm">
+              {blocks.map((b) => (
+                <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 p-2">
+                  <span>
+                    <span className="font-medium">🔧 {roomNumberOf(b.room_id)}</span> · {formatDateTime(b.from)} →{" "}
+                    {formatDateTime(b.to)} · {b.reason}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={isPending}
+                    onClick={() => run(() => deleteRoomBlockAction(b.id), "Block removed")}
+                  >
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {rooms.length === 0 ? (

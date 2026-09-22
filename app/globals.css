@@ -18,6 +18,15 @@
   );
 }
 
+/* A room out of service (Phase 7): a dark cross-hatch, unlike a stay's solid
+   red and the turnaround's light diagonal, so the three differ without colour. */
+@utility bg-maintenance {
+  background-color: #475569;
+  background-image:
+    repeating-linear-gradient(45deg, #1e293b 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(-45deg, #1e293b 0 2px, transparent 2px 7px);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

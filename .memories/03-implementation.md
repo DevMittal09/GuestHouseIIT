@@ -728,6 +728,19 @@ pending bookings, and **Dining to invoice** — approved dining bookings whose
 meals have begun and have no invoice. The daily desk report carries the same
 plates and the day's dining bookings.
 
+## Operational states (Phase 7)
+
+`components/manage-stay-dialog.tsx` on every approved / current stay in the
+reception tables: extend (manager, caretaker), approve / decline a requester's
+extension, move rooms (`reassignRooms`, audited), release a no-show, cancel.
+Requesters ask for an extension from their booking view. Actions are in
+`app/actions/operations.ts`; pure rules in `lib/operations.ts`
+(`extensionError`, `noShowReleasable`, `planRoomRange`, `roomBlockError`,
+`blockSegment`); the automatic no-show release in `lib/no-show-server.ts`, run by
+`/api/mail/cron` before the daily mail. Maintenance blocks (`room_blocks`) are
+managed in Guest Houses & Rooms, merged into availability as segments with
+`kind: "maintenance"`, and refused against stays in both stores.
+
 ## Branding
 
 **Since 19 Sep 2026 the palette comes from the guest house design handoff**

@@ -167,6 +167,13 @@ export interface Database {
         Update: Partial<BookingRoomRow>;
         Relationships: [];
       };
+      /** Migration 20: rooms out of service. `during` is a tstzrange literal. */
+      room_blocks: {
+        Row: { id: string; room_id: string; during: string; reason: string; created_by: string | null; created_at: string };
+        Insert: { room_id: string; during: string; reason: string; created_by?: string | null };
+        Update: Partial<{ during: string; reason: string }>;
+        Relationships: [];
+      };
       room_holds: {
         Row: RoomHoldRow;
         Insert: Insertable<RoomHoldRow, "override_by" | "guard">;

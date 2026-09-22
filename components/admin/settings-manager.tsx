@@ -508,15 +508,23 @@ function BookingWindowSection({ current }: { current: Rules["booking"] }) {
     advance_booking_months: String(current.advance_booking_months),
     max_stay_nights: String(current.max_stay_nights),
     buffer_minutes: String(current.buffer_minutes),
+    no_show_release_hours: String(current.no_show_release_hours),
   });
   const [raw, setRaw] = useState(initial);
   const months = toInt(raw.advance_booking_months);
   const nights = toInt(raw.max_stay_nights);
   const buffer = toInt(raw.buffer_minutes);
+  const noShow = toInt(raw.no_show_release_hours);
   const parsed =
-    months === null || nights === null || buffer === null
+    months === null || nights === null || buffer === null || noShow === null
       ? null
-      : { advance_booking_months: months, max_stay_nights: nights, buffer_minutes: buffer };
+      : {
+          ...current,
+          advance_booking_months: months,
+          max_stay_nights: nights,
+          buffer_minutes: buffer,
+          no_show_release_hours: noShow,
+        };
 
   return (
     <SettingCard
@@ -549,6 +557,15 @@ function BookingWindowSection({ current }: { current: Rules["booking"] }) {
           max={1440}
           hint="240 = 4 hours. 0 turns it off. The manager can still accept a tighter changeover on a room."
           onChange={(v) => setRaw({ ...raw, buffer_minutes: v })}
+        />
+        <NumberField
+          id="booking-no-show"
+          label="Release no-shows after (hours)"
+          value={raw.no_show_release_hours}
+          min={0}
+          max={168}
+          hint="An approved stay nobody has checked in to this long after its check-in is released by the daily job, and the requester told. 0 turns it off; the manager can always release one by hand."
+          onChange={(v) => setRaw({ ...raw, no_show_release_hours: v })}
         />
       </div>
       <RuleGroupActions

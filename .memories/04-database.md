@@ -377,6 +377,18 @@ Current migrations:
    seeded once, every constraint and trigger refusal, FY restart at 0001, draft
    promoted in place, and RLS for two users.
 
+20. `00000000000020_operational_states.sql` (Phase 7, Sep 2026).
+   `room_blocks` (room out of service over a `tstzrange`, reason 3–300 chars,
+   no overlap between blocks of a room); triggers `room_blocks_respect_holds`
+   and `room_holds_respect_blocks` refuse a block over a stay's guard and a
+   stay into a block (`ROOM_BLOCKED|…`), each after locking the room row;
+   `bookings.extension_requested_until`, `extension_reason`,
+   `extension_requested_at`, `no_show_released_at`. RLS: signed-in users read
+   blocks; writes are the server's. Verified in a throwaway Postgres 16: applied
+   twice, blocks refused over a stay and over its turnaround buffer, a stay into
+   a block refused with the old hold kept, a buffer change into a block refused,
+   RLS read-only for `authenticated`.
+
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.
 

@@ -45,6 +45,7 @@ import {
 import type { Json } from "@/lib/supabase/database.types";
 import type { NewProjectInput, Project } from "@/lib/projects";
 import type { NewTariffInput, Tariff } from "@/lib/tariffs";
+import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import {
   invoiceErrorFrom,
   InvoiceStateError,
@@ -433,6 +434,7 @@ export class SupabaseStore implements DataStore {
       .update({
         status: update.status,
         ...(update.rejection_reason !== undefined && { rejection_reason: update.rejection_reason }),
+        ...(update.no_show_released_at !== undefined && { no_show_released_at: update.no_show_released_at }),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -489,6 +491,9 @@ export class SupabaseStore implements DataStore {
     if (!error) return;
     // 23P01 = exclusion_violation: someone else holds one of these rooms.
     if (error.code === "23P01") throw new RoomClashError();
+    // Migration 20: the room is out of service for maintenance then.
+    const blocked = /ROOM_BLOCKED\|([^\n]+)/.exec(error.message);
+    if (blocked) throw new RoomClashError(blocked[1]);
     throw error;
   }
 
@@ -525,7 +530,7 @@ export class SupabaseStore implements DataStore {
   ): Promise<void> {
     const { data: current, error: readError } = await this.db
       .from("bookings")
-      .select("status, check_in, check_out")
+      .select("status, check_in, check_out, extension_requested_until")
       .eq("id", id)
       .single();
     if (readError) throw readError;
@@ -561,6 +566,17 @@ export class SupabaseStore implements DataStore {
         }),
         ...(patch.meals !== undefined && { meals: patch.meals }),
         ...(patch.meal_preference !== undefined && { meal_preference: patch.meal_preference }),
+        // Migration 20: a request is set or cleared explicitly, and one the new
+        // check-out already satisfies is settled.
+        ...(patch.extension_request !== undefined
+          ? {
+              extension_requested_until: patch.extension_request?.until ?? null,
+              extension_reason: patch.extension_request?.reason ?? null,
+              extension_requested_at: patch.extension_request ? new Date().toISOString() : null,
+            }
+          : current.extension_requested_until && Date.parse(current.extension_requested_until) <= Date.parse(checkOut)
+            ? { extension_requested_until: null, extension_reason: null, extension_requested_at: null }
+            : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -677,6 +693,8 @@ export class SupabaseStore implements DataStore {
     if (!error) return;
     const match = /BUFFER_CLASH\|(\d+)\|(.*)/.exec(error.message);
     if (match) throw new BufferClashError(Number(match[1]), match[2]);
+    const blocked = /ROOM_BLOCKED\|([^\n]+)/.exec(error.message);
+    if (blocked) throw new RoomClashError(`That buffer would run a stay into a maintenance block: ${blocked[1]}`);
     throw error;
   }
 
@@ -1055,6 +1073,55 @@ export class SupabaseStore implements DataStore {
     if (error) throw error;
   }
 
+  // ---- maintenance blocks and bulk rooms (migration 20) ----------------
+
+  async listRoomBlocks(guestHouseId: string): Promise<RoomBlock[]> {
+    // A string, not a literal, so the embedded join is not type-checked
+    // against the hand-written schema (as for `room_holds`).
+    const select: string = "id, room_id, during, reason, created_by, created_at, rooms!inner(guest_house_id)";
+    const { data, error } = await this.db.from("room_blocks").select(select).eq("rooms.guest_house_id", guestHouseId);
+    if (error) throw error;
+    type Row = { id: string; room_id: string; during: string; reason: string; created_by: string | null; created_at: string };
+    return ((data ?? []) as unknown as Row[])
+      .map((row) => {
+        const [from, to] = parseRange(String(row.during));
+        return { id: row.id, room_id: row.room_id, from, to, reason: row.reason, created_by: row.created_by, created_at: row.created_at };
+      })
+      .sort((a, b) => a.from.localeCompare(b.from));
+  }
+
+  async createRoomBlock(input: NewRoomBlockInput): Promise<RoomBlock> {
+    const { data, error } = await this.db
+      .from("room_blocks")
+      .insert({ room_id: input.room_id, during: rangeLiteral(input.from, input.to), reason: input.reason, created_by: input.created_by })
+      .select("id, created_at")
+      .single();
+    if (error) {
+      const blocked = /ROOM_BLOCKED\|([^\n]+)/.exec(error.message);
+      if (blocked) throw new RoomClashError(blocked[1]);
+      if (error.code === "23P01") throw new RoomClashError("That room is already blocked for part of that time");
+      throw error;
+    }
+    return { ...input, id: data.id, created_at: data.created_at };
+  }
+
+  async deleteRoomBlock(id: string): Promise<void> {
+    const { error } = await this.db.from("room_blocks").delete().eq("id", id);
+    if (error) throw error;
+  }
+
+  async createRooms(guestHouseId: string, rooms: { room_number: string; room_type: RoomType }[]): Promise<number> {
+    if (rooms.length === 0) return 0;
+    const { error } = await this.db
+      .from("rooms")
+      .insert(rooms.map((r) => ({ guest_house_id: guestHouseId, room_number: r.room_number, room_type: r.room_type })));
+    if (error) {
+      throw error.code === "23505" ? new Error("One of those room numbers already exists in this guest house") : error;
+    }
+    await this.recountRooms(guestHouseId);
+    return rooms.length;
+  }
+
   // ---- tariffs and invoices (migration 19) ----------------------------
 
   async listTariffs(): Promise<Tariff[]> {
@@ -1392,4 +1459,11 @@ function hydrateInvoice(row: Record<string, unknown>): InvoiceRecord {
     gst_amount: n(row.gst_amount),
     grand_total: n(row.grand_total),
   };
+}
+
+/** `["2030-01-10 12:00:00+05:30","2030-01-11 12:00:00+05:30")` → ISO bounds. */
+function parseRange(literal: string): [string, string] {
+  const m = /^[[(]"?([^",]+)"?,"?([^")\]]+)"?[)\]]$/.exec(literal.trim());
+  if (!m) return ["", ""];
+  return [new Date(m[1]).toISOString(), new Date(m[2]).toISOString()];
 }

@@ -59,6 +59,7 @@ import {
   seedUnits,
 } from "./seed";
 import type { NewProjectInput, Project } from "@/lib/projects";
+import { blockOverlaps, type NewRoomBlockInput, type RoomBlock } from "@/lib/operations";
 import { tariffLockedError, type NewTariffInput, type Tariff } from "@/lib/tariffs";
 import {
   invoiceColumnsFrom,
@@ -103,6 +104,8 @@ interface Db {
   tariffs?: Tariff[];
   invoices?: InvoiceRecord[];
   invoice_counters?: Record<string, number>;
+  /** Migration 20: rooms out of service. */
+  room_blocks?: RoomBlock[];
   /** Queued notifications; see `lib/mail/dispatch.ts`. */
   email_outbox?: EmailMessage[];
   /** Only the mails whose wording has actually been edited (migration 13). */
@@ -369,6 +372,11 @@ function loadDb(): Db {
       db.invoice_counters = {};
       dirty = true;
     }
+    // Migration 20.
+    if (!db.room_blocks) {
+      db.room_blocks = [];
+      dirty = true;
+    }
     if (dirty) saveDb(db);
     return db;
   }
@@ -437,6 +445,19 @@ function assertNoClash(
     const room = db.rooms.find((r) => r.id === clash.room_id);
     throw new RoomClashError(
       `Room ${room?.room_number ?? clash.room_id} was just taken for these dates — refresh the grid`
+    );
+  }
+  // `room_holds_respect_blocks`: no stay in a room out of service.
+  const guard = holdGuard({ from, to }, false, buffer);
+  const block = (db.room_blocks ?? []).find(
+    (bl) =>
+      roomIds.includes(bl.room_id) &&
+      rangesOverlap(guard, { from: Date.parse(bl.from), to: Date.parse(bl.to) })
+  );
+  if (block) {
+    const room = db.rooms.find((r) => r.id === block.room_id);
+    throw new RoomClashError(
+      `Room ${room?.room_number ?? block.room_id} is out of service for maintenance then (${block.reason}).`
     );
   }
 }
@@ -585,6 +606,10 @@ export class MockStore implements DataStore {
     }));
     return {
       ...b,
+      extension_requested_until: b.extension_requested_until ?? null,
+      extension_reason: b.extension_reason ?? null,
+      extension_requested_at: b.extension_requested_at ?? null,
+      no_show_released_at: b.no_show_released_at ?? null,
       meals: normalizeMeals(b.meals, b),
       assigned_room_ids: assignedRoomIds,
       requester: db.profiles.find((p) => p.id === b.user_id)!,
@@ -666,6 +691,7 @@ export class MockStore implements DataStore {
     const previous = b.status;
     b.status = update.status;
     if (update.rejection_reason !== undefined) b.rejection_reason = update.rejection_reason;
+    if (update.no_show_released_at !== undefined) b.no_show_released_at = update.no_show_released_at;
     // A hold exists exactly while the booking holds the room, so leaving
     // ROOM_HOLDING_STATUSES releases the rooms with no caller involvement.
     if (!ROOM_HOLDING_STATUSES.includes(update.status)) {
@@ -717,6 +743,17 @@ export class MockStore implements DataStore {
     if (patch.purpose_of_visit !== undefined) b.purpose_of_visit = patch.purpose_of_visit;
     if (patch.meals !== undefined) b.meals = normalizeMeals(patch.meals);
     if (patch.meal_preference !== undefined) b.meal_preference = patch.meal_preference;
+    if (patch.extension_request !== undefined) {
+      b.extension_requested_until = patch.extension_request?.until ?? null;
+      b.extension_reason = patch.extension_request?.reason ?? null;
+      b.extension_requested_at = patch.extension_request ? new Date().toISOString() : null;
+    }
+    // A request the new check-out already satisfies is settled.
+    if (movingDates && b.extension_requested_until && b.extension_requested_until <= b.check_out) {
+      b.extension_requested_until = null;
+      b.extension_reason = null;
+      b.extension_requested_at = null;
+    }
 
     b.updated_at = new Date().toISOString();
     db.booking_logs.push({
@@ -763,6 +800,12 @@ export class MockStore implements DataStore {
       if (!roomsHere.has(hold.room_id)) continue;
       if (!rangesOverlap(wanted, guardOf(hold, buffer))) continue;
       occupied.add(hold.room_id);
+    }
+    // A room out of service is not free either.
+    for (const block of db.room_blocks ?? []) {
+      if (roomsHere.has(block.room_id) && rangesOverlap(wanted, { from: Date.parse(block.from), to: Date.parse(block.to) })) {
+        occupied.add(block.room_id);
+      }
     }
     return [...occupied];
   }
@@ -1167,6 +1210,59 @@ export class MockStore implements DataStore {
     const db = loadDb();
     db.app_settings = { ...(db.app_settings ?? {}), [key]: value };
     saveDb(db);
+  }
+
+  // ---- maintenance blocks and bulk rooms (migration 20) ----------------
+
+  async listRoomBlocks(guestHouseId: string): Promise<RoomBlock[]> {
+    const db = loadDb();
+    const here = new Set(db.rooms.filter((r) => r.guest_house_id === guestHouseId).map((r) => r.id));
+    return (db.room_blocks ?? []).filter((b) => here.has(b.room_id)).sort((a, b) => a.from.localeCompare(b.from));
+  }
+
+  async createRoomBlock(input: NewRoomBlockInput): Promise<RoomBlock> {
+    const db = loadDb();
+    const room = db.rooms.find((r) => r.id === input.room_id);
+    if (!room) throw new Error("Room not found");
+    const blocks = (db.room_blocks ??= []);
+    // `room_blocks_no_overlap` and `room_blocks_respect_holds`.
+    if (blocks.some((b) => b.room_id === input.room_id && blockOverlaps(b, input.from, input.to))) {
+      throw new RoomClashError(`Room ${room.room_number} is already blocked for part of that time`);
+    }
+    const buffer = currentBuffer(db);
+    const clash = db.room_holds.find(
+      (h) => h.room_id === input.room_id && rangesOverlap(guardOf(h, buffer), { from: Date.parse(input.from), to: Date.parse(input.to) })
+    );
+    if (clash) {
+      const ref = db.bookings.find((b) => b.id === clash.booking_id)?.booking_reference_id ?? "a booking";
+      throw new RoomClashError(
+        `Room ${room.room_number} is held for ${ref} during that time — move that stay first, or block a different period.`
+      );
+    }
+    const block: RoomBlock = { ...input, id: randomUUID(), created_at: new Date().toISOString() };
+    blocks.push(block);
+    saveDb(db);
+    return block;
+  }
+
+  async deleteRoomBlock(id: string): Promise<void> {
+    const db = loadDb();
+    db.room_blocks = (db.room_blocks ?? []).filter((b) => b.id !== id);
+    saveDb(db);
+  }
+
+  async createRooms(guestHouseId: string, rooms: { room_number: string; room_type: RoomType }[]): Promise<number> {
+    const db = loadDb();
+    if (!db.guest_houses.some((g) => g.id === guestHouseId)) throw new Error("Guest house not found");
+    const taken = new Set(db.rooms.filter((r) => r.guest_house_id === guestHouseId).map((r) => r.room_number.toUpperCase()));
+    const dup = rooms.find((r) => taken.has(r.room_number.toUpperCase()));
+    if (dup) throw new Error(`Room ${dup.room_number} already exists in this guest house`);
+    for (const r of rooms) {
+      db.rooms.push({ id: randomUUID(), guest_house_id: guestHouseId, room_number: r.room_number, room_type: r.room_type, is_active: true });
+    }
+    MockStore.recountRooms(db, guestHouseId);
+    saveDb(db);
+    return rooms.length;
   }
 
   // ---- tariffs and invoices (migration 19) ----------------------------

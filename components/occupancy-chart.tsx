@@ -107,7 +107,9 @@ function HourRow({
           <div
             key={room.id}
             title={
-              segment
+              segment?.kind === "maintenance"
+                ? `${room.room_number} — out of service at ${hourLabel(hour)} (maintenance: ${segment.purpose_of_visit ?? ""})`
+                : segment
                 ? `${room.room_number} — booked at ${hourLabel(hour)} · ${
                     segment.booking_reference_id
                   }${segment.requester_name ? ` · ${segment.requester_name}` : ""}`
@@ -118,7 +120,13 @@ function HourRow({
             className={cn(
               "border-r border-b",
               rowHeight,
-              segment ? "bg-red-500" : turnaround ? "bg-turnaround" : "bg-background",
+              segment?.kind === "maintenance"
+                ? "bg-maintenance"
+                : segment
+                  ? "bg-red-500"
+                  : turnaround
+                    ? "bg-turnaround"
+                    : "bg-background",
               isCurrent && "border-t-2 border-t-primary"
             )}
           />
@@ -231,18 +239,38 @@ export function RangeOccupancyChart({
                 style={{ top: `${from * 100}%`, height: `max(${(to - from) * 100}%, 2px)` }}
               />
             ))}
-            {occupancy.get(room.id)?.bars.map(({ segment, from, to }) => (
-              <div
-                key={segment.booking_id}
-                title={`${room.room_number} — booked ${formatDateTime(
-                  segment.check_in
-                )} → ${formatDateTime(segment.check_out)} · ${segment.booking_reference_id}${
-                  segment.requester_name ? ` · ${segment.requester_name}` : ""
-                }`}
-                className="absolute inset-x-1 rounded-sm bg-red-500 ring-1 ring-background"
-                style={{ top: `${from * 100}%`, height: `max(${(to - from) * 100}%, 3px)` }}
-              />
-            ))}
+            {occupancy.get(room.id)?.bars.map(({ segment, from, to }) => {
+              const maintenance = segment.kind === "maintenance";
+              // Not colour alone: a symbol inside the bar says what it is
+              // (● a stay, 🔧 out of service), for print and colour-blind eyes.
+              return (
+                <div
+                  key={segment.booking_id}
+                  role="img"
+                  aria-label={
+                    maintenance
+                      ? `${room.room_number} out of service: ${segment.purpose_of_visit ?? "maintenance"}`
+                      : `${room.room_number} booked, ${segment.booking_reference_id}`
+                  }
+                  title={
+                    maintenance
+                      ? `${room.room_number} — out of service ${formatDateTime(segment.check_in)} → ${formatDateTime(
+                          segment.check_out
+                        )} · maintenance: ${segment.purpose_of_visit ?? ""}`
+                      : `${room.room_number} — booked ${formatDateTime(segment.check_in)} → ${formatDateTime(
+                          segment.check_out
+                        )} · ${segment.booking_reference_id}${segment.requester_name ? ` · ${segment.requester_name}` : ""}`
+                  }
+                  className={cn(
+                    "absolute inset-x-1 flex items-start justify-center overflow-hidden rounded-sm pt-0.5 text-[9px] leading-none text-white ring-1 ring-background",
+                    maintenance ? "bg-maintenance" : "bg-red-500"
+                  )}
+                  style={{ top: `${from * 100}%`, height: `max(${(to - from) * 100}%, 3px)` }}
+                >
+                  <span aria-hidden>{maintenance ? "🔧" : "●"}</span>
+                </div>
+              );
+            })}
             {nowAt !== null && (
               <div
                 aria-hidden

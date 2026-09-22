@@ -183,7 +183,7 @@ export function ManagerQueue({
             Nobody is staying at this guest house right now.
           </p>
         ) : (
-          <StaysTable bookings={current} />
+          <StaysTable bookings={current} isManager />
         )}
       </section>
 
@@ -202,7 +202,7 @@ export function ManagerQueue({
             These stays are past their check-out time and were never marked Vacated, so they are
             still holding their rooms. Close them off to release the rooms.
           </p>
-          <StaysTable bookings={overdue} showOverdue />
+          <StaysTable bookings={overdue} showOverdue isManager />
         </section>
       )}
 
@@ -224,7 +224,7 @@ export function ManagerQueue({
             No upcoming stays for this guest house.
           </p>
         ) : (
-          <StaysTable bookings={upcoming} />
+          <StaysTable bookings={upcoming} isManager />
         )}
       </section>
     </div>
