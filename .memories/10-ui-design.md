@@ -193,10 +193,10 @@ strip), `GUEST_HOUSE_CONTACT`, `GUEST_HOUSE_MAP`, the photo registry
 (`PHOTOS`, `HOME_PHOTOS`, `GALLERY_SECTIONS`, `GUEST_HOUSE_PHOTOS`).
 `grep -rn "TODO(site)"` lists everything awaiting the office.
 
-Contact details come from the guest house page on iitpkd.ac.in (Sep 2026) —
-`ghm@iitpkd.ac.in`, `+91 88483 94440` — rather than the design's placeholders
-(`guesthouse@iitpkd.ac.in`, which is also the demo manager persona's address,
-and an unconfirmed 0491 number). Still TODO: confirm with the office.
+Contact details are the ones on the foot of the office's own invoice template
+(Phase 5): `ghm@iitpkd.ac.in`, `+91 491 209 2016`, Kanjikode West — the
+office's own choice, so they replaced the iitpkd.ac.in guest house page's
+`+91 88483 94440`. Front-office hours are still TODO.
 
 ## Photographs
 
@@ -252,7 +252,7 @@ address and the footer link to it too. To pin the guest house itself, replace
 | --- | --- |
 | "Keep me signed in", "Forgot password" | The mock session has neither; a control that does nothing is worse than none. Real auth brings both |
 | A meal-only booking flow ("Meal requests close the previous evening", "attach to your room booking automatically") | The backend has no such flow. Meals are chosen per day **inside the room request**, only where `serves_meals`. `/book-meal` says exactly that and sends the visitor to `/book`. A separate dining booking is in the meeting notes as *not started* |
-| "Tariff and payment" guideline card, "GST applies" | No billing model (invoices are *not started*). The Guidelines intro points to the office instead |
+| "Tariff and payment" guideline card, "GST applies" | Not on the public site. Rates live in Tariffs & Invoicing and change by date; GST is a Setting that is 0 until the office sets it. The Guidelines intro points to the office |
 | "Requests at least seven days in advance", "Check-in from 12:00 noon / check-out by 11:00" | Contradict the backend: the window is one month *maximum*, and times are chosen per booking |
 | "24-hour front office", "Doctor on call", front-office hours | Unconfirmed; the facilities cards use the iitpkd.ac.in amenity list (TODO-marked) and backend-true service lines |
 | `image-slot.js` | Prototype-only, per the handoff. `design_handoff/**` is excluded from ESLint |

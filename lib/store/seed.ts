@@ -1,3 +1,4 @@
+import type { Tariff } from "@/lib/tariffs";
 import { normalizeMeals, stayMealDays } from "@/lib/meals";
 import type {
   Booking,
@@ -105,6 +106,47 @@ export const seedOfficialEmails: string[] = [
   "cse.office@iitpkd.ac.in",
   "director.office@iitpkd.ac.in",
   "registrar@iitpkd.ac.in",
+];
+
+/**
+ * The office's tariff sheet, as migration 19 seeds it. No extra-bed rate: the
+ * sheet has none, so an invoice with an extra bed cannot be issued until the
+ * office adds one in Tariffs & Invoicing.
+ */
+function tariff(
+  id: string,
+  guest_house_id: string | null,
+  item: Tariff["item"],
+  rate: number,
+  scope: Partial<Pick<Tariff, "booking_type" | "requester_role">> = {},
+  note: string
+): Tariff {
+  return {
+    id,
+    guest_house_id,
+    item,
+    room_type: null,
+    booking_type: scope.booking_type ?? null,
+    requester_role: scope.requester_role ?? null,
+    rate,
+    effective_from: "2024-01-01",
+    note,
+    created_at: "2024-01-01T00:00:00.000Z",
+    created_by: null,
+  };
+}
+
+export const seedTariffs: Tariff[] = [
+  tariff("tariff-bageshri-room", GH_BAGESHRI, "room", 750, {}, "Tariff sheet: Bageshri, per room per day"),
+  tariff("tariff-hamsanandi-room", GH_HAMSANANDI, "room", 2000, {}, "Tariff sheet: Hamsanandi types 1 and 2"),
+  tariff("tariff-hamsanandi-official", GH_HAMSANANDI, "room", 4000, { requester_role: "official" }, "Tariff sheet: Hamsanandi type 3, government officers"),
+  tariff("tariff-breakfast", null, "breakfast", 80, {}, "Tariff sheet: per head"),
+  tariff("tariff-lunch", null, "lunch", 120, {}, "Tariff sheet: per head"),
+  tariff("tariff-dinner", null, "dinner", 100, {}, "Tariff sheet: per head"),
+  ...(["breakfast", "lunch", "dinner"] as const).flatMap((meal) => [
+    tariff(`tariff-${meal}-student`, null, meal, 0, { requester_role: "student" }, "Tariff sheet: meals free to students"),
+    tariff(`tariff-${meal}-alumni`, null, meal, 0, { booking_type: "alumni" }, "Tariff sheet: meals free to alumni"),
+  ]),
 ];
 
 /** Demo projects for the Project debitable head (migration 18). */

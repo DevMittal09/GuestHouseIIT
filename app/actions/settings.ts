@@ -37,6 +37,23 @@ import type { ActionResult } from "./bookings";
  * the security audit log.
  */
 
+/**
+ * The invoice group is priced and run by the office, so it belongs to the
+ * Tariffs & Invoicing section (manager and developer); every other group is
+ * Settings (developer only).
+ */
+async function requireConsoleFor(group: RuleGroup): Promise<Profile> {
+  if (group !== "invoice") return requireSettingsConsole();
+  const user = await requireUser();
+  if (!canUseConsoleSection(user.role, "billing")) {
+    throw new Error("Only the Guest House Manager or a developer can change invoice settings");
+  }
+  if (!(await isAdminUnlocked())) {
+    throw new Error("The console is locked — enter the console password again");
+  }
+  return user;
+}
+
 async function requireSettingsConsole(): Promise<Profile> {
   const user = await requireUser();
   if (!canUseConsoleSection(user.role, "settings")) {
@@ -119,7 +136,7 @@ export async function getSettingsConsoleData(): Promise<
  */
 export async function saveRuleGroup(group: RuleGroup, proposed: unknown): Promise<ActionResult> {
   try {
-    const user = await requireSettingsConsole();
+    const user = await requireConsoleFor(group);
     const schema = RULE_SCHEMAS[group];
     if (!schema) return { ok: false, error: "Unknown settings group" };
     const parsed = schema.safeParse(proposed);

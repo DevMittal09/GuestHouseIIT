@@ -28,6 +28,14 @@ import type { Role } from "@/lib/types";
 import type { Unit } from "@/lib/units";
 import type { AuditEvent, AuditFilter, NewAuditEvent } from "@/lib/audit";
 import type { NewProjectInput, Project } from "@/lib/projects";
+import type { NewTariffInput, Tariff } from "@/lib/tariffs";
+import type {
+  InvoiceFilter,
+  InvoiceRecord,
+  IssueInvoiceInput,
+  MealCounts,
+  PaymentMode,
+} from "@/lib/invoice";
 
 export type NewProfileInput = Omit<Profile, "id">;
 
@@ -223,6 +231,43 @@ export interface DataStore {
   /** Newest first. */
   listAudit(filter: AuditFilter): Promise<AuditEvent[]>;
 
+  // ---- tariffs and invoices (migration 19) ----------------------------
+
+  /** Every rate, in force or future. */
+  listTariffs(): Promise<Tariff[]>;
+  /** Throws on a second rate for the same scope and date. */
+  createTariff(input: NewTariffInput): Promise<Tariff>;
+  /** Throws `InvoiceStateError` for a rate already in force (institute date). */
+  deleteTariff(id: string): Promise<void>;
+
+  /** Newest first. */
+  listInvoices(filter: InvoiceFilter): Promise<InvoiceRecord[]>;
+  getInvoice(id: string): Promise<InvoiceRecord | null>;
+  /**
+   * Save the desk's meal-count correction on the booking's draft, creating
+   * the draft if there is none. Throws `InvoiceStateError` once the booking
+   * has a live issued invoice.
+   */
+  saveInvoiceDraft(bookingId: string, mealCounts: MealCounts | null, userId: string): Promise<InvoiceRecord>;
+  /**
+   * Number and issue the booking's invoice in one step: the financial year's
+   * next serial and the snapshot are written together (`issue_invoice()`),
+   * so numbers are consecutive with no gaps. Promotes the draft if there is
+   * one. Throws `InvoiceStateError` when a live invoice is already issued.
+   */
+  issueInvoice(input: IssueInvoiceInput): Promise<InvoiceRecord>;
+  /** issued → paid. Throws `InvoiceStateError` from any other state. */
+  markInvoicePaid(
+    id: string,
+    payment: { mode: PaymentMode; reference: string | null; paidAt: string; paidBy: string }
+  ): Promise<void>;
+  /** issued / paid → cancelled, with a reason. Frees the booking for a corrected invoice. */
+  cancelInvoice(id: string, cancel: { reason: string; by: string }): Promise<void>;
+
+  /**
+   * Deletes the booking outright (developer console). Its draft invoice goes
+   * with it; a booking with an issued invoice cannot be deleted.
+   */
   deleteBooking(id: string): Promise<void>;
 
   // ---- email outbox ------------------------------------------------

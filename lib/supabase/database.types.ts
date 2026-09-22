@@ -15,6 +15,8 @@ import type { EmailMessage } from "@/lib/mail/types";
 import type { Unit } from "@/lib/units";
 import type { AuditEvent } from "@/lib/audit";
 import type { Project } from "@/lib/projects";
+import type { Tariff } from "@/lib/tariffs";
+import type { InvoiceRecord } from "@/lib/invoice";
 
 /** Any value a jsonb column can hold. */
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -185,6 +187,7 @@ export interface Database {
           | "cc_emails"
           | "thread_root"
           | "is_thread_root"
+          | "attachments"
           | "status"
           | "attempts"
           | "last_error"
@@ -206,6 +209,20 @@ export interface Database {
         Row: Unit;
         Insert: Insertable<Unit, "id" | "parent_id" | "head_id" | "acting_head_id" | "office_class" | "hod_unit_id">;
         Update: Partial<Unit>;
+        Relationships: [];
+      };
+      /** Migration 19. `rate` is numeric, so it arrives as a string. */
+      tariffs: {
+        Row: Omit<Tariff, "rate"> & { rate: number | string };
+        Insert: Insertable<Tariff, "id" | "created_at" | "created_by" | "note">;
+        Update: Partial<Tariff>;
+        Relationships: [];
+      };
+      /** Migration 19. Money columns are numeric, so they arrive as strings. */
+      invoices: {
+        Row: InvoiceRecord;
+        Insert: Partial<InvoiceRecord> & { booking_id: string };
+        Update: Partial<InvoiceRecord>;
         Relationships: [];
       };
       projects: {
@@ -297,6 +314,23 @@ export interface Database {
        * Claims due outbox rows with `for update skip locked` (migration 10),
        * so two dispatchers cannot send the same message.
        */
+      /**
+       * Numbers and writes an invoice in one transaction (migration 19).
+       * Raises `INVOICE_EXISTS|…` when the booking already has a live one.
+       */
+      issue_invoice: {
+        Args: {
+          p_booking_id: string;
+          p_fy: string;
+          p_prefix: string;
+          p_digits: number;
+          p_document: Json;
+          p_meal_counts: Json | null;
+          p_issued_by: string;
+          p_replaces?: string | null;
+        };
+        Returns: InvoiceRecord;
+      };
       claim_queued_emails: {
         Args: {
           p_limit: number;

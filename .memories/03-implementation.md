@@ -653,6 +653,69 @@ a pass proves the whole path and not merely that a password was accepted.
 Bodies are deliberately not returned to the client: the question there is
 delivery, and the content is the booking, one click away in All Bookings.
 
+## Invoices and tariffs (Phase 5)
+
+The office's invoice template is `public/GHM_Invoice.docx`; its header images
+are in `public/invoice/`. The flow, in the manager's and caretaker's consoles
+(the **Invoice** button on an occupied or vacated stay, `components/invoice-dialog.tsx`):
+**preview → correct the meal counts → Issue & print → Mark paid**.
+
+- **Pure rules — `lib/invoice.ts`, `lib/tariffs.ts`.** Money is integer paise.
+  `chargeableDays()` (calendar nights by default, or 24-hour blocks with a
+  grace — Setting `day_basis` / `grace_hours`), `splitByRate()` (a mid-stay
+  rate change prints two rows), `extraBedsByRoom()` (guests in a room card
+  beyond the room type's beds), `mealCovers()` (meals ticked × bed-occupying
+  guests, or a dining booking's head count), `gstPaise()` (basis points,
+  half-up to the rupee), `formatINR()` (₹1,23,456.00, written out, not `Intl`),
+  `financialYear()` (1 April rollover, institute time) and
+  `buildInvoiceDocument()`, which assembles every printed field into an
+  `InvoiceDocument`. `actualStayTimes()` reads the desk's OCCUPIED / VACATED
+  log entries; an occupied stay is billed to its booked check-out.
+- **Tariffs** are effective-dated rows (`tariffs`, migration 19), each
+  optionally narrowed by guest house, room type, booking type and requester
+  role. `resolveTariff()` takes the most specific row in force (guest house >
+  requester > booking type > room type), then the latest. A rate in force is
+  never edited or deleted (trigger `tariffs_guard`, `tariffLockedError`); a new
+  price is a new row. A charge no rate covers is a *problem* on the document
+  and blocks issuing (`invoiceBlocker`) — nothing is ever priced at ₹0 by
+  omission.
+- **Issuing** (`app/actions/invoices.ts` → `store.issueInvoice` →
+  `issue_invoice()`) takes the financial year's next serial
+  (`GH/2026-27/0001`, prefix and width are Settings) and stores the whole
+  document as the snapshot in one transaction. Issued invoices are immutable
+  (trigger `invoices_guard`): only the payment can be recorded (cash, UPI with
+  its id, account transfer with its UTR) and the invoice cancelled with a
+  reason. A correction is a cancellation plus a new invoice that records
+  `replaces_invoice_id`. A draft row only carries the desk's meal-count
+  correction; it has no number and is priced afresh when shown.
+- **The PDF** (`lib/invoice-pdf.ts`, server only) is drawn with jsPDF to the
+  template's measurements, from the snapshot, never recomputed. Fonts and
+  artwork are embedded from `lib/invoice-assets.generated.ts` (regenerate with
+  `node scripts/build-invoice-assets.mjs`): Arimo (Arial-metric, has ₹) and
+  the **Hindi half of the footer address as an image** rendered from the
+  template's Palanquin Dark — jsPDF cannot shape Devanagari. Routes:
+  `/api/invoices/[id]/pdf` (desk: any; requester: their own issued invoices;
+  others 404) and `/api/invoices/preview/[bookingId]` (desk only, DRAFT
+  watermark). The requester's issued invoices show as **Invoice** on
+  `/dashboard`.
+- **Official invoices go to Accounts.** On issue, `notifyInvoiceIssued()`
+  queues `invoice.issued.accounts` To the Setting `accounts_email`, CC the
+  requester's HOD (`hodApproversFor`) and the requester, with an attachment
+  *reference* on the outbox row (`email_outbox.attachments`); the dispatcher
+  renders the PDF at send time. Personal bookings are not mailed. Nothing is
+  mailed until the office sets the address.
+- **Tariffs & Invoicing console** (`/admin/billing`, manager and developer):
+  the rates table with an add form (future rates removable), and the invoice
+  Settings group `rules.invoice` — numbering, day basis, GST %, GSTIN, Accounts
+  email, bank details and the footer contact line.
+- **Collections** (`lib/collections.ts`): the monthly CSV on `/history` for the
+  desk — every invoice issued or paid in the month, then totals by payment
+  mode and by debitable head.
+- **Who:** manager, caretaker and developer preview, issue and mark paid
+  (`canIssueInvoices`); only the manager and developer cancel
+  (`canCancelInvoices`). Each action re-checks and writes `invoice.issued`,
+  `invoice.paid` or `invoice.cancelled` to the security audit log.
+
 ## Branding
 
 **Since 19 Sep 2026 the palette comes from the guest house design handoff**

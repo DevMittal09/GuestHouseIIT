@@ -93,7 +93,7 @@ export function SettingsManager({
 
 // ------------------------------------------------------------------ layout
 
-function SettingCard({
+export function SettingCard({
   title,
   description,
   children,
@@ -113,7 +113,7 @@ function SettingCard({
   );
 }
 
-function useRunner() {
+export function useRunner() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const run = (work: () => Promise<Result>, success: string, after?: () => void) =>
@@ -135,7 +135,7 @@ function useRunner() {
  * spells out each change. Validation runs here first so an obvious mistake is
  * reported without a round trip; the server validates again regardless.
  */
-function RuleGroupActions<G extends RuleGroup>({
+export function RuleGroupActions<G extends RuleGroup>({
   group,
   current,
   draft,

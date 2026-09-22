@@ -3,7 +3,7 @@ import { mailConfig } from "./config";
 import { getMailer } from "./index";
 import { applyRedirect } from "./redirect";
 import { freshMessageId } from "./thread";
-import type { EmailMessage, OutboundMessage } from "./types";
+import type { EmailMessage, MailAttachmentRef, OutboundAttachment, OutboundMessage } from "./types";
 
 /**
  * The outbox worker: claim due messages, send them, record what happened.
@@ -92,6 +92,29 @@ function toOutbound(row: EmailMessage, isRoot: boolean): OutboundMessage {
   };
 }
 
+/**
+ * Turn the outbox row's attachment references into files. An invoice is drawn
+ * from its stored snapshot now — the bytes are never kept in the outbox. A
+ * reference that cannot be resolved fails the send (and so retries): mailing
+ * Accounts an invoice without the invoice would be worse than mailing late.
+ */
+async function resolveAttachments(refs: MailAttachmentRef[] | undefined): Promise<OutboundAttachment[]> {
+  const out: OutboundAttachment[] = [];
+  for (const ref of refs ?? []) {
+    if (ref.kind === "invoice") {
+      const invoice = await getStore().getInvoice(ref.invoice_id);
+      if (!invoice?.document) throw new Error(`Invoice ${ref.invoice_id} to attach was not found`);
+      const { renderInvoicePdf, invoiceFilename } = await import("@/lib/invoice-pdf");
+      out.push({
+        filename: invoiceFilename(invoice.document),
+        contentType: "application/pdf",
+        content: renderInvoicePdf(invoice.document, invoice),
+      });
+    }
+  }
+  return out;
+}
+
 export interface DispatchResult {
   claimed: number;
   sent: number;
@@ -141,6 +164,8 @@ export async function dispatchOutbox(
         continue;
       }
       try {
+        const attachments = await resolveAttachments(row.attachments);
+        if (attachments.length > 0) message.attachments = attachments;
         const { messageId } = await mailer.send(message);
         await store.settleEmail(row.id, { ok: true, providerMessageId: messageId });
         sent++;

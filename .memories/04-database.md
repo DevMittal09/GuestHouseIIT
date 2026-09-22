@@ -357,6 +357,26 @@ Current migrations:
    backfill, the checks, and `can_access_booking` true for the Dean reached via
    `hod_unit_id` and false for an unrelated employee.
 
+19. `00000000000019_tariffs_and_invoices.sql` (Phase 5, Sep 2026).
+   `tariffs` (effective-dated rates; blank qualifiers mean "any"; unique per
+   scope and date; `tariffs_guard` refuses changing or deleting a rate already
+   in force, institute date; seeded from the tariff sheet — Bageshri ₹750,
+   Hamsanandi ₹2,000 / ₹4,000 for `official`, meals ₹80/120/100, free to
+   students and alumni stays — and **no extra-bed rate**, which the office must
+   add). `invoice_counters` (per financial year) and `invoices` (snapshot
+   `document` jsonb, reporting columns, status draft/issued/paid/cancelled,
+   payment mode and reference, `replaces_invoice_id`; one live invoice per
+   booking; `on delete restrict` from bookings). `invoices_guard` makes issued
+   invoices immutable apart from payment and cancellation, and refuses deleting
+   anything but a draft. `issue_invoice()` (service role only) increments the
+   counter and writes the invoice in one transaction — no gaps, and a refused
+   issue spends no number. `email_outbox.attachments` holds attachment
+   references. RLS: the desk reads all invoices, a requester their own
+   non-draft ones; tariffs readable by signed-in users; explicit grants.
+   Verified in a throwaway Postgres 16: applied twice over old-shape rows,
+   seeded once, every constraint and trigger refusal, FY restart at 0001, draft
+   promoted in place, and RLS for two users.
+
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.
 

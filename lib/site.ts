@@ -54,16 +54,18 @@ export const INSTITUTE_CONTACT = {
 } as const;
 
 /**
- * The guest house office. Taken from the guest house page on iitpkd.ac.in
- * (September 2026), which is more current than the design's placeholders.
- * TODO(site): confirm the phone number, the address and whether front-office
- * hours should be published.
+ * The guest house office, as printed at the foot of the office's own invoice
+ * template (public/GHM_Invoice.docx, Sep 2026) — the phone, email and address
+ * the office itself hands to guests. (The number on the iitpkd.ac.in guest
+ * house page, +91 88483 94440, was used before.) The invoice's copy of these is
+ * a Setting (Tariffs & Invoicing), so a change there does not reach this page.
+ * TODO(site): whether front-office hours should be published.
  */
 export const GUEST_HOUSE_CONTACT = {
-  phone: "+91 88483 94440",
-  phoneHref: "tel:+918848394440",
+  phone: "+91 491 209 2016",
+  phoneHref: "tel:+914912092016",
   email: "ghm@iitpkd.ac.in",
-  address: ["Guest House, Indian Institute of Technology Palakkad", "Kanjikode | Palakkad", "Kerala | Pin: 678623"],
+  address: ["Guest House, Indian Institute of Technology Palakkad", "Kanjikode West | Palakkad", "Kerala | Pin: 678623"],
 } as const;
 
 /**

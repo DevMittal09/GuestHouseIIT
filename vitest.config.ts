@@ -10,7 +10,13 @@ import { defineConfig } from "vitest/config";
  *   test file), never the developer's `.local-db.json`.
  */
 export default defineConfig({
-  resolve: { alias: { "@": path.resolve(__dirname, ".") } },
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "."),
+      // The package throws unless bundled for the server; tests are server code.
+      "server-only": path.resolve(__dirname, "tests/stubs/server-only.ts"),
+    },
+  },
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { MyBookings } from "@/components/my-bookings";
+import { MyBookings, type MyInvoice } from "@/components/my-bookings";
 import { PageHeader } from "@/components/page-header";
 import { getCurrentUser } from "@/lib/auth";
 import { serviceTypesFor } from "@/lib/booking-types";
@@ -22,6 +22,16 @@ export default async function DashboardPage() {
     getEffectiveFormConfig(user.role),
     store.listGuestHouses(),
   ]);
+  // Issued invoices, to download (Phase 5). Before migration 19 there are none.
+  const invoices: Record<string, MyInvoice> = {};
+  if (bookings.length > 0) {
+    const rows = await store.listInvoices({ bookingIds: bookings.map((b) => b.id) }).catch(() => []);
+    for (const i of rows) {
+      if ((i.status === "issued" || i.status === "paid") && i.invoice_number) {
+        invoices[i.booking_id] = { id: i.id, number: i.invoice_number, paid: i.status === "paid" };
+      }
+    }
+  }
 
   // Meals get their own door rather than living inside "New Booking": a
   // department booking lunch for a visiting examiner has no room to ask for,
@@ -58,7 +68,7 @@ export default async function DashboardPage() {
       >
         Track your guest house requests through the approval pipeline.
       </PageHeader>
-      <MyBookings bookings={bookings} />
+      <MyBookings bookings={bookings} invoices={invoices} />
       {/* The way out when the form will not do what the requester needs — a
           stay over the 14-night cap, an exception, a booking taken at the
           desk. Values live in `lib/policy.ts`. */}

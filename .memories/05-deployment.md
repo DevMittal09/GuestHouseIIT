@@ -265,6 +265,20 @@ See [07-troubleshooting.md](07-troubleshooting.md) for the other two causes of
 click latency (`revalidatePath("/", "layout")` on every action, and the 5 s
 poll).
 
+**5. The invoice against the office's template**
+
+`INVOICE_PDF_OUT=/tmp/sample.pdf npx vitest run tests/invoice.test.ts` writes a
+sample invoice. LibreOffice renders both it and the template to PNG for a
+side-by-side look (`soffice --headless --convert-to pdf public/GHM_Invoice.docx`,
+then `soffice --headless --convert-to png <file>.pdf`). The invoice's artwork
+and fonts are compiled into `lib/invoice-assets.generated.ts`; after changing
+anything in `public/invoice/` or `assets/invoice/fonts/`, run
+`node scripts/build-invoice-assets.mjs`.
+
+To run a one-off TypeScript script against the mock store (seeding a checked-in
+stay, say), `npx vite-node --config vitest.config.ts script.ts` resolves the
+`@/` aliases; `tsx` is not installed.
+
 ## Deploying to production
 
 Not yet deployed. The intended path is Vercel + hosted Supabase.

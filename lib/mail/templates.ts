@@ -1,3 +1,4 @@
+import { formatINR, formatInvoiceDate, type InvoiceDocument } from "@/lib/invoice";
 import { formatDateTime, formatDate } from "@/lib/format";
 import { describeMealDays, describeMeals } from "@/lib/meals";
 import { describeParty } from "@/lib/occupancy";
@@ -676,6 +677,38 @@ export function dailyDeskReport(
         : []),
       { kind: "button", label: "Open the console", href: portalUrl("/manager") },
       { kind: "note", text: "Sent once a day. Room availability by hour is at /availability in the portal." },
+    ],
+  };
+}
+
+/** An issued official invoice, to Accounts (Phase 5). The PDF is attached. */
+export function invoiceToAccounts(booking: BookingWithDetails, invoice: InvoiceDocument): EmailDocument {
+  return {
+    heading: `Invoice ${invoice.invoice_number}`,
+    preheader: `${invoice.guest_house} Guest House — ${formatINR(invoice.grand_total)}, debitable to ${invoice.debit_head_label}.`,
+    blocks: [
+      {
+        kind: "paragraph",
+        text: `The Guest House has issued the invoice below for an official stay. The invoice is attached as a PDF; it is the record — this message only summarises it.`,
+      },
+      {
+        kind: "facts",
+        rows: [
+          ["Invoice No.", invoice.invoice_number ?? ""],
+          ["Invoice date", formatInvoiceDate(invoice.invoice_date)],
+          ["Booked by", `${invoice.booked_by} — ${invoice.unit}`],
+          ["Debitable head", invoice.debit_head_label],
+          ...(invoice.project_number
+            ? ([["Project", `${invoice.project_number} — ${invoice.project_title ?? ""}`]] as [string, string][])
+            : []),
+          ["Primary guest", invoice.primary_guest],
+          ["Rooms (A)", formatINR(invoice.subtotal_rooms)],
+          ["Dining (B)", formatINR(invoice.subtotal_dining)],
+          ["GST", formatINR(invoice.gst)],
+          ["Grand total", formatINR(invoice.grand_total)],
+        ],
+      },
+      bookingFacts(booking),
     ],
   };
 }

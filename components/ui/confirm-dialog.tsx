@@ -1,5 +1,7 @@
 "use client";
 
+import type * as React from "react";
+
 import { useState } from "react";
 import { AlertTriangleIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,8 @@ export function ConfirmDialog({
   confirmLabel = "Delete",
   pending = false,
   onConfirm,
+  confirmVariant = "destructive",
+  children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -46,6 +50,10 @@ export function ConfirmDialog({
   confirmLabel?: string;
   pending?: boolean;
   onConfirm: () => void;
+  /** "default" for a weighty but not destructive step, like issuing an invoice. */
+  confirmVariant?: "destructive" | "default";
+  /** Extra fields the step needs, e.g. a reason. */
+  children?: React.ReactNode;
 }) {
   const [typed, setTyped] = useState("");
   const satisfied = !confirmPhrase || typed.trim() === confirmPhrase;
@@ -81,6 +89,8 @@ export function ConfirmDialog({
           </ul>
         )}
 
+        {children}
+
         {confirmPhrase && (
           <div className="space-y-2">
             <Label htmlFor="confirm-phrase">
@@ -101,7 +111,7 @@ export function ConfirmDialog({
             Cancel
           </Button>
           <Button
-            variant="destructive"
+            variant={confirmVariant}
             disabled={pending || !satisfied}
             onClick={onConfirm}
           >

@@ -11,6 +11,9 @@ import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { canExportPdf, canViewHistory, historyScope, isRequesterHistory } from "@/lib/workflow";
 import { PageHeader } from "@/components/page-header";
+import { CollectionsExport } from "@/components/collections-export";
+import { canExportCollections } from "@/lib/access";
+import { toInstituteDateValue } from "@/lib/tz";
 
 export default async function HistoryPage({
   searchParams,
@@ -55,6 +58,9 @@ export default async function HistoryPage({
   return (
     <div className="space-y-6">
       <Heading scopeLabel={scope.label} isRequester={isRequester} />
+      {canExportCollections(user.role) && (
+        <CollectionsExport defaultMonth={toInstituteDateValue(new Date()).slice(0, 7)} />
+      )}
       <BookingHistory
         rows={result.rows}
         total={result.total}

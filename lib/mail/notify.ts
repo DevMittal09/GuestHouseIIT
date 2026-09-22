@@ -98,6 +98,8 @@ interface QueueOne {
    */
   stamp: string;
   scheduledFor?: string;
+  /** Files to attach when it is sent (resolved by the dispatcher). */
+  attachments?: NewEmailInput["attachments"];
   /**
    * Send this one on its own even though its event normally joins a daily
    * thread — the console's test message, which borrows an event key.
@@ -167,6 +169,7 @@ function buildInputs(
     // Which message opens a thread is decided when it is sent — see dispatch.ts.
     is_thread_root: false,
     ...(params.scheduledFor ? { scheduled_for: params.scheduledFor } : {}),
+    ...(params.attachments?.length ? { attachments: params.attachments } : {}),
   });
 
   if (!thread) return [input(to, cc, null, itemSubject)];
@@ -482,3 +485,42 @@ export async function notifyCancelled(
 }
 
 export { mailConfig };
+
+/**
+ * An official booking's invoice has been issued: mail it to Accounts, with
+ * the requester's HOD and the requester copied, and the PDF attached (Phase
+ * 5). Personal bookings are not mailed. Nothing is sent until the office has
+ * entered the Accounts address in Tariffs & Invoicing.
+ */
+export async function notifyInvoiceIssued(invoiceId: string): Promise<void> {
+  await safely("invoice.issued", async () => {
+    const store = getStore();
+    const invoice = await store.getInvoice(invoiceId);
+    if (!invoice?.document || !invoice.invoice_number) return;
+    const booking = await freshBooking(invoice.booking_id);
+    if (!booking || booking.booking_type === "personal") return;
+    const { getRules } = await import("@/lib/settings-server");
+    const accounts = (await getRules()).invoice.accounts_email;
+    if (!accounts) return;
+
+    const { hodApproversFor } = await import("@/lib/units");
+    const [units, profiles] = await Promise.all([store.listUnits().catch(() => []), store.listProfiles()]);
+    const hods = hodApproversFor(booking.requester, units)
+      .map((id) => profiles.find((p) => p.id === id)?.email)
+      .filter((e): e is string => Boolean(e));
+    const requester = requesterRecipient(booking);
+
+    await queueMessages([
+      {
+        eventKey: "invoice.issued.accounts",
+        booking,
+        to: [accounts],
+        cc: [...hods, ...(requester ? [requester.email] : [])],
+        subjectText: `Invoice ${invoice.invoice_number}`,
+        doc: t.invoiceToAccounts(booking, invoice.document),
+        stamp: invoice.issued_at ?? invoice.created_at,
+        attachments: [{ kind: "invoice", invoice_id: invoice.id }],
+      },
+    ]);
+  });
+}

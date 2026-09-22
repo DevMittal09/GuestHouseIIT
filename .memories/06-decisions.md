@@ -1431,3 +1431,76 @@ flag with department scoping": `units.head_id`, scoped by `hodApproversFor`.
 - **Display:** the head is a second line under the requester in the manager and
   caretaker tables, the history list, a column in the PDF export, the CSV
   column "Debitable head", and "Debitable head" in every booking mail's facts.
+
+## Phase 5: invoices (22 Sep 2026)
+
+The office's template (`public/GHM_Invoice.docx`) is reproduced to its
+measurements; the brief's `docs/invoice-template.docx` does not exist — the
+template was in `public/`. The header images are `word/media/image1.jpg` and
+`image2.gif` (converted to PNG), now in `public/invoice/`.
+
+- **Server-side PDF, one renderer.** The same bytes are printed at the desk,
+  downloaded by the requester and attached to the Accounts mail, so the PDF is
+  drawn on the server (jsPDF, which was already a dependency) rather than in
+  the browser. It is drawn from the stored snapshot, never recomputed.
+- **Fonts.** jsPDF's built-in fonts have no ₹, so the old invoice printed
+  "INR". Arimo (SIL OFL, metrically Arial — the template's font) is embedded,
+  subset to Latin-1 + ₹ (16 KB a weight). The footer's Latin text is Arimo Bold
+  rather than the template's Palanquin Dark: a viewer that substitutes
+  Palanquin draws it wider than jsPDF measured and it overran the Hindi.
+- **Hindi is artwork.** jsPDF cannot shape Devanagari (matra reordering,
+  conjuncts), so "कंजिकोड पश्चिम, पालक्काड, केरल - ६७८ ६२३" is a PNG rendered
+  from the template's own Palanquin Dark Bold in Chrome, at 3×.
+  `pdfSafe()` is gone. **Assumed:** the Hindi address never changes; the Latin
+  address, phone and email are Settings.
+- **Assets are compiled in** (`lib/invoice-assets.generated.ts`, base64, 180
+  KB, `server-only`) so a serverless function needs no access to `public/`.
+- **Day(s) counts nights by default**, as the brief asks, although the office's
+  tariff sheet words Bageshri's rate as "24 hours with ±4 hours". Both are
+  implemented; Setting `day_basis` switches, `grace_hours` defaults to 4.
+  **Office to confirm.**
+- **Rates by date, most specific wins.** Guest house > requester role >
+  booking type > room type, then the latest `effective_from`; a later general
+  rate never overrides an officer-specific one. Rates in force are immutable;
+  a back-dated rate is allowed (the console warns) because the first extra-bed
+  rate has to cover stays already in progress — invoices already issued keep
+  their rates regardless.
+- **No extra-bed rate is seeded** — the tariff sheet has none. A stay with an
+  extra bed cannot be invoiced until the office adds one; the console and the
+  invoice say so. Nothing is priced at ₹0 by omission.
+- **Meals are priced at the rate in force on the stay's first day**, not split
+  by date: the dining table must be exactly three rows, and the desk corrects
+  counts, not dated covers. **Meals are free to students and alumni stays** as
+  zero-rate rows, as the sheet says, so the rows still print.
+- **"Requester category" = the requester's role**, the portal's own category.
+  The sheet's Type 3 "government officers" is the `official` role (as before).
+- **Rounding.** GST is computed in basis points on integer paise and rounded
+  half-up to the rupee; the grand total is rounded half-up to the rupee too.
+  GST is 0 by default (the office has not said), and the row still prints.
+- **Numbering** is per financial year, `GH/2026-27/0001` (prefix and width are
+  Settings), taken by `issue_invoice()` in the same transaction as the insert:
+  no gaps, no duplicates, and a refused issue spends no number (verified).
+- **One live invoice per booking.** A correction is cancel-with-reason, then a
+  new invoice that records `replaces_invoice_id`. Only the manager (and the
+  developer) may cancel; the caretaker issues and records payments.
+- **Issued at check-out, including while occupied.** The desk is often asked
+  for the bill before the guest formally leaves, so an occupied stay can be
+  invoiced; it is billed to its booked check-out. Once vacated, actual times
+  are used (read from the desk's log entries; no new columns).
+- **Payment:** cash (reference optional), UPI (transaction id required),
+  account transfer (UTR required); a date may be back-dated, never future.
+- **Official → Accounts.** Mailed To the Accounts email, CC the requester's
+  HOD and the requester, PDF attached (rendered at send time from a reference
+  on the outbox row). "Department/HOD in CC" is read as the HOD of the
+  requester's HOD unit. Personal bookings are not mailed; the requester
+  downloads from `/dashboard`, where an official requester sees theirs too.
+  **Nothing is mailed until the office sets the Accounts address.**
+- **Who edits what.** Tariffs & Invoicing (`/admin/billing`) is the manager's
+  as well as the developer's — pricing is the office's to run; changes are
+  audited like Settings.
+- **Contact details** on the public site now come from the invoice footer
+  (+91 491 209 2016, ghm@iitpkd.ac.in), as the brief asks; the earlier number
+  was the iitpkd.ac.in guest house page's.
+- **"plus dining bookings"** in the brief's meal-count rule is read as: a
+  dining (meals-only) booking is invoiced the same way, its covers being its
+  head count × meals. Phase 6 builds on this.

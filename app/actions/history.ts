@@ -1,5 +1,6 @@
 "use server";
 
+import { csvCell } from "@/lib/csv";
 import { requireUser } from "@/lib/auth";
 import {
   HISTORY_EXPORT_LIMIT,
@@ -52,16 +53,6 @@ const COLUMNS = [
   "My remarks",
   "Rejection reason",
 ];
-
-/**
- * Spreadsheets execute cells that begin with a formula character, and every
- * text field here is user-supplied. Neutralise those, then quote everything.
- */
-function csvCell(value: string | number | null | undefined): string {
-  const text = String(value ?? "").replace(/[\r\n]+/g, " ");
-  const safe = /^[=+\-@\t]/.test(text) ? `'${text}` : text;
-  return `"${safe.replace(/"/g, '""')}"`;
-}
 
 function csvRow(booking: BookingWithDetails, userId: string): string {
   const action = latestReviewerActionOn(booking, userId);

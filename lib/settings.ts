@@ -66,17 +66,56 @@ export type MealRules = {
   windows: Record<MealKey, MealWindow>;
 };
 
+/**
+ * How invoices are numbered, charged and printed (Phase 5). Edited from the
+ * Tariffs & Invoicing console, which the Guest House Manager can use too —
+ * pricing is the office's to run. The rates themselves are the `tariffs`
+ * table (`lib/tariffs.ts`), because they are effective-dated rows.
+ */
+export type InvoiceRules = {
+  /** "GH" in GH/2026-27/0001. */
+  serial_prefix: string;
+  /** Zero-padded width of the running number: 4 gives 0001. */
+  serial_digits: number;
+  /**
+   * What "Day(s)" on the invoice counts. `night`: calendar nights between
+   * the actual check-in and check-out dates, at least one. `24h`: blocks of
+   * 24 hours from the actual check-in, a block starting only once the stay
+   * runs `grace_hours` past the previous one.
+   */
+  day_basis: "night" | "24h";
+  grace_hours: number;
+  /** GST on the total, percent. Zero still prints the row, as ₹0.00. */
+  gst_percent: number;
+  gstin: string;
+  /**
+   * Where an official booking's invoice is mailed when it is issued, with the
+   * requester's HOD and the requester in CC. Empty: nothing is mailed.
+   */
+  accounts_email: string;
+  bank: {
+    account_holder: string;
+    account_number: string;
+    bank_name: string;
+    ifsc: string;
+    branch: string;
+  };
+  /** The address line at the foot of the invoice (the Hindi half is fixed artwork). */
+  contact: { address: string; phone: string; email: string };
+};
+
 export type Rules = {
   capacity: CapacityRules;
   booking: BookingRules;
   meals: MealRules;
   /** Which debitable heads each kind of requester may choose (Phase 4). */
   debit: DebitRules;
+  invoice: InvoiceRules;
 };
 
 export type RuleGroup = keyof Rules;
 
-export const RULE_GROUPS: RuleGroup[] = ["capacity", "booking", "meals", "debit"];
+export const RULE_GROUPS: RuleGroup[] = ["capacity", "booking", "meals", "debit", "invoice"];
 
 /** The `app_settings` key a group is stored under. */
 export function ruleKey(group: RuleGroup): string {
@@ -111,6 +150,30 @@ export const DEFAULT_RULES: Rules = {
     },
   },
   debit: DEFAULT_DEBIT_RULES,
+  // From the office's invoice template (public/GHM_Invoice.docx). GST is 0
+  // until the office says otherwise, and nothing is mailed to Accounts until
+  // an address is entered.
+  invoice: {
+    serial_prefix: "GH",
+    serial_digits: 4,
+    day_basis: "night",
+    grace_hours: 4,
+    gst_percent: 0,
+    gstin: "32AAAAI9910J1ZR",
+    accounts_email: "",
+    bank: {
+      account_holder: "Guest house IIT PKD",
+      account_number: "39938270076",
+      bank_name: "State Bank of India",
+      ifsc: "SBIN0006640",
+      branch: "KANJIKODE",
+    },
+    contact: {
+      address: "Kanjikode West, Palakkad, Kerala",
+      phone: "+91 491 209 2016",
+      email: "ghm@iitpkd.ac.in",
+    },
+  },
 };
 
 // -------------------------------------------------------------- validation
@@ -182,11 +245,56 @@ export const mealRulesSchema = z
     { message: "Breakfast, lunch and dinner must be served in that order without overlapping" }
   );
 
+const text = (label: string, max: number) =>
+  z.string().trim().min(1, `${label} is required`).max(max, `${label} is too long`);
+
+export const invoiceRulesSchema = z.object({
+  serial_prefix: z
+    .string()
+    .trim()
+    .regex(/^[A-Z0-9-]{1,10}$/, "The invoice prefix must be 1–10 capital letters, digits or hyphens"),
+  serial_digits: whole("Invoice number width", 3, 6),
+  day_basis: z.enum(["night", "24h"], { message: "Choose how days are counted" }),
+  grace_hours: whole("Grace", 0, 12),
+  gst_percent: z.coerce
+    .number({ message: "GST is required" })
+    .min(0, "GST cannot be negative")
+    .max(28, "GST cannot exceed 28%")
+    .refine((n) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6, "GST can have at most two decimals"),
+  gstin: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^(\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z])?$/, "That is not a GSTIN (15 characters, e.g. 32AAAAI9910J1ZR)"),
+  accounts_email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine((v) => v === "" || z.email().safeParse(v).success, "The Accounts email is not an address"),
+  bank: z.object({
+    account_holder: text("Account holder", 80),
+    account_number: z.string().trim().regex(/^\d{6,20}$/, "The account number must be 6–20 digits"),
+    bank_name: text("Bank name", 80),
+    ifsc: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "That is not an IFSC code (e.g. SBIN0006640)"),
+    branch: text("Branch", 80),
+  }),
+  contact: z.object({
+    address: text("Address", 120),
+    phone: text("Phone", 40),
+    email: z.email("The contact email is not an address"),
+  }),
+});
+
 export const RULE_SCHEMAS = {
   capacity: capacityRulesSchema,
   booking: bookingRulesSchema,
   meals: mealRulesSchema,
   debit: debitRulesSchema,
+  invoice: invoiceRulesSchema,
 } as const satisfies Record<RuleGroup, z.ZodType>;
 
 /**

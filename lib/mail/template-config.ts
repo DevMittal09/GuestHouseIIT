@@ -124,6 +124,11 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
     audience: "A reviewer who has left a request too long",
     when: "When a request has waited past the escalation threshold.",
   },
+  "invoice.issued.accounts": {
+    audience:
+      "To: the Accounts email (Tariffs & Invoicing). CC: the requester's HOD and the requester. The invoice PDF is attached.",
+    when: "When the desk issues the invoice for an official booking. Personal bookings are not mailed — the requester downloads theirs from the dashboard.",
+  },
 };
 
 /**

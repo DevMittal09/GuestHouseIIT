@@ -88,6 +88,7 @@ export type ConsoleSection =
   | "users"
   | "units"
   | "projects"
+  | "billing"
   | "guest_houses"
   | "forms"
   | "mail_templates"
@@ -117,6 +118,12 @@ export const CONSOLE_SECTIONS: Record<
     href: "/admin/projects",
     roles: ["gh_manager", "developer"],
     blurb: "The projects a booking can be debited to, with a spreadsheet paste import.",
+  },
+  billing: {
+    label: "Tariffs & Invoicing",
+    href: "/admin/billing",
+    roles: ["gh_manager", "developer"],
+    blurb: "Room, extra-bed and meal rates by date, invoice numbering, GST, bank details and the Accounts email.",
   },
   guest_houses: {
     label: "Guest Houses & Rooms",
@@ -198,4 +205,27 @@ export function userEditError(actor: Profile, target: Profile): string | null {
     return "Only a developer can change a developer account";
   }
   return null;
+}
+
+// ---------------------------------------------------------------- invoices
+
+/**
+ * Preview, issue and print invoices and record payments (Phase 5): the desk —
+ * manager and caretaker — plus the developer.
+ */
+export function canIssueInvoices(role: Role): boolean {
+  return role === "gh_manager" || role === "gh_caretaker" || role === "developer";
+}
+
+/**
+ * Cancel an issued invoice. A correction is a cancellation plus a new
+ * invoice, so it is the manager's call, not the reception desk's.
+ */
+export function canCancelInvoices(role: Role): boolean {
+  return hasFullBookingAccess(role);
+}
+
+/** The monthly collections export on /history. */
+export function canExportCollections(role: Role): boolean {
+  return canIssueInvoices(role);
 }

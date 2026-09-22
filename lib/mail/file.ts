@@ -44,10 +44,18 @@ export class FileMailer implements Mailer {
         ([name, value]) => `${name.replace(/[^\w-]/g, "")}: ${headerValue(value)}`
       ),
       "MIME-Version: 1.0",
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
     ];
 
-    const body = [
+    // With attachments the text/html alternative nests inside multipart/mixed.
+    const attachments = message.attachments ?? [];
+    const outer = `${boundary}-mixed`;
+    headers.push(
+      attachments.length > 0
+        ? `Content-Type: multipart/mixed; boundary="${outer}"`
+        : `Content-Type: multipart/alternative; boundary="${boundary}"`
+    );
+
+    const alternative = [
       "",
       `--${boundary}`,
       'Content-Type: text/plain; charset="utf-8"',
@@ -64,6 +72,26 @@ export class FileMailer implements Mailer {
       `--${boundary}--`,
       "",
     ];
+    const body =
+      attachments.length === 0
+        ? alternative
+        : [
+            "",
+            `--${outer}`,
+            `Content-Type: multipart/alternative; boundary="${boundary}"`,
+            ...alternative,
+            ...attachments.flatMap((a) => [
+              `--${outer}`,
+              `Content-Type: ${a.contentType}; name="${headerValue(a.filename)}"`,
+              `Content-Disposition: attachment; filename="${headerValue(a.filename)}"`,
+              "Content-Transfer-Encoding: base64",
+              "",
+              ...(Buffer.from(a.content).toString("base64").match(/.{1,76}/g) ?? []),
+              "",
+            ]),
+            `--${outer}--`,
+            "",
+          ];
 
     await fs.promises.mkdir(MAIL_DIR, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -87,7 +115,8 @@ export class DryRunMailer implements Mailer {
   async send(message: OutboundMessage): Promise<{ messageId: string }> {
     console.log(
       `[mail:dry-run] would send "${message.subject}" to ${message.to.join(", ")}` +
-        (message.cc.length > 0 ? ` (cc ${message.cc.join(", ")})` : "")
+        (message.cc.length > 0 ? ` (cc ${message.cc.join(", ")})` : "") +
+        (message.attachments?.length ? ` with ${message.attachments.map((a) => a.filename).join(", ")}` : "")
     );
     return { messageId: message.messageId ?? "<dry-run>" };
   }

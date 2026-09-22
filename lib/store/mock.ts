@@ -54,10 +54,22 @@ import {
   seedHostels,
   seedOfficialEmails,
   seedProjects,
+  seedTariffs,
   seedRooms,
   seedUnits,
 } from "./seed";
 import type { NewProjectInput, Project } from "@/lib/projects";
+import { tariffLockedError, type NewTariffInput, type Tariff } from "@/lib/tariffs";
+import {
+  invoiceColumnsFrom,
+  InvoiceStateError,
+  type InvoiceFilter,
+  type InvoiceRecord,
+  type IssueInvoiceInput,
+  type MealCounts,
+  type PaymentMode,
+} from "@/lib/invoice";
+import { toInstituteDateValue } from "@/lib/tz";
 import type { Unit } from "@/lib/units";
 import { auditMatches, type AuditEvent, type AuditFilter, type NewAuditEvent } from "@/lib/audit";
 import { parseRuleGroup } from "@/lib/settings";
@@ -87,6 +99,10 @@ interface Db {
   security_audit?: AuditEvent[];
   /** Migration 18: projects a stay can be debited to. */
   projects?: Project[];
+  /** Migration 19: rates by date, invoices, and the running number per financial year. */
+  tariffs?: Tariff[];
+  invoices?: InvoiceRecord[];
+  invoice_counters?: Record<string, number>;
   /** Queued notifications; see `lib/mail/dispatch.ts`. */
   email_outbox?: EmailMessage[];
   /** Only the mails whose wording has actually been edited (migration 13). */
@@ -338,6 +354,21 @@ function loadDb(): Db {
       db.security_audit = [];
       dirty = true;
     }
+    // Migration 19: the tariff sheet, and no invoices yet.
+    if (!db.tariffs) {
+      db.tariffs = seedTariffs.filter(
+        (t) => t.guest_house_id === null || db.guest_houses.some((g) => g.id === t.guest_house_id)
+      );
+      dirty = true;
+    }
+    if (!db.invoices) {
+      db.invoices = [];
+      dirty = true;
+    }
+    if (!db.invoice_counters) {
+      db.invoice_counters = {};
+      dirty = true;
+    }
     if (dirty) saveDb(db);
     return db;
   }
@@ -357,6 +388,9 @@ function loadDb(): Db {
     official_emails: [...seedOfficialEmails],
     projects: [...seedProjects],
     security_audit: [],
+    tariffs: [...seedTariffs],
+    invoices: [],
+    invoice_counters: {},
   };
   saveDb(db);
   return db;
@@ -1135,8 +1169,169 @@ export class MockStore implements DataStore {
     saveDb(db);
   }
 
+  // ---- tariffs and invoices (migration 19) ----------------------------
+
+  async listTariffs(): Promise<Tariff[]> {
+    return [...(loadDb().tariffs ?? [])];
+  }
+
+  async createTariff(input: NewTariffInput): Promise<Tariff> {
+    const db = loadDb();
+    const tariffs = (db.tariffs ??= []);
+    // The unique index on (scope, effective_from).
+    const clash = tariffs.find(
+      (t) =>
+        t.guest_house_id === input.guest_house_id &&
+        t.item === input.item &&
+        t.room_type === input.room_type &&
+        t.booking_type === input.booking_type &&
+        t.requester_role === input.requester_role &&
+        t.effective_from === input.effective_from
+    );
+    if (clash) throw new Error("A rate for exactly this scope already starts on that date");
+    const row: Tariff = { ...input, id: randomUUID(), created_at: new Date().toISOString() };
+    tariffs.push(row);
+    saveDb(db);
+    return row;
+  }
+
+  async deleteTariff(id: string): Promise<void> {
+    const db = loadDb();
+    const row = (db.tariffs ?? []).find((t) => t.id === id);
+    if (!row) return;
+    // `tariffs_guard`: a rate in force has priced stays.
+    const locked = tariffLockedError(row, toInstituteDateValue(new Date()));
+    if (locked) throw new InvoiceStateError(locked);
+    db.tariffs = (db.tariffs ?? []).filter((t) => t.id !== id);
+    saveDb(db);
+  }
+
+  async listInvoices(filter: InvoiceFilter): Promise<InvoiceRecord[]> {
+    const within = (at: string | null, from?: string, to?: string) =>
+      (!from || (at !== null && at >= from)) && (!to || (at !== null && at < to));
+    return (loadDb().invoices ?? [])
+      .filter(
+        (i) =>
+          (!filter.bookingId || i.booking_id === filter.bookingId) &&
+          (!filter.bookingIds || filter.bookingIds.includes(i.booking_id)) &&
+          (!(filter.issuedFrom || filter.issuedTo) || within(i.issued_at, filter.issuedFrom, filter.issuedTo)) &&
+          (!(filter.paidFrom || filter.paidTo) || within(i.paid_at, filter.paidFrom, filter.paidTo))
+      )
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+
+  async getInvoice(id: string): Promise<InvoiceRecord | null> {
+    return (loadDb().invoices ?? []).find((i) => i.id === id) ?? null;
+  }
+
+  async saveInvoiceDraft(bookingId: string, mealCounts: MealCounts | null, userId: string): Promise<InvoiceRecord> {
+    const db = loadDb();
+    const invoices = (db.invoices ??= []);
+    const live = invoices.find((i) => i.booking_id === bookingId && i.status !== "cancelled");
+    if (live && live.status !== "draft") {
+      throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} — cancel it first to issue a corrected one.`);
+    }
+    const now = new Date().toISOString();
+    if (live) {
+      live.meal_counts = mealCounts;
+      live.updated_at = now;
+      saveDb(db);
+      return live;
+    }
+    const draft = blankInvoice(bookingId, userId, now);
+    draft.meal_counts = mealCounts;
+    invoices.push(draft);
+    saveDb(db);
+    return draft;
+  }
+
+  async issueInvoice(input: IssueInvoiceInput): Promise<InvoiceRecord> {
+    // `issue_invoice()`: check, count and write with no await in between, so
+    // this single-threaded process cannot interleave two issues.
+    const db = loadDb();
+    const invoices = (db.invoices ??= []);
+    const counters = (db.invoice_counters ??= {});
+    const live = invoices.find((i) => i.booking_id === input.bookingId && i.status !== "cancelled");
+    if (live && live.status !== "draft") {
+      throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} — cancel it first to issue a corrected one.`);
+    }
+    const seq = (counters[input.fy] ?? 0) + 1;
+    counters[input.fy] = seq;
+    const number = `${input.prefix}/${input.fy}/${String(seq).padStart(input.digits, "0")}`;
+    const document = { ...input.document, invoice_number: number };
+    const now = new Date().toISOString();
+    const row: InvoiceRecord = live ?? blankInvoice(input.bookingId, input.issuedBy, now);
+    Object.assign(row, {
+      status: "issued",
+      invoice_number: number,
+      fy: input.fy,
+      seq,
+      document,
+      meal_counts: input.mealCounts,
+      ...invoiceColumnsFrom(document),
+      issued_at: document.invoice_date,
+      issued_by: input.issuedBy,
+      replaces_invoice_id: input.replaces,
+      updated_at: now,
+    } satisfies Partial<InvoiceRecord>);
+    if (!live) invoices.push(row);
+    saveDb(db);
+    return row;
+  }
+
+  async markInvoicePaid(
+    id: string,
+    payment: { mode: PaymentMode; reference: string | null; paidAt: string; paidBy: string }
+  ): Promise<void> {
+    const db = loadDb();
+    const row = (db.invoices ?? []).find((i) => i.id === id);
+    if (!row) throw new InvoiceStateError("Invoice not found");
+    if (row.status !== "issued") {
+      throw new InvoiceStateError(`Invoice ${row.invoice_number ?? ""} cannot go from ${row.status} to paid.`);
+    }
+    if (payment.mode !== "cash" && !payment.reference?.trim()) {
+      throw new InvoiceStateError("A UPI or transfer payment needs its reference");
+    }
+    Object.assign(row, {
+      status: "paid",
+      payment_mode: payment.mode,
+      payment_reference: payment.reference?.trim() || null,
+      paid_at: payment.paidAt,
+      paid_by: payment.paidBy,
+      updated_at: new Date().toISOString(),
+    });
+    saveDb(db);
+  }
+
+  async cancelInvoice(id: string, cancel: { reason: string; by: string }): Promise<void> {
+    const db = loadDb();
+    const row = (db.invoices ?? []).find((i) => i.id === id);
+    if (!row) throw new InvoiceStateError("Invoice not found");
+    if (row.status !== "issued" && row.status !== "paid") {
+      throw new InvoiceStateError(`Invoice ${row.invoice_number ?? ""} is ${row.status} and cannot be cancelled.`);
+    }
+    if (!cancel.reason.trim()) throw new InvoiceStateError("Give a reason for cancelling the invoice");
+    const now = new Date().toISOString();
+    Object.assign(row, {
+      status: "cancelled",
+      cancelled_at: now,
+      cancelled_by: cancel.by,
+      cancel_reason: cancel.reason.trim(),
+      updated_at: now,
+    });
+    saveDb(db);
+  }
+
   async deleteBooking(id: string): Promise<void> {
     const db = loadDb();
+    // `invoices.booking_id ... on delete restrict`, with drafts removed first.
+    const issued = (db.invoices ?? []).find((i) => i.booking_id === id && i.status !== "draft");
+    if (issued) {
+      throw new InvoiceStateError(
+        `Invoice ${issued.invoice_number} was issued for this booking, so it cannot be deleted — cancel the booking instead.`
+      );
+    }
+    db.invoices = (db.invoices ?? []).filter((i) => i.booking_id !== id);
     db.bookings = db.bookings.filter((b) => b.id !== id);
     db.booking_guests = db.booking_guests.filter((g) => g.booking_id !== id);
     db.booking_logs = db.booking_logs.filter((l) => l.booking_id !== id);
@@ -1307,4 +1502,39 @@ function assertLdapUidFree(db: Db, uid: string | null | undefined, exceptId: str
   if (db.profiles.some((p) => p.id !== exceptId && p.ldap_uid?.toLowerCase() === wanted)) {
     throw new Error("Another user already has this LDAP username");
   }
+}
+
+/** A fresh draft row, as the table's defaults would make it. */
+function blankInvoice(bookingId: string, userId: string, now: string): InvoiceRecord {
+  return {
+    id: randomUUID(),
+    booking_id: bookingId,
+    status: "draft",
+    invoice_number: null,
+    fy: null,
+    seq: null,
+    document: null,
+    meal_counts: null,
+    debit_head: null,
+    project_number: null,
+    subtotal_rooms: 0,
+    subtotal_dining: 0,
+    total: 0,
+    gst_percent: 0,
+    gst_amount: 0,
+    grand_total: 0,
+    payment_mode: null,
+    payment_reference: null,
+    paid_at: null,
+    paid_by: null,
+    issued_at: null,
+    issued_by: null,
+    cancelled_at: null,
+    cancelled_by: null,
+    cancel_reason: null,
+    replaces_invoice_id: null,
+    created_by: userId,
+    created_at: now,
+    updated_at: now,
+  };
 }

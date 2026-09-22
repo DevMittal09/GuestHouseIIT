@@ -44,6 +44,16 @@ import {
 } from "@/lib/audit";
 import type { Json } from "@/lib/supabase/database.types";
 import type { NewProjectInput, Project } from "@/lib/projects";
+import type { NewTariffInput, Tariff } from "@/lib/tariffs";
+import {
+  invoiceErrorFrom,
+  InvoiceStateError,
+  type InvoiceFilter,
+  type InvoiceRecord,
+  type IssueInvoiceInput,
+  type MealCounts,
+  type PaymentMode,
+} from "@/lib/invoice";
 import type {
   BookingDetailsPatch,
   DataStore,
@@ -1045,9 +1055,146 @@ export class SupabaseStore implements DataStore {
     if (error) throw error;
   }
 
-  async deleteBooking(id: string): Promise<void> {
-    const { error } = await this.db.from("bookings").delete().eq("id", id);
+  // ---- tariffs and invoices (migration 19) ----------------------------
+
+  async listTariffs(): Promise<Tariff[]> {
+    const { data, error } = await this.db.from("tariffs").select("*").order("effective_from");
     if (error) throw error;
+    return (data ?? []).map((row) => ({ ...row, rate: Number(row.rate) })) as Tariff[];
+  }
+
+  async createTariff(input: NewTariffInput): Promise<Tariff> {
+    const { data, error } = await this.db.from("tariffs").insert(input).select("*").single();
+    if (error) {
+      if (error.code === "23505") throw new Error("A rate for exactly this scope already starts on that date");
+      throw error;
+    }
+    return { ...data, rate: Number(data.rate) } as Tariff;
+  }
+
+  async deleteTariff(id: string): Promise<void> {
+    const { error } = await this.db.from("tariffs").delete().eq("id", id);
+    if (error) throw invoiceErrorFrom(error.message) ?? error;
+  }
+
+  async listInvoices(filter: InvoiceFilter): Promise<InvoiceRecord[]> {
+    let query = this.db.from("invoices").select("*").order("created_at", { ascending: false });
+    if (filter.bookingId) query = query.eq("booking_id", filter.bookingId);
+    if (filter.bookingIds) query = query.in("booking_id", filter.bookingIds);
+    if (filter.issuedFrom) query = query.gte("issued_at", filter.issuedFrom);
+    if (filter.issuedTo) query = query.lt("issued_at", filter.issuedTo);
+    if (filter.paidFrom) query = query.gte("paid_at", filter.paidFrom);
+    if (filter.paidTo) query = query.lt("paid_at", filter.paidTo);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? []).map(hydrateInvoice);
+  }
+
+  async getInvoice(id: string): Promise<InvoiceRecord | null> {
+    const { data, error } = await this.db.from("invoices").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return data ? hydrateInvoice(data) : null;
+  }
+
+  async saveInvoiceDraft(bookingId: string, mealCounts: MealCounts | null, userId: string): Promise<InvoiceRecord> {
+    const { data: live, error: readError } = await this.db
+      .from("invoices")
+      .select("*")
+      .eq("booking_id", bookingId)
+      .neq("status", "cancelled")
+      .maybeSingle();
+    if (readError) throw readError;
+    if (live && live.status !== "draft") {
+      throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} — cancel it first to issue a corrected one.`);
+    }
+    const write = live
+      ? this.db.from("invoices").update({ meal_counts: mealCounts, updated_at: new Date().toISOString() }).eq("id", live.id)
+      : this.db.from("invoices").insert({ booking_id: bookingId, meal_counts: mealCounts, created_by: userId });
+    const { data, error } = await write.select("*").single();
+    if (error) {
+      // Two desks saving the first draft at once: the partial unique index
+      // lets one win; the other retries as an update.
+      if (error.code === "23505") return this.saveInvoiceDraft(bookingId, mealCounts, userId);
+      throw error;
+    }
+    return hydrateInvoice(data);
+  }
+
+  async issueInvoice(input: IssueInvoiceInput): Promise<InvoiceRecord> {
+    const { data, error } = await this.db.rpc("issue_invoice", {
+      p_booking_id: input.bookingId,
+      p_fy: input.fy,
+      p_prefix: input.prefix,
+      p_digits: input.digits,
+      p_document: input.document,
+      p_meal_counts: input.mealCounts,
+      p_issued_by: input.issuedBy,
+      p_replaces: input.replaces,
+    });
+    if (error) {
+      if (error.code === "23505") {
+        throw new InvoiceStateError("Another invoice was issued for this booking a moment ago — reload to see it.");
+      }
+      throw invoiceErrorFrom(error.message) ?? error;
+    }
+    return hydrateInvoice(data);
+  }
+
+  async markInvoicePaid(
+    id: string,
+    payment: { mode: PaymentMode; reference: string | null; paidAt: string; paidBy: string }
+  ): Promise<void> {
+    const { data, error } = await this.db
+      .from("invoices")
+      .update({
+        status: "paid",
+        payment_mode: payment.mode,
+        payment_reference: payment.reference?.trim() || null,
+        paid_at: payment.paidAt,
+        paid_by: payment.paidBy,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("status", "issued")
+      .select("id");
+    if (error) throw invoiceErrorFrom(error.message) ?? error;
+    if (!data?.length) throw new InvoiceStateError("Only an issued, unpaid invoice can be marked paid — reload to see its state.");
+  }
+
+  async cancelInvoice(id: string, cancel: { reason: string; by: string }): Promise<void> {
+    const now = new Date().toISOString();
+    const { data, error } = await this.db
+      .from("invoices")
+      .update({
+        status: "cancelled",
+        cancelled_at: now,
+        cancelled_by: cancel.by,
+        cancel_reason: cancel.reason.trim(),
+        updated_at: now,
+      })
+      .eq("id", id)
+      .in("status", ["issued", "paid"])
+      .select("id");
+    if (error) throw invoiceErrorFrom(error.message) ?? error;
+    if (!data?.length) throw new InvoiceStateError("Only an issued or paid invoice can be cancelled — reload to see its state.");
+  }
+
+  async deleteBooking(id: string): Promise<void> {
+    // A draft goes with its booking; an issued invoice keeps it (on delete
+    // restrict), and the refusal is said in words.
+    const { error: draftError } = await this.db
+      .from("invoices")
+      .delete()
+      .eq("booking_id", id)
+      .eq("status", "draft");
+    if (draftError && draftError.code !== "42P01" && draftError.code !== "PGRST205") throw draftError;
+    const { error } = await this.db.from("bookings").delete().eq("id", id);
+    if (error) {
+      if (error.code === "23503" && /invoices/.test(error.message)) {
+        throw new InvoiceStateError("An invoice was issued for this booking, so it cannot be deleted — cancel the booking instead.");
+      }
+      throw error;
+    }
   }
 
   // ---- email outbox ------------------------------------------------
@@ -1071,6 +1218,9 @@ export class SupabaseStore implements DataStore {
           body_text: input.body_text,
           thread_root: input.thread_root,
           is_thread_root: input.is_thread_root,
+          // Sent only when there is something to attach, so queueing keeps
+          // working on a database without migration 19's column.
+          ...(input.attachments?.length ? { attachments: input.attachments } : {}),
           ...(input.scheduled_for ? { scheduled_for: input.scheduled_for } : {}),
         })),
         { onConflict: "idempotency_key", ignoreDuplicates: true }
@@ -1198,6 +1348,7 @@ export class SupabaseStore implements DataStore {
 function hydrateEmail(row: EmailOutboxRow): EmailMessage {
   return {
     ...row,
+    attachments: (row as { attachments?: EmailMessage["attachments"] }).attachments ?? [],
     cc_emails: row.cc_emails ?? [],
     to_emails: row.to_emails ?? [],
     event_key: row.event_key as EmailMessage["event_key"],
@@ -1225,4 +1376,20 @@ function profileWriteError(error: { code?: string; message: string }): Error | t
     return new Error("That hostel is not on the list — add it in Settings first");
   }
   return error;
+}
+
+/** numeric columns arrive as strings from PostgREST. */
+function hydrateInvoice(row: Record<string, unknown>): InvoiceRecord {
+  const n = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
+  const doc = row.document as InvoiceRecord["document"] | Record<string, never> | null;
+  return {
+    ...(row as unknown as InvoiceRecord),
+    document: doc && Object.keys(doc).length > 0 ? (doc as InvoiceRecord["document"]) : null,
+    subtotal_rooms: n(row.subtotal_rooms),
+    subtotal_dining: n(row.subtotal_dining),
+    total: n(row.total),
+    gst_percent: n(row.gst_percent),
+    gst_amount: n(row.gst_amount),
+    grand_total: n(row.grand_total),
+  };
 }

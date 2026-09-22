@@ -1,279 +1,595 @@
 import { mealDayCounts, MEAL_KEYS, MEAL_LABELS } from "./meals";
 import { countBedGuests, countInfants, ROOM_TYPE_LABELS } from "./occupancy";
-import { formatDateTime } from "./format";
-import { describeDebit } from "./debit-heads";
-import type { BookingWithDetails, MealKey, Role } from "./types";
+import { invoiceHeadLabel, needsProject } from "./debit-heads";
+import { resolveTariff, type Tariff, type TariffItem } from "./tariffs";
+import {
+  addDaysToDateValue,
+  formatDateValue,
+  formatInstituteDate,
+  parseDateValue,
+  toInstituteDateValue,
+} from "./tz";
+import type { CapacityRules, InvoiceRules } from "./settings";
+import type { BookingWithDetails, DebitHead, MealKey, Room } from "./types";
 
 /**
- * The institute's guest house tariff, and what a given stay costs under it.
+ * The guest house invoice (Phase 5), as pure functions.
  *
- * Transcribed from the office's TARIFF DETAILS sheet. Two guest houses charge
- * on different principles, which is why this is not one table:
+ * Everything the printed invoice shows is worked out here from the booking,
+ * the tariff rows and the invoice Settings — then **frozen**: issuing stores
+ * the whole `InvoiceDocument` as the invoice's snapshot, and the PDF is drawn
+ * from the snapshot, never recomputed. A tariff edited next year, a guest
+ * renamed or a project retitled cannot change an invoice already handed over.
+ * A correction is a cancellation (with a reason) and a new invoice.
  *
- * - **Bageshri** is a flat rate per room per day, whoever the guest is.
- * - **Hamsanandi** is per room per day too, but the rate depends on the
- *   *category of guest* — and the only distinction that moves the price is
- *   whether they are a government officer from outside the institute.
+ * Money is **integer paise** throughout, so no sum is ever off by a
+ * floating-point hair; it becomes rupees only for display and in the
+ * reporting columns of the `invoices` table.
  *
- * The invoice is a **statement of what was used**, not a payment record: the
- * portal takes no money and knows nothing about what was actually settled.
- * That is why it prints "not a receipt".
+ * The layout follows the office's template (`public/GHM_Invoice.docx`)
+ * exactly: Booking Details | Invoice Details, a room table with a row per room
+ * and per extra bed, a dining table of exactly Breakfast, Lunch and Dinner,
+ * then Sub Total (A), Sub Total (B), Total (A+B), GST on Total and the Grand
+ * Total.
  */
 
-/** Bageshri: one room, one rate, everybody. */
-export const BAGESHRI_DAY_RATE = 750;
+export type InvoiceStatus = "draft" | "issued" | "paid" | "cancelled";
 
-/**
- * Hamsanandi, by the sheet's three categories.
- *
- * Types 1 and 2 are both ₹2,000, so the academic/personal distinction does
- * not change what is charged — it is kept only because the invoice should say
- * which basis was applied, and because the office may price them apart later.
- */
-export const HAMSANANDI_DAY_RATES = {
-  /** Type 1 — official visitors of the Office / HOD / Faculty. */
-  academic: 2000,
-  /** Type 2 — staff and faculty, staying personally. */
-  personal: 2000,
-  /** Type 3 — government officers other than the above. */
-  government: 4000,
-} as const;
-
-export type TariffCategory = keyof typeof HAMSANANDI_DAY_RATES | "flat";
-
-/** Dining at Hamsanandi, per head per sitting. */
-export const MEAL_RATES: Record<MealKey, number> = {
-  breakfast: 80,
-  lunch: 120,
-  dinner: 100,
+export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  draft: "Draft",
+  issued: "Issued — awaiting payment",
+  paid: "Paid",
+  cancelled: "Cancelled",
 };
 
-/**
- * Extra non-vegetarian items at lunch carry a further charge — but the sheet
- * gives a *range*, "approximately ₹70–₹90 … depending on the prevailing
- * market rate". A range is not a price, so nothing is added to the total; the
- * invoice says it may be levied and the desk fills in the figure.
- */
-export const NON_VEG_LUNCH_SURCHARGE = { min: 70, max: 90 };
+export type PaymentMode = "cash" | "upi" | "account_transfer";
+
+export const PAYMENT_MODES: PaymentMode[] = ["cash", "upi", "account_transfer"];
+
+export const PAYMENT_MODE_LABELS: Record<PaymentMode, string> = {
+  cash: "Cash",
+  upi: "UPI",
+  account_transfer: "Account transfer",
+};
+
+/** A reference is required for anything but cash: the UTR or UPI transaction id. */
+export function paymentReferenceError(mode: PaymentMode, reference: string | null | undefined): string | null {
+  if (mode === "cash") return null;
+  return reference?.trim()
+    ? null
+    : `Enter the ${mode === "upi" ? "UPI transaction id" : "transfer reference (UTR)"} for this payment`;
+}
+
+export type MealCounts = Record<MealKey, number>;
+
+// ------------------------------------------------------------------ money
+
+/** Rupees (as the tariff stores them) to integer paise. */
+export function toPaise(rupees: number): number {
+  return Math.round(rupees * 100);
+}
+
+export function toRupees(paise: number): number {
+  return paise / 100;
+}
+
+/** Half-up to the whole rupee: ₹10.50 → ₹11, ₹10.49 → ₹10. */
+export function roundHalfUpToRupee(paise: number): number {
+  return Math.floor((paise + 50) / 100) * 100;
+}
 
 /**
- * A charged day is 24 hours, with a permissible variation of ±4 hours.
+ * GST on a total, rounded half-up to the rupee. Computed in integers:
+ * percent is taken to basis points, so 18% of ₹25 is exactly ₹4.50 and rounds
+ * to ₹5 rather than to whatever 4.499999 happens to be.
+ */
+export function gstPaise(totalPaise: number, percent: number): number {
+  const bp = Math.round(percent * 100);
+  if (bp <= 0 || totalPaise <= 0) return 0;
+  return Math.floor((totalPaise * bp + 500_000) / 1_000_000) * 100;
+}
+
+/**
+ * Indian grouping with the rupee sign: ₹1,23,456.00. Written out rather than
+ * left to `Intl`, because a server without full ICU would print Western
+ * grouping on an official document.
+ */
+export function formatINR(paise: number): string {
+  const negative = paise < 0;
+  const abs = Math.abs(Math.round(paise));
+  const rupees = Math.floor(abs / 100);
+  const fraction = String(abs % 100).padStart(2, "0");
+  const digits = String(rupees);
+  const last3 = digits.slice(-3);
+  const rest = digits.slice(0, -3);
+  const grouped = rest ? `${rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",")},${last3}` : last3;
+  return `${negative ? "-" : ""}₹${grouped}.${fraction}`;
+}
+
+// ------------------------------------------------------------ numbering
+
+/**
+ * The Indian financial year an instant falls in, by the institute's
+ * calendar: 1 April 2026 to 31 March 2027 is "2026-27". The running number
+ * restarts at 0001 each April.
+ */
+export function financialYear(at: string | Date): string {
+  const day = parseDateValue(toInstituteDateValue(at));
+  if (!day) throw new Error("Not a date");
+  const start = day.month >= 4 ? day.year : day.year - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, "0")}`;
+}
+
+/** GH/2026-27/0001 */
+export function formatInvoiceNumber(prefix: string, fy: string, seq: number, digits: number): string {
+  return `${prefix}/${fy}/${String(seq).padStart(digits, "0")}`;
+}
+
+// ---------------------------------------------------------- chargeable days
+
+/**
+ * The days a stay is charged for, each as the institute date it starts on —
+ * the date whose tariff prices it.
  *
- * So a stay may run up to 28 hours before a second day is charged, and a
- * short stay is still one day. The sheet states this under Bageshri; it is
- * applied to both guest houses because "per day" has to mean something
- * definite at each, and there is no competing rule for Hamsanandi.
- */
-export const CHARGED_DAY_HOURS = 24;
-export const DAY_GRACE_HOURS = 4;
-
-/**
- * Who eats free.
+ * - `night`: one per calendar night between the check-in and check-out dates.
+ *   Arriving after midnight and leaving the same morning is still one.
+ * - `24h`: one per 24 hours from check-in; a further day starts only when the
+ *   stay runs more than `graceHours` into it. The office's tariff sheet words
+ *   it as "24 hours, with a permissible variation of ±4 hours".
  *
- * "Applicable to all guests except Students and Alumni" — so a student's
- * family and an alumnus are fed without charge, and everyone else pays per
- * sitting.
+ * Never fewer than one: a guest who used a room for an afternoon used it.
  */
-export function mealsAreChargeable(userRole: Role, bookingType: string): boolean {
-  return userRole !== "student" && bookingType !== "alumni";
-}
-
-export const TARIFF = { currency: "INR", currencySymbol: "₹" } as const;
-
-export function formatMoney(amount: number): string {
-  return `${TARIFF.currencySymbol}${amount.toLocaleString("en-IN")}`;
-}
-
-/**
- * Days charged for a stay: 24-hour blocks, with the ±4 hour variation applied
- * before the next one starts. Never less than one — a guest who used a room
- * for an afternoon still used it for a day.
- */
-export function chargedDays(checkIn: string, checkOut: string): number {
-  const hours = (Date.parse(checkOut) - Date.parse(checkIn)) / 3_600_000;
-  if (!Number.isFinite(hours) || hours <= 0) return 1;
-  return Math.max(1, Math.ceil((hours - DAY_GRACE_HOURS) / CHARGED_DAY_HOURS));
-}
-
-export interface RoomTariff {
-  rate: number;
-  category: TariffCategory;
-  /** How the basis reads on the invoice line. */
-  label: string;
-}
-
-/**
- * The nightly room rate for this booking, or null when the guest house is not
- * on the tariff sheet.
- *
- * Hamsanandi's Type 3 is "government officers other than the above" — someone
- * from outside the institute, which in this portal is the `official` role
- * (the whitelisted dignitary and Director's Office accounts). Everyone else
- * staying there is institute staff or their guest, which is Types 1 and 2 at
- * the same ₹2,000. **That mapping is an inference from the sheet's wording,
- * not something the sheet states in portal terms** — it is the one line to
- * revisit if the office prices a case differently.
- */
-export function roomTariffFor(booking: {
-  guest_house?: { name?: string } | null;
-  user_role: Role;
-  booking_type: string;
-}): RoomTariff | null {
-  const house = booking.guest_house?.name ?? "";
-  if (house === "Bageshri") {
-    return { rate: BAGESHRI_DAY_RATE, category: "flat", label: "Bageshri room rate" };
+export function chargeableDays(
+  checkIn: string,
+  checkOut: string,
+  basis: InvoiceRules["day_basis"],
+  graceHours: number
+): string[] {
+  const firstDate = toInstituteDateValue(checkIn);
+  let count: number;
+  if (basis === "night") {
+    const a = parseDateValue(firstDate)!;
+    const b = parseDateValue(toInstituteDateValue(checkOut))!;
+    count = Math.round(
+      (Date.UTC(b.year, b.month - 1, b.day) - Date.UTC(a.year, a.month - 1, a.day)) / 86_400_000
+    );
+  } else {
+    const hours = (Date.parse(checkOut) - Date.parse(checkIn)) / 3_600_000;
+    count = Number.isFinite(hours) ? Math.ceil((hours - graceHours) / 24) : 1;
   }
-  if (house === "Hamsanandi") {
-    if (booking.user_role === "official") {
-      return {
-        rate: HAMSANANDI_DAY_RATES.government,
-        category: "government",
-        label: "Hamsanandi — Type 3, government officer",
-      };
+  count = Math.max(1, count);
+  if (basis === "night") {
+    return Array.from({ length: count }, (_, i) => addDaysToDateValue(firstDate, i));
+  }
+  const start = Date.parse(checkIn);
+  return Array.from({ length: count }, (_, i) =>
+    toInstituteDateValue(new Date(start + i * 86_400_000))
+  );
+}
+
+/**
+ * Consecutive days charged at the same rate, so a mid-stay tariff change
+ * prints as two rows instead of an average nobody can check.
+ */
+export function splitByRate(
+  days: string[],
+  rateFor: (day: string) => number | null
+): { from: string; to: string; days: number; rate: number | null }[] {
+  const out: { from: string; to: string; days: number; rate: number | null }[] = [];
+  for (const day of days) {
+    const rate = rateFor(day);
+    const last = out[out.length - 1];
+    if (last && last.rate === rate) {
+      last.to = day;
+      last.days++;
+    } else {
+      out.push({ from: day, to: day, days: 1, rate });
     }
-    if (booking.booking_type === "personal") {
-      return {
-        rate: HAMSANANDI_DAY_RATES.personal,
-        category: "personal",
-        label: "Hamsanandi — Type 2, personal (staff / faculty)",
-      };
+  }
+  return out;
+}
+
+// ------------------------------------------------------ what the stay used
+
+/**
+ * When the guest actually arrived and left, from the desk's own log: the
+ * check-in and check-out the caretaker recorded. A stay not yet checked out
+ * is billed to its booked check-out; one never recorded as arriving, from its
+ * booked check-in.
+ */
+export function actualStayTimes(booking: Pick<BookingWithDetails, "check_in" | "check_out" | "logs">): {
+  checkIn: string;
+  checkOut: string;
+  actualIn: boolean;
+  actualOut: boolean;
+} {
+  const last = (status: string) =>
+    [...booking.logs]
+      .filter((l) => l.new_status === status)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+      .pop()?.timestamp ?? null;
+  const inAt = last("OCCUPIED");
+  const outAt = last("VACATED");
+  return {
+    checkIn: inAt ?? booking.check_in,
+    checkOut: outAt ?? booking.check_out,
+    actualIn: inAt !== null,
+    actualOut: outAt !== null,
+  };
+}
+
+/**
+ * Meals served, as covers: each meal ticked on a day × the people eating it.
+ * On a stay the people are the guests with a bed (an infant shares a
+ * guardian's plate as they share the bed); on a dining booking, its head
+ * count. The desk corrects these on the invoice when the kitchen's tally
+ * differs — the correction is what is printed.
+ */
+export function mealCovers(
+  booking: Pick<BookingWithDetails, "meals" | "guests" | "service_type" | "meal_guest_count">
+): MealCounts {
+  const diners =
+    booking.service_type === "meals_only" ? (booking.meal_guest_count ?? 0) : countBedGuests(booking.guests);
+  const ticks = mealDayCounts(booking.meals);
+  return {
+    breakfast: ticks.breakfast * diners,
+    lunch: ticks.lunch * diners,
+    dinner: ticks.dinner * diners,
+  };
+}
+
+/**
+ * Extra beds per allocated room: the guests the manager put in a room card
+ * beyond the room's own beds. Rooms held but not tied to a card (bookings from
+ * before migration 11) are pooled, with any extra beds put against the last.
+ */
+export function extraBedsByRoom(
+  booking: Pick<BookingWithDetails, "rooms" | "assigned_rooms" | "guests">,
+  capacity: CapacityRules
+): { room: Room; extra: number }[] {
+  const out = new Map<string, { room: Room; extra: number }>();
+  const mapped = new Set<string>();
+  for (const card of booking.rooms ?? []) {
+    const room = card.assigned_room;
+    if (!room) continue;
+    mapped.add(room.id);
+    const standard = capacity.room_types[room.room_type]?.standard ?? 1;
+    const beds = countBedGuests(card.guests);
+    const prev = out.get(room.id);
+    out.set(room.id, { room, extra: (prev?.extra ?? 0) + Math.max(0, beds - standard) });
+  }
+  const unmapped = booking.assigned_rooms.filter((r) => !mapped.has(r.id));
+  if (unmapped.length > 0) {
+    const onCards = new Set((booking.rooms ?? []).filter((c) => c.assigned_room).flatMap((c) => c.guests.map((g) => g.id)));
+    const rest = booking.guests.filter((g) => !onCards.has(g.id));
+    const standard = unmapped.reduce((n, r) => n + (capacity.room_types[r.room_type]?.standard ?? 1), 0);
+    const extra = Math.max(0, countBedGuests(rest) - standard);
+    unmapped.forEach((room, i) => out.set(room.id, { room, extra: i === unmapped.length - 1 ? extra : 0 }));
+  }
+  // In the order the rooms were allocated.
+  return booking.assigned_rooms.map((r) => out.get(r.id)).filter((x): x is { room: Room; extra: number } => !!x);
+}
+
+/** "SP/2025/017 — Grid-scale storage (Dr. A. Kumar)" back into its parts. */
+export function projectFromDetails(details: string | null): { number: string; title: string } | null {
+  if (!details) return null;
+  const at = details.indexOf(" — ");
+  if (at < 0) return { number: details.trim(), title: "" };
+  return { number: details.slice(0, at).trim(), title: details.slice(at + 3).trim() };
+}
+
+// ------------------------------------------------------------ the document
+
+export type InvoiceRoomLine = {
+  kind: "room" | "extra_bed";
+  description: string;
+  days: number;
+  /** Paise per day, per bed for extra beds. Null when no tariff covers it. */
+  rate: number | null;
+  amount: number;
+};
+
+export type InvoiceMealLine = { meal: MealKey; count: number; rate: number | null; amount: number };
+
+/** Everything printed on an invoice. Stored whole as the issued invoice's snapshot. */
+export type InvoiceDocument = {
+  version: 1;
+  booking_id: string;
+  booking_reference: string;
+  guest_house: string;
+  booked_by: string;
+  unit: string;
+  debit_head: DebitHead | null;
+  debit_head_label: string;
+  project_title: string | null;
+  project_number: string | null;
+  /** Null until issued; the preview prints "DRAFT". */
+  invoice_number: string | null;
+  invoice_date: string;
+  primary_guest: string;
+  check_in: string;
+  check_out: string;
+  rooms: number;
+  guests: number;
+  infants: number;
+  room_lines: InvoiceRoomLine[];
+  subtotal_rooms: number;
+  /** Always Breakfast, Lunch, Dinner, in that order. */
+  meal_lines: InvoiceMealLine[];
+  subtotal_dining: number;
+  total: number;
+  gst_percent: number;
+  gst: number;
+  grand_total: number;
+  gstin: string;
+  bank: InvoiceRules["bank"];
+  contact: InvoiceRules["contact"];
+  day_basis: InvoiceRules["day_basis"];
+  /** What stops it being issued — a charge no tariff covers. Empty when it can be. */
+  problems: string[];
+};
+
+export type InvoiceContext = {
+  tariffs: Tariff[];
+  rules: InvoiceRules;
+  capacity: CapacityRules;
+  /** The desk's corrected meal counts; the computed covers when absent. */
+  mealCounts?: MealCounts | null;
+  invoiceNumber?: string | null;
+  /** Defaults to now. */
+  invoiceDate?: string;
+};
+
+/** "No extra-bed rate covers …" */
+const RATE_NOUN: Record<TariffItem, string> = {
+  room: "room",
+  extra_bed: "extra-bed",
+  breakfast: "breakfast",
+  lunch: "lunch",
+  dinner: "dinner",
+};
+
+function dayRange(from: string, to: string): string {
+  const a = formatDateValue(from, { weekday: false });
+  return from === to ? a : `${a} – ${formatDateValue(to, { weekday: false })}`;
+}
+
+export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceContext): InvoiceDocument {
+  const problems: string[] = [];
+  const stay = actualStayTimes(booking);
+  const house = booking.guest_house?.name ?? "";
+  const base = {
+    guest_house_id: booking.guest_house_id,
+    booking_type: booking.booking_type,
+    requester_role: booking.user_role,
+  };
+  const priceOf = (item: TariffItem, roomType: Room["room_type"] | null, date: string): number | null => {
+    const t = resolveTariff(ctx.tariffs, { ...base, item, room_type: roomType, date });
+    return t ? toPaise(t.rate) : null;
+  };
+  const missing = (item: TariffItem, date: string, what: string) =>
+    problems.push(
+      `No ${RATE_NOUN[item]} rate covers ${what} at ${house} on ${formatDateValue(date, { year: true })} — add one in Tariffs & Invoicing, applying from that date or earlier.`
+    );
+
+  // ---- rooms and extra beds
+  const days = chargeableDays(stay.checkIn, stay.checkOut, ctx.rules.day_basis, ctx.rules.grace_hours);
+  const roomLines: InvoiceRoomLine[] = [];
+  const extras = extraBedsByRoom(booking, ctx.capacity);
+  for (const { room, extra } of extras) {
+    const typeLabel = ROOM_TYPE_LABELS[room.room_type] ?? room.room_type;
+    const groups = splitByRate(days, (d) => priceOf("room", room.room_type, d));
+    for (const g of groups) {
+      if (g.rate === null) missing("room", g.from, `room ${room.room_number}`);
+      roomLines.push({
+        kind: "room",
+        description: `${room.room_number} — ${typeLabel}${groups.length > 1 ? ` (${dayRange(g.from, g.to)})` : ""}`,
+        days: g.days,
+        rate: g.rate,
+        amount: (g.rate ?? 0) * g.days,
+      });
     }
-    return {
-      rate: HAMSANANDI_DAY_RATES.academic,
-      category: "academic",
-      label: "Hamsanandi — Type 1, academic visitor",
-    };
+    if (extra > 0) {
+      const bedGroups = splitByRate(days, (d) => priceOf("extra_bed", room.room_type, d));
+      for (const g of bedGroups) {
+        if (g.rate === null) missing("extra_bed", g.from, `the extra bed in ${room.room_number}`);
+        roomLines.push({
+          kind: "extra_bed",
+          description: `Extra bed${extra > 1 ? ` ×${extra}` : ""} — ${room.room_number}${bedGroups.length > 1 ? ` (${dayRange(g.from, g.to)})` : ""}`,
+          days: g.days,
+          rate: g.rate,
+          amount: (g.rate ?? 0) * g.days * extra,
+        });
+      }
+    }
+  }
+  const subtotalRooms = roomLines.reduce((n, l) => n + l.amount, 0);
+
+  // ---- dining: exactly the three rows the template prints. A meal is priced
+  // at the rate in force on the first day of the stay; counts are covers, or
+  // the desk's correction.
+  const counts = ctx.mealCounts ?? mealCovers(booking);
+  const mealDate = toInstituteDateValue(stay.checkIn);
+  const mealLines: InvoiceMealLine[] = MEAL_KEYS.map((meal) => {
+    const count = Math.max(0, Math.floor(counts[meal] ?? 0));
+    const rate = priceOf(meal, null, mealDate);
+    if (count > 0 && rate === null) missing(meal, mealDate, `${MEAL_LABELS[meal].toLowerCase()}`);
+    return { meal, count, rate, amount: (rate ?? 0) * count };
+  });
+  const subtotalDining = mealLines.reduce((n, l) => n + l.amount, 0);
+
+  // ---- totals
+  const total = subtotalRooms + subtotalDining;
+  const gst = gstPaise(total, ctx.rules.gst_percent);
+  const grandTotal = roundHalfUpToRupee(total + gst);
+
+  // ---- who and what
+  const requester = booking.requester;
+  const firstCard = [...(booking.rooms ?? [])].sort((a, b) => a.room_index - b.room_index)[0];
+  const primary =
+    firstCard?.guests.find((g) => !g.is_infant)?.name ??
+    booking.guests.find((g) => !g.is_infant)?.name ??
+    booking.on_behalf_of_name ??
+    requester?.full_name ??
+    "";
+  const project = needsProject(booking.debit_head) ? projectFromDetails(booking.debit_details) : null;
+  const mealsOnly = booking.service_type === "meals_only";
+
+  return {
+    version: 1,
+    booking_id: booking.id,
+    booking_reference: booking.booking_reference_id,
+    guest_house: house,
+    booked_by: booking.on_behalf_of_name ?? requester?.full_name ?? "",
+    unit: booking.on_behalf_of_name
+      ? booking.booking_type === "official"
+        ? "Institute"
+        : "—"
+      : (requester?.department_or_club ?? (booking.user_role === "official" ? "Institute" : "—")),
+    debit_head: booking.debit_head,
+    debit_head_label: invoiceHeadLabel(booking.debit_head),
+    project_title: project?.title || null,
+    project_number: project?.number || null,
+    invoice_number: ctx.invoiceNumber ?? null,
+    invoice_date: ctx.invoiceDate ?? new Date().toISOString(),
+    primary_guest: primary,
+    check_in: stay.checkIn,
+    check_out: stay.checkOut,
+    rooms: mealsOnly ? 0 : booking.assigned_rooms.length,
+    guests: mealsOnly ? (booking.meal_guest_count ?? 0) : countBedGuests(booking.guests),
+    infants: mealsOnly ? 0 : countInfants(booking.guests),
+    room_lines: roomLines,
+    subtotal_rooms: subtotalRooms,
+    meal_lines: mealLines,
+    subtotal_dining: subtotalDining,
+    total,
+    gst_percent: ctx.rules.gst_percent,
+    gst,
+    grand_total: grandTotal,
+    gstin: ctx.rules.gstin,
+    bank: ctx.rules.bank,
+    contact: ctx.rules.contact,
+    day_basis: ctx.rules.day_basis,
+    problems,
+  };
+}
+
+/** "12 Oct 2026" for the Invoice Date line. */
+export function formatInvoiceDate(iso: string): string {
+  return formatInstituteDate(iso);
+}
+
+export const INVOICE_TITLE = (guestHouse: string) => `INVOICE - IIT Palakkad ${guestHouse} Guest House`;
+
+/**
+ * Why an invoice cannot be issued for this booking now, or null when it can.
+ * Issued at check-out — the desk may do it while the guest is still in the
+ * room (they are often asked for the bill before the guest formally leaves),
+ * so an occupied stay qualifies, billed to its booked check-out.
+ */
+export function invoiceBlocker(
+  booking: Pick<BookingWithDetails, "status" | "service_type">,
+  doc: Pick<InvoiceDocument, "problems" | "room_lines" | "meal_lines">
+): string | null {
+  const billable =
+    booking.status === "OCCUPIED" ||
+    booking.status === "VACATED" ||
+    (booking.service_type === "meals_only" && booking.status === "APPROVED");
+  if (!billable) return "An invoice is issued at check-out, once the guest has checked in.";
+  if (doc.problems.length > 0) return doc.problems[0];
+  if (doc.room_lines.length === 0 && doc.meal_lines.every((l) => l.count === 0)) {
+    return "There is nothing to charge: no rooms were allocated and no meals were served.";
   }
   return null;
 }
 
-export const TARIFF_NOTE =
-  "Charged per room per day, a day being 24 hours with a permissible variation of ±4 hours. This statement lists what was used during the stay; it is not a receipt and records no payment.";
+// ------------------------------------------------------------ the record
 
-export interface InvoiceLine {
-  description: string;
-  quantity: number;
-  unit: string;
-  rate: number;
-  amount: number;
-}
-
-export interface Invoice {
-  reference: string;
-  guestName: string;
-  guestHouse: string;
-  /** The tariff basis applied, in the sheet's own words. */
-  category: string;
-  /** The budget debited: personal funds, a project, a department. */
-  paidFrom: string;
-  checkIn: string;
-  checkOut: string;
-  /** Days charged, after the ±4 hour rule. */
-  days: number;
-  lines: InvoiceLine[];
+/** One row of the `invoices` table (migration 19). Amounts in rupees. */
+export type InvoiceRecord = {
+  id: string;
+  booking_id: string;
+  status: InvoiceStatus;
+  invoice_number: string | null;
+  fy: string | null;
+  seq: number | null;
+  /** The snapshot. Null on a draft, which is priced afresh each time it is shown. */
+  document: InvoiceDocument | null;
+  /** The desk's corrected meal counts, or null to use the computed covers. */
+  meal_counts: MealCounts | null;
+  debit_head: string | null;
+  project_number: string | null;
+  subtotal_rooms: number;
+  subtotal_dining: number;
   total: number;
-  currency: string;
-  /** The guest house is not on the tariff sheet — the desk must price it. */
-  unpriced: string | null;
-  /** Charges the sheet leaves open, which the desk adds by hand. */
-  openCharges: string[];
-  note: string;
-}
+  gst_percent: number;
+  gst_amount: number;
+  grand_total: number;
+  payment_mode: PaymentMode | null;
+  payment_reference: string | null;
+  paid_at: string | null;
+  paid_by: string | null;
+  issued_at: string | null;
+  issued_by: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancel_reason: string | null;
+  replaces_invoice_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InvoiceFilter = {
+  bookingId?: string;
+  bookingIds?: string[];
+  /** Issued within [from, to), ISO instants. */
+  issuedFrom?: string;
+  issuedTo?: string;
+  /** Paid within [from, to), ISO instants. */
+  paidFrom?: string;
+  paidTo?: string;
+};
+
+export type IssueInvoiceInput = {
+  bookingId: string;
+  fy: string;
+  prefix: string;
+  digits: number;
+  document: InvoiceDocument;
+  mealCounts: MealCounts | null;
+  issuedBy: string;
+  replaces: string | null;
+};
 
 /**
- * Build the invoice for a booking.
- *
- * Rooms are charged per allocated room per day. A meals-only booking has no
- * rooms, so it is dining alone.
+ * A refused invoice operation — the database's INVOICE_EXISTS /
+ * INVOICE_IMMUTABLE, or the mock's equivalent. Its message is written for the
+ * desk and is shown as it stands.
  */
-export function buildInvoice(booking: BookingWithDetails): Invoice {
-  const lines: InvoiceLine[] = [];
-  const openCharges: string[] = [];
-
-  const house = booking.guest_house?.name ?? "";
-  const tariff = roomTariffFor(booking);
-  const days = chargedDays(booking.check_in, booking.check_out);
-
-  for (const room of booking.assigned_rooms) {
-    lines.push({
-      // The room type is named because it is what the guest slept in, even
-      // though the tariff is per room and does not depend on it.
-      description: `Room ${room.room_number} (${ROOM_TYPE_LABELS[room.room_type]}) — ${tariff?.label ?? "rate not on the tariff sheet"}`,
-      quantity: days,
-      unit: days === 1 ? "day" : "days",
-      rate: tariff?.rate ?? 0,
-      amount: (tariff?.rate ?? 0) * days,
-    });
+export class InvoiceStateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvoiceStateError";
   }
+}
 
-  // Dining is Hamsanandi's, and the sheet exempts students and alumni. An
-  // infant sharing a guardian's plate is not a head, the same way they are
-  // not a bed.
-  const beds = countBedGuests(booking.guests);
-  const heads =
-    booking.service_type === "meals_only" ? (booking.meal_guest_count ?? 0) : beds;
-  const charged = mealsAreChargeable(booking.user_role, booking.booking_type);
-  const mealDays = mealDayCounts(booking.meals);
-  const mealsTaken = MEAL_KEYS.filter((meal) => mealDays[meal] > 0);
+/** The part of a "CODE|message" database exception meant for people. */
+export function invoiceErrorFrom(message: string): InvoiceStateError | null {
+  const m = /(INVOICE_EXISTS|INVOICE_IMMUTABLE|TARIFF_IN_FORCE)\|([^\n]+)/.exec(message);
+  return m ? new InvoiceStateError(m[2].trim()) : null;
+}
 
-  if (mealsTaken.length > 0 && heads > 0) {
-    if (!charged) {
-      openCharges.push(
-        booking.user_role === "student"
-          ? "Meals are not charged to students under the tariff sheet."
-          : "Meals are not charged to alumni under the tariff sheet."
-      );
-    } else {
-      for (const meal of mealsTaken) {
-        const sittings = mealDays[meal];
-        const rate = MEAL_RATES[meal];
-        lines.push({
-          description: `${MEAL_LABELS[meal]} — ${heads} guest${heads === 1 ? "" : "s"} x ${sittings} day${sittings === 1 ? "" : "s"}`,
-          quantity: heads * sittings,
-          unit: "servings",
-          rate,
-          amount: rate * heads * sittings,
-        });
-      }
-      // A range is not a price, so it is flagged rather than totalled.
-      if (booking.meal_preference === "non_veg" && mealDays.lunch > 0) {
-        openCharges.push(
-          `Additional non-vegetarian items at lunch may carry a further ${formatMoney(
-            NON_VEG_LUNCH_SURCHARGE.min
-          )}–${formatMoney(NON_VEG_LUNCH_SURCHARGE.max)} per head, at the prevailing market rate — add it by hand if it applies.`
-        );
-      }
-    }
-  }
-
-  const unpriced = booking.assigned_rooms.length > 0 && tariff === null ? house : null;
-  if (unpriced) {
-    openCharges.push(
-      `${unpriced} is not on the tariff sheet — the room lines above show zero and must be priced by hand.`
-    );
-  }
-
-  const infants = countInfants(booking.guests);
-  if (infants > 0) {
-    openCharges.push(
-      `${infants} infant${infants === 1 ? "" : "s"} shared a guardian's bed and ${infants === 1 ? "is" : "are"} not charged.`
-    );
-  }
-
+/** What `issue_invoice()` writes to the reporting columns, from the snapshot. */
+export function invoiceColumnsFrom(doc: InvoiceDocument) {
   return {
-    reference: booking.booking_reference_id,
-    guestName: booking.on_behalf_of_name ?? booking.requester?.full_name ?? "Guest",
-    guestHouse: house,
-    category: tariff?.label ?? "Not on the tariff sheet",
-    paidFrom: describeDebit(booking),
-    checkIn: formatDateTime(booking.check_in),
-    checkOut: formatDateTime(booking.check_out),
-    days,
-    lines,
-    total: lines.reduce((sum, l) => sum + l.amount, 0),
-    currency: TARIFF.currency,
-    unpriced,
-    openCharges,
-    note: TARIFF_NOTE,
+    debit_head: doc.debit_head,
+    project_number: doc.project_number,
+    subtotal_rooms: toRupees(doc.subtotal_rooms),
+    subtotal_dining: toRupees(doc.subtotal_dining),
+    total: toRupees(doc.total),
+    gst_percent: doc.gst_percent,
+    gst_amount: toRupees(doc.gst),
+    grand_total: toRupees(doc.grand_total),
   };
 }

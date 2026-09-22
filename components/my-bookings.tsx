@@ -32,7 +32,17 @@ const CANCELLABLE: BookingStatus[] = [
   "APPROVED", "OCCUPIED",
 ];
 
-export function MyBookings({ bookings }: { bookings: BookingWithDetails[] }) {
+/** An issued invoice the requester can download (Phase 5). */
+export type MyInvoice = { id: string; number: string; paid: boolean };
+
+export function MyBookings({
+  bookings,
+  invoices = {},
+}: {
+  bookings: BookingWithDetails[];
+  /** By booking id: the live issued invoice, if any. */
+  invoices?: Record<string, MyInvoice>;
+}) {
   if (bookings.length === 0) {
     return (
       <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
@@ -56,7 +66,7 @@ export function MyBookings({ bookings }: { bookings: BookingWithDetails[] }) {
         </TableHeader>
         <TableBody>
           {bookings.map((b) => (
-            <BookingRow key={b.id} booking={b} />
+            <BookingRow key={b.id} booking={b} invoice={invoices[b.id] ?? null} />
           ))}
         </TableBody>
       </Table>
@@ -64,7 +74,7 @@ export function MyBookings({ bookings }: { bookings: BookingWithDetails[] }) {
   );
 }
 
-function BookingRow({ booking }: { booking: BookingWithDetails }) {
+function BookingRow({ booking, invoice }: { booking: BookingWithDetails; invoice: MyInvoice | null }) {
   const [open, setOpen] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -112,7 +122,19 @@ function BookingRow({ booking }: { booking: BookingWithDetails }) {
       <TableCell>
         <StatusBadge status={booking.status} />
       </TableCell>
-      <TableCell className="text-right">
+      <TableCell className="text-right whitespace-nowrap">
+        {invoice && (
+          <Button asChild variant="outline" size="sm" className="mr-2">
+            <a
+              href={`/api/invoices/${invoice.id}/pdf`}
+              target="_blank"
+              rel="noopener"
+              title={`${invoice.number}${invoice.paid ? " — paid" : " — awaiting payment"}`}
+            >
+              {invoice.paid ? "✓ " : ""}Invoice
+            </a>
+          </Button>
+        )}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm">

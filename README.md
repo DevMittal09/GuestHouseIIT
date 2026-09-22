@@ -69,6 +69,11 @@ Sign in as **Portal Developer** (`developer@iitpkd.ac.in`) to open `/admin`:
   alumni-card upload, edit the info banner, and add custom fields (text, long text, number, date,
   dropdown, checkbox) that are stored with each booking and shown to reviewers. "Reset to spec
   defaults" restores the original behaviour.
+- **Tariffs & Invoicing** (manager too) — room, extra-bed and meal rates by date, invoice
+  numbering, GST, GSTIN, bank details and the Accounts email. Invoices themselves are issued
+  from the manager and caretaker consoles (**Invoice** on a stay: preview, correct meal counts,
+  Issue & print, Mark paid) in the office's template, with a monthly collections CSV on
+  `/history`.
 - **All Bookings** — every booking across statuses, with an audit-logged force-status override
   and permanent delete.
 
@@ -164,9 +169,10 @@ portal has queued, what failed and why, and lets you retry one.
 | Daily | Each reviewer with a non-empty queue — one digest, not one mail per request |
 | Daily | Manager + caretaker — the day-wise guest house log, per guest house |
 | A request has waited over 48 h | The reviewer, copying the manager |
+| An official booking's invoice is issued | The Accounts email, copying the requester's HOD and the requester, with the invoice PDF |
 
-All mail about one booking arrives as a **single thread**, and nothing is sent inside a
-request: messages are queued in `email_outbox` and delivered by a worker, so a slow or
+Staff mail is threaded **per person per day** (requesters' mail stands alone), and nothing is
+sent inside a request: messages are queued in `email_outbox` and delivered by a worker, so a slow or
 broken mail host can never fail a booking or make a requester wait.
 
 ### Scheduling

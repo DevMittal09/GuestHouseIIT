@@ -38,7 +38,8 @@ export type MailEventKey =
   | "stay.reminder.requester"
   | "queue.digest.reviewer"
   | "desk.daily_report"
-  | "queue.escalation.reviewer";
+  | "queue.escalation.reviewer"
+  | "invoice.issued.accounts";
 
 /** What each event is, for the developer console's outbox table. */
 export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
@@ -58,6 +59,7 @@ export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
   "queue.digest.reviewer": "Daily approval digest",
   "desk.daily_report": "Daily guest house report",
   "queue.escalation.reviewer": "Pending-too-long escalation",
+  "invoice.issued.accounts": "Invoice issued (Accounts)",
 };
 
 /**
@@ -106,6 +108,7 @@ export interface OutboundMessage {
   references?: string[];
   /** Extra headers, e.g. `X-Original-To` when a redirect is in force. */
   headers?: Record<string, string>;
+  attachments?: OutboundAttachment[];
 }
 
 /**
@@ -144,6 +147,21 @@ export interface NewEmailInput {
   is_thread_root: boolean;
   /** Earliest the worker may send it. Defaults to now. */
   scheduled_for?: string;
+  /**
+   * Files to attach, as references resolved when the message is sent — the
+   * PDF of an issued invoice is rendered from its snapshot then, so no file
+   * sits in the outbox (migration 19).
+   */
+  attachments?: MailAttachmentRef[];
+}
+
+export type MailAttachmentRef = { kind: "invoice"; invoice_id: string };
+
+/** A file ready for the transport. */
+export interface OutboundAttachment {
+  filename: string;
+  contentType: string;
+  content: Uint8Array;
 }
 
 export interface EmailMessage extends NewEmailInput {

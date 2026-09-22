@@ -56,6 +56,11 @@ export class SmtpMailer implements Mailer {
       inReplyTo: message.inReplyTo,
       references: message.references,
       headers: message.headers,
+      attachments: message.attachments?.map((a) => ({
+        filename: a.filename,
+        contentType: a.contentType,
+        content: Buffer.from(a.content),
+      })),
     });
     return { messageId: String(info.messageId ?? message.messageId ?? "") };
   }
