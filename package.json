@@ -53,5 +53,10 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-linux-x64-gnu": "1.2.9",
+    "@rolldown/binding-win32-x64-msvc": "1.2.9",
+    "@rolldown/binding-darwin-arm64": "1.2.9"
   }
 }
