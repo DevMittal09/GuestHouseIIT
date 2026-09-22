@@ -280,16 +280,74 @@ export function projectFromDetails(details: string | null): { number: string; ti
 
 // ------------------------------------------------------------ the document
 
+/**
+ * `rate` and `amount` are the **taxable value** (before GST) — what the Tariff
+ * and Amount columns print, so that Total (A+B) + GST = Grand Total. When the
+ * tariff includes GST, `rate_incl` / `amount_incl` are the office's prices.
+ */
 export type InvoiceRoomLine = {
   kind: "room" | "extra_bed";
   description: string;
   days: number;
-  /** Paise per day, per bed for extra beds. Null when no tariff covers it. */
+  /** Paise per day, per bed for extra beds, before GST. Null when no tariff covers it. */
   rate: number | null;
   amount: number;
+  rate_incl: number | null;
+  amount_incl: number;
+  gst_percent: number;
 };
 
-export type InvoiceMealLine = { meal: MealKey; count: number; rate: number | null; amount: number };
+export type InvoiceMealLine = {
+  meal: MealKey;
+  count: number;
+  rate: number | null;
+  amount: number;
+  rate_incl: number | null;
+  amount_incl: number;
+  gst_percent: number;
+};
+
+/** One row of the tax breakdown: taxable value and GST for a SAC at a rate. */
+export type GstBreakdown = {
+  label: "Accommodation" | "Food";
+  sac: string;
+  percent: number;
+  taxable: number;
+  tax: number;
+  cgst: number;
+  sgst: number;
+};
+
+/**
+ * Taxable value and GST of a price. Inclusive: `gross` is the price paid,
+ * the taxable value is backed out and rounded to the paisa, and the GST is the
+ * difference — so the two always add back to the price exactly. Exclusive:
+ * `gross` is the taxable value and GST is added, rounded to the paisa.
+ */
+export function splitGst(gross: number, percent: number, inclusive: boolean): { taxable: number; tax: number } {
+  if (percent <= 0) return { taxable: gross, tax: 0 };
+  if (inclusive) {
+    const bp = Math.round(percent * 100);
+    const taxable = Math.round((gross * 10_000) / (10_000 + bp));
+    return { taxable, tax: gross - taxable };
+  }
+  return { taxable: gross, tax: Math.round((gross * Math.round(percent * 100)) / 10_000) };
+}
+
+/**
+ * The accommodation rate for a room charged `ratePaise` a day: the lower rate
+ * while the room's value (before GST) is at most the threshold, else the higher.
+ */
+export function roomGstPercent(ratePaise: number, rules: InvoiceRules): number {
+  const value = rules.prices_include_gst ? splitGst(ratePaise, rules.gst_room_percent, true).taxable : ratePaise;
+  return value <= rules.gst_room_threshold * 100 ? rules.gst_room_percent : rules.gst_room_above_percent;
+}
+
+/** CGST and SGST, half each; an odd paisa goes to SGST. */
+export function halves(tax: number): { cgst: number; sgst: number } {
+  const cgst = Math.floor(tax / 2);
+  return { cgst, sgst: tax - cgst };
+}
 
 /** Everything printed on an invoice. Stored whole as the issued invoice's snapshot. */
 export type InvoiceDocument = {
@@ -317,9 +375,17 @@ export type InvoiceDocument = {
   /** Always Breakfast, Lunch, Dinner, in that order. */
   meal_lines: InvoiceMealLine[];
   subtotal_dining: number;
+  /** Taxable value, A + B. */
   total: number;
+  /** The effective rate on the whole invoice (rounded), for reports. */
   gst_percent: number;
   gst: number;
+  cgst: number;
+  sgst: number;
+  /** Per SAC and rate — printed under the table. */
+  gst_breakdown: GstBreakdown[];
+  /** Whether the tariffs the invoice was priced at included GST. */
+  prices_include_gst: boolean;
   grand_total: number;
   gstin: string;
   bank: InvoiceRules["bank"];
@@ -363,6 +429,20 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     booking_type: booking.booking_type,
     requester_role: booking.user_role,
   };
+  const rules = ctx.rules;
+  const inclusive = rules.prices_include_gst;
+  /** A line's printed figures from its tariff (paise) and quantity. */
+  const price = (tariff: number | null, qty: number, percent: number) => {
+    if (tariff === null) return { rate: null, amount: 0, rate_incl: null, amount_incl: 0, gst_percent: percent };
+    if (inclusive) {
+      // The Tariff column shows the rate before GST; the Amount is that rate
+      // times the quantity; the line's GST is what makes it up to the price.
+      const rate = splitGst(tariff, percent, true).taxable;
+      return { rate, amount: rate * qty, rate_incl: tariff, amount_incl: tariff * qty, gst_percent: percent };
+    }
+    const tax = splitGst(tariff * qty, percent, false).tax;
+    return { rate: tariff, amount: tariff * qty, rate_incl: null, amount_incl: tariff * qty + tax, gst_percent: percent };
+  };
   const priceOf = (item: TariffItem, roomType: Room["room_type"] | null, date: string): number | null => {
     const t = resolveTariff(ctx.tariffs, { ...base, item, room_type: roomType, date });
     return t ? toPaise(t.rate) : null;
@@ -385,20 +465,20 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
         kind: "room",
         description: `${room.room_number} — ${typeLabel}${groups.length > 1 ? ` (${dayRange(g.from, g.to)})` : ""}`,
         days: g.days,
-        rate: g.rate,
-        amount: (g.rate ?? 0) * g.days,
+        ...price(g.rate, g.days, g.rate === null ? rules.gst_room_percent : roomGstPercent(g.rate, rules)),
       });
     }
     if (extra > 0) {
       const bedGroups = splitByRate(days, (d) => priceOf("extra_bed", room.room_type, d));
       for (const g of bedGroups) {
         if (g.rate === null) missing("extra_bed", g.from, `the extra bed in ${room.room_number}`);
+        // An extra bed is part of the room's accommodation: the room's slab.
+        const roomRate = priceOf("room", room.room_type, g.from);
         roomLines.push({
           kind: "extra_bed",
           description: `Extra bed${extra > 1 ? ` ×${extra}` : ""} — ${room.room_number}${bedGroups.length > 1 ? ` (${dayRange(g.from, g.to)})` : ""}`,
           days: g.days,
-          rate: g.rate,
-          amount: (g.rate ?? 0) * g.days * extra,
+          ...price(g.rate, g.days * extra, roomGstPercent((roomRate ?? 0) + (g.rate ?? 0) * extra, rules)),
         });
       }
     }
@@ -414,14 +494,32 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     const count = Math.max(0, Math.floor(counts[meal] ?? 0));
     const rate = priceOf(meal, null, mealDate);
     if (count > 0 && rate === null) missing(meal, mealDate, `${MEAL_LABELS[meal].toLowerCase()}`);
-    return { meal, count, rate, amount: (rate ?? 0) * count };
+    return { meal, count, ...price(rate, count, rules.gst_meal_percent) };
   });
   const subtotalDining = mealLines.reduce((n, l) => n + l.amount, 0);
 
   // ---- totals
+  // Grouped by SAC and rate, as a tax invoice shows them. Inclusive: the
+  // grand total is the sum of the prices exactly. Exclusive: GST is added per
+  // group and the grand total rounded half-up to the rupee.
   const total = subtotalRooms + subtotalDining;
-  const gst = gstPaise(total, ctx.rules.gst_percent);
-  const grandTotal = roundHalfUpToRupee(total + gst);
+  const groups = new Map<string, GstBreakdown>();
+  const add = (label: GstBreakdown["label"], sac: string, percent: number, taxable: number, gross: number) => {
+    const key = `${label}|${percent}`;
+    const g = groups.get(key) ?? { label, sac, percent, taxable: 0, tax: 0, cgst: 0, sgst: 0 };
+    g.taxable += taxable;
+    g.tax += gross - taxable;
+    groups.set(key, g);
+  };
+  for (const l of roomLines) add("Accommodation", rules.sac_room, l.gst_percent, l.amount, l.amount_incl);
+  for (const l of mealLines) if (l.count > 0) add("Food", rules.sac_meal, l.gst_percent, l.amount, l.amount_incl);
+  const gstBreakdown = [...groups.values()].map((g) => {
+    const tax = inclusive ? g.tax : gstPaise(g.taxable, g.percent);
+    return { ...g, tax, ...halves(tax) };
+  });
+  const gst = gstBreakdown.reduce((n, g) => n + g.tax, 0);
+  const grandTotal = inclusive ? total + gst : roundHalfUpToRupee(total + gst);
+  const { cgst, sgst } = { cgst: gstBreakdown.reduce((n, g) => n + g.cgst, 0), sgst: gstBreakdown.reduce((n, g) => n + g.sgst, 0) };
 
   // ---- who and what
   const requester = booking.requester;
@@ -463,8 +561,12 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     meal_lines: mealLines,
     subtotal_dining: subtotalDining,
     total,
-    gst_percent: ctx.rules.gst_percent,
+    gst_percent: total > 0 ? Math.round((gst * 10_000) / total) / 100 : 0,
     gst,
+    cgst,
+    sgst,
+    gst_breakdown: gstBreakdown,
+    prices_include_gst: inclusive,
     grand_total: grandTotal,
     gstin: ctx.rules.gstin,
     bank: ctx.rules.bank,

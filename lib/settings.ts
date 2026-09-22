@@ -85,8 +85,25 @@ export type InvoiceRules = {
    */
   day_basis: "night" | "24h";
   grace_hours: number;
-  /** GST on the total, percent. Zero still prints the row, as ₹0.00. */
-  gst_percent: number;
+  /**
+   * Whether the tariff rates already include GST (the office's rates do). When
+   * true the Grand Total is exactly the sum of the rates, and the taxable value
+   * and GST are backed out of it; when false GST is added on top.
+   */
+  prices_include_gst: boolean;
+  /**
+   * GST on accommodation, percent — 5% (without ITC) for a room whose value is
+   * at most `gst_room_threshold` a day, since 22 Sep 2025; above it,
+   * `gst_room_above_percent` (18%). Applied per room line by its daily rate.
+   */
+  gst_room_percent: number;
+  gst_room_threshold: number;
+  gst_room_above_percent: number;
+  /** GST on food served (restaurant service), percent: 5% without ITC. */
+  gst_meal_percent: number;
+  /** SAC codes printed with the tax breakdown. */
+  sac_room: string;
+  sac_meal: string;
   gstin: string;
   /**
    * Where an official booking's invoice is mailed when it is issued, with the
@@ -158,7 +175,16 @@ export const DEFAULT_RULES: Rules = {
     serial_digits: 4,
     day_basis: "night",
     grace_hours: 4,
-    gst_percent: 0,
+    // The office's rates include GST. Rates as in force since 22 Sep 2025 (the
+    // 56th GST Council): accommodation up to ₹7,500 a day 5% without ITC, above
+    // it 18%; restaurant service 5%. Intra-state (Kerala), so CGST + SGST.
+    prices_include_gst: true,
+    gst_room_percent: 5,
+    gst_room_threshold: 7500,
+    gst_room_above_percent: 18,
+    gst_meal_percent: 5,
+    sac_room: "996311",
+    sac_meal: "996331",
     gstin: "32AAAAI9910J1ZR",
     accounts_email: "",
     bank: {
@@ -245,6 +271,13 @@ export const mealRulesSchema = z
     { message: "Breakfast, lunch and dinner must be served in that order without overlapping" }
   );
 
+const percent = (label: string) =>
+  z.coerce
+    .number({ message: `${label} is required` })
+    .min(0, `${label} cannot be negative`)
+    .max(28, `${label} cannot exceed 28%`)
+    .refine((n) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6, `${label} can have at most two decimals`);
+
 const text = (label: string, max: number) =>
   z.string().trim().min(1, `${label} is required`).max(max, `${label} is too long`);
 
@@ -256,11 +289,13 @@ export const invoiceRulesSchema = z.object({
   serial_digits: whole("Invoice number width", 3, 6),
   day_basis: z.enum(["night", "24h"], { message: "Choose how days are counted" }),
   grace_hours: whole("Grace", 0, 12),
-  gst_percent: z.coerce
-    .number({ message: "GST is required" })
-    .min(0, "GST cannot be negative")
-    .max(28, "GST cannot exceed 28%")
-    .refine((n) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6, "GST can have at most two decimals"),
+  prices_include_gst: z.boolean(),
+  gst_room_percent: percent("GST on rooms"),
+  gst_room_threshold: whole("Room value for the higher GST rate", 0, 1_000_000),
+  gst_room_above_percent: percent("GST on rooms above the threshold"),
+  gst_meal_percent: percent("GST on food"),
+  sac_room: z.string().trim().regex(/^\d{4,8}$/, "A SAC code is 4–8 digits"),
+  sac_meal: z.string().trim().regex(/^\d{4,8}$/, "A SAC code is 4–8 digits"),
   gstin: z
     .string()
     .trim()
