@@ -31,10 +31,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      # One second, and it names the problem instead of letting `npm ci` fail
-      # with a wall of "Missing: ... from lock file".
-      - run: npm run check:lockfile
-      - run: npm ci
+      # `npm install`, not `npm ci`, and deliberately. The lockfile is written
+      # on Windows by npm 11; the runner is Linux with npm 10, and it needs ~83
+      # platform-specific binaries (lightningcss, sharp, swc, rolldown) that a
+      # Windows resolution never records — npm/cli#4828. `npm ci` refuses the
+      # whole install over them; `npm install` honours the lock for everything
+      # it pins and fetches the platform pieces it has to. Go back to `npm ci`
+      # the day the lockfile is generated on Linux.
+      - run: npm install --no-audit --no-fund
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
@@ -51,8 +55,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm run check:lockfile
-      - run: npm ci
+      - run: npm install --no-audit --no-fund
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       # Built with Supabase switched off so the client bundle cannot carry a

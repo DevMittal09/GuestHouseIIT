@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["bom1"],
+  "installCommand": "npm install --no-audit --no-fund",
+  "regions": [
+    "bom1"
+  ],
   "crons": [
     {
       "path": "/api/mail/cron",
