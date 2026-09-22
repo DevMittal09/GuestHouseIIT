@@ -1590,3 +1590,89 @@ stay, and adds:
 - **Not colour alone** — a ● in booked bars and a 🔧 in maintenance bars,
   `aria-label`s on the bars, the legend spelled out, and ⏳ on pending
   extensions.
+
+## Phase 8: security (22 Sep 2026)
+
+- **Sessions are rows, not cookies** (migration 21). The cookie holds 32 random
+  bytes; only its SHA-256 is stored, so a database dump cannot be replayed as a
+  login. 30 minutes idle (pushed forward on use), 12 hours absolute, revocable
+  one at a time or all at once. The token is **rotated** when a session gains
+  privilege — at sign-in and when the second factor is proved. `__Host-` prefix
+  in production (HTTPS, no Domain, Path=/); a plain name in development, where
+  the prefix's Secure requirement cannot be met. `lib/auth.ts` remains the only
+  reader.
+- **Rotation is on privilege, not on a timer.** A rotation on every request
+  would need a write and a `Set-Cookie` on every request, and server components
+  cannot set cookies at all; the idle window is pushed forward in the row
+  instead (at most one write a minute).
+- **Real Google sign-in** (`lib/oidc.ts`): state + PKCE in a ten-minute
+  httpOnly cookie, the id_token verified against Google's JWKS (signature,
+  issuer, audience, expiry, nonce), then `email_verified`, the `hd` claim and
+  `isInstituteEmail`, and finally an existing portal account. Written with
+  `fetch` and Node crypto rather than an OAuth dependency — an authentication
+  library is a supply-chain risk of its own.
+- **The developer doors are gone in production**: `/mock-login` 404s and
+  `loginAs` refuses unless `DEV_LOGIN=true` outside production, and `lib/env.ts`
+  refuses to boot production with that flag set, or without Supabase, APP_URL,
+  CRON_SECRET or ID_ENCRYPTION_KEY. `ALLOW_MOCK_STORE=true` is the one escape
+  hatch, for running a production build locally against the mock store.
+- **TOTP for developers** (`lib/totp.ts`, ~100 lines of HMAC): secret encrypted
+  at rest, ten recovery codes kept only as scrypt hashes, replay refused by
+  remembering the last accepted step. **Step-up**: a developer proves a code
+  again within ten minutes before role changes, settings, or any delete;
+  `stepUpProblem()` returns null for other roles, who are already behind the
+  console password — that is the seam where a second factor would be demanded
+  of them too.
+- **Throttles moved into the database** (`hit_rate_limit`), so a restart does
+  not reset a brute-force counter and every instance shares it. Routes answer
+  **429** with `Retry-After`; server actions return the message.
+- **Headers in `proxy.ts`** (Next 16's middleware): CSP with a per-request
+  nonce and `strict-dynamic`, HSTS (production only — an HSTS header from a
+  local build would pin localhost to HTTPS), `frame-ancestors 'none'`,
+  nosniff, Referrer-Policy, Permissions-Policy, COOP, CORP, and
+  `X-Robots-Tag: noindex` on every portal path. `style-src` keeps
+  `'unsafe-inline'`: the charts position bars with `style=` attributes, which a
+  nonce cannot cover. Maps and Supabase are named explicitly.
+- **Cron is POST-only** and reads the secret from the Authorization header
+  alone — a secret in a query string is written to every access log it passes.
+- **Uploads** (`lib/uploads.ts`): the bytes decide the type, EXIF and PNG text
+  chunks are stripped, the uploader's filename is thrown away, and files live
+  outside `public/`. They are served by `/api/documents/…`, which checks who is
+  asking (desk, requester, or the approver it is waiting on), writes a
+  `document.viewed` audit row, and signs a **five-minute** link. The year-long
+  signed URL this replaced was, in effect, a permanent public link to an ID
+  card. ClamAV is used when `CLAMAV_HOST` is set; a configured-but-unreachable
+  scanner refuses the upload rather than storing it unscanned.
+- **ID numbers are encrypted at rest** (AES-256-GCM, key version in the value,
+  `ID_ENCRYPTION_KEYS_OLD` for rotation) and shown as their last four
+  everywhere — screens and exports. Without a key configured the value is
+  stored as it is, which is what lets a fresh clone run and old rows still
+  read; production refuses to start without one.
+- **Retention** (`lib/retention-server.ts`, daily): identity fields and their
+  documents are erased `id_retention_days` after a stay ends (Setting, default
+  365); the audit log is trimmed to `audit_retention_days`, which the database
+  will not let fall below 180. The stay itself is kept — it is the guest
+  house's own record.
+- **DPDP**: a versioned privacy notice at `/privacy` that reads its retention
+  period from Settings, a consent tick on the booking form stored with the
+  notice's version, "Download my data" and "Ask for erasure" on the dashboard,
+  and the office answering each request from Console → Security. Erasure is a
+  request, not a switch: records the guest house must keep for audit cannot be
+  erased, and the answer says so.
+- **Audit**: sign-ins (success and failure), console unlocks, role and settings
+  changes, document views, exports, invoices, overrides, 2FA and privacy events,
+  readable at Console → Audit Log (developer), append-only in the database.
+  `lib/log.ts` gives structured JSON logs with emails, long digit strings and
+  secrets redacted, and posts to Sentry when `SENTRY_DSN` is set.
+- **Not done as the brief describes: RLS with per-request clients.** Every
+  table has RLS on and no `authenticated` write policy, which is what protects
+  the public anon key, and the policies are tested with two users in the
+  migration harness. But the server still reaches the database with the
+  service-role key from one server-only module: making the store per-request
+  and user-scoped would mean minting Supabase JWTs and rewriting every write
+  path to satisfy policies, which is a phase of its own. The boundary today is
+  the server: every action re-checks the caller. **Left for the next phase.**
+- **Dependencies**: `npm audit` is clean (Next 16.3.6, Vitest 5, @types/node
+  24). Node is pinned by `.nvmrc` and `engines`. Dependabot groups Next's
+  packages together; gitleaks has rules for the service-role key, the mail
+  password, the cron secret and the encryption key.

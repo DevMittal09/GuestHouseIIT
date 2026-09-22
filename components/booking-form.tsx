@@ -130,6 +130,8 @@ interface RoomFields {
 }
 
 interface FormValues {
+  /** DPDP consent (Phase 8): ticked before the request can be submitted. */
+  privacy_consent: boolean;
   /** Asked first: whether a room is involved changes the rest of the form. */
   /** Asked next: it decides the approval route and how the stay is settled. */
   booking_type: BookingType;
@@ -272,6 +274,7 @@ export function BookingForm({
 
   const form = useForm<FormValues>({
     defaultValues: {
+      privacy_consent: false,
       // "Official" for staff, because that is the common case; a role with one
       // option is never shown the question at all.
       booking_type: defaultBookingTypeFor(config.role) ?? "official",
@@ -600,6 +603,8 @@ export function BookingForm({
           }))
         : [],
       custom: values.custom,
+      // DPDP (Phase 8): the tick below, recorded with the notice's version.
+      privacy_consent: values.privacy_consent,
     };
 
     const parsed = bookingPayloadSchema(config, {
@@ -1335,6 +1340,23 @@ export function BookingForm({
       <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
         {MANAGER_HELP_LINE}
       </p>
+
+      <label className="flex items-start gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+        <input
+          type="checkbox"
+          className="mt-0.5 size-4 shrink-0 accent-primary"
+          {...register("privacy_consent")}
+        />
+        <span>
+          I have read how these details are used, who can see them and how long they are kept, and I
+          agree to the guest house holding them.{" "}
+          <a href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+            Privacy notice
+          </a>
+          .
+          <FieldError message={err("privacy_consent")} />
+        </span>
+      </label>
 
       <div className="flex justify-end gap-3">
         <Button type="button" variant="outline" onClick={() => router.push("/dashboard")}>

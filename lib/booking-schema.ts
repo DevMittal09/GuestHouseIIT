@@ -278,6 +278,15 @@ export function bookingPayloadSchema(
          .boolean()
          .optional()
          .transform((v) => v === true),
+      /**
+       * DPDP (Phase 8): the requester agrees to how the details on this form
+       * are handled, and the booking records which version of the notice they
+       * were shown. Unlike the pets notice this is a tick, because consent has
+       * to be given, not merely displayed.
+       */
+      privacy_consent: z.boolean().refine((v) => v === true, {
+        message: "Tick the box to confirm you have read how these details are used",
+      }),
       custom: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
     })
     .superRefine((v, ctx) => {

@@ -44,6 +44,8 @@ export const SITE_LINKS = [
   { label: "IIT Palakkad Website", href: INSTITUTE_WEBSITE },
   { label: "Guest House on iitpkd.ac.in", href: "https://iitpkd.ac.in/guest-house-hamsanandi" },
   { label: "Room Booking System (MRBS)", href: "https://mrbs.iitpkd.ac.in" },
+  // DPDP (Phase 8): the notice the booking form asks people to agree to.
+  { label: "Privacy notice", href: "/privacy" },
 ] as const;
 
 /** The institute's own switchboard line and address, shown in the utility strip. */

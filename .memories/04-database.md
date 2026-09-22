@@ -389,6 +389,20 @@ Current migrations:
    a block refused with the old hold kept, a buffer change into a block refused,
    RLS read-only for `authenticated`.
 
+21. `00000000000021_sessions_and_security.sql` (Phase 8, Sep 2026).
+   `sessions` (SHA-256 of the cookie's token, idle and absolute expiry,
+   `revoked_at`, `verified_at` for step-up, `rotated_from`) and
+   `purge_expired_sessions()`; `user_mfa` (encrypted TOTP secret, scrypt-hashed
+   recovery codes, `last_step` against replay); `rate_limits` +
+   `hit_rate_limit()` (one statement, returns allowed/attempts/retry_after) and
+   `purge_rate_limits()`; `bookings.privacy_notice_version` /
+   `privacy_consent_at`; `privacy_requests`. RLS on all four with no
+   `authenticated` policy — a deny-all for the anon key — and the functions
+   granted to the service role only. Verified in a throwaway Postgres 16:
+   applied twice, token uniqueness, the throttle counting and resetting, the
+   kind check, consent columns, and `authenticated` refused on both the tables
+   and `hit_rate_limit`.
+
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.
 

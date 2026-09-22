@@ -127,6 +127,17 @@ export type InvoiceRules = {
   contact: { address: string; phone: string; email: string };
 };
 
+/**
+ * How long personal data is kept (Phase 8, DPDP). The daily job clears ID
+ * numbers and their documents from stays that ended more than
+ * `id_retention_days` ago, and trims the security audit log — never below the
+ * 180 days the log's own purge function insists on.
+ */
+export type PrivacyRules = {
+  id_retention_days: number;
+  audit_retention_days: number;
+};
+
 export type Rules = {
   capacity: CapacityRules;
   booking: BookingRules;
@@ -134,11 +145,12 @@ export type Rules = {
   /** Which debitable heads each kind of requester may choose (Phase 4). */
   debit: DebitRules;
   invoice: InvoiceRules;
+  privacy: PrivacyRules;
 };
 
 export type RuleGroup = keyof Rules;
 
-export const RULE_GROUPS: RuleGroup[] = ["capacity", "booking", "meals", "debit", "invoice"];
+export const RULE_GROUPS: RuleGroup[] = ["capacity", "booking", "meals", "debit", "invoice", "privacy"];
 
 /** The `app_settings` key a group is stored under. */
 export function ruleKey(group: RuleGroup): string {
@@ -206,6 +218,12 @@ export const DEFAULT_RULES: Rules = {
       phone: "+91 491 209 2016",
       email: "ghm@iitpkd.ac.in",
     },
+  },
+  privacy: {
+    // A year covers a full audit cycle and the institute's own queries about a
+    // past stay; the office can shorten it.
+    id_retention_days: 365,
+    audit_retention_days: 180,
   },
 };
 
@@ -332,12 +350,19 @@ export const invoiceRulesSchema = z.object({
   }),
 });
 
+export const privacyRulesSchema = z.object({
+  id_retention_days: whole("ID retention", 30, 3650),
+  // The audit log's own purge refuses anything under 180 days.
+  audit_retention_days: whole("Audit retention", 180, 3650),
+});
+
 export const RULE_SCHEMAS = {
   capacity: capacityRulesSchema,
   booking: bookingRulesSchema,
   meals: mealRulesSchema,
   debit: debitRulesSchema,
   invoice: invoiceRulesSchema,
+  privacy: privacyRulesSchema,
 } as const satisfies Record<RuleGroup, z.ZodType>;
 
 /**

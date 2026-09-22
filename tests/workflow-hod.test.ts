@@ -184,6 +184,7 @@ describe("the schema accepts its own output for every requester role", () => {
         const payload = {
           guest_house_id: GH.id,
           service_type: "room",
+          privacy_consent: true,
           booking_type: type,
           debit_head: head,
           project_id: head === "project_grant" ? "proj-storage" : null,
@@ -222,6 +223,7 @@ describe("the schema accepts its own output for every requester role", () => {
   const base = {
     guest_house_id: GH.id,
     service_type: "room",
+    privacy_consent: true,
     booking_type: "official",
     purpose_of_visit: "Visiting the institute",
     check_in: `${checkIn}T12:00`,

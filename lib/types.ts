@@ -372,6 +372,9 @@ export type Booking = {
   extension_requested_at?: string | null;
   /** Set when the stay was released because the guest never arrived (migration 20). */
   no_show_released_at?: string | null;
+  /** The privacy notice the requester agreed to when submitting (Phase 8, DPDP). */
+  privacy_notice_version?: string | null;
+  privacy_consent_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -534,6 +537,8 @@ export interface NewBookingInput {
   /** Only on a meals-only booking, which has no guest rows to count. */
   meal_guest_count: number | null;
   pets_policy_acknowledged: boolean;
+  /** The privacy notice version the requester agreed to (Phase 8, DPDP). */
+  privacy_notice_version?: string | null;
   alumni_name: string | null;
   alumni_roll_number: string | null;
   alumni_id_url: string | null;

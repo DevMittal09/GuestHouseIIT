@@ -2,6 +2,7 @@ import { cronAuthorized, mailConfig } from "@/lib/mail/config";
 import { runDailyMailJobs } from "@/lib/mail/digest";
 import { drainOutbox } from "@/lib/mail/dispatch";
 import { runNoShowRelease } from "@/lib/no-show-server";
+import { runRetention } from "@/lib/retention-server";
 import { getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
 
@@ -40,6 +41,8 @@ async function handle(request: Request): Promise<Response> {
     const noShowsReleased = await runNoShowRelease(new Date(), (await getRules()).booking.no_show_release_hours);
     // Housekeeping: sessions and throttle windows long dead (migration 21).
     const sessionsPurged = await getStore().purgeExpiredSessions().catch(() => 0);
+    // Retention (Phase 8): identity fields and audit rows past their keep-days.
+    const retention = await runRetention(new Date());
     const queued = await runDailyMailJobs();
     const dispatched = await drainOutbox();
 
@@ -49,6 +52,7 @@ async function handle(request: Request): Promise<Response> {
       queued,
       noShowsReleased,
       sessionsPurged,
+      retention,
       dispatched,
     });
   } catch (error) {

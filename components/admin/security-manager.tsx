@@ -17,7 +17,9 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatDateTime } from "@/lib/format";
+import { resolvePrivacyRequestAction, type PrivacyRequestRow } from "@/app/actions/privacy";
+import { Textarea } from "@/components/ui/textarea";
+import { formatDate, formatDateTime } from "@/lib/format";
 import type { MfaState } from "@/lib/auth";
 
 /**
@@ -31,12 +33,15 @@ export function SecurityManager({
   idleMinutes,
   absoluteHours,
   stepUpMinutes,
+  privacyRequests = [],
 }: {
   mfa: MfaState;
   sessions: SessionSummary[];
   idleMinutes: number;
   absoluteHours: number;
   stepUpMinutes: number;
+  /** DPDP requests waiting on the office (Phase 8). */
+  privacyRequests?: PrivacyRequestRow[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -45,6 +50,7 @@ export function SecurityManager({
   const [recovery, setRecovery] = useState<string[] | null>(null);
   const [confirmDisable, setConfirmDisable] = useState(false);
   const [confirmEverywhere, setConfirmEverywhere] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   const run = (work: () => Promise<{ ok: boolean; error?: string }>, success: string, after?: () => void) =>
     startTransition(async () => {
@@ -212,6 +218,56 @@ export function SecurityManager({
           </Button>
         </div>
       </SettingCard>
+
+      {privacyRequests.length > 0 && (
+        <SettingCard
+          title="Data requests"
+          description="Requests from people to have what the portal holds about them erased. Answer each one: records the guest house must keep for audit cannot be erased, and the answer is kept with the request."
+        >
+          <ul className="divide-y rounded-md border text-sm">
+            {privacyRequests.map((r) => (
+              <li key={r.id} className="space-y-2 p-3">
+                <p>
+                  <span className="font-medium">{r.person}</span>{" "}
+                  <span className="text-muted-foreground">({r.email})</span> — {r.kind === "deletion" ? "erasure" : "copy"},
+                  asked {formatDate(r.created_at)}{" "}
+                  <Badge variant={r.status === "open" ? "secondary" : "outline"}>{r.status}</Badge>
+                </p>
+                {r.note && <p className="text-muted-foreground">“{r.note}”</p>}
+                {r.response && <p className="text-muted-foreground">Answered: {r.response}</p>}
+                {r.status === "open" && (
+                  <div className="space-y-2">
+                    <Textarea
+                      aria-label={`Answer for ${r.person}`}
+                      rows={2}
+                      value={answers[r.id] ?? ""}
+                      onChange={(e) => setAnswers((a) => ({ ...a, [r.id]: e.target.value }))}
+                      placeholder="What was done, and what had to be kept"
+                    />
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isPending || !(answers[r.id] ?? "").trim()}
+                        onClick={() => run(() => resolvePrivacyRequestAction(r.id, "refused", answers[r.id] ?? ""), "Answered")}
+                      >
+                        Record as refused
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={isPending || !(answers[r.id] ?? "").trim()}
+                        onClick={() => run(() => resolvePrivacyRequestAction(r.id, "done", answers[r.id] ?? ""), "Answered")}
+                      >
+                        Record as done
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </SettingCard>
+      )}
 
       <ConfirmDialog
         open={confirmDisable}

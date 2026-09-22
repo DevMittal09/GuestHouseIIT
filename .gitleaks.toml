@@ -1,0 +1,30 @@
+# gitleaks configuration (Phase 8).
+#
+# The repository must never contain a Supabase service-role key, an SMTP app
+# password, the cron secret or the ID encryption key — `.env` and `.env.local`
+# hold those and are git-ignored. This is the check that says so out loud.
+title = "IIT Palakkad Guest House portal"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "supabase-service-role-key"
+description = "Supabase service-role JWT"
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'''
+tags = ["supabase", "jwt"]
+
+[[rules]]
+id = "guesthouse-env-assignment"
+description = "A secret assigned in a committed file"
+regex = '''(?i)(SUPABASE_SERVICE_ROLE_KEY|MAIL_APP_PASSWORD|CRON_SECRET|ID_ENCRYPTION_KEY|GOOGLE_CLIENT_SECRET)\s*=\s*["']?[A-Za-z0-9/+_-]{12,}'''
+
+[allowlist]
+description = "Documentation and fixtures that name variables without values"
+paths = [
+  '''\.env\.example$''',
+  '''\.memories/.*\.md$''',
+  '''README\.md$''',
+  '''AGENTS\.md$''',
+  '''lib/ldap/mock-directory\.ts$''',
+]

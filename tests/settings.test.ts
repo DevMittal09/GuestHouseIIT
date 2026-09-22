@@ -176,6 +176,7 @@ describe("the booking schema uses the settings on both sides", () => {
   const payload = (guests: number) => ({
     guest_house_id: GH.id,
     service_type: "room",
+    privacy_consent: true,
     booking_type: "personal",
     debit_head: "personal_funds",
     purpose_of_visit: "Family visit",

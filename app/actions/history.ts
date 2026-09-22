@@ -1,5 +1,6 @@
 "use server";
 
+import { maskIdNumber } from "@/lib/security";
 import { csvCell } from "@/lib/csv";
 import { requireUser } from "@/lib/auth";
 import {
@@ -88,7 +89,7 @@ function csvRow(booking: BookingWithDetails, userId: string): string {
       .map(
         (g) =>
           `${g.name} (${g.nationality ? countryName(g.nationality) : "nationality not recorded"}${
-            g.passport_number ? `, ${g.passport_number}` : ""
+            g.passport_number ? `, ${maskIdNumber(g.passport_number)}` : ""
           })`
       )
       .join(" / "),

@@ -96,6 +96,7 @@ export type ConsoleSection =
   | "bookings"
   | "settings"
   | "security"
+  | "audit"
   | "console_access";
 
 export const CONSOLE_SECTIONS: Record<
@@ -168,6 +169,12 @@ export const CONSOLE_SECTIONS: Record<
     href: "/admin/security",
     roles: ["gh_manager", "developer"],
     blurb: "Your second factor and the browsers you are signed in on.",
+  },
+  audit: {
+    label: "Audit Log",
+    href: "/admin/audit",
+    roles: ["developer"],
+    blurb: "Every sign-in, role change, settings change, document view and export. Developer only.",
   },
   console_access: {
     label: "Console Access",

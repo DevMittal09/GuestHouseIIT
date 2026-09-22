@@ -741,6 +741,21 @@ Requesters ask for an extension from their booking view. Actions are in
 managed in Guest Houses & Rooms, merged into availability as segments with
 `kind: "maintenance"`, and refused against stays in both stores.
 
+## Security (Phase 8)
+
+`lib/sessions.ts` (rows in `sessions`, opaque token cookie, idle/absolute
+expiry, rotation, revoke-all), `lib/auth.ts` (the only reader; `mfaState`,
+`stepUpProblem`), `lib/oidc.ts` (Google, state + PKCE, verified id_token),
+`lib/totp.ts` + `app/actions/security.ts` (developer second factor, recovery
+codes), `lib/env.ts` + `instrumentation.ts` (refuses to boot an unfit
+production), `lib/crypto.ts` (AES-256-GCM for ID numbers and TOTP secrets),
+`lib/uploads.ts` (magic bytes, EXIF stripping, random names, optional ClamAV),
+`/api/documents/[...path]` (authorised, audited, five-minute links),
+`lib/retention-server.ts` (daily erasure), `app/actions/privacy.ts` (DPDP
+download and erasure requests), `lib/log.ts` (redacted JSON logs, optional
+Sentry), `proxy.ts` (CSP nonces and the other headers). Console: **Security**
+(second factor, sessions, data requests) and **Audit Log** (developer).
+
 ## Branding
 
 **Since 19 Sep 2026 the palette comes from the guest house design handoff**

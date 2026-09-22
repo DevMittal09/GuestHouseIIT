@@ -1,0 +1,22 @@
+# Dependency updates, weekly (Phase 8). Security advisories come through
+# regardless; this keeps the ordinary drift small enough to review.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the framework, one for everything else: a Next release
+      # touches several packages at once and they must move together.
+      next:
+        patterns: ["next", "eslint-config-next", "@next/*"]
+      rest:
+        patterns: ["*"]
+        exclude-patterns: ["next", "eslint-config-next", "@next/*"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly

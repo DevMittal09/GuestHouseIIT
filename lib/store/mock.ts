@@ -62,6 +62,8 @@ import type { NewProjectInput, Project } from "@/lib/projects";
 import { blockOverlaps, type NewRoomBlockInput, type RoomBlock } from "@/lib/operations";
 import type { NewSessionInput, Session } from "@/lib/sessions";
 import type { NewPrivacyRequest, PrivacyRequest, RateLimitResult, UserMfa } from "@/lib/security";
+import type { PreparedUpload } from "@/lib/uploads";
+import { decryptValue, encryptValue } from "@/lib/crypto";
 import { tariffLockedError, type NewTariffInput, type Tariff } from "@/lib/tariffs";
 import {
   invoiceColumnsFrom,
@@ -128,7 +130,8 @@ interface Db {
 function dbPath(): string {
   return process.env.MOCK_DB_PATH || path.join(process.cwd(), ".local-db.json");
 }
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+// Not under `public/`: nothing here may be fetched by guessing its name.
+const UPLOAD_DIR = path.join(process.cwd(), ".uploads");
 
 function loadDb(): Db {
   if (fs.existsSync(/*turbopackIgnore: true*/ dbPath())) {
@@ -565,6 +568,9 @@ export class MockStore implements DataStore {
       meal_guest_count: derived.meal_guest_count,
       pets_policy_acknowledged: input.pets_policy_acknowledged,
       pets_policy_acknowledged_at: input.pets_policy_acknowledged ? nowIso : null,
+      // DPDP: which notice was agreed to, and when (Phase 8).
+      privacy_notice_version: input.privacy_notice_version ?? null,
+      privacy_consent_at: input.privacy_notice_version ? nowIso : null,
       has_foreign_national: derived.has_foreign_national,
       created_by: input.created_by ?? null,
       on_behalf_of_name: input.on_behalf_of_name ?? null,
@@ -593,6 +599,9 @@ export class MockStore implements DataStore {
       for (const g of room.guests) {
         db.booking_guests.push({
           ...g,
+          // Identity numbers are encrypted at rest (Phase 8); reads decrypt.
+          id_number: encryptValue(g.id_number),
+          passport_number: encryptValue(g.passport_number),
           id: randomUUID(),
           booking_id: booking.id,
           booking_room_id: roomRow.id,
@@ -626,7 +635,9 @@ export class MockStore implements DataStore {
     const roomCards = (db.booking_rooms ?? [])
       .filter((r) => r.booking_id === b.id)
       .sort((a, c) => a.room_index - c.room_index);
-    const guests = db.booking_guests.filter((g) => g.booking_id === b.id);
+    const guests = db.booking_guests
+      .filter((g) => g.booking_id === b.id)
+      .map((g) => ({ ...g, id_number: decryptValue(g.id_number), passport_number: decryptValue(g.passport_number) }));
     const rooms: BookingRoomWithGuests[] = roomCards.map((card) => ({
       ...card,
       guests: guests.filter((g) => g.booking_room_id === card.id),
@@ -907,14 +918,39 @@ export class MockStore implements DataStore {
     saveDb(db);
   }
 
-  async saveDocument(file: File, folder: string): Promise<string> {
+  async saveDocument(file: PreparedUpload, folder: string): Promise<string> {
+    // Outside `public/`: an ID document must never be served by filename
+    // (Phase 8). `/api/documents/<path>` checks who is asking and streams it.
     const dir = path.join(UPLOAD_DIR, folder);
     fs.mkdirSync(dir, { recursive: true });
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const fileName = `${Date.now()}-${safeName}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-    fs.writeFileSync(path.join(dir, fileName), buffer);
-    return `/uploads/${folder}/${fileName}`;
+    fs.writeFileSync(path.join(dir, file.name), Buffer.from(file.bytes));
+    return `${folder}/${file.name}`;
+  }
+
+  /** The mock serves its own files, so the "signed link" is the route itself. */
+  async documentUrl(storedPath: string, _seconds: number): Promise<string | null> {
+    void _seconds;
+    const onDisk = path.join(UPLOAD_DIR, storedPath);
+    return fs.existsSync(/*turbopackIgnore: true*/ onDisk) ? `/api/documents/${storedPath}` : null;
+  }
+
+  async findDocumentOwner(storedPath: string): Promise<{ bookingId: string } | null> {
+    const db = loadDb();
+    const guest = db.booking_guests.find((g) => g.id_document_url === storedPath);
+    if (guest) return { bookingId: guest.booking_id };
+    const booking = db.bookings.find(
+      (b) => b.alumni_id_url === storedPath || b.debit_document_url === storedPath
+    );
+    return booking ? { bookingId: booking.id } : null;
+  }
+
+  async deleteDocument(storedPath: string): Promise<void> {
+    const onDisk = path.join(UPLOAD_DIR, storedPath);
+    try {
+      fs.rmSync(/*turbopackIgnore: true*/ onDisk, { force: true });
+    } catch {
+      // Already gone; nothing to do.
+    }
   }
 
   // ---- developer / admin operations ----------------------------------
@@ -1238,6 +1274,41 @@ export class MockStore implements DataStore {
     const db = loadDb();
     db.app_settings = { ...(db.app_settings ?? {}), [key]: value };
     saveDb(db);
+  }
+
+  async purgeGuestIdentities(before: string): Promise<{ bookings: number; documents: string[] }> {
+    const db = loadDb();
+    const over = new Set(
+      db.bookings.filter((b) => b.check_out < before).map((b) => b.id)
+    );
+    const documents: string[] = [];
+    const touched = new Set<string>();
+    for (const guest of db.booking_guests) {
+      if (!over.has(guest.booking_id)) continue;
+      if (guest.id_number === null && guest.passport_number === null && guest.id_document_url === null) continue;
+      if (guest.id_document_url) documents.push(guest.id_document_url);
+      guest.id_number = null;
+      guest.passport_number = null;
+      guest.id_document_url = null;
+      touched.add(guest.booking_id);
+    }
+    for (const booking of db.bookings) {
+      if (!over.has(booking.id) || !booking.alumni_id_url) continue;
+      documents.push(booking.alumni_id_url);
+      booking.alumni_id_url = null;
+      touched.add(booking.id);
+    }
+    if (touched.size > 0) saveDb(db);
+    return { bookings: touched.size, documents };
+  }
+
+  async purgeAudit(days: number): Promise<number> {
+    const db = loadDb();
+    const cutoff = new Date(Date.now() - Math.max(180, days) * 86_400_000).toISOString();
+    const before = (db.security_audit ?? []).length;
+    db.security_audit = (db.security_audit ?? []).filter((e) => e.at >= cutoff);
+    saveDb(db);
+    return before - db.security_audit.length;
   }
 
   // ---- sessions, 2FA and throttles (migration 21) ---------------------

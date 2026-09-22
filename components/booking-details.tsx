@@ -1,3 +1,4 @@
+import { maskIdNumber } from "@/lib/security";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -326,19 +327,19 @@ function GuestTable({ guests }: { guests: BookingGuest[] }) {
                 <TableCell>{g.nationality ? countryName(g.nationality) : "—"}</TableCell>
               )}
               {anyForeign && (
-                <TableCell className="font-mono text-xs">{g.passport_number ?? "—"}</TableCell>
+                <TableCell className="font-mono text-xs">{maskIdNumber(g.passport_number) ?? "—"}</TableCell>
               )}
               <TableCell className="font-mono text-xs">
                 {g.is_infant ? (
                   <span className="font-sans text-muted-foreground">Not required</span>
                 ) : (
-                  (g.id_number ?? "—")
+                  (maskIdNumber(g.id_number) ?? "—")
                 )}
               </TableCell>
               <TableCell>
                 {g.id_document_url ? (
                   <a
-                    href={g.id_document_url}
+                    href={documentHref(g.id_document_url)}
                     target="_blank"
                     rel="noreferrer"
                     className="text-primary underline underline-offset-4"
@@ -366,4 +367,13 @@ function Field({ label, value, block }: { label: string; value: string; block?: 
       <p className="font-medium">{value}</p>
     </div>
   );
+}
+
+/**
+ * Documents are fetched through `/api/documents/…`, which checks who is asking
+ * and signs a five-minute link (Phase 8). Rows written before that stored a
+ * full URL; those are still opened directly.
+ */
+function documentHref(stored: string): string {
+  return /^https?:\/\//.test(stored) || stored.startsWith("/uploads/") ? stored : `/api/documents/${stored}`;
 }

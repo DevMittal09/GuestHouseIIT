@@ -1,6 +1,8 @@
 "use server";
 
 import { blockOverlaps } from "@/lib/operations";
+import { prepareUpload } from "@/lib/uploads";
+import { PRIVACY_NOTICE_VERSION } from "@/lib/security";
 import { revalidatePath } from "next/cache";
 import { canAssignRooms, canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
@@ -63,23 +65,12 @@ export type ActionResult =
   | { ok: true; reference?: string }
   | { ok: false; error: string };
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_FILE_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-
 /** A trimmed text field from the form, or null when it is blank or absent. */
 function readText(formData: FormData, key: string): string | null {
   const value = formData.get(key);
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
-}
-
-function validFile(file: File): string | null {
-  if (file.size === 0) return "Uploaded file is empty";
-  if (file.size > MAX_FILE_BYTES) return `${file.name} exceeds the 5 MB limit`;
-  if (!ALLOWED_FILE_TYPES.includes(file.type))
-    return `${file.name}: only JPG, PNG, WEBP or PDF files are accepted`;
-  return null;
 }
 
 /**
@@ -229,9 +220,9 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         const file = formData.get(`guest_doc_${roomIndex}_${guestIndex}`);
         let documentUrl: string | null = null;
         if (file instanceof File && file.size > 0) {
-          const fileError = validFile(file);
-          if (fileError) return { ok: false, error: fileError };
-          documentUrl = await store.saveDocument(file, "guest-ids");
+          const prepared = await prepareUpload(file);
+          if (!prepared.ok) return { ok: false, error: `Guest ${guestIndex + 1} in Room ${roomIndex + 1}: ${prepared.error}` };
+          documentUrl = await store.saveDocument(prepared.file, "guest-ids");
         } else if (config.guest_fields.id_document === "required" && !infant) {
           return {
             ok: false,
@@ -263,9 +254,9 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     let alumniIdUrl: string | null = null;
     const alumniCard = formData.get("alumni_card");
     if (alumniCard instanceof File && alumniCard.size > 0 && (config.alumni_card !== "hidden" || forAlumnus)) {
-      const fileError = validFile(alumniCard);
-      if (fileError) return { ok: false, error: fileError };
-      alumniIdUrl = await store.saveDocument(alumniCard, "alumni-cards");
+      const prepared = await prepareUpload(alumniCard);
+      if (!prepared.ok) return { ok: false, error: `Alumni ID card: ${prepared.error}` };
+      alumniIdUrl = await store.saveDocument(prepared.file, "alumni-cards");
     } else if (cardRequired) {
       return { ok: false, error: "Alumni ID card upload is mandatory" };
     }
@@ -278,9 +269,9 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       if (!(document instanceof File) || document.size === 0) {
         return { ok: false, error: "Upload the sanction document for the Special Budget" };
       }
-      const fileError = validFile(document);
-      if (fileError) return { ok: false, error: fileError };
-      debitDocumentUrl = await store.saveDocument(document, "debit-documents");
+      const prepared = await prepareUpload(document);
+      if (!prepared.ok) return { ok: false, error: `Sanction document: ${prepared.error}` };
+      debitDocumentUrl = await store.saveDocument(prepared.file, "debit-documents");
     }
 
     // Who approves, if anyone: the route for this role and kind of booking
@@ -332,6 +323,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       meal_preference: payload.meal_preference ?? null,
       meal_guest_count: wantsRooms ? null : payload.meal_guest_count,
       pets_policy_acknowledged: payload.pets_policy_acknowledged,
+      privacy_notice_version: PRIVACY_NOTICE_VERSION,
       alumni_name: forAlumnus ? payload.alumni_name : null,
       alumni_roll_number: forAlumnus ? payload.alumni_roll_number : null,
       alumni_id_url: alumniIdUrl,

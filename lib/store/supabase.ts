@@ -48,6 +48,8 @@ import type { NewTariffInput, Tariff } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import type { NewSessionInput, Session } from "@/lib/sessions";
 import type { NewPrivacyRequest, PrivacyRequest, RateLimitResult, UserMfa } from "@/lib/security";
+import type { PreparedUpload } from "@/lib/uploads";
+import { decryptValue, encryptValue } from "@/lib/crypto";
 import {
   invoiceErrorFrom,
   InvoiceStateError,
@@ -204,6 +206,9 @@ export class SupabaseStore implements DataStore {
         ...derived,
         booking_reference_id: makeReference(),
         pets_policy_acknowledged_at: input.pets_policy_acknowledged ? nowIso : null,
+        // DPDP: which notice was agreed to, and when (Phase 8).
+        privacy_notice_version: input.privacy_notice_version ?? null,
+        privacy_consent_at: input.privacy_notice_version ? nowIso : null,
         created_by: created_by ?? null,
         on_behalf_of_name: on_behalf_of_name ?? null,
         on_behalf_of_email: on_behalf_of_email ?? null,
@@ -232,6 +237,9 @@ export class SupabaseStore implements DataStore {
       const guests = rooms.flatMap((room, index) =>
         room.guests.map((g) => ({
           ...g,
+          // Identity numbers are encrypted at rest (Phase 8); reads decrypt.
+          id_number: encryptValue(g.id_number),
+          passport_number: encryptValue(g.passport_number),
           booking_id: booking.id,
           booking_room_id: byIndex.get(index + 1)!,
         }))
@@ -288,7 +296,12 @@ export class SupabaseStore implements DataStore {
       const assignedRooms = (byBooking.get(r.id) ?? []).sort((a, b) =>
         a.room_number.localeCompare(b.room_number)
       );
-      const guests = r.guests ?? [];
+      // Identity numbers come back encrypted (Phase 8).
+      const guests = (r.guests ?? []).map((g) => ({
+        ...g,
+        id_number: decryptValue(g.id_number),
+        passport_number: decryptValue(g.passport_number),
+      }));
       const cards = [...(r.booking_rooms ?? [])].sort((a, b) => a.room_index - b.room_index);
       const rooms: BookingRoomWithGuests[] = cards.map((card) => ({
         ...card,
@@ -700,20 +713,41 @@ export class SupabaseStore implements DataStore {
     throw error;
   }
 
-  async saveDocument(file: File, folder: string): Promise<string> {
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const filePath = `${folder}/${Date.now()}-${safeName}`;
-    const { error } = await this.db.storage.from("documents").upload(filePath, file, {
-      contentType: file.type,
-    });
-    if (error) throw error;
-    // Private bucket: return a long-lived signed URL. For production, prefer
-    // storing the path and signing on demand.
-    const { data, error: signError } = await this.db.storage
+  async saveDocument(file: PreparedUpload, folder: string): Promise<string> {
+    const filePath = `${folder}/${file.name}`;
+    const { error } = await this.db.storage
       .from("documents")
-      .createSignedUrl(filePath, 60 * 60 * 24 * 365);
-    if (signError) throw signError;
+      .upload(filePath, Buffer.from(file.bytes), { contentType: file.type, upsert: false });
+    if (error) throw error;
+    // The **path** is stored, never a URL: links are signed for five minutes
+    // when someone opens the document (Phase 8). The year-long signed URL this
+    // replaced was, in effect, a permanent public link to an ID card.
+    return filePath;
+  }
+
+  async documentUrl(storedPath: string, seconds: number): Promise<string | null> {
+    const { data, error } = await this.db.storage.from("documents").createSignedUrl(storedPath, seconds);
+    if (error) return null;
     return data.signedUrl;
+  }
+
+  async findDocumentOwner(storedPath: string): Promise<{ bookingId: string } | null> {
+    const { data: guest } = await this.db
+      .from("booking_guests")
+      .select("booking_id")
+      .eq("id_document_url", storedPath)
+      .maybeSingle();
+    if (guest) return { bookingId: guest.booking_id };
+    const { data: booking } = await this.db
+      .from("bookings")
+      .select("id")
+      .or(`alumni_id_url.eq.${storedPath},debit_document_url.eq.${storedPath}`)
+      .maybeSingle();
+    return booking ? { bookingId: booking.id } : null;
+  }
+
+  async deleteDocument(storedPath: string): Promise<void> {
+    await this.db.storage.from("documents").remove([storedPath]);
   }
 
   // ---- developer / admin operations ----------------------------------
@@ -1073,6 +1107,49 @@ export class SupabaseStore implements DataStore {
       .from("app_settings")
       .upsert({ key, value, updated_at: new Date().toISOString() });
     if (error) throw error;
+  }
+
+  async purgeGuestIdentities(before: string): Promise<{ bookings: number; documents: string[] }> {
+    const { data: stays, error } = await this.db
+      .from("bookings")
+      .select("id, alumni_id_url")
+      .lt("check_out", before);
+    if (error) throw error;
+    const ids = (stays ?? []).map((b) => b.id);
+    if (ids.length === 0) return { bookings: 0, documents: [] };
+
+    const { data: guests, error: guestError } = await this.db
+      .from("booking_guests")
+      .select("id, booking_id, id_document_url")
+      .in("booking_id", ids)
+      .or("id_number.not.is.null,passport_number.not.is.null,id_document_url.not.is.null");
+    if (guestError) throw guestError;
+
+    const documents = [
+      ...(guests ?? []).map((g) => g.id_document_url).filter((u): u is string => Boolean(u)),
+      ...(stays ?? []).map((b) => b.alumni_id_url).filter((u): u is string => Boolean(u)),
+    ];
+    const touched = new Set<string>((guests ?? []).map((g) => g.booking_id));
+    if ((guests ?? []).length > 0) {
+      const { error: clearError } = await this.db
+        .from("booking_guests")
+        .update({ id_number: null, passport_number: null, id_document_url: null })
+        .in("id", (guests ?? []).map((g) => g.id));
+      if (clearError) throw clearError;
+    }
+    const withCards = (stays ?? []).filter((b) => b.alumni_id_url).map((b) => b.id);
+    if (withCards.length > 0) {
+      const { error: cardError } = await this.db.from("bookings").update({ alumni_id_url: null }).in("id", withCards);
+      if (cardError) throw cardError;
+      for (const id of withCards) touched.add(id);
+    }
+    return { bookings: touched.size, documents };
+  }
+
+  async purgeAudit(days: number): Promise<number> {
+    const { data, error } = await this.db.rpc("purge_security_audit", { p_keep_days: Math.max(180, days) });
+    if (error) throw error;
+    return Number(data ?? 0);
   }
 
   // ---- sessions, 2FA and throttles (migration 21) ---------------------

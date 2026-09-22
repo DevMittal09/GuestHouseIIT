@@ -370,6 +370,11 @@ export interface Database {
         Args: { p_key: string; p_limit: number; p_window_seconds: number };
         Returns: { allowed: boolean; attempts: number; retry_after: number }[];
       };
+      /** Migration 16: trims the append-only audit log, never below 180 days. */
+      purge_security_audit: {
+        Args: { p_keep_days: number };
+        Returns: number;
+      };
       purge_expired_sessions: {
         Args: Record<string, never>;
         Returns: number;

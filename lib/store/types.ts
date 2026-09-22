@@ -31,6 +31,7 @@ import type { NewProjectInput, Project } from "@/lib/projects";
 import type { NewTariffInput, Tariff } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import type { NewSessionInput, Session } from "@/lib/sessions";
+import type { PreparedUpload } from "@/lib/uploads";
 import type {
   NewPrivacyRequest,
   PrivacyRequest,
@@ -164,7 +165,27 @@ export interface DataStore {
   applyBookingBuffer(minutes: number): Promise<void>;
 
   /** Persist an uploaded document, returning a browser-loadable URL. */
-  saveDocument(file: File, folder: string): Promise<string>;
+  /**
+   * Store an uploaded document, already sniffed, stripped and renamed
+   * (`lib/uploads.ts`). Returns the **path** it was stored at, not a URL: the
+   * link is signed for five minutes when someone opens it (Phase 8).
+   */
+  saveDocument(file: PreparedUpload, folder: string): Promise<string>;
+  /** A short-lived link to a stored document, or null when it is gone. */
+  documentUrl(path: string, seconds: number): Promise<string | null>;
+  /** Which booking a stored document belongs to, for the access check. */
+  findDocumentOwner(path: string): Promise<{ bookingId: string } | null>;
+  /** Forget a stored document (retention, erasure). */
+  deleteDocument(path: string): Promise<void>;
+  /**
+   * Retention (Phase 8): clear the identity fields of stays that ended before
+   * `before`, returning the document paths that went with them so the caller
+   * can delete the files. The booking itself — who stayed, when, what it cost
+   * — is kept: it is the guest house's own record.
+   */
+  purgeGuestIdentities(before: string): Promise<{ bookings: number; documents: string[] }>;
+  /** Trim the security audit log, never below 180 days. Returns rows removed. */
+  purgeAudit(days: number): Promise<number>;
 
   // ---- developer / admin operations ----------------------------------
   createProfile(input: NewProfileInput): Promise<Profile>;

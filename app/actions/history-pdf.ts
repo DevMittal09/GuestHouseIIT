@@ -1,5 +1,6 @@
 "use server";
 
+import { maskIdNumber } from "@/lib/security";
 import { requireUser } from "@/lib/auth";
 import {
   HISTORY_EXPORT_LIMIT,
@@ -125,7 +126,7 @@ function toReportRow(b: BookingWithDetails): ReportRow {
       .map(
         (g) =>
           `${g.name} (${g.nationality ? countryName(g.nationality) : "nationality not recorded"}${
-            g.passport_number ? `, ${g.passport_number}` : ""
+            g.passport_number ? `, ${maskIdNumber(g.passport_number)}` : ""
           })`
       )
       .join("; "),

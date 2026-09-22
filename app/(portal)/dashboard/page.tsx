@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MyBookings, type MyInvoice } from "@/components/my-bookings";
+import { MyData } from "@/components/my-data";
 import { PageHeader } from "@/components/page-header";
 import { getCurrentUser } from "@/lib/auth";
 import { serviceTypesFor } from "@/lib/booking-types";
@@ -47,6 +48,10 @@ export default async function DashboardPage() {
   // developer console can move.
   const mealHouseNames = mealHouses.map((g) => g.name).join(" / ");
 
+  // An erasure request already waiting on the office, if any.
+  const openPrivacyRequest =
+    (await store.listPrivacyRequests({ userId: user.id }).catch(() => [])).find((r) => r.status === "open") ?? null;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -69,6 +74,8 @@ export default async function DashboardPage() {
         Track your guest house requests through the approval pipeline.
       </PageHeader>
       <MyBookings bookings={bookings} invoices={invoices} />
+      {/* DPDP (Phase 8): take a copy, or ask the office to erase it. */}
+      <MyData openRequest={openPrivacyRequest} />
       {/* The way out when the form will not do what the requester needs — a
           stay over the 14-night cap, an exception, a booking taken at the
           desk. Values live in `lib/policy.ts`. */}
