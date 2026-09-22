@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateConsole } from "@/lib/revalidate";
 import { canUseConsoleSection } from "@/lib/access";
 import { isAdminUnlocked } from "@/lib/admin-lock";
 import { requireUser } from "@/lib/auth";
@@ -123,7 +123,7 @@ export async function saveMailTemplateAction(input: MailTemplateInput): Promise<
       cc,
       updated_at: new Date().toISOString(),
     });
-    revalidatePath("/", "layout");
+    revalidateConsole();
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -136,7 +136,7 @@ export async function resetMailTemplateAction(key: string): Promise<ActionResult
     await requireMailConsole();
     if (!(key in MAIL_EVENT_LABELS)) return { ok: false, error: "Unknown email type" };
     await getStore().resetMailTemplate(key as MailEventKey);
-    revalidatePath("/", "layout");
+    revalidateConsole();
     return { ok: true };
   } catch (e) {
     return fail(e);

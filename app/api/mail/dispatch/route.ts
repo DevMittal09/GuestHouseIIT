@@ -60,7 +60,11 @@ function failed(error: unknown): Response {
 }
 
 
+/** As for the daily cron: GET only for Vercel Cron, which cannot POST. */
 export async function GET(request: Request) {
+  if (request.headers.get("x-vercel-cron") === null) {
+    return new Response("Use POST", { status: 405, headers: { Allow: "POST" } });
+  }
   return handle(request);
 }
 

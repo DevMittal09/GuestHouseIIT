@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateConsole } from "@/lib/revalidate";
 import { recordAudit } from "@/lib/audit-server";
 import { getSessionUser, mfaRequiredFor, mfaState } from "@/lib/auth";
 import { decryptValue, encryptValue, hashSecret, verifySecret } from "@/lib/crypto";
@@ -90,7 +90,7 @@ export async function confirmMfaEnrolment(code: string): Promise<
     });
     await rotateSession(session, { verified: true });
     await recordAudit(user, "twofa.enrolled", user.email, {});
-    revalidatePath("/", "layout");
+    revalidateConsole();
     return { ok: true, recoveryCodes: plain };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Could not confirm enrolment" };
@@ -132,7 +132,7 @@ export async function verifyMfa(code: string): Promise<ActionResult> {
     // Rotate: the session has just gained privilege.
     await rotateSession(session, { verified: true });
     if (step !== null) await recordAudit(user, "twofa.verified", user.email, {});
-    revalidatePath("/", "layout");
+    revalidateConsole();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Could not verify the code" };
@@ -152,7 +152,7 @@ export async function disableMfa(code: string): Promise<ActionResult> {
     }
     await getStore().deleteUserMfa(user.id);
     await recordAudit(user, "twofa.reset", user.email, { by: "self" });
-    revalidatePath("/", "layout");
+    revalidateConsole();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Could not turn it off" };
@@ -209,7 +209,7 @@ export async function resetMfaFor(userId: string): Promise<ActionResult> {
     await getStore().deleteUserMfa(userId);
     await getStore().revokeUserSessions(userId);
     await recordAudit(user, "twofa.reset", target.email, { by: "developer" });
-    revalidatePath("/", "layout");
+    revalidateConsole();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Could not reset it" };

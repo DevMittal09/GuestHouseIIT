@@ -48,6 +48,7 @@ export function ManagerQueue({
   current,
   upcoming,
   overdue,
+  toBill,
   checkoutsToday,
   cancellationRequests,
   rooms,
@@ -67,6 +68,8 @@ export function ManagerQueue({
   upcoming: BookingWithDetails[];
   /** Past their check-out but never marked Vacated — still need closing off. */
   overdue: BookingWithDetails[];
+  /** Checked out, invoice not yet paid. The desk's list of bills to settle. */
+  toBill: BookingWithDetails[];
   /** Rooms due back today, earliest first. */
   checkoutsToday: BookingWithDetails[];
   cancellationRequests: BookingWithDetails[];
@@ -203,6 +206,24 @@ export function ManagerQueue({
             still holding their rooms. Close them off to release the rooms.
           </p>
           <StaysTable bookings={overdue} showOverdue isManager />
+        </section>
+      )}
+
+      {/* Checked out and still owing. Without this the bill vanished with the
+          guest: a Vacated stay appeared on no screen the manager has. */}
+      {toBill.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold">
+            Checked out — to bill{" "}
+            <Badge variant="secondary" className="align-middle">
+              {toBill.length}
+            </Badge>
+          </h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            These guests have left and their invoice is not yet paid. Issue it, or record the
+            payment against one already issued — they leave this list once it is settled.
+          </p>
+          <StaysTable bookings={toBill} isManager />
         </section>
       )}
 

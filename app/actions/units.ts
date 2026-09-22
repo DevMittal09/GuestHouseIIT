@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateEverything } from "@/lib/revalidate";
 import { z } from "zod";
 import { canUseConsoleSection } from "@/lib/access";
 import { isAdminUnlocked } from "@/lib/admin-lock";
@@ -40,7 +40,7 @@ function fail(e: unknown): ActionResult {
 }
 
 function done(): ActionResult {
-  revalidatePath("/", "layout");
+  revalidateEverything();
   return { ok: true };
 }
 

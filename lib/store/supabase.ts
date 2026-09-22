@@ -292,10 +292,37 @@ export class SupabaseStore implements DataStore {
       if (hold.rooms) roomsById.set(hold.rooms.id, hold.rooms);
     }
 
+    // A finished stay holds nothing, but it still has to be invoiced, so the
+    // rooms its cards were allocated are fetched too — one query for all of
+    // the rows, and only for the ids the holds did not already bring.
+    const cardRoomIds = [
+      ...new Set(
+        rows
+          .flatMap((r) => r.booking_rooms ?? [])
+          .map((c) => c.assigned_room_id)
+          .filter((id): id is string => Boolean(id) && !roomsById.has(id!))
+      ),
+    ];
+    if (cardRoomIds.length > 0) {
+      const { data: cardRooms, error: cardRoomError } = await this.db
+        .from("rooms")
+        .select("*")
+        .in("id", cardRoomIds);
+      if (cardRoomError) throw cardRoomError;
+      for (const room of cardRooms ?? []) roomsById.set(room.id, room);
+    }
+
     return rows.map((r) => {
-      const assignedRooms = (byBooking.get(r.id) ?? []).sort((a, b) =>
+      const held = (byBooking.get(r.id) ?? []).sort((a, b) =>
         a.room_number.localeCompare(b.room_number)
       );
+      const assignedRooms =
+        held.length > 0 || r.status !== "VACATED"
+          ? held
+          : (r.booking_rooms ?? [])
+              .map((c) => (c.assigned_room_id ? roomsById.get(c.assigned_room_id) : null))
+              .filter((room): room is Room => Boolean(room))
+              .sort((a, b) => a.room_number.localeCompare(b.room_number));
       // Identity numbers come back encrypted (Phase 8).
       const guests = (r.guests ?? []).map((g) => ({
         ...g,
@@ -417,8 +444,19 @@ export class SupabaseStore implements DataStore {
     if (criteria.userId) query = query.eq("user_id", criteria.userId);
     if (criteria.checkInFrom) query = query.gte("check_in", criteria.checkInFrom);
     if (criteria.checkInTo) query = query.lte("check_in", criteria.checkInTo);
-
-    const { data, error } = await query;
+    // The keyword goes to Postgres first (migration 22's `search_text`), so a
+    // large archive is narrowed by the index rather than by scanning a
+    // thousand rows in JavaScript. The matcher still runs afterwards: it also
+    // looks at guests, rooms and logs, which the vector deliberately omits.
+    const keyword = criteria.query?.trim();
+    let { data, error } = keyword
+      ? await query.textSearch("search_text", keyword, { type: "websearch", config: "simple" })
+      : await query;
+    // A keyword that matches nothing on the booking itself may still match a
+    // guest or a room number, so fall back to the unfiltered scan.
+    if (!error && keyword && (data ?? []).length === 0) {
+      ({ data, error } = await query);
+    }
     if (error) throw error;
     const scanned = data as unknown as BookingRow[];
     const candidates = await this.hydrate(scanned);
@@ -465,7 +503,11 @@ export class SupabaseStore implements DataStore {
         .delete()
         .eq("booking_id", id);
       if (releaseError) throw releaseError;
-      await this.assignRoomsToCards(id, []);
+      // The room *cards* are not a hold: they record which room the party was
+      // actually given, and the invoice is priced from that. A stay that
+      // happened keeps them; one that was cancelled, rejected or never
+      // arrived gives them up with the rooms.
+      if (update.status !== "VACATED") await this.assignRoomsToCards(id, []);
     }
 
     const { error: logError } = await this.db.from("booking_logs").insert({

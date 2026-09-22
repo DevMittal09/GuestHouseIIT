@@ -31,25 +31,40 @@ npm install
 npm run dev          # http://localhost:3000
 npm run build        # tsc typecheck runs here — always run before finishing
 npm run lint         # must stay clean
+npm run typecheck    # tsc --noEmit, when you want types without a build
 npm test             # Vitest (tests/), must stay clean
+npm run test:e2e     # Playwright journeys (e2e/) against a production build
 ```
 
 **`npm test`** runs the Vitest suite in `tests/`. Store tests use the mock
 store on a throwaway file (`MOCK_DB_PATH`, see `tests/helpers.ts`) with
 `TZ=UTC`; they never touch `.local-db.json`. Add a test for any rule you change.
-Beyond the suite, behaviour is verified these ways:
+
+**`npm run test:e2e`** builds nothing itself: run `npm run build` first, with
+`NEXT_PUBLIC_SUPABASE_URL=` empty so the client bundle carries no project URL.
+Playwright then starts a **production** server on the mock store, on
+`./.e2e-db.json`, and signs in through the LDAP form as each role. Lint, types,
+unit tests and the journeys all run in CI (`.github/workflows/ci.yml`) with no
+secrets at all.
+
+Beyond the suites, behaviour is verified these ways:
 
 1. **Ad-hoc TypeScript tests** run with
    `npx tsx --tsconfig ./tsconfig.json <file>.ts` (write them outside the repo,
    e.g. a temp dir; `@/` path aliases resolve fine). Good for store/workflow/pure
    logic.
-2. **HTTP smoke tests** against a running dev server. Auth is a cookie holding a
-   profile id, so you can impersonate anyone:
+2. **HTTP smoke tests** against a running dev server. A session is a row and
+   the cookie is an opaque token, so a forged cookie gets nothing. In
+   development with `DEV_LOGIN=true` the old persona cookie is still honoured,
+   which is the quickest way to check a page:
    ```bash
+   DEV_LOGIN=true npm run dev
    curl -s -b "gh_mock_user=<profile-id>" http://localhost:3000/book
    ```
    Use this to check a page renders (200) and that scoping works (e.g. the Malhar
-   warden sees only Malhar students' requests).
+   warden sees only Malhar students' requests). For a whole journey — approvals,
+   the desk, an invoice — run `npm run test:e2e` instead: it signs in through
+   the form as each role against a production build on a throwaway database.
 
    `.env.local` currently points at the **hosted** Supabase project, so a plain
    dev server writes there. For anything that creates or changes data, start it
@@ -104,11 +119,13 @@ as `assertNoClash`.
   **service-role key**. Never commit it, never log it, never send it anywhere.
   `.env.example` documents the variables.
 
-## Sign-in: LDAP + a mocked Google door — one session swap point
+## Sign-in: LDAP and Google, one session module
 
-`lib/auth.ts` `getCurrentUser()` reads the `gh_mock_user` cookie and looks up a
-profile. Two doors set it (`app/actions/auth.ts`), and both are on the card at
-`/sign-in`, which is also embedded in the public `/book-room` and `/book-meal`:
+`lib/auth.ts` `getCurrentUser()` reads the session cookie — an opaque token
+whose SHA-256 keys a row in `sessions` (`lib/sessions.ts`, Phase 8). It is the
+only reader. Two doors open a session (`app/actions/auth.ts`), and both are on
+the card at `/sign-in`, which is also embedded in the public `/book-room` and
+`/book-meal`:
 
 - **LDAP username + password** → `signInWithLdap()`. The *directory* checks the
   password (`lib/ldap/`: `getDirectory()` returns the real `LdapDirectory`
@@ -433,8 +450,8 @@ Everything" toggle and the "My decision" column are shown.
   IST even when the server is in UTC. Two presets can resolve to the same range
   (31 Jan: "Last 30 days" and "This month"), so `matchDatePreset` returns the
   first in display order.
-- `/history` is excluded from the 5 s polling (`NO_POLL_PREFIXES` in
-  `components/auto-refresh.tsx`).
+- `/history` is excluded from automatic refreshing (`NO_REFRESH_PREFIXES` in
+  `components/live-updates.tsx`).
 
 ## Room allocation — occupancy is a DB constraint
 

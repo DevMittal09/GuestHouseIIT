@@ -155,18 +155,25 @@ what is still waiting on the office: [10-ui-design.md](10-ui-design.md).
   Section will need to add a guest house, change who is a warden, or make a field
   optional without a developer. That drove the configurable form system and the
   admin console, which are now the most distinctive parts of the project.
-- **Authentication was deliberately deferred.** See
+- **Authentication was deliberately deferred, then built.** See
   [06-decisions.md](06-decisions.md) — the app used a mock persona picker with a
   single, well-marked swap point. Since 19 Sep 2026 sign-in is **LDAP**, against
-  dummy accounts until the institute directory is connected (`LDAP_URL`), with a
-  "Sign in with Google" button that opens the persona picker as a placeholder.
-  See [11-ldap-accounts.md](11-ldap-accounts.md).
+  dummy accounts until the institute directory is connected (`LDAP_URL`), and
+  since Phase 8 (22 Sep 2026) the session is a row with an opaque cookie and
+  "Sign in with Google" is the real OpenID Connect flow. See
+  [11-ldap-accounts.md](11-ldap-accounts.md) and
+  [14-security.md](14-security.md).
 - **Email notifications are built; SMS is not.** `lib/mail/` covers every
   workflow transition plus daily digests, reminders and escalations. SMS would
   be a second `Mailer`-shaped seam and has not been asked for.
 
 ## Status
 
-Feature-complete for the specified workflows and running against a hosted
-Supabase project. **Not yet deployed** and **not yet using real authentication** —
-those are the two gates before production use.
+Feature-complete for the specified workflows, taken through a ten-phase
+production-readiness programme in September 2026 (Settings, mail addressing,
+the turnaround buffer, HOD approval and debitable heads, invoices, dining,
+operational states, security, performance and tests, documentation), and
+running against a hosted Supabase project. **Not yet deployed.** Two gates
+remain: pointing sign-in at the institute's real LDAP directory, and moving
+request-scoped database reads off the service-role key
+([08-roadmap.md](08-roadmap.md) §1).

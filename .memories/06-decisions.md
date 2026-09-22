@@ -1676,3 +1676,97 @@ stay, and adds:
   24). Node is pinned by `.nvmrc` and `engines`. Dependabot groups Next's
   packages together; gitleaks has rules for the service-role key, the mail
   password, the cron secret and the encryption key.
+
+## Phase 9: performance and tests (22–23 Sep 2026)
+
+- **Caching the data, not the page.** `export const revalidate` was written on
+  the five public pages first and did nothing: the `(site)` layout greets
+  whoever is signed in, so it reads the session cookie and every segment under
+  it is dynamic. The answer is to cache what the pages *say* —
+  `lib/site-data.ts` holds the guest houses and the policy summary under the
+  `site` tag for half an hour, and `revalidateEverything()` expires that tag
+  when a Setting, a guest house or a room changes. `/guidelines` went from
+  ~68 ms to ~27 ms warm (measured; see
+  [07-troubleshooting.md](07-troubleshooting.md)).
+- **One subscription instead of a render every five seconds.**
+  `components/live-updates.tsx` replaces `auto-refresh.tsx`: with Supabase it
+  subscribes to `postgres_changes` on bookings, room holds, blocks and
+  invoices and re-fetches on a 400 ms debounce; without it (the mock store) it
+  polls every 30 seconds. It also refreshes when the tab comes back to the
+  front, and never refreshes the pages that fetch their own data (`/history`,
+  `/availability`, the mail and audit consoles). A reception screen open for a
+  shift made ~5,800 requests; now it makes one.
+- **Revalidation names what changed.** Twenty-five `revalidatePath("/",
+  "layout")` calls threw away the whole application's cache because one
+  booking moved. `lib/revalidate.ts` has three lists — booking views, console
+  views, everything — and the call sites say which they mean.
+- **Search is Postgres's job** (migration 22). `bookings.search_text` is a
+  generated tsvector (reference and roll number weighted A, purpose and names
+  B) with a GIN index, and `SupabaseStore.searchBookings` pushes the keyword
+  down with `websearch` before JavaScript ranks what comes back, falling back
+  to the unfiltered scan when the keyword matches nothing. **Guests' names are
+  deliberately not in the vector**: they are personal data and the column would
+  be reachable by anything that can query the table; the JavaScript matcher
+  still covers them for the staff allowed to see them.
+- **End-to-end tests sign in like a person.** `playwright.config.ts` builds and
+  starts a **production** server against the mock store on a throwaway database
+  file (`MOCK_DB_PATH=./.e2e-db.json`), so a test run cannot touch a
+  developer's `.local-db.json`, let alone the hosted project. The tests use the
+  LDAP form and the dummy directory, because the developer sign-in door does
+  not exist in a production build — which is exactly the build they run
+  against. Fields are addressed by their `name` attribute (`rooms.0.guests.0.age`),
+  the key the payload is built from, rather than by label text.
+- **Two defects the journeys found**, both invisible to the unit tests:
+  - **A checked-out stay could not be invoiced.** Marking a guest Vacated
+    released the room holds *and* cleared the room cards, and the manager
+    console listed no Vacated bookings at all — so the bill vanished with the
+    guest, while `invoiceBlocker` says an invoice is issued "at check-out".
+    Holds are still the sole authority on occupancy, but the cards now survive
+    a check-out (they are the record of which room the party was given, which
+    is what the invoice is priced from) and are dropped only when the stay
+    never happened — cancelled, rejected, no-show. The manager console grew a
+    **"Checked out — to bill"** section: stays that have left and whose invoice
+    is not yet paid, for the last 30 days.
+  - **A meals-only booking could not be submitted.** One guest house serves
+    meals, so the guest-house select was locked to a single option — and a
+    locked select never fires a change, so the field stayed empty and the
+    schema refused the booking. The form now sets the value when there is only
+    one to set.
+- **CI is offline by construction** (`.github/workflows/ci.yml`): lint,
+  typecheck, unit tests, then a production build and the Playwright journeys,
+  all with `NEXT_PUBLIC_SUPABASE_URL` empty and `MAIL_DRY_RUN` on. **No secret
+  is configured for CI and none should be** — nothing there may be able to
+  reach the hosted project. The build in the e2e job clears the Supabase
+  variables because `NEXT_PUBLIC_*` values are inlined at build time.
+
+## Phase 10: documentation (23 Sep 2026)
+
+- **Two new pages rather than more sections in old ones.**
+  [13-workflows.md](13-workflows.md) is what each role does and where a request
+  goes — every pipeline as a Mermaid diagram, the states a booking can be in,
+  and what happens without anybody pressing anything.
+  [14-security.md](14-security.md) is the operational view of Phase 8: what is
+  protected, by what, where each secret lives, and what to do about an
+  incident. The reasoning stays here in the decision log; those pages say what
+  is true now.
+- **A production runbook, not a deployment checklist**
+  ([05-deployment.md](05-deployment.md#production-runbook)): every environment
+  variable with an example and what breaks without it, how to rotate each
+  secret (including the one that needs care —
+  `ID_ENCRYPTION_KEY`/`ID_ENCRYPTION_KEYS_OLD`), a **backup restore drill**
+  because a backup nobody has restored is not a backup, CERT-In's **6-hour**
+  reporting window and the DPDP obligations beside it, what is retained for how
+  long, and the branch-protection rules with the two CI checks to require.
+- **The public guidelines gained a "Charges and settlement" card**, built like
+  every other card from `lib/` — the day basis and grace hours from the invoice
+  rules, and the plain statement that **the tariff includes GST**, so the total
+  is the rate the office quoted. A visitor should not have to ask the desk how
+  the bill is worked out.
+- **Stale statements were hunted, not just added to.** The docs still said
+  authentication was mocked, that the session was an unsigned cookie holding a
+  profile id, that Google sign-in was a placeholder, that there were eight
+  migrations, that queue pages polled every five seconds, and that there was no
+  test framework. Each of those was true when written and is not now; every one
+  was corrected in place, with the dated entries in this log left as they are —
+  a decision log is a record of what was decided when, not a description of the
+  present.

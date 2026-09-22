@@ -1,9 +1,9 @@
 "use server";
 
+import { revalidateBookings } from "@/lib/revalidate";
 import { blockOverlaps } from "@/lib/operations";
 import { prepareUpload } from "@/lib/uploads";
 import { PRIVACY_NOTICE_VERSION } from "@/lib/security";
-import { revalidatePath } from "next/cache";
 import { canAssignRooms, canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { aadhaarDigits, bookingPayloadSchema } from "@/lib/booking-schema";
@@ -349,7 +349,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     // and a mail failure must not fail a booking that is already stored.
     await notifyBookingSubmitted(booking.id);
 
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true, reference: booking.booking_reference_id };
   } catch (e) {
     console.error("createBooking failed", e);
@@ -433,7 +433,7 @@ export async function reviewBooking(
       // just signed off, which is what the requester's mail names.
       await notifyTierApproved(bookingId, user, booking.status);
     }
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     console.error("reviewBooking failed", e);
@@ -599,7 +599,7 @@ export async function allocateRooms(
     // open the portal to learn their room numbers.
     await notifyRoomsAllocated(bookingId, user);
 
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     if (e instanceof RoomClashError) return { ok: false, error: e.message };
@@ -659,7 +659,7 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
     // The manager decides; whoever was reviewing it is told at the same
     // moment, for information only — see `notifyCancellationRequested`.
     await notifyCancellationRequested(bookingId, reason.trim());
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     console.error("cancelBooking failed", e);
@@ -733,7 +733,7 @@ export async function updateBookingLifecycle(
         remarks: remarkMap[targetStatus] ?? `Status updated to ${targetStatus}`,
       }
     );
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     console.error("updateBookingLifecycle failed", e);
@@ -765,7 +765,7 @@ export async function approveCancellation(bookingId: string): Promise<ActionResu
     );
     await notifyCancellationDecided(bookingId, "approved", user, booking.rejection_reason);
 
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     console.error("approveCancellation failed", e);
@@ -806,7 +806,7 @@ export async function rejectCancellation(bookingId: string, reason: string): Pro
     // way of knowing otherwise — they asked to cancel and nothing changed.
     await notifyCancellationDecided(bookingId, "rejected", user, reason.trim());
 
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     console.error("rejectCancellation failed", e);

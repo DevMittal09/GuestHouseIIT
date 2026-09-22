@@ -79,10 +79,21 @@ function failed(error: unknown): Response {
 
 
 /**
- * POST only (Phase 8). A GET can be triggered by a link, a prefetch or a
- * crawler, and its URL — secret and all — ends up in browser history and
- * access logs.
+ * POST for anything that can choose its method (Phase 8): a GET can be
+ * triggered by a link, a prefetch or a crawler.
+ *
+ * Vercel Cron, however, only issues GET. So a GET is accepted **only** when it
+ * carries Vercel's own `x-vercel-cron` header as well as the bearer secret,
+ * which together cannot be produced by a browser following a link. The secret
+ * is never read from the query string.
  */
+export async function GET(request: Request) {
+  if (request.headers.get("x-vercel-cron") === null) {
+    return new Response("Use POST", { status: 405, headers: { Allow: "POST" } });
+  }
+  return handle(request);
+}
+
 export async function POST(request: Request) {
   return handle(request);
 }

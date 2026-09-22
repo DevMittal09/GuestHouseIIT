@@ -5,6 +5,15 @@ import { GUEST_HOUSE_CONTACT, GUEST_HOUSE_MAP } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Contact us" };
 
+/**
+ * The page itself is rendered per request — the header greets whoever is
+ * signed in — but everything it *says* comes from `lib/site-data.ts`, which
+ * holds its answers for half an hour under the `site` cache tag, so a visitor
+ * does not wait for a database round trip to read the guidelines (Phase 9).
+ * `revalidateEverything()` drops that tag the moment a setting or a guest
+ * house changes, so it is never stale in practice.
+ */
+
 const LINK = "font-semibold text-navy underline underline-offset-2 hover:text-gold-dark";
 
 export default function ContactPage() {

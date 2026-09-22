@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   useFieldArray,
@@ -347,6 +347,16 @@ export function BookingForm({
     // that serves no meals would be offering a booking nobody can fulfil.
     .filter((g) => !mealsOnly || g.serves_meals);
   const guestHouseLocked = offeredGuestHouses.length === 1;
+  // One guest house is not a choice, so the select is locked — and a locked
+  // select never fires a change, which left the field empty and the form
+  // unsubmittable. It happens on every meals-only booking: only the kitchens
+  // are offered, and there is one. Set it here instead of asking.
+  const onlyGuestHouseId = guestHouseLocked ? offeredGuestHouses[0].id : null;
+  useEffect(() => {
+    if (onlyGuestHouseId && selectedGuestHouseId !== onlyGuestHouseId) {
+      setValue("guest_house_id", onlyGuestHouseId, { shouldValidate: false });
+    }
+  }, [onlyGuestHouseId, selectedGuestHouseId, setValue]);
   const overridingHouse =
     canOverrideHouse &&
     forAlumnus &&

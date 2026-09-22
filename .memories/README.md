@@ -22,6 +22,8 @@ one.
 | [10-ui-design.md](10-ui-design.md) | The public website, the design tokens, sign-in pages, photos and map — read before any visual change |
 | [11-ldap-accounts.md](11-ldap-accounts.md) | **Dummy LDAP logins for every persona**, how LDAP sign-in works, and how to switch to the institute's real LDAP accounts |
 | [12-academic-records.md](12-academic-records.md) | **The Requester details card**: the fields the academic database supplies for each kind of account, the Copy-to rules, the dummy records, and **how to connect the real academic database** |
+| [13-workflows.md](13-workflows.md) | **What each role does and where a request goes** — every pipeline drawn out, the states a booking can be in, and what happens automatically |
+| [14-security.md](14-security.md) | What protects the portal, where each control lives, secret rotation, and what to do about an incident |
 
 **Also in the repo root:** `AGENTS.md` is the terse operational brief that agent
 tools load automatically. It is the hard rules; these files are the reasoning.
@@ -39,24 +41,33 @@ rooms on a visual grid, with a **caretaker** working the reception desk. A
 **developer** superadmin can reconfigure users, guest houses, rooms and even the
 booking forms from the UI.
 
-**Status:** feature-complete for the specified workflows. **Not deployed** and
-**not using real authentication** — those are the two gates before production.
+**Status:** feature-complete for the specified workflows, and taken through a
+ten-phase production-readiness programme in September 2026 — Settings, mail
+addressing, the turnaround buffer, HOD approval and debitable heads, invoices,
+dining, operational states, security, performance and tests, documentation
+(see [06-decisions.md](06-decisions.md), "Phase 1" onwards). **Not yet
+deployed.** Two gates remain: pointing sign-in at the institute's real LDAP
+directory, and moving request-scoped database reads off the service-role key so
+RLS becomes the boundary ([08-roadmap.md](08-roadmap.md) §1).
 
 ## 2. Stack
 
 Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind v4 ·
 shadcn/ui (radix base, "nova" preset) · zod 4 · react-hook-form · Supabase
-(optional) · date-fns · jsPDF · nodemailer · Vitest (`npm test`, see §9).
+(optional) · date-fns · jsPDF · nodemailer · Vitest (`npm test`) · Playwright
+(`npm run test:e2e`) — see §9.
 
 ```
 app/
   (site)/                  PUBLIC website: / (home), book-room, book-meal,
-                           guidelines, gallery, contact, sign-in, mock-login
+                           guidelines, gallery, contact, privacy, sign-in,
+                           mock-login (developer door, DEV_LOGIN only)
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
     dashboard/             requester's own bookings
     book/                  the booking form
-    warden/  fa/  iar/     reviewer queues (one component, three scopings)
+    warden/ fa/ hod/ iar/  reviewer queues (one component, four scopings)
+    caretaker/             the reception desk
     availability/          read-only room availability grid (every role)
     history/               booking history (requesters) / approval log (all roles)
     manager/               room allocation console
@@ -90,34 +101,38 @@ keys are added, and older bookings gain the fields later migrations introduced
 (`has_infant`, `meals`, `booking_type`, and `is_infant` on guest rows), so a
 new feature never requires deleting the database.
 
-### 3.2 Auth is mocked, with exactly one swap point
+### 3.2 Authentication has exactly one swap point
 
 There is one exception worth knowing: `/admin` sits behind a **console
 password** (`lib/admin-lock.ts`, default `0000`, changeable from Console
 Access). It is enforced inside `requireDeveloper()`, so it guards the admin
-*actions* rather than just hiding the UI. It is a speed bump for demos, **not**
-authentication — identity is still a persona cookie, so anyone can claim to be
-the developer. See §6.
+*actions* rather than just hiding the UI. Since Phase 8 it sits on top of real
+authentication — a session row, and a second factor for developers — rather
+than being the only thing in the way. See §6.
 
-`lib/auth.ts` `getCurrentUser()` reads the `gh_mock_user` cookie (a profile id).
-Since 19 Sep 2026 the sign-in card (`/sign-in`, and the two public booking entry
-points `/book-room` and `/book-meal`) has two doors onto that cookie:
+`lib/auth.ts` `getCurrentUser()` reads the session cookie, an opaque token
+whose SHA-256 is the row's key (`lib/sessions.ts`). The sign-in card
+(`/sign-in`, and the two public booking entry points `/book-room` and
+`/book-meal`) has two doors onto it:
 
 - **LDAP username + password** (`signInWithLdap`). The directory
   (`lib/ldap/`) checks the password. It is the real server when `LDAP_URL` is
   set, and dummy accounts otherwise. `profiles.ldap_uid` then picks the portal
   account.
-- **"Sign in with Google"**, which for now opens the persona picker at
-  `/mock-login`. It is a placeholder for Google OAuth and the one-click role
-  switcher for development.
+- **"Sign in with Google"** — the real OpenID Connect flow (`lib/oidc.ts`:
+  state, PKCE, the id_token verified against Google's JWKS, institute domains
+  only) when `GOOGLE_CLIENT_ID` is set. Where it is not, and only where the
+  developer doors are switched on (`DEV_LOGIN=true`, never in production), the
+  button opens the one-click persona picker at `/mock-login` instead.
 
 The dummy logins and the path to the real LDAP accounts (migration 12, bulk
 import, `LDAP_URL`) are in [11-ldap-accounts.md](11-ldap-accounts.md).
 
 **`/` is the public website, not a sign-in page** — portal guards redirect to
 `SIGN_IN_PATH` (`/sign-in`). **No other module contains auth logic.** The
-cookie is still unsigned, so a signed or server-side session plus real Google
-OAuth is the remaining production migration.
+session is a row in `sessions` (migration 21) keyed by the SHA-256 of the
+cookie's token: 30 minutes idle, 12 hours absolute, revocable, rotated when a
+session gains privilege. A forged cookie gets nothing.
 
 Authorization is separate and always server-side: every server action re-checks
 the caller (`requireUser`, role checks, `canReview`, `requireDeveloper`). The UI
@@ -411,8 +426,10 @@ can only narrow, never widen. Do not reorder that spread.
 | `/api/mail/dispatch` | cron (`CRON_SECRET`) | Drains the email outbox |
 | `/api/mail/cron` | cron (`CRON_SECRET`) | Daily digests, check-in reminders, the day-wise guest house log, 48-hour escalations |
 
-Queue pages poll every 5 s (`components/auto-refresh.tsx`); `/history`,
-`/availability` and `/admin/mail` are excluded via `NO_POLL_PREFIXES` — each
+Queue pages update themselves through `components/live-updates.tsx`: a Supabase
+realtime subscription on bookings, room holds, blocks and invoices, or a
+30-second poll where there is no Supabase. `/history`, `/availability`,
+`/admin/mail` and `/admin/audit` are excluded via `NO_REFRESH_PREFIXES` — each
 fetches client-side and has its own Refresh button.
 
 **Email.** Every workflow transition sends mail, queued through `email_outbox`
@@ -523,15 +540,23 @@ booking on behalf of Vikram Iyer, sitting in the IAR Office's queue.
 
 ## 9. How to verify a change
 
-`npm test` runs the Vitest suite (`tests/`, mock store on a throwaway file, `TZ=UTC`). Beyond it, these are proven to work:
+`npm test` runs the Vitest suite (`tests/`, mock store on a throwaway file,
+`TZ=UTC`), `npm run typecheck` the types, and **`npm run test:e2e` the
+Playwright journeys** — a production build on the mock store, on a throwaway
+database file, signed into through the form as each role (`e2e/`). All three,
+plus `npm run lint`, run in CI on every push and pull request
+(`.github/workflows/ci.yml`). Beyond them, these are proven to work:
 
 1. **Ad-hoc TypeScript tests** — `npx tsx --tsconfig ./tsconfig.json <file>.ts`.
    Note that `@/` aliases resolve but **bare package imports only resolve from
    inside the repo**, so put the file in the repo root and delete it after.
    Top-level `await` is not supported (CJS output) — wrap in `async function
    main()`.
-2. **HTTP smoke tests** against a running dev server. Auth is a cookie holding a
-   profile id, so you can impersonate anyone:
+2. **HTTP smoke tests** against a running dev server. A session is a row and
+   the cookie is opaque, so sign in through the form and keep the jar
+   (`curl -c jar.txt -b jar.txt`) — or, for anything that needs a signed-in
+   journey, run `npm run test:e2e`, which does it as each role. With
+   `DEV_LOGIN=true` the old persona cookie still works in development:
    `curl -s -b "gh_mock_user=gh-manager" http://localhost:3000/manager`
 3. **Client-rendered UI** — headless Chrome driven over the DevTools protocol,
    no packages needed; **migrations** — a throwaway `postgres:16-alpine`

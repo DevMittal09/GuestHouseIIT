@@ -1,7 +1,7 @@
 "use server";
 
+import { revalidateConsole } from "@/lib/revalidate";
 import { recordAudit } from "@/lib/audit-server";
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser, stepUpProblem } from "@/lib/auth";
 import {
@@ -69,7 +69,7 @@ function fail(e: unknown): ActionResult {
 }
 
 function done(): ActionResult {
-  revalidatePath("/", "layout");
+  revalidateConsole();
   return { ok: true };
 }
 
@@ -99,7 +99,7 @@ export async function unlockAdminConsole(password: string): Promise<ActionResult
     }
 
     await grantAdminUnlock();
-    revalidatePath("/", "layout");
+    revalidateConsole();
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -109,7 +109,7 @@ export async function unlockAdminConsole(password: string): Promise<ActionResult
 /** Drop the unlock without switching persona. */
 export async function lockAdminConsole(): Promise<ActionResult> {
   await revokeAdminUnlock();
-  revalidatePath("/", "layout");
+  revalidateConsole();
   return { ok: true };
 }
 
@@ -425,7 +425,7 @@ export async function importLdapUidsAction(text: string): Promise<LdapImportResu
       if (c.from !== null) await store.updateProfile(c.id, { ldap_uid: null });
     }
     for (const c of plan.changes) await store.updateProfile(c.id, { ldap_uid: c.to });
-    revalidatePath("/", "layout");
+    revalidateConsole();
     return { ok: true, updated: plan.changes.length, unchanged: plan.unchanged };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
@@ -586,7 +586,7 @@ export async function flushMailOutbox(): Promise<
   try {
     await requireConsole("mail_outbox");
     const result = await drainOutbox();
-    revalidatePath("/", "layout");
+    revalidateConsole();
     return { ok: true, sent: result.sent, failed: result.failed };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };

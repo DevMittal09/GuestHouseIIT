@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AutoRefresh } from "@/components/auto-refresh";
+import { LiveUpdates } from "@/components/live-updates";
 import { BrandBlock } from "@/components/site/site-chrome";
 import { NavBar, type NavItem } from "@/components/site/site-nav";
 import { logout } from "@/app/actions/auth";
@@ -98,7 +98,11 @@ export default async function PortalLayout({ children }: { children: React.React
           </span>
         </div>
       </footer>
-      <AutoRefresh />
+      {/* Realtime where Supabase is configured, a 30-second poll otherwise. */}
+      <LiveUpdates
+        supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL ?? null}
+        supabaseAnonKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? null}
+      />
     </div>
   );
 }

@@ -84,11 +84,11 @@ Rules worth keeping:
   database outage must never stop anyone from booking. Failures are logged
   with the kind only, never the email.
 - **Answers are cached in-process.** Records and "no record" are kept for
-  10 minutes, an outage for 1 minute. `/book` is polled every 5 s by
-  `components/auto-refresh.tsx`, so without the cache an open form would ask
-  the academic database twelve times a minute. Consequence: **a correction in
-  the academic database takes up to 10 minutes to show**, or restart the
-  server.
+  10 minutes, an outage for 1 minute. An open `/book` re-renders whenever the
+  desk's data changes (`components/live-updates.tsx`), so without the cache the
+  form would ask the academic database again on every one. Consequence: **a
+  correction in the academic database takes up to 10 minutes to show**, or
+  restart the server.
 - **The card streams behind Suspense.** The HTTP source times out after 3 s,
   and only the card waits for it.
 - **Copy-to approvers come from `canReview()` on the portal profile, never
@@ -245,7 +245,8 @@ This is what was done on 21 Sep 2026, and it is quick to repeat:
    answers 200 for one email, 500 for another and 404 for the rest).
 2. Start the dev server on the mock store with the env pointed at it:
    `NEXT_PUBLIC_SUPABASE_URL= ACADEMIC_DB_URL=http://127.0.0.1:4545/api ACADEMIC_DB_TOKEN=… npm run dev`.
-3. `curl -b "gh_mock_user=student-anjali" localhost:3000/book` and check that
+3. With `DEV_LOGIN=true` (development only),
+   `curl -b "gh_mock_user=student-anjali" localhost:3000/book` and check that
    the card shows the served values, that blanks read "Not on record", that
    unknown keys do not appear, and that there is no Demo note. The 500 persona
    shows "could not be reached", with the form still rendered below. The 404

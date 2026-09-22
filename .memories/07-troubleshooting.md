@@ -172,6 +172,12 @@ which is what the 5 s poll is currently covering for.
 (`components/auto-refresh.tsx`), competing with whatever was just clicked.
 `/history`, `/availability` and `/admin/mail` are already excluded.
 
+> **Both fixed in Phase 9 (22–23 Sep 2026)**, and together, exactly as this
+> analysis said they would have to be: `lib/revalidate.ts` narrows the
+> invalidation, and `components/live-updates.tsx` replaces the poll with a
+> realtime subscription — so another tab still notices a change. The measured
+> before and after is at the end of this file.
+
 **Not the cause:** the email layer. `after()` runs its dispatch *after* the
 response is sent, so queuing and sending never delay a click.
 
@@ -399,3 +405,49 @@ in one Python process exhausted memory and the kernel OOM-killed it.
 **Fix.** One photo per process, and `im.draft("RGB", (2000, 2000))` before
 loading so the JPEG decoder works at reduced scale. Recipe in
 [10-ui-design.md](10-ui-design.md#photographs).
+
+## The portal felt slow, and what was actually measured (Phase 9)
+
+Three things were costing time. Each was measured before and after on the same
+machine, with a production build (`next build && next start`) against the mock
+store, so the numbers compare like with like — they are *relative*, not a
+promise about the hosted project.
+
+**1. The public pages queried the database on every request.** `/guidelines`
+reads every guest house, its rooms, the effective form configuration of every
+requester role and the rules. Those change when the office edits them, which is
+rarely, so `lib/site-data.ts` now holds the answers under the `site` cache tag
+for half an hour and `revalidateEverything()` expires the tag as soon as
+anything behind them is saved.
+
+| Page (warm, median of five) | Before | After |
+| --- | --- | --- |
+| `/guidelines` | 68 ms | 27 ms |
+| `/contact` | 29 ms | 17 ms |
+| `/` | 48 ms | 38 ms |
+
+The pages themselves are still rendered per request, and cannot be otherwise:
+the header greets whoever is signed in, so every render reads the session
+cookie. An `export const revalidate` on those pages was written first and did
+**nothing** for exactly that reason — a dynamic segment ignores it. Caching the
+data rather than the page is what moved the numbers.
+
+**2. Every desk screen re-rendered itself every five seconds.** A reception
+screen left open for an eight-hour shift made ~5,800 full page requests and
+found nothing new in almost all of them. `components/live-updates.tsx`
+subscribes to Postgres changes instead (bookings, room holds, blocks,
+invoices), and falls back to a 30-second poll only where there is no Supabase
+to subscribe to — one subscription, or ~960 polls, in place of 5,800 renders.
+
+**3. Every write threw away the whole cache.** Twenty-five call sites ran
+`revalidatePath("/", "layout")`, which invalidates the entire application
+because one booking moved. `lib/revalidate.ts` names the three sets that
+actually change together, so approving a booking no longer re-renders the
+public gallery.
+
+**And one that was measured in Postgres, not here.** The archive search read up
+to 1,000 bookings and matched keywords in JavaScript. Migration 22 adds a
+generated `bookings.search_text` tsvector with a GIN index, and the store
+pushes the keyword down. In the throwaway Postgres stand-in the plan changed
+from a sequential scan to `Bitmap Index Scan on bookings_search_idx`. The
+dataset there is small — the plan is the evidence, not a timing.

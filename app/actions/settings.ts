@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateEverything } from "@/lib/revalidate";
 import { canUseConsoleSection } from "@/lib/access";
 import { isAdminUnlocked } from "@/lib/admin-lock";
 import { recordAudit } from "@/lib/audit-server";
@@ -83,7 +83,7 @@ function fail(e: unknown): ActionResult {
  * is one of the few actions that genuinely changes every page.
  */
 function done(): ActionResult {
-  revalidatePath("/", "layout");
+  revalidateEverything();
   return { ok: true };
 }
 

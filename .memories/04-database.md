@@ -403,6 +403,23 @@ Current migrations:
    kind check, consent columns, and `authenticated` refused on both the tables
    and `hit_rate_limit`.
 
+22. `00000000000022_search_and_indexes.sql` (Phase 9, Sep 2026).
+   `bookings.search_text` — a **generated** tsvector over the reference and
+   alumni roll number (weight A) and the purpose, on-behalf name and alumni
+   name (weight B) — with a GIN index, plus the indexes every desk read uses:
+   check-in and check-out, `(status, created_at desc)`, `(user_id, created_at
+   desc)`, `(guest_house_id, check_in)`, the four child tables by booking, the
+   audit log by time and event, and the outbox by status and due time. All
+   `if not exists`, so it is re-runnable and additive — nothing reads
+   differently until `SupabaseStore.searchBookings` chooses to push the keyword
+   down, and it falls back to the unfiltered scan when the keyword matches
+   nothing. **Guests' names are deliberately absent from the vector**: they are
+   personal data, the column is reachable by anything that can query the table,
+   and the application already matches them for the staff allowed to see them.
+   Verified in a throwaway Postgres 16: applied twice, the vector generated,
+   the generated column refused a write, and the plan for a keyword search
+   showing `Bitmap Index Scan on bookings_search_idx`.
+
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.
 

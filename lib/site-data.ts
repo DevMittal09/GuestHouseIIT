@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { getEffectiveFormConfig } from "./form-config-server";
 import { DEFAULT_RULES, type Rules } from "./settings";
 import { getRules } from "./settings-server";
@@ -23,14 +24,29 @@ import type { BookingStatus } from "./types";
  * Both loaders swallow store errors and return empty data: the public pages
  * are the front door, and a misconfigured backend must not take down the page
  * that carries the office's phone number.
+ *
+ * **Caching (Phase 9).** The public pages themselves cannot be static — the
+ * header greets whoever is signed in, so every render reads the session — but
+ * what they *say* changes only when a guest house, a room or a Setting does.
+ * So the data is cached across requests under the `site` tag and rebuilt at
+ * most every half hour; `revalidateEverything()` drops the tag the moment any
+ * of that is edited. React's `cache` on top of it keeps one render from asking
+ * twice.
  */
+
+/** The cache tag every public-site read shares. See `lib/revalidate.ts`. */
+export const SITE_CACHE_TAG = "site";
+
+/** Half an hour: the longest the brochure may lag an edit nobody saved through the console. */
+const SITE_CACHE_SECONDS = 1800;
 
 export type SiteGuestHouse = GuestHouse & {
   roomsByType: Record<RoomType, number>;
   activeRooms: number;
 };
 
-export const getSiteGuestHouses = cache(async (): Promise<SiteGuestHouse[]> => {
+const loadSiteGuestHouses = unstable_cache(
+  async (): Promise<SiteGuestHouse[]> => {
   try {
     const store = getStore();
     const houses = await store.listGuestHouses();
@@ -46,7 +62,14 @@ export const getSiteGuestHouses = cache(async (): Promise<SiteGuestHouse[]> => {
     console.error("[site] could not load guest houses", err);
     return [];
   }
-});
+  },
+  ["site-guest-houses"],
+  { tags: [SITE_CACHE_TAG], revalidate: SITE_CACHE_SECONDS }
+);
+
+export const getSiteGuestHouses = cache(
+  async (): Promise<SiteGuestHouse[]> => loadSiteGuestHouses()
+);
 
 export type BookingRoute = {
   role: Role;
@@ -88,7 +111,8 @@ function approversFor(role: Role): string[] {
   return [...names, ROLE_LABELS.gh_manager];
 }
 
-export const getSitePolicies = cache(async (): Promise<SitePolicies> => {
+const loadSitePolicies = unstable_cache(
+  async (): Promise<SitePolicies> => {
   try {
     const houses = await getSiteGuestHouses();
     const nameOf = new Map(houses.map((h) => [h.id, h.name]));
@@ -117,4 +141,9 @@ export const getSitePolicies = cache(async (): Promise<SitePolicies> => {
     console.error("[site] could not load booking policies", err);
     return { routes: [], studentDependency: null, rules: DEFAULT_RULES };
   }
-});
+  },
+  ["site-policies"],
+  { tags: [SITE_CACHE_TAG], revalidate: SITE_CACHE_SECONDS }
+);
+
+export const getSitePolicies = cache(async (): Promise<SitePolicies> => loadSitePolicies());

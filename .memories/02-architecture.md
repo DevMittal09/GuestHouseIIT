@@ -22,7 +22,8 @@ The test suite is Vitest (`npm test`, `tests/`, since 21 Sep 2026). The rest of 
 ```
 app/
   (site)/                  PUBLIC website (19 Sep 2026): / home, book-room, book-meal,
-                           guidelines, gallery, contact, sign-in, mock-login (Google placeholder)
+                           guidelines, gallery, contact, privacy, sign-in,
+                           mock-login (developer persona picker, DEV_LOGIN only)
                            — see 10-ui-design.md
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
@@ -69,13 +70,17 @@ not require deleting the database.
 
 ### 2. Authentication has exactly one swap point
 
-`lib/auth.ts` exposes `getCurrentUser()` / `requireUser()`. `getCurrentUser()`
-reads the `gh_mock_user` cookie (a profile id) and looks the profile up. The
+`lib/auth.ts` exposes `getCurrentUser()` / `requireUser()`. Since Phase 8 a
+session is a **row** in `sessions` and the cookie holds an opaque token
+(`lib/sessions.ts`); `lib/auth.ts` is the only module that reads it. The
 sign-in card (`/sign-in`, also embedded in the public `/book-room` and
-`/book-meal`) sets that cookie through two doors: **LDAP** username + password,
-and **"Sign in with Google"**, which is a placeholder that opens the persona
-picker at `/mock-login`. `/` is the public website, so signed-out guards
-redirect to `SIGN_IN_PATH`, not `/`.
+`/book-meal`) opens a session through two doors: **LDAP** username + password,
+and **"Sign in with Google"** — the real OpenID Connect flow when
+`GOOGLE_CLIENT_ID` is set, and the persona picker at `/mock-login` only where
+the developer doors are switched on (`DEV_LOGIN=true`, never in production).
+The pre-Phase-8 `gh_mock_user` cookie is honoured on the same condition and
+nowhere else. `/` is the public website, so signed-out guards redirect to
+`SIGN_IN_PATH`, not `/`.
 
 LDAP is the third environment-selected seam, alongside the store and the
 mailer:

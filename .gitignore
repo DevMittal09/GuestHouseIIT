@@ -43,6 +43,12 @@ next-env.d.ts
 
 # local mock data layer
 .local-db.json
+# The end-to-end suite's throwaway database, and Playwright's own output.
+.e2e-db.json
+/test-results/
+/playwright-report/
+/blob-report/
+/.uploads/
 # Snapshots taken before clearing the mock database. They hold whatever guest
 # details were typed in while testing, so they never go near the repository.
 .local-db.backup-*.json

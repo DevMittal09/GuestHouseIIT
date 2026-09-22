@@ -1,0 +1,73 @@
+name: CI
+
+# Everything that has to be true before a branch may be merged (Phase 9).
+#
+# The whole run is offline: no Supabase, no SMTP, no LDAP. `ALLOW_MOCK_STORE`
+# lets the mock store run in a production build, `MOCK_DB_PATH` puts its file
+# in the workspace, and `MAIL_DRY_RUN` keeps the outbox in the database instead
+# of sending. **No secret is needed, and none should ever be added here** —
+# nothing in CI may be able to reach the hosted project.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push supersedes the run in flight for the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Lint, types and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ""
+          MAIL_DRY_RUN: "true"
+
+  e2e:
+    name: End-to-end journeys
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      # Built with Supabase switched off so the client bundle cannot carry a
+      # project URL into the test run: `NEXT_PUBLIC_*` values are inlined at
+      # build time.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ""
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+      - name: Playwright
+        run: npm run test:e2e
+        env:
+          CI: "true"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

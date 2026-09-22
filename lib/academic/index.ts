@@ -49,7 +49,7 @@ export type AcademicLookup =
 
 /**
  * Answers are kept for a while because the portal re-renders every page every
- * five seconds (`components/auto-refresh.tsx`), and a booking form left open
+ * changes (`components/live-updates.tsx`), and a booking form left open
  * would otherwise ask the academic database twelve times a minute. An outage
  * is kept for less, so the card recovers soon after the database does.
  *

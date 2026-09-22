@@ -84,9 +84,11 @@ Error messages:
 - **A directory outage** reads "could not be reached … or sign in with Google",
   and the real error is logged.
 
-Session: still the unsigned `gh_mock_user` cookie. **LDAP proves who typed the
-password; the cookie does not prove who is holding it.** Signing or
-server-siding the session is still roadmap item 1.
+Session: a row in `sessions` since Phase 8, with an opaque token in the cookie
+(`lib/sessions.ts`). LDAP proves who typed the password; the session row is
+what proves, on every later request, that the person holding the cookie is the
+one who did. The unsigned `gh_mock_user` cookie it replaced is honoured only
+where the developer doors are on, and never in production.
 
 ## 3. Moving to the real LDAP accounts
 

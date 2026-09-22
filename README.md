@@ -10,14 +10,21 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and sign in as any persona. With no Supabase env vars set, the
-app runs against a local mock data layer:
+Open http://localhost:3000 and sign in with any of the dummy LDAP accounts (listed
+in `.memories/11-ldap-accounts.md` — e.g. `priya` / `Priya@2026`). With no Supabase
+env vars set, the app runs against a local mock data layer:
 
 - **Database** → `.local-db.json` (auto-seeded on first run; delete it to reset demo data)
-- **Auth** → mock cookie session with one-click role switching from the login page
-- **Uploads** → saved under `public/uploads/`
+- **Auth** → a real session row with an opaque cookie, opened by the dummy LDAP
+  directory. One-click persona switching is a developer door: `DEV_LOGIN=true npm run dev`
+- **Uploads** → saved outside `public/`, served only through an authorised, audited route
 - **Email** → written to `.local-mail/*.eml` instead of being sent (open one in any mail
   client to see exactly what a recipient would have received)
+
+```bash
+npm run lint && npm run typecheck && npm test   # unit tests
+npm run test:e2e                                # the journeys, in a real browser
+```
 
 ## Roles & approval pipelines
 
@@ -52,8 +59,26 @@ Reviewer portals: `/warden` (scoped to the warden's hostel), `/fa` (scoped to th
 club/council), `/iar`, and `/manager` — the GH Manager console with per-guest-house queues and a
 cinema-style room grid (green = available, red = occupied, blue = selected) with a date/time
 selector for clash checking. "Confirm & Allocate" re-validates clashes server-side, assigns room
-ids and marks the booking `APPROVED`. Rejections everywhere require a mandatory reason. Queue
-pages poll for changes every 5 s (`components/auto-refresh.tsx`).
+ids and marks the booking `APPROVED`. Rejections everywhere require a mandatory reason. Desk
+screens update themselves through Supabase realtime, falling back to a 30-second poll where
+there is no Supabase (`components/live-updates.tsx`).
+
+## The desk, and the bill
+
+The manager and caretaker consoles share one stays table: **Mark as Occupied** when a
+guest arrives (**Early check-in** if they are ahead of their booked time, which the log
+says), **Mark as Vacated** when they leave — which is what releases the room. A stay that
+has been checked out and not yet paid for waits under **Checked out — to bill**.
+
+**Invoice** on a stay opens the bill in the office's own template: the rooms and their
+chargeable days, extra beds, the meals actually served (correctable against the kitchen's
+tally), GST split out of the tariff — **the rates are GST-inclusive, so the Grand Total is
+the price the office quotes** — then *Issue & print*, which numbers it against the
+financial year, freezes it, and renders the PDF. *Mark paid* records cash, UPI or a
+transfer. An issued invoice cannot be edited; it is cancelled with a reason and reissued.
+
+Rooms can also be taken out of service (maintenance blocks), stays extended, guests moved
+between rooms, and a no-show released automatically after a configurable window.
 
 ## Developer console (superadmin)
 
@@ -96,9 +121,10 @@ supabase status                # prints API URL, anon key and service_role key
 1. Create a project at https://supabase.com/dashboard (free tier is fine).
 2. In the project's **SQL Editor**, paste and run **every file in
    `supabase/migrations/` in numerical order** (`00000000000001_init.sql` through
-   `00000000000008_meal_plans.sql`), then `supabase/seed.sql`. An existing project
-   does not pick up new migrations by itself — after pulling changes, run the ones
-   you have not applied yet, in order.
+   the highest-numbered file — 22 as of September 2026), then `supabase/seed.sql`.
+   An existing project does not pick up new migrations by itself — after pulling
+   changes, run the ones you have not applied yet, in order. Every migration from
+   6 onwards is safe to re-run.
    (Or link the CLI: `supabase link --project-ref <ref>` then `supabase db push`.)
 3. Copy the keys from **Project Settings → API**.
 
@@ -121,11 +147,20 @@ The data layer is a single interface (`lib/store/types.ts`) with two implementat
 **Signing in.** The sign-in page takes an **LDAP username and password**, checked against
 dummy accounts (one per demo persona — listed in `.memories/11-ldap-accounts.md`, e.g.
 `priya` / `Priya@2026`) until `LDAP_URL` points it at the institute directory (see
-`.env.example`). **"Sign in with Google"** is a placeholder for now: it opens a persona
-picker. The `password123` above is not a portal login. Apply migration 12 so profiles can
-carry their LDAP username (`profiles.ldap_uid`); real usernames are loaded from the
-developer console (Users & Roles → Import LDAP usernames). The session itself is still a
-mock cookie in `lib/auth.ts` — making it unforgeable is part of going to production. Uploaded documents go to the private `documents` bucket via signed URLs.
+`.env.example`). **"Sign in with Google"** is the real OpenID Connect flow when
+`GOOGLE_CLIENT_ID` is set, restricted to institute domains; where it is not configured the
+button is not shown at all. The `password123` above is not a portal login. Apply migration
+12 so profiles can carry their LDAP username (`profiles.ldap_uid`); real usernames are
+loaded from the developer console (Users & Roles → Import LDAP usernames).
+
+The session is a **row** (`sessions`, migration 21) with an opaque token in the cookie —
+30 minutes idle, 12 hours absolute, revocable, rotated when a session gains privilege.
+Guests' ID numbers are encrypted at rest and shown as their last four digits. Uploaded
+documents live in the private `documents` bucket and are served only through
+`/api/documents/…`, which checks who is asking, writes an audit row, and signs a
+five-minute link. In production the server refuses to start without `APP_URL`,
+`CRON_SECRET` and `ID_ENCRYPTION_KEY`, and refuses outright if the developer sign-in doors
+are switched on. See `.memories/14-security.md`.
 
 ## Email notifications
 
@@ -197,9 +232,25 @@ lib/workflow.ts          pipeline rules (initial status, transitions, reviewer s
 lib/booking-schema.ts    zod validation + per-role form rules
 lib/store/               DataStore interface, mock + Supabase implementations, seed data
 lib/mail/                transport seam, templates, outbox worker, digests
+lib/invoice.ts           chargeable days, GST-inclusive pricing, the invoice document
+lib/settings.ts          the rules the office edits, with their defaults
+lib/sessions.ts          session rows; lib/auth.ts is the only reader of the cookie
 app/actions/             server actions: auth, createBooking, review, allocateRooms
-app/api/mail/            the outbox worker and the daily cron (the only route handlers)
-app/(portal)/            dashboard, book, warden, fa, iar, manager
+app/api/mail/            the outbox worker and the daily cron
+app/(site)/              the public website
+app/(portal)/            dashboard, book, warden, fa, hod, iar, manager, caretaker, admin
 components/              booking form, review queues, manager console, room grid
 supabase/                migrations + seed SQL
+tests/                   Vitest unit and store tests
+e2e/                     Playwright journeys, run against a production build
+.memories/               the project's documentation — start at .memories/README.md
 ```
+
+## Documentation
+
+`.memories/` is the long-form documentation: how it is built
+(`02-architecture.md`, `03-implementation.md`), the database and every migration
+(`04-database.md`), running and deploying with the production runbook
+(`05-deployment.md`), why things are the way they are (`06-decisions.md`), what to do when
+something breaks (`07-troubleshooting.md`), the workflows role by role
+(`13-workflows.md`) and security (`14-security.md`).

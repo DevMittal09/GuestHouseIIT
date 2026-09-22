@@ -8,11 +8,11 @@ npm run dev            # http://localhost:3000
 ```
 
 With no Supabase variables set, the app uses the mock store: data in
-`.local-db.json`, uploads in `public/uploads/`, login with the dummy LDAP
-accounts ([11-ldap-accounts.md](11-ldap-accounts.md)) or "Sign in with Google"
-(the persona picker).
-Everything works — all five booking forms, all approval tiers, the room grid, the
-developer console.
+`.local-db.json`, uploads outside `public/`, and sign-in with the dummy LDAP
+accounts ([11-ldap-accounts.md](11-ldap-accounts.md)). The one-click persona
+picker is a developer door: run `DEV_LOGIN=true npm run dev` to see it at all.
+Everything works — all five booking forms, all approval tiers, the room grid,
+invoices, the desk and the developer console.
 
 `next dev` refuses to start if another dev server is already running. Check port
 3000 before launching a second one.
@@ -32,19 +32,20 @@ supabase status              # prints URL, anon key, service_role key
 
 1. Create a project at https://supabase.com/dashboard.
 2. In the SQL Editor run **every file in `supabase/migrations/` in numerical
-   order** (there are eight), then `supabase/seed.sql`.
+   order** (there are 22 as of Sep 2026 — count the directory, not this
+   sentence), then `supabase/seed.sql`.
 3. Copy the keys from **Project Settings → API**.
 
 > **Migrations are not applied automatically and an existing project will not
-> pick up new ones.** Migrations 6 (`bookings.meals`), 7
-> (`bookings.has_infant`) and 8 (per-day meals, `guest_houses.serves_meals`) are
-> the current examples: the booking insert names `meals` and `has_infant`, and
-> migration 6's check refuses a per-day plan until 8 replaces it, so until all
-> three are applied **submissions fail** while every page still renders — reads
-> degrade (`normalizeMeals` reads either meals shape, a missing `has_infant` is
-> derived from infant guest rows, and a missing `serves_meals` reads as false,
-> which hides the meals card). After pulling changes, check whether
-> `supabase/migrations/` has grown.
+> pick up new ones.** After pulling changes, check whether
+> `supabase/migrations/` has grown. Missing migrations rarely fail loudly:
+> reads degrade and writes fail. Migrations 6 to 8 are the classic example —
+> the booking insert names `meals` and `has_infant`, and migration 6's check
+> refuses a per-day plan until 8 replaces it, so until all three are applied
+> **submissions fail** while every page still renders. The same shape of
+> problem applies to the Sep 2026 work: without 17 there are no Settings rows
+> to read, without 19 no invoice can be numbered, without 21 nobody can sign
+> in at all, and without 22 the archive search falls back to its scan.
 
 Either way, fill `.env.local` and restart the dev server:
 
@@ -62,9 +63,14 @@ variables; `.env.local` is gitignored and must stay that way.
 > console's user management (it creates Supabase Auth users).
 
 The current hosted project already has the schema, seed data and the private
-`documents` bucket applied. As last recorded (10 Sep 2026) it was on migration 5;
-migrations 7 and 8 were added on 15 Sep 2026, so **check which of migrations 6,
-7 and 8 are missing and apply them in order** — and
+`documents` bucket applied. As last recorded (10 Sep 2026) it was on migration
+5, and **migrations 6 to 22 have been written since** — the production
+programme of Sep 2026 added Settings, invoices, operational states, sessions
+and search. Before the portal is pointed at that project, check which
+migrations it actually has and apply the rest **in order**; every one from 6
+onwards is re-runnable, so applying a file twice is safe. The list, and what
+each one needs, is in [04-database.md](04-database.md#migrations).
+
 `supabase/repairs/2026-09-10-utc-parsed-bookings.sql` still needs running to
 correct four bookings stored 5h30m late (see below).
 
@@ -95,15 +101,25 @@ time-conversion helpers.
 
 **2. HTTP smoke tests against a running dev server**
 
-Auth is a cookie holding a profile id, so you can impersonate anyone:
+Since Phase 8 a session is a **row**, and the cookie holds an opaque token, so
+there is no profile id to set by hand — a forged cookie gets nothing. Sign in
+the way a person does and keep the cookie jar:
 
 ```bash
-curl -s -b "gh_mock_user=<profile-id>" http://localhost:3000/book
-curl -s -o /dev/null -w "%{http_code}\n" -b "gh_mock_user=<id>" http://localhost:3000/admin/users
+# Sign in through the LDAP form (dummy directory), keeping cookies.
+curl -s -c jar.txt -b jar.txt http://localhost:3000/sign-in > /dev/null
+# then drive the form in a browser, or use the end-to-end suite, which does
+# exactly this: npm run test:e2e
+
+# With a jar from a real sign-in, the ordinary checks still work:
+curl -s -b jar.txt -o /dev/null -w "%{http_code}\n" http://localhost:3000/book
+curl -s -b jar.txt -o /dev/null -w "%{http_code}\n" http://localhost:3000/admin/users
 ```
 
-Use this to confirm a page renders (200), that access control redirects (307),
-and that scoping holds — e.g. the Malhar warden sees only Malhar students.
+Use this to confirm a page renders (200) and that access control redirects
+(307). For anything that needs a signed-in journey — scoping, approvals, the
+desk, invoices — **`npm run test:e2e` is the tool**: it signs in through the
+form as each role and walks the whole pipeline (`e2e/`).
 
 **3. Migrations against a throwaway Postgres, never the hosted project**
 
@@ -162,7 +178,8 @@ enough to drive Chrome over the DevTools protocol with no extra packages:
 
 - launch `google-chrome --headless=new --remote-debugging-port=9333 --user-data-dir=<tmp dir>`;
 - read the page's `webSocketDebuggerUrl` from `http://127.0.0.1:9333/json/list`;
-- `Network.setCookie` (`gh_mock_user` = a profile id), `Page.navigate`, then
+- `Network.setCookie` (`gh_mock_user` = a profile id, which needs
+  `DEV_LOGIN=true`), `Page.navigate`, then
   `Runtime.evaluate` to click and fill — set input values through the native
   `value` setter and dispatch `input` / `change`, or react-hook-form never sees
   them;
@@ -283,25 +300,25 @@ stay, say), `npx vite-node --config vitest.config.ts script.ts` resolves the
 
 Not yet deployed. The intended path is Vercel + hosted Supabase.
 
-**Blocking items — do these first:**
+**What used to block this is done** (Phase 8, Sep 2026): sessions are rows with
+an opaque cookie that cannot be forged, Google sign-in is the real OpenID
+Connect flow, and the developer doors refuse to exist in a production build —
+`instrumentation.ts` will not let the server start if `DEV_LOGIN` is set, or if
+Supabase, `APP_URL`, `CRON_SECRET` or `ID_ENCRYPTION_KEY` is missing.
 
-1. **Replace the mock session and connect the directory.** Set `LDAP_URL` and
-   friends (`.env.example`) so LDAP sign-in checks the institute directory, load
-   the real usernames onto profiles (migration 12, then the console import —
-   [11-ldap-accounts.md](11-ldap-accounts.md) §3), and make the session
-   something a client cannot forge (signed cookie or Supabase session). Until
-   then anyone can impersonate anyone by setting a cookie. This is the single
-   most important gate.
-2. **Stop using the service-role key for request-scoped reads.** Once real
-   sessions exist, use the anon key with a per-request client so RLS becomes the
-   enforcement boundary. Keep the service-role client only for genuine admin
-   operations.
-3. **Replace the Google placeholder** — `/mock-login` and `loginAs` — with real
-   Google OAuth (institute domain only, `isInstituteEmail()`), and delete the
-   dummy-directory sample note under the card. Not behind a flag; see
-   09-production-plan.md step 5. The LDAP form stays.
-4. **Delete the demo personas**, or at least never deploy without `LDAP_URL`:
-   the dummy LDAP passwords are published in this repo.
+**Still to settle before the first real deployment:**
+
+1. **Connect the directory.** Set `LDAP_URL` and friends (`.env.example`) and
+   load the real usernames onto profiles (migration 12, then the console import
+   — [11-ldap-accounts.md](11-ldap-accounts.md) §3). **Never deploy without
+   `LDAP_URL`:** with it unset the portal accepts the dummy accounts, whose
+   passwords are published in this repository.
+2. **Delete or disable the demo personas** once the real accounts exist.
+3. **Per-request, user-scoped database clients.** Every table has RLS with no
+   `authenticated` write policy, but the server still uses the service-role
+   key from one server-only module. The boundary today is the server: every
+   action re-checks the caller. See
+   [14-security.md](14-security.md#6-what-is-deliberately-not-done-yet).
 
 **Deployment steps once those are done:**
 
@@ -309,9 +326,12 @@ Not yet deployed. The intended path is Vercel + hosted Supabase.
    current permissions blocker).
 2. Import the project in Vercel.
 3. Set the environment variables in Vercel's project settings — mark
-   `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_APP_PASSWORD` and `CRON_SECRET` as
-   server-only (do **not** prefix them with `NEXT_PUBLIC_`). Set
-   `APP_BASE_URL` too, or every link in an email points at localhost.
+   `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_APP_PASSWORD`, `CRON_SECRET`,
+   `ID_ENCRYPTION_KEY` and `GOOGLE_CLIENT_SECRET` as server-only (do **not**
+   prefix them with `NEXT_PUBLIC_`). The full table is in
+   [§ Environment variables](#environment-variables) below. Set `APP_URL` and
+   `APP_BASE_URL`, or sign-in redirects break and every link in an email points
+   at localhost.
 4. Deploy; Vercel detects Next.js automatically. `npm run build` must pass first.
 5. Apply **all** migrations, in order, and the seed to the production Supabase
    project if it is separate from the development one.
@@ -347,3 +367,224 @@ Not yet deployed. The intended path is Vercel + hosted Supabase.
 - Uploaded documents contain Aadhaar/ID data. Keep the bucket private, keep
   signed-URL lifetimes reasonable, and confirm retention expectations with the
   Administration Section before going live.
+
+---
+
+# Production runbook
+
+Everything below is for whoever operates the portal once it is live.
+
+## Environment variables
+
+`instrumentation.ts` checks these at boot and refuses to start a production
+server that is not fit, naming exactly what is wrong. `.env.example` documents
+every one with an example value.
+
+**Required in production**
+
+| Variable | Example | What breaks without it |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://abcdefgh.supabase.co` | The portal has no database |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `eyJhbGciOi...` | The browser cannot subscribe for live updates |
+| `SUPABASE_SERVICE_ROLE_KEY` | `eyJhbGciOi...` | Every server read and write |
+| `APP_URL` | `https://guesthouse.iitpkd.ac.in` | Sign-in redirects, server-action origins |
+| `CRON_SECRET` | 32+ random characters | The daily jobs would be open to anyone |
+| `ID_ENCRYPTION_KEY` | `openssl rand -base64 32` | Guests' ID numbers would be stored in clear |
+
+**Needed for the portal to be useful**
+
+| Variable | Example | What it turns on |
+| --- | --- | --- |
+| `LDAP_URL`, `LDAP_BASE_DN` | `ldaps://ldap.iitpkd.ac.in:636`, `dc=iitpkd,dc=ac,dc=in` | Real sign-in. **Without it the dummy accounts work** |
+| `LDAP_BIND_DN`, `LDAP_BIND_PASSWORD` | a read-only service account | Directory search where anonymous search is refused |
+| `MAIL_USER`, `MAIL_APP_PASSWORD`, `MAIL_HOST` | the institute's relay | Sending mail instead of writing `.eml` files |
+| `APP_BASE_URL` | `https://guesthouse.iitpkd.ac.in` | Absolute links inside mail |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | from the Google Cloud console | "Sign in with Google"; the button is hidden entirely if unset |
+| `ACADEMIC_DB_URL`, `ACADEMIC_DB_TOKEN` | the institute ERP | Real requester details instead of the dummy records |
+
+**Optional**
+
+| Variable | Effect |
+| --- | --- |
+| `ID_ENCRYPTION_KEYS_OLD` | Reads rows written under a retired key: `v1:<base64>,v2:<base64>` |
+| `CLAMAV_HOST`, `CLAMAV_PORT` | Virus-scans uploads; an unreachable scanner refuses the upload |
+| `SENTRY_DSN` | Error reporting |
+| `MAIL_REDIRECT_ALL_TO` | **Set this on every non-production deployment** |
+| `MAIL_DRY_RUN` | Logs mail and sends nothing |
+
+**Must never be set in production:** `DEV_LOGIN` (the server refuses to start)
+and `ALLOW_MOCK_STORE` (it lets a production build run on a JSON file).
+
+## Settings the office must fill in
+
+Everything below is edited in the portal, not in code, and everything has a
+working default — but a default is a guess, and some of these are guesses the
+office must replace before real money and real people are involved. Ordered by
+what hurts most if it is left alone.
+
+**Must be changed before go-live**
+
+| Setting | Where | Default, and why it must change |
+| --- | --- | --- |
+| Console password | Console → Access | **`0000`.** It guards every developer action. |
+| Room, extra-bed and meal rates | Console → Tariffs & Invoicing | Seeded from the office's tariff sheet (Bageshri ₹750/day; Hamsanandi ₹2,000, and ₹4,000 for government officers; breakfast ₹80, lunch ₹120, dinner ₹100; free to students and alumni). **There is no extra-bed rate at all** — an invoice for a room with an extra bed cannot be issued until one is entered. Confirm every rate and its effective date. |
+| GSTIN | Console → Tariffs & Invoicing | Carried over from the invoice template. Confirm it against the institute's registration — it is printed on every invoice. |
+| Accounts email | Console → Tariffs & Invoicing | **Empty**, so nothing is mailed to Accounts when an official booking's invoice is issued. |
+| Bank details (holder, account number, IFSC, branch) | Console → Tariffs & Invoicing | From the template. Guests pay against these. |
+| Guest house contact (address, phone, email) | Console → Tariffs & Invoicing | From the template; also shown on the public site. |
+| Departments, clubs and their heads | Console → Departments & Clubs | The HOD queue follows whoever heads a unit. Nobody set means the HOD stage is skipped and the log says so. |
+| Hostels and their wardens | Console → Users & Roles | A student's request goes to the warden of the hostel on their profile. |
+| Official email whitelist | Console → Settings | Which addresses may book as an office. |
+
+**Should be reviewed, because the default is a policy choice**
+
+| Setting | Default | What it decides |
+| --- | --- | --- |
+| Advance booking window | 1 month | How far ahead a check-in may be requested. Officials and the manager are exempt. |
+| Longest stay | 14 nights | 0 removes the limit. |
+| Turnaround buffer | 240 minutes | The least gap between one stay's check-out and the next check-in on the same room. Changing it rebuilds every hold and is refused if that would make two stays clash. |
+| No-show release | 0 (off) | Hours after the booked check-in at which an unclaimed stay is released automatically, with mail to the requester. |
+| Day basis and grace hours | Nights, 4 hours | What "Day(s)" on an invoice counts. |
+| Rates include GST | Yes | The office's rates do, so the Grand Total is the quoted price and the tax is shown inside it. |
+| GST percentages and SAC codes | 5% up to ₹7,500/day, 18% above, 5% on food | As in force since 22 Sep 2025. Check before the next Council revision bites. |
+| Meal windows | 07:30–09:30, 12:30–14:00, 19:30–21:00 | Which meals a stay can include, and the kitchen's day. |
+| Room capacity | Single 1 (2 with an extra bed), double 2 (3) | Enforced at submission and at allocation. |
+| Debitable heads per category | Department / Project / PDF / Institute Grant | What each kind of requester may charge a stay to. |
+| ID retention | 365 days after the stay | When identity numbers and ID documents are erased. |
+| Audit retention | 180 days | Cannot be set lower — CERT-In expects 180 days of logs. |
+
+**Outside Settings, still the office's to confirm:** the guest house phone and
+email on the public site and the house rules on `/guidelines` (everything
+tagged `TODO(site)` in `lib/site.ts` and `lib/site-content.ts`), and the
+wording of the automatic mail (Console → Mail Templates).
+
+## Rotating a secret
+
+Rotation is routine, not an emergency measure. Do it on a schedule, and after
+anyone with access leaves.
+
+**The service-role key.** Supabase -> Settings -> API -> *Reset service role
+key*. Put the new value in the hosting provider's environment, redeploy, then
+confirm the portal reads and writes. The old key stops working the moment it is
+reset, so this is a short outage if the redeploy is slow -- do it outside desk
+hours.
+
+**`ID_ENCRYPTION_KEY`.** This one needs care: rows encrypted with the old key
+must stay readable.
+
+```bash
+openssl rand -base64 32          # the new key
+```
+
+1. Move the current `ID_ENCRYPTION_KEY` value into `ID_ENCRYPTION_KEYS_OLD`,
+   prefixed with its version -- `v1:<old key>`, comma-separated if there are
+   already old keys.
+2. Set `ID_ENCRYPTION_KEY` to the new value.
+3. Redeploy. New writes use the new key; old rows are still read through the
+   old one, and are re-encrypted whenever they are written.
+4. Keep the old key until the retention window has passed
+   (`id_retention_days`, default 365), then drop it.
+
+**`CRON_SECRET`.** Generate, set it in the environment *and* in the cron
+configuration, redeploy. The endpoints refuse the old value immediately.
+
+**Mail, Google, LDAP.** Rotate at the source (the mail administrator, the
+Google Cloud console, the directory administrators), then update the
+environment and redeploy.
+
+After any rotation, read Console -> Audit Log for the period the old secret was
+live.
+
+## Backup and restore
+
+Supabase takes daily backups on its paid plans; on the free plan **there are
+none**, which is not acceptable for a guest register. Confirm which plan the
+project is on before go-live.
+
+**A backup that has never been restored is not a backup.** Run this drill once
+before go-live, and then every six months:
+
+```bash
+# 1. Dump the production database (read-only; safe at any time).
+supabase db dump --db-url "$PROD_DB_URL" -f backup-$(date +%F).sql
+
+# 2. Restore it into a throwaway local Postgres -- never into production.
+docker run --rm -d --name gh-restore -e POSTGRES_PASSWORD=pw -p 55432:5432 postgres:16
+psql "postgresql://postgres:pw@127.0.0.1:55432/postgres" -f backup-$(date +%F).sql
+
+# 3. Check the numbers agree with production.
+psql "postgresql://postgres:pw@127.0.0.1:55432/postgres" -c \
+  "select (select count(*) from bookings), (select count(*) from invoices);"
+
+# 4. Throw the copy away.
+docker rm -f gh-restore
+```
+
+Record the date of the drill and the counts in
+[07-troubleshooting.md](07-troubleshooting.md).
+
+**Uploaded documents are not in the database dump.** They live in Supabase
+Storage; back up the bucket separately, and remember it holds ID documents --
+the copy needs the same protection as the original.
+
+**Restoring into production** is Supabase's own point-in-time restore. Tell the
+Guest House Manager before doing it: any booking made after the restore point
+is gone, and the office will have to re-enter it.
+
+## Incident response
+
+A personal-data breach here means guests' ID numbers, ID documents or the guest
+register. The portal's part is containment and evidence; the institute's own
+incident process decides who reports.
+
+1. **Contain** -- rotate the secret involved (above), revoke sessions from
+   Console -> Security, and if necessary take the deployment down. A portal
+   that is off leaks nothing.
+2. **Preserve evidence** -- export Console -> Audit Log for the period, and
+   pull the hosting and Supabase logs before their own retention closes.
+3. **Report inside 6 hours.** CERT-In's directions of 28 April 2022 require
+   specified cyber incidents, data breaches among them, to be reported **within
+   6 hours of noticing them**, to `incident@cert-in.org.in` (forms at
+   cert-in.org.in). The DPDP Act 2023 separately requires informing the Data
+   Protection Board and every affected person. The institute's Data Protection
+   Officer / IT Section files these -- contact them first, and do not wait for
+   a full diagnosis: an initial report inside the window can be corrected
+   later.
+4. **Keep the logs** that CERT-In expects Indian ICT systems to retain for
+   **180 days**. That is why `audit_retention_days` cannot be set below 180.
+5. **Write it up** in [07-troubleshooting.md](07-troubleshooting.md): what
+   happened, what was done, and what would have prevented it.
+
+## Retention, in practice
+
+| Data | Kept for | Set where |
+| --- | --- | --- |
+| Guests' ID numbers and documents | `id_retention_days` after the stay ends (default 365) | Console -> Settings -> Privacy |
+| Audit log | `audit_retention_days` (default 400, floor 180) | Console -> Settings -> Privacy |
+| The booking itself | Indefinitely -- it is the guest house's own record | -- |
+| Mail outbox | Kept; it is the evidence that a notice was sent | -- |
+
+`/api/mail/cron` runs the erasure nightly. Check Console -> Audit Log after
+changing a retention Setting: the change is recorded, and so is what the next
+run deleted.
+
+## Branch protection
+
+The repository should not accept a push straight to `main`.
+
+On GitHub: **Settings -> Branches -> Add branch ruleset**, targeting `main`:
+
+- Require a pull request before merging (1 approval).
+- Require these status checks to pass: `Lint, types and unit tests` and
+  `End-to-end journeys` -- the two jobs in `.github/workflows/ci.yml`.
+- Require branches to be up to date before merging.
+- Block force pushes and deletions.
+- Require conversation resolution before merging.
+
+For a one-person repository, keep the status checks and the force-push block
+even if the approval requirement is relaxed: the checks are what stop a broken
+migration or a failing journey from reaching production.
+
+**Never add a repository secret that can reach the hosted project.** CI is
+offline by construction -- it runs with `NEXT_PUBLIC_SUPABASE_URL` empty and
+`MAIL_DRY_RUN` on, against the mock store on a throwaway file.

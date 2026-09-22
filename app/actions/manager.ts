@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateBookings } from "@/lib/revalidate";
 import {
   canAssignRooms,
   canEditMeals,
@@ -98,7 +98,7 @@ export async function updateBookingStay(
         remarks: `Booking updated by the Guest House Manager: ${input.reason.trim()}`,
       }
     );
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     if (e instanceof RoomClashError) return { ok: false, error: e.message };
@@ -158,7 +158,7 @@ export async function updateBookingMeals(
         remarks: `Meals updated by the Guest House Manager: ${input.reason.trim()}`,
       }
     );
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     console.error("updateBookingMeals failed", e);
@@ -237,7 +237,7 @@ export async function reassignRooms(
       to: selected.map((r) => r.room_number),
       reason: reason.trim(),
     });
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     if (e instanceof RoomClashError) return { ok: false, error: e.message };
@@ -285,7 +285,7 @@ export async function managerCancelBooking(
     // The requester did not ask for this one, so they certainly need to hear
     // about it — and the desk needs to know if a room just came back.
     await notifyCancelled(bookingId, user, reason.trim(), { heldRooms });
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     console.error("managerCancelBooking failed", e);
@@ -334,7 +334,7 @@ export async function reinstateBooking(
         remarks: `Reinstated by the Guest House Manager and returned to the allocation queue: ${reason.trim()}`,
       }
     );
-    revalidatePath("/", "layout");
+    revalidateBookings();
     return { ok: true };
   } catch (e) {
     console.error("reinstateBooking failed", e);

@@ -111,6 +111,7 @@ export function guidelineCards(houses: SiteGuestHouse[], policies: SitePolicies)
   const dependency = policies.studentDependency;
   const exempt = policies.routes.filter((r) => r.advanceWindowExempt).map((r) => r.label);
   const serving = servingHouses(houses);
+  const invoice = policies.rules.invoice;
 
   return [
     {
@@ -157,6 +158,21 @@ export function guidelineCards(houses: SiteGuestHouse[], policies: SitePolicies)
               "Every meal your stay covers is ticked by default; untick the ones you will not need",
             ]
           : ["Meals are not being served at the guest houses at present"],
+    },
+    {
+      // Phase 10: the bill, from the same rules `lib/invoice.ts` prices it by.
+      title: "Charges and settlement",
+      items: [
+        invoice.day_basis === "night"
+          ? "Rooms are charged by the night, counted between the actual check-in and check-out dates — never fewer than one"
+          : `Rooms are charged in blocks of 24 hours from the actual check-in, with a permissible variation of ${plural(invoice.grace_hours, "hour")}`,
+        invoice.prices_include_gst
+          ? "The tariff includes GST: the total on the invoice is the rate you were quoted, with the tax shown separately inside it"
+          : "GST is added to the tariff on the invoice",
+        "An extra bed and meals served are charged in addition, and appear as their own lines",
+        "The invoice is issued by the Guest House Office at check-out and can be settled in cash, by UPI or by transfer; an official stay is debited to the head named on the request",
+        "A dining booking is invoiced from the day of its first meal",
+      ],
     },
     {
       title: "Cancellation",

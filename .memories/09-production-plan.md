@@ -7,6 +7,18 @@ what is most fun to build.
 Companion to [08-roadmap.md](08-roadmap.md), which lists gaps. This one says how
 to close them and in what order.
 
+> **Status, 23 Sep 2026.** Most of this plan was carried out in the ten-phase
+> programme of 21–23 Sep 2026: Settings, mail addressing, the turnaround
+> buffer, HOD approval and debitable heads, invoices, dining, operational
+> states, security, performance and tests, and the documentation you are
+> reading. What each phase actually did — and what it deliberately did not — is
+> in [06-decisions.md](06-decisions.md) under "Phase 1" to "Phase 9", with the
+> operational view in [14-security.md](14-security.md) and
+> [05-deployment.md](05-deployment.md#production-runbook). Where this plan and
+> those pages disagree, those pages are newer. The two items still open are
+> connecting the real directory and moving request-scoped reads off the
+> service-role key.
+
 > **Review notes (2026-09-02):** This plan was cross-referenced against the
 > actual codebase. Key findings:
 >

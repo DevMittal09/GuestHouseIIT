@@ -4,28 +4,33 @@ Ordered roughly by priority.
 
 ## 1. Real authentication (blocks production)
 
-**Partly done (19 Sep 2026):** sign-in is LDAP. The real directory client
-(`LDAP_URL`), `profiles.ldap_uid` (migration 12), the bulk import and opt-in
-link-by-email are built and tested against OpenLDAP. It runs on dummy accounts
-until the institute's LDAP details arrive
-([11-ldap-accounts.md](11-ldap-accounts.md)). `DEMO_PASSWORD` is gone.
+**Mostly done (Phase 8, 22 Sep 2026).** Sessions are rows in `sessions` with an
+opaque token in the cookie, 30 minutes idle and 12 hours absolute, rotated on
+privilege; "Sign in with Google" is the real OpenID Connect flow (state, PKCE,
+the id_token verified against Google's JWKS, institute domains only); the
+developer sign-in doors refuse to exist in a production build, and
+`instrumentation.ts` will not start one that is not fit. Developers have a
+second factor and are asked for it again before role changes, Settings and
+deletes. Details in [14-security.md](14-security.md).
 
-Still to do:
+Still to do, and both are environment or plumbing rather than design:
 
-- **Connect the institute directory** (env only) and load the real usernames.
+- **Connect the institute directory** (env only) and load the real usernames
+  ([11-ldap-accounts.md](11-ldap-accounts.md) §3). Until `LDAP_URL` is set the
+  dummy accounts work, and their passwords are published in this repository —
+  so this gates the first real deployment.
 - **Connect the academic database** behind the Requester details card —
   `ACADEMIC_DB_URL` for an API on the documented contract, or a new
   `AcademicSource` for anything else. Dummy records until then
   ([12-academic-records.md](12-academic-records.md) §4).
-- **Replace the "Sign in with Google" placeholder** (`/mock-login` +
-  `loginAs`) with real Google OAuth, restricted to `isInstituteEmail()`.
-- **Make the session unforgeable.** Today it is an unsigned cookie holding a
-  profile id; use a signed cookie or a Supabase session.
 - **Switch request-scoped database access to the anon key** so RLS becomes the
-  real boundary.
+  enforcement boundary rather than a second line behind the server. Every table
+  has RLS on with no `authenticated` write policy, and the policies are tested
+  in the migration harness, but the server still reaches the database with the
+  service-role key. This is the next security phase.
 
 Everything else in the app already re-checks authorization server-side, so
-this change is contained.
+that last change is contained.
 
 ## 2. ~~Notifications and the day-wise occupancy report~~ ✅ Done
 
@@ -68,9 +73,31 @@ back it is still a credentials issue and not a code one: add Rizzwan285 as a
 collaborator, use a DevMittal09 personal access token, or push to a repository
 under Rizzwan285.
 
-## 4. Automated tests
+## 4. ~~Automated tests~~ ✅ Done, and what is still thin
 
-No framework is installed. The highest-value targets, in order:
+**Vitest since 21 Sep 2026** (`npm test`, `tests/`, 192 checks) and
+**Playwright since 23 Sep 2026** (`npm run test:e2e`, `e2e/`), both run by
+`.github/workflows/ci.yml` on every push and pull request along with lint and
+`npm run typecheck`. The end-to-end journeys walk a student's stay from request
+to a paid invoice, a faculty official stay through the HOD, a dining booking,
+and the public site at 320 px — against a **production build on the mock
+store**, on a throwaway database file.
+
+Two defects the journeys caught that the unit tests could not: a checked-out
+stay could not be invoiced at all, and a meals-only booking could not be
+submitted. Both are written up in
+[06-decisions.md](06-decisions.md#phase-9-performance-and-tests-2223-sep-2026).
+
+Still thin, in order of what would catch the most:
+
+1. the mail layer — rendering, outbox claim and retry, and that recipients
+   follow `canReview`;
+2. the availability grid's overlap arithmetic, beyond what the store tests
+   cover;
+3. an end-to-end pass for the developer console: Settings, tariffs, units;
+4. accessibility assertions inside the Playwright run (axe) rather than by eye.
+
+The original list of targets, all of which now have unit coverage:
 
 1. `lib/workflow.ts` — status transitions, `canReview` and `historyScope`
    scoping;
@@ -130,33 +157,34 @@ Vitest fits the stack. Until then, the ad-hoc `npx tsx` approach in
 
 ## 7. Operational hardening
 
-- **Move archive keyword search into Postgres.** `SupabaseStore.searchBookings`
-  scans up to 1000 candidate rows and refines in JS, because keyword matching
-  spans joined tables. It flags `truncated` when it hits the cap. Once the
-  archive is genuinely large, add a `tsvector` column on `bookings` maintained by
-  a trigger (covering reference id, purpose, guest names) and push the match
-  down. Raising the cap is not the fix.
+- ~~**Move archive keyword search into Postgres.**~~ ✅ Done (migration 22,
+  Phase 9). `bookings.search_text` is a **generated** tsvector — no trigger to
+  keep in step — with a GIN index, and `SupabaseStore.searchBookings` pushes
+  the keyword down, falling back to the unfiltered scan when it matches
+  nothing. Guests' names are deliberately not in the vector: personal data in a
+  column anything can query. The JavaScript matcher still covers them for the
+  staff allowed to see them.
 
-- **Narrow `revalidatePath`.** All 11 call sites in `app/actions/bookings.ts`
-  and `app/actions/admin.ts` use `revalidatePath("/", "layout")`, so every
-  action re-renders every route and re-runs the layout's queries before the
-  button's spinner clears. Scoping each to the routes it actually changes is
-  the biggest code-level win for click latency (measured 17 Sep 2026 —
-  see [07-troubleshooting.md](07-troubleshooting.md)). The catch: the 5 s poll
-  is currently what makes *other* tabs notice a change, so narrowing
-  revalidation and changing the poll have to be thought about together.
-- Rate-limit booking submission.
-- Decide a retention policy for uploaded Aadhaar/ID documents with the
-  Administration Section, and implement deletion.
+- ~~**Narrow `revalidatePath`.**~~ ✅ Done (Phase 9). `lib/revalidate.ts` names
+  the three sets that change together — booking views, console views,
+  everything — in place of 25 whole-application invalidations. As predicted
+  here, it had to be done together with the polling: it was, in the same phase.
+- ~~Rate-limit booking submission.~~ ✅ Done (Phase 8): throttles live in the
+  database (`hit_rate_limit`), so they survive a restart and are shared between
+  instances.
+- ~~Decide a retention policy for uploaded Aadhaar/ID documents with the
+  Administration Section, and implement deletion.~~ ✅ Implemented (Phase 8):
+  `id_retention_days` (Setting, default 365) erases identity fields and their
+  documents nightly. **The office still has to confirm the number** — see the
+  Settings the office must fill in, in [05-deployment.md](05-deployment.md).
 - Add a proper migration workflow if the schema starts changing regularly —
   today there are manual SQL files (e.g. `00000000000001_init.sql` and `00000000000002_booking_lifecycle.sql`).
-- Replace the 5-second polling in `components/auto-refresh.tsx` with Supabase
-  realtime subscriptions if queue volume grows. It re-renders the whole tree
-  per open tab every 5 s, which against hosted Supabase is a continuous stream
-  of queries competing with whatever the user just clicked. Raising the
-  interval to 20–30 s is the cheap interim step; realtime is the real fix,
-  because it pushes instead of polling and would let `revalidatePath` be
-  narrowed at the same time.
+- ~~Replace the 5-second polling in `components/auto-refresh.tsx` with Supabase
+  realtime subscriptions.~~ ✅ Done (Phase 9). `components/live-updates.tsx`
+  subscribes to `postgres_changes` on bookings, room holds, blocks and
+  invoices, and polls every 30 seconds only where there is no Supabase to
+  subscribe to. A reception screen open for a shift made ~5,800 requests and
+  now makes one subscription.
 
 ## 8. Public website follow-ups (from the 19 Sep 2026 redesign)
 

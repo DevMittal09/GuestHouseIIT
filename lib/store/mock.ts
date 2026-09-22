@@ -629,12 +629,17 @@ export class MockStore implements DataStore {
   private hydrate(db: Db, b: Booking): BookingWithDetails {
     // Holds are the source of truth; any `assigned_room_ids` left on an old
     // stored booking is ignored so the two cannot drift.
-    const assignedRoomIds = db.room_holds
-      .filter((h) => h.booking_id === b.id)
-      .map((h) => h.room_id);
     const roomCards = (db.booking_rooms ?? [])
       .filter((r) => r.booking_id === b.id)
       .sort((a, c) => a.room_index - c.room_index);
+    const held = db.room_holds.filter((h) => h.booking_id === b.id).map((h) => h.room_id);
+    // Once the guest has left, the hold is gone but the stay still has to be
+    // invoiced — so a finished stay reads its rooms off the cards it was
+    // allocated. Nothing is held either way, which is what occupancy asks.
+    const assignedRoomIds =
+      held.length > 0 || b.status !== "VACATED"
+        ? held
+        : roomCards.map((c) => c.assigned_room_id).filter((id): id is string => Boolean(id));
     const guests = db.booking_guests
       .filter((g) => g.booking_id === b.id)
       .map((g) => ({ ...g, id_number: decryptValue(g.id_number), passport_number: decryptValue(g.passport_number) }));
@@ -733,9 +738,13 @@ export class MockStore implements DataStore {
     if (update.no_show_released_at !== undefined) b.no_show_released_at = update.no_show_released_at;
     // A hold exists exactly while the booking holds the room, so leaving
     // ROOM_HOLDING_STATUSES releases the rooms with no caller involvement.
+    // The room *cards* are not a hold: they record which room the party was
+    // actually given, which is what the invoice is priced from. A stay that
+    // happened keeps them; one that was cancelled, rejected or never arrived
+    // gives them up with the rooms.
     if (!ROOM_HOLDING_STATUSES.includes(update.status)) {
       db.room_holds = db.room_holds.filter((h) => h.booking_id !== id);
-      assignRoomsToCards(db, id, []);
+      if (update.status !== "VACATED") assignRoomsToCards(db, id, []);
     }
     b.updated_at = new Date().toISOString();
     db.booking_logs.push({

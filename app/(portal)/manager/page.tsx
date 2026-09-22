@@ -11,6 +11,9 @@ import { cn } from "@/lib/utils";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
 import { PageHeader } from "@/components/page-header";
 
+/** How far back the desk's "checked out, not yet settled" list reaches. */
+const UNSETTLED_WINDOW_DAYS = 30;
+
 export default async function ManagerPage({
   searchParams,
 }: {
@@ -34,13 +37,15 @@ export default async function ManagerPage({
   const current =
     guestHouses.find((g) => g.name.toLowerCase() === (gh ?? "").toLowerCase()) ?? guestHouses[0];
 
-  const [pending, allApproved, allOccupied, cancellationRequests, rooms] = await Promise.all([
-    store.listBookings({ status: "PENDING_GH_MANAGER", guestHouseId: current.id }),
-    store.listBookings({ status: "APPROVED", guestHouseId: current.id }),
-    store.listBookings({ status: "OCCUPIED", guestHouseId: current.id }),
-    store.listBookings({ status: "CANCELLATION_REQUESTED", guestHouseId: current.id }),
-    store.listRooms(current.id),
-  ]);
+  const [pending, allApproved, allOccupied, allVacated, cancellationRequests, rooms] =
+    await Promise.all([
+      store.listBookings({ status: "PENDING_GH_MANAGER", guestHouseId: current.id }),
+      store.listBookings({ status: "APPROVED", guestHouseId: current.id }),
+      store.listBookings({ status: "OCCUPIED", guestHouseId: current.id }),
+      store.listBookings({ status: "VACATED", guestHouseId: current.id }),
+      store.listBookings({ status: "CANCELLATION_REQUESTED", guestHouseId: current.id }),
+      store.listRooms(current.id),
+    ]);
   const now = new Date();
 
   // Split the stays by where they actually are in time, not by status. An
@@ -59,6 +64,33 @@ export default async function ManagerPage({
   // A stay past its check-out that was never marked Vacated still needs
   // closing off, so it stays visible with the current occupants.
   const overdueStays = stays.filter((b) => stayPhase(b, now) === "past");
+
+  /**
+   * Checked out, not yet settled.
+   *
+   * Marking a guest Vacated took their stay off every screen the manager has,
+   * while `invoiceBlocker` says an invoice is issued "at check-out" — so a
+   * desk that closed a stay off first had no way back to its bill. These stay
+   * in front of the manager until the invoice is paid (or cancelled, which
+   * only reopens the question). Bounded to the last few weeks: older ones are
+   * the accounts section's business, through the archive and the monthly
+   * collections export, not the desk's daily list.
+   */
+  const recentlyVacated = allVacated
+    .filter((b) => b.service_type !== "meals_only")
+    .filter((b) => Date.parse(b.check_out) >= now.getTime() - UNSETTLED_WINDOW_DAYS * 86_400_000);
+  const settled = new Set(
+    (
+      await store
+        .listInvoices({ bookingIds: recentlyVacated.map((b) => b.id) })
+        .catch(() => [])
+    )
+      .filter((i) => i.status === "paid")
+      .map((i) => i.booking_id)
+  );
+  const toBill = recentlyVacated
+    .filter((b) => !settled.has(b.id))
+    .sort((a, b) => b.check_out.localeCompare(a.check_out));
 
   // "Today" is the guest house's day, not the server's — see lib/tz.ts.
   const { start: dayStart, end: dayEnd } = instituteDayBounds(toInstituteDateValue(now));
@@ -135,6 +167,7 @@ export default async function ManagerPage({
         current={currentStays}
         upcoming={upcomingStays}
         overdue={overdueStays}
+        toBill={toBill}
         checkoutsToday={checkoutsToday}
         cancellationRequests={cancellationRequests}
         rooms={rooms}

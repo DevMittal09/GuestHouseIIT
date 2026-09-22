@@ -8,7 +8,9 @@ What exists today, with file paths.
 | --- | --- |
 | Public website (home, booking entry points, guidelines, gallery, contact) | `app/(site)/*`, `components/site/*` — see [10-ui-design.md](10-ui-design.md) |
 | Sign-in (LDAP + Google button) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` → `components/login-form.tsx` |
-| "Sign in with Google" placeholder (persona picker, honours `next`) | `app/(site)/mock-login/page.tsx` |
+| Google sign-in (real OpenID Connect: state, PKCE, verified id_token) | `lib/oidc.ts`, `app/api/auth/google/start`, `app/api/auth/google/callback` |
+| Developer persona picker — **only with `DEV_LOGIN=true`, 404 in production** | `app/(site)/mock-login/page.tsx` |
+| Sessions (rows, opaque token, idle/absolute expiry, rotation, revoke) | `lib/sessions.ts` |
 | Login / logout actions | `app/actions/auth.ts` (`signInWithLdap` — directory check, `ldap:<uid>` throttle, profile by `ldap_uid`, safe `next`; `loginAs(id, next)`; `logout` → `/sign-in`) |
 | Academic records (the Requester details card) | `lib/academic/` — `index.ts` (`getAcademicSource()` from env; `academicRecordFor()`, cached and never throwing), `http-source.ts` (real; `recordFromJson` is the field mapping), `mock-source.ts` (dummy records), `fields.ts` (role → kind, display order, guardian and Copy-to rules), `details.ts` (rows + Copy to for the card). See [12-academic-records.md](12-academic-records.md) |
 | LDAP directory | `lib/ldap/` — `index.ts` (`getDirectory()` from env), `ldap-directory.ts` (real), `mock-directory.ts` (dummy accounts), `link.ts` (entry → profile, opt-in link by email), `import.ts` (bulk import planner), `uid.ts` (client-safe rules). See [11-ldap-accounts.md](11-ldap-accounts.md) |
@@ -180,7 +182,9 @@ for.
   request for an approved/occupied booking, the manager can approve or reject it
   via `approveCancellation` / `rejectCancellation` in `app/actions/bookings.ts`.
 
-Queue pages poll every 5 s via `components/auto-refresh.tsx`.
+Queue pages keep themselves current through `components/live-updates.tsx`:
+Supabase realtime on bookings, room holds, blocks and invoices where Supabase
+is configured, and a 30-second poll where it is not (Phase 9).
 
 ## Room availability grid (`/availability`)
 
@@ -345,9 +349,9 @@ CSV / PDF" pair next to the result count, so once the filters are set the only
 remaining choice is the file format. The PDF button appears for GH Manager and
 Developer only; everyone else sees CSV alone.
 
-Polling is deliberately **off** on this route (`NO_POLL_PREFIXES` in
-`components/auto-refresh.tsx`): the archive is historical, and a 5-second
-refresh would only re-run a full scan and churn the table under the reader.
+Refreshing is deliberately **off** on this route (`NO_REFRESH_PREFIXES` in
+`components/live-updates.tsx`): the archive is historical, and re-fetching
+would only re-run a full scan and churn the table under the reader.
 
 ## Developer console (`/admin`)
 
@@ -755,6 +759,30 @@ production), `lib/crypto.ts` (AES-256-GCM for ID numbers and TOTP secrets),
 download and erasure requests), `lib/log.ts` (redacted JSON logs, optional
 Sentry), `proxy.ts` (CSP nonces and the other headers). Console: **Security**
 (second factor, sessions, data requests) and **Audit Log** (developer).
+
+## Performance and tests (Phase 9)
+
+`lib/revalidate.ts` (three named sets in place of 25 whole-application cache
+drops), `components/live-updates.tsx` (Supabase realtime on bookings, holds,
+blocks and invoices; a 30-second poll where there is no Supabase),
+`lib/site-data.ts` (the public site's data held under the `site` cache tag for
+half an hour, expired by `revalidateEverything()`), migration 22
+(`bookings.search_text` + GIN, and the indexes every desk read uses) with
+`SupabaseStore.searchBookings` pushing the keyword down, `vercel.json`
+(`regions: ["bom1"]`, the two crons).
+
+Tests: `npm test` (Vitest, unit and store), `npm run typecheck`, and
+`npm run test:e2e` — Playwright against a **production build on the mock
+store**, on a throwaway database file:
+
+| Spec | What it walks |
+| --- | --- |
+| `e2e/booking-journey.spec.ts` | student books → warden forwards → manager allocates → desk checks in and out → invoice issued → payment recorded |
+| `e2e/official-and-dining.spec.ts` | a faculty official stay through the HOD; a meals-only booking approved by the manager and counted on the kitchen's day sheet |
+| `e2e/public-site.spec.ts` | the public pages at 320 px, with no sideways scroll |
+
+`e2e/helpers.ts` holds the accounts, sign-in, and the form-filling steps.
+`.github/workflows/ci.yml` runs all of it with Supabase switched off.
 
 ## Branding
 
