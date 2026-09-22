@@ -1,3 +1,4 @@
+import { isKitchenConfirmed, kitchenHeadCount, MEAL_KEYS } from "@/lib/meals";
 import { getStore } from "@/lib/store";
 import {
   addDaysToDateValue,
@@ -218,6 +219,18 @@ export async function queueDailyDeskReports(now: Date): Promise<number> {
     // nothing to be a log *of*.
     if (rooms.length === 0) continue;
 
+    // The kitchen's day, where the guest house serves meals (Phase 6).
+    let kitchen: t.DailyReportSections["kitchen"];
+    if (guestHouse.serves_meals) {
+      const eating = (await store.listBookingsWithMealsOn(day, guestHouse.id)).filter((b) =>
+        isKitchenConfirmed(b.status)
+      );
+      kitchen = {
+        counts: MEAL_KEYS.map((meal) => ({ meal, ...kitchenHeadCount(eating, day, meal) })),
+        dining: eating.filter((b) => b.service_type === "meals_only"),
+      };
+    }
+
     queued += await queueMessages([
       {
         eventKey: "desk.daily_report",
@@ -227,7 +240,7 @@ export async function queueDailyDeskReports(now: Date): Promise<number> {
         doc: t.dailyDeskReport(
           day,
           guestHouse.name,
-          { arrivals, departures, inHouse, overdue, awaitingAllocation },
+          { arrivals, departures, inHouse, overdue, awaitingAllocation, kitchen },
           { rooms: rooms.length, held: held.length }
         ),
         stamp: `${day}:${guestHouse.id}`,

@@ -718,6 +718,16 @@ are in `public/invoice/`. The flow, in the manager's and caretaker's consoles
   (`canCancelInvoices`). Each action re-checks and writes `invoice.issued`,
   `invoice.paid` or `invoice.cancelled` to the security audit log.
 
+## Dining (Phase 6)
+
+Meals without a room (`service_type: "meals_only"`) for faculty, staff and
+offices (`MEALS_ONLY_ROLES`) at guest houses that serve meals; `/book-meal`
+opens `/book?service=meals_only`. `/manager/meals` is the kitchen's day
+(manager and caretaker): plates per meal from `kitchenHeadCount`, confirmed and
+pending bookings, and **Dining to invoice** — approved dining bookings whose
+meals have begun and have no invoice. The daily desk report carries the same
+plates and the day's dining bookings.
+
 ## Branding
 
 **Since 19 Sep 2026 the palette comes from the guest house design handoff**

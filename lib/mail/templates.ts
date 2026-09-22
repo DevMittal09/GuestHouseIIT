@@ -1,6 +1,6 @@
 import { formatINR, formatInvoiceDate, type InvoiceDocument } from "@/lib/invoice";
 import { formatDateTime, formatDate } from "@/lib/format";
-import { describeMealDays, describeMeals } from "@/lib/meals";
+import { describeMealDays, describeMeals, MEAL_LABELS, mealsOn } from "@/lib/meals";
 import { describeParty } from "@/lib/occupancy";
 import { PETS_POLICY_NOTICE } from "@/lib/policy";
 import { describeDebit } from "@/lib/debit-heads";
@@ -14,6 +14,7 @@ import {
   type BookingWithDetails,
   type Profile,
 } from "@/lib/types";
+import type { MealKey } from "@/lib/types";
 import { portalUrl } from "./config";
 import type { Block, EmailDocument } from "./render";
 
@@ -593,6 +594,15 @@ export interface DailyReportSections {
   inHouse: BookingWithDetails[];
   overdue: BookingWithDetails[];
   awaitingAllocation: BookingWithDetails[];
+  /**
+   * The kitchen's day (Phase 6), for a guest house that serves meals: plates
+   * per meal from approved bookings, and the dining (meals-only) bookings
+   * eating today. Absent where no meals are served.
+   */
+  kitchen?: {
+    counts: { meal: MealKey; veg: number; non_veg: number; unknown: number; total: number }[];
+    dining: BookingWithDetails[];
+  };
 }
 
 export function dailyDeskReport(
@@ -616,7 +626,8 @@ export function dailyDeskReport(
     sections.departures.length === 0 &&
     sections.inHouse.length === 0 &&
     sections.overdue.length === 0 &&
-    sections.awaitingAllocation.length === 0;
+    sections.awaitingAllocation.length === 0 &&
+    (sections.kitchen?.counts.every((c) => c.total === 0) ?? true);
 
   return {
     heading: `${guestHouseName} — daily log for ${formatDate(day)}`,
@@ -657,6 +668,34 @@ export function dailyDeskReport(
               ],
             },
             { kind: "table" as const, head, rows: sections.overdue.map(stayRow) },
+          ]
+        : []),
+      ...(sections.kitchen
+        ? [
+            {
+              kind: "table" as const,
+              caption: "Kitchen — plates today (approved bookings)",
+              head: ["Meal", "Vegetarian", "Non-vegetarian", "Unspecified", "Total"],
+              rows: sections.kitchen.counts.map((c) => [
+                MEAL_LABELS[c.meal],
+                String(c.veg),
+                String(c.non_veg),
+                String(c.unknown),
+                String(c.total),
+              ]),
+            },
+            {
+              kind: "table" as const,
+              caption: "Dining bookings today (meals without a room)",
+              head: ["Reference", "Booked by", "People", "Meals today", "Head"],
+              rows: sections.kitchen.dining.map((b) => [
+                b.booking_reference_id,
+                b.on_behalf_of_name ?? b.requester.full_name,
+                String(b.meal_guest_count ?? 0),
+                mealsOn(b.meals, day).map((m) => MEAL_LABELS[m]).join(", "),
+                describeDebit(b),
+              ]),
+            },
           ]
         : []),
       ...(sections.awaitingAllocation.length > 0

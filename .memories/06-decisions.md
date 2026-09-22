@@ -1515,3 +1515,31 @@ template was in `public/`. The header images are `word/media/image1.jpg` and
 - **"plus dining bookings"** in the brief's meal-count rule is read as: a
   dining (meals-only) booking is invoiced the same way, its covers being its
   head count × meals. Phase 6 builds on this.
+
+## Phase 6: dining (22 Sep 2026)
+
+Most of dining already existed (meals-only service, `/book-meal`, the per-day
+kitchen page `/manager/meals`, dining debit heads from Phase 4). Phase 6 closed
+the gaps:
+
+- **Who:** meals without a room are for faculty, staff and offices —
+  `employee`, `official`, `iar_cell` (the IAR Office is an office), plus the
+  manager booking for someone. The IAR **Student** Cell was dropped: it is
+  students, and the brief names faculty, staff and offices. It still books
+  room + meals.
+- **Where:** only at guest houses flagged `serves_meals`; the server now refuses
+  a meals-only booking elsewhere even with an empty meal grid.
+- **Heads:** Department / PDF / Personal for faculty, Department for staff, the
+  office's head for offices; never Project (schema-enforced since Phase 4).
+- **Kitchen count** is one pure function (`kitchenHeadCount`,
+  `isKitchenConfirmed` in `lib/meals.ts`) used by the kitchen page and the daily
+  report, so the two cannot disagree. Approved / occupied /
+  cancellation-requested bookings count; pending ones are shown apart.
+- **Daily desk report** gains, for a guest house that serves meals, the plates
+  per meal (veg / non-veg / unspecified) and the day's dining bookings. A day
+  with lunches to cook is not "quiet".
+- **Billing:** a dining booking is invoiced from its first meal day once
+  approved (`invoiceBlocker`), from "Dining to invoice" on the kitchen page (or
+  the Invoice button on its row). Covers are the head count × meals; the desk
+  corrects them to what was served. No separate dining booking is attached to a
+  stay's invoice — each is invoiced on its own.

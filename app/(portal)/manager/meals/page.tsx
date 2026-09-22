@@ -21,9 +21,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { canViewAllOccupancy } from "@/lib/access";
+import { canIssueInvoices, canViewAllOccupancy } from "@/lib/access";
+import { InvoiceDialog } from "@/components/invoice-dialog";
 import { getCurrentUser } from "@/lib/auth";
 import {
+  isKitchenConfirmed,
+  kitchenHeadCount,
   MEAL_KEYS,
   MEAL_LABELS,
   mealTimes,
@@ -39,8 +42,6 @@ import {
   MEAL_PREFERENCE_LABELS,
   SERVICE_TYPE_LABELS,
   type BookingWithDetails,
-  type MealKey,
-  type MealPreference,
 } from "@/lib/types";
 
 /**
@@ -54,8 +55,6 @@ import {
  * waiting on a warden may never happen, and cooking for it would be cooking
  * for nobody; it is listed separately so the manager can see it coming.
  */
-const CONFIRMED = new Set(["APPROVED", "OCCUPIED", "CANCELLATION_REQUESTED"]);
-
 export default async function DailyMealsPage({
   searchParams,
 }: {
@@ -87,8 +86,24 @@ export default async function DailyMealsPage({
     guestHouses.find((g) => g.name.toLowerCase() === (gh ?? "").toLowerCase()) ?? guestHouses[0];
 
   const bookings = await store.listBookingsWithMealsOn(day, current.id);
-  const confirmed = bookings.filter((b) => CONFIRMED.has(b.status));
-  const provisional = bookings.filter((b) => !CONFIRMED.has(b.status));
+  const confirmed = bookings.filter((b) => isKitchenConfirmed(b.status));
+  const provisional = bookings.filter((b) => !isKitchenConfirmed(b.status));
+  const canInvoice = canIssueInvoices(user.role);
+
+  // Dining bookings whose meals have started and that have no live invoice
+  // yet: the desk bills them here, as it bills stays from the reception list.
+  const today = toInstituteDateValue(new Date());
+  let toInvoice: BookingWithDetails[] = [];
+  if (canInvoice) {
+    const dining = (await store.listBookings({ status: "APPROVED", guestHouseId: current.id })).filter(
+      (b) => b.service_type === "meals_only" && [...b.meals].map((d) => d.date).sort()[0] <= today
+    );
+    const invoices = dining.length
+      ? await store.listInvoices({ bookingIds: dining.map((b) => b.id) }).catch(() => [])
+      : [];
+    const invoiced = new Set(invoices.filter((i) => i.status === "issued" || i.status === "paid").map((i) => i.booking_id));
+    toInvoice = dining.filter((b) => !invoiced.has(b.id));
+  }
 
   return (
     <div className="space-y-6">
@@ -133,8 +148,8 @@ export default async function DailyMealsPage({
 
       <div className="grid gap-4 sm:grid-cols-3">
         {MEAL_KEYS.map((meal) => {
-          const counts = headCount(confirmed, day, meal);
-          const pending = headCount(provisional, day, meal);
+          const counts = kitchenHeadCount(confirmed, day, meal);
+          const pending = kitchenHeadCount(provisional, day, meal);
           return (
             <Card key={meal}>
               <CardHeader className="pb-3">
@@ -163,6 +178,7 @@ export default async function DailyMealsPage({
         description="Approved or already in the building. These are the ones to cook for."
         bookings={confirmed}
         day={day}
+        canInvoice={canInvoice}
       />
 
       {provisional.length > 0 && (
@@ -174,31 +190,41 @@ export default async function DailyMealsPage({
           muted
         />
       )}
+
+      {canInvoice && (
+        <section>
+          <h2 className="text-lg font-semibold">
+            Dining to invoice{" "}
+            <Badge variant="secondary" className="align-middle">
+              {toInvoice.length}
+            </Badge>
+          </h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Meals-only bookings at {current.name} whose meals have begun and that have no invoice yet. Correct
+            the counts to what the kitchen served, then issue.
+          </p>
+          {toInvoice.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">Nothing waiting.</p>
+          ) : (
+            <ul className="divide-y rounded-lg border">
+              {toInvoice.map((b) => (
+                <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+                  <span>
+                    <span className="font-mono text-xs">{b.booking_reference_id}</span>{" "}
+                    <span className="font-medium">{b.on_behalf_of_name ?? b.requester.full_name}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {b.meal_guest_count ?? 0} people · {b.meals.map((d) => formatDateValue(d.date)).join(", ")}
+                    </span>
+                  </span>
+                  <InvoiceDialog booking={b} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
-}
-
-/** Guests eating one meal on one day, split by preference. */
-function headCount(
-  bookings: BookingWithDetails[],
-  day: string,
-  meal: MealKey
-): Record<MealPreference | "unknown", number> {
-  const counts = { veg: 0, non_veg: 0, unknown: 0 };
-  for (const booking of bookings) {
-    if (!mealsOn(booking.meals, day).includes(meal)) continue;
-    // A meals-only booking has no guest rows, so its head count is the number
-    // the requester gave. Everything else counts the guests needing a bed —
-    // an infant shares a guardian's plate as well as their bed.
-    const people =
-      booking.service_type === "meals_only"
-        ? (booking.meal_guest_count ?? 0)
-        : countBedGuests(booking.guests);
-    // A booking made before the preference existed is counted, not guessed at:
-    // the kitchen would rather see "unspecified" than cook the wrong thing.
-    counts[booking.meal_preference ?? "unknown"] += people;
-  }
-  return counts;
 }
 
 function MealBookingTable({
@@ -207,12 +233,14 @@ function MealBookingTable({
   bookings,
   day,
   muted = false,
+  canInvoice = false,
 }: {
   title: string;
   description: string;
   bookings: BookingWithDetails[];
   day: string;
   muted?: boolean;
+  canInvoice?: boolean;
 }) {
   return (
     <section>
@@ -239,6 +267,7 @@ function MealBookingTable({
                 <TableHead>Preference</TableHead>
                 <TableHead>Meals</TableHead>
                 <TableHead>Status</TableHead>
+                {canInvoice && <TableHead />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -271,6 +300,11 @@ function MealBookingTable({
                     <TableCell>
                       <StatusBadge status={b.status} />
                     </TableCell>
+                    {canInvoice && (
+                      <TableCell className="text-right">
+                        {b.service_type === "meals_only" && <InvoiceDialog booking={b} />}
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}

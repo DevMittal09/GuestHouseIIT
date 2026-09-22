@@ -611,14 +611,23 @@ export const GST_INCLUDED_NOTE = "The tariff rates include GST; the amounts abov
  * so an occupied stay qualifies, billed to its booked check-out.
  */
 export function invoiceBlocker(
-  booking: Pick<BookingWithDetails, "status" | "service_type">,
-  doc: Pick<InvoiceDocument, "problems" | "room_lines" | "meal_lines">
+  booking: Pick<BookingWithDetails, "status" | "service_type" | "meals">,
+  doc: Pick<InvoiceDocument, "problems" | "room_lines" | "meal_lines">,
+  now: Date = new Date()
 ): string | null {
-  const billable =
-    booking.status === "OCCUPIED" ||
-    booking.status === "VACATED" ||
-    (booking.service_type === "meals_only" && booking.status === "APPROVED");
-  if (!billable) return "An invoice is issued at check-out, once the guest has checked in.";
+  if (booking.service_type === "meals_only") {
+    // A dining booking is billed once its first meal has come round — the
+    // kitchen may already have served it — and never before it was approved.
+    if (!["APPROVED", "OCCUPIED", "VACATED"].includes(booking.status)) {
+      return "A dining booking is invoiced once it has been approved.";
+    }
+    const first = [...booking.meals].map((d) => d.date).sort()[0];
+    if (first && first > toInstituteDateValue(now)) {
+      return `A dining booking is invoiced from the day of its first meal (${formatDateValue(first, { year: true })}).`;
+    }
+  } else if (booking.status !== "OCCUPIED" && booking.status !== "VACATED") {
+    return "An invoice is issued at check-out, once the guest has checked in.";
+  }
   if (doc.problems.length > 0) return doc.problems[0];
   if (doc.room_lines.length === 0 && doc.meal_lines.every((l) => l.count === 0)) {
     return "There is nothing to charge: no rooms were allocated and no meals were served.";

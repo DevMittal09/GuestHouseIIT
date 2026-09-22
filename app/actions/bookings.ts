@@ -175,7 +175,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     // Meals only where the guest house serves them (Hamsanandi by default,
     // set in the developer console). The form hides the grid elsewhere; this
     // is the check a crafted request meets.
-    if (payload.meals.length > 0 && !guestHouse.serves_meals) {
+    if ((payload.meals.length > 0 || payload.service_type === "meals_only") && !guestHouse.serves_meals) {
       return { ok: false, error: `Meals are not served at ${guestHouse.name}` };
     }
 

@@ -330,3 +330,48 @@ function twelveHour(time: string): [string, "AM" | "PM"] {
   const hour12 = hour % 12 === 0 ? 12 : hour % 12;
   return [`${hour12}:${String(minute).padStart(2, "0")}`, hour < 12 ? "AM" : "PM"];
 }
+
+// ---------------------------------------------------------------- kitchen
+
+/**
+ * Bookings the kitchen cooks for: approved or already in the building. A
+ * request still in the approval chain may never happen.
+ */
+export const KITCHEN_CONFIRMED_STATUSES = ["APPROVED", "OCCUPIED", "CANCELLATION_REQUESTED"] as const;
+
+export function isKitchenConfirmed(status: string): boolean {
+  return (KITCHEN_CONFIRMED_STATUSES as readonly string[]).includes(status);
+}
+
+type KitchenBooking = {
+  meals: MealPlan;
+  service_type: string;
+  meal_guest_count: number | null;
+  meal_preference: "veg" | "non_veg" | null;
+  guests: { is_infant?: boolean }[];
+};
+
+/** People eating at one sitting of a booking: a dining booking's head count, else the bed guests. */
+export function dinersFor(booking: KitchenBooking): number {
+  return booking.service_type === "meals_only"
+    ? (booking.meal_guest_count ?? 0)
+    : booking.guests.filter((g) => !g.is_infant).length;
+}
+
+/**
+ * Plates for one meal on one day, split by preference. A booking made before
+ * the preference existed is "unknown" — the kitchen would rather see that than
+ * have it guessed.
+ */
+export function kitchenHeadCount(
+  bookings: KitchenBooking[],
+  day: string,
+  meal: MealKey
+): { veg: number; non_veg: number; unknown: number; total: number } {
+  const counts = { veg: 0, non_veg: 0, unknown: 0 };
+  for (const b of bookings) {
+    if (!mealsOn(b.meals, day).includes(meal)) continue;
+    counts[b.meal_preference ?? "unknown"] += dinersFor(b);
+  }
+  return { ...counts, total: counts.veg + counts.non_veg + counts.unknown };
+}

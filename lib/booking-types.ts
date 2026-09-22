@@ -120,7 +120,6 @@ export const MEALS_ONLY_ROLES: Role[] = [
   "employee",
   "official",
   "iar_cell",
-  "iar_student_cell",
   "gh_manager",
 ];
 
