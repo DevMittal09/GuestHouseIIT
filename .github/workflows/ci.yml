@@ -31,6 +31,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # One second, and it names the problem instead of letting `npm ci` fail
+      # with a wall of "Missing: ... from lock file".
+      - run: npm run check:lockfile
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
@@ -48,6 +51,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - run: npm run check:lockfile
       - run: npm ci
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
