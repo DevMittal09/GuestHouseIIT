@@ -3,6 +3,7 @@ import { runDailyMailJobs } from "@/lib/mail/digest";
 import { drainOutbox } from "@/lib/mail/dispatch";
 import { runNoShowRelease } from "@/lib/no-show-server";
 import { getRules } from "@/lib/settings-server";
+import { getStore } from "@/lib/store";
 
 /**
  * The daily mail jobs: approval digests, check-in reminders, the day-wise
@@ -37,6 +38,8 @@ async function handle(request: Request): Promise<Response> {
     // Release no-shows first (Phase 7, off unless the Setting is above 0), so
     // the day's desk report already shows the rooms as free.
     const noShowsReleased = await runNoShowRelease(new Date(), (await getRules()).booking.no_show_release_hours);
+    // Housekeeping: sessions and throttle windows long dead (migration 21).
+    const sessionsPurged = await getStore().purgeExpiredSessions().catch(() => 0);
     const queued = await runDailyMailJobs();
     const dispatched = await drainOutbox();
 
@@ -45,6 +48,7 @@ async function handle(request: Request): Promise<Response> {
       transport: mailConfig().transport,
       queued,
       noShowsReleased,
+      sessionsPurged,
       dispatched,
     });
   } catch (error) {
@@ -70,10 +74,11 @@ function failed(error: unknown): Response {
 }
 
 
-export async function GET(request: Request) {
-  return handle(request);
-}
-
+/**
+ * POST only (Phase 8). A GET can be triggered by a link, a prefetch or a
+ * crawler, and its URL — secret and all — ends up in browser history and
+ * access logs.
+ */
 export async function POST(request: Request) {
   return handle(request);
 }

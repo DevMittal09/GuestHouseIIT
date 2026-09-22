@@ -1,0 +1,7 @@
+# Security contact for the IIT Palakkad Guest House portal (RFC 9116).
+Contact: mailto:ghm@iitpkd.ac.in
+Contact: mailto:cert-in@iitpkd.ac.in
+Preferred-Languages: en
+Canonical: https://guesthouse.iitpkd.ac.in/.well-known/security.txt
+Expires: 2027-09-22T00:00:00.000Z
+Policy: https://guesthouse.iitpkd.ac.in/privacy

@@ -26,9 +26,10 @@ function GoogleMark() {
  * redirects on success, so the only state this holds is the error from a
  * failed attempt.
  *
- * "Sign in with Google" is a placeholder: it opens the mock account picker at
- * `/mock-login` until Google OAuth is connected, carrying `next` along so both
- * doors land in the same place. "Keep me signed in" and "Forgot password" from
+ * "Sign in with Google" starts the real OpenID Connect flow
+ * (`/api/auth/google/start`, Phase 8) when Google is configured. Where it is
+ * not, and only where the developer doors are switched on, it opens the
+ * account picker instead; otherwise it is not shown at all. "Keep me signed in" and "Forgot password" from
  * the design are deliberately absent — passwords belong to the directory, and a
  * control that does nothing is worse than none.
  */
@@ -37,6 +38,8 @@ export function LoginForm({
   next,
   submitLabel = "Sign in",
   footnote,
+  googleSignIn = "none",
+  notice,
 }: {
   /** A dummy LDAP login to show, while sign-in checks the dummy directory. */
   sampleAccount: { uid: string; password: string } | null;
@@ -44,13 +47,18 @@ export function LoginForm({
   next?: string;
   submitLabel?: string;
   footnote?: React.ReactNode;
+  /** Real Google sign-in, the developer account picker, or neither. */
+  googleSignIn?: "google" | "dev" | "none";
+  /** A message from a failed sign-in (`?error=` on the way back from Google). */
+  notice?: string | null;
 }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const googleHref = next ? `/mock-login?next=${encodeURIComponent(next)}` : "/mock-login";
+  const googlePath = googleSignIn === "google" ? "/api/auth/google/start" : "/mock-login";
+  const googleHref = next ? `${googlePath}?next=${encodeURIComponent(next)}` : googlePath;
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -68,6 +76,11 @@ export function LoginForm({
   return (
     <div className="min-w-0">
       <div className="rounded-[2px] border border-t-[3px] border-border border-t-navy bg-white px-[clamp(18px,5vw,30px)] pt-8 pb-[34px]">
+        {notice && (
+          <p role="alert" className="mb-4 rounded-[3px] border border-red-300 bg-red-50 px-3 py-2 text-[14.5px] text-red-900">
+            {notice}
+          </p>
+        )}
         <h2 className="mb-1.5 text-[25px] font-semibold text-navy">Sign in</h2>
         <p className="mb-[22px] text-[14.5px] text-muted-foreground">
           With your institute LDAP account
@@ -123,19 +136,24 @@ export function LoginForm({
           </button>
         </form>
 
-        <div className="my-6 flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden="true">
-          <span className="h-px flex-1 bg-border" />
-          or
-          <span className="h-px flex-1 bg-border" />
-        </div>
+        {googleSignIn !== "none" && (
+          <>
+            <div className="my-6 flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden="true">
+              <span className="h-px flex-1 bg-border" />
+              or
+              <span className="h-px flex-1 bg-border" />
+            </div>
 
-        <Link
-          href={googleHref}
-          className="flex w-full items-center justify-center gap-3 rounded-[3px] border border-border-strong bg-white p-3 text-[15.5px] font-semibold text-navy transition-colors duration-150 hover:border-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
-        >
-          <GoogleMark />
-          Sign in with Google
-        </Link>
+            <Link
+              href={googleHref}
+              prefetch={false}
+              className="flex w-full items-center justify-center gap-3 rounded-[3px] border border-border-strong bg-white p-3 text-[15.5px] font-semibold text-navy transition-colors duration-150 hover:border-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+            >
+              <GoogleMark />
+              {googleSignIn === "google" ? "Sign in with Google" : "Developer sign-in (dev only)"}
+            </Link>
+          </>
+        )}
 
         {footnote && (
           <p className="mt-4 text-sm leading-normal text-muted-foreground">{footnote}</p>

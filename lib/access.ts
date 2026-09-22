@@ -95,6 +95,7 @@ export type ConsoleSection =
   | "mail_outbox"
   | "bookings"
   | "settings"
+  | "security"
   | "console_access";
 
 export const CONSOLE_SECTIONS: Record<
@@ -161,6 +162,12 @@ export const CONSOLE_SECTIONS: Record<
     roles: ["developer"],
     blurb:
       "The rules: official whitelist, hostels, room capacity, the booking window, stay length and meal times. Developer only.",
+  },
+  security: {
+    label: "Security",
+    href: "/admin/security",
+    roles: ["gh_manager", "developer"],
+    blurb: "Your second factor and the browsers you are signed in on.",
   },
   console_access: {
     label: "Console Access",

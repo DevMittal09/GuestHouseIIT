@@ -60,6 +60,8 @@ import {
 } from "./seed";
 import type { NewProjectInput, Project } from "@/lib/projects";
 import { blockOverlaps, type NewRoomBlockInput, type RoomBlock } from "@/lib/operations";
+import type { NewSessionInput, Session } from "@/lib/sessions";
+import type { NewPrivacyRequest, PrivacyRequest, RateLimitResult, UserMfa } from "@/lib/security";
 import { tariffLockedError, type NewTariffInput, type Tariff } from "@/lib/tariffs";
 import {
   invoiceColumnsFrom,
@@ -106,6 +108,11 @@ interface Db {
   invoice_counters?: Record<string, number>;
   /** Migration 20: rooms out of service. */
   room_blocks?: RoomBlock[];
+  /** Migration 21: server-side sessions, second factors, throttles, DPDP requests. */
+  sessions?: Session[];
+  user_mfa?: UserMfa[];
+  rate_limits?: Record<string, { window_start: string; count: number }>;
+  privacy_requests?: PrivacyRequest[];
   /** Queued notifications; see `lib/mail/dispatch.ts`. */
   email_outbox?: EmailMessage[];
   /** Only the mails whose wording has actually been edited (migration 13). */
@@ -115,13 +122,17 @@ interface Db {
 }
 
 // `MOCK_DB_PATH` lets the test suite run against a throwaway file instead of
-// the developer's working data.
-const DB_PATH = process.env.MOCK_DB_PATH || path.join(process.cwd(), ".local-db.json");
+// the developer's working data. Read on **every** access, not once at import:
+// a test that sets it in `beforeAll` would otherwise be too late if anything
+// had already pulled this module in, and would write to the real file.
+function dbPath(): string {
+  return process.env.MOCK_DB_PATH || path.join(process.cwd(), ".local-db.json");
+}
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 
 function loadDb(): Db {
-  if (fs.existsSync(/*turbopackIgnore: true*/ DB_PATH)) {
-    const db = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ DB_PATH, "utf8")) as Db;
+  if (fs.existsSync(/*turbopackIgnore: true*/ dbPath())) {
+    const db = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ dbPath(), "utf8")) as Db;
     // Self-heal databases created before newer features existed.
     let dirty = false;
     if (!db.form_configs) {
@@ -377,6 +388,23 @@ function loadDb(): Db {
       db.room_blocks = [];
       dirty = true;
     }
+    // Migration 21.
+    if (!db.sessions) {
+      db.sessions = [];
+      dirty = true;
+    }
+    if (!db.user_mfa) {
+      db.user_mfa = [];
+      dirty = true;
+    }
+    if (!db.rate_limits) {
+      db.rate_limits = {};
+      dirty = true;
+    }
+    if (!db.privacy_requests) {
+      db.privacy_requests = [];
+      dirty = true;
+    }
     if (dirty) saveDb(db);
     return db;
   }
@@ -481,7 +509,7 @@ function assignRoomsToCards(db: Db, bookingId: string, roomIds: string[]) {
 }
 
 function saveDb(db: Db) {
-  fs.writeFileSync(/*turbopackIgnore: true*/ DB_PATH, JSON.stringify(db, null, 2));
+  fs.writeFileSync(/*turbopackIgnore: true*/ dbPath(), JSON.stringify(db, null, 2));
 }
 
 export class MockStore implements DataStore {
@@ -1209,6 +1237,153 @@ export class MockStore implements DataStore {
   async setSetting(key: string, value: string): Promise<void> {
     const db = loadDb();
     db.app_settings = { ...(db.app_settings ?? {}), [key]: value };
+    saveDb(db);
+  }
+
+  // ---- sessions, 2FA and throttles (migration 21) ---------------------
+
+  async createSession(input: NewSessionInput): Promise<Session> {
+    const db = loadDb();
+    const now = new Date().toISOString();
+    const session: Session = { ...input, id: randomUUID(), created_at: now, last_seen_at: now };
+    (db.sessions ??= []).push(session);
+    saveDb(db);
+    return session;
+  }
+
+  async getSessionByToken(tokenHash: string): Promise<Session | null> {
+    return (loadDb().sessions ?? []).find((s) => s.token_hash === tokenHash) ?? null;
+  }
+
+  async touchSession(id: string, lastSeenAt: string, idleExpiresAt: string): Promise<void> {
+    const db = loadDb();
+    const session = (db.sessions ?? []).find((s) => s.id === id);
+    if (!session) return;
+    session.last_seen_at = lastSeenAt;
+    session.idle_expires_at = idleExpiresAt;
+    saveDb(db);
+  }
+
+  async revokeSession(id: string): Promise<void> {
+    const db = loadDb();
+    const session = (db.sessions ?? []).find((s) => s.id === id);
+    if (!session || session.revoked_at) return;
+    session.revoked_at = new Date().toISOString();
+    saveDb(db);
+  }
+
+  async revokeUserSessions(userId: string): Promise<number> {
+    const db = loadDb();
+    const now = new Date().toISOString();
+    let count = 0;
+    for (const session of db.sessions ?? []) {
+      if (session.user_id === userId && !session.revoked_at) {
+        session.revoked_at = now;
+        count++;
+      }
+    }
+    if (count > 0) saveDb(db);
+    return count;
+  }
+
+  async markSessionVerified(id: string, at: string): Promise<void> {
+    const db = loadDb();
+    const session = (db.sessions ?? []).find((s) => s.id === id);
+    if (!session) return;
+    session.verified_at = at;
+    saveDb(db);
+  }
+
+  async listUserSessions(userId: string): Promise<Session[]> {
+    const now = Date.now();
+    return (loadDb().sessions ?? [])
+      .filter((s) => s.user_id === userId && !s.revoked_at && Date.parse(s.absolute_expires_at) > now)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+
+  async purgeExpiredSessions(): Promise<number> {
+    const db = loadDb();
+    const cutoff = Date.now() - 86_400_000;
+    const before = (db.sessions ?? []).length;
+    db.sessions = (db.sessions ?? []).filter(
+      (s) => Date.parse(s.absolute_expires_at) > cutoff && !(s.revoked_at && Date.parse(s.revoked_at) < cutoff)
+    );
+    saveDb(db);
+    return before - db.sessions.length;
+  }
+
+  async getUserMfa(userId: string): Promise<UserMfa | null> {
+    return (loadDb().user_mfa ?? []).find((m) => m.user_id === userId) ?? null;
+  }
+
+  async saveUserMfa(record: UserMfa): Promise<void> {
+    const db = loadDb();
+    const list = (db.user_mfa ??= []);
+    const at = list.findIndex((m) => m.user_id === record.user_id);
+    if (at === -1) list.push(record);
+    else list[at] = record;
+    saveDb(db);
+  }
+
+  async deleteUserMfa(userId: string): Promise<void> {
+    const db = loadDb();
+    db.user_mfa = (db.user_mfa ?? []).filter((m) => m.user_id !== userId);
+    saveDb(db);
+  }
+
+  async hitRateLimit(key: string, limit: number, windowSeconds: number): Promise<RateLimitResult> {
+    // `hit_rate_limit()` in one process: read, count, write, with no await in
+    // between, so two requests cannot interleave.
+    const db = loadDb();
+    const limits = (db.rate_limits ??= {});
+    const now = Date.now();
+    const entry = limits[key];
+    const fresh = !entry || now - Date.parse(entry.window_start) > windowSeconds * 1000;
+    const next = fresh ? { window_start: new Date(now).toISOString(), count: 1 } : { ...entry, count: entry.count + 1 };
+    limits[key] = next;
+    saveDb(db);
+    return {
+      allowed: next.count <= limit,
+      attempts: next.count,
+      retryAfter: Math.max(0, Math.ceil((Date.parse(next.window_start) + windowSeconds * 1000 - now) / 1000)),
+    };
+  }
+
+  // ---- privacy requests (migration 21) --------------------------------
+
+  async createPrivacyRequest(input: NewPrivacyRequest): Promise<PrivacyRequest> {
+    const db = loadDb();
+    const row: PrivacyRequest = {
+      ...input,
+      id: randomUUID(),
+      status: "open",
+      response: null,
+      created_at: new Date().toISOString(),
+      handled_at: null,
+      handled_by: null,
+    };
+    (db.privacy_requests ??= []).push(row);
+    saveDb(db);
+    return row;
+  }
+
+  async listPrivacyRequests(filter: { userId?: string; status?: PrivacyRequest["status"] }): Promise<PrivacyRequest[]> {
+    return (loadDb().privacy_requests ?? [])
+      .filter((r) => (!filter.userId || r.user_id === filter.userId) && (!filter.status || r.status === filter.status))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+
+  async resolvePrivacyRequest(
+    id: string,
+    patch: { status: PrivacyRequest["status"]; response: string; handledBy: string }
+  ): Promise<void> {
+    const db = loadDb();
+    const row = (db.privacy_requests ?? []).find((r) => r.id === id);
+    if (!row) return;
+    row.status = patch.status;
+    row.response = patch.response;
+    row.handled_at = new Date().toISOString();
+    row.handled_by = patch.handledBy;
     saveDb(db);
   }
 

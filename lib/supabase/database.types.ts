@@ -17,6 +17,8 @@ import type { AuditEvent } from "@/lib/audit";
 import type { Project } from "@/lib/projects";
 import type { Tariff } from "@/lib/tariffs";
 import type { InvoiceRecord } from "@/lib/invoice";
+import type { Session } from "@/lib/sessions";
+import type { PrivacyRequest, UserMfa } from "@/lib/security";
 
 /** Any value a jsonb column can hold. */
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -165,6 +167,31 @@ export interface Database {
         Row: BookingRoomRow;
         Insert: Insertable<BookingRoomRow, "id" | "room_type" | "assigned_room_id" | "is_legacy">;
         Update: Partial<BookingRoomRow>;
+        Relationships: [];
+      };
+      /** Migration 21: server-side sessions. */
+      sessions: {
+        Row: Session;
+        Insert: Insertable<Session, "id" | "created_at" | "last_seen_at">;
+        Update: Partial<Session>;
+        Relationships: [];
+      };
+      user_mfa: {
+        Row: UserMfa;
+        Insert: Insertable<UserMfa, "key_version" | "recovery_codes" | "last_step" | "confirmed_at" | "created_at" | "updated_at">;
+        Update: Partial<UserMfa>;
+        Relationships: [];
+      };
+      rate_limits: {
+        Row: { key: string; window_start: string; count: number };
+        Insert: { key: string; window_start?: string; count?: number };
+        Update: Partial<{ window_start: string; count: number }>;
+        Relationships: [];
+      };
+      privacy_requests: {
+        Row: PrivacyRequest;
+        Insert: Insertable<PrivacyRequest, "id" | "status" | "response" | "created_at" | "handled_at" | "handled_by">;
+        Update: Partial<PrivacyRequest>;
         Relationships: [];
       };
       /** Migration 20: rooms out of service. `during` is a tstzrange literal. */
@@ -337,6 +364,19 @@ export interface Database {
           p_replaces?: string | null;
         };
         Returns: InvoiceRecord;
+      };
+      /** Migration 21: counts one attempt against a key, in one statement. */
+      hit_rate_limit: {
+        Args: { p_key: string; p_limit: number; p_window_seconds: number };
+        Returns: { allowed: boolean; attempts: number; retry_after: number }[];
+      };
+      purge_expired_sessions: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      purge_rate_limits: {
+        Args: Record<string, never>;
+        Returns: number;
       };
       claim_queued_emails: {
         Args: {

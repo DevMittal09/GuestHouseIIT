@@ -30,6 +30,13 @@ import type { AuditEvent, AuditFilter, NewAuditEvent } from "@/lib/audit";
 import type { NewProjectInput, Project } from "@/lib/projects";
 import type { NewTariffInput, Tariff } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
+import type { NewSessionInput, Session } from "@/lib/sessions";
+import type {
+  NewPrivacyRequest,
+  PrivacyRequest,
+  RateLimitResult,
+  UserMfa,
+} from "@/lib/security";
 import type {
   InvoiceFilter,
   InvoiceRecord,
@@ -235,6 +242,38 @@ export interface DataStore {
   appendAudit(event: NewAuditEvent): Promise<void>;
   /** Newest first. */
   listAudit(filter: AuditFilter): Promise<AuditEvent[]>;
+
+  // ---- sessions, 2FA and throttles (migration 21) ---------------------
+
+  createSession(input: NewSessionInput): Promise<Session>;
+  /** By the SHA-256 of the cookie's token. Null when unknown. */
+  getSessionByToken(tokenHash: string): Promise<Session | null>;
+  touchSession(id: string, lastSeenAt: string, idleExpiresAt: string): Promise<void>;
+  revokeSession(id: string): Promise<void>;
+  /** "Sign out everywhere": every live session of a user. Returns how many. */
+  revokeUserSessions(userId: string): Promise<number>;
+  /** Record that this session has just proved a second factor. */
+  markSessionVerified(id: string, at: string): Promise<void>;
+  /** Live sessions of a user, newest first — for the security page. */
+  listUserSessions(userId: string): Promise<Session[]>;
+  /** Delete sessions long dead. Returns how many. */
+  purgeExpiredSessions(): Promise<number>;
+
+  getUserMfa(userId: string): Promise<UserMfa | null>;
+  saveUserMfa(record: UserMfa): Promise<void>;
+  deleteUserMfa(userId: string): Promise<void>;
+
+  /**
+   * Count one attempt against a key. Persistent and shared by every instance,
+   * so a restart does not reset a brute-force counter (migration 21).
+   */
+  hitRateLimit(key: string, limit: number, windowSeconds: number): Promise<RateLimitResult>;
+
+  // ---- privacy requests (migration 21) --------------------------------
+
+  createPrivacyRequest(input: NewPrivacyRequest): Promise<PrivacyRequest>;
+  listPrivacyRequests(filter: { userId?: string; status?: PrivacyRequest["status"] }): Promise<PrivacyRequest[]>;
+  resolvePrivacyRequest(id: string, patch: { status: PrivacyRequest["status"]; response: string; handledBy: string }): Promise<void>;
 
   // ---- maintenance blocks and bulk rooms (migration 20) ----------------
 

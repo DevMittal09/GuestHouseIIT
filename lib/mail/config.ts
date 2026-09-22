@@ -121,9 +121,9 @@ export function cronAuthorized(request: Request): { ok: true } | { ok: false; re
     return { ok: true };
   }
   const header = request.headers.get("authorization");
-  const presented = header?.startsWith("Bearer ")
-    ? header.slice("Bearer ".length).trim()
-    : new URL(request.url).searchParams.get("key");
+  // Only the Authorization header: a secret in the query string is written
+  // to every access log and proxy cache it passes through (Phase 8).
+  const presented = header?.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : null;
   if (!presented || !sameSecret(presented, secret)) {
     return { ok: false, reason: "Bad or missing CRON_SECRET" };
   }

@@ -10,7 +10,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { notFound } from "next/navigation";
 import { loginAs } from "@/app/actions/auth";
+import { devLoginEnabled } from "@/lib/env";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { safeNextPath } from "@/lib/site";
@@ -29,6 +31,9 @@ export default async function MockLoginPage({
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
+  // The developer door does not exist in production, nor without DEV_LOGIN
+  // (Phase 8): the page is not there at all, rather than refusing politely.
+  if (!devLoginEnabled()) notFound();
   const { next: rawNext } = await searchParams;
   const next = safeNextPath(rawNext);
   const user = await getCurrentUser();

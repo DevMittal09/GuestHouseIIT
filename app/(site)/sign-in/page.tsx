@@ -12,8 +12,13 @@ export const metadata: Metadata = { title: "Sign in" };
  * visitor (`SIGN_IN_PATH`), and the header's "Sign in" link. Unlike the two
  * booking entry points it lands each role on its own home.
  */
-export default async function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const user = await getCurrentUser();
+  const { error } = await searchParams;
   if (user) redirect(homeForRole(user.role));
 
   return (
@@ -24,6 +29,7 @@ export default async function SignInPage() {
         user={null}
         continueTo="/"
         continueLabel=""
+        notice={error ? error.slice(0, 200) : null}
       />
     </Container>
   );

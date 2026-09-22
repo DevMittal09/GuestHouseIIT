@@ -46,6 +46,8 @@ import type { Json } from "@/lib/supabase/database.types";
 import type { NewProjectInput, Project } from "@/lib/projects";
 import type { NewTariffInput, Tariff } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
+import type { NewSessionInput, Session } from "@/lib/sessions";
+import type { NewPrivacyRequest, PrivacyRequest, RateLimitResult, UserMfa } from "@/lib/security";
 import {
   invoiceErrorFrom,
   InvoiceStateError,
@@ -1070,6 +1072,132 @@ export class SupabaseStore implements DataStore {
     const { error } = await this.db
       .from("app_settings")
       .upsert({ key, value, updated_at: new Date().toISOString() });
+    if (error) throw error;
+  }
+
+  // ---- sessions, 2FA and throttles (migration 21) ---------------------
+
+  async createSession(input: NewSessionInput): Promise<Session> {
+    const { data, error } = await this.db.from("sessions").insert(input).select("*").single();
+    if (error) throw error;
+    return data as Session;
+  }
+
+  async getSessionByToken(tokenHash: string): Promise<Session | null> {
+    const { data, error } = await this.db.from("sessions").select("*").eq("token_hash", tokenHash).maybeSingle();
+    if (error) throw error;
+    return (data as Session) ?? null;
+  }
+
+  async touchSession(id: string, lastSeenAt: string, idleExpiresAt: string): Promise<void> {
+    const { error } = await this.db
+      .from("sessions")
+      .update({ last_seen_at: lastSeenAt, idle_expires_at: idleExpiresAt })
+      .eq("id", id);
+    if (error) throw error;
+  }
+
+  async revokeSession(id: string): Promise<void> {
+    const { error } = await this.db
+      .from("sessions")
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("id", id)
+      .is("revoked_at", null);
+    if (error) throw error;
+  }
+
+  async revokeUserSessions(userId: string): Promise<number> {
+    const { data, error } = await this.db
+      .from("sessions")
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .is("revoked_at", null)
+      .select("id");
+    if (error) throw error;
+    return data?.length ?? 0;
+  }
+
+  async markSessionVerified(id: string, at: string): Promise<void> {
+    const { error } = await this.db.from("sessions").update({ verified_at: at }).eq("id", id);
+    if (error) throw error;
+  }
+
+  async listUserSessions(userId: string): Promise<Session[]> {
+    const { data, error } = await this.db
+      .from("sessions")
+      .select("*")
+      .eq("user_id", userId)
+      .is("revoked_at", null)
+      .gt("absolute_expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as Session[];
+  }
+
+  async purgeExpiredSessions(): Promise<number> {
+    const { data, error } = await this.db.rpc("purge_expired_sessions");
+    if (error) throw error;
+    return Number(data ?? 0);
+  }
+
+  async getUserMfa(userId: string): Promise<UserMfa | null> {
+    const { data, error } = await this.db.from("user_mfa").select("*").eq("user_id", userId).maybeSingle();
+    if (error) throw error;
+    return (data as UserMfa) ?? null;
+  }
+
+  async saveUserMfa(record: UserMfa): Promise<void> {
+    const { error } = await this.db
+      .from("user_mfa")
+      .upsert({ ...record, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    if (error) throw error;
+  }
+
+  async deleteUserMfa(userId: string): Promise<void> {
+    const { error } = await this.db.from("user_mfa").delete().eq("user_id", userId);
+    if (error) throw error;
+  }
+
+  async hitRateLimit(key: string, limit: number, windowSeconds: number): Promise<RateLimitResult> {
+    const { data, error } = await this.db.rpc("hit_rate_limit", {
+      p_key: key,
+      p_limit: limit,
+      p_window_seconds: windowSeconds,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    return {
+      allowed: Boolean(row?.allowed ?? true),
+      attempts: Number(row?.attempts ?? 0),
+      retryAfter: Number(row?.retry_after ?? 0),
+    };
+  }
+
+  // ---- privacy requests (migration 21) --------------------------------
+
+  async createPrivacyRequest(input: NewPrivacyRequest): Promise<PrivacyRequest> {
+    const { data, error } = await this.db.from("privacy_requests").insert(input).select("*").single();
+    if (error) throw error;
+    return data as PrivacyRequest;
+  }
+
+  async listPrivacyRequests(filter: { userId?: string; status?: PrivacyRequest["status"] }): Promise<PrivacyRequest[]> {
+    let query = this.db.from("privacy_requests").select("*").order("created_at", { ascending: false });
+    if (filter.userId) query = query.eq("user_id", filter.userId);
+    if (filter.status) query = query.eq("status", filter.status);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? []) as PrivacyRequest[];
+  }
+
+  async resolvePrivacyRequest(
+    id: string,
+    patch: { status: PrivacyRequest["status"]; response: string; handledBy: string }
+  ): Promise<void> {
+    const { error } = await this.db
+      .from("privacy_requests")
+      .update({ status: patch.status, response: patch.response, handled_at: new Date().toISOString(), handled_by: patch.handledBy })
+      .eq("id", id);
     if (error) throw error;
   }
 

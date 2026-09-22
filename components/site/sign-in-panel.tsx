@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { logout } from "@/app/actions/auth";
+import { devLoginEnabled, googleOauth } from "@/lib/env";
 import { LoginForm } from "@/components/login-form";
 import { NoticeBox, PageTitle, siteButton } from "@/components/site/site-ui";
 import { isMockDirectory } from "@/lib/ldap";
@@ -23,6 +24,7 @@ export function SignInPanel({
   next,
   submitLabel,
   footnote,
+  notice,
 }: {
   title: string;
   intro: React.ReactNode;
@@ -35,6 +37,8 @@ export function SignInPanel({
   next?: string;
   submitLabel?: string;
   footnote?: React.ReactNode;
+  /** A failed sign-in's message, e.g. coming back from Google. */
+  notice?: string | null;
 }) {
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))] items-start gap-11">
@@ -75,6 +79,8 @@ export function SignInPanel({
           next={next}
           submitLabel={submitLabel}
           footnote={footnote}
+          googleSignIn={googleOauth() ? "google" : devLoginEnabled() ? "dev" : "none"}
+          notice={notice}
         />
       )}
     </div>

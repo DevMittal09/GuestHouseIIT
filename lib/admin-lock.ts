@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { getStore } from "@/lib/store";
+import { RATE_LIMITS } from "@/lib/security";
 
 /**
  * A password gate in front of the developer console.
@@ -164,40 +165,23 @@ export async function revokeAdminUnlock(): Promise<void> {
 // ---------------------------------------------------------------- throttling
 
 /**
- * Per-process attempt throttle. A four-digit default is guessable in seconds,
- * so this at least stops a naive script. In-memory and per-process: it resets
- * on restart and does not span instances — real rate limiting belongs at the
- * edge (see .memories/09-production-plan.md).
+ * Attempt throttle, counted in the database (migration 21) so it survives a
+ * restart and is shared by every instance — the in-process map this replaced
+ * reset itself whenever the server did.
  *
- * Keys are the caller's choice and share one map: the console lock counts per
- * profile id, LDAP sign-in (`app/actions/auth.ts`) per `ldap:<uid>`.
+ * Keys are the caller's choice: the console lock counts per profile
+ * ("console:<id>"), sign-in per username (`app/actions/auth.ts`).
  */
-const attempts = new Map<string, { count: number; firstAt: number }>();
-const WINDOW_MS = 5 * 60 * 1000;
-const MAX_ATTEMPTS = 10;
-
-export function throttleCheck(who: string): { allowed: boolean; retryInSeconds: number } {
-  const now = Date.now();
-  const entry = attempts.get(who);
-  if (!entry || now - entry.firstAt > WINDOW_MS) {
-    attempts.set(who, { count: 0, firstAt: now });
+export async function throttleCheck(
+  who: string,
+  limit = RATE_LIMITS.consoleUnlock.limit,
+  windowSeconds = RATE_LIMITS.consoleUnlock.windowSeconds
+): Promise<{ allowed: boolean; retryInSeconds: number }> {
+  try {
+    const result = await getStore().hitRateLimit(who, limit, windowSeconds);
+    return { allowed: result.allowed, retryInSeconds: result.retryAfter };
+  } catch {
+    // Migration 21 not applied: do not lock the office out of its own console.
     return { allowed: true, retryInSeconds: 0 };
   }
-  if (entry.count >= MAX_ATTEMPTS) {
-    return {
-      allowed: false,
-      retryInSeconds: Math.ceil((entry.firstAt + WINDOW_MS - now) / 1000),
-    };
-  }
-  return { allowed: true, retryInSeconds: 0 };
-}
-
-export function recordFailedAttempt(who: string): void {
-  const entry = attempts.get(who) ?? { count: 0, firstAt: Date.now() };
-  entry.count += 1;
-  attempts.set(who, entry);
-}
-
-export function clearAttempts(who: string): void {
-  attempts.delete(who);
 }

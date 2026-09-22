@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { canUseConsoleSection } from "@/lib/access";
 import { isAdminUnlocked } from "@/lib/admin-lock";
 import { recordAudit } from "@/lib/audit-server";
-import { requireUser } from "@/lib/auth";
+import { requireUser, stepUpProblem } from "@/lib/auth";
 import {
   describeRuleChanges,
   hostelNameSchema,
@@ -137,6 +137,9 @@ export async function getSettingsConsoleData(): Promise<
 export async function saveRuleGroup(group: RuleGroup, proposed: unknown): Promise<ActionResult> {
   try {
     const user = await requireConsoleFor(group);
+    // Phase 8: a developer proves their second factor again for a settings change.
+    const stepUp = await stepUpProblem();
+    if (stepUp) return { ok: false, error: stepUp };
     const schema = RULE_SCHEMAS[group];
     if (!schema) return { ok: false, error: "Unknown settings group" };
     const parsed = schema.safeParse(proposed);

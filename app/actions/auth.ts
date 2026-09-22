@@ -1,37 +1,41 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { clearAttempts, recordFailedAttempt, throttleCheck } from "@/lib/admin-lock";
-import { SESSION_COOKIE } from "@/lib/auth";
+import { recordAudit } from "@/lib/audit-server";
+import { getSessionUser } from "@/lib/auth";
+import { devLoginEnabled } from "@/lib/env";
 import { directoryUsesEmailUsernames, getDirectory, type DirectoryEntry } from "@/lib/ldap";
 import { profileForDirectoryEntry } from "@/lib/ldap/link";
 import { isValidLdapUid, normalizeLdapUid } from "@/lib/ldap/uid";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
+import { RATE_LIMITS } from "@/lib/security";
+import { endAllSessions, endSession, startSession } from "@/lib/sessions";
 import { safeNextPath } from "@/lib/site";
 import { getStore } from "@/lib/store";
 import type { ActionResult } from "./bookings";
 
-async function startSession(userId: string): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, userId, { httpOnly: true, sameSite: "lax", path: "/" });
-}
+/**
+ * The sign-in doors. Each one ends in `startSession()` — a row in `sessions`
+ * and an opaque cookie (`lib/sessions.ts`) — so there is a single definition
+ * of what being signed in means, and a single place to revoke it.
+ */
 
 /**
- * LDAP sign-in — the form the institute sees on `/sign-in`, `/book-room` and
- * `/book-meal`. Two separate questions, answered by two separate systems:
- *
- * 1. Is this the password for this LDAP username? The directory
- *    (`getDirectory()`: the institute server when `LDAP_URL` is set, the dummy
- *    accounts in `lib/ldap/mock-directory.ts` otherwise).
- * 2. Which portal account is this person? `profiles.ldap_uid`. The directory
- *    knows nothing about roles, hostels or clubs, so a valid LDAP login with
- *    no profile gets in nowhere.
- *
- * `next` is where the page wanted to go ("Book a room" sends `/book`); anything
- * that is not a same-origin path is ignored, and a role that cannot use the
- * destination is bounced to its own home by that page's guard.
+ * Attempts are counted in the database (migration 21), so a restart does not
+ * clear the counter and every instance shares it. Failures are recorded in the
+ * security audit log; the message never says whether the username exists.
  */
+async function throttle(key: string): Promise<{ allowed: boolean; retryAfter: number }> {
+  try {
+    const result = await getStore().hitRateLimit(key, RATE_LIMITS.signIn.limit, RATE_LIMITS.signIn.windowSeconds);
+    return { allowed: result.allowed, retryAfter: result.retryAfter };
+  } catch {
+    // The table is not there yet (migration 21). Better to allow the sign-in
+    // than to lock the office out of its own portal.
+    return { allowed: true, retryAfter: 0 };
+  }
+}
+
 export async function signInWithLdap(
   username: string,
   password: string,
@@ -46,13 +50,10 @@ export async function signInWithLdap(
   }
   if (!isValidLdapUid(uid)) return { ok: false, error: "Incorrect username or password" };
 
-  // Per username, so guessing one person's password is slow. Shares the
-  // console lock's in-process counter under its own key prefix; the directory
-  // server's own lockout policy is the real defence.
-  const throttleKey = `ldap:${uid}`;
-  const gate = throttleCheck(throttleKey);
+  const gate = await throttle(`signin:ldap:${uid}`);
   if (!gate.allowed) {
-    return { ok: false, error: `Too many attempts — try again in ${gate.retryInSeconds}s` };
+    await recordAudit(null, "signin.failure", uid, { reason: "throttled" });
+    return { ok: false, error: `Too many attempts — try again in ${gate.retryAfter}s` };
   }
 
   let entry: DirectoryEntry | null;
@@ -68,10 +69,9 @@ export async function signInWithLdap(
   // One message for both failures on purpose: a distinct "no such user" tells
   // an unauthenticated visitor which usernames exist.
   if (!entry) {
-    recordFailedAttempt(throttleKey);
+    await recordAudit(null, "signin.failure", uid, { method: "ldap" });
     return { ok: false, error: "Incorrect username or password" };
   }
-  clearAttempts(throttleKey);
 
   const profile = await profileForDirectoryEntry(entry);
   if (!profile) {
@@ -84,28 +84,37 @@ export async function signInWithLdap(
   }
 
   await startSession(profile.id);
+  await recordAudit(profile, "signin.success", profile.email, { method: "ldap" });
   // Outside any try/catch — `redirect()` signals by throwing.
   redirect(safeNextPath(next) ?? homeForRole(profile.role));
 }
 
 /**
- * The "Sign in with Google" door, mocked: `/mock-login` lists the portal's
- * accounts and this signs in as the one picked. Real Google OAuth replaces the
- * page and this action together — it would match the verified Google address
- * against `profiles.email`, accepting only `@iitpkd.ac.in` and its subdomains
- * (`isInstituteEmail`). Until then it is also the one-click persona switcher
- * development relies on.
+ * The developer's one-click persona switcher (`/mock-login`). It exists only
+ * when `DEV_LOGIN=true` outside production — in production this refuses, the
+ * page 404s, and the environment check refuses to start with the flag set.
  */
 export async function loginAs(userId: string, next?: string | null): Promise<void> {
+  if (!devLoginEnabled()) throw new Error("Developer sign-in is disabled");
   const profile = await getStore().getProfile(userId);
   if (!profile) throw new Error("Unknown user");
-  await startSession(userId);
+  await startSession(userId, { verified: true });
   redirect(safeNextPath(next) ?? homeForRole(profile.role));
 }
 
 export async function logout(): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
+  const current = await getSessionUser();
+  await endSession();
+  if (current) await recordAudit(current.user, "signout", current.user.email, {});
   // Straight back to a sign-in form: "Switch user" is the common reason.
   redirect(SIGN_IN_PATH);
+}
+
+/** Sign out of every browser — the answer to a laptop left in a lab. */
+export async function logoutEverywhere(): Promise<ActionResult & { sessions?: number }> {
+  const current = await getSessionUser();
+  if (!current) return { ok: false, error: "You are not signed in" };
+  const count = await endAllSessions(current.user.id);
+  await recordAudit(current.user, "signout.everywhere", current.user.email, { sessions: count });
+  return { ok: true, sessions: count };
 }

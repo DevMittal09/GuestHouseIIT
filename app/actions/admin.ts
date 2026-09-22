@@ -1,14 +1,13 @@
 "use server";
 
+import { recordAudit } from "@/lib/audit-server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { requireUser, stepUpProblem } from "@/lib/auth";
 import {
   checkAdminPassword,
-  clearAttempts,
   grantAdminUnlock,
   isAdminUnlocked,
-  recordFailedAttempt,
   revokeAdminUnlock,
   setAdminPassword,
   throttleCheck,
@@ -44,13 +43,23 @@ import type { ActionResult } from "./bookings";
  * The section is named at each call site rather than inferred, so adding an
  * action without deciding who may run it is not possible.
  */
-async function requireConsole(section: ConsoleSection): Promise<Profile> {
+async function requireConsole(
+  section: ConsoleSection,
+  { stepUp = false }: { stepUp?: boolean } = {}
+): Promise<Profile> {
   const user = await requireUser();
   if (!canUseConsoleSection(user.role, section)) {
     throw new Error(`You do not have access to ${CONSOLE_SECTIONS[section].label}`);
   }
   if (!(await isAdminUnlocked())) {
     throw new Error("The console is locked — enter the console password again");
+  }
+  // Phase 8: changing who may do what, or deleting records, asks a developer
+  // for a fresh second factor. Anyone else is already behind the console
+  // password (`stepUpProblem` returns null for them).
+  if (stepUp) {
+    const problem = await stepUpProblem();
+    if (problem) throw new Error(problem);
   }
   return user;
 }
@@ -74,8 +83,10 @@ export async function unlockAdminConsole(password: string): Promise<ActionResult
     // see is `consoleSectionsFor`. The password is the door, not the roles.
     if (!canUseConsole(user.role)) return { ok: false, error: "Console access required" };
 
-    const gate = throttleCheck(user.id);
+    // Counted before the check, so a wrong password costs an attempt.
+    const gate = await throttleCheck(`console:${user.id}`);
     if (!gate.allowed) {
+      await recordAudit(user, "signin.failure", "console", { reason: "throttled" });
       return {
         ok: false,
         error: `Too many attempts — try again in ${gate.retryInSeconds}s`,
@@ -83,11 +94,10 @@ export async function unlockAdminConsole(password: string): Promise<ActionResult
     }
 
     if (!(await checkAdminPassword(password))) {
-      recordFailedAttempt(user.id);
+      await recordAudit(user, "signin.failure", "console", { reason: "wrong console password" });
       return { ok: false, error: "Incorrect console password" };
     }
 
-    clearAttempts(user.id);
     await grantAdminUnlock();
     revalidatePath("/", "layout");
     return { ok: true };
@@ -113,7 +123,7 @@ export async function changeAdminPassword(
   newPassword: string
 ): Promise<ActionResult> {
   try {
-    await requireConsole("console_access");
+    await requireConsole("console_access", { stepUp: true });
 
     if (!(await checkAdminPassword(currentPassword))) {
       return { ok: false, error: "Current password is incorrect" };
@@ -267,7 +277,7 @@ export async function setGuestHouseMealsAction(
 
 export async function deleteGuestHouseAction(id: string): Promise<ActionResult> {
   try {
-    await requireConsole("guest_houses");
+    await requireConsole("guest_houses", { stepUp: true });
     await getStore().deleteGuestHouse(id);
     return done();
   } catch (e) {
@@ -303,7 +313,7 @@ export async function setRoomActiveAction(id: string, isActive: boolean): Promis
 
 export async function deleteRoomAction(id: string): Promise<ActionResult> {
   try {
-    await requireConsole("guest_houses");
+    await requireConsole("guest_houses", { stepUp: true });
     await getStore().deleteRoom(id);
     return done();
   } catch (e) {
@@ -344,7 +354,7 @@ export type UserFormInput = z.input<typeof userSchema>;
 
 export async function createUserAction(input: UserFormInput): Promise<ActionResult> {
   try {
-    const actor = await requireConsole("users");
+    const actor = await requireConsole("users", { stepUp: true });
     const parsed = userSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid user" };
     // A manager may appoint another manager — that is the point of giving
@@ -361,7 +371,7 @@ export async function createUserAction(input: UserFormInput): Promise<ActionResu
 
 export async function updateUserAction(id: string, input: UserFormInput): Promise<ActionResult> {
   try {
-    const actor = await requireConsole("users");
+    const actor = await requireConsole("users", { stepUp: true });
     const parsed = userSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid user" };
     if (id === actor.id && parsed.data.role !== actor.role) {
@@ -424,7 +434,7 @@ export async function importLdapUidsAction(text: string): Promise<LdapImportResu
 
 export async function deleteUserAction(id: string): Promise<ActionResult> {
   try {
-    const actor = await requireConsole("users");
+    const actor = await requireConsole("users", { stepUp: true });
     if (id === actor.id) return { ok: false, error: "You cannot delete your own account" };
     const target = await getStore().getProfile(id);
     if (!target) return { ok: false, error: "User not found" };
@@ -441,7 +451,7 @@ export async function deleteUserAction(id: string): Promise<ActionResult> {
 
 export async function adminDeleteBookingAction(id: string): Promise<ActionResult> {
   try {
-    await requireConsole("bookings");
+    await requireConsole("bookings", { stepUp: true });
     await getStore().deleteBooking(id);
     return done();
   } catch (e) {
@@ -462,7 +472,7 @@ export async function adminSetBookingStatusAction(
   remark: string
 ): Promise<ActionResult> {
   try {
-    const dev = await requireConsole("bookings");
+    const dev = await requireConsole("bookings", { stepUp: true });
     if (!OVERRIDABLE.includes(status)) return { ok: false, error: "Unknown status" };
     if (!remark.trim()) return { ok: false, error: "A remark is required for status overrides" };
 
