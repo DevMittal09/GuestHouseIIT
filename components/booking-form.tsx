@@ -242,6 +242,8 @@ export function BookingForm({
   const [declinedMealSlots, setDeclinedMealSlots] = useState<Set<string>>(() => new Set());
   const [mealsError, setMealsError] = useState<string | null>(null);
   const [roomsToDrop, setRoomsToDrop] = useState<number | null>(null);
+  /** The room card whose "Remove room" was pressed, awaiting confirmation. */
+  const [roomToRemove, setRoomToRemove] = useState<number | null>(null);
 
   const gf = config.guest_fields;
   const idDocRequired = gf.id_document === "required";
@@ -521,6 +523,24 @@ export function BookingForm({
     shrinkRooms(roomsToDrop);
     setRoomsToDrop(null);
   };
+
+  /**
+   * Remove one particular room (not just the last), with its guests. The rooms
+   * after it move up — Room 3 becomes Room 2 — which is fine: the numbers are
+   * only the order the requester filled them in.
+   */
+  const confirmRemoveRoom = () => {
+    if (roomToRemove === null || roomFields.length <= 1) return;
+    for (const g of form.getValues(`rooms.${roomToRemove}.guests`) ?? []) guestFiles.delete(g.key);
+    removeRoom(roomToRemove);
+    setRoomCountRaw(String(roomFields.length - 1));
+    setRoomCountError(null);
+    setRoomToRemove(null);
+  };
+
+  /** How many people are entered in a room, for the warning. */
+  const peopleIn = (index: number) =>
+    (form.getValues(`rooms.${index}.guests`) ?? []).filter((g) => g.name.trim() || g.age.trim() || g.id_number.trim()).length;
 
   const onSubmit = handleSubmit((values) => {
     clearErrors();
@@ -1223,6 +1243,7 @@ export function BookingForm({
                 guestFiles={guestFiles}
                 err={err}
                 capacity={rules.capacity}
+                onRemove={roomFields.length > 1 ? () => setRoomToRemove(roomIndex) : undefined}
               />
             ))}
 
@@ -1350,6 +1371,33 @@ export function BookingForm({
         confirmLabel="Remove rooms"
         onConfirm={confirmShrink}
       />
+
+      <ConfirmDialog
+        open={roomToRemove !== null}
+        onOpenChange={(open) => !open && setRoomToRemove(null)}
+        title={roomToRemove === null ? "Remove room?" : `Remove Room ${roomToRemove + 1}?`}
+        description={
+          roomToRemove === null
+            ? ""
+            : peopleIn(roomToRemove) > 0
+              ? `Everyone entered in Room ${roomToRemove + 1} is removed with it, including any ID documents attached. This cannot be undone.`
+              : `Room ${roomToRemove + 1} is empty, so nothing else is lost.`
+        }
+        consequences={
+          roomToRemove === null
+            ? undefined
+            : [
+                ...(peopleIn(roomToRemove) > 0
+                  ? [`${peopleIn(roomToRemove)} guest${peopleIn(roomToRemove) === 1 ? "" : "s"} entered in this room`]
+                  : []),
+                ...(roomToRemove < roomFields.length - 1
+                  ? [`The rooms after it move up — Room ${roomToRemove + 2} becomes Room ${roomToRemove + 1}`]
+                  : []),
+              ]
+        }
+        confirmLabel="Remove room"
+        onConfirm={confirmRemoveRoom}
+      />
     </form>
   );
 }
@@ -1371,6 +1419,7 @@ function RoomCard({
   guestFiles,
   err,
   capacity,
+  onRemove,
 }: {
   roomIndex: number;
   control: Control<FormValues>;
@@ -1381,6 +1430,8 @@ function RoomCard({
   guestFiles: Map<string, File>;
   err: (path: string) => string | undefined;
   capacity: CapacityRules;
+  /** Absent on the only room: a booking always has at least one. */
+  onRemove?: () => void;
 }) {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -1394,8 +1445,22 @@ function RoomCard({
   const infantBlocked = addInfantBlockedReason(infants, capacity);
 
   return (
-    <fieldset className="rounded-lg border p-4">
+    <fieldset className="relative rounded-lg border p-4">
       <legend className="px-1 text-sm font-semibold">Room {roomIndex + 1}</legend>
+      {/* On the border, level with the legend, like the legend itself. */}
+      {onRemove && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="absolute -top-4 right-3 h-7 bg-background px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          onClick={onRemove}
+          aria-label={`Remove Room ${roomIndex + 1}`}
+        >
+          <Trash2Icon />
+          Remove room
+        </Button>
+      )}
 
       <p className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
         {roomOccupancyNotice(capacity)}
