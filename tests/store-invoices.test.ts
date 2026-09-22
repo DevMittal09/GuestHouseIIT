@@ -167,7 +167,10 @@ describe("invoices in the mock store", () => {
       rate: 500, effective_from: "2026-01-01", note: null, created_by: null,
     });
     await expect(store.deleteTariff(past.id)).rejects.toThrow(/in force/);
-    const { id: _id, created_at: _at, ...input } = past;
+    const input = {
+      guest_house_id: past.guest_house_id, item: past.item, room_type: past.room_type, booking_type: past.booking_type,
+      requester_role: past.requester_role, rate: past.rate, effective_from: past.effective_from, note: past.note, created_by: null,
+    };
     await expect(store.createTariff(input)).rejects.toThrow(/already starts/);
     const future = await store.createTariff({ ...input, effective_from: "2099-04-01" });
     await store.deleteTariff(future.id);
