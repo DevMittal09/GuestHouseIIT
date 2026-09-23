@@ -89,9 +89,10 @@ uses the mock store on a throwaway file (`MOCK_DB_PATH`) and `TZ=UTC`, so it
 never touches `.local-db.json`. The techniques below are still how UI, HTTP
 and migrations are checked:
 
-> **`npm run test:e2e` has two re-run traps** — a persisted throwaway database
-> that carries the sign-in rate limit forward, and a reused `next start` serving
-> the previous build. Both look like application bugs. The clean loop is in
+> **`npm run test:e2e` has a re-run trap** — a reused `next start` serving the
+> previous build, which looks like an application bug. (The other one, a
+> persisted throwaway database carrying the sign-in rate limit forward, was
+> fixed on 23 Sep 2026 by `e2e/global-setup.ts`.) The clean loop is in
 > [07-troubleshooting.md](07-troubleshooting.md#re-running-the-playwright-suite-bites-twice-23-sep-2026).
 
 **1. Ad-hoc TypeScript tests**
@@ -479,7 +480,7 @@ what hurts most if it is left alone.
 | GST percentages and SAC codes | 5% up to ₹7,500/day, 18% above, 5% on food | As in force since 22 Sep 2025. Check before the next Council revision bites. |
 | Meal windows | 07:30–09:30, 12:30–14:00, 19:30–21:00 | Which meals a stay can include, and the kitchen's day. |
 | Room capacity | Single 1 (2 with an extra bed), double 2 (3) | Enforced at submission and at allocation. |
-| Debitable heads per category | Department / Project / PDF / Institute Grant | What each kind of requester may charge a stay to. |
+| Debitable heads per category | Department / Project / PDF / Institute Grant | What each kind of requester may charge a stay to. **Faculty can never be given the Institute Grant** (`FORBIDDEN_DEBIT_HEADS`) — that cell is greyed, and the rule is applied on read as well as on save. |
 | ID retention | 365 days after the stay | When identity numbers and ID documents are erased. |
 | Audit retention | 180 days | Cannot be set lower — CERT-In expects 180 days of logs. |
 

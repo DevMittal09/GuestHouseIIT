@@ -25,6 +25,15 @@ export interface RoomDayOccupancy {
    * check-out.
    */
   turnaround: (RoomOccupancySegment | null)[];
+  /**
+   * Hours two or more bookings both hold, listed per hour (null = at most
+   * one). A changeover the manager accepted (`isOverridable`, up to two
+   * hours) really does put two stays in one room at the same time, and
+   * drawing it in the same red as an ordinary booking said nothing about it —
+   * the room reads as taken either way, which is why the office reported
+   * overlaps as invisible. Drawn in its own colour instead.
+   */
+  overlaps: (RoomOccupancySegment[] | null)[];
   segments: RoomOccupancySegment[];
 }
 
@@ -85,13 +94,25 @@ export function bucketOccupancyByHour(
     byRoom.set(room.id, {
       hours: Array(HOURS_IN_DAY).fill(null),
       turnaround: Array(HOURS_IN_DAY).fill(null),
+      overlaps: Array(HOURS_IN_DAY).fill(null),
       segments: [],
     });
   }
 
+  // Who holds each hour, in full — the last writer wins for `hours`, but an
+  // hour held by two bookings has to be recognisable as such.
+  const holdersOf = new Map<string, RoomOccupancySegment[][]>();
+  for (const room of rooms) {
+    holdersOf.set(
+      room.id,
+      Array.from({ length: HOURS_IN_DAY }, () => [] as RoomOccupancySegment[])
+    );
+  }
+
   for (const segment of segments) {
     const entry = byRoom.get(segment.room_id);
-    if (!entry) continue;
+    const holders = holdersOf.get(segment.room_id);
+    if (!entry || !holders) continue;
     const segStart = new Date(segment.check_in).getTime();
     const segEnd = new Date(segment.check_out).getTime();
     const turnEnd = segment.turnaround_until ? new Date(segment.turnaround_until).getTime() : segEnd;
@@ -103,17 +124,47 @@ export function bucketOccupancyByHour(
       const hourStart = dayStart.getTime() + hour * HOUR_MS;
       if (segStart < hourStart + HOUR_MS && segEnd > hourStart) {
         entry.hours[hour] = segment;
+        holders[hour].push(segment);
       } else if (turnEnd > segEnd && segEnd < hourStart + HOUR_MS && turnEnd > hourStart) {
         entry.turnaround[hour] = segment;
       }
     }
   }
-  // A booked hour is booked, whatever turnaround also touches it.
-  for (const entry of byRoom.values()) {
+  for (const [roomId, entry] of byRoom) {
+    // A booked hour is booked, whatever turnaround also touches it.
     entry.turnaround = entry.turnaround.map((t, hour) => (entry.hours[hour] ? null : t));
+    const holders = holdersOf.get(roomId);
+    if (holders) {
+      entry.overlaps = holders.map((held) => (held.length > 1 ? held : null));
+    }
   }
 
   return byRoom;
+}
+
+/**
+ * The stretches where two bookings hold the same room at once, as `[from, to)`
+ * instants. Every pair is compared because an overlap is rare and a room holds
+ * a handful of segments in any window the grid will show.
+ */
+export function overlapSpans(
+  segments: RoomOccupancySegment[]
+): { segments: [RoomOccupancySegment, RoomOccupancySegment]; from: number; to: number }[] {
+  const spans: {
+    segments: [RoomOccupancySegment, RoomOccupancySegment];
+    from: number;
+    to: number;
+  }[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    for (let j = i + 1; j < segments.length; j++) {
+      const a = segments[i];
+      const b = segments[j];
+      const from = Math.max(new Date(a.check_in).getTime(), new Date(b.check_in).getTime());
+      const to = Math.min(new Date(a.check_out).getTime(), new Date(b.check_out).getTime());
+      if (to > from) spans.push({ segments: [a, b], from, to });
+    }
+  }
+  return spans;
 }
 
 // ---------------------------------------------------------------- week & month views
@@ -223,6 +274,15 @@ export interface RoomRangeOccupancy {
    * the range, drawn hatched beneath the next bar. Not counted as booked.
    */
   turnarounds: { segment: RoomOccupancySegment; from: number; to: number }[];
+  /**
+   * Where two bookings hold the room at once, clipped to the range and drawn
+   * over both bars in its own colour — see `RoomDayOccupancy.overlaps`.
+   */
+  overlaps: {
+    segments: [RoomOccupancySegment, RoomOccupancySegment];
+    from: number;
+    to: number;
+  }[];
   /** Minutes booked on each day of the range, in `range.days` order. */
   bookedMinutes: number[];
   /** The bookings themselves, in check-in order. */
@@ -253,6 +313,7 @@ export function bucketOccupancyByDay(
     byRoom.set(room.id, {
       bars: [],
       turnarounds: [],
+      overlaps: [],
       bookedMinutes: range.days.map(() => 0),
       segments: [],
     });
@@ -288,6 +349,19 @@ export function bucketOccupancyByDay(
     entry.segments.sort(
       (a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
     );
+    // Computed from the segments rather than the bars so it is the real
+    // overlap of the two stays, then clipped to the range like everything else.
+    for (const pair of overlapSpans(entry.segments)) {
+      const from = Math.max(pair.from, rangeStart);
+      const to = Math.min(pair.to, rangeEnd);
+      if (to > from) {
+        entry.overlaps.push({
+          segments: pair.segments,
+          from: (from - rangeStart) / span,
+          to: (to - rangeStart) / span,
+        });
+      }
+    }
   }
   return byRoom;
 }

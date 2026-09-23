@@ -216,6 +216,16 @@ red when held and blank when free, with a `title` naming the booking. When the
 selected date is today the current hour is marked in the primary colour (navy
 since the 19 Sep 2026 restyle; it was amber before).
 
+**An hour held by two bookings is violet, not red** (23 Sep 2026). An accepted
+changeover puts two stays in one room for up to two hours, and in red that was
+indistinguishable from one ordinary stay — the office reported overlaps as
+invisible. `bucketOccupancyByHour` returns `overlaps` (the segments holding
+each hour, when there is more than one) and the range chart gets clipped
+`overlaps` spans from `overlapSpans()`; both draw `bg-overlap`, a vertical
+stripe so it differs from the turnaround's diagonal and maintenance's
+cross-hatch by pattern too. Stays that merely **touch** at check-out are not an
+overlap — the same half-open rule as `room_holds.during`.
+
 **Week and month views.** One row per day (3rem tall in a week, 1.75rem in a
 month), one column per room. Each room column is a single grid item spanning
 every day row, and each booking is an absolutely positioned red bar whose top and
@@ -374,8 +384,8 @@ Layout and tabs in `app/(portal)/admin/layout.tsx`; all actions in
 `ROOM_HOLDING_STATUSES`, lifecycle transitions, `historyScope` / `canViewHistory`
 / `canExportPdf` / `isRequesterHistory`, advance-booking window
 (`latestCheckIn` / `isAdvanceWindowExempt`). |
-| `lib/form-config.ts` | `RoleFormConfig`, defaults per role, sanitization, custom-field validation, the relationship dependency (`parentDependencyError` / `hasQualifyingParent` / `parentDependencyHint`). |
-| `lib/availability.ts` | Availability grid maths: `bucketOccupancyByHour`, `dayBounds`, `hourLabel`, `toDateInputValue`; the week/month views' `availabilityRange`, `shiftAnchor`, `describeRange`, `bucketOccupancyByDay`, `freeRoomsByDay`, `roomRangeStatus`, `rangeProgress`, `roomsBookedAt`; `MAX_AVAILABILITY_DAYS`. |
+| `lib/form-config.ts` | `RoleFormConfig`, defaults per role, sanitization, custom-field validation, the relationship dependency (`parentDependencyError` / `hasQualifyingParent` / `parentDependencyHint`) and the one-of-each rule (`duplicateRelationshipError` / `usedUniqueRelationships` / `uniqueRelationshipHint`). |
+| `lib/availability.ts` | Availability grid maths: `bucketOccupancyByHour`, `dayBounds`, `hourLabel`, `toDateInputValue`, `overlapSpans`; the week/month views' `availabilityRange`, `shiftAnchor`, `describeRange`, `bucketOccupancyByDay`, `freeRoomsByDay`, `roomRangeStatus`, `rangeProgress`, `roomsBookedAt`; `MAX_AVAILABILITY_DAYS`. |
 | `lib/occupancy.ts` | Room capacity per type, `INFANT_AGE_LIMIT`, `roomsNeededFor`, `requestedRoomsError`, `allocationCapacityError`. |
 | `lib/report-pdf.ts` | Client-side PDF rendering for the history report (dynamically imported). |
 | `lib/form-config-server.ts` | `getEffectiveFormConfig` — saved config or defaults. |
@@ -408,7 +418,10 @@ both ways. `lib/booking-types.ts` is the one policy:
 
 - `bookingTypesFor(role)` — what a role may pick. Employee is the only role with
   a real choice (`official` default, `personal`); student is personal-only; club
-  and official are official-only; both IAR accounts get `official` | `alumni`.
+  and official are official-only; the IAR Office gets `official` | `alumni` and
+  the Student Cell `alumni` only. The **GH Manager** gets `official` | `alumni`
+  — booking at the desk for someone else, never a private stay of their own
+  (23 Sep 2026).
 - `offersBookingTypeChoice(role)` — a role with one option is **never asked**,
   but the value is still recorded on the booking.
 - `bookingTypeError()` — the server-side counterpart, run inside
@@ -577,25 +590,34 @@ correctly, being unable to act on them. `canReview` also refuses
 `reviewer.id === requester.id`, so the IAR Office is never asked to approve its
 own booking.
 
-### Threads: per person per day for staff, standalone for requesters
+### Threads: per booking for staff, standalone for requesters
 
 From the meeting notes: *"Email — try to send in a single thread instead of a
-standalone email."* Staff mail joins one **approvals** thread per person per
-institute day (per-booking mail) or one **daily log** thread (digest,
-escalation, desk report); requester mail stands alone with a `[reference]`-led
-subject. Two things must line up for mail clients to group messages:
+standalone email."* Staff mail about a booking joins that recipient's thread
+**for that booking**; the scheduled mail that has no booking (digest,
+escalation, desk report) joins a **daily log** thread; requester mail stands
+alone with a `[reference]`-led subject. Two things must line up for mail
+clients to group messages:
 
-1. `dailyThreadRoot(kind, day, address)` is a deterministic root `Message-ID`;
-   the first message actually **sent** claims it (decided in `dispatch.ts`),
-   and every later one sets `In-Reply-To` / `References` to it.
+1. `bookingThreadRoot(referenceId, address)` — or `dailyThreadRoot("daily_log",
+   day, address)` for the scheduled mail — is a deterministic root
+   `Message-ID`; the first message actually **sent** claims it (decided in
+   `dispatch.ts`), and every later one sets `In-Reply-To` / `References` to it.
 2. Every message in a thread shares the thread's subject
-   (`Guest house approvals — Mon 21 Sep 2026`); what the message is about moves
-   to its heading and inbox preview.
+   (`[IITPKD-GH-2026-AB12C] Guest house booking`, or `Guest house daily log —
+   Mon 21 Sep 2026`); what the message is about moves to its heading and inbox
+   preview.
 
 Threaded mail is queued **one message per To address** (a message carries one
 `References`). **CC rides on the first To's message only**, so a copied
 warden or HOD receives it once and it joins that recipient's thread — every
-later message about the day's approvals to the same To carries the same root.
+later message about the same booking to the same To carries the same root.
+
+> **Was per person per *day* until 23 Sep 2026.** Threading on the day grouped
+> by when a message happened to be queued, so unrelated requests shared a
+> conversation and one booking's messages were split across days. See
+> [06-decisions.md](06-decisions.md), "Mail threads on the booking, not on the
+> day".
 
 ### HTML and text from one description
 
@@ -782,8 +804,12 @@ store**, on a throwaway database file:
 | `e2e/public-site.spec.ts` | the public pages at 320 px, with no sideways scroll |
 | `e2e/sign-in.spec.ts` | **Mock Authentication** signs a persona in on a *production* build with no Google configuration — the deployment where the door had 404'd — and carries `?next=` through |
 | `e2e/room-party.spec.ts` | 2 guests + 2 infants in one room, through the real form: the second infant reachable, a fifth person refused, no room-type question, and Bageshri's review showing no meals row |
+| `e2e/alumni-and-relationships.spec.ts` | the IAR Student Cell's alumni booking, which is never asked which guest house (no `<select>` at all) and reaches the IAR Office's queue; and a student being refused a second Mother in the dropdown itself |
 
 `e2e/helpers.ts` holds the accounts, sign-in, and the form-filling steps.
+`e2e/global-setup.ts` deletes the throwaway database before each run, so the
+sign-in throttle (a row in it) cannot carry over and lock the dummy accounts
+out on a second run inside 15 minutes.
 `.github/workflows/ci.yml` runs all of it with Supabase switched off.
 
 ## Branding

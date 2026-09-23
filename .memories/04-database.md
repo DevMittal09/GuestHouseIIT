@@ -227,11 +227,12 @@ the migration keeps existing rows.
 
 ## `form_configs` shape changes
 
-`form_configs.config` is jsonb, so new keys need no migration. Two were added
-for the relationship dependency: `parent_relationships` and
-`dependent_relationships`, both `string[]`. Rows saved before that are missing
-the keys entirely; `sanitizeFormConfig` backfills them from the spec defaults on
-read, so no data fix-up is required. See
+`form_configs.config` is jsonb, so new keys need no migration. Three carry the
+relationship rules — `parent_relationships` and `dependent_relationships` for
+the dependency, and `unique_relationships` for the one-of-each rule (23 Sep
+2026) — all `string[]`. Rows saved before any of them are missing the keys
+entirely; `sanitizeFormConfig` backfills them from the spec defaults on read, so
+no data fix-up is required. See
 [02-architecture.md](02-architecture.md) for the degradation rules.
 
 ## Storage

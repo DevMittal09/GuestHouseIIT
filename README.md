@@ -206,7 +206,9 @@ portal has queued, what failed and why, and lets you retry one.
 | A request has waited over 48 h | The reviewer, copying the manager |
 | An official booking's invoice is issued | The Accounts email, copying the requester's HOD and the requester, with the invoice PDF |
 
-Staff mail is threaded **per person per day** (requesters' mail stands alone), and nothing is
+Staff mail about a booking is threaded **per booking** — everything about one request arrives as
+one conversation — while the daily digest and log thread per day and requesters' mail stands alone.
+Nothing is
 sent inside a request: messages are queued in `email_outbox` and delivered by a worker, so a slow or
 broken mail host can never fail a booking or make a requester wait.
 

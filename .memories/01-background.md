@@ -64,7 +64,7 @@ of **10 Sep 2026**:
 
 | # | Requirement | Status | Where |
 | --- | --- | --- | --- |
-| 1 | Parents may stay freely; siblings and grandparents only when a father or mother is also staying | **Done** | `parent_relationships` / `dependent_relationships` on `RoleFormConfig`, enforced by `parentDependencyError()` — see [03-implementation.md](03-implementation.md) |
+| 1 | Parents may stay freely; siblings and grandparents only when a father or mother is also staying | **Done** | `parent_relationships` / `dependent_relationships` on `RoleFormConfig`, enforced by `parentDependencyError()` — see [03-implementation.md](03-implementation.md). Joined 23 Sep 2026 by `unique_relationships` / `duplicateRelationshipError()`: a student has one mother, so a singular relationship may appear only once |
 | 2 | Room availability grid for all users, showing room details, booking periods and vacant/occupied status | **Done** | `/availability` + `lib/availability.ts` + `app/actions/availability.ts` |
 | 3 | Day-wise guest house log / occupancy report, emailed automatically to the Guest House Manager | **Done** | `queueDailyDeskReports()` in `lib/mail/digest.ts`, driven by `/api/mail/cron`. One report per guest house per day to the manager *and* the caretaker: arrivals, departures, who is in house, stays past check-out still holding rooms, and what awaits allocation. Rendered as HTML tables, not a PDF, because `lib/report-pdf.ts` is client-side (jsPDF) and there is no browser in a cron job |
 | 4 | Bookings only within a one-month advance window | **Done** | `latestCheckIn()` / `isAdvanceWindowExempt()` in `lib/workflow.ts`, applied by `bookingPayloadSchema` on client and server |
@@ -169,6 +169,24 @@ already known.** Reasoning in
 | An infant's relationship can be a text box | **Done** | The dropdown lists adults' relationships; membership is checked per guest, skipping infants |
 | Father + mother + sibling under 3 in one room and 2 siblings + an infant in another shows an error | **Done, cause inferred** | The composition was always within the rules (`tests/booking-rules.test.ts`), but a *second* infant in one room was unreachable: the form's Add button stopped at one and the Supabase trigger refused it. The combination rule fixes both; `e2e/room-party.spec.ts` fills that room through the real form. The reporter could not recall the message, so this is the best-supported explanation rather than a confirmed one |
 | Booking a Bageshri stay should not show "Meals Requested" at all, even as "None requested" | **Done** | `BookingDetails` and `StaysTable`, the rule the mail templates already applied |
+
+## Office corrections — 23 Sep 2026, second list
+
+Seven more, from working the portal after the round above. Same theme again in
+places: **the portal asks questions whose answer is already known, and hides
+the ones that matter.** Reasoning in [06-decisions.md](06-decisions.md)
+("the office's third round"); the working summary, which is replaced each
+round, is [15-recent-changes.md](15-recent-changes.md).
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| The alumni Student Cell login has no guest house selected, then errors saying none was chosen — keep Bageshri autofilled, no dropdown | **Done** | One guest house is a statement plus a hidden field, not a disabled `<select>`, and it is resolved before `useForm` so it is in the server-rendered HTML; `components/booking-form.tsx`, `e2e/alumni-and-relationships.spec.ts` |
+| A student can choose Mother twice; there is only one mother | **Done** | `unique_relationships` on `RoleFormConfig` + `duplicateRelationshipError()`, both sides, whole request; greyed on other guests, flagged on the repeat |
+| There is no option to remove a room while filling guest details | **Already built** | Each room card above the first carries **Remove room** on its border, with a confirm dialog naming what goes with it |
+| Overlapping bookings show as plain red in room availability; the overlapping part should differ | **Done** | `overlaps` from `bucketOccupancyByHour` / `bucketOccupancyByDay`, drawn `bg-overlap` (violet, vertical stripe, `◆`), legend on `/availability` and in the form's panel |
+| The GHM should not be able to book for personal reasons — they have a personal account for that | **Done** | `bookingTypesFor("gh_manager")` is `["official", "alumni"]` |
+| Mail for one booking id should thread together, not all of a day's mail in one thread | **Done** | `bookingThreadRoot(referenceId, address)`; scheduled mail (digest, escalation, desk log) keeps a daily thread because it has no booking; requester mail still standalone |
+| Remove Institute Grant for faculty as a debitable head | **Done** | `FORBIDDEN_DEBIT_HEADS` — a floor under Settings, not a default: stripped on read, refused on save, greyed in the console |
 
 ## Scope decisions made during the build
 

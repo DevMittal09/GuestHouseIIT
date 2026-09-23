@@ -19,7 +19,14 @@ import {
   type MailTemplateOverride,
 } from "./template-config";
 import { toInstituteDateValue } from "@/lib/tz";
-import { MAIL_THREAD_OF, bookingSubject, dailyThreadRoot, dailyThreadSubject } from "./thread";
+import {
+  MAIL_THREAD_OF,
+  bookingSubject,
+  bookingThreadRoot,
+  bookingThreadSubject,
+  dailyThreadRoot,
+  dailyThreadSubject,
+} from "./thread";
 import type { MailEventKey, NewEmailInput } from "./types";
 
 /**
@@ -130,7 +137,11 @@ function buildInputs(
     : params.booking
       ? bookingSubject(params.booking.booking_reference_id, params.subjectText)
       : params.subjectText;
-  const thread = params.standalone ? undefined : MAIL_THREAD_OF[params.eventKey];
+  // A booking thread needs the booking; without one (the console's test
+  // message borrows an event key) the message stands alone rather than being
+  // hung on a root nobody else will reference.
+  const kind = params.standalone ? undefined : MAIL_THREAD_OF[params.eventKey];
+  const thread = kind === "booking" && !params.booking ? undefined : kind;
   // The intro goes above everything, the outro below it as small print — the
   // two places a standing sentence belongs without disturbing the facts the
   // template assembled from the booking.
@@ -175,17 +186,27 @@ function buildInputs(
   if (!thread) return [input(to, cc, null, itemSubject)];
 
   // One message per address: the thread root is per mailbox, and a message can
-  // reference only one root. The day is the institute date it was queued on,
-  // so only the same day's mail shares a thread.
+  // reference only one root.
+  //
+  // Booking mail threads on the **booking**, so every message about one
+  // request — submitted, forwarded, allocated, cancelled — lands in one
+  // conversation however many days apart they are. Scheduled mail has no
+  // booking, so it threads on the institute day it was queued.
+  const reference = params.booking?.booking_reference_id;
   const day = toInstituteDateValue(new Date());
-  const subject = dailyThreadSubject(thread, day);
+  const subject =
+    thread === "booking" && reference
+      ? bookingThreadSubject(reference)
+      : dailyThreadSubject("daily_log", day);
+  const rootFor = (address: string) =>
+    thread === "booking" && reference
+      ? bookingThreadRoot(reference, address)
+      : dailyThreadRoot("daily_log", day, address);
   // Anyone copied is copied once, on the first recipient's message, not on
   // every one of them — and so joins that recipient's thread: the message
-  // carries its References, and every later message about the day's
-  // approvals to the same To carries the same root.
-  return to.map((address, i) =>
-    input([address], i === 0 ? cc : [], dailyThreadRoot(thread, day, address), subject)
-  );
+  // carries its References, and every later message to the same To carries
+  // the same root.
+  return to.map((address, i) => input([address], i === 0 ? cc : [], rootFor(address), subject));
 }
 
 /** Queue a batch and kick the worker. Returns how many messages were new. */

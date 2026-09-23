@@ -151,6 +151,18 @@ evaluated by one function, `parentDependencyError()`, called from the booking
 form (which greys out the gated `<option>`s) and from the zod schema (which
 actually enforces it, per-guest, server-side).
 
+A third list works the same way (23 Sep 2026):
+
+- `unique_relationships` — options a requester has only **one** of (Mother,
+  Father, Guardian, Grandmother, Grandfather for a student; **not** Siblings),
+  so they may appear once per request, across every room.
+
+`duplicateRelationshipError()` is its matcher, again called from both sides; the
+form greys the option out on every *other* guest (`usedUniqueRelationships`) and
+the schema attaches the error to the **repeat**, not the first one.
+`sanitizeFormConfig` empties it for a free-text role, where there is no option
+list to be unique within.
+
 > **Trap.** A developer can rename the relationship options from the Form
 > Builder. `sanitizeFormConfig` therefore intersects both arrays with the
 > options actually offered, and **drops the rule entirely if no parent option

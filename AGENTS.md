@@ -43,9 +43,13 @@ store on a throwaway file (`MOCK_DB_PATH`, see `tests/helpers.ts`) with
 **`npm run test:e2e`** builds nothing itself: run `npm run build` first, with
 `NEXT_PUBLIC_SUPABASE_URL=` empty so the client bundle carries no project URL.
 Playwright then starts a **production** server on the mock store, on
-`./.e2e-db.json`, and signs in through the LDAP form as each role. Lint, types,
-unit tests and the journeys all run in CI (`.github/workflows/ci.yml`) with no
-secrets at all.
+`./.e2e-db.json`, and signs in through the LDAP form as each role.
+`e2e/global-setup.ts` deletes that database first — the sign-in throttle is a
+row in it (8 per uid per 15 min), so a second run inside the window used to
+lock the dummy accounts out and fail on a sign-in that was fine. `next start`
+is still reused if one is listening on 3100, so `pkill -f "next start"` after
+rebuilding. Lint, types, unit tests and the journeys all run in CI
+(`.github/workflows/ci.yml`) with no secrets at all.
 
 Beyond the suites, behaviour is verified these ways:
 
@@ -239,6 +243,11 @@ Scoping lives in `canReview()` (HODs: `hodApproversFor`), which also refuses
 
 **Debitable head** (`lib/debit-heads.ts`): required on every booking; allowed
 heads per requester category are the Setting `rules.debit` (room and dining).
+`FORBIDDEN_DEBIT_HEADS` is a **floor under that Setting** — **faculty may never
+debit the Institute Grant** (23 Sep 2026), which is the offices' money.
+`allowedHeads()` strips a forbidden head on read (so a stored row that still
+lists one is ignored, not fatal), `debitRulesSchema` refuses to save it, and the
+console greys that cell.
 `bookingContextFor(user)` computes them once for the page and for
 `createBooking`. Project → a project from the Projects console
 (`projects` table, paste import); the number and title are snapshotted into
@@ -251,6 +260,9 @@ heads per requester category are the Setting `rules.debit` (room and dining).
 truth for which a role may pick, and a role with one option is **never asked** —
 the form records the value silently. Employee is the only role with a real
 choice (`official` default, `personal`); club and official are official-only.
+**The GH Manager has no `personal`** (23 Sep 2026): the desk account is the
+guest house, not a person, and staff in that post book their own family from an
+ordinary institute account. It is `["official", "alumni"]`.
 
 `alumni` means *on behalf of an alumnus*, who has no login: it requires
 `alumni_name`, `alumni_roll_number` and the Alumni ID card upload. The card is
@@ -408,6 +420,25 @@ waiting for someone who cannot come.
   survives a rename** — otherwise those options would be permanently
   unselectable. Keep that guard if you touch it.
 
+### One of each (students)
+
+A student has one mother. `unique_relationships` on `RoleFormConfig` (Mother,
+Father, Guardian, Grandmother, Grandfather by default; **not Siblings**) is the
+list of relationships that may appear **once per request**, across every room.
+Same shape as the rule above and for the same reason — the Form Builder can
+rename the options, so the rule is config, not words in code.
+
+- `duplicateRelationshipError(config, relationships)` in `lib/form-config.ts`
+  is the one matcher, called by the booking form *and* `bookingPayloadSchema`.
+  The form greys the option out on every **other** guest
+  (`usedUniqueRelationships`, "— already on this request"); the zod
+  `superRefine` enforces it, and attaches the error to the **repeat**, not the
+  first one.
+- Never grey out a guest's own current answer — that silently clears the box.
+- `sanitizeFormConfig` empties it for a **free-text** role: there is no option
+  list to be unique within, and "Mother " and "mother" would be two answers.
+- Edited in the Form Builder as "One of each".
+
 ## Booking history & archive search (`/history`)
 
 Accessible to **all roles**. Requesters see their own booking history (nav:
@@ -503,6 +534,20 @@ the same room. This replaced a check-then-act race in `allocateRooms()`.
 
 `components/room-grid.tsx` — cinema-style grid, green available / red occupied /
 blue selected, grouped into double-sharing and single.
+
+### One guest house is not a dropdown
+
+Where a role has exactly one guest house to offer (students are Bageshri-only;
+an alumni booking narrows to Bageshri; a meals-only booking narrows to the one
+kitchen), the form **states the name and carries the id in a hidden registered
+input** — never a disabled `<select>`. The value is computed before `useForm`
+(`initialGuestHouseId`), so it is in the server-rendered HTML rather than
+arriving with an effect.
+
+> A disabled one-option dropdown is what made the IAR Student Cell's alumni
+> booking fail with "Select a guest house" — a question the form had already
+> answered and was not offering. Don't reintroduce it, and don't rely on an
+> effect to fill a field that something might read before hydration.
 
 ### The booking form's availability panel is browsable
 
@@ -704,18 +749,27 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
 - **HTML and plain text are rendered from one block list** (`lib/mail/render.ts`).
   Do not hand-write either body. Tables and inline styles only, no external
   images, and **never a link to an ID document** — mail points at the portal.
-- **Staff mail is threaded per person per day; requester mail stands alone**
+- **Staff mail threads on the booking; requester mail stands alone**
   (`lib/mail/thread.ts`, `MAIL_THREAD_OF` in `types.ts`). Reviewer and desk
-  mail about bookings joins that recipient's daily **approvals** thread; the
-  digest, escalation and day-wise log join a separate **daily log** thread. A
-  new institute day starts new threads. Threaded mail is queued **one message
-  per To address**, with CC on the first one only (so a CC recipient joins
-  that thread once) (a message carries one `References`), shares a fixed subject
-  (`Guest house approvals — Mon 21 Sep 2026`; the per-item subject moves to
-  the preview line), and the **first one actually sent** claims the root
+  mail about a booking joins that recipient's thread **for that booking**
+  (`bookingThreadRoot(referenceId, address)`, fixed subject
+  `[IITPKD-GH-2026-AB12C] Guest house booking`), so everything about one
+  request is one conversation however many days it spans. **Scheduled mail —
+  the digest, escalation and day-wise log — keeps a daily log thread**, because
+  it is about a queue and has no booking to hang on; a new institute day starts
+  a new one. Threaded mail is queued **one message per To address**, with CC on
+  the first one only (so a CC recipient joins that thread once) (a message
+  carries one `References`), shares a fixed subject (the per-item subject moves
+  to the preview line), and the **first one actually sent** claims the root
   `Message-ID` — decided in `dispatch.ts` by looking for a SENT sibling, not
   at queue time, so a failed opener hands the role on. Requester mail has no
-  threading headers and a `[reference]`-led subject.
+  threading headers and a `[reference]`-led subject that says what happened.
+
+  > **It used to be one "approvals" thread per person per day** (before 23 Sep
+  > 2026). That grouped by when a message was queued, which nobody follows: a
+  > club's request, an unrelated cancellation and a dignitary's allocation
+  > shared a conversation because they landed the same morning, while two
+  > messages about one booking a day apart were split. Don't go back.
 - `nodemailer` is in `serverExternalPackages` (dynamic requires + Node
   built-ins). Gmail app passwords are shown in four groups of four and people
   paste the spaces, so `mailConfig()` strips whitespace from
@@ -743,6 +797,15 @@ booked / Booked badge for the whole period shown.
   per **(room, booking)** using the same `ROOM_HOLDING_STATUSES` + strict
   overlap as `getOccupiedRoomIds`. The two must agree — a throwaway parity
   check caught nothing, but that is exactly where the backends drift.
+- **An overlap is drawn in its own colour.** Where the manager accepted a
+  changeover (`isOverridable`, up to 2 h) two bookings really do hold one room
+  at once; in plain red that is indistinguishable from one ordinary stay.
+  `bucketOccupancyByHour` returns `overlaps` per hour and `bucketOccupancyByDay`
+  returns clipped `overlaps` spans (`overlapSpans`), drawn `bg-overlap` —
+  violet, vertical stripe, `◆` on range bars — over both bars. Stays that merely
+  **touch** at check-out are not an overlap (the same half-open rule as
+  `room_holds.during`). Four states now share these charts, and each differs by
+  pattern as well as colour.
 - **All the calendar maths lives in `lib/availability.ts`, not the
   components**, so the boundary behaviour is testable: `bucketOccupancyByHour`
   (a stay checking out at 11:00 releases the 11 AM hour; its turnaround buffer

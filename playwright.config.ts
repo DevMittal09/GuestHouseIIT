@@ -18,6 +18,8 @@ const DB = process.env.E2E_DB ?? "./.e2e-db.json";
 
 export default defineConfig({
   testDir: "./e2e",
+  // Wipes the throwaway database first — see the file for why.
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   workers: 1,
   timeout: 90_000,

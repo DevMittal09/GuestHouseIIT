@@ -39,10 +39,20 @@ const ROLE_BOOKING_TYPES: Partial<Record<Role, BookingType[]>> = {
   // Retired: no one books as an alumnus any more, but stored bookings read
   // their type through here.
   alumni: ["alumni"],
-  // The manager takes bookings at the desk for people who never open the
-  // portal, so every kind is open to them — the guest decides which it is,
-  // not the account typing it in.
-  gh_manager: ["official", "personal", "alumni"],
+  /**
+   * The manager takes bookings at the desk for people who never open the
+   * portal, so the kinds they raise on someone else's behalf are open to
+   * them — the guest decides which it is, not the account typing it in.
+   *
+   * **Not `personal`** (23 Sep 2026). The manager's account is the desk, not
+   * a person: a booking made on it is the guest house booking for somebody,
+   * and "personal" would mean the manager's own family. Staff in this
+   * position hold a second, ordinary institute account for their own
+   * bookings — the office asked for the desk account to stop offering a
+   * private stay, so a private stay cannot be raised, invoiced or approved
+   * from the console that also approves it.
+   */
+  gh_manager: ["official", "alumni"],
 };
 
 /** The booking types `role` may pick. Empty when the role cannot book at all. */

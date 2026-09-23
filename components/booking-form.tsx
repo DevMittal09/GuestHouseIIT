@@ -52,6 +52,8 @@ import { DEFAULT_RULES, type CapacityRules, type Rules } from "@/lib/settings";
 import {
   hasQualifyingParent,
   parentDependencyHint,
+  uniqueRelationshipHint,
+  usedUniqueRelationships,
   validateCustomValue,
   type CustomField,
   type RoleFormConfig,
@@ -301,6 +303,26 @@ export function BookingForm({
       : []
   );
 
+  /**
+   * The guest house the form opens on.
+   *
+   * Computed here, before `useForm`, rather than left to the effect below:
+   * a role with one guest house renders it as a statement rather than a
+   * dropdown, and a hidden field that starts empty would be empty in the
+   * server-rendered HTML too — which is exactly the "select a guest house"
+   * the IAR Student Cell hit on a form that was never going to ask.
+   * `offeredGuestHouses` below recomputes the same list once the requester
+   * can change the booking type.
+   */
+  const [initialGuestHouseId] = useState(() => {
+    const offered = (
+      canOverrideGuestHousePolicy(user.role)
+        ? guestHouses
+        : guestHousesForBookingType(guestHouses, defaultBookingTypeFor(config.role) ?? "official")
+    ).filter((g) => !mealsOnly || g.serves_meals);
+    return offered.length === 1 ? offered[0].id : "";
+  });
+
   const form = useForm<FormValues>({
     defaultValues: {
       privacy_consent: false,
@@ -316,7 +338,7 @@ export function BookingForm({
       on_behalf_of_phone: "",
       alumni_name: "",
       alumni_roll_number: "",
-      guest_house_id: guestHouses.length === 1 ? guestHouses[0].id : "",
+      guest_house_id: initialGuestHouseId,
       purpose_of_visit: "",
       check_in_date: "",
       check_in_time: "12:00",
@@ -403,6 +425,14 @@ export function BookingForm({
     allGuests.map((g) => g?.relationship)
   );
   const dependencyHint = parentDependencyHint(config);
+  // Mother, Father, Guardian… once each across the whole request. Computed
+  // here, where every room's guests are in view, and greyed out on every
+  // guest but the one that already holds the answer.
+  const usedUnique = usedUniqueRelationships(
+    config,
+    allGuests.map((g) => g?.relationship)
+  );
+  const uniqueHint = uniqueRelationshipHint(config);
 
   const totals = describeTotals({
     rooms: (watchedRooms ?? []).length,
@@ -1073,18 +1103,40 @@ export function BookingForm({
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="guest_house_id">Guest house *</Label>
-            <NativeSelect
-              id="guest_house_id"
-              {...register("guest_house_id")}
-              disabled={guestHouseLocked}
-            >
-              {offeredGuestHouses.length > 1 && <option value="">Select guest house…</option>}
-              {offeredGuestHouses.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </NativeSelect>
+            {/* One guest house is not a choice, so it is not a dropdown.
+                A disabled <select> looked like a question that had somehow
+                been answered wrongly — the IAR Student Cell, whose alumni
+                bookings are always Bageshri, reported being told to select a
+                guest house it was never offered. The name is stated and the
+                id travels in a hidden input, which is a real registered field
+                and so cannot be left empty by anything the browser does to a
+                disabled control. */}
+            {guestHouseLocked ? (
+              <>
+                <input
+                  type="hidden"
+                  {...register("guest_house_id")}
+                  // Carried in the server-rendered HTML too, so the field is
+                  // never momentarily empty between render and hydration.
+                  defaultValue={offeredGuestHouses[0].id}
+                />
+                <p
+                  id="guest_house_id"
+                  className="border-input flex h-9 w-full items-center rounded-md border bg-muted/40 px-3 py-1 text-sm"
+                >
+                  {offeredGuestHouses[0].name}
+                </p>
+              </>
+            ) : (
+              <NativeSelect id="guest_house_id" {...register("guest_house_id")}>
+                <option value="">Select guest house…</option>
+                {offeredGuestHouses.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </NativeSelect>
+            )}
             {forAlumnus && <p className="text-xs text-muted-foreground">{ALUMNI_GUEST_HOUSE_NOTE}</p>}
             {overridingHouse && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
@@ -1352,6 +1404,12 @@ export function BookingForm({
               </p>
             )}
 
+            {uniqueHint && (
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                {uniqueHint}
+              </p>
+            )}
+
             {roomFields.map((room, roomIndex) => (
               <RoomCard
                 key={room.id}
@@ -1360,6 +1418,7 @@ export function BookingForm({
                 register={register}
                 config={config}
                 parentPresent={parentPresent}
+                usedUnique={usedUnique}
                 idDocRequired={idDocRequired}
                 guestFiles={guestFiles}
                 err={err}
@@ -1553,6 +1612,7 @@ function RoomCard({
   register,
   config,
   parentPresent,
+  usedUnique,
   idDocRequired,
   guestFiles,
   err,
@@ -1564,6 +1624,8 @@ function RoomCard({
   register: UseFormRegister<FormValues>;
   config: RoleFormConfig;
   parentPresent: boolean;
+  /** Unique relationships already used anywhere on the request. */
+  usedUnique: string[];
   idDocRequired: boolean;
   guestFiles: Map<string, File>;
   err: (path: string) => string | undefined;
@@ -1631,6 +1693,7 @@ function RoomCard({
             register={register}
             config={config}
             parentPresent={parentPresent}
+            usedUnique={usedUnique}
             idDocRequired={idDocRequired}
             guestKey={watched[guestIndex]?.key ?? field.id}
             guestFiles={guestFiles}
@@ -1684,6 +1747,7 @@ function GuestRow({
   register,
   config,
   parentPresent,
+  usedUnique,
   idDocRequired,
   guestKey,
   guestFiles,
@@ -1697,6 +1761,8 @@ function GuestRow({
   register: UseFormRegister<FormValues>;
   config: RoleFormConfig;
   parentPresent: boolean;
+  /** Unique relationships already used anywhere on the request. */
+  usedUnique: string[];
   idDocRequired: boolean;
   guestKey: string;
   guestFiles: Map<string, File>;
@@ -1708,10 +1774,28 @@ function GuestRow({
   const gf = config.guest_fields;
   const citizenship = useWatch({ control, name: `${base}.citizenship` });
   const age = useWatch({ control, name: `${base}.age` });
+  const relationship = useWatch({ control, name: `${base}.relationship` });
   const isInfant = isInfantEntry({ age });
   const star = (mode: "required" | "optional" | "hidden") => (mode === "required" ? " *" : "");
-  const isLocked = (option: string) =>
-    !parentPresent && config.dependent_relationships.includes(option);
+  /**
+   * Why an option is not selectable here, or null when it is. Two reasons,
+   * and they read differently on the option, so the requester is told which
+   * rule they have met rather than just finding a greyed line:
+   *
+   *  - a dependent (sibling, grandparent) with no parent on the request yet;
+   *  - a one-of-each relationship another guest already holds. Never this
+   *    guest's own answer — taking away the value in the box would silently
+   *    clear it.
+   */
+  const lockReason = (option: string): string | null => {
+    if (!parentPresent && config.dependent_relationships.includes(option)) {
+      return "needs a parent on this request";
+    }
+    if (usedUnique.includes(option) && relationship?.trim() !== option) {
+      return "already on this request";
+    }
+    return null;
+  };
 
   return (
     <div className="rounded-md border bg-muted/20 p-3">
@@ -1776,15 +1860,15 @@ function GuestRow({
               <NativeSelect {...register(`${base}.relationship`)}>
                 <option value="">Select…</option>
                 {config.relationship_options.map((r) => {
-                  const locked = isLocked(r);
+                  const locked = lockReason(r);
                   return (
                     <option
                       key={r}
                       value={r}
-                      disabled={locked}
+                      disabled={Boolean(locked)}
                       className={locked ? "text-muted-foreground opacity-50" : undefined}
                     >
-                      {locked ? `${r} — needs a parent on this request` : r}
+                      {locked ? `${r} — ${locked}` : r}
                     </option>
                   );
                 })}

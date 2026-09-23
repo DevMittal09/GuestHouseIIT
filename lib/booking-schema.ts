@@ -12,7 +12,13 @@ import {
 } from "./debit-heads";
 import { isOfficeRole } from "./workflow";
 import { isCountryCode } from "./countries";
-import { parentDependencyError, type FieldMode, type RoleFormConfig } from "./form-config";
+import {
+  duplicateRelationshipError,
+  duplicateRelationships,
+  parentDependencyError,
+  type FieldMode,
+  type RoleFormConfig,
+} from "./form-config";
 import { MAX_MEAL_DAYS, mealLeadTimeError, mealPlanError, normalizeMeals } from "./meals";
 import { describeRoomParties, INFANT_AGE_LIMIT, isInfantAge, roomPartyError } from "./occupancy";
 import { stayLengthError } from "./policy";
@@ -642,6 +648,40 @@ export function bookingPayloadSchema(
               path: ["rooms", i, "guests", j, "relationship"],
             });
           }
+        });
+      });
+    })
+    .superRefine((v, ctx) => {
+      // One of each, across the whole request: two guests cannot both be the
+      // requester's mother. Like the dependency above, this is config
+      // (`unique_relationships`), not a hardcoded list of words.
+      const all = v.rooms.flatMap((r) => r.guests);
+      const message = duplicateRelationshipError(
+        config,
+        all.map((g) => g.relationship)
+      );
+      if (!message) return;
+      const repeated = duplicateRelationships(
+        config,
+        all.map((g) => g.relationship)
+      );
+      // Marked on every copy but the first: the first one is almost always
+      // the one the requester meant, and flagging it too reads as though both
+      // were wrong.
+      const seen = new Set<string>();
+      v.rooms.forEach((room, i) => {
+        room.guests.forEach((g, j) => {
+          const value = g.relationship?.trim();
+          if (!value || !repeated.includes(value)) return;
+          if (!seen.has(value)) {
+            seen.add(value);
+            return;
+          }
+          ctx.addIssue({
+            code: "custom",
+            message,
+            path: ["rooms", i, "guests", j, "relationship"],
+          });
         });
       });
     });

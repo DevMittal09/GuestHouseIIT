@@ -22,6 +22,8 @@ export const ACCOUNTS = {
   manager: { uid: "guesthouse", password: "Manager@2026", name: "Guest House Manager" },
   caretaker: { uid: "gh.reception", password: "Reception@2026", name: "Guest House Caretaker" },
   developer: { uid: "developer", password: "Developer@2026", name: "Portal Developer" },
+  iarStudentCell: { uid: "alumnicell", password: "AlumniCell@2026", name: "IAR Student Cell" },
+  iarOffice: { uid: "iar", password: "IarOffice@2026", name: "IAR Office" },
 } as const;
 
 /** A 1×1 PNG that passes the upload sniffer, for guest ID documents. */
@@ -98,7 +100,13 @@ export async function setTime(
   await page.getByLabel(`${label} AM or PM`).selectOption(time.period);
 }
 
-/** Pick a guest house, unless the form already settled on the only one offered. */
+/**
+ * Pick a guest house, unless the form already settled on the only one offered.
+ *
+ * A role with one guest house is not shown a dropdown at all — the name is
+ * stated and the id travels in a hidden field — so a filled value is the
+ * answer, whatever element is holding it.
+ */
 export async function chooseGuestHouse(page: Page): Promise<void> {
   const house = page.locator('[name="guest_house_id"]');
   if (await house.inputValue()) return;
@@ -128,11 +136,18 @@ export function nextDay(date: string): string {
   return next.toISOString().slice(0, 10);
 }
 
-/** The name of the guest house the form is currently set to. */
+/**
+ * The name of the guest house the form is currently set to — from the
+ * dropdown's selected option, or from the statement that replaces it when the
+ * role has only one.
+ */
 export async function selectedGuestHouseName(page: Page): Promise<string> {
-  return page
-    .locator('[name="guest_house_id"]')
-    .evaluate((el) => (el as HTMLSelectElement).selectedOptions[0]?.text.trim() ?? "");
+  const field = page.locator('[name="guest_house_id"]');
+  const isSelect = await field.evaluate((el) => el.tagName === "SELECT");
+  if (isSelect) {
+    return field.evaluate((el) => (el as HTMLSelectElement).selectedOptions[0]?.text.trim() ?? "");
+  }
+  return (await page.locator("#guest_house_id").innerText()).trim();
 }
 
 /** Fill one guest row in a room, with whichever fields that role's form asks for. */

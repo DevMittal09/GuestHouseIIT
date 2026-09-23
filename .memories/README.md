@@ -24,6 +24,7 @@ one.
 | [12-academic-records.md](12-academic-records.md) | **The Requester details card**: the fields the academic database supplies for each kind of account, the Copy-to rules, the dummy records, and **how to connect the real academic database** |
 | [13-workflows.md](13-workflows.md) | **What each role does and where a request goes** — every pipeline drawn out, the states a booking can be in, and what happens automatically |
 | [14-security.md](14-security.md) | What protects the portal, where each control lives, secret rotation, and what to do about an incident |
+| [15-recent-changes.md](15-recent-changes.md) | **Only the most recent round of changes**, so you can pick up where the last session stopped. Deliberately short-lived: a new round replaces it rather than being appended. Anything permanent lives in [06-decisions.md](06-decisions.md) |
 
 **Also in the repo root:** `AGENTS.md` is the terse operational brief that agent
 tools load automatically. It is the hard rules; these files are the reasoning.
@@ -303,6 +304,10 @@ and the two are approved and settled differently.
 **never asked** — a toggle with one position is not a decision — but the value
 is still recorded. Employee is the only role with a real choice (`official`
 default, `personal`); club and official are official-only; student is personal.
+The **GH Manager** takes bookings at the desk for people who never open the
+portal, so `official` and `alumni` are open to them — but **not `personal`**
+(23 Sep 2026): the desk account is the guest house, not a person, and staff in
+that post book their own family from an ordinary institute account.
 
 `alumni` means *on behalf of an alumnus*, who has no institute login. It
 requires `alumni_name`, `alumni_roll_number` and the Alumni ID card. The card
@@ -341,6 +346,13 @@ the gated options) and by the zod schema (which enforces it).
 > intersects both arrays with the options actually offered and **drops the rule
 > entirely if no parent option survives**, so the gated options can never become
 > permanently unselectable.
+
+**And one of each** (23 Sep 2026): `unique_relationships` lists the options a
+requester has only one of — Mother, Father, Guardian, Grandmother, Grandfather
+for a student, and deliberately **not** Siblings. `duplicateRelationshipError()`
+is the matcher, on both sides, spanning the whole request. It exists because a
+student could enter "Mother" twice: two names, both the requester's mother, and
+nothing at the desk to say which was right.
 
 ### 4.3 Room capacity and infants — `lib/occupancy.ts`
 

@@ -106,6 +106,66 @@ describe("charts: a booked bar ends at check-out, the turnaround is separate", (
     const week = bucketOccupancyByDay([room()], [{ ...seg, turnaround_until: null }], range).get("room-1")!;
     expect(week.turnarounds).toEqual([]);
   });
+
+  /**
+   * 23 Sep 2026: a changeover the manager accepted really does put two stays
+   * in one room for up to two hours. Drawn in the same red as an ordinary
+   * booking it said nothing — the room reads as taken either way — so the
+   * overlapping stretch is now its own band.
+   */
+  describe("two bookings on one room at once", () => {
+    // Starts two hours before `seg` leaves: an accepted soft overlap.
+    const other: RoomOccupancySegment = {
+      ...seg,
+      booking_id: "b-2",
+      booking_reference_id: "REF2",
+      check_in: "2030-01-11T03:30:00.000Z", // 09:00 IST
+      check_out: "2030-01-12T05:30:00.000Z",
+      turnaround_until: null,
+    };
+
+    it("day view: only the shared hours are marked, and they name both bookings", () => {
+      const { start } = instituteDayBounds("2030-01-11");
+      const day = bucketOccupancyByHour([room()], [seg, other], start).get("room-1")!;
+      // 09:00 and 10:00 IST are held by both; 08:00 by the first alone and
+      // 11:00 by the second alone.
+      expect(day.overlaps[8]).toBeNull();
+      expect(day.overlaps[9]?.map((o) => o.booking_reference_id).sort()).toEqual(["REF", "REF2"]);
+      expect(day.overlaps[10]?.map((o) => o.booking_reference_id).sort()).toEqual(["REF", "REF2"]);
+      expect(day.overlaps[11]).toBeNull();
+      // The hour is still booked — the overlap is drawn over it, not instead.
+      expect(day.hours[9]).not.toBeNull();
+    });
+
+    it("week view: one band covering exactly the shared stretch", () => {
+      const range = availabilityRange("week", "2030-01-11")!;
+      const week = bucketOccupancyByDay([room()], [seg, other], range).get("room-1")!;
+      expect(week.overlaps).toHaveLength(1);
+      const span = range.end.getTime() - range.start.getTime();
+      const from =
+        (new Date(other.check_in).getTime() - range.start.getTime()) / span;
+      const to = (new Date(seg.check_out).getTime() - range.start.getTime()) / span;
+      expect(week.overlaps[0].from).toBeCloseTo(from, 10);
+      expect(week.overlaps[0].to).toBeCloseTo(to, 10);
+      expect(
+        week.overlaps[0].segments.map((o) => o.booking_reference_id).sort()
+      ).toEqual(["REF", "REF2"]);
+    });
+
+    it("stays that only touch at check-out are not an overlap", () => {
+      const backToBack: RoomOccupancySegment = {
+        ...other,
+        check_in: seg.check_out,
+      };
+      const { start } = instituteDayBounds("2030-01-11");
+      const day = bucketOccupancyByHour([room()], [seg, backToBack], start).get("room-1")!;
+      expect(day.overlaps.every((o) => o === null)).toBe(true);
+      const range = availabilityRange("week", "2030-01-11")!;
+      expect(
+        bucketOccupancyByDay([room()], [seg, backToBack], range).get("room-1")!.overlaps
+      ).toEqual([]);
+    });
+  });
 });
 
 // --------------------------------------------- the mock store emulates Postgres

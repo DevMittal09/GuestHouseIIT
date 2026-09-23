@@ -163,6 +163,7 @@ const formConfigSchema = z.object({
   relationship_options: z.array(z.string().trim().min(1)).max(30),
   parent_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
   dependent_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
+  unique_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
   alumni_card: fieldMode,
   banner_text: z.string().trim().max(200).nullable(),
   custom_fields: z
@@ -206,9 +207,11 @@ export async function saveRoleFormConfig(config: RoleFormConfig): Promise<Action
       };
     }
     const offered = new Set(parsed.data.relationship_options);
-    const stray = [...parsed.data.parent_relationships, ...parsed.data.dependent_relationships].find(
-      (r) => !offered.has(r)
-    );
+    const stray = [
+      ...parsed.data.parent_relationships,
+      ...parsed.data.dependent_relationships,
+      ...parsed.data.unique_relationships,
+    ].find((r) => !offered.has(r));
     if (stray) {
       return { ok: false, error: `“${stray}” is not one of the relationship dropdown options` };
     }

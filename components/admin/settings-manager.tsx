@@ -32,6 +32,7 @@ import { DEBIT_HEAD_LABELS, type DebitHead, type RoomType } from "@/lib/types";
 import {
   DEBIT_CATEGORIES,
   DEBIT_CATEGORY_LABELS,
+  isHeadAllowedFor,
   STANDARD_DEBIT_HEADS,
   type DebitRules,
 } from "@/lib/debit-heads";
@@ -674,15 +675,26 @@ function DebitHeadsSection({ current }: { current: Rules["debit"] }) {
               <tr key={category} className="border-b last:border-0">
                 <td className="p-2">{DEBIT_CATEGORY_LABELS[category]}</td>
                 {heads.map((h) => {
-                  const disabled = kind === "dining" && h === "project_grant";
+                  // Dining is never charged to a project, and a few
+                  // category/head pairs are refused outright by the rules
+                  // themselves (faculty cannot debit the Institute Grant) —
+                  // shown greyed rather than hidden, so the table still reads
+                  // as one grid and the reason is in the tooltip.
+                  const forbidden = !isHeadAllowedFor(category, h);
+                  const disabled = (kind === "dining" && h === "project_grant") || forbidden;
                   return (
                     <td key={h} className="p-2 text-center">
                       <input
                         type="checkbox"
                         aria-label={`${DEBIT_CATEGORY_LABELS[category]}: ${DEBIT_HEAD_LABELS[h]} (${title})`}
+                        title={
+                          forbidden
+                            ? `${DEBIT_CATEGORY_LABELS[category]} cannot be charged to the ${DEBIT_HEAD_LABELS[h]}`
+                            : undefined
+                        }
                         className="size-4 accent-primary"
                         disabled={disabled}
-                        checked={draft[kind][category].includes(h)}
+                        checked={!forbidden && draft[kind][category].includes(h)}
                         onChange={() => toggle(kind, category, h)}
                       />
                     </td>

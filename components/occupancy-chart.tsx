@@ -103,11 +103,19 @@ function HourRow({
       {rooms.map((room) => {
         const segment = occupancy.get(room.id)?.hours[hour] ?? null;
         const turnaround = segment ? null : (occupancy.get(room.id)?.turnaround[hour] ?? null);
+        // Two bookings on one room at this hour — an accepted changeover.
+        // Its own colour: plain red said only "taken", which is what the
+        // hour would look like with a single stay in it.
+        const overlap = occupancy.get(room.id)?.overlaps[hour] ?? null;
         return (
           <div
             key={room.id}
             title={
-              segment?.kind === "maintenance"
+              overlap
+                ? `${room.room_number} — ${overlap.length} bookings overlap at ${hourLabel(hour)}: ${overlap
+                    .map((s) => s.booking_reference_id)
+                    .join(", ")}`
+                : segment?.kind === "maintenance"
                 ? `${room.room_number} — out of service at ${hourLabel(hour)} (maintenance: ${segment.purpose_of_visit ?? ""})`
                 : segment
                 ? `${room.room_number} — booked at ${hourLabel(hour)} · ${
@@ -120,7 +128,9 @@ function HourRow({
             className={cn(
               "border-r border-b",
               rowHeight,
-              segment?.kind === "maintenance"
+              overlap
+                ? "bg-overlap"
+                : segment?.kind === "maintenance"
                 ? "bg-maintenance"
                 : segment
                   ? "bg-red-500"
@@ -271,6 +281,34 @@ export function RangeOccupancyChart({
                 </div>
               );
             })}
+            {/* Over both bars: where two stays hold the room at once. Drawn
+                last so neither booking's red hides it. */}
+            {occupancy.get(room.id)?.overlaps.map(({ segments, from, to }) => (
+              <div
+                key={`o-${segments[0].booking_id}-${segments[1].booking_id}`}
+                role="img"
+                aria-label={`${room.room_number}: ${segments[0].booking_reference_id} and ${segments[1].booking_reference_id} overlap`}
+                title={`${room.room_number} — ${segments[0].booking_reference_id} and ${segments[1].booking_reference_id} hold this room at the same time, ${formatDateTime(
+                  new Date(
+                    Math.max(
+                      new Date(segments[0].check_in).getTime(),
+                      new Date(segments[1].check_in).getTime()
+                    )
+                  ).toISOString()
+                )} → ${formatDateTime(
+                  new Date(
+                    Math.min(
+                      new Date(segments[0].check_out).getTime(),
+                      new Date(segments[1].check_out).getTime()
+                    )
+                  ).toISOString()
+                )}`}
+                className="bg-overlap absolute inset-x-0.5 flex items-start justify-center overflow-hidden rounded-sm pt-0.5 text-[9px] leading-none text-white ring-1 ring-background"
+                style={{ top: `${from * 100}%`, height: `max(${(to - from) * 100}%, 3px)` }}
+              >
+                <span aria-hidden>◆</span>
+              </div>
+            ))}
             {nowAt !== null && (
               <div
                 aria-hidden

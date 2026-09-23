@@ -82,16 +82,25 @@ export const RETIRED_MAIL_EVENTS: MailEventKey[] = ["booking.cancellation_reques
  * here only so the console can say which mails are threaded without pulling
  * server code into the browser.
  */
-export type MailThreadKind = "approvals" | "daily_log";
+export type MailThreadKind = "booking" | "daily_log";
 
 export const MAIL_THREAD_OF: Partial<Record<MailEventKey, MailThreadKind>> = {
-  "booking.submitted.reviewer": "approvals",
-  "booking.pending.reviewer": "approvals",
-  "booking.allocated.desk": "approvals",
-  "booking.cancellation_requested.manager": "approvals",
-  "booking.cancellation_requested.reviewer": "approvals",
-  "booking.cancelled.desk": "approvals",
-  "booking.extension_requested.manager": "approvals",
+  // Per **booking**, not per day (23 Sep 2026). These used to join one
+  // "approvals" thread per person per institute day, which put a fest club's
+  // request, a cancellation and a dignitary's allocation in the same
+  // conversation because they happened on the same morning. The office asked
+  // for the thread to follow the request: everything about
+  // IITPKD-GH-2026-AB12C in one place, from submission to cancellation,
+  // however many days it takes.
+  "booking.submitted.reviewer": "booking",
+  "booking.pending.reviewer": "booking",
+  "booking.allocated.desk": "booking",
+  "booking.cancellation_requested.manager": "booking",
+  "booking.cancellation_requested.reviewer": "booking",
+  "booking.cancelled.desk": "booking",
+  "booking.extension_requested.manager": "booking",
+  // Scheduled mail has no booking to thread on — a digest is *about* a queue
+  // — so it keeps a daily thread of its own.
   "queue.digest.reviewer": "daily_log",
   "queue.escalation.reviewer": "daily_log",
   "desk.daily_report": "daily_log",
@@ -105,10 +114,10 @@ export interface OutboundMessage {
   html: string;
   text: string;
   /**
-   * RFC 5322 threading headers. The Guest House meeting asked for staff mail
-   * to arrive as a single thread per day rather than a pile of standalone
-   * messages, so every message after the first references the thread's root
-   * id — see `lib/mail/thread.ts`.
+   * RFC 5322 threading headers. Staff mail about one booking arrives as one
+   * conversation rather than a pile of standalone messages, so every message
+   * after the first references the thread's root id — see
+   * `lib/mail/thread.ts`.
    */
   messageId?: string;
   inReplyTo?: string;
@@ -144,7 +153,7 @@ export interface NewEmailInput {
   subject: string;
   body_html: string;
   body_text: string;
-  /** The daily thread this message belongs to, or null for standalone mail. */
+  /** The thread this message belongs to, or null for standalone mail. */
   thread_root: string | null;
   /**
    * Written false. Kept for rows queued before threads were daily, when the

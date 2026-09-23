@@ -27,6 +27,22 @@
     repeating-linear-gradient(-45deg, #1e293b 0 2px, transparent 2px 7px);
 }
 
+/*
+ * Two bookings holding one room at the same time (23 Sep 2026): a changeover
+ * the Guest House Manager accepted, which really is an overlap and not just a
+ * busy room. Violet with a vertical stripe, so it is not red, not the
+ * turnaround's 135° diagonal and not maintenance's cross-hatch — the four
+ * states differ by pattern as well as by colour.
+ */
+@utility bg-overlap {
+  background-color: #7c3aed;
+  background-image: repeating-linear-gradient(
+    90deg,
+    #f5f3ff 0 2px,
+    transparent 2px 6px
+  );
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

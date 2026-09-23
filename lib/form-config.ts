@@ -40,6 +40,13 @@ export interface RoleFormConfig {
    * grandparents are accommodated only alongside a parent.
    */
   dependent_relationships: string[];
+  /**
+   * Relationships a requester has exactly one of, so they may appear **once**
+   * on a request — Mother, Father, Guardian, Grandmother, Grandfather. Empty
+   * disables the rule. "Siblings" is deliberately not one of them: a student
+   * can have several.
+   */
+  unique_relationships: string[];
   alumni_card: FieldMode;
   /** Informational banner under "Number of rooms" (null = no banner). */
   banner_text: string | null;
@@ -69,6 +76,21 @@ const DOUBLE_PREFERENCE_BANNER = "Double shared rooms will get first preference"
 const STUDENT_PARENT_RELATIONSHIPS = ["Mother", "Father", "Guardian"];
 /** Accommodated only when a parent is staying too. */
 const STUDENT_DEPENDENT_RELATIONSHIPS = ["Grandmother", "Grandfather", "Siblings"];
+/**
+ * Relationships nobody has two of (23 Sep 2026).
+ *
+ * A student was able to add "Mother" twice — two different people, both
+ * described as the requester's mother — and the desk had no way to tell which
+ * of the two names was right. Everything on the list below is singular by
+ * definition; **Siblings is not**, because a student may well bring two.
+ */
+const STUDENT_UNIQUE_RELATIONSHIPS = [
+  "Mother",
+  "Father",
+  "Guardian",
+  "Grandmother",
+  "Grandfather",
+];
 
 /** The spec's defaults, used until a developer saves a custom configuration. */
 export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): RoleFormConfig {
@@ -89,6 +111,7 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
     relationship_options: [...STUDENT_RELATIONSHIPS],
     parent_relationships: [],
     dependent_relationships: [],
+    unique_relationships: [],
     alumni_card: "hidden",
     banner_text: null,
     custom_fields: [],
@@ -100,6 +123,7 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
         allowed_guest_house_ids: bageshriOnly.length > 0 ? bageshriOnly : all,
         parent_relationships: [...STUDENT_PARENT_RELATIONSHIPS],
         dependent_relationships: [...STUDENT_DEPENDENT_RELATIONSHIPS],
+        unique_relationships: [...STUDENT_UNIQUE_RELATIONSHIPS],
         banner_text: DOUBLE_PREFERENCE_BANNER,
       };
     case "employee":
@@ -191,8 +215,22 @@ export function sanitizeFormConfig(
           (r) => offered.has(r) && !parents.includes(r)
         );
 
+  // Same treatment for the "one of each" list: backfilled from the spec
+  // defaults for a row saved before the rule, and narrowed to the options the
+  // form actually offers, so a renamed option cannot make the rule fire on a
+  // value nobody can pick. A free-text relationship field is exempt — there is
+  // no option list to be unique within, and "Mother " and "mother" would be
+  // two different answers.
+  const unique =
+    config.relationship_style === "dropdown"
+      ? (config.unique_relationships ?? defaults.unique_relationships).filter((r) =>
+          offered.has(r)
+        )
+      : [];
+
   return {
     ...config,
+    unique_relationships: unique,
     allowed_guest_house_ids: ids.length > 0 ? ids : guestHouses.map((g) => g.id),
     guest_fields: {
       ...config.guest_fields,
@@ -235,6 +273,65 @@ export function parentDependencyError(
     parents,
     "or"
   )} is also staying`;
+}
+
+/**
+ * The one-of-each rule: a relationship in `unique_relationships` may appear at
+ * most once on a request. Returns the error message, or null when the request
+ * is acceptable. Shared by the booking form and the server-side schema, the
+ * same way `parentDependencyError` is.
+ *
+ * The rule spans the whole booking, not a room card: a mother in Room 1 and a
+ * second mother in Room 2 is still two mothers.
+ */
+export function duplicateRelationshipError(
+  config: RoleFormConfig,
+  relationships: (string | null | undefined)[]
+): string | null {
+  const repeated = duplicateRelationships(config, relationships);
+  if (repeated.length === 0) return null;
+  return `${formatList(repeated, "and")} can only be entered once on a request${
+    repeated.length === 1 ? "" : " each"
+  } — change the extra ${repeated.length === 1 ? "one" : "ones"} to the guest's actual relationship.`;
+}
+
+/** Which unique relationships appear more than once, in the order they are configured. */
+export function duplicateRelationships(
+  config: RoleFormConfig,
+  relationships: (string | null | undefined)[]
+): string[] {
+  const unique = config.unique_relationships;
+  if (unique.length === 0) return [];
+  const counts = new Map<string, number>();
+  for (const raw of relationships) {
+    const value = raw?.trim();
+    if (!value || !unique.includes(value)) continue;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return unique.filter((r) => (counts.get(r) ?? 0) > 1);
+}
+
+/**
+ * The unique relationships already spoken for somewhere on the request.
+ *
+ * The form greys these out on every *other* guest — a guest never has its own
+ * answer taken away from it — so the second Mother cannot be picked at all,
+ * rather than being rejected after the whole form is filled in.
+ */
+export function usedUniqueRelationships(
+  config: RoleFormConfig,
+  relationships: (string | null | undefined)[]
+): string[] {
+  if (config.unique_relationships.length === 0) return [];
+  return config.unique_relationships.filter((option) =>
+    relationships.some((r) => r?.trim() === option)
+  );
+}
+
+/** One-line description of the rule for form hints. Null when the rule is off. */
+export function uniqueRelationshipHint(config: RoleFormConfig): string | null {
+  if (config.unique_relationships.length === 0) return null;
+  return `${formatList(config.unique_relationships, "and")} can each be entered only once — there is only one of each.`;
 }
 
 /** Whether the request already carries a guest who unlocks the dependent options. */

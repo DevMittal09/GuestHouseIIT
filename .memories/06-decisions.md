@@ -1947,3 +1947,164 @@ still validated if typed — just not demanded.
 "e.g. Parents visiting for convocation" is gone from Purpose of visit. A
 placeholder is read as a suggestion, and the office did not want that one
 suggested.
+
+## 23 Sep 2026 — the office's third round of corrections
+
+Seven items, reported after the office worked the portal. The short-lived
+summary is [15-recent-changes.md](15-recent-changes.md); what follows is the
+reasoning, which stays.
+
+### One guest house is not a question
+
+**Decision.** Where a role has exactly one guest house to book, the booking
+form states its name and carries the id in a hidden registered field. No
+`<select>`, disabled or otherwise.
+
+**Why.** The IAR Student Cell books only for alumni, alumni go to Bageshri, so
+the list narrows to one — and the form rendered that as a **disabled dropdown
+with one option** and then refused the request with "Select a guest house". The
+requester was being asked for an answer the form had already decided and was
+not offering. Two things were wrong and only one of them was cosmetic: a
+disabled control reads as a question answered wrongly, *and* a disabled input
+is at the mercy of what the browser and react-hook-form each think a disabled
+field's value is.
+
+**What made it stick.** The locked value is computed **before `useForm`**
+(`initialGuestHouseId`), not set by an effect afterwards, so it is present in
+the server-rendered HTML. An effect-set value is empty for the first paint and
+for anything that reads the form before hydration — which is exactly how a test
+or a fast submit sees it.
+
+**Reach.** Students are Bageshri-only too, so they get the same treatment. The
+meals-only flow already did this (it never drew a Kitchen dropdown for a single
+kitchen); this makes the two consistent.
+
+**Cost.** `e2e/helpers.ts` can no longer assume the field is a `<select>`;
+`selectedGuestHouseName` branches on the tag.
+
+### One of each: a student has one mother
+
+**Decision.** A new `unique_relationships` list on `RoleFormConfig` — Mother,
+Father, Guardian, Grandmother, Grandfather for students — whose members may
+appear at most once on a request. **Siblings is not on it.**
+
+**Why.** The form let "Mother" be chosen for two different guests. Two names,
+both the requester's mother, and nothing at the desk to say which record was
+right.
+
+**Why config rather than a hardcoded check**, for the third time in this file:
+the Form Builder can rename the relationship options, and a rule written in
+words would silently stop matching. It sits beside `parent_relationships` and
+`dependent_relationships` and is sanitized the same way — backfilled from the
+spec defaults for a row saved before the rule, narrowed to the options actually
+offered, and **emptied for a free-text role**, because "Mother " and "mother"
+are two different answers when there is no option list to be unique within.
+
+**Two defences, as with the parent dependency.** The dropdown greys the option
+out on every *other* guest, with "— already on this request" on the option
+itself; the zod `superRefine` is what actually enforces it. A guest never has
+its own current answer greyed out — that would silently clear the box.
+
+**Detail worth keeping.** The error is attached to the **repeat**, not the
+first one. Flagging both reads as though both were wrong, and the first is
+almost always the one the requester meant.
+
+### An overlap should not look like a booking
+
+**Decision.** Where two bookings hold one room at the same time, the
+availability charts draw that stretch in its own colour (`bg-overlap`: violet,
+vertical stripe, `◆` on range bars) over both bars.
+
+**Why.** The turnaround buffer's whole point is that the manager may *accept* a
+changeover with up to two hours of real overlap (`isOverridable`, Phase 3).
+Having accepted one, the manager had no way to see it: the grid drew red, which
+is what one ordinary stay looks like. The room reads as taken either way, so
+the picture answered "is this room free" and lost "and is something unusual
+happening here".
+
+**Where the logic lives.** `lib/availability.ts`, with the rest of the calendar
+maths, not in the components — `bucketOccupancyByHour` gains `overlaps` per
+hour and `bucketOccupancyByDay` gains `overlaps` as clipped spans, from
+`overlapSpans()`. That is what makes the boundary behaviour testable, and the
+boundary is the interesting part: **stays that merely touch at check-out are
+not an overlap**, the same half-open rule as `room_holds.during`.
+
+**Pattern, not just colour.** Four states now share these charts — booked,
+turnaround, out of service, overlap — and each has its own hatch direction or
+symbol, so they survive printing and colour-blind eyes.
+
+### The desk account is not a person
+
+**Decision.** `bookingTypesFor("gh_manager")` drops `personal`; it is
+`["official", "alumni"]`.
+
+**Why.** The manager books at the desk for people who never open the portal —
+that is why every *other* kind is open to them. "Personal" on that account
+means the manager's own family, and staff in that post hold an ordinary
+institute account for exactly that. Leaving it there meant a private stay could
+be raised, invoiced and approved from the one console that also approves
+everybody else's.
+
+**Cost.** None found: `debitCategoryFor` maps a personal booking to the
+`personal` category whoever makes it, so nothing downstream was keyed on the
+manager having the option.
+
+### Mail threads on the booking, not on the day
+
+**Decision.** `MailThreadKind` becomes `"booking" | "daily_log"`. Staff mail
+about a booking joins one thread **per booking, per mailbox**, rooted at
+`bookingThreadRoot(referenceId, address)` with the fixed subject
+`[IITPKD-GH-2026-AB12C] Guest house booking`.
+
+**Why the daily thread was wrong.** It grouped by *when a message was queued*,
+which is not a thing anyone follows. A club's request, an unrelated
+cancellation and a dignitary's allocation landed in one conversation because
+they happened on the same morning, and two messages about the same booking a
+day apart were split into different ones. Threading on the booking is what the
+reference id already promises: search for it and get the whole story.
+
+**What stays daily.** The digest, the escalation nudge and the per-guest-house
+day-wise log. They are about a queue, not about a booking, so there is nothing
+else to hang them on — and a new institute day starting a new one is the point:
+today's digest should not keep bumping last week's.
+
+**What stays standalone.** Requester mail. Each step is news to them, and a
+standalone subject can say *what happened* — which a threaded subject cannot,
+because Gmail splits a thread the moment the subject changes. This was not part
+of the complaint; if the office wants the requester's mail threaded too, it is
+one line, at the cost of every requester subject becoming the same words.
+
+**Unchanged.** Everything else about threading still holds: one message per To
+address, CC on the first one only, and the first message *actually sent* claims
+the root `Message-ID` (decided in `dispatch.ts`, not at queue time, so a failed
+opener hands the role on).
+
+### Faculty cannot debit the Institute Grant
+
+**Decision.** `FORBIDDEN_DEBIT_HEADS` in `lib/debit-heads.ts` — a floor under
+Settings, not a default.
+
+**Why a floor.** The grant was already absent from `DEFAULT_DEBIT_RULES.room.faculty`,
+but Settings → Debitable heads is a grid of checkboxes and a default can be
+ticked back on. The grant is the institute's own money, spent by the offices
+that hold it; a faculty member hosting a visitor charges the department, a
+project or their PDF.
+
+**Three places, one rule.** `allowedHeads()` strips it on read — so a row
+already saved with it is ignored rather than throwing, and the same computation
+feeds the booking form and `createBooking`; `debitRulesSchema` refuses to save
+it; the console greys that cell with the reason in its tooltip rather than
+hiding it, so the table still reads as one grid.
+
+### And the test fixture that was quietly wrong
+
+`tests/booking-rules.test.ts` built its capacity rooms out of three guests all
+related as "Father" — which the one-of-each rule correctly refuses, and which
+was never a booking anybody could make. It is one Father and then siblings now:
+the only shape that isolates the capacity rules from the relationship rules.
+
+`e2e/global-setup.ts` now wipes `.e2e-db.json` before each run. The mock store
+keeps the sign-in throttle in the database it writes (`RATE_LIMITS.signIn`: 8
+per uid per 15 minutes), so running the suite twice inside that window locked
+the dummy accounts out and the journeys failed on a sign-in that had nothing
+wrong with it — a failure that looks like a portal bug and is not.

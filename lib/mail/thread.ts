@@ -8,29 +8,37 @@ export { MAIL_THREAD_OF, type MailThreadKind };
 /**
  * Threading: which mail arrives as one conversation, and which stands alone.
  *
- * From the Guest House meeting notes: staff mail goes in a single thread
- * instead of a pile of standalone emails, so the Guest House Manager and the
- * approvers are not spammed — but the person who *asked* for a room gets a
- * standalone mail for each step, because each one is news to them.
+ * From the Guest House meeting notes: staff mail goes in a thread instead of a
+ * pile of standalone emails, so the Guest House Manager and the approvers are
+ * not spammed — but the person who *asked* for a room gets a standalone mail
+ * for each step, because each one is news to them.
  *
- * - **Requesters: standalone.** No threading headers at all.
+ * - **Requesters: standalone.** No threading headers at all, and a
+ *   `[reference]`-led subject that says what happened.
  * - **Staff, per-booking mail** (a new request, a forwarded one, a
- *   cancellation, the desk's copy of an allocation): one **approvals** thread
- *   per person per institute day.
+ *   cancellation, the desk's copy of an allocation): one thread **per
+ *   booking**, per person.
  * - **Staff, scheduled mail** (the morning digest, the escalation nudge, the
- *   day-wise guest house log): a separate **daily log** thread per person per
- *   day.
+ *   day-wise guest house log): a **daily log** thread per person per day.
+ *   These are about a queue, not a booking, so there is nothing else to hang
+ *   them on; and a new institute day starts a new one, which is the point —
+ *   today's digest should not keep bumping last week's.
  *
- * A new day starts a new thread. That is the point: today's approvals are one
- * conversation, and yesterday's do not keep bumping it.
+ * > **The booking thread replaced a daily "approvals" thread** (23 Sep 2026).
+ * > That grouped by the day a message was queued, so a club's request, an
+ * > unrelated cancellation and a dignitary's allocation landed in one
+ * > conversation because they happened on the same morning, while two messages
+ * > about the *same* booking a day apart were split. Threading on the booking
+ * > is what an approver actually wants to follow, and it is what the reference
+ * > id already promises: search for it and get the whole story.
  *
  * Two things have to line up for Gmail and Outlook to group messages:
  *
  * 1. **Threading headers.** Every message in a thread references a
  *    deterministic root `Message-ID`, and the first one actually sent claims
  *    that id as its own (decided at send time in `dispatch.ts`, since which
- *    message is first is only known then). The id is derived from the kind,
- *    the day and the recipient, so it needs no storage.
+ *    message is first is only known then). The id is derived from the thread's
+ *    key and the recipient, so it needs no storage.
  * 2. **An identical subject.** Gmail splits a thread when the subject changes,
  *    so a threaded message's subject is the thread's, and what the message is
  *    about goes in its heading and inbox preview instead.
@@ -41,20 +49,49 @@ export { MAIL_THREAD_OF, type MailThreadKind };
  * reliably grouped.
  */
 
-const THREAD_TITLES: Record<MailThreadKind, string> = {
-  approvals: "Guest house approvals",
+/** A stable, short fingerprint of a mailbox, so a root id carries no address. */
+function mailboxKey(address: string): string {
+  return createHash("sha256").update(address.trim().toLowerCase()).digest("hex").slice(0, 16);
+}
+
+/**
+ * The root Message-ID of one person's thread about one booking.
+ *
+ * Keyed on the **reference id** rather than the row id: it is what the subject
+ * shows, what the office searches for, and what stays readable in a header
+ * someone has to debug.
+ */
+export function bookingThreadRoot(referenceId: string, address: string): string {
+  const reference = referenceId.toLowerCase().replace(/[^a-z0-9-]/g, "");
+  return `<gh-booking-${reference}-${mailboxKey(address)}@${mailConfig().messageIdDomain}>`;
+}
+
+/**
+ * `[IITPKD-GH-2026-AB12C] Guest house booking`: the same for every message in
+ * the booking's thread.
+ *
+ * Deliberately says nothing about *this* message — a thread needs one subject,
+ * and Gmail splits it the moment that changes. What each message is about
+ * leads its heading and its inbox preview line instead (`notify.ts`).
+ */
+export function bookingThreadSubject(referenceId: string): string {
+  return bookingSubject(referenceId, "Guest house booking");
+}
+
+const DAILY_THREAD_TITLES: Record<"daily_log", string> = {
   daily_log: "Guest house daily log",
 };
 
-/** The root Message-ID of one person's thread of one kind on one institute day. */
-export function dailyThreadRoot(kind: MailThreadKind, day: string, address: string): string {
-  const who = createHash("sha256").update(address.trim().toLowerCase()).digest("hex").slice(0, 16);
-  return `<gh-${kind.replace("_", "-")}-${day}-${who}@${mailConfig().messageIdDomain}>`;
+/** The root Message-ID of one person's daily-log thread on one institute day. */
+export function dailyThreadRoot(kind: "daily_log", day: string, address: string): string {
+  return `<gh-${kind.replace("_", "-")}-${day}-${mailboxKey(address)}@${
+    mailConfig().messageIdDomain
+  }>`;
 }
 
-/** `Guest house approvals — Mon 21 Sep 2026`: the same for every message that day. */
-export function dailyThreadSubject(kind: MailThreadKind, day: string): string {
-  return `${THREAD_TITLES[kind]} — ${formatDateValue(day, { year: true })}`;
+/** `Guest house daily log — Mon 21 Sep 2026`: the same for every message that day. */
+export function dailyThreadSubject(kind: "daily_log", day: string): string {
+  return `${DAILY_THREAD_TITLES[kind]} — ${formatDateValue(day, { year: true })}`;
 }
 
 /** A fresh Message-ID for a message that is not opening a thread. */

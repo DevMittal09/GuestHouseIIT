@@ -240,6 +240,10 @@ export function BookingAvailability({
           <div className="flex flex-wrap items-center gap-4 text-xs">
             <LegendSwatch className="bg-red-500" label="● Booked" />
             <LegendSwatch className="bg-turnaround" label="Turnaround (housekeeping after a stay)" />
+            <LegendSwatch
+              className="bg-overlap"
+              label="◆ Overlap — two bookings hold the room at once"
+            />
             <LegendSwatch className="bg-maintenance" label="🔧 Out of service (maintenance)" />
             <LegendSwatch className="border bg-background" label="Free" />
             {showsToday && (

@@ -212,6 +212,9 @@ export function FormConfigEditor({
                       dependent_relationships: config.dependent_relationships.filter((r) =>
                         offered.has(r)
                       ),
+                      unique_relationships: config.unique_relationships.filter((r) =>
+                        offered.has(r)
+                      ),
                     });
                   }}
                 />
@@ -261,6 +264,29 @@ export function FormConfigEditor({
                       selected.
                     </p>
                   )}
+              </div>
+              <div className="space-y-3 sm:col-span-2 lg:col-span-3">
+                <div>
+                  <Label>One of each</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Relationships a requester has only one of. Each may be entered once per
+                    request; the booking form greys it out on every other guest once it is used.
+                    Leave empty to allow an option to repeat — “Siblings” usually should.
+                  </p>
+                </div>
+                <RelationshipPicker
+                  title="Enter once per request (e.g. Mother, Father)"
+                  options={config.relationship_options}
+                  selected={config.unique_relationships}
+                  disabledOptions={[]}
+                  onToggle={(option, checked) =>
+                    update({
+                      unique_relationships: checked
+                        ? [...config.unique_relationships, option]
+                        : config.unique_relationships.filter((r) => r !== option),
+                    })
+                  }
+                />
               </div>
             </>
           )}

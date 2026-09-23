@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { bookingPayloadSchema } from "@/lib/booking-schema";
 import { bookingTypesFor } from "@/lib/booking-types";
-import { debitCategoryFor, debitHeadsByType, DEFAULT_DEBIT_RULES } from "@/lib/debit-heads";
+import {
+  allowedHeads,
+  debitCategoryFor,
+  debitHeadsByType,
+  debitRulesSchema,
+  DEFAULT_DEBIT_RULES,
+  type DebitRules,
+} from "@/lib/debit-heads";
 import { buildDefaultFormConfig } from "@/lib/form-config";
 import { planProjectImport, type Project } from "@/lib/projects";
 import { runBookingSearch } from "@/lib/booking-search";
@@ -156,6 +163,47 @@ describe("debitable heads from the brief, per category", () => {
     const dining = debitHeadsByType("employee", ["official"], priya, units, DEFAULT_DEBIT_RULES, "dining");
     expect(dining.official).toEqual(["department_budget", "professional_development_fund", "personal_funds"]);
     expect(DEFAULT_DEBIT_RULES.dining.staff).toEqual(["department_budget"]);
+  });
+
+  /**
+   * 23 Sep 2026: the Institute Grant is the offices' money, not a fourth
+   * budget a faculty member can reach. It is a floor under Settings, not just
+   * a default — a stored row that still lists it is ignored on read, and the
+   * console cannot save it.
+   */
+  it("never offers faculty the Institute Grant, whatever Settings says", () => {
+    expect(DEFAULT_DEBIT_RULES.room.faculty).not.toContain("institute_grant");
+    expect(allowedHeads("faculty", ["department_budget", "institute_grant"])).toEqual([
+      "department_budget",
+    ]);
+    // The offices that do hold it keep it.
+    expect(allowedHeads("officer_office", ["institute_grant"])).toEqual(["institute_grant"]);
+
+    const tampered: DebitRules = {
+      ...DEFAULT_DEBIT_RULES,
+      room: {
+        ...DEFAULT_DEBIT_RULES.room,
+        faculty: ["department_budget", "institute_grant"],
+      },
+    };
+    const priya = P("employee-priya");
+    expect(
+      debitHeadsByType("employee", ["official"], priya, units, tampered, "room").official
+    ).toEqual(["department_budget"]);
+    expect(debitRulesSchema.safeParse(tampered).success).toBe(false);
+    expect(debitRulesSchema.safeParse(DEFAULT_DEBIT_RULES).success).toBe(true);
+  });
+});
+
+describe("who may book what", () => {
+  /**
+   * 23 Sep 2026: the desk account is the guest house, not a person. A manager
+   * books their own family from their ordinary institute account, so
+   * "personal" is gone from the console that also approves bookings.
+   */
+  it("gives the Guest House Manager no personal booking type", () => {
+    expect(bookingTypesFor("gh_manager")).toEqual(["official", "alumni"]);
+    expect(bookingTypesFor("employee")).toContain("personal");
   });
 });
 

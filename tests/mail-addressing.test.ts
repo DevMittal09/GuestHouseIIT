@@ -219,13 +219,68 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
     expect(await mails(id, "booking.cancellation_requested.reviewer")).toEqual([]);
   });
 
-  it("threaded staff mail shares the day's thread root for To, and CC rides on it", async () => {
+  it("threaded staff mail hangs on the booking, and CC rides on it", async () => {
     const id = await route("student-anjali", "student", "PENDING_WARDEN", { booking_type: "personal" });
     await forward(id, "warden-malhar", "PENDING_WARDEN");
+    const booking = (await store.getBooking(id))!;
+    const reference = booking.booking_reference_id.toLowerCase();
     const [row] = (await store.listEmails({ bookingId: id })).filter(
       (r) => r.event_key === "booking.pending.reviewer"
     );
-    expect(row.thread_root).toMatch(/^<gh-approvals-\d{4}-\d{2}-\d{2}-[0-9a-f]{16}@/);
+    // Per booking, not per day: the reference id is in the root, so every
+    // later message about this request joins the same conversation.
+    expect(row.thread_root).toMatch(
+      new RegExp(`^<gh-booking-${reference}-[0-9a-f]{16}@`)
+    );
+    expect(row.subject).toBe(`[${booking.booking_reference_id}] Guest house booking`);
     expect(row.cc_emails).toEqual(["warden.malhar@iitpkd.ac.in"]);
+  });
+
+  it("two messages about one booking, days apart, share a root; two bookings do not", async () => {
+    const first = await route("student-anjali", "student", "PENDING_WARDEN", {
+      booking_type: "personal",
+    });
+    const second = await route("student-anjali", "student", "PENDING_WARDEN", {
+      booking_type: "personal",
+    });
+    await forward(first, "warden-malhar", "PENDING_WARDEN");
+    await forward(second, "warden-malhar", "PENDING_WARDEN");
+    const threaded = async (id: string) =>
+      (await store.listEmails({ bookingId: id })).filter((r) => r.thread_root);
+    const reference = async (id: string) =>
+      (await store.getBooking(id))!.booking_reference_id.toLowerCase();
+
+    // Every threaded message about a booking names that booking in its root,
+    // whatever event it is and whichever day it was queued.
+    for (const row of await threaded(first)) {
+      expect(row.thread_root).toContain(`<gh-booking-${await reference(first)}-`);
+    }
+    // The root is per mailbox as well, so one address's messages about one
+    // booking are one conversation — that is what a mail client groups.
+    const byAddress = new Map<string, Set<string>>();
+    for (const row of await threaded(first)) {
+      const key = row.to_emails[0];
+      byAddress.set(key, (byAddress.get(key) ?? new Set()).add(row.thread_root!));
+    }
+    expect([...byAddress.values()].every((roots) => roots.size === 1)).toBe(true);
+
+    // Different bookings — different threads, even queued the same minute.
+    const rootsOfSecond = new Set((await threaded(second)).map((r) => r.thread_root));
+    for (const row of await threaded(first)) {
+      expect(rootsOfSecond.has(row.thread_root)).toBe(false);
+    }
+  });
+
+  it("scheduled mail has no booking to hang on, so it still threads on the institute day", async () => {
+    await route("student-anjali", "student", "PENDING_WARDEN", { booking_type: "personal" });
+    const { queueReviewerDigests } = await import("@/lib/mail/digest");
+    await queueReviewerDigests(new Date());
+    const digests = (await store.listEmails({})).filter(
+      (r) => r.event_key === "queue.digest.reviewer"
+    );
+    expect(digests.length).toBeGreaterThan(0);
+    for (const row of digests) {
+      expect(row.thread_root).toMatch(/^<gh-daily-log-\d{4}-\d{2}-\d{2}-[0-9a-f]{16}@/);
+    }
   });
 });

@@ -137,7 +137,37 @@ const DEBIT_HEAD_VALUES = [
 
 export const debitHeadSchema = z.enum(DEBIT_HEAD_VALUES);
 
-const headList = (label: string, allowProject: boolean) =>
+/**
+ * Heads a category may never be charged to, whatever Settings says.
+ *
+ * **Faculty cannot debit the Institute Grant** (23 Sep 2026). The grant is the
+ * institute's own money, spent by the offices that hold it — the Director, the
+ * Registrar, the Deans and the IAR Office, which is why they still have it
+ * below. A faculty member hosting a visitor charges the department, the
+ * project or their PDF; letting the grant appear on their form made it look
+ * like a fourth budget they could reach, and it is not one.
+ *
+ * It is a floor under the Settings console rather than only a default, because
+ * a default can be ticked back on. {@link allowedHeads} strips it on read, so
+ * a row saved before this rule keeps working instead of breaking the page, and
+ * {@link debitRulesSchema} refuses to save it.
+ */
+export const FORBIDDEN_DEBIT_HEADS: Partial<Record<DebitCategory, DebitHead[]>> = {
+  faculty: ["institute_grant"],
+};
+
+/** Whether this category may ever be offered that head. */
+export function isHeadAllowedFor(category: DebitCategory, head: DebitHead): boolean {
+  return !FORBIDDEN_DEBIT_HEADS[category]?.includes(head);
+}
+
+/** A configured list with the forbidden heads removed. */
+export function allowedHeads(category: DebitCategory, heads: DebitHead[]): DebitHead[] {
+  const forbidden = FORBIDDEN_DEBIT_HEADS[category];
+  return forbidden ? heads.filter((h) => !forbidden.includes(h)) : heads;
+}
+
+const headList = (category: DebitCategory, label: string, allowProject: boolean) =>
   z
     .array(debitHeadSchema)
     .min(1, `${label}: choose at least one head`)
@@ -145,17 +175,23 @@ const headList = (label: string, allowProject: boolean) =>
     .refine(
       (heads) => allowProject || !heads.includes("project_grant"),
       `${label}: dining cannot be charged to a project`
+    )
+    .refine(
+      (heads) => heads.every((h) => isHeadAllowedFor(category, h)),
+      `${label}: ${(FORBIDDEN_DEBIT_HEADS[category] ?? [])
+        .map((h) => DEBIT_HEAD_LABELS[h])
+        .join(" and ")} cannot be charged by this category`
     );
 
 export const debitRulesSchema = z.object({
   room: z.object(
     Object.fromEntries(
-      DEBIT_CATEGORIES.map((c) => [c, headList(`Room — ${DEBIT_CATEGORY_LABELS[c]}`, true)])
+      DEBIT_CATEGORIES.map((c) => [c, headList(c, `Room — ${DEBIT_CATEGORY_LABELS[c]}`, true)])
     ) as Record<DebitCategory, ReturnType<typeof headList>>
   ),
   dining: z.object(
     Object.fromEntries(
-      DEBIT_CATEGORIES.map((c) => [c, headList(`Dining — ${DEBIT_CATEGORY_LABELS[c]}`, false)])
+      DEBIT_CATEGORIES.map((c) => [c, headList(c, `Dining — ${DEBIT_CATEGORY_LABELS[c]}`, false)])
     ) as Record<DebitCategory, ReturnType<typeof headList>>
   ),
 });
@@ -206,7 +242,13 @@ export function debitHeadsByType(
   kind: "room" | "dining" = "room"
 ): DebitHeadsByType {
   return Object.fromEntries(
-    bookingTypes.map((type) => [type, rules[kind][debitCategoryFor(role, type, requester, units)]])
+    bookingTypes.map((type) => {
+      const category = debitCategoryFor(role, type, requester, units);
+      // Stripped here rather than trusted from Settings: the form and
+      // `createBooking` both read this, so a head a category may never use
+      // cannot be offered or accepted even if a stored row still lists it.
+      return [type, allowedHeads(category, rules[kind][category])];
+    })
   );
 }
 

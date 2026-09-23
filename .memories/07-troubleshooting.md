@@ -459,12 +459,15 @@ dataset there is small — the plan is the evidence, not a timing.
 Both of these cost a full debugging cycle, and neither announces itself:
 
 **1. `.e2e-db.json` survives the run, and so does the sign-in throttle.**
-Playwright does not delete the throwaway database, and since migration 21 the
-sign-in rate limit is a *row* in it (`hitRateLimit`, `RATE_LIMITS.signIn`) —
-counted in the database precisely so a restart cannot clear it. A second run
-inside the window therefore fails at `signIn()` with the browser sitting on
-`/sign-in`, which reads exactly like a broken sign-in page. **`rm -f
-.e2e-db.json` before re-running.**
+*Fixed on 23 Sep 2026* — `e2e/global-setup.ts` now removes the throwaway
+database before every run, so this one should not bite again. Keep it: since
+migration 21 the sign-in rate limit is a *row* in that database (`hitRateLimit`,
+`RATE_LIMITS.signIn`: 8 per uid per 15 minutes), counted there precisely so a
+restart cannot clear it. A second run inside the window used to fail at
+`signIn()` with the browser sitting on `/sign-in`, which reads exactly like a
+broken sign-in page — and did, the day a spec was added that signed a few more
+accounts in. Seeded data is rebuilt on load, so there is nothing to preserve by
+keeping the file.
 
 **2. `reuseExistingServer` serves the previous build.** `playwright.config.ts`
 sets `reuseExistingServer: !process.env.CI`, so a server left listening on 3100
@@ -478,7 +481,7 @@ A clean loop, then:
 
 ```bash
 export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 20
-pkill -f "next start"; rm -f .e2e-db.json
+pkill -f "next start"                     # the database is wiped by global-setup
 NEXT_PUBLIC_SUPABASE_URL= npm run build   # empty, or the bundle talks to hosted Supabase
 npm run test:e2e
 npm run build                             # rebuild normally afterwards

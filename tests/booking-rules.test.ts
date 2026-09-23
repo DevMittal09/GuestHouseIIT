@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { bookingPayloadSchema } from "@/lib/booking-schema";
 import {
   buildDefaultFormConfig,
+  duplicateRelationshipError,
   parentDependencyError,
   sanitizeFormConfig,
+  usedUniqueRelationships,
 } from "@/lib/form-config";
 import { addDaysToDateValue, toInstituteDateValue } from "@/lib/tz";
 import { GH } from "./helpers";
@@ -66,8 +68,12 @@ const messages = (result: ReturnType<typeof parseStudent>) =>
 describe("what one room may hold", () => {
   const adult = (relationship = "Siblings"): Person => ({ age: 20, relationship });
   const infant = (relationship = "Daughter"): Person => ({ age: 2, relationship });
+  // One Father and then siblings: a student has one father (the one-of-each
+  // rule) but may bring several siblings, and a sibling needs a parent on the
+  // request anyway — so this is the only shape that isolates the capacity
+  // rules from the relationship rules.
   const room = (adults: number, infants: number): Person[] => [
-    ...Array.from({ length: adults }, () => adult(adults > 0 ? "Father" : "Siblings")),
+    ...Array.from({ length: adults }, (_, i) => adult(i === 0 ? "Father" : "Siblings")),
     ...Array.from({ length: infants }, () => infant()),
   ];
   const fits = (adults: number, infants: number) => parseStudent([room(adults, infants)]).success;
@@ -152,6 +158,83 @@ describe("who a student may bring", () => {
     ]);
     expect(result.success).toBe(false);
     expect(messages(result)[0]).toMatch(/Mother, Father or Guardian is also staying/);
+  });
+});
+
+describe("one of each: a student has only one mother", () => {
+  /**
+   * Reported by the office in September 2026: a student could add "Mother"
+   * twice — two different names, both described as the requester's mother,
+   * and nothing at the desk to say which was right. The rule is config
+   * (`unique_relationships`), not a hardcoded list, and it spans the whole
+   * request rather than a room card.
+   */
+  it("refuses the same singular relationship twice, in one room or across two", () => {
+    expect(studentConfig.unique_relationships).toContain("Mother");
+    expect(duplicateRelationshipError(studentConfig, ["Mother", "Mother"])).toMatch(
+      /only be entered once/
+    );
+    expect(duplicateRelationshipError(studentConfig, ["Mother", "Father"])).toBeNull();
+
+    const oneRoom = parseStudent([
+      [
+        { age: 48, relationship: "Mother" },
+        { age: 46, relationship: "Mother" },
+      ],
+    ]);
+    expect(oneRoom.success).toBe(false);
+    expect(messages(oneRoom)[0]).toMatch(/Mother.*only be entered once/);
+
+    const twoRooms = parseStudent([
+      [{ age: 48, relationship: "Mother" }],
+      [{ age: 46, relationship: "Mother" }],
+    ]);
+    expect(twoRooms.success).toBe(false);
+  });
+
+  /** Marked on the second one: the first is almost always the one meant. */
+  it("flags the repeat, not the original", () => {
+    const result = parseStudent([
+      [
+        { age: 48, relationship: "Mother" },
+        { age: 46, relationship: "Mother" },
+      ],
+    ]);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues
+        .filter((i) => i.message.includes("only be entered once"))
+        .map((i) => i.path.join("."));
+      expect(paths).toEqual(["rooms.0.guests.1.relationship"]);
+    }
+  });
+
+  /** Siblings is plural by definition; a student may well bring two. */
+  it("lets a repeatable relationship repeat", () => {
+    expect(studentConfig.unique_relationships).not.toContain("Siblings");
+    expect(
+      parseStudent([
+        [
+          { age: 50, relationship: "Father" },
+          { age: 16, relationship: "Siblings" },
+          { age: 13, relationship: "Siblings" },
+        ],
+      ]).success
+    ).toBe(true);
+  });
+
+  /** What the form greys out: an option already spoken for, on other guests. */
+  it("reports which singular relationships are already used", () => {
+    expect(usedUniqueRelationships(studentConfig, ["Mother", "Siblings"])).toEqual(["Mother"]);
+    expect(usedUniqueRelationships(studentConfig, ["Siblings"])).toEqual([]);
+  });
+
+  /** A free-text field has no option list to be unique within. */
+  it("does not apply to a role whose relationship field is free text", () => {
+    const employee = sanitizeFormConfig(buildDefaultFormConfig("employee", HOUSES), HOUSES);
+    expect(employee.relationship_style).toBe("free_text");
+    expect(employee.unique_relationships).toEqual([]);
+    expect(duplicateRelationshipError(employee, ["Colleague", "Colleague"])).toBeNull();
   });
 });
 
