@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   useFieldArray,
@@ -633,8 +633,7 @@ export function BookingForm({
   const peopleIn = (index: number) =>
     (form.getValues(`rooms.${index}.guests`) ?? []).filter((g) => g.name.trim() || g.age.trim() || g.id_number.trim()).length;
 
-  const onSubmit = handleSubmit((values) => {
-    clearErrors();
+  const validateAndSubmit = handleSubmit((values) => {
     setAlumniCardError(null);
     setMealsError(null);
 
@@ -794,6 +793,24 @@ export function BookingForm({
       }
     });
   });
+
+  /**
+   * Wipe the previous attempt's errors *before* react-hook-form decides
+   * whether to run the callback above.
+   *
+   * The zod pass reports on paths that are not registered fields —
+   * `check_in`, `check_out`, `rooms` — and react-hook-form only clears the
+   * errors of fields it knows about. A stale error on one of those paths
+   * therefore kept `formState.errors` non-empty for ever, `handleSubmit` went
+   * on treating the form as invalid, and the callback that clears errors
+   * never ran again: fix the date, press Submit, nothing happens. Clearing
+   * here rather than inside the callback is the point — whatever is still
+   * wrong is re-reported by the zod pass a moment later.
+   */
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    clearErrors();
+    void validateAndSubmit(event);
+  };
 
   const err = (path: string) => {
     const parts = path.split(".");
