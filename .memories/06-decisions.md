@@ -1814,7 +1814,7 @@ type, and rows created earlier are still recorded as `single`. What went is the
 *asking*. The console creates doubles; the grid splits only when both types are
 actually present (`splitByType`), and prints one "Rooms" heading otherwise;
 `booking-details` names a room's type only when it is a leftover single. The
-seed makes B-101..B-120 and H-101..H-116 all double sharing, and
+seed makes every room double sharing, and
 `supabase/repairs/2026-09-23-all-rooms-double-sharing.sql` converts an existing
 database — as a repair, not a migration, because whether the institute has a
 single room is the office's fact, not ours.
@@ -2108,3 +2108,44 @@ keeps the sign-in throttle in the database it writes (`RATE_LIMITS.signIn`: 8
 per uid per 15 minutes), so running the suite twice inside that window locked
 the dummy accounts out and the journeys failed on a sign-in that had nothing
 wrong with it — a failure that looks like a portal bug and is not.
+
+## The office's real rooms and the Bageshri rate (23 Sep 2026)
+
+**The rooms are no longer invented.** The seed used to generate B-101..B-120
+and H-101..H-116 so a first run had a grid to look at. The office gave the
+actual list:
+
+| Guest house | Rooms | Count |
+| --- | --- | --- |
+| Bageshri | 201, 202, 203, 204, 206, 302, 303, 305, 306, 307 | 10 |
+| Hamsanandi | A4, B1–B4, C1–C4, D1–D4 | 13 |
+
+Bageshri numbers by floor and skips 205, 301 and 304; Hamsanandi is four
+blocks and only A4 exists in A. Both lists are exported from
+`lib/store/seed.ts` (`BAGESHRI_ROOM_NUMBERS` / `HAMSANANDI_ROOM_NUMBERS`) so
+the mock seed and any future check read one list, and mirrored literally in
+`supabase/seed.sql`. Room ids in the mock store are still
+`` `${ghId}-${room_number}` `` — so `gh-bageshri-201`, `gh-hamsanandi-C2`. The
+numbers are the office's fact, not a format: don't "normalise" them to a
+`B-`/`H-` prefix, and don't assume a room number is numeric.
+
+**All of them are double sharing** — unchanged, and the reason `makeRooms`
+still hardcodes the type.
+
+**An existing database is corrected by a repair, not a migration**
+(`supabase/repairs/2026-09-23-real-room-numbers.sql`), because which rooms the
+institute has is the office's fact and a hosted database may already have
+stays in the dummy rooms. It creates the real rooms, **deletes** a dummy room
+nothing references and **deactivates** one something does — `room_holds`,
+`booking_rooms` and `room_blocks` all cascade from `rooms`, so deleting a room
+that held a stay would silently erase the history of where those guests slept.
+It then recounts `total_rooms`, which no trigger does: both stores recount it
+in their own room CRUD.
+
+**Bageshri is ₹1,000 a room a day**, up from ₹750. The seed and migration 19
+carry the new figure, so a fresh database is right. A live one gets
+`supabase/repairs/2026-09-23-bageshri-rate-1000.sql`, which **inserts a second
+row** with a later `effective_from` instead of editing the ₹750 one: a rate in
+force priced past stays and `tariffs_guard` refuses to touch it, by design.
+`resolveTariff` then prices each night at whatever was in force that night.
+Hamsanandi and the meal rates are untouched.

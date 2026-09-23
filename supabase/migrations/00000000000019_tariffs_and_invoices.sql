@@ -82,7 +82,10 @@ create trigger tariffs_guard
   before update or delete on public.tariffs
   for each row execute function public.tariffs_guard();
 
--- The office's tariff sheet. Bageshri: ₹750 a room a day, everyone.
+-- The office's tariff sheet. Bageshri: ₹1,000 a room a day, everyone (₹750
+-- until 23 Sep 2026; a database seeded before that is raised by
+-- supabase/repairs/2026-09-23-bageshri-rate-1000.sql, since a rate in force is
+-- never edited).
 -- Hamsanandi: ₹2,000 (types 1 and 2), ₹4,000 for government officers from
 -- outside — in portal terms the `official` role. Meals, per head: breakfast
 -- ₹80, lunch ₹120, dinner ₹100; free to students and to alumni stays.
@@ -90,7 +93,7 @@ insert into public.tariffs (guest_house_id, item, room_type, booking_type, reque
 select s.gh, s.item, null, s.booking_type, s.requester_role, s.rate, date '2024-01-01', s.note
 from (
   select (select id from public.guest_houses where name = 'Bageshri') as gh, 'room' as item,
-         null::text as booking_type, null::text as requester_role, 750::numeric as rate,
+         null::text as booking_type, null::text as requester_role, 1000::numeric as rate,
          'Tariff sheet: Bageshri, per room per day' as note
   union all
   select (select id from public.guest_houses where name = 'Hamsanandi'), 'room', null, null, 2000,

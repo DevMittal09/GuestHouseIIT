@@ -132,25 +132,28 @@ where p.email = v.email and p.ldap_uid is null;
 -- ---------------------------------------------------------------- guest houses
 -- Meals are served at Hamsanandi only (migration 8); editable in the console.
 insert into public.guest_houses (id, name, total_rooms, serves_meals) values
-  ('22222222-2222-2222-2222-222222222201', 'Bageshri', 20, false),
-  ('22222222-2222-2222-2222-222222222202', 'Hamsanandi', 16, true)
+  ('22222222-2222-2222-2222-222222222201', 'Bageshri', 10, false),
+  ('22222222-2222-2222-2222-222222222202', 'Hamsanandi', 13, true)
 on conflict (name) do nothing;
 
 -- ---------------------------------------------------------------- rooms
+-- The rooms the office actually has (23 Sep 2026). Bageshri numbers by floor
+-- and skips 205, 301 and 304; Hamsanandi is four blocks, A to D, with only A4
+-- in A. These replaced the dummy B-101../H-101.. blocks — an existing database
+-- is corrected by supabase/repairs/2026-09-23-real-room-numbers.sql, not here.
+--
 -- Every room in both guest houses is double sharing: the office confirmed
 -- there is no single room, which is why the booking form and the developer
 -- console no longer ask for a type. `rooms.room_type` stays because the
 -- tariffs and the invoice are priced per type.
---
--- Bageshri: B-101..B-120. Hamsanandi: H-101..H-116.
 insert into public.rooms (guest_house_id, room_number, room_type)
-select '22222222-2222-2222-2222-222222222201', 'B-' || (100 + n), 'double_sharing'::public.room_type
-from generate_series(1, 20) n
+select '22222222-2222-2222-2222-222222222201', n, 'double_sharing'::public.room_type
+from unnest(array['201','202','203','204','206','302','303','305','306','307']) n
 on conflict do nothing;
 
 insert into public.rooms (guest_house_id, room_number, room_type)
-select '22222222-2222-2222-2222-222222222202', 'H-' || (100 + n), 'double_sharing'::public.room_type
-from generate_series(1, 16) n
+select '22222222-2222-2222-2222-222222222202', n, 'double_sharing'::public.room_type
+from unnest(array['A4','B1','B2','B3','B4','C1','C2','C3','C4','D1','D2','D3','D4']) n
 on conflict do nothing;
 
 -- ---------------------------------------------------------------- phase 4

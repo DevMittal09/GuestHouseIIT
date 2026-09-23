@@ -207,7 +207,7 @@ async function newBooking(checkIn: string, checkOut: string) {
   return b.id;
 }
 
-const ROOM = "gh-hamsanandi-H-108";
+const ROOM = "gh-hamsanandi-C2";
 const log = { action_by: "gh-manager", action_by_name: "Manager", new_status: "APPROVED" as const, remarks: "test" };
 const allocate = (id: string, overrides: string[] = []) =>
   store.updateBookingStatus(
@@ -265,7 +265,7 @@ describe("mock store: changing the buffer", () => {
     await allocate(b);
     const err = await store.applyBookingBuffer(240).catch((e) => e);
     expect(err).toBeInstanceOf(BufferClashError);
-    expect((err as BufferClashError).clashes).toMatch(/H-108: IITPKD-GH-\d{4}-\w+ and IITPKD-GH-\d{4}-\w+/);
+    expect((err as BufferClashError).clashes).toMatch(/C2: IITPKD-GH-\d{4}-\w+ and IITPKD-GH-\d{4}-\w+/);
     expect(await store.getJsonSetting("rules.booking")).toMatchObject({ buffer_minutes: 0 });
   });
 

@@ -67,7 +67,7 @@ beforeAll(async () => {
 });
 afterAll(() => db.cleanup());
 
-const ROOM = "gh-bageshri-B-110";
+const ROOM = "gh-bageshri-203";
 const input = (checkIn: string, checkOut: string, patch: Partial<NewBookingInput> = {}): NewBookingInput => ({
   user_id: "employee-priya", guest_house_id: "gh-bageshri", user_role: "employee", status: "APPROVED",
   purpose_of_visit: "Visit", check_in: checkIn, check_out: checkOut, booking_type: "official", service_type: "room",
@@ -117,7 +117,7 @@ describe("no-shows and early check-out", () => {
   it("the automatic release frees the rooms, mails the requester, and is idempotent", async () => {
     const { runNoShowRelease } = await import("@/lib/no-show-server");
     const b = await store.createBooking(input("2031-06-10T08:30:00.000Z", "2031-06-12T05:30:00.000Z"));
-    await store.updateBookingStatus(b.id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-B-113"] }, LOG);
+    await store.updateBookingStatus(b.id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-204"] }, LOG);
     const later = new Date("2031-06-10T20:00:00.000Z");
     expect(await runNoShowRelease(later, 0)).toBe(0); // off
     await runNoShowRelease(new Date("2031-06-10T10:00:00.000Z"), 6); // too soon for this one
@@ -137,11 +137,11 @@ describe("no-shows and early check-out", () => {
 
   it("an early check-out frees the room from that moment", async () => {
     const b = await store.createBooking(input("2031-07-10T08:30:00.000Z", "2031-07-15T05:30:00.000Z"));
-    await store.updateBookingStatus(b.id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-B-114"] }, LOG);
+    await store.updateBookingStatus(b.id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-206"] }, LOG);
     await store.updateBookingStatus(b.id, { status: "OCCUPIED" }, { ...LOG, new_status: "OCCUPIED" });
-    expect(await store.getOccupiedRoomIds("gh-bageshri", "2031-07-12T00:00:00.000Z", "2031-07-13T00:00:00.000Z")).toContain("gh-bageshri-B-114");
+    expect(await store.getOccupiedRoomIds("gh-bageshri", "2031-07-12T00:00:00.000Z", "2031-07-13T00:00:00.000Z")).toContain("gh-bageshri-206");
     await store.updateBookingStatus(b.id, { status: "VACATED" }, { ...LOG, new_status: "VACATED" });
-    expect(await store.getOccupiedRoomIds("gh-bageshri", "2031-07-12T00:00:00.000Z", "2031-07-13T00:00:00.000Z")).not.toContain("gh-bageshri-B-114");
+    expect(await store.getOccupiedRoomIds("gh-bageshri", "2031-07-12T00:00:00.000Z", "2031-07-13T00:00:00.000Z")).not.toContain("gh-bageshri-206");
   });
 
   it("a checked-out stay still knows which room it used, so it can be invoiced", async () => {
@@ -150,21 +150,21 @@ describe("no-shows and early check-out", () => {
     // Releasing the room card with the hold left the bill with nothing to
     // charge for every stay closed off before it was invoiced.
     const b = await store.createBooking(input("2031-08-10T08:30:00.000Z", "2031-08-12T05:30:00.000Z"));
-    await store.updateBookingStatus(b.id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-B-115"] }, LOG);
+    await store.updateBookingStatus(b.id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-302"] }, LOG);
     await store.updateBookingStatus(b.id, { status: "OCCUPIED" }, { ...LOG, new_status: "OCCUPIED" });
     await store.updateBookingStatus(b.id, { status: "VACATED" }, { ...LOG, new_status: "VACATED" });
 
     const after = await store.getBooking(b.id);
-    expect(after?.assigned_room_ids).toEqual(["gh-bageshri-B-115"]);
-    expect(after?.rooms[0].assigned_room?.room_number).toBe("B-115");
+    expect(after?.assigned_room_ids).toEqual(["gh-bageshri-302"]);
+    expect(after?.rooms[0].assigned_room?.room_number).toBe("302");
     // And the room is free from that moment, for everyone else.
     expect(
       await store.getOccupiedRoomIds("gh-bageshri", "2031-08-11T00:00:00.000Z", "2031-08-12T00:00:00.000Z")
-    ).not.toContain("gh-bageshri-B-115");
+    ).not.toContain("gh-bageshri-302");
 
     // A stay that never happened gives its rooms up entirely.
     const cancelled = await store.createBooking(input("2031-09-10T08:30:00.000Z", "2031-09-12T05:30:00.000Z"));
-    await store.updateBookingStatus(cancelled.id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-B-115"] }, LOG);
+    await store.updateBookingStatus(cancelled.id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-302"] }, LOG);
     await store.updateBookingStatus(cancelled.id, { status: "CANCELLED" }, { ...LOG, new_status: "CANCELLED" });
     const gone = await store.getBooking(cancelled.id);
     expect(gone?.assigned_room_ids).toEqual([]);

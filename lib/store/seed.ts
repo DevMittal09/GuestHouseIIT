@@ -20,29 +20,46 @@ export const GH_HAMSANANDI = "gh-hamsanandi";
 
 // Meals are served at Hamsanandi only, as in migration 8 and supabase/seed.sql.
 export const seedGuestHouses: GuestHouse[] = [
-  { id: GH_BAGESHRI, name: "Bageshri", total_rooms: 20, serves_meals: false },
-  { id: GH_HAMSANANDI, name: "Hamsanandi", total_rooms: 16, serves_meals: true },
+  { id: GH_BAGESHRI, name: "Bageshri", total_rooms: 10, serves_meals: false },
+  { id: GH_HAMSANANDI, name: "Hamsanandi", total_rooms: 13, serves_meals: true },
 ];
 
 /**
+ * The rooms the office actually has (23 Sep 2026) — these replaced the dummy
+ * B-101…/H-101… blocks. Bageshri numbers its rooms by floor and skips 205,
+ * 301 and 304; Hamsanandi is four blocks, A to D, and only A4 exists in A.
+ *
  * Both guest houses are **all double sharing** — the office confirmed there is
  * no single room, which is why the booking form and the developer console no
  * longer ask for a type. `room_type` stays on the row because the tariffs and
  * the invoice are priced per type, and a stored booking may still point at a
  * single created before this.
  */
-function makeRooms(ghId: string, prefix: string, count: number): Room[] {
-  const rooms: Room[] = [];
-  for (let i = 1; i <= count; i++) {
-    const n = `${prefix}-${100 + i}`;
-    rooms.push({ id: `${ghId}-${n}`, guest_house_id: ghId, room_number: n, room_type: "double_sharing", is_active: true });
-  }
-  return rooms;
+export const BAGESHRI_ROOM_NUMBERS = [
+  "201", "202", "203", "204", "206",
+  "302", "303", "305", "306", "307",
+];
+
+export const HAMSANANDI_ROOM_NUMBERS = [
+  "A4",
+  "B1", "B2", "B3", "B4",
+  "C1", "C2", "C3", "C4",
+  "D1", "D2", "D3", "D4",
+];
+
+function makeRooms(ghId: string, roomNumbers: readonly string[]): Room[] {
+  return roomNumbers.map((n) => ({
+    id: `${ghId}-${n}`,
+    guest_house_id: ghId,
+    room_number: n,
+    room_type: "double_sharing" as const,
+    is_active: true,
+  }));
 }
 
 export const seedRooms: Room[] = [
-  ...makeRooms(GH_BAGESHRI, "B", 20),
-  ...makeRooms(GH_HAMSANANDI, "H", 16),
+  ...makeRooms(GH_BAGESHRI, BAGESHRI_ROOM_NUMBERS),
+  ...makeRooms(GH_HAMSANANDI, HAMSANANDI_ROOM_NUMBERS),
 ];
 
 // `ldap_uid` is each persona's dummy LDAP username — the local part of the
@@ -140,7 +157,7 @@ function tariff(
 }
 
 export const seedTariffs: Tariff[] = [
-  tariff("tariff-bageshri-room", GH_BAGESHRI, "room", 750, {}, "Tariff sheet: Bageshri, per room per day"),
+  tariff("tariff-bageshri-room", GH_BAGESHRI, "room", 1000, {}, "Tariff sheet: Bageshri, per room per day"),
   tariff("tariff-hamsanandi-room", GH_HAMSANANDI, "room", 2000, {}, "Tariff sheet: Hamsanandi types 1 and 2"),
   tariff("tariff-hamsanandi-official", GH_HAMSANANDI, "room", 4000, { requester_role: "official" }, "Tariff sheet: Hamsanandi type 3, government officers"),
   tariff("tariff-breakfast", null, "breakfast", 80, {}, "Tariff sheet: per head"),
@@ -308,7 +325,7 @@ const demoBookings: DemoBooking[] = [
     check_in: iso(6, 12),
     check_out: iso(9, 11),
     rooms_requested: 2,
-    assigned_room_ids: [`${GH_BAGESHRI}-B-111`, `${GH_BAGESHRI}-B-112`],
+    assigned_room_ids: [`${GH_BAGESHRI}-201`, `${GH_BAGESHRI}-202`],
     rejection_reason: null,
     alumni_id_url: null,
     custom_fields: null,
@@ -441,8 +458,8 @@ export const seedBookingRooms: BookingRoom[] = [
   { id: "br-3", booking_id: "bk-demo-2", room_index: 2, room_type: null, assigned_room_id: null },
   { id: "br-4", booking_id: "bk-demo-3", room_index: 1, room_type: null, assigned_room_id: null },
   { id: "br-5", booking_id: "bk-demo-4", room_index: 1, room_type: null, assigned_room_id: null },
-  { id: "br-6", booking_id: "bk-demo-5", room_index: 1, room_type: null, assigned_room_id: `${GH_BAGESHRI}-B-111` },
-  { id: "br-7", booking_id: "bk-demo-5", room_index: 2, room_type: null, assigned_room_id: `${GH_BAGESHRI}-B-112` },
+  { id: "br-6", booking_id: "bk-demo-5", room_index: 1, room_type: null, assigned_room_id: `${GH_BAGESHRI}-201` },
+  { id: "br-7", booking_id: "bk-demo-5", room_index: 2, room_type: null, assigned_room_id: `${GH_BAGESHRI}-202` },
 ];
 
 export const seedGuests: BookingGuest[] = [
@@ -480,5 +497,5 @@ export const seedLogs: BookingLog[] = [
   { id: "l-3", booking_id: "bk-demo-3", action_by: "iar-student-cell", action_by_name: "IAR Student Cell", previous_status: null, new_status: "PENDING_IAR", remarks: "Booking submitted", timestamp: iso(-1, 18) },
   { id: "l-4", booking_id: "bk-demo-4", action_by: "employee-priya", action_by_name: "Dr. Priya Sharma", previous_status: null, new_status: "PENDING_GH_MANAGER", remarks: "Booking submitted", timestamp: iso(-3, 11) },
   { id: "l-5", booking_id: "bk-demo-5", action_by: "official-admin", action_by_name: "Director's Office", previous_status: null, new_status: "PENDING_GH_MANAGER", remarks: "Booking submitted", timestamp: iso(-5, 10) },
-  { id: "l-6", booking_id: "bk-demo-5", action_by: "gh-manager", action_by_name: "Guest House Manager", previous_status: "PENDING_GH_MANAGER", new_status: "APPROVED", remarks: "Rooms B-111, B-112 allocated", timestamp: iso(-4, 16) },
+  { id: "l-6", booking_id: "bk-demo-5", action_by: "gh-manager", action_by_name: "Guest House Manager", previous_status: "PENDING_GH_MANAGER", new_status: "APPROVED", remarks: "Rooms 201, 202 allocated", timestamp: iso(-4, 16) },
 ];

@@ -361,7 +361,10 @@ Current migrations:
 19. `00000000000019_tariffs_and_invoices.sql` (Phase 5, Sep 2026).
    `tariffs` (effective-dated rates; blank qualifiers mean "any"; unique per
    scope and date; `tariffs_guard` refuses changing or deleting a rate already
-   in force, institute date; seeded from the tariff sheet — Bageshri ₹750,
+   in force, institute date; seeded from the tariff sheet — Bageshri ₹1,000
+   (₹750 before 23 Sep 2026; an existing database is raised by
+   `supabase/repairs/2026-09-23-bageshri-rate-1000.sql`, which adds a second
+   row rather than editing one in force),
    Hamsanandi ₹2,000 / ₹4,000 for `official`, meals ₹80/120/100, free to
    students and alumni stays — and **no extra-bed rate**, which the office must
    add). `invoice_counters` (per financial year) and `invoices` (snapshot

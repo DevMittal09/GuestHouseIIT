@@ -199,7 +199,7 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
 
   it("allocation: one message per desk address, the Copy-to list in CC on the first only", async () => {
     const id = await route("student-anjali", "student", "PENDING_WARDEN", { booking_type: "personal" });
-    await store.updateBookingStatus(id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-B-110"] }, {
+    await store.updateBookingStatus(id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-203"] }, {
       action_by: "gh-manager", action_by_name: "Manager", new_status: "APPROVED", remarks: "Rooms",
     });
     await notify.notifyRoomsAllocated(id, (await store.getProfile("gh-manager"))!);

@@ -599,7 +599,12 @@ guest houses and rooms only** — the five demo bookings are mock-store only.
 | GH caretaker | `gh.reception@iitpkd.ac.in` | `gh-caretaker` |
 | Developer | `developer@iitpkd.ac.in` | `developer` |
 
-Rooms: Bageshri B-101..B-120, Hamsanandi H-101..H-116 — **all double sharing**
+Rooms (the office's real list, 23 Sep 2026): Bageshri 201, 202, 203, 204,
+206, 302, 303, 305, 306, 307 (10); Hamsanandi A4, B1–B4, C1–C4, D1–D4 (13).
+These replaced the dummy B-101../H-101.. blocks;
+`supabase/repairs/2026-09-23-real-room-numbers.sql` corrects an existing
+database (it deactivates rather than deletes a dummy room something
+references). **All double sharing**
 (23 Sep 2026: the office confirmed there is no single room, so the booking form
 and the developer console stopped asking for a type). `RoomType` stays in the
 schema because tariffs and invoice lines are priced per type and older rows may

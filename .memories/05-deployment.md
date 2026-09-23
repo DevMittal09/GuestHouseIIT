@@ -458,7 +458,7 @@ what hurts most if it is left alone.
 | Setting | Where | Default, and why it must change |
 | --- | --- | --- |
 | Console password | Console → Access | **`0000`.** It guards every developer action. |
-| Room, extra-bed and meal rates | Console → Tariffs & Invoicing | Seeded from the office's tariff sheet (Bageshri ₹750/day; Hamsanandi ₹2,000, and ₹4,000 for government officers; breakfast ₹80, lunch ₹120, dinner ₹100; free to students and alumni). **There is no extra-bed rate at all** — an invoice for a room with an extra bed cannot be issued until one is entered. Confirm every rate and its effective date. |
+| Room, extra-bed and meal rates | Console → Tariffs & Invoicing | Seeded from the office's tariff sheet (Bageshri ₹1,000/day, raised from ₹750 on 23 Sep 2026; Hamsanandi ₹2,000, and ₹4,000 for government officers; breakfast ₹80, lunch ₹120, dinner ₹100; free to students and alumni). **There is no extra-bed rate at all** — an invoice for a room with an extra bed cannot be issued until one is entered. Confirm every rate and its effective date. |
 | GSTIN | Console → Tariffs & Invoicing | Carried over from the invoice template. Confirm it against the institute's registration — it is printed on every invoice. |
 | Accounts email | Console → Tariffs & Invoicing | **Empty**, so nothing is mailed to Accounts when an official booking's invoice is issued. |
 | Bank details (holder, account number, IFSC, branch) | Console → Tariffs & Invoicing | From the template. Guests pay against these. |
