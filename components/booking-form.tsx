@@ -15,6 +15,7 @@ import { PlusIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import { createBooking } from "@/app/actions/bookings";
 import { BookingAvailability } from "@/components/booking-availability";
+import { MealDatesPicker } from "@/components/meal-dates-picker";
 import { MealPlanGrid } from "@/components/meal-plan-grid";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,7 +40,6 @@ import {
   describeTotals,
   INFANT_AGE_LIMIT,
   roomOccupancyNotice,
-  ROOM_TYPE_LABELS,
 } from "@/lib/occupancy";
 import {
   AADHAAR_DIGITS,
@@ -72,8 +72,10 @@ import {
   ALUMNI_GUEST_HOUSE_NOTE,
 } from "@/lib/policy";
 import {
+  bookableMealsOn,
   declinedFromMealSlots,
   describeMeals,
+  firstBookableMealDate,
   MEAL_KEYS,
   mealPlanFromSlots,
   mealSlot,
@@ -192,6 +194,7 @@ export function BookingForm({
   guestHouses,
   config,
   initialServiceType,
+  initialMealDate,
   rules = DEFAULT_RULES,
   debitHeads = { room: {}, dining: {} },
   projects = [],
@@ -223,6 +226,13 @@ export function BookingForm({
    * The selector is still there, so the door is a starting point, not a trap.
    */
   initialServiceType?: ServiceType;
+  /**
+   * The first date a meals-only booking can be cooked for, resolved on the
+   * server (`firstBookableMealDate`). Passed in rather than computed here so
+   * the server-rendered form and its hydration cannot disagree about which
+   * day it is — they would, for one second either side of a meal's deadline.
+   */
+  initialMealDate?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -246,6 +256,13 @@ export function BookingForm({
   const [roomsToDrop, setRoomsToDrop] = useState<number | null>(null);
   /** The room card whose "Remove room" was pressed, awaiting confirmation. */
   const [roomToRemove, setRoomToRemove] = useState<number | null>(null);
+  /**
+   * The clock the kitchen's notice period is measured against, taken once
+   * when the form opens. The server checks it again on submission, so a form
+   * left open past a meal's deadline is refused there rather than silently
+   * accepted here.
+   */
+  const [now] = useState(() => new Date());
 
   const gf = config.guest_fields;
   const idDocRequired = gf.id_document === "required";
@@ -270,6 +287,18 @@ export function BookingForm({
     () =>
       initialServiceType === "meals_only" &&
       serviceTypesFor(config.role, mealsAvailable).includes("meals_only")
+  );
+  /**
+   * A dining booking's days. It is not a stay, so there is no check-in and no
+   * check-out to ask for: the requester picks the dates the kitchen cooks on,
+   * one at a time, starting from the first day that still has a meal open.
+   * `check_in` / `check_out` are derived from the first and last of them when
+   * the request is submitted, because that is what the booking record holds.
+   */
+  const [mealDates, setMealDates] = useState<string[]>(() =>
+    initialServiceType === "meals_only"
+      ? [initialMealDate ?? firstBookableMealDate(new Date(), rules.meals.windows)]
+      : []
   );
 
   const form = useForm<FormValues>({
@@ -386,10 +415,16 @@ export function BookingForm({
   // is the same function the schema uses, so the two cannot disagree.
   const effectiveCheckInTime = wantsRooms ? checkInTime : MEALS_ONLY_DAY.start;
   const effectiveCheckOutTime = wantsRooms ? checkOutTime : MEALS_ONLY_DAY.end;
+  // A dining booking's first and last day come from the dates picked below,
+  // not from two date boxes — it has no check-in and no check-out.
+  const effectiveCheckInDate = mealsOnly ? (mealDates[0] ?? "") : checkInDate;
+  const effectiveCheckOutDate = mealsOnly
+    ? (mealDates[mealDates.length - 1] ?? "")
+    : checkOutDate;
   const stay = (() => {
-    if (!checkInDate || !checkOutDate) return null;
-    const from = `${checkInDate}T${effectiveCheckInTime}`;
-    const to = `${checkOutDate}T${effectiveCheckOutTime}`;
+    if (!effectiveCheckInDate || !effectiveCheckOutDate) return null;
+    const from = `${effectiveCheckInDate}T${effectiveCheckInTime}`;
+    const to = `${effectiveCheckOutDate}T${effectiveCheckOutTime}`;
     const fromAt = instituteDate(from);
     const toAt = instituteDate(to);
     if (Number.isNaN(fromAt.getTime()) || Number.isNaN(toAt.getTime())) return null;
@@ -422,8 +457,21 @@ export function BookingForm({
    */
   const offerMeals = Boolean(selectedGuestHouse) && servesMeals;
   const mealCheckIn = stay && !stay.problem ? stay.fromAt : null;
-  const mealDays =
-    stay && !stay.problem ? stayMealDays(stay.fromAt, stay.toAt, rules.meals.windows) : [];
+  /**
+   * The rows of the meal grid. For a stay they are the days it touches; for a
+   * dining booking they are exactly the dates picked, which need not be
+   * consecutive. Either way a meal is offered only while the kitchen can still
+   * take it (`now`), so nothing is ticked by default that the schema would
+   * then refuse.
+   */
+  const mealDays = mealsOnly
+    ? mealDates.map((date) => ({
+        date,
+        available: bookableMealsOn(date, now, rules.meals.windows),
+      }))
+    : stay && !stay.problem
+      ? stayMealDays(stay.fromAt, stay.toAt, rules.meals.windows, now)
+      : [];
   // Derived, never stored. Picking Veg or Non-Veg means "we are eating here",
   // so the whole stay is ticked and the requester clears what they will miss;
   // before that, nothing is ticked, because no preference has been given. The
@@ -560,8 +608,12 @@ export function BookingForm({
     setAlumniCardError(null);
     setMealsError(null);
 
-    const checkIn = `${values.check_in_date}T${wantsRooms ? values.check_in_time : MEALS_ONLY_DAY.start}`;
-    const checkOut = `${values.check_out_date}T${wantsRooms ? values.check_out_time : MEALS_ONLY_DAY.end}`;
+    const checkIn = wantsRooms
+      ? `${values.check_in_date}T${values.check_in_time}`
+      : `${effectiveCheckInDate}T${MEALS_ONLY_DAY.start}`;
+    const checkOut = wantsRooms
+      ? `${values.check_out_date}T${values.check_out_time}`
+      : `${effectiveCheckOutDate}T${MEALS_ONLY_DAY.end}`;
 
     const payload = {
       service_type: serviceType,
@@ -626,6 +678,10 @@ export function BookingForm({
     if (wantsRooms && roomCountRaw.trim() === "") {
       hasError = true;
       setRoomCountError("Number of rooms is required");
+    }
+    if (mealsOnly && mealDates.length === 0) {
+      hasError = true;
+      setMealsError("Add at least one date for the kitchen to cook on");
     }
     if (!parsed.success) {
       hasError = true;
@@ -821,16 +877,21 @@ export function BookingForm({
         <CardHeader>
           <CardTitle>Debitable head</CardTitle>
           <CardDescription>
-            {fixedHead
-              ? "How this stay will be settled."
-              : "The budget this stay will be charged to. The accounts section debits it after checkout."}
+            {mealsOnly
+              ? "The budget these meals will be charged to."
+              : fixedHead
+                ? "How this stay will be settled."
+                : "The budget this stay will be charged to. The accounts section debits it after checkout."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {fixedHead ? (
             <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-              <span className="font-medium">{DEBIT_HEAD_LABELS[fixedHead]}</span> —{" "}
-              {PAY_AT_CHECKOUT_NOTE.replace(/^Personal — /, "")}
+              <span className="font-medium">{DEBIT_HEAD_LABELS[fixedHead]}</span>
+              {/* There is no checkout on a dining booking — nobody checks in —
+                  so the line about settling an invoice at the desk was
+                  describing something that does not happen. */}
+              {!mealsOnly && <> — {PAY_AT_CHECKOUT_NOTE.replace(/^Personal — /, "")}</>}
             </p>
           ) : (
             <>
@@ -942,9 +1003,65 @@ export function BookingForm({
         </Card>
       )}
 
+      {/* A dining booking is not a stay: no guest house to choose (only a
+          kitchen can take it, and there is one), no check-in, no check-out.
+          What it needs is a head count, a reason, and the days — which are
+          picked in the Meals card below, beside the meals themselves. */}
+      {mealsOnly ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Meal booking</CardTitle>
+            <CardDescription>
+              {offeredGuestHouses.length === 1
+                ? `Meals from the ${offeredGuestHouses[0].name} kitchen — the guest house that serves them. Choose the days and the meals below.`
+                : "Choose the kitchen, then the days and the meals below."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            {offeredGuestHouses.length > 1 && (
+              <div className="space-y-2">
+                <Label htmlFor="guest_house_id">Kitchen *</Label>
+                <NativeSelect id="guest_house_id" {...register("guest_house_id")}>
+                  <option value="">Select guest house…</option>
+                  {offeredGuestHouses.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <FieldError message={err("guest_house_id")} />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="meal_guest_count">Number of guests *</Label>
+              <QuantityInput
+                id="meal_guest_count"
+                aria-label="Number of guests"
+                min={1}
+                max={100}
+                value={mealGuestCount}
+                onChange={(raw) => setValue("meal_guest_count", raw, { shouldValidate: false })}
+              />
+              <p className="text-xs text-muted-foreground">
+                How many people the kitchen is cooking for. A meals booking needs no guest list.
+              </p>
+              <FieldError message={err("meal_guest_count")} />
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="purpose_of_visit">Purpose *</Label>
+              <Textarea id="purpose_of_visit" rows={3} {...register("purpose_of_visit")} />
+              <FieldError message={err("purpose_of_visit")} />
+            </div>
+            <FieldError message={err("check_in")} />
+            <FieldError message={err("check_out")} />
+          </CardContent>
+        </Card>
+      ) : (
       <Card>
         <CardHeader>
-          <CardTitle>{wantsRooms ? "Stay details" : "Meal dates"}</CardTitle>
+          <CardTitle>Stay details</CardTitle>
           {offeredGuestHouses.length === 1 && (
             <CardDescription>
               {forAlumnus
@@ -978,48 +1095,28 @@ export function BookingForm({
             <FieldError message={err("guest_house_id")} />
           </div>
 
-          {wantsRooms ? (
-            <div className="space-y-2">
-              <Label htmlFor="rooms_requested">Number of rooms *</Label>
-              <QuantityInput
-                id="rooms_requested"
-                aria-label="Number of rooms"
-                min={1}
-                max={MAX_ROOMS}
-                value={roomCountRaw}
-                onChange={onRoomCountChange}
-              />
-              <p className="text-xs text-muted-foreground">{roomOccupancyNotice(rules.capacity)}</p>
-              <FieldError message={roomCountError ?? undefined} />
-              <FieldError message={err("rooms")} />
-              {config.banner_text && (
-                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                  {config.banner_text}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="meal_guest_count">Number of guests *</Label>
-              <QuantityInput
-                id="meal_guest_count"
-                aria-label="Number of guests"
-                min={1}
-                max={100}
-                value={mealGuestCount}
-                onChange={(raw) => setValue("meal_guest_count", raw, { shouldValidate: false })}
-              />
-              <p className="text-xs text-muted-foreground">
-                How many people the kitchen is cooking for. A meals booking needs no guest list.
+          <div className="space-y-2">
+            <Label htmlFor="rooms_requested">Number of rooms *</Label>
+            <QuantityInput
+              id="rooms_requested"
+              aria-label="Number of rooms"
+              min={1}
+              max={MAX_ROOMS}
+              value={roomCountRaw}
+              onChange={onRoomCountChange}
+            />
+            <p className="text-xs text-muted-foreground">{roomOccupancyNotice(rules.capacity)}</p>
+            <FieldError message={roomCountError ?? undefined} />
+            <FieldError message={err("rooms")} />
+            {config.banner_text && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                {config.banner_text}
               </p>
-              <FieldError message={err("meal_guest_count")} />
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="space-y-2">
-            <Label htmlFor="check_in_date">
-              {wantsRooms ? "Check-in date & time *" : "First day of meals *"}
-            </Label>
+            <Label htmlFor="check_in_date">Check-in date &amp; time *</Label>
             <Input
               id="check_in_date"
               type="date"
@@ -1027,22 +1124,18 @@ export function BookingForm({
               max={checkInLimits.max}
               {...register("check_in_date")}
             />
-            {wantsRooms && (
-              <TimeSelect
-                label="Check-in"
-                value={checkInTime}
-                onChange={(v) => setValue("check_in_time", v)}
-              />
-            )}
+            <TimeSelect
+              label="Check-in"
+              value={checkInTime}
+              onChange={(v) => setValue("check_in_time", v)}
+            />
             {checkInLimits.note && (
               <p className="text-xs text-muted-foreground">{checkInLimits.note}.</p>
             )}
             <FieldError message={err("check_in")} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="check_out_date">
-              {wantsRooms ? "Check-out date & time *" : "Last day of meals *"}
-            </Label>
+            <Label htmlFor="check_out_date">Check-out date &amp; time *</Label>
             <Input
               id="check_out_date"
               type="date"
@@ -1050,13 +1143,11 @@ export function BookingForm({
               max={latestCheckOut ?? undefined}
               {...register("check_out_date")}
             />
-            {wantsRooms && (
-              <TimeSelect
-                label="Check-out"
-                value={checkOutTime}
-                onChange={(v) => setValue("check_out_time", v)}
-              />
-            )}
+            <TimeSelect
+              label="Check-out"
+              value={checkOutTime}
+              onChange={(v) => setValue("check_out_time", v)}
+            />
             {durationHint && <p className="text-xs text-muted-foreground">{durationHint}</p>}
             <FieldError message={err("check_out")} />
           </div>
@@ -1071,13 +1162,13 @@ export function BookingForm({
             >
               <p>
                 <span className="text-xs tracking-wide text-muted-foreground uppercase">
-                  {wantsRooms ? "Your stay" : "Meal dates"}
+                  Your stay
                 </span>
                 <br />
                 <span className="font-medium">{stay.from}</span>
                 <span className="text-muted-foreground"> → </span>
                 <span className="font-medium">{stay.to}</span>
-                {!stay.problem && wantsRooms && (
+                {!stay.problem && (
                   <span className="text-muted-foreground"> · {stay.duration}</span>
                 )}
               </p>
@@ -1090,13 +1181,13 @@ export function BookingForm({
             <Textarea
               id="purpose_of_visit"
               rows={3}
-              placeholder="e.g. Parents visiting for convocation"
               {...register("purpose_of_visit")}
             />
             <FieldError message={err("purpose_of_visit")} />
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Told, not signed for. A guest who arrives with an animal has to be
           turned away at the desk, so the notice is given prominence here and
@@ -1140,10 +1231,10 @@ export function BookingForm({
       {offerMeals && (
         <Card>
           <CardHeader>
-            <CardTitle>{mealsOnly ? "Meals" : "Meals (optional)"}</CardTitle>
+            <CardTitle>{mealsOnly ? "Days and meals" : "Meals (optional)"}</CardTitle>
             <CardDescription>
               {mealsOnly
-                ? `Meals from the ${selectedGuestHouse?.name} kitchen. Choose a preference and every meal of the range is included for you — then untick the ones you will not need.`
+                ? `Choose a preference and the meals still open on each day are included for you — then untick the ones you will not need. "Add another date" books further days.`
                 : `${selectedGuestHouse?.name} serves meals. Choose a preference if your party would like them and every meal of the stay is included — then untick the ones they will not need, or leave this alone to book the room on its own.`}{" "}
               The kitchen uses this for head counts, so tell the manager if plans change after
               booking.
@@ -1174,7 +1265,21 @@ export function BookingForm({
               <FieldError message={err("meal_preference")} />
             </div>
 
-            {!mealCheckIn ? (
+            {mealsOnly ? (
+              <>
+                <MealDatesPicker
+                  dates={mealDates}
+                  slots={mealSlots}
+                  onSlotsChange={onMealSlotsChange}
+                  onDatesChange={setMealDates}
+                  now={now}
+                  windows={rules.meals.windows}
+                  minDate={checkInLimits.min}
+                  maxDate={checkInLimits.max}
+                />
+                <p className="text-sm text-muted-foreground">{mealSummary}</p>
+              </>
+            ) : !mealCheckIn ? (
               <EmptyNote>Choose your dates to pick meals for each day.</EmptyNote>
             ) : (
               <>
@@ -1212,6 +1317,7 @@ export function BookingForm({
                   slots={mealSlots}
                   onChange={onMealSlotsChange}
                   windows={rules.meals.windows}
+                  now={now}
                 />
                 <p className="text-sm text-muted-foreground">{mealSummary}</p>
               </>
@@ -1473,8 +1579,8 @@ function RoomCard({
   const infants = countInfants(watched.map((g) => ({ is_infant: isInfantEntry(g) })));
   const guests = watched.length - infants;
 
-  const guestBlocked = addGuestBlockedReason(guests, capacity);
-  const infantBlocked = addInfantBlockedReason(infants, capacity);
+  const guestBlocked = addGuestBlockedReason(guests, infants, capacity);
+  const infantBlocked = addInfantBlockedReason(infants, guests, capacity);
 
   return (
     <fieldset className="relative rounded-lg border p-4">
@@ -1498,34 +1604,21 @@ function RoomCard({
         {roomOccupancyNotice(capacity)}
       </p>
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Room type preference</Label>
-          <NativeSelect {...register(`rooms.${roomIndex}.room_type`)}>
-            <option value="">No preference</option>
-            {(["double_sharing", "single"] as const).map((t) => (
-              <option key={t} value={t}>
-                {ROOM_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </NativeSelect>
-          <p className="text-xs text-muted-foreground">
-            The Guest House Manager allocates the actual room.
-          </p>
-        </div>
-        <div className="flex items-end">
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{guests}</span> guest
-            {guests === 1 ? "" : "s"}
-            {infants > 0 && (
-              <>
-                {" "}
-                + <span className="font-medium text-foreground">{infants}</span> infant
-              </>
-            )}{" "}
-            in this room.
-          </p>
-        </div>
+      {/* No room-type question: the guest houses have only double sharing
+          rooms, so "preference" was a choice with one real answer. The
+          manager still allocates the actual room. */}
+      <div className="mb-4">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{guests}</span> guest
+          {guests === 1 ? "" : "s"}
+          {infants > 0 && (
+            <>
+              {" "}
+              + <span className="font-medium text-foreground">{infants}</span> infant
+            </>
+          )}{" "}
+          in this room. The Guest House Manager allocates the actual room.
+        </p>
       </div>
 
       <div className="space-y-4">
@@ -1674,7 +1767,12 @@ function GuestRow({
         {gf.relationship !== "hidden" && (
           <div className="space-y-2">
             <Label>Relationship{star(gf.relationship)}</Label>
-            {config.relationship_style === "dropdown" ? (
+            {/* An infant gets a text box whatever the role's style is. The
+                dropdown lists the relationships an adult guest can have to
+                the requester; "Nephew", "Niece", "Cousin's daughter" are not
+                on it, and a child who has to be typed as "Siblings" to get
+                past the form tells the desk the wrong thing. */}
+            {config.relationship_style === "dropdown" && !isInfant ? (
               <NativeSelect {...register(`${base}.relationship`)}>
                 <option value="">Select…</option>
                 {config.relationship_options.map((r) => {
@@ -1693,7 +1791,9 @@ function GuestRow({
               </NativeSelect>
             ) : (
               <Input
-                placeholder="e.g. Colleague, collaborator…"
+                placeholder={
+                  isInfant ? "e.g. Daughter, niece…" : "e.g. Colleague, collaborator…"
+                }
                 {...register(`${base}.relationship`)}
               />
             )}

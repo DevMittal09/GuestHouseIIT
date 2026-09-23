@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  mealDeadlineNote,
   MEAL_KEYS,
   MEAL_LABELS,
   MEAL_SERVING_WINDOWS,
@@ -22,9 +23,10 @@ import { formatDateValue } from "@/lib/tz";
 
 /**
  * Meals for each day of a stay: days down the side, breakfast / lunch / dinner
- * across. A meal served before check-in or after check-out shows a dash and
- * cannot be ticked. Each column's "Every day" box ticks or clears that meal on
- * every day it is served.
+ * across. A meal served before check-in or after check-out — or past the
+ * kitchen's notice period, when `now` is given — shows a dash and cannot be
+ * ticked, with the reason on hover. Each column's "Every day" box ticks or
+ * clears that meal on every day it is offered.
  *
  * Controlled: the booking form owns the ticked slots (`mealSlot` keys) and
  * turns them into the submitted plan with `mealPlanFromSlots`.
@@ -35,6 +37,7 @@ export function MealPlanGrid({
   slots,
   onChange,
   windows = MEAL_SERVING_WINDOWS,
+  now,
 }: {
   days: StayMealDay[];
   checkIn: Date;
@@ -42,6 +45,12 @@ export function MealPlanGrid({
   onChange: (next: Set<string>) => void;
   /** The kitchen's serving times (Settings), for the column labels and the dashes. */
   windows?: MealWindows;
+  /**
+   * The clock the kitchen's notice period is measured against. Given it, a
+   * dashed cell can say "too late" instead of the misleading "served after you
+   * check out" — the meal is inside the stay, it has simply closed.
+   */
+  now?: Date;
 }) {
   const times = mealTimes(windows);
   const update = (keys: string[], on: boolean) => {
@@ -97,10 +106,13 @@ export function MealPlanGrid({
               </TableCell>
               {MEAL_KEYS.map((meal) => {
                 if (!day.available[meal]) {
+                  const why = mealUnavailableReason(day.date, meal, checkIn, windows, now);
                   const reason =
-                    mealUnavailableReason(day.date, meal, checkIn, windows) === "before-check-in"
-                      ? "Served before check-in"
-                      : "Served after check-out";
+                    why === "too-late"
+                      ? `Too late — ${mealDeadlineNote(day.date, meal, windows)}`
+                      : why === "before-check-in"
+                        ? "Served before check-in"
+                        : "Served after check-out";
                   return (
                     <TableCell
                       key={meal}

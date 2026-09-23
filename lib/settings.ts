@@ -43,6 +43,17 @@ export type CapacityRules = {
   max_guests_per_room: number;
   /** Infants per room card. They share a guardian's bed. */
   max_infants_per_room: number;
+  /**
+   * Everybody on one room card, infants included.
+   *
+   * The office's rule is a combination, not two independent caps: three
+   * adults and one infant fit, and so do two adults and two infants, but
+   * three adults and two infants do not. Neither `max_guests_per_room` nor
+   * `max_infants_per_room` can express that on its own — a room holds four
+   * people however they are made up, of whom at most
+   * `max_guests_per_room` may need a bed.
+   */
+  max_occupants_per_room: number;
 };
 
 export type BookingRules = {
@@ -170,7 +181,10 @@ export const DEFAULT_RULES: Rules = {
       double_sharing: { standard: 2, withExtraBed: 3 },
     },
     max_guests_per_room: 3,
-    max_infants_per_room: 1,
+    // Three, because one adult plus three infants is a combination the office
+    // allows; the combined cap below is what stops four infants.
+    max_infants_per_room: 3,
+    max_occupants_per_room: 4,
   },
   booking: {
     advance_booking_months: 1,
@@ -255,7 +269,8 @@ export const capacityRulesSchema = z
       double_sharing: roomCapacitySchema("Double sharing"),
     }),
     max_guests_per_room: whole("Guests per room", 1, 12),
-    max_infants_per_room: whole("Infants per room", 0, 4),
+    max_infants_per_room: whole("Infants per room", 0, 6),
+    max_occupants_per_room: whole("People per room", 1, 16),
   })
   .refine(
     (c) =>
@@ -265,7 +280,11 @@ export const capacityRulesSchema = z
       message:
         "Guests per room cannot exceed what the largest room type holds with an extra bed — the manager could never allocate such a request",
     }
-  );
+  )
+  .refine((c) => c.max_occupants_per_room >= c.max_guests_per_room, {
+    message:
+      "People per room cannot be fewer than guests per room — the combined limit has to leave room for the guests needing a bed",
+  });
 
 export const bookingRulesSchema = z.object({
   advance_booking_months: whole("Advance-booking window", 1, 24),
@@ -374,9 +393,38 @@ export const RULE_SCHEMAS = {
 export function parseRuleGroup<G extends RuleGroup>(group: G, stored: unknown): Rules[G] {
   const defaults = DEFAULT_RULES[group];
   if (!stored || typeof stored !== "object") return defaults;
-  const merged = deepMerge(defaults, stored as Record<string, unknown>);
+  const merged = deepMerge(defaults, upgradeStoredGroup(group, stored as Record<string, unknown>));
   const parsed = RULE_SCHEMAS[group].safeParse(merged);
   return parsed.success ? (parsed.data as Rules[G]) : defaults;
+}
+
+/**
+ * Repair a stored group saved **before a rule changed shape**, the way
+ * `sanitizeFormConfig` repairs a form config saved before the relationship
+ * dependency existed. Adding a field is handled by the merge above; this is for
+ * the rarer case where an *existing* field's meaning changed with it.
+ *
+ * **Capacity, 23 Sep 2026.** The per-room rule became a combination: a room
+ * holds `max_occupants_per_room` people of whom at most `max_guests_per_room`
+ * need a bed. A row with no `max_occupants_per_room` was therefore saved
+ * before that, and its `max_infants_per_room` is the old default of **1** — a
+ * number nobody chose, and one that refuses two of the three combinations the
+ * office actually allows (2 guests + 2 infants, 1 guest + 3 infants). So the
+ * infant cap is dropped and taken from the defaults. `max_guests_per_room` is
+ * kept, because the office may well have set that one deliberately.
+ *
+ * Saving capacity once from the console writes the combined cap, after which
+ * this leaves the row alone for good. The `booking_guests` trigger applies the
+ * same repair in SQL (migration 23), so the database and the app agree.
+ */
+function upgradeStoredGroup(
+  group: RuleGroup,
+  stored: Record<string, unknown>
+): Record<string, unknown> {
+  if (group !== "capacity" || "max_occupants_per_room" in stored) return stored;
+  const rest = { ...stored };
+  delete rest.max_infants_per_room;
+  return rest;
 }
 
 /** First validation message for a proposed group, or null when it is acceptable. */

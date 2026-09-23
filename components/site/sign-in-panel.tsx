@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { logout } from "@/app/actions/auth";
-import { devLoginEnabled, googleOauth } from "@/lib/env";
+import { googleOauth, mockLoginEnabled } from "@/lib/env";
 import { LoginForm } from "@/components/login-form";
 import { NoticeBox, PageTitle, siteButton } from "@/components/site/site-ui";
 import { isMockDirectory } from "@/lib/ldap";
@@ -47,7 +47,7 @@ export function SignInPanel({
         <div className="mt-[26px] space-y-6">
           <NoticeBox label="Please note">
             Sign in with your institute <strong>LDAP username and password</strong>, or with
-            Google using your <strong>@{LOGIN_DOMAIN}</strong> account (students:{" "}
+            your <strong>@{LOGIN_DOMAIN}</strong> account (students:{" "}
             <strong>@smail.{LOGIN_DOMAIN}</strong>). Personal accounts cannot be used to book.
           </NoticeBox>
           {aside}
@@ -79,7 +79,7 @@ export function SignInPanel({
           next={next}
           submitLabel={submitLabel}
           footnote={footnote}
-          googleSignIn={googleOauth() ? "google" : devLoginEnabled() ? "dev" : "none"}
+          googleSignIn={googleOauth() ? "google" : mockLoginEnabled() ? "mock" : "none"}
           notice={notice}
         />
       )}

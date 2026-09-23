@@ -89,6 +89,11 @@ uses the mock store on a throwaway file (`MOCK_DB_PATH`) and `TZ=UTC`, so it
 never touches `.local-db.json`. The techniques below are still how UI, HTTP
 and migrations are checked:
 
+> **`npm run test:e2e` has two re-run traps** — a persisted throwaway database
+> that carries the sign-in rate limit forward, and a reused `next start` serving
+> the previous build. Both look like application bugs. The clean loop is in
+> [07-troubleshooting.md](07-troubleshooting.md#re-running-the-playwright-suite-bites-twice-23-sep-2026).
+
 **1. Ad-hoc TypeScript tests**
 
 ```bash

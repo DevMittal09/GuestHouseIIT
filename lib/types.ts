@@ -159,6 +159,13 @@ export const REVIEWER_ROLES: Role[] = [
 export const STUDENT_RELATIONSHIPS = [
   "Mother",
   "Father",
+  // A student whose parents have both died, or are abroad and cannot travel,
+  // is accompanied by the guardian the institute already holds on record (the
+  // academic database's `guardian_name`). The guardian stands in for a parent
+  // in the relationship dependency too — see `STUDENT_PARENT_RELATIONSHIPS` —
+  // so siblings and grandparents are not locked out of a booking that no
+  // parent can ever be on.
+  "Guardian",
   "Grandmother",
   "Grandfather",
   "Siblings",

@@ -108,6 +108,26 @@ export async function chooseGuestHouse(page: Page): Promise<void> {
   await house.selectOption(values[0]);
 }
 
+/**
+ * The kitchen a dining booking is going to.
+ *
+ * A meals-only booking has no guest house question — only a kitchen can take
+ * one and there is one — so the name is read from the card that states it. The
+ * manager's console opens on a tab per guest house, so the journey still needs
+ * to know which.
+ */
+export async function kitchenName(page: Page): Promise<string> {
+  const text = await page.getByText(/Meals from the .* kitchen/).first().innerText();
+  return text.match(/Meals from the (.+?) kitchen/)![1];
+}
+
+/** The institute calendar date after `date` ("yyyy-MM-dd"), as the form shows it. */
+export function nextDay(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  return next.toISOString().slice(0, 10);
+}
+
 /** The name of the guest house the form is currently set to. */
 export async function selectedGuestHouseName(page: Page): Promise<string> {
   return page

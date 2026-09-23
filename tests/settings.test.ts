@@ -6,6 +6,9 @@ import {
   allocationCapacityError,
   roomAssignmentError,
   roomOccupancyNotice,
+  addGuestBlockedReason,
+  addInfantBlockedReason,
+  describeRoomParties,
   roomPartyError,
 } from "@/lib/occupancy";
 import { stayLengthError } from "@/lib/policy";
@@ -53,6 +56,38 @@ describe("reading stored settings", () => {
     const parsed = parseRuleGroup("booking", { max_stay_nights: 7, surprise: true });
     expect(parsed).toEqual({ advance_booking_months: 1, max_stay_nights: 7, buffer_minutes: 240, no_show_release_hours: 0 });
   });
+
+  /**
+   * A capacity row saved before the per-room rule became a combination
+   * (23 Sep 2026) carries `max_infants_per_room: 1` — the *old default*, not a
+   * choice — and no combined cap. Obeying it would refuse two of the three
+   * combinations the office allows, so the infant cap comes from the defaults
+   * until the office saves capacity once from the console. The `booking_guests`
+   * trigger applies the same repair in SQL (migration 23).
+   */
+  it("repairs a capacity row saved before the combination rule", () => {
+    const legacy = parseRuleGroup("capacity", {
+      room_types: DEFAULT_RULES.capacity.room_types,
+      max_guests_per_room: 3,
+      max_infants_per_room: 1,
+    });
+    expect(legacy.max_occupants_per_room).toBe(4);
+    expect(legacy.max_infants_per_room).toBe(3);
+    expect(roomPartyError(2, 2, legacy)).toBeNull();
+
+    // A row that *does* carry the combined cap is obeyed to the letter: at that
+    // point one infant per room is something the office chose.
+    const deliberate = parseRuleGroup("capacity", {
+      room_types: DEFAULT_RULES.capacity.room_types,
+      max_guests_per_room: 3,
+      max_infants_per_room: 1,
+      max_occupants_per_room: 4,
+    });
+    expect(deliberate.max_infants_per_room).toBe(1);
+    expect(roomPartyError(2, 2, deliberate)).toMatch(/at most 1 infant/);
+    // And a guest cap the office set on purpose survives either way.
+    expect(legacy.max_guests_per_room).toBe(3);
+  });
 });
 
 describe("validating a proposed change", () => {
@@ -99,14 +134,51 @@ describe("validating a proposed change", () => {
 describe("rule functions follow the settings", () => {
   it("per-room card limit", () => {
     expect(roomPartyError(4, 0)).toMatch(/at most 3 guests/);
-    const rules = withCapacity({ max_guests_per_room: 4, room_types: {
-      ...DEFAULT_RULES.capacity.room_types,
-      double_sharing: { standard: 2, withExtraBed: 4 },
-    } });
+    const rules = withCapacity({
+      max_guests_per_room: 4,
+      max_occupants_per_room: 5,
+      room_types: {
+        ...DEFAULT_RULES.capacity.room_types,
+        double_sharing: { standard: 2, withExtraBed: 4 },
+      },
+    });
     expect(roomPartyError(4, 0, rules.capacity)).toBeNull();
     expect(roomOccupancyNotice(rules.capacity)).toBe(
-      "Maximum 4 guests + 1 infant (below 5 years) per room."
+      "Maximum 5 people per room, of whom at most 4 may need a bed — infants below 5 years share a guardian's bed."
     );
+  });
+
+  /**
+   * The office's rule, stated as combinations (Sep 2026). It is three settings
+   * working together — guests, infants and everybody — and no two of them can
+   * express it: a flat "3 guests + 1 infant" refuses 2 + 2, and a flat "at most
+   * 4 people" would let in four adults.
+   */
+  it("the adult / infant combinations the office allows", () => {
+    const fits = (guests: number, infants: number) => roomPartyError(guests, infants) === null;
+    expect(fits(3, 1)).toBe(true);
+    expect(fits(3, 2)).toBe(false);
+    expect(fits(2, 2)).toBe(true);
+    expect(fits(2, 3)).toBe(false);
+    expect(fits(1, 3)).toBe(true);
+    expect(fits(1, 4)).toBe(false);
+    // And the two individual caps still hold on their own.
+    expect(fits(4, 0)).toBe(false);
+    expect(fits(0, 1)).toBe(false);
+    expect(roomPartyError(3, 2)).toMatch(/at most 4 people in total/);
+    expect(describeRoomParties()).toBe(
+      "3 guests + 1 infant, 2 guests + 2 infants or 1 guest + 3 infants"
+    );
+  });
+
+  it("the Add buttons stop where the combination does", () => {
+    // One guest and three infants is a full room, although only one of the
+    // three guest places is taken — the combined cap is what is in the way.
+    expect(addGuestBlockedReason(1, 3)).toMatch(/4 people/);
+    expect(addGuestBlockedReason(1, 2)).toBeNull();
+    expect(addInfantBlockedReason(1, 3)).toMatch(/4 people/);
+    expect(addInfantBlockedReason(1, 2)).toBeNull();
+    expect(addGuestBlockedReason(3, 0)).toMatch(/3 guests is the maximum/);
   });
 
   it("zero infants per room refuses any infant", () => {

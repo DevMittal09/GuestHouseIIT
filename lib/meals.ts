@@ -88,7 +88,8 @@ export interface StayMealDay {
 export function stayMealDays(
   checkIn: Date,
   checkOut: Date,
-  windows: MealWindows = MEAL_SERVING_WINDOWS
+  windows: MealWindows = MEAL_SERVING_WINDOWS,
+  now?: Date
 ): StayMealDay[] {
   const from = checkIn.getTime();
   const to = checkOut.getTime();
@@ -107,11 +108,115 @@ export function stayMealDays(
       const { start, end } = windows[meal];
       available[meal] =
         from < instituteDate(`${date}T${end}`).getTime() &&
-        to > instituteDate(`${date}T${start}`).getTime();
+        to > instituteDate(`${date}T${start}`).getTime() &&
+        // The kitchen's notice period, when the caller has a clock to give.
+        // Without it this is purely "does the stay cover the meal", which is
+        // what `normalizeMeals` wants when re-reading a stored plan.
+        (now === undefined || isMealBookable(date, meal, now, windows));
     }
     days.push({ date, available });
   }
   return days;
+}
+
+// --------------------------------------------------------- notice period
+
+/**
+ * The meal served immediately before this one. Breakfast's predecessor is the
+ * *previous day's* dinner, which is what makes the deadline for a morning meal
+ * the evening before rather than the small hours.
+ */
+export function previousMealSlot(date: string, meal: MealKey): { date: string; meal: MealKey } {
+  const index = MEAL_KEYS.indexOf(meal);
+  return index > 0
+    ? { date, meal: MEAL_KEYS[index - 1] }
+    : { date: addDaysToDateValue(date, -1), meal: MEAL_KEYS[MEAL_KEYS.length - 1] };
+}
+
+/**
+ * The instant after which a meal can no longer be booked: **the end of the
+ * previous meal's service**.
+ *
+ * The kitchen buys and cooks one meal ahead, so a head count that arrives
+ * while the previous meal is still being served is the last one it can act on.
+ * Lunch closes when breakfast ends, dinner when lunch ends, and tomorrow's
+ * breakfast when tonight's dinner ends.
+ */
+export function mealBookingDeadline(
+  date: string,
+  meal: MealKey,
+  windows: MealWindows = MEAL_SERVING_WINDOWS
+): Date {
+  const previous = previousMealSlot(date, meal);
+  return instituteDate(`${previous.date}T${windows[previous.meal].end}`);
+}
+
+/** Whether `meal` on `date` can still be asked for at `now`. */
+export function isMealBookable(
+  date: string,
+  meal: MealKey,
+  now: Date,
+  windows: MealWindows = MEAL_SERVING_WINDOWS
+): boolean {
+  return now.getTime() < mealBookingDeadline(date, meal, windows).getTime();
+}
+
+/** "Lunch on Tue 15 Sep had to be booked by 9:30 AM on Tue 15 Sep". */
+export function mealDeadlineNote(
+  date: string,
+  meal: MealKey,
+  windows: MealWindows = MEAL_SERVING_WINDOWS
+): string {
+  const previous = previousMealSlot(date, meal);
+  const [time, period] = twelveHour(windows[previous.meal].end);
+  return `${MEAL_LABELS[meal]} on ${formatDateValue(date)} has to be booked before ${MEAL_LABELS[
+    previous.meal
+  ].toLowerCase()} ends, at ${time} ${period} on ${formatDateValue(previous.date)}`;
+}
+
+/** Which meals on a date can still be booked at `now`. */
+export function bookableMealsOn(
+  date: string,
+  now: Date,
+  windows: MealWindows = MEAL_SERVING_WINDOWS
+): MealPreferences {
+  const available = { ...NO_MEALS };
+  for (const meal of MEAL_KEYS) available[meal] = isMealBookable(date, meal, now, windows);
+  return available;
+}
+
+/**
+ * The first institute date that still has a meal to offer — today while any
+ * of today's meals is open, otherwise tomorrow. So a dining form opened in the
+ * afternoon starts on tomorrow rather than on a day of greyed-out boxes.
+ *
+ * It never needs to look further than the next day: tomorrow's lunch and
+ * dinner cannot both be closed while today is over, because their deadlines
+ * are tomorrow morning and tomorrow midday.
+ */
+export function firstBookableMealDate(
+  now: Date,
+  windows: MealWindows = MEAL_SERVING_WINDOWS
+): string {
+  const today = toInstituteDateValue(now);
+  const open = (date: string) => MEAL_KEYS.some((meal) => isMealBookable(date, meal, now, windows));
+  return open(today) ? today : addDaysToDateValue(today, 1);
+}
+
+/** Why a chosen meal is now too late to book, or null when every one is in time. */
+export function mealLeadTimeError(
+  plan: MealPlan,
+  now: Date,
+  windows: MealWindows = MEAL_SERVING_WINDOWS
+): string | null {
+  for (const day of plan) {
+    for (const meal of MEAL_KEYS) {
+      if (day[meal] && !isMealBookable(day.date, meal, now, windows)) {
+        return `${mealDeadlineNote(day.date, meal, windows)} — that has passed, so the kitchen can no longer take it.`;
+      }
+    }
+  }
+  return null;
 }
 
 /** Why a meal on a day of the stay cannot be booked. */
@@ -119,8 +224,12 @@ export function mealUnavailableReason(
   date: string,
   meal: MealKey,
   checkIn: Date,
-  windows: MealWindows = MEAL_SERVING_WINDOWS
-): "before-check-in" | "after-check-out" {
+  windows: MealWindows = MEAL_SERVING_WINDOWS,
+  now?: Date
+): "too-late" | "before-check-in" | "after-check-out" {
+  // Checked first: a meal inside the stay that has simply closed is the
+  // common case, and "served after you check out" would be a lie about it.
+  if (now && !isMealBookable(date, meal, now, windows)) return "too-late";
   const servedUntil = instituteDate(`${date}T${windows[meal].end}`).getTime();
   return servedUntil <= checkIn.getTime() ? "before-check-in" : "after-check-out";
 }
@@ -185,8 +294,12 @@ export function mealPlanError(
   plan: MealPlan,
   checkIn: Date,
   checkOut: Date,
-  windows: MealWindows = MEAL_SERVING_WINDOWS
+  windows: MealWindows = MEAL_SERVING_WINDOWS,
+  now?: Date
 ): string | null {
+  // Without `now` this answers only "does the stay cover it". The notice
+  // period is `mealLeadTimeError`, reported separately so a meal that is
+  // inside the stay but past its deadline is not described as outside it.
   const days = new Map(stayMealDays(checkIn, checkOut, windows).map((d) => [d.date, d.available]));
   for (const day of plan) {
     const label = formatDateValue(day.date, { year: true });
@@ -202,7 +315,7 @@ export function mealPlanError(
       }
     }
   }
-  return null;
+  return now ? mealLeadTimeError(plan, now, windows) : null;
 }
 
 /** The booking form's key for one meal on one day. */

@@ -136,7 +136,15 @@ function GuestHouseCard({
   const roomNumberOf = (id: string) => rooms.find((r) => r.id === id)?.room_number ?? "?";
   const [name, setName] = useState(gh.name);
   const [roomNumber, setRoomNumber] = useState("");
-  const [roomType, setRoomType] = useState<RoomType>("double_sharing");
+  /**
+   * Every room in both guest houses is double sharing, so the type is not
+   * asked for: new rooms are created as doubles. It stays a column on `rooms`
+   * (the tariffs and the invoice are per type, and older single rooms may
+   * still exist), so this is a constant here rather than a removal.
+   */
+  const roomType: RoomType = "double_sharing";
+  /** Whether this guest house still holds rooms of more than one type. */
+  const mixedTypes = new Set(rooms.map((r) => r.room_type)).size > 1;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState<Room | null>(null);
 
@@ -224,17 +232,6 @@ function GuestHouseCard({
               onChange={(e) => setRoomNumber(e.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label>Type</Label>
-            <NativeSelect
-              className="w-44"
-              value={roomType}
-              onChange={(e) => setRoomType(e.target.value as RoomType)}
-            >
-              <option value="double_sharing">Double sharing</option>
-              <option value="single">Single</option>
-            </NativeSelect>
-          </div>
           <Button
             variant="outline"
             disabled={isPending || !roomNumber.trim()}
@@ -307,7 +304,7 @@ function GuestHouseCard({
             open={confirmRange}
             onOpenChange={setConfirmRange}
             title={`Add ${plan?.create.length ?? 0} rooms to ${gh.name}?`}
-            description={`${plan?.create.slice(0, 12).join(", ") ?? ""}${(plan?.create.length ?? 0) > 12 ? "…" : ""} — all as ${roomType === "single" ? "single" : "double sharing"} rooms.`}
+            description={`${plan?.create.slice(0, 12).join(", ") ?? ""}${(plan?.create.length ?? 0) > 12 ? "…" : ""} — all as double sharing rooms.`}
             confirmLabel="Add rooms"
             confirmVariant="default"
             pending={isPending}
@@ -414,7 +411,9 @@ function GuestHouseCard({
                 <div className="min-w-0">
                   <p className="truncate font-medium">{room.room_number}</p>
                   <p className="text-xs text-muted-foreground">
-                    {room.room_type === "single" ? "Single" : "Double"}
+                    {/* Printed only where this guest house has more than one
+                        type — otherwise it is the same word under every room. */}
+                    {mixedTypes ? `${room.room_type === "single" ? "Single" : "Double"}` : "Room"}
                     {!room.is_active && " · inactive"}
                   </p>
                 </div>

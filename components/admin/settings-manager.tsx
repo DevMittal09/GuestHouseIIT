@@ -423,6 +423,7 @@ function CapacitySection({ current }: { current: Rules["capacity"] }) {
     ) as Record<RoomType, { standard: string; withExtraBed: string }>,
     max_guests_per_room: String(current.max_guests_per_room),
     max_infants_per_room: String(current.max_infants_per_room),
+    max_occupants_per_room: String(current.max_occupants_per_room),
   });
   const [raw, setRaw] = useState(initial);
 
@@ -436,14 +437,20 @@ function CapacitySection({ current }: { current: Rules["capacity"] }) {
     }
     const guests = toInt(raw.max_guests_per_room);
     const infants = toInt(raw.max_infants_per_room);
-    if (guests === null || infants === null) return null;
-    return { room_types: types, max_guests_per_room: guests, max_infants_per_room: infants };
+    const occupants = toInt(raw.max_occupants_per_room);
+    if (guests === null || infants === null || occupants === null) return null;
+    return {
+      room_types: types,
+      max_guests_per_room: guests,
+      max_infants_per_room: infants,
+      max_occupants_per_room: occupants,
+    };
   })();
 
   return (
     <SettingCard
       title="Room capacity"
-      description="Two rules, checked at different times. Per room type: how many beds a room has, and the most it holds once an extra bed is rolled in — checked when the manager allocates rooms. Per room on the form: the most guests and infants one room card may hold — checked when the request is submitted, before the room's type is known, and again by the database."
+      description="Two rules, checked at different times. Per room type: how many beds a room has, and the most it holds once an extra bed is rolled in — checked when the manager allocates rooms. Per room on the form: how many guests, how many infants and how many people in all one room card may hold — checked when the request is submitted, before the room's type is known, and again by the database. The three together are what make the rule a combination: 3 guests + 1 infant and 2 guests + 2 infants both fit, 3 guests + 2 infants does not."
     >
       <div className="grid gap-4 sm:grid-cols-2">
         {ROOM_TYPES.map((t) => (
@@ -485,9 +492,18 @@ function CapacitySection({ current }: { current: Rules["capacity"] }) {
           label="Infants per room card"
           value={raw.max_infants_per_room}
           min={0}
-          max={4}
+          max={6}
           hint="Infants share a guardian's bed. 0 stops infants being booked."
           onChange={(v) => setRaw({ ...raw, max_infants_per_room: v })}
+        />
+        <NumberField
+          id="cap-occupants"
+          label="People per room card, in all"
+          value={raw.max_occupants_per_room}
+          min={1}
+          max={16}
+          hint="Guests and infants together. This is what refuses 3 guests + 2 infants while allowing 2 guests + 2 infants."
+          onChange={(v) => setRaw({ ...raw, max_occupants_per_room: v })}
         />
       </div>
       <RuleGroupActions

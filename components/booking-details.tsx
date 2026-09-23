@@ -116,14 +116,26 @@ export function BookingDetails({
               : describeParty(booking)
           }
         />
-        <Field label="Meals requested" value={describeMeals(booking.meals)} />
+        {/* Only where the guest house serves meals. At Bageshri the row could
+            only ever read "None requested", which reads to a reviewer as a
+            request that was refused rather than a question never asked. The
+            booking mail already applies the same rule. */}
+        {(booking.guest_house.serves_meals || booking.meals.length > 0) && (
+          <Field label="Meals requested" value={describeMeals(booking.meals)} />
+        )}
         {booking.meal_preference && (
           <Field label="Meal preference" value={MEAL_PREFERENCE_LABELS[booking.meal_preference]} />
         )}
         {booking.assigned_rooms.length > 0 && (
           <Field
             label="Assigned rooms"
-            value={booking.assigned_rooms.map((r) => `${r.room_number} (${r.room_type === "single" ? "Single" : "Double"})`).join(", ")}
+            value={booking.assigned_rooms
+              .map((r) =>
+                // The type is worth printing only when it distinguishes: every
+                // room is double sharing unless an older single is still in use.
+                r.room_type === "single" ? `${r.room_number} (Single)` : r.room_number
+              )
+              .join(", ")}
           />
         )}
       </div>
@@ -227,12 +239,16 @@ export function BookingDetails({
                   Room {room.room_index}
                   {room.assigned_room ? (
                     <span className="ml-2 font-normal text-muted-foreground">
-                      → {room.assigned_room.room_number} (
-                      {ROOM_TYPE_LABELS[room.assigned_room.room_type]})
+                      → {room.assigned_room.room_number}
+                      {room.assigned_room.room_type === "single" &&
+                        ` (${ROOM_TYPE_LABELS.single})`}
                     </span>
                   ) : (
                     <span className="ml-2 font-normal text-muted-foreground">
                       → not yet allocated
+                      {/* A preference is only shown on bookings made while the
+                          form still asked for one; it no longer does, because
+                          there is only one kind of room to ask about. */}
                       {room.room_type && ` · ${ROOM_TYPE_LABELS[room.room_type]} preferred`}
                     </span>
                   )}

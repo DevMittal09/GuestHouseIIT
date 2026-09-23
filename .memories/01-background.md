@@ -148,6 +148,28 @@ Built the same day: the public site at `/`, sign-in moved to `/sign-in`, and
 the portal restyled to match. What was built, what was left out and why, and
 what is still waiting on the office: [10-ui-design.md](10-ui-design.md).
 
+## Office corrections — 23 Sep 2026
+
+Ten items from the guest house office, verbatim in substance. Most are the same
+complaint in different places: **the portal asks questions whose answer is
+already known.** Reasoning in
+[06-decisions.md](06-decisions.md) ("23 Sep 2026").
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| Mock authentication users are gone — put them back behind the "Sign in with Google" button, and call it "Mock Auth" | **Done** | `mockLoginEnabled()` in `lib/env.ts` gates the door on Google being unconfigured, not on `DEV_LOGIN`; button and page read **Mock Authentication**; `e2e/sign-in.spec.ts` |
+| A meals-only booking should not ask for a guest house or a first/last day of meals — just the veg/non-veg grid, one day at a time, with "add another date" | **Done** | `components/meal-dates-picker.tsx`; dates derived into `check_in`/`check_out` |
+| A meal can only be booked one meal ahead (lunch before breakfast ends); default to today, or tomorrow if it is already dinner time | **Done** | `isMealBookable` / `mealBookingDeadline` / `firstBookableMealDate` / `mealLeadTimeError` in `lib/meals.ts` |
+| Remove "You will be given an invoice at checkout…" from a meal-only booking | **Done** | `PAY_AT_CHECKOUT_NOTE` suppressed for `meals_only` — nobody checks in |
+| There are only double sharing rooms, so stop asking for a room type — including for the developer and the manager | **Done** | Booking form, developer console (creates doubles), allocation grid (`splitByType`), `BookingDetails`, both seeds; `supabase/repairs/2026-09-23-all-rooms-double-sharing.sql` for existing data |
+| For employee, do not collect ID proof | **Done** | `buildDefaultFormConfig("employee")`: `id_document: "hidden"`, `id_number: "optional"` |
+| Is a guardian handled for students with no parents, or parents abroad? | **Done** — it was *half* done | The academic card already showed `guardian_name` where both parents' are blank; the booking form did not. **Guardian** is now a relationship option and counts as a parent for the dependency rule |
+| Remove "Parents visiting for convocation" from the Purpose of Visit placeholder | **Done** | A placeholder reads as a suggestion |
+| Restrict infants by combination: 3+1 ok, 3+2 no, 2+2 ok, 2+3 no, 1+3 ok, 1+4 no | **Done** | Third setting `max_occupants_per_room` (4); `roomPartyError`, both Add buttons, migration 23 |
+| An infant's relationship can be a text box | **Done** | The dropdown lists adults' relationships; membership is checked per guest, skipping infants |
+| Father + mother + sibling under 3 in one room and 2 siblings + an infant in another shows an error | **Done, cause inferred** | The composition was always within the rules (`tests/booking-rules.test.ts`), but a *second* infant in one room was unreachable: the form's Add button stopped at one and the Supabase trigger refused it. The combination rule fixes both; `e2e/room-party.spec.ts` fills that room through the real form. The reporter could not recall the message, so this is the best-supported explanation rather than a confirmed one |
+| Booking a Bageshri stay should not show "Meals Requested" at all, even as "None requested" | **Done** | `BookingDetails` and `StaysTable`, the rule the mail templates already applied |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

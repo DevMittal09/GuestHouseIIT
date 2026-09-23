@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { notFound } from "next/navigation";
 import { loginAs } from "@/app/actions/auth";
-import { devLoginEnabled } from "@/lib/env";
+import { mockLoginEnabled } from "@/lib/env";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { safeNextPath } from "@/lib/site";
@@ -20,20 +20,21 @@ import { getStore } from "@/lib/store";
 import { REVIEWER_ROLES, ROLE_LABELS, type Profile } from "@/lib/types";
 
 /**
- * The placeholder behind "Sign in with Google": one click per portal account,
- * no password. Real Google OAuth replaces this page and `loginAs` together.
- * Until then it is also how a developer jumps between the ten roles without
- * typing a password. `next` arrives from the sign-in card, so "Book a room"
- * still lands on `/book` through this door.
+ * **Mock Authentication**: one click per portal account, no password. It is the
+ * placeholder for Google sign-in, which is not built yet, and it is also how a
+ * developer jumps between the roles. Real Google OAuth replaces this page and
+ * `loginAs` together — `mockLoginEnabled()` closes the door as soon as
+ * `GOOGLE_CLIENT_ID` and friends are set. `next` arrives from the sign-in
+ * card, so "Book a room" still lands on `/book` through this door.
  */
 export default async function MockLoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
-  // The developer door does not exist in production, nor without DEV_LOGIN
-  // (Phase 8): the page is not there at all, rather than refusing politely.
-  if (!devLoginEnabled()) notFound();
+  // Once Google sign-in is configured this page is not there at all, rather
+  // than refusing politely — there is nothing here anyone should reach.
+  if (!mockLoginEnabled()) notFound();
   const { next: rawNext } = await searchParams;
   const next = safeNextPath(rawNext);
   const user = await getCurrentUser();
@@ -50,15 +51,22 @@ export default async function MockLoginPage({
     <Container className="pt-11 pb-[88px]">
       <PageTitle
         className="mb-8"
-        intro="Google sign-in is not connected yet. In this development build, choose the account to continue as — no password needed."
+        intro="Google sign-in is not connected yet, so this stands in for it: choose the account to continue as — no password needed."
       >
-        Sign in with Google
+        Mock Authentication
       </PageTitle>
 
       <div className="grid gap-8 md:grid-cols-2">
         <PersonaGroup title="Requesters" description="Submit and track booking requests" profiles={requesters} next={next} />
         <PersonaGroup title="Reviewers & Admins" description="Approve, reject and allocate rooms" profiles={reviewers} next={next} />
       </div>
+
+      {profiles.length === 0 && (
+        <p className="rounded-[2px] border border-dashed border-border-strong p-6 text-center text-[15px] text-muted-foreground">
+          No portal accounts exist in this database yet. Run <code>supabase/seed.sql</code>, or
+          delete <code>.local-db.json</code> to reseed the mock store.
+        </p>
+      )}
 
       <div className="mt-8 text-center">
         <Button asChild variant="ghost" size="sm">

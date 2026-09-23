@@ -310,7 +310,7 @@ named `withExtraBed` rather than `max` deliberately — the third occupant is no
 a property of the room, it is a bed somebody has to arrange, and
 `extraBedsNeeded()` puts that number in front of the manager at allocation time.
 
-**Infants** — under 5 years, sharing a guardian's bed — are entered as guest rows within a room card (migration 11), with their `is_infant` flag computed automatically based on age. They occupy no bed, but count towards a maximum of 1 infant per room. Prior to migration 11, infants were just a boolean switch on the booking, so legacy bookings were migrated into synthetic room cards while retaining their original infant flags. `describeParty(booking)` supports both shapes.
+**Infants** — under 5 years, sharing a guardian's bed — are entered as guest rows within a room card (migration 11), with their `is_infant` flag computed automatically based on age. They occupy no bed, but they count towards the room's **combined** limit: a room card holds `max_occupants_per_room` people (4) of whom at most `max_guests_per_room` (3) may need a bed and at most `max_infants_per_room` (3) may be infants. That combination — 3 + 1, 2 + 2 or 1 + 3, never 3 + 2 — is the office's own rule (23 Sep 2026) and is why there are three settings rather than two. Prior to migration 11, infants were just a boolean switch on the booking, so legacy bookings were migrated into synthetic room cards while retaining their original infant flags. `describeParty(booking)` supports both shapes.
 It is checked twice because two different things are known at the two moments:
 `requestedRoomsError()` at submission, when only a room *count* exists, and
 `allocationCapacityError()` at allocation, when the manager has picked actual

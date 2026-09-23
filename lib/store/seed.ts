@@ -24,22 +24,25 @@ export const seedGuestHouses: GuestHouse[] = [
   { id: GH_HAMSANANDI, name: "Hamsanandi", total_rooms: 16, serves_meals: true },
 ];
 
-function makeRooms(ghId: string, prefix: string, doubles: number, singles: number): Room[] {
+/**
+ * Both guest houses are **all double sharing** — the office confirmed there is
+ * no single room, which is why the booking form and the developer console no
+ * longer ask for a type. `room_type` stays on the row because the tariffs and
+ * the invoice are priced per type, and a stored booking may still point at a
+ * single created before this.
+ */
+function makeRooms(ghId: string, prefix: string, count: number): Room[] {
   const rooms: Room[] = [];
-  for (let i = 1; i <= doubles; i++) {
+  for (let i = 1; i <= count; i++) {
     const n = `${prefix}-${100 + i}`;
     rooms.push({ id: `${ghId}-${n}`, guest_house_id: ghId, room_number: n, room_type: "double_sharing", is_active: true });
-  }
-  for (let i = 1; i <= singles; i++) {
-    const n = `${prefix}-${200 + i}`;
-    rooms.push({ id: `${ghId}-${n}`, guest_house_id: ghId, room_number: n, room_type: "single", is_active: true });
   }
   return rooms;
 }
 
 export const seedRooms: Room[] = [
-  ...makeRooms(GH_BAGESHRI, "B", 10, 10),
-  ...makeRooms(GH_HAMSANANDI, "H", 8, 8),
+  ...makeRooms(GH_BAGESHRI, "B", 20),
+  ...makeRooms(GH_HAMSANANDI, "H", 16),
 ];
 
 // `ldap_uid` is each persona's dummy LDAP username — the local part of the
@@ -305,7 +308,7 @@ const demoBookings: DemoBooking[] = [
     check_in: iso(6, 12),
     check_out: iso(9, 11),
     rooms_requested: 2,
-    assigned_room_ids: [`${GH_BAGESHRI}-B-201`, `${GH_BAGESHRI}-B-202`],
+    assigned_room_ids: [`${GH_BAGESHRI}-B-111`, `${GH_BAGESHRI}-B-112`],
     rejection_reason: null,
     alumni_id_url: null,
     custom_fields: null,
@@ -433,13 +436,13 @@ export const seedBookings: Booking[] = demoBookings.map(withDefaults).map((b) =>
  * bk-demo-6 has none: it is meals-only.
  */
 export const seedBookingRooms: BookingRoom[] = [
-  { id: "br-1", booking_id: "bk-demo-1", room_index: 1, room_type: "double_sharing", assigned_room_id: null },
-  { id: "br-2", booking_id: "bk-demo-2", room_index: 1, room_type: "single", assigned_room_id: null },
-  { id: "br-3", booking_id: "bk-demo-2", room_index: 2, room_type: "single", assigned_room_id: null },
-  { id: "br-4", booking_id: "bk-demo-3", room_index: 1, room_type: "single", assigned_room_id: null },
-  { id: "br-5", booking_id: "bk-demo-4", room_index: 1, room_type: "double_sharing", assigned_room_id: null },
-  { id: "br-6", booking_id: "bk-demo-5", room_index: 1, room_type: "single", assigned_room_id: `${GH_BAGESHRI}-B-201` },
-  { id: "br-7", booking_id: "bk-demo-5", room_index: 2, room_type: "single", assigned_room_id: `${GH_BAGESHRI}-B-202` },
+  { id: "br-1", booking_id: "bk-demo-1", room_index: 1, room_type: null, assigned_room_id: null },
+  { id: "br-2", booking_id: "bk-demo-2", room_index: 1, room_type: null, assigned_room_id: null },
+  { id: "br-3", booking_id: "bk-demo-2", room_index: 2, room_type: null, assigned_room_id: null },
+  { id: "br-4", booking_id: "bk-demo-3", room_index: 1, room_type: null, assigned_room_id: null },
+  { id: "br-5", booking_id: "bk-demo-4", room_index: 1, room_type: null, assigned_room_id: null },
+  { id: "br-6", booking_id: "bk-demo-5", room_index: 1, room_type: null, assigned_room_id: `${GH_BAGESHRI}-B-111` },
+  { id: "br-7", booking_id: "bk-demo-5", room_index: 2, room_type: null, assigned_room_id: `${GH_BAGESHRI}-B-112` },
 ];
 
 export const seedGuests: BookingGuest[] = [
@@ -477,5 +480,5 @@ export const seedLogs: BookingLog[] = [
   { id: "l-3", booking_id: "bk-demo-3", action_by: "iar-student-cell", action_by_name: "IAR Student Cell", previous_status: null, new_status: "PENDING_IAR", remarks: "Booking submitted", timestamp: iso(-1, 18) },
   { id: "l-4", booking_id: "bk-demo-4", action_by: "employee-priya", action_by_name: "Dr. Priya Sharma", previous_status: null, new_status: "PENDING_GH_MANAGER", remarks: "Booking submitted", timestamp: iso(-3, 11) },
   { id: "l-5", booking_id: "bk-demo-5", action_by: "official-admin", action_by_name: "Director's Office", previous_status: null, new_status: "PENDING_GH_MANAGER", remarks: "Booking submitted", timestamp: iso(-5, 10) },
-  { id: "l-6", booking_id: "bk-demo-5", action_by: "gh-manager", action_by_name: "Guest House Manager", previous_status: "PENDING_GH_MANAGER", new_status: "APPROVED", remarks: "Rooms B-201, B-202 allocated", timestamp: iso(-4, 16) },
+  { id: "l-6", booking_id: "bk-demo-5", action_by: "gh-manager", action_by_name: "Guest House Manager", previous_status: "PENDING_GH_MANAGER", new_status: "APPROVED", remarks: "Rooms B-111, B-112 allocated", timestamp: iso(-4, 16) },
 ];

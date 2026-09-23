@@ -10,11 +10,18 @@ import type { Room, RoomType } from "./types";
  *   3 with an extra bed; a single sleeps 1, 2 with an extra bed. Checked at
  *   **allocation**, when the manager picks actual rooms and their types are
  *   known (`allocationCapacityError`, `roomAssignmentError`).
- * - **Per room card** (`capacity.max_guests_per_room` /
- *   `max_infants_per_room`, 3 + 1 by default): checked at **submission**, when
- *   the requester has filled in "Room 1", "Room 2" but no physical room exists
- *   yet (`roomPartyError`), and again by the database trigger on
- *   `booking_guests` (migration 11, reading Settings since migration 16).
+ * - **Per room card** (`capacity.max_guests_per_room`,
+ *   `max_infants_per_room` and `max_occupants_per_room`; 3, 3 and 4 by
+ *   default): checked at **submission**, when the requester has filled in
+ *   "Room 1", "Room 2" but no physical room exists yet (`roomPartyError`), and
+ *   again by the database trigger on `booking_guests` (migration 11, reading
+ *   Settings since migration 16 and the combined cap since migration 23).
+ *
+ *   The third of those is what makes the office's rule a **combination**
+ *   rather than two independent caps: 3 adults + 1 infant and 2 adults +
+ *   2 infants both fit, 3 adults + 2 infants and 2 adults + 3 infants do not.
+ *   A room holds four people however they are made up, of whom at most three
+ *   may need a bed.
  *
  * All the numbers are Settings (`lib/settings.ts`). Every function takes them
  * as a parameter defaulting to `DEFAULT_RULES.capacity` — what the portal did
@@ -53,6 +60,9 @@ export const MAX_GUESTS_PER_ROOM = DEFAULT_CAPACITY.max_guests_per_room;
 /** Default: most infants allowed in one room card. They share a guardian's bed. */
 export const MAX_INFANTS_PER_ROOM = DEFAULT_CAPACITY.max_infants_per_room;
 
+/** Default: most people on one room card, infants included. */
+export const MAX_OCCUPANTS_PER_ROOM = DEFAULT_CAPACITY.max_occupants_per_room;
+
 export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   single: "Single",
   double_sharing: "Double sharing",
@@ -61,12 +71,53 @@ export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
 const guestCount = (n: number) => `${n} guest${n === 1 ? "" : "s"}`;
 const infantCount = (n: number) => `${n} infant${n === 1 ? "" : "s"}`;
 
-/** The rule, in the requester's words. Shown inside every room card. */
+/**
+ * The rule, in the requester's words. Shown inside every room card.
+ *
+ * Both halves are stated because either on its own reads as permission for
+ * something the other refuses: "up to 4 people" invites four adults, and
+ * "up to 3 guests plus 3 infants" invites six. The combinations themselves are
+ * spelled out separately, by `describeRoomParties`.
+ */
 export function roomOccupancyNotice(capacity: CapacityRules = DEFAULT_CAPACITY): string {
-  const infants = capacity.max_infants_per_room;
-  const infantPart =
-    infants > 0 ? ` + ${infantCount(infants)} (below ${INFANT_AGE_LIMIT} years)` : "";
-  return `Maximum ${guestCount(capacity.max_guests_per_room)}${infantPart} per room.`;
+  const total = capacity.max_occupants_per_room;
+  const beds = capacity.max_guests_per_room;
+  if (capacity.max_infants_per_room === 0 || total <= beds) {
+    return `Maximum ${guestCount(beds)} per room.`;
+  }
+  return `Maximum ${total} people per room, of whom at most ${beds} may need a bed — infants below ${INFANT_AGE_LIMIT} years share a guardian's bed.`;
+}
+
+/**
+ * The room parties that are *full* — one more of anybody would break the rule.
+ *
+ * Derived from the three settings rather than written out, so the wording
+ * cannot drift from the rule when the office changes a number. A party counts
+ * as full when it reaches the combined cap, or when it is at both individual
+ * caps at once; the ones in between are implied and would only add noise.
+ */
+export function maximalRoomParties(
+  capacity: CapacityRules = DEFAULT_CAPACITY
+): { guests: number; infants: number }[] {
+  const parties: { guests: number; infants: number }[] = [];
+  for (let guests = capacity.max_guests_per_room; guests >= 1; guests--) {
+    const infants = Math.min(capacity.max_infants_per_room, capacity.max_occupants_per_room - guests);
+    if (infants < 0) continue;
+    const full =
+      guests + infants === capacity.max_occupants_per_room ||
+      (guests === capacity.max_guests_per_room && infants === capacity.max_infants_per_room);
+    if (full) parties.push({ guests, infants });
+  }
+  return parties;
+}
+
+/** "3 guests + 1 infant, 2 guests + 2 infants, or 1 guest + 3 infants". */
+export function describeRoomParties(capacity: CapacityRules = DEFAULT_CAPACITY): string {
+  const parts = maximalRoomParties(capacity).map(({ guests, infants }) =>
+    infants > 0 ? `${guestCount(guests)} + ${infantCount(infants)}` : guestCount(guests)
+  );
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} or ${parts[parts.length - 1]}`;
 }
 
 /** The notice under the default rules, for places with no settings to hand. */
@@ -154,6 +205,14 @@ export function roomPartyError(
       ? `Infants under ${INFANT_AGE_LIMIT} cannot be booked into a room at present — contact the Guest House Manager.`
       : `A room takes at most ${infantCount(capacity.max_infants_per_room)} under ${INFANT_AGE_LIMIT}. Move the extra infant to another room.`;
   }
+  // The combination. Named in full because "at most 4 people" alone does not
+  // explain why this particular four were refused — the requester is looking
+  // at a room they believe is within both of the caps above.
+  if (guests + infants > capacity.max_occupants_per_room) {
+    return `A room takes at most ${capacity.max_occupants_per_room} people in total, infants included. This room has ${guestCount(
+      guests
+    )} and ${infantCount(infants)}. Move someone to another room.`;
+  }
   if (guests === 0 && infants > 0) {
     return `An infant cannot be booked into a room on their own — add the guest they are staying with.`;
   }
@@ -161,25 +220,41 @@ export function roomPartyError(
   return null;
 }
 
-/** Why no more bed-occupying guests can be added to this room, or null. */
+/**
+ * Why no more bed-occupying guests can be added to this room, or null.
+ *
+ * Takes the infants too, because the combined cap can be what is in the way:
+ * a room with one guest and three infants is full for guests although only
+ * one of the three guest places is used.
+ */
 export function addGuestBlockedReason(
   guests: number,
+  infants: number,
   capacity: CapacityRules = DEFAULT_CAPACITY
 ): string | null {
-  return guests >= capacity.max_guests_per_room
-    ? `This room is full — ${guestCount(capacity.max_guests_per_room)} is the maximum. Add another room for more guests.`
-    : null;
+  if (guests >= capacity.max_guests_per_room) {
+    return `This room is full — ${guestCount(capacity.max_guests_per_room)} is the maximum. Add another room for more guests.`;
+  }
+  if (guests + infants >= capacity.max_occupants_per_room) {
+    return `This room already holds ${capacity.max_occupants_per_room} people, which is the maximum including infants. Add another room.`;
+  }
+  return null;
 }
 
 /** Why no more infants can be added to this room, or null. */
 export function addInfantBlockedReason(
   infants: number,
+  guests: number,
   capacity: CapacityRules = DEFAULT_CAPACITY
 ): string | null {
   if (capacity.max_infants_per_room === 0) return "Infants cannot be added to a room at present.";
-  return infants >= capacity.max_infants_per_room
-    ? `This room already has ${infantCount(capacity.max_infants_per_room)}, which is the maximum per room.`
-    : null;
+  if (infants >= capacity.max_infants_per_room) {
+    return `This room already has ${infantCount(capacity.max_infants_per_room)}, which is the maximum per room.`;
+  }
+  if (guests + infants >= capacity.max_occupants_per_room) {
+    return `This room already holds ${capacity.max_occupants_per_room} people, which is the maximum including infants. Add another room.`;
+  }
+  return null;
 }
 
 /** Totals rolled up across the room cards, for the booking summary. */

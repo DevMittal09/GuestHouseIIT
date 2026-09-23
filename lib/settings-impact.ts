@@ -52,6 +52,10 @@ export function capacityChangeBlockers(
         blockers.push(
           `${b.booking_reference_id}: Room ${card.room_index} has ${infants} infant(s) (new limit ${proposed.max_infants_per_room})`
         );
+      } else if (guests + infants > proposed.max_occupants_per_room) {
+        blockers.push(
+          `${b.booking_reference_id}: Room ${card.room_index} holds ${guests + infants} people including infants (new limit ${proposed.max_occupants_per_room})`
+        );
       }
       const room = card.assigned_room;
       if (room && ROOM_HOLDING_STATUSES.includes(b.status)) {

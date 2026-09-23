@@ -420,6 +420,38 @@ Current migrations:
    the generated column refused a write, and the plan for a keyword search
    showing `Bitmap Index Scan on bookings_search_idx`.
 
+23. `00000000000023_room_occupancy_combination.sql` (23 Sep 2026).
+   Replaces `check_room_occupancy()` so the per-room-card rule is the office's
+   **combination** rather than two independent caps: at most
+   `max_guests_per_room` needing a bed (3), at most `max_infants_per_room`
+   infants (now **3**, was 1), and at most `max_occupants_per_room` people in
+   all (**4**, new). Migration 16's version refused 2 guests + 2 infants and
+   1 guest + 3 infants — two of the three combinations the office allows.
+   All three numbers still come from `rules.capacity` through `rule_int()`, so
+   the developer console governs. Only a function is replaced: no row is
+   rewritten, nothing already stored becomes invalid, and it is strictly more
+   permissive than what it replaces. Additive and safe to re-run. **Until it is
+   applied, Supabase still refuses a second infant in a room** while the form
+   and the schema allow it — the insert fails with a `check_violation` naming
+   the infant limit.
+
+   It also carries the **same repair as `lib/settings.ts`**: an `app_settings`
+   row for `rules.capacity` with no `max_occupants_per_room` was saved before
+   this rule, so its `max_infants_per_room` is the old default of 1 — a number
+   nobody chose, and one that refuses two of the three combinations the office
+   allows. The trigger takes the current default in that case
+   (`combined_saved`), exactly as `upgradeStoredGroup` does on read, so the
+   database and the app cannot disagree. Saving capacity once from the console
+   writes the combined cap and settles it.
+
+   Verified in a throwaway Postgres 16 (23 Sep 2026): the whole chain 1–23
+   applied, then all six of the office's combinations plus 4 + 0 checked against
+   the trigger on the defaults, with a pre-combination `rules.capacity` row
+   (2 + 2 and 1 + 3 accepted — the repair), with a post-combination row naming
+   `max_infants_per_room: 1` (2 + 2 refused — a stored choice is obeyed), with a
+   widened row (3 + 3 accepted), and a `is_legacy` room card of nine guests still
+   exempt. Migration 23 then applied a second time.
+
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.
 

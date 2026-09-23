@@ -10,6 +10,7 @@ import { getStore } from "@/lib/store";
 import { canBookOnBehalf } from "@/lib/access";
 import { serviceTypesFor } from "@/lib/booking-types";
 import { REQUESTER_ROLES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/types";
+import { firstBookableMealDate } from "@/lib/meals";
 import { PageHeader } from "@/components/page-header";
 import { AcademicDetailsCard } from "@/components/academic-details";
 
@@ -65,7 +66,7 @@ export default async function BookPage({
         }
       >
         {mealsOnly
-          ? "Meals at the guest house with no room booked. Tell the kitchen how many people, which days and whether it is vegetarian — it goes straight to the Guest House Manager."
+          ? "Meals at the guest house with no room booked. Tell the kitchen how many people, which days and whether it is vegetarian — it goes straight to the Guest House Manager. Each meal has to be booked before the previous one finishes being served."
           : onBehalf
             ? "Take a booking for someone who cannot use the portal themselves. It is recorded against your account and names them as the guest."
             : "Fill in the stay and guest details — the request enters the approval pipeline for your role automatically."}
@@ -79,6 +80,10 @@ export default async function BookPage({
         guestHouses={guestHouses}
         config={config}
         initialServiceType={initialServiceType}
+        // Resolved here rather than in the form so the server-rendered page
+        // and its hydration cannot land on different days — they would, for a
+        // second either side of a meal's deadline.
+        initialMealDate={firstBookableMealDate(new Date(), context.rules.meals.windows)}
         rules={context.rules}
         debitHeads={context.debitHeads}
         projects={context.projects}

@@ -135,10 +135,14 @@ the card at `/sign-in`, which is also embedded in the public `/book-room` and
   how to switch to the real accounts, are in
   **`.memories/11-ldap-accounts.md`**. Keep that file and
   `lib/ldap/mock-directory.ts` in step.
-- **"Sign in with Google"** → `/mock-login` (the persona picker) → `loginAs()`.
-  This is a **placeholder** for Google OAuth, and it is also the one-click role
-  switcher for development. Real Google replaces the page and `loginAs`, and
-  must enforce `isInstituteEmail()` on the verified address.
+- **"Mock Authentication"** → `/mock-login` (the persona picker) → `loginAs()`.
+  A **placeholder** for Google OAuth and the one-click role switcher. It is open
+  while `googleOauth()` is null (`mockLoginEnabled()` in `lib/env.ts`) — **not**
+  gated on `DEV_LOGIN`, which is how it once vanished from the office's
+  deployment and took every demo account with it. `MOCK_LOGIN=false` closes it
+  early. Configuring Google closes it and turns the button back into
+  "Sign in with Google"; the real flow must enforce `isInstituteEmail()` on the
+  verified address. Don't put Google's "G" mark on the placeholder.
 
 Rules for the LDAP door:
 
@@ -377,15 +381,22 @@ after an admin edits the form.
 Current defaults worth knowing: students are Bageshri-only and see the "double
 shared rooms will get first preference" banner; employee and official use
 free-text relationship; **club and official hide the relationship field**;
-club ID uploads are optional; alumni ID card is mandatory.
+club ID uploads are optional; alumni ID card is mandatory; **employee collects
+no ID document** (`id_document: "hidden"`, `id_number: "optional"`).
 
 ### The parent-dependency rule (students)
 
 Institute policy: a student may book for parents freely, but **siblings and
 grandparents only when a parent is staying too**. This is config, not a
-hardcoded role check — `parent_relationships` (Mother, Father) and
+hardcoded role check — `parent_relationships` (Mother, Father, **Guardian**) and
 `dependent_relationships` (Grandmother, Grandfather, Siblings) on
 `RoleFormConfig`, defaulted for `student` and empty for everyone else.
+
+**Guardian qualifies as a parent** (23 Sep 2026). The academic database already
+carries `guardian_name` and the Requester details card shows it where both
+parents' names are missing; without Guardian here, a student whose parents have
+died or are abroad could never bring a sibling at all, because the rule would be
+waiting for someone who cannot come.
 
 - `parentDependencyError(config, relationships)` in `lib/form-config.ts` is the
   one matcher, called by the booking form *and* `bookingPayloadSchema`. The
@@ -535,6 +546,13 @@ the trigger reads the same row through `rule_int()` (migration 16).
 | `double_sharing` | 2 | 3 |
 | `single` | 1 | 2 |
 
+> **Both guest houses are all double sharing.** The booking form and the
+> developer console do **not** ask for a room type — don't reintroduce the
+> question. `RoomType` stays in the schema (tariffs and invoice lines are per
+> type, and older rows may say `single`), and the allocation grid splits by type
+> only when both are actually present (`splitByType`). New rooms are created
+> `double_sharing`.
+
 The third occupant of a double is on a **rolled-in extra bed** — hence the field
 name `withExtraBed` (not `max`). Say so in UI copy; it is a thing someone has to
 physically do.
@@ -549,7 +567,18 @@ physically do.
   double rooms and is only for the booking form, before rooms exist — using it
   in the dialog under-counted a single room holding two guests.
 
-**Infants** (under `INFANT_AGE_LIMIT` = 5) are entered as normal guests in a room card. They are classified as infants based on the age typed in. They share a guardian's bed and take no bed capacity, but they count towards a maximum of 1 infant per room.
+**The per-room-card rule is a combination, not two caps** (23 Sep 2026): a room
+card holds `max_occupants_per_room` (**4**) people, of whom at most
+`max_guests_per_room` (**3**) may need a bed and at most
+`max_infants_per_room` (**3**) may be infants. So 3 guests + 1 infant,
+2 + 2 and 1 + 3 all fit; 3 + 2, 2 + 3 and 1 + 4 do not. All three are Settings,
+all three are in `roomPartyError`, and migration 23 teaches the
+`booking_guests` trigger the same. **Both Add buttons take both counts** —
+`addGuestBlockedReason(guests, infants)` / `addInfantBlockedReason(infants,
+guests)` — because one guest and three infants is a full room. The wording is
+derived (`maximalRoomParties` / `describeRoomParties`), never written out.
+
+**Infants** (under `INFANT_AGE_LIMIT` = 5) are entered as normal guests in a room card. They are classified as infants based on the age typed in. They share a guardian's bed and take no bed capacity, but they count towards the combined limit above. **An infant's relationship is a free text box** whatever the role's `relationship_style` is — the dropdown lists adults' relationships and has no "Nephew" on it — so the dropdown-membership check is a `superRefine` over the rooms that skips infants, not a field-level refinement.
 
 > **Stored bookings can still hold legacy synthetic rooms** — migration 11 migrated older bookings into single synthetic rooms and left their infant flags unchanged.
 
@@ -596,9 +625,30 @@ it as one `{breakfast, lunch, dinner}` answer for the whole stay.)
   tell a meal the requester unticked from one that was never offered. Each
   column's "Every day" box still ticks or clears that meal for the whole stay,
   and meals remain optional — clearing the table submits no plan.
+- **The kitchen's notice period** (23 Sep 2026): a meal must be booked **before
+  the previous one finishes being served** — lunch before breakfast ends, dinner
+  before lunch ends, tomorrow's breakfast before tonight's dinner ends.
+  `isMealBookable` / `mealBookingDeadline` are the rule; `stayMealDays(from, to,
+  windows, now)` applies it so a closed meal is never offered *or* auto-ticked;
+  `mealLeadTimeError` enforces it in the schema on both sides.
+  `firstBookableMealDate()` is why a dining form opens on today until today is
+  over and on tomorrow afterwards.
+- **A meals-only booking is not a stay.** No guest house question (only a
+  kitchen can take one, and there is one) and no check-in/check-out: it is a
+  **set of dates**, each with its own three meals
+  (`components/meal-dates-picker.tsx`), with "Add another date" for the next.
+  `check_in` / `check_out` are derived from the first and last date. Two knock-on
+  rules, both deliberate: the schema's "check-in must be in the future" is
+  **skipped** for `meals_only`, and `hasLapsed()` measures a dining booking from
+  its **last day of meals** — otherwise the manager cannot approve one made for
+  today. No invoice-at-checkout note either: nobody checks in.
 - Shown on `BookingDetails` as a per-day table with the head count (so every
   reviewer sees them) and as "Breakfast (2 days), Dinner (1 day)" in the
-  manager's stays tables, with the per-day list in the cell's tooltip.
+  manager's stays tables, with the per-day list in the cell's tooltip —
+  **only where the guest house serves meals**. At Bageshri the row could only
+  read "None requested", which reviewers read as a refusal rather than as a
+  question never asked; `BookingDetails` and `StaysTable` drop it, as the mail
+  templates already did.
 
 ## Email notifications — `lib/mail/`
 
@@ -976,6 +1026,12 @@ Migration files, applied sequentially:
 16. `00000000000016_settings_and_audit.sql` — `hostels`,
    `official_email_whitelist`, `units.office_class`, the occupancy trigger
    reading Settings, `security_audit`.
+23. `00000000000023_room_occupancy_combination.sql` — `check_room_occupancy()`
+   becomes the office's combination: at most 3 needing a bed, at most 3 infants,
+   at most **4 people in all** (`rules.capacity.max_occupants_per_room`).
+   Additive, replaces only a function, safe to re-run. **Until it is applied,
+   Supabase refuses a second infant in a room** although the form and the schema
+   allow it.
 
 Full notes per migration in `.memories/04-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine

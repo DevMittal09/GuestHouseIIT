@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { serviceTypeError, serviceTypesFor } from "@/lib/booking-types";
 import { DEFAULT_DEBIT_RULES, debitHeadsByType } from "@/lib/debit-heads";
 import { buildInvoiceDocument, invoiceBlocker } from "@/lib/invoice";
-import { isKitchenConfirmed, kitchenHeadCount } from "@/lib/meals";
+import {
+  firstBookableMealDate,
+  isKitchenConfirmed,
+  isMealBookable,
+  kitchenHeadCount,
+  mealLeadTimeError,
+  stayMealDays,
+} from "@/lib/meals";
 import { renderEmail } from "@/lib/mail/render";
 import { dailyDeskReport } from "@/lib/mail/templates";
 import { DEFAULT_RULES } from "@/lib/settings";
@@ -138,5 +145,89 @@ describe("the daily desk report", () => {
     expect(text).toContain("REF-b-1");
     // A day with lunches to cook is not "quiet".
     expect(text).not.toContain("No arrivals, departures or guests in house");
+  });
+});
+
+/**
+ * The kitchen's notice period (Sep 2026): a meal has to be asked for **before
+ * the previous one finishes being served**, because that is the last head count
+ * the kitchen can buy and cook against. So lunch closes when breakfast ends,
+ * dinner when lunch ends, and a morning's breakfast when the evening before it
+ * ends.
+ *
+ * `TZ=UTC` in the suite, so every instant below is written in UTC and the
+ * institute's wall clock is 5h30m ahead of it: 04:00Z is 09:30 IST, the moment
+ * breakfast stops being served.
+ */
+describe("the kitchen's notice period", () => {
+  const windows = DEFAULT_RULES.meals.windows;
+  const at = (iso: string) => new Date(iso);
+
+  it("closes each meal when the previous one stops being served", () => {
+    // 08:00 IST — before breakfast ends, so every meal today is still open.
+    const morning = at("2026-10-01T02:30:00.000Z");
+    expect(isMealBookable("2026-10-01", "breakfast", morning, windows)).toBe(false); // last night
+    expect(isMealBookable("2026-10-01", "lunch", morning, windows)).toBe(true);
+    expect(isMealBookable("2026-10-01", "dinner", morning, windows)).toBe(true);
+
+    // 09:31 IST — one minute past the end of breakfast: lunch has closed.
+    const afterBreakfast = at("2026-10-01T04:01:00.000Z");
+    expect(isMealBookable("2026-10-01", "lunch", afterBreakfast, windows)).toBe(false);
+    expect(isMealBookable("2026-10-01", "dinner", afterBreakfast, windows)).toBe(true);
+
+    // 14:01 IST — past the end of lunch: nothing today is left.
+    const afterLunch = at("2026-10-01T08:31:00.000Z");
+    expect(isMealBookable("2026-10-01", "dinner", afterLunch, windows)).toBe(false);
+    // But tomorrow is wide open, because tonight's dinner has yet to be served.
+    expect(isMealBookable("2026-10-02", "breakfast", afterLunch, windows)).toBe(true);
+
+    // 21:01 IST — past the end of dinner: tomorrow's breakfast has closed too.
+    const afterDinner = at("2026-10-01T15:31:00.000Z");
+    expect(isMealBookable("2026-10-02", "breakfast", afterDinner, windows)).toBe(false);
+    expect(isMealBookable("2026-10-02", "lunch", afterDinner, windows)).toBe(true);
+  });
+
+  it("opens the dining form on today until today is over", () => {
+    // 08:00 IST: today still has lunch and dinner to offer.
+    expect(firstBookableMealDate(at("2026-10-01T02:30:00.000Z"), windows)).toBe("2026-10-01");
+    // 14:01 IST: nothing left today, so the form starts on tomorrow.
+    expect(firstBookableMealDate(at("2026-10-01T08:31:00.000Z"), windows)).toBe("2026-10-02");
+    // 23:00 IST: still tomorrow — tomorrow's lunch and dinner are open even
+    // though its breakfast is not.
+    expect(firstBookableMealDate(at("2026-10-01T17:30:00.000Z"), windows)).toBe("2026-10-02");
+  });
+
+  it("refuses a plan whose deadline has passed, naming it", () => {
+    const plan = [{ date: "2026-10-01", breakfast: false, lunch: true, dinner: false }];
+    expect(mealLeadTimeError(plan, at("2026-10-01T02:30:00.000Z"), windows)).toBeNull();
+    const late = mealLeadTimeError(plan, at("2026-10-01T04:01:00.000Z"), windows);
+    expect(late).toMatch(/Lunch on .* has to be booked before breakfast ends, at 9:30 AM/);
+    expect(late).toMatch(/that has passed/);
+  });
+
+  it("offers a stay only the meals the kitchen can still take", () => {
+    // A stay starting this afternoon: today's dinner is already closed
+    // (its deadline was the end of lunch), tomorrow's meals are not.
+    const now = at("2026-10-01T08:31:00.000Z"); // 14:01 IST
+    const days = stayMealDays(
+      new Date("2026-10-01T09:30:00.000Z"), // 15:00 IST today
+      new Date("2026-10-02T09:30:00.000Z"), // 15:00 IST tomorrow
+      windows,
+      now
+    );
+    expect(days.map((d) => d.date)).toEqual(["2026-10-01", "2026-10-02"]);
+    // Day 1: breakfast and lunch are before check-in, and dinner — which the
+    // stay does cover — is past its deadline.
+    expect(days[0].available).toEqual({ breakfast: false, lunch: false, dinner: false });
+    // Day 2: breakfast and lunch are open; dinner is after the 15:00 check-out.
+    expect(days[1].available).toEqual({ breakfast: true, lunch: true, dinner: false });
+    // Without a clock it is purely "does the stay cover the meal" — the shape
+    // `normalizeMeals` needs when re-reading a plan that was stored long ago.
+    const noClock = stayMealDays(
+      new Date("2026-10-01T09:30:00.000Z"),
+      new Date("2026-10-02T09:30:00.000Z"),
+      windows
+    );
+    expect(noClock[0].available.dinner).toBe(true);
   });
 });

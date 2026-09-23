@@ -1770,3 +1770,180 @@ stay, and adds:
   was corrected in place, with the dated entries in this log left as they are —
   a decision log is a record of what was decided when, not a description of the
   present.
+
+---
+
+## 23 Sep 2026 — the office's second round of corrections
+
+Ten items from the guest house office, most of them the same complaint in
+different places: **the portal asks questions whose answer is already known.**
+
+### Mock authentication is a door, not a flag
+
+Google sign-in is still not built. Phase 8 wired the real OpenID Connect flow
+and made the placeholder — the persona picker at `/mock-login` — depend on
+`DEV_LOGIN=true` outside production. The office's deployment sets neither, so
+the second button on the sign-in card vanished and **every demo account became
+unreachable**: the page 404'd and `loginAs` threw.
+
+The fix is to stop gating the door on a flag somebody has to remember, and gate
+it on the thing it stands in for: `mockLoginEnabled()` is true while
+`googleOauth()` is null. Configure Google and the door closes by itself; there
+is no switch left set the wrong way. `MOCK_LOGIN=false` closes it early for a
+deployment that wants LDAP only.
+
+It is also **labelled honestly**. The button read "Sign in with Google" and
+opened a persona picker; it now reads **"Mock Authentication"** and drops
+Google's "G" mark, which had no business on a button that does not talk to
+Google. `e2e/sign-in.spec.ts` holds this to account against a *production*
+build with no Google configuration — the exact deployment where it broke.
+
+> Unchanged: this is a placeholder, not authentication. Anyone who can reach
+> the page can become any account on it. It must not be open on a deployment
+> holding real bookings — [08-roadmap.md](08-roadmap.md) item 1.
+
+### One room type, so stop asking
+
+Both guest houses are **all double sharing**. The form asked for a "room type
+preference" whose only real answer was the one type that exists, the developer
+console asked for a type on every new room, and the manager's grid split into
+"Double sharing rooms" and an empty "Single rooms".
+
+`RoomType` **stays** in the schema: tariffs and invoice lines are priced per
+type, and rows created earlier are still recorded as `single`. What went is the
+*asking*. The console creates doubles; the grid splits only when both types are
+actually present (`splitByType`), and prints one "Rooms" heading otherwise;
+`booking-details` names a room's type only when it is a leftover single. The
+seed makes B-101..B-120 and H-101..H-116 all double sharing, and
+`supabase/repairs/2026-09-23-all-rooms-double-sharing.sql` converts an existing
+database — as a repair, not a migration, because whether the institute has a
+single room is the office's fact, not ours.
+
+### The per-room rule is a combination, not two caps
+
+The office stated it as a table:
+
+```
+3 adults + 1 infant  ok      3 adults + 2 infants  no
+2 adults + 2 infants ok      2 adults + 3 infants  no
+1 adult  + 3 infants ok      1 adult  + 4 infants  no
+```
+
+`max_guests_per_room` (3) and `max_infants_per_room` (1) could not express
+that, and **refused two of the three combinations the office allows**. A room
+holds **four people however they are made up, of whom at most three may need a
+bed** — so there is a third setting, `max_occupants_per_room` (4), and the
+infant cap rises to 3. All three are Settings, all three are checked in
+`roomPartyError`, and migration 23 teaches the `booking_guests` trigger the
+same rule.
+
+The two Add buttons now take **both** counts: a room with one guest and three
+infants is full for guests although only one of the three guest places is
+used, and `addGuestBlockedReason(1, 3)` has to say so.
+
+The wording is **derived, not written**: `maximalRoomParties()` computes the
+full parties from the three numbers and `describeRoomParties()` renders them,
+so the copy cannot drift when the office changes a value. `roomOccupancyNotice`
+states both halves, because either alone reads as permission — "up to 4 people"
+invites four adults, "3 guests plus 3 infants" invites six.
+
+This is also the most likely cause of the reported *"one room with father,
+mother, sibling under 3, and another with 2 siblings and one infant shows some
+error"*. The exact composition is within every rule and always was
+(`tests/booking-rules.test.ts` proves it against the schema) — but the second
+infant in a *single* room was unreachable, because the form's "Add infant"
+button stopped at one and the Supabase trigger refused a second. The reporter
+could not recall the message, so the rule was made right and the composition
+pinned by a test and by `e2e/room-party.spec.ts`, which fills that room through
+the real form.
+
+### An infant's relationship is a text box
+
+The dropdown lists the relationships an **adult** guest can have to the
+requester — Mother, Father, Guardian, Grandmother, Grandfather, Siblings. It
+has no "Nephew" or "Cousin's daughter" on it, and a two-year-old recorded as
+"Siblings" to get past the form tells the desk something untrue. So an infant's
+row is free text whatever the role's style is.
+
+That moved the membership check out of the field and into a `superRefine` over
+the rooms, because the field-level refinement could not see the age that
+decides which kind of guest the row is.
+
+### Guardian counts as a parent
+
+Siblings and grandparents are accommodated only alongside a parent. A student
+whose parents have both died, or who are abroad and cannot travel, could
+therefore **never bring a sibling at all** — the rule was waiting for someone
+who cannot come.
+
+The institute already holds the answer: the academic database carries
+`guardian_name`, and the Requester details card shows it exactly where both
+parents' names are missing (a rule that has been there since 19 Sep). The
+booking form did not know about it. **Guardian** is now one of
+`STUDENT_RELATIONSHIPS` and one of `STUDENT_PARENT_RELATIONSHIPS`, so it
+satisfies the dependency. Config, not a code branch — as the rule has been
+since it was built.
+
+### Meals: a dining booking is not a stay
+
+The meals-only form was a stay with the rooms taken out. It asked for a guest
+house (a locked dropdown: only a kitchen can take a dining booking, and there
+is one), a "First day of meals" and a "Last day of meals" — two date boxes that
+somebody booking one lunch had to fill in with the same day twice.
+
+It is now a **set of dates**, each with its own breakfast / lunch / dinner
+(`components/meal-dates-picker.tsx`): it opens on the first day the kitchen can
+still cook for, and "Add another date" adds the next. `check_in` and
+`check_out` are derived from the first and last date at submission, because
+that is what the booking record holds.
+
+**The kitchen's notice period is a new rule** (`lib/meals.ts`): a meal has to
+be asked for **before the previous one finishes being served**, because that is
+the last head count the kitchen can buy and cook against. Lunch closes when
+breakfast ends, dinner when lunch ends, and tomorrow's breakfast when tonight's
+dinner ends. So:
+
+- `stayMealDays(..., now)` stops offering a meal that has closed, which means
+  nothing is ticked by default that the schema would then refuse;
+- the room flow's grid explains a closed cell as "too late" with the deadline,
+  instead of the misleading "served after you check out";
+- `firstBookableMealDate()` is why the dining form opens on **today** until
+  today is over and on **tomorrow** afterwards — the office asked for exactly
+  that ("if it's already dinner time, I should get the next day's booking as
+  default");
+- `mealLeadTimeError` is checked on the server too, so a form left open past a
+  deadline is refused rather than silently accepted.
+
+Allowing meals **today** broke something one layer down: `hasLapsed()` measured
+every request from `check_in`, and a dining booking's `check_in` is midnight on
+its first day — already past. The manager could not approve a dining booking
+made for today at all ("its check-in has passed"). A meals-only booking now
+lapses on its **last day of meals**, which is what "can the kitchen still serve
+it" actually means. `e2e/official-and-dining.spec.ts` caught this, which is the
+argument for having it.
+
+Two smaller ones in the same area: the invoice-at-checkout line is gone from a
+dining booking's Debitable head card (nobody checks in, so there is no
+checkout), and **"Meals requested" is hidden where the guest house serves no
+meals** — on `BookingDetails` and as a column on `StaysTable`. At Bageshri the
+row could only ever read "None requested", which the assistant warden read as a
+request that had been *refused* rather than a question never asked. The booking
+mail had applied that rule since Phase 2; the screens had not.
+
+### No ID document from an employee's guests
+
+`buildDefaultFormConfig("employee")` hides `id_document` and makes `id_number`
+optional. The requester is a member of the institute, identifiable from their
+own account. The Aadhaar number is still taken for the guest house register and
+still validated if typed — just not demanded.
+
+> **Trap, as ever:** a role whose config was ever saved from the Form Builder
+> keeps its stored row, so this default does not reach it. "Reset to spec
+> defaults" is the way back. The same applies to Guardian reaching a student's
+> `parent_relationships`.
+
+### And the placeholder that read as policy
+
+"e.g. Parents visiting for convocation" is gone from Purpose of visit. A
+placeholder is read as a suggestion, and the office did not want that one
+suggested.

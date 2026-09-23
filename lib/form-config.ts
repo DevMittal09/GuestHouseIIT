@@ -57,8 +57,16 @@ export const GUEST_FIELD_LABELS: Record<keyof RoleFormConfig["guest_fields"], st
 
 const DOUBLE_PREFERENCE_BANNER = "Double shared rooms will get first preference";
 
-/** Students may bring parents freely; these two satisfy the dependency below. */
-const STUDENT_PARENT_RELATIONSHIPS = ["Mother", "Father"];
+/**
+ * Students may bring parents freely; these satisfy the dependency below.
+ *
+ * **Guardian is one of them.** The institute's own record carries a guardian
+ * where both parents' names are missing (`lib/academic/fields.ts`), and a
+ * student in that position — or one whose parents live abroad — could
+ * otherwise never bring a sibling or a grandparent at all, because the rule
+ * would be waiting for a parent who cannot come.
+ */
+const STUDENT_PARENT_RELATIONSHIPS = ["Mother", "Father", "Guardian"];
 /** Accommodated only when a parent is staying too. */
 const STUDENT_DEPENDENT_RELATIONSHIPS = ["Grandmother", "Grandfather", "Siblings"];
 
@@ -95,7 +103,19 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
         banner_text: DOUBLE_PREFERENCE_BANNER,
       };
     case "employee":
-      return { ...base, relationship_style: "free_text" };
+      return {
+        ...base,
+        relationship_style: "free_text",
+        guest_fields: {
+          ...base.guest_fields,
+          // No ID proof from an employee's guests: the requester is a member
+          // of the institute, identifiable from their own account, and the
+          // office asked for the upload to go. The Aadhaar number is still
+          // taken for the guest house register, and still validated if typed.
+          id_number: "optional",
+          id_document: "hidden",
+        },
+      };
     case "club":
       return {
         ...base,

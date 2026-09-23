@@ -780,6 +780,8 @@ store**, on a throwaway database file:
 | `e2e/booking-journey.spec.ts` | student books → warden forwards → manager allocates → desk checks in and out → invoice issued → payment recorded |
 | `e2e/official-and-dining.spec.ts` | a faculty official stay through the HOD; a meals-only booking approved by the manager and counted on the kitchen's day sheet |
 | `e2e/public-site.spec.ts` | the public pages at 320 px, with no sideways scroll |
+| `e2e/sign-in.spec.ts` | **Mock Authentication** signs a persona in on a *production* build with no Google configuration — the deployment where the door had 404'd — and carries `?next=` through |
+| `e2e/room-party.spec.ts` | 2 guests + 2 infants in one room, through the real form: the second infant reachable, a fifth person refused, no room-type question, and Bageshri's review showing no meals row |
 
 `e2e/helpers.ts` holds the accounts, sign-in, and the form-filling steps.
 `.github/workflows/ci.yml` runs all of it with Supabase switched off.

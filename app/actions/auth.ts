@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { recordAudit } from "@/lib/audit-server";
 import { getSessionUser } from "@/lib/auth";
-import { devLoginEnabled } from "@/lib/env";
+import { mockLoginEnabled } from "@/lib/env";
 import { directoryUsesEmailUsernames, getDirectory, type DirectoryEntry } from "@/lib/ldap";
 import { profileForDirectoryEntry } from "@/lib/ldap/link";
 import { isValidLdapUid, normalizeLdapUid } from "@/lib/ldap/uid";
@@ -90,12 +90,13 @@ export async function signInWithLdap(
 }
 
 /**
- * The developer's one-click persona switcher (`/mock-login`). It exists only
- * when `DEV_LOGIN=true` outside production — in production this refuses, the
- * page 404s, and the environment check refuses to start with the flag set.
+ * Mock authentication (`/mock-login`): one click per portal account, no
+ * password. It stands in for "Sign in with Google" until the real OpenID
+ * Connect flow is configured, and it is also how a developer jumps between the
+ * roles. `mockLoginEnabled()` closes this door the moment Google is set up.
  */
 export async function loginAs(userId: string, next?: string | null): Promise<void> {
-  if (!devLoginEnabled()) throw new Error("Developer sign-in is disabled");
+  if (!mockLoginEnabled()) throw new Error("Mock authentication is disabled");
   const profile = await getStore().getProfile(userId);
   if (!profile) throw new Error("Unknown user");
   await startSession(userId, { verified: true });

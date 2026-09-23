@@ -20,6 +20,26 @@ export function devLoginEnabled(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.DEV_LOGIN === "true";
 }
 
+/**
+ * Whether the **mock authentication** door (`/mock-login`, `loginAs`) is open.
+ *
+ * Google sign-in is not built yet, so the button on the sign-in card has to
+ * lead somewhere: while `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` /
+ * `APP_URL` are not all set, it opens the persona picker instead. Configure
+ * Google and the door closes on its own — there is no flag to remember to
+ * unset, which is the failure mode a `DEV_LOGIN`-style switch has.
+ *
+ * `MOCK_LOGIN=false` closes it early, for a deployment that wants LDAP only.
+ *
+ * > This is a placeholder, not authentication: anyone who can reach the page
+ * > can become any account on it. It must not be open on a deployment holding
+ * > real bookings — see `.memories/08-roadmap.md` item 1.
+ */
+export function mockLoginEnabled(): boolean {
+  if (process.env.MOCK_LOGIN === "false") return false;
+  return devLoginEnabled() || googleOauth() === null;
+}
+
 export function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }

@@ -13,8 +13,8 @@ import {
 import { isOfficeRole } from "./workflow";
 import { isCountryCode } from "./countries";
 import { parentDependencyError, type FieldMode, type RoleFormConfig } from "./form-config";
-import { MAX_MEAL_DAYS, mealPlanError, normalizeMeals } from "./meals";
-import { INFANT_AGE_LIMIT, isInfantAge, roomPartyError } from "./occupancy";
+import { MAX_MEAL_DAYS, mealLeadTimeError, mealPlanError, normalizeMeals } from "./meals";
+import { describeRoomParties, INFANT_AGE_LIMIT, isInfantAge, roomPartyError } from "./occupancy";
 import { stayLengthError } from "./policy";
 import { DEFAULT_RULES, type CapacityRules, type Rules } from "./settings";
 import { formatInstituteDate, formatInstituteDateTime, instituteDate } from "./tz";
@@ -79,12 +79,14 @@ function guestSchema(config: RoleFormConfig) {
       f.gender === "required"
         ? z.enum(["male", "female", "other"], { message: "Gender is required" })
         : z.enum(["male", "female", "other"]).optional(),
-    relationship:
-      f.relationship === "required" && config.relationship_style === "dropdown"
-        ? z
-            .string({ message: "Select a relationship" })
-            .refine((v) => config.relationship_options.includes(v), "Select a relationship")
-        : textField(f.relationship, "Relationship is required"),
+    // Whether it has to be one of the dropdown's options is checked per guest
+    // below, not here: an **infant's** relationship is free text whatever the
+    // role's style is, and a field-level refinement cannot see the age that
+    // decides which this guest is.
+    relationship: textField(
+      f.relationship,
+      config.relationship_style === "dropdown" ? "Select a relationship" : "Relationship is required"
+    ),
     // Optional here; the per-guest check below applies the role's requirement,
     // so the message lands on the right row.
     id_number: optionalTrimmed,
@@ -435,6 +437,26 @@ export function bookingPayloadSchema(
       });
     })
     .superRefine((v, ctx) => {
+      // The dropdown's options describe the adults a requester may bring. An
+      // **infant** is typed in free text instead: the list has no "Nephew" or
+      // "Cousin's daughter" on it, and a small child recorded as "Siblings"
+      // just to get past the form tells the desk something untrue.
+      if (config.relationship_style !== "dropdown") return;
+      if (config.guest_fields.relationship === "hidden") return;
+      v.rooms.forEach((room, i) => {
+        room.guests.forEach((g, j) => {
+          if (isInfantAge(g.age) || !g.relationship) return;
+          if (!config.relationship_options.includes(g.relationship)) {
+            ctx.addIssue({
+              code: "custom",
+              message: "Select a relationship",
+              path: ["rooms", i, "guests", j, "relationship"],
+            });
+          }
+        });
+      });
+    })
+    .superRefine((v, ctx) => {
       // Per-guest citizenship. "Other" makes both fields mandatory; "Indian"
       // must carry neither, so a value typed before switching back cannot be
       // submitted against a guest the form no longer shows them for.
@@ -558,6 +580,16 @@ export function bookingPayloadSchema(
       if (message) ctx.addIssue({ code: "custom", message, path: ["meals"] });
     })
     .superRefine((v, ctx) => {
+      // The kitchen's notice period: a meal has to be asked for before the
+      // previous one finishes being served. Checked separately from the stay
+      // so a meal that is inside the stay but closed is not described as
+      // outside it — and checked on the server too, because a form left open
+      // past a deadline would otherwise submit an order nobody can cook.
+      if (v.meals.length === 0) return;
+      const message = mealLeadTimeError(v.meals, new Date(), rules.meals.windows);
+      if (message) ctx.addIssue({ code: "custom", message, path: ["meals"] });
+    })
+    .superRefine((v, ctx) => {
       if (checkOutOrderError(v.check_in, v.check_out)) return;
       const message = stayLengthError(
         instituteDate(v.check_in),
@@ -568,10 +600,18 @@ export function bookingPayloadSchema(
       );
       if (message) ctx.addIssue({ code: "custom", message, path: ["check_out"] });
     })
-    .refine((v) => instituteDate(v.check_in) > new Date(), {
-      message: "Check-in must be in the future",
-      path: ["check_in"],
-    })
+    .refine(
+      (v) =>
+        // A meals-only booking has no check-in: `check_in` is midnight on the
+        // first day the kitchen cooks, which is today whenever today still has
+        // a meal open. What stops it being booked too late is the notice
+        // period above, not a rule about arriving in the future.
+        v.service_type === "meals_only" || instituteDate(v.check_in) > new Date(),
+      {
+        message: "Check-in must be in the future",
+        path: ["check_in"],
+      }
+    )
     .refine(
       (v) => {
         const limit = latestCheckIn(config.role, new Date(), rules.booking.advance_booking_months);
@@ -674,10 +714,11 @@ export function isAadhaarNumber(value: string): boolean {
 
 /** The fine print next to the infant counter, kept with the rule it explains. */
 export function infantHelpText(capacity: CapacityRules = DEFAULT_RULES.capacity): string {
-  const infants = capacity.max_infants_per_room;
-  return `A guest below ${INFANT_AGE_LIMIT} years is an infant: they share a guardian's bed, need no bed of their own and are not asked for an ID. A room takes up to ${capacity.max_guests_per_room} guests${
-    infants > 0 ? ` plus ${infants === 1 ? "one infant" : `${infants} infants`}` : ""
-  }.`;
+  const opening = `A guest below ${INFANT_AGE_LIMIT} years is an infant: they share a guardian's bed, need no bed of their own and are not asked for an ID.`;
+  if (capacity.max_infants_per_room === 0) {
+    return `${opening} A room takes up to ${capacity.max_guests_per_room} guests.`;
+  }
+  return `${opening} A room takes ${capacity.max_occupants_per_room} people in all, of whom at most ${capacity.max_guests_per_room} may need a bed — so a full room is ${describeRoomParties(capacity)}.`;
 }
 
 export const INFANT_HELP_TEXT = infantHelpText();

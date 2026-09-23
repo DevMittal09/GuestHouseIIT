@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { KeyRoundIcon } from "lucide-react";
 import { signInWithLdap } from "@/app/actions/auth";
 
 const LABEL = "mb-[7px] block text-[13px] font-bold tracking-[0.03em] text-body";
@@ -22,16 +23,17 @@ function GoogleMark() {
 
 /**
  * The sign-in card the institute sees, on `/sign-in`, `/book-room` and
- * `/book-meal`: an LDAP username and password, or Google. `signInWithLdap`
- * redirects on success, so the only state this holds is the error from a
- * failed attempt.
+ * `/book-meal`: an LDAP username and password, or the second door.
+ * `signInWithLdap` redirects on success, so the only state this holds is the
+ * error from a failed attempt.
  *
- * "Sign in with Google" starts the real OpenID Connect flow
- * (`/api/auth/google/start`, Phase 8) when Google is configured. Where it is
- * not, and only where the developer doors are switched on, it opens the
- * account picker instead; otherwise it is not shown at all. "Keep me signed in" and "Forgot password" from
- * the design are deliberately absent — passwords belong to the directory, and a
- * control that does nothing is worse than none.
+ * The second door is **"Sign in with Google"** — the real OpenID Connect flow
+ * (`/api/auth/google/start`, Phase 8) — once Google is configured. Until then
+ * it is **"Mock Authentication"**, the persona picker at `/mock-login`, and it
+ * says so rather than promising Google and delivering something else.
+ * "Keep me signed in" and "Forgot password" from the design are deliberately
+ * absent — passwords belong to the directory, and a control that does nothing
+ * is worse than none.
  */
 export function LoginForm({
   sampleAccount,
@@ -47,8 +49,8 @@ export function LoginForm({
   next?: string;
   submitLabel?: string;
   footnote?: React.ReactNode;
-  /** Real Google sign-in, the developer account picker, or neither. */
-  googleSignIn?: "google" | "dev" | "none";
+  /** Real Google sign-in, the mock account picker, or neither. */
+  googleSignIn?: "google" | "mock" | "none";
   /** A message from a failed sign-in (`?error=` on the way back from Google). */
   notice?: string | null;
 }) {
@@ -57,8 +59,10 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const googlePath = googleSignIn === "google" ? "/api/auth/google/start" : "/mock-login";
-  const googleHref = next ? `${googlePath}?next=${encodeURIComponent(next)}` : googlePath;
+  const secondDoorPath = googleSignIn === "google" ? "/api/auth/google/start" : "/mock-login";
+  const secondDoorHref = next
+    ? `${secondDoorPath}?next=${encodeURIComponent(next)}`
+    : secondDoorPath;
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -145,12 +149,14 @@ export function LoginForm({
             </div>
 
             <Link
-              href={googleHref}
+              href={secondDoorHref}
               prefetch={false}
               className="flex w-full items-center justify-center gap-3 rounded-[3px] border border-border-strong bg-white p-3 text-[15.5px] font-semibold text-navy transition-colors duration-150 hover:border-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
             >
-              <GoogleMark />
-              {googleSignIn === "google" ? "Sign in with Google" : "Developer sign-in (dev only)"}
+              {/* The Google mark belongs only on the real Google flow — on the
+                  placeholder it would claim something the button does not do. */}
+              {googleSignIn === "google" ? <GoogleMark /> : <KeyRoundIcon className="size-5 shrink-0" aria-hidden />}
+              {googleSignIn === "google" ? "Sign in with Google" : "Mock Authentication"}
             </Link>
           </>
         )}
@@ -179,7 +185,8 @@ export function LoginForm({
             .{" "}
           </>
         ) : null}
-        &ldquo;Sign in with Google&rdquo; opens a persona picker until Google sign-in is connected.
+&ldquo;Mock Authentication&rdquo; opens a persona picker; it is replaced by
+        &ldquo;Sign in with Google&rdquo; once Google sign-in is connected.
       </div>
     </div>
   );

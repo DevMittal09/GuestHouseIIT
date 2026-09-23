@@ -137,26 +137,20 @@ insert into public.guest_houses (id, name, total_rooms, serves_meals) values
 on conflict (name) do nothing;
 
 -- ---------------------------------------------------------------- rooms
--- Bageshri: B-101..B-110 double sharing, B-201..B-210 single
+-- Every room in both guest houses is double sharing: the office confirmed
+-- there is no single room, which is why the booking form and the developer
+-- console no longer ask for a type. `rooms.room_type` stays because the
+-- tariffs and the invoice are priced per type.
+--
+-- Bageshri: B-101..B-120. Hamsanandi: H-101..H-116.
 insert into public.rooms (guest_house_id, room_number, room_type)
 select '22222222-2222-2222-2222-222222222201', 'B-' || (100 + n), 'double_sharing'::public.room_type
-from generate_series(1, 10) n
+from generate_series(1, 20) n
 on conflict do nothing;
 
-insert into public.rooms (guest_house_id, room_number, room_type)
-select '22222222-2222-2222-2222-222222222201', 'B-' || (200 + n), 'single'::public.room_type
-from generate_series(1, 10) n
-on conflict do nothing;
-
--- Hamsanandi: H-101..H-108 double sharing, H-201..H-208 single
 insert into public.rooms (guest_house_id, room_number, room_type)
 select '22222222-2222-2222-2222-222222222202', 'H-' || (100 + n), 'double_sharing'::public.room_type
-from generate_series(1, 8) n
-on conflict do nothing;
-
-insert into public.rooms (guest_house_id, room_number, room_type)
-select '22222222-2222-2222-2222-222222222202', 'H-' || (200 + n), 'single'::public.room_type
-from generate_series(1, 8) n
+from generate_series(1, 16) n
 on conflict do nothing;
 
 -- ---------------------------------------------------------------- phase 4

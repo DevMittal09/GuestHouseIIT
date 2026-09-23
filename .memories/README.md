@@ -9,7 +9,7 @@ one.
 
 | File | Read it when you need |
 | --- | --- |
-| [01-background.md](01-background.md) | Why this project exists, who uses it, what was asked for |
+| [01-background.md](01-background.md) | Why this project exists, who uses it, what was asked for — including the office's correction rounds and what each one became |
 | [02-architecture.md](02-architecture.md) | How the system is put together and why |
 | [03-implementation.md](03-implementation.md) | What is built, feature by feature, with file paths |
 | [04-database.md](04-database.md) | Schema, enums, RLS, storage, migrations |
@@ -121,9 +121,19 @@ whose SHA-256 is the row's key (`lib/sessions.ts`). The sign-in card
   account.
 - **"Sign in with Google"** — the real OpenID Connect flow (`lib/oidc.ts`:
   state, PKCE, the id_token verified against Google's JWKS, institute domains
-  only) when `GOOGLE_CLIENT_ID` is set. Where it is not, and only where the
-  developer doors are switched on (`DEV_LOGIN=true`, never in production), the
-  button opens the one-click persona picker at `/mock-login` instead.
+  only) when `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL` are all
+  set. Where they are not, the same button reads **"Mock Authentication"** and
+  opens the one-click persona picker at `/mock-login`.
+
+  > **The mock door is gated on Google, not on a flag** (23 Sep 2026).
+  > `mockLoginEnabled()` is true while `googleOauth()` is null, so configuring
+  > Google closes it by itself and there is no switch left set the wrong way.
+  > It used to need `DEV_LOGIN=true` outside production, which the office's
+  > deployment set neither of — so the button disappeared and **every demo
+  > account became unreachable**. `MOCK_LOGIN=false` closes it early for a
+  > deployment that wants LDAP only. It is still a placeholder, not
+  > authentication: anyone who reaches the page can become any account on it,
+  > so it must not be open on a deployment holding real bookings.
 
 The dummy logins and the path to the real LDAP accounts (migration 12, bulk
 import, `LDAP_URL`) are in [11-ldap-accounts.md](11-ldap-accounts.md).
@@ -340,7 +350,7 @@ both apply — at different moments.** Neither replaced the other.
 | Rule | Value (default) | Checked when | Where |
 | --- | --- | --- | --- |
 | Per **room type** | double sharing 2 beds, **3** with an extra bed; single 1 bed, **2** with an extra bed | **Allocation** — the manager has picked physical rooms, so their types are known | `allocationCapacityError`, `roomAssignmentError` (and the grid) |
-| Per **room card** on the form | **3 guests + 1 infant** per card | **Submission** — the requester has filled in "Room 1", "Room 2" but no room exists yet | `roomPartyError` in the zod schema, plus the `booking_guests` trigger (migration 11, reads Settings since migration 16) |
+| Per **room card** on the form | **4 people**, of whom at most **3** may need a bed and at most **3** may be infants | **Submission** — the requester has filled in "Room 1", "Room 2" but no room exists yet | `roomPartyError` in the zod schema, plus the `booking_guests` trigger (migration 11, reads Settings since migration 16, the combined cap since migration 23) |
 
 So a card with 3 guests is accepted at submission, and the manager must then
 give it a double room (3 with an extra bed) — a single (max 2) is refused at
@@ -348,6 +358,17 @@ allocation. Since Phase 1 **all of these numbers are Settings**
 (`rules.capacity`, developer console → Settings); every function takes them as
 a parameter defaulting to the values above, and the database trigger reads the
 same row through `rule_int()`.
+
+> **The per-card rule is a combination, not independent caps** (23 Sep 2026).
+> The office gave it as a table: 3 adults + 1 infant, 2 + 2 and 1 + 3 all fit;
+> 3 + 2, 2 + 3 and 1 + 4 do not. `max_guests_per_room` (3) and
+> `max_infants_per_room` (3) cannot express that between them, so there is a
+> third setting — `max_occupants_per_room` (**4**) — and all three are checked.
+> Both of the room card's Add buttons therefore take **both** counts: a room
+> with one guest and three infants is full for guests although only one of the
+> three guest places is used. The wording is derived from the numbers
+> (`maximalRoomParties` / `describeRoomParties`), never written out, so it
+> cannot drift when the office changes one.
 
 The third occupant of a double is on a rolled-in extra bed, which is why the
 field is called `withExtraBed` and the UI says so — the allocation dialog tells
@@ -361,7 +382,11 @@ too informal.
 like anyone else and classified from the age typed (`isInfantAge`; the
 database derives `booking_guests.is_infant` in a trigger with the same
 threshold). They share a guardian's bed, take no bed capacity, are not asked
-for an ID, and count toward the per-card infant limit. `bookings.has_infant`
+for an ID, and count toward the per-card infant limit **and the combined
+limit**. Their **relationship is a free text box** whatever the role's style
+is: the dropdown lists the relationships an adult can have to the requester and
+has no "Nephew" on it, so a toddler typed as "Siblings" to get past the form
+told the desk something untrue. `bookings.has_infant`
 is now a summary derived from the rows. Bookings made between migrations 7 and
 11 recorded only the switch, with no row, which `describeParty` still reads.
 Capacity is always measured with `countBedGuests()` (reads the stored
@@ -381,6 +406,35 @@ enforced by `mealPlanError` in the schema on both sides. `normalizeMeals()` is
 the only reader: it expands the old whole-stay object over the stay's days (the
 same rule migration 8 applied in SQL) and turns anything missing into "none
 requested", so nothing downstream needs a null check. Always optional.
+
+**The kitchen's notice period** (23 Sep 2026): a meal has to be asked for
+**before the previous one finishes being served**, because that is the last
+head count the kitchen can buy and cook against — lunch closes when breakfast
+ends, dinner when lunch ends, tomorrow's breakfast when tonight's dinner ends.
+`isMealBookable` / `mealBookingDeadline` are the rule; `stayMealDays(..., now)`
+stops offering a closed meal (so nothing is ticked by default that the schema
+would refuse), the grid explains a closed cell as "too late" with the deadline,
+and `mealLeadTimeError` is checked on the server too, so a form left open past a
+deadline is refused rather than silently accepted.
+
+**A meals-only booking is not a stay.** It asks for no guest house (only a
+kitchen can take one, and there is one) and no check-in or check-out: it is a
+**set of dates**, each with its own breakfast / lunch / dinner
+(`components/meal-dates-picker.tsx`). It opens on `firstBookableMealDate()` —
+today while today has a meal left, tomorrow afterwards — and "Add another date"
+adds the next. `check_in` / `check_out` are derived from the first and last date
+at submission, because that is what the booking record holds. Two consequences
+worth knowing: the schema's "check-in must be in the future" is **skipped** for
+`meals_only` (its `check_in` is midnight on day one, already past whenever a
+meal is booked for today), and `hasLapsed()` measures a dining booking from its
+**last day of meals** instead — otherwise the manager could not approve one made
+for today.
+
+**"Meals requested" is hidden where the guest house serves no meals** — on
+`BookingDetails` and as a column on `StaysTable`, the rule the booking mail has
+applied since Phase 2. At Bageshri the row could only ever read "None
+requested", which the assistant warden read as a request that had been refused
+rather than a question never asked.
 
 ### 4.5 Advance-booking window
 
@@ -414,7 +468,7 @@ can only narrow, never widen. Do not reorder that spread.
 | `/book-room` `/book-meal` | anyone | Public booking entry points: sign in, then `/book` |
 | `/guidelines` `/gallery` `/contact` | anyone | Rules rendered from `lib/`, the photographs, the map |
 | `/sign-in` | anyone | LDAP sign-in + "Sign in with Google"; every portal guard redirects here |
-| `/mock-login` | anyone | Google placeholder: persona picker (development) |
+| `/mock-login` | anyone | **Mock Authentication**: persona picker, while Google sign-in is unconfigured |
 | `/dashboard` | requesters | Own bookings, status, assigned rooms, cancellation |
 | `/book` | requesters | The config-driven booking form, under a **Requester details** card from the academic database (with Copy to; [12-academic-records.md](12-academic-records.md)), opening with the booking type, a **browsable** availability panel (day/week/month), a per-day meal grid (where the guest house serves meals) and an "Infant accompanying" switch |
 | `/warden` `/fa` `/iar` | reviewers | One `ReviewQueue` component, three scopings. `/warden` also shows the warden's own academic record |
@@ -533,7 +587,12 @@ guest houses and rooms only** — the five demo bookings are mock-store only.
 | GH caretaker | `gh.reception@iitpkd.ac.in` | `gh-caretaker` |
 | Developer | `developer@iitpkd.ac.in` | `developer` |
 
-Rooms: Bageshri 10 double + 10 single, Hamsanandi 8 + 8.
+Rooms: Bageshri B-101..B-120, Hamsanandi H-101..H-116 — **all double sharing**
+(23 Sep 2026: the office confirmed there is no single room, so the booking form
+and the developer console stopped asking for a type). `RoomType` stays in the
+schema because tariffs and invoice lines are priced per type and older rows may
+still say `single`; `supabase/repairs/2026-09-23-all-rooms-double-sharing.sql`
+converts an existing database, as a repair rather than a migration.
 
 **There is no alumnus persona** — demo booking 3 is now the IAR Student Cell
 booking on behalf of Vikram Iyer, sitting in the IAR Office's queue.
@@ -595,7 +654,21 @@ against a throwaway Postgres before being written down — see
 `supabase/repairs/` holds one-off data fixes that are not migrations and are
 never applied automatically. Read each file's header before running it.
 
-Last substantive update: 2026-09-19 — the UI redesign from `design_handoff/`
+Last substantive update: 2026-09-23 — the office's second round of
+corrections ([06-decisions.md](06-decisions.md), "23 Sep 2026"): **Mock
+Authentication** as a door gated on Google rather than on `DEV_LOGIN`, which is
+why the demo accounts had vanished; the room-type question removed everywhere
+(both guest houses are all double sharing); the per-room rule restated as the
+office's **combination** — 4 people of whom at most 3 need a bed, so 3+1, 2+2
+and 1+3 all fit (migration 23); an infant's relationship as free text;
+**Guardian** counted as a parent so a student with no parents can still bring a
+sibling; the meals-only form rebuilt as a set of dates with the kitchen's
+**notice period** (a meal must be booked before the previous one stops being
+served), which also fixed a dining booking for today being unapprovable; no ID
+document from an employee's guests; and "Meals requested" hidden where the guest
+house serves none.
+
+Previous update: 2026-09-19 — the UI redesign from `design_handoff/`
 ([10-ui-design.md](10-ui-design.md)): a public guest house website at `/`
 (home, Book a Room, Book Meal, Guidelines, Gallery, Contact with the Google
 Maps location) in a new `app/(site)/` route group; sign-in moved to `/sign-in`

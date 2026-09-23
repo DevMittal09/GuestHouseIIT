@@ -348,19 +348,41 @@ export function isEarlyArrival(
  * The way out is to reject it, or for the manager to move the dates
  * (`updateBookingStay`) and then allocate.
  */
-export function hasLapsed(
-  booking: { status: BookingStatus; check_in: string },
-  now: Date = new Date()
-): boolean {
-  return ACTIVE_STATUSES.includes(booking.status) && booking.check_in < now.toISOString();
+type LapsableBooking = {
+  status: BookingStatus;
+  check_in: string;
+  check_out?: string;
+  service_type?: ServiceType;
+};
+
+/**
+ * The instant after which the request can no longer be honoured.
+ *
+ * For a stay that is check-in: approving it afterwards would hold rooms for
+ * dates in the past. A **dining booking has no check-in** — its `check_in` is
+ * midnight on its first day of meals, which is already past the moment someone
+ * books a meal for today, and booking a meal for today is allowed (the
+ * kitchen's notice period is what limits it). What makes one lapse is its last
+ * meal day being over, so that is measured from `check_out`.
+ */
+function lapseDeadline(booking: LapsableBooking): string {
+  return booking.service_type === "meals_only"
+    ? (booking.check_out ?? booking.check_in)
+    : booking.check_in;
+}
+
+export function hasLapsed(booking: LapsableBooking, now: Date = new Date()): boolean {
+  return ACTIVE_STATUSES.includes(booking.status) && lapseDeadline(booking) < now.toISOString();
 }
 
 /** Why this request can no longer be approved, or null when it still can. */
-export function lapsedError(
-  booking: { status: BookingStatus; check_in: string },
-  now: Date = new Date()
-): string | null {
+export function lapsedError(booking: LapsableBooking, now: Date = new Date()): string | null {
   if (!hasLapsed(booking, now)) return null;
+  if (booking.service_type === "meals_only") {
+    return `This request was never decided and its last day of meals (${formatDateTime(
+      lapseDeadline(booking)
+    )}) has passed, so the kitchen cannot serve it. Reject it to close it off.`;
+  }
   return `This request was never decided and its check-in (${formatDateTime(
     booking.check_in
   )}) has passed, so the stay cannot happen. Reject it, or ask the Guest House Manager to move the dates first.`;

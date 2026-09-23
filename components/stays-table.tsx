@@ -72,6 +72,10 @@ export function StaysTable({
   /** The manager's desk: moves, no-shows and cancellations as well as extensions. */
   isManager?: boolean;
 }) {
+  // The Meals column is dropped where no stay on the table is at a guest house
+  // that serves them: at Bageshri every cell could only read "None requested",
+  // which reads as a refusal rather than as a question never asked.
+  const showMeals = bookings.some((b) => b.guest_house.serves_meals || b.meals.length > 0);
   return (
     <div className="overflow-x-auto rounded-lg border">
       <Table>
@@ -82,14 +86,20 @@ export function StaysTable({
             <TableHead>Check-in</TableHead>
             <TableHead>Check-out</TableHead>
             <TableHead>Assigned rooms</TableHead>
-            <TableHead>Meals</TableHead>
+            {showMeals && <TableHead>Meals</TableHead>}
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {bookings.map((b) => (
-            <StayRow key={b.id} booking={b} showOverdue={showOverdue} isManager={isManager} />
+            <StayRow
+              key={b.id}
+              booking={b}
+              showOverdue={showOverdue}
+              isManager={isManager}
+              showMeals={showMeals}
+            />
           ))}
         </TableBody>
       </Table>
@@ -102,10 +112,13 @@ function StayRow({
   booking,
   showOverdue,
   isManager,
+  showMeals,
 }: {
   booking: BookingWithDetails;
   showOverdue: boolean;
   isManager: boolean;
+  /** Whether the table is showing a Meals column at all. */
+  showMeals: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -161,12 +174,16 @@ function StayRow({
         )}
       </TableCell>
       <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "—"}</TableCell>
-      <TableCell
-        className="text-xs"
-        title={describeMealDays(booking.meals).join("\n") || undefined}
-      >
-        {describeMeals(booking.meals)}
-      </TableCell>
+      {showMeals && (
+        <TableCell
+          className="text-xs"
+          title={describeMealDays(booking.meals).join("\n") || undefined}
+        >
+          {booking.guest_house.serves_meals || booking.meals.length > 0
+            ? describeMeals(booking.meals)
+            : "—"}
+        </TableCell>
+      )}
       <TableCell>
         <StatusBadge status={displayStatus(booking)} />
       </TableCell>

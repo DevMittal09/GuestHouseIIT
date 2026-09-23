@@ -143,6 +143,14 @@ export function RoomGrid({
 
   const doubles = rooms.filter((r) => r.room_type === "double_sharing");
   const singles = rooms.filter((r) => r.room_type === "single");
+  /**
+   * The grid splits by room type only where there is more than one to split.
+   * Both guest houses are all double sharing, so a lone "Double sharing rooms"
+   * heading over every room was a distinction that carried no information —
+   * and a "Single rooms" heading over nothing. A leftover single brings both
+   * headings back on its own.
+   */
+  const splitByType = doubles.length > 0 && singles.length > 0;
 
   // Infants share with their guardians, so only the others need a bed.
   // Which of the picked rooms the manager is accepting an overlap on. Derived
@@ -206,26 +214,43 @@ export function RoomGrid({
         {loading && <span className="text-muted-foreground">Loading occupancy…</span>}
       </div>
 
-      <RoomSection
-        title={`${ROOM_TYPE_LABELS.double_sharing} rooms`}
-        description={describeCapacity("double_sharing", capacity)}
-        rooms={doubles}
-        capacity={capacity}
-        bufferMinutes={bufferMinutes}
-        conflicts={conflicts}
-        selected={selected}
-        onToggle={toggle}
-      />
-      <RoomSection
-        title={`${ROOM_TYPE_LABELS.single} rooms`}
-        description={describeCapacity("single", capacity)}
-        rooms={singles}
-        capacity={capacity}
-        bufferMinutes={bufferMinutes}
-        conflicts={conflicts}
-        selected={selected}
-        onToggle={toggle}
-      />
+      {splitByType ? (
+        <>
+          <RoomSection
+            title={`${ROOM_TYPE_LABELS.double_sharing} rooms`}
+            description={describeCapacity("double_sharing", capacity)}
+            rooms={doubles}
+            capacity={capacity}
+            bufferMinutes={bufferMinutes}
+            conflicts={conflicts}
+            selected={selected}
+            onToggle={toggle}
+          />
+          <RoomSection
+            title={`${ROOM_TYPE_LABELS.single} rooms`}
+            description={describeCapacity("single", capacity)}
+            rooms={singles}
+            capacity={capacity}
+            bufferMinutes={bufferMinutes}
+            conflicts={conflicts}
+            selected={selected}
+            onToggle={toggle}
+          />
+        </>
+      ) : (
+        <RoomSection
+          title="Rooms"
+          description={
+            rooms.length > 0 ? describeCapacity(rooms[0].room_type, capacity) : ""
+          }
+          rooms={rooms}
+          capacity={capacity}
+          bufferMinutes={bufferMinutes}
+          conflicts={conflicts}
+          selected={selected}
+          onToggle={toggle}
+        />
+      )}
 
       <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
         <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -288,7 +313,9 @@ export function RoomGrid({
                   </span>
                   <span className={room ? "font-medium" : "text-muted-foreground"}>
                     {room
-                      ? `${room.room_number} (${ROOM_TYPE_LABELS[room.room_type].toLowerCase()})`
+                      ? splitByType
+                        ? `${room.room_number} (${ROOM_TYPE_LABELS[room.room_type].toLowerCase()})`
+                        : room.room_number
                       : "pick a room"}
                   </span>
                   {problem && <span className="w-full text-xs text-destructive">{problem}</span>}

@@ -451,3 +451,45 @@ generated `bookings.search_text` tsvector with a GIN index, and the store
 pushes the keyword down. In the throwaway Postgres stand-in the plan changed
 from a sequential scan to `Bitmap Index Scan on bookings_search_idx`. The
 dataset there is small — the plan is the evidence, not a timing.
+
+---
+
+## Re-running the Playwright suite bites twice (23 Sep 2026)
+
+Both of these cost a full debugging cycle, and neither announces itself:
+
+**1. `.e2e-db.json` survives the run, and so does the sign-in throttle.**
+Playwright does not delete the throwaway database, and since migration 21 the
+sign-in rate limit is a *row* in it (`hitRateLimit`, `RATE_LIMITS.signIn`) —
+counted in the database precisely so a restart cannot clear it. A second run
+inside the window therefore fails at `signIn()` with the browser sitting on
+`/sign-in`, which reads exactly like a broken sign-in page. **`rm -f
+.e2e-db.json` before re-running.**
+
+**2. `reuseExistingServer` serves the previous build.** `playwright.config.ts`
+sets `reuseExistingServer: !process.env.CI`, so a server left listening on 3100
+from an earlier run is reused — and `next start` read `.next` when it *started*.
+Rebuild and re-run, and the tests are exercising the old code while reporting on
+the new. **`pkill -f "next start"` before re-running**, or expect to be
+confused. (This is the `next start` cousin of the "`npm run build` kills a
+running `next dev`" warning in `AGENTS.md`.)
+
+A clean loop, then:
+
+```bash
+export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 20
+pkill -f "next start"; rm -f .e2e-db.json
+NEXT_PUBLIC_SUPABASE_URL= npm run build   # empty, or the bundle talks to hosted Supabase
+npm run test:e2e
+npm run build                             # rebuild normally afterwards
+```
+
+**And the build self-heals `.local-db.json`.** Generating the static pages reads
+the store, and with `MOCK_DB_PATH` unset that is the developer's own
+`.local-db.json` — `loadDb()` adds missing seeded profiles and any keys later
+features introduced. Harmless by design, but it *does* modify the file, so back
+it up first if it holds anything you care about.
+
+**`npx playwright install chromium`, not `--with-deps`.** The `--with-deps` form
+shells out to `sudo` for system packages and dies on a machine with no askpass
+helper. The browser download on its own needs no root.
