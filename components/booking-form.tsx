@@ -1645,22 +1645,8 @@ function RoomCard({
   const infantBlocked = addInfantBlockedReason(infants, guests, capacity);
 
   return (
-    <fieldset className="relative rounded-lg border p-4">
+    <fieldset className="rounded-lg border p-4">
       <legend className="px-1 text-sm font-semibold">Room {roomIndex + 1}</legend>
-      {/* On the border, level with the legend, like the legend itself. */}
-      {onRemove && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="absolute -top-4 right-3 h-7 bg-background px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
-          onClick={onRemove}
-          aria-label={`Remove Room ${roomIndex + 1}`}
-        >
-          <Trash2Icon />
-          Remove room
-        </Button>
-      )}
 
       <p className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
         {roomOccupancyNotice(capacity)}
@@ -1733,6 +1719,21 @@ function RoomCard({
         </Button>
         {(guestBlocked || infantBlocked) && (
           <p className="text-xs text-muted-foreground">{guestBlocked ?? infantBlocked}</p>
+        )}
+        {/* Last in the row and pushed to the end, so it sits on the same line
+            as the Add buttons inside the card instead of straddling its border. */}
+        {onRemove && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={onRemove}
+            aria-label={`Remove Room ${roomIndex + 1}`}
+          >
+            <Trash2Icon />
+            Remove room
+          </Button>
         )}
       </div>
     </fieldset>
