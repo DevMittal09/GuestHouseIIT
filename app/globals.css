@@ -30,17 +30,15 @@
 /*
  * Two bookings holding one room at the same time (23 Sep 2026): a changeover
  * the Guest House Manager accepted, which really is an overlap and not just a
- * busy room. Violet with a vertical stripe, so it is not red, not the
- * turnaround's 135° diagonal and not maintenance's cross-hatch — the four
- * states differ by pattern as well as by colour.
+ * busy room. A flat violet fills the overlapping stretch itself — asked for
+ * on 23 Sep 2026 in place of the vertical stripe it used to carry, because a
+ * pattern over two red bars read as a rendering artefact rather than as a
+ * state of its own. It is still unmistakably not red, and the turnaround's
+ * 135° diagonal and maintenance's cross-hatch keep their patterns, so those
+ * two do not depend on colour alone.
  */
 @utility bg-overlap {
   background-color: #7c3aed;
-  background-image: repeating-linear-gradient(
-    90deg,
-    #f5f3ff 0 2px,
-    transparent 2px 6px
-  );
 }
 
 @theme inline {

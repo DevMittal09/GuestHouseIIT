@@ -221,10 +221,12 @@ changeover puts two stays in one room for up to two hours, and in red that was
 indistinguishable from one ordinary stay — the office reported overlaps as
 invisible. `bucketOccupancyByHour` returns `overlaps` (the segments holding
 each hour, when there is more than one) and the range chart gets clipped
-`overlaps` spans from `overlapSpans()`; both draw `bg-overlap`, a vertical
-stripe so it differs from the turnaround's diagonal and maintenance's
-cross-hatch by pattern too. Stays that merely **touch** at check-out are not an
-overlap — the same half-open rule as `room_holds.during`.
+`overlaps` spans from `overlapSpans()`; both draw `bg-overlap`. It was violet
+with a vertical stripe and a `◆` on range bars until later the same day, when
+the office asked for **a plain colour filling the overlapping area** instead:
+a pattern drawn over two red bars read as a rendering artefact. The turnaround
+and maintenance keep their hatching. Stays that merely **touch** at check-out
+are not an overlap — the same half-open rule as `room_holds.during`.
 
 **Week and month views.** One row per day (3rem tall in a week, 1.75rem in a
 month), one column per room. Each room column is a single grid item spanning

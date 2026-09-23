@@ -802,10 +802,14 @@ booked / Booked badge for the whole period shown.
   at once; in plain red that is indistinguishable from one ordinary stay.
   `bucketOccupancyByHour` returns `overlaps` per hour and `bucketOccupancyByDay`
   returns clipped `overlaps` spans (`overlapSpans`), drawn `bg-overlap` —
-  violet, vertical stripe, `◆` on range bars — over both bars. Stays that merely
-  **touch** at check-out are not an overlap (the same half-open rule as
-  `room_holds.during`). Four states now share these charts, and each differs by
-  pattern as well as colour.
+  **solid violet**, filling the overlapping stretch itself — over both bars.
+  It carried a vertical stripe and a `◆` until 23 Sep 2026; the office asked
+  for a plain colour, because a pattern laid over two red bars read as a
+  rendering artefact rather than as a state. Stays that merely **touch** at
+  check-out are not an overlap (the same half-open rule as
+  `room_holds.during`). The turnaround's 135° diagonal and maintenance's
+  cross-hatch keep their patterns, so only booked and overlap differ by colour
+  alone — both also carry their period in the tooltip and `aria-label`.
 - **All the calendar maths lives in `lib/availability.ts`, not the
   components**, so the boundary behaviour is testable: `bucketOccupancyByHour`
   (a stay checking out at 11:00 releases the 11 AM hour; its turnaround buffer

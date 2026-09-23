@@ -2012,8 +2012,10 @@ almost always the one the requester meant.
 ### An overlap should not look like a booking
 
 **Decision.** Where two bookings hold one room at the same time, the
-availability charts draw that stretch in its own colour (`bg-overlap`: violet,
-vertical stripe, `◆` on range bars) over both bars.
+availability charts draw that stretch in its own colour (`bg-overlap`: solid
+violet) over both bars. **Amended 23 Sep 2026:** it was a striped violet with a
+`◆` on range bars; the office asked for a plain colour in the overlapping area,
+so the pattern and the glyph are gone. Only the fill says it.
 
 **Why.** The turnaround buffer's whole point is that the manager may *accept* a
 changeover with up to two hours of real overlap (`isOverridable`, Phase 3).

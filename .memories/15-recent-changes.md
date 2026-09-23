@@ -85,10 +85,11 @@ is what a single stay looks like. The overlap was invisible.
 - `bucketOccupancyByDay` returns `overlaps` — the intersecting stretches,
   computed by `overlapSpans()` over the room's segments and clipped to the
   range.
-- `bg-overlap` in `app/globals.css`: violet with a **vertical** stripe, so it
-  differs from red, from the turnaround's 135° diagonal and from
-  maintenance's cross-hatch by pattern as well as colour. Range bars carry a
-  `◆`, as stays carry `●`.
+- `bg-overlap` in `app/globals.css`: **solid violet**, filling the overlapping
+  stretch. It shipped as violet with a vertical stripe and a `◆` on range
+  bars; the office asked the same day for a plain colour in the overlapping
+  area instead, because the stripe over two red bars looked like a glitch. The
+  turnaround's 135° diagonal and maintenance's cross-hatch are unchanged.
 - Legend swatch added on `/availability` and in the booking form's panel.
 
 ### 5. The Guest House Manager can no longer book "personal"

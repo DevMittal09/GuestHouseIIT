@@ -281,8 +281,10 @@ export function RangeOccupancyChart({
                 </div>
               );
             })}
-            {/* Over both bars: where two stays hold the room at once. Drawn
-                last so neither booking's red hides it. */}
+            {/* Over both bars: the stretch where two stays hold the room at
+                once, filled solid in its own colour. Drawn last so neither
+                booking's red hides it; the stays' ● sits above and below it,
+                which is how you can still tell there are two of them. */}
             {occupancy.get(room.id)?.overlaps.map(({ segments, from, to }) => (
               <div
                 key={`o-${segments[0].booking_id}-${segments[1].booking_id}`}
@@ -303,11 +305,9 @@ export function RangeOccupancyChart({
                     )
                   ).toISOString()
                 )}`}
-                className="bg-overlap absolute inset-x-0.5 flex items-start justify-center overflow-hidden rounded-sm pt-0.5 text-[9px] leading-none text-white ring-1 ring-background"
+                className="bg-overlap absolute inset-x-0.5 overflow-hidden rounded-sm ring-1 ring-background"
                 style={{ top: `${from * 100}%`, height: `max(${(to - from) * 100}%, 3px)` }}
-              >
-                <span aria-hidden>◆</span>
-              </div>
+              />
             ))}
             {nowAt !== null && (
               <div
