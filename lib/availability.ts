@@ -11,15 +11,7 @@ import {
 import { STATUS_LABELS, type Room, type RoomOccupancySegment } from "./types";
 
 export const HOURS_IN_DAY = 24;
-const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;
-
-/** One room's day: the booking holding each hour (null = free), plus its bookings. */
-export interface RoomDayOccupancy {
-  /** 24 entries, midnight-first, in institute time (`lib/tz.ts`). */
-  hours: (RoomOccupancySegment | null)[];
-  segments: RoomOccupancySegment[];
-}
 
 /**
  * Institute midnight of `date` ("yyyy-MM-dd") and of the day after. Zoned
@@ -62,40 +54,7 @@ export function hourLabel(hour: number): string {
   return `${hour12} ${suffix}`;
 }
 
-/**
- * Lay the day's occupancy out per room and per hour, for the availability
- * grid. An hour counts as held when a booking covers any part of it, using
- * the same strict overlap as room allocation — so a stay checking out at
- * 11:00 releases the 11 AM hour rather than holding it.
- */
-export function bucketOccupancyByHour(
-  rooms: Room[],
-  segments: RoomOccupancySegment[],
-  dayStart: Date
-): Map<string, RoomDayOccupancy> {
-  const byRoom = new Map<string, RoomDayOccupancy>();
-  for (const room of rooms) {
-    byRoom.set(room.id, { hours: Array(HOURS_IN_DAY).fill(null), segments: [] });
-  }
-
-  for (const segment of segments) {
-    const entry = byRoom.get(segment.room_id);
-    if (!entry) continue;
-    entry.segments.push(segment);
-    const segStart = new Date(segment.check_in).getTime();
-    const segEnd = new Date(segment.check_out).getTime();
-    for (let hour = 0; hour < HOURS_IN_DAY; hour++) {
-      const hourStart = dayStart.getTime() + hour * HOUR_MS;
-      if (segStart < hourStart + HOUR_MS && segEnd > hourStart) {
-        entry.hours[hour] = segment;
-      }
-    }
-  }
-
-  return byRoom;
-}
-
-// ---------------------------------------------------------------- week & month views
+// ---------------------------------------------------------------- day, week & month views
 
 /** How much of the calendar `/availability` shows at once. */
 export type AvailabilityView = "day" | "week" | "month";
@@ -189,25 +148,53 @@ export function describeRange(range: AvailabilityRange): string {
   )}`;
 }
 
-/** One room's bookings over a week or a month. */
-export interface RoomRangeOccupancy {
+/**
+ * One booking's hold, clipped to the range, as fractions of it: 0 is the
+ * range's first midnight and 1 its last. Drawn as one unbroken bar, so a
+ * three-night stay reads as one booking rather than three.
+ */
+export interface OccupancyBar {
+  segment: RoomOccupancySegment;
+  from: number;
+  to: number;
   /**
-   * Each booking's hold clipped to the range, as fractions of it: 0 is the
-   * range's first midnight and 1 its last. Drawn as one unbroken bar, so a
-   * three-night stay reads as one booking rather than three.
+   * Which of two shades to draw it in. A room's bookings alternate in
+   * check-in order, so a stay that starts the moment the previous one ends
+   * still reads as two bookings rather than one long one.
    */
-  bars: { segment: RoomOccupancySegment; from: number; to: number }[];
-  /** Minutes booked on each day of the range, in `range.days` order. */
+  tone: 0 | 1;
+}
+
+/**
+ * A stretch when two of a room's bookings hold it at the same time — a
+ * turnover the Guest House Manager accepted (`lib/turnover.ts`), or a row
+ * forced from the console. Fractions of the range, like the bars.
+ */
+export interface OccupancyOverlap {
+  from: number;
+  to: number;
+  /** The two bookings, earlier check-in first. */
+  segments: [RoomOccupancySegment, RoomOccupancySegment];
+}
+
+/** One room's bookings over a day, a week or a month. */
+export interface RoomRangeOccupancy {
+  bars: OccupancyBar[];
+  overlaps: OccupancyOverlap[];
+  /**
+   * Minutes booked on each day of the range, in `range.days` order. Time two
+   * bookings share is counted once: the room is booked, not booked twice.
+   */
   bookedMinutes: number[];
   /** The bookings themselves, in check-in order. */
   segments: RoomOccupancySegment[];
 }
 
 /**
- * Lay occupancy out per room across a range of days, for the week and month
- * views and for every view's per-room badges. Uses the same strict overlap as
+ * Lay occupancy out per room across a range of days, for all three views and
+ * for every view's per-room badges. Uses the same strict overlap as
  * allocation: a stay checking out at 11:00 books nothing after 11:00 on the
- * day it leaves.
+ * day it leaves, and one checking in at 11:00 touches it without overlapping.
  */
 export function bucketOccupancyByDay(
   rooms: Room[],
@@ -222,32 +209,79 @@ export function bucketOccupancyByDay(
     return { start: start.getTime(), end: end.getTime() };
   });
 
-  const byRoom = new Map<string, RoomRangeOccupancy>();
-  for (const room of rooms) {
-    byRoom.set(room.id, { bars: [], bookedMinutes: range.days.map(() => 0), segments: [] });
-  }
+  // Each room's holds as clipped instants, before they become fractions.
+  const held = new Map<string, { segment: RoomOccupancySegment; from: number; to: number }[]>();
+  for (const room of rooms) held.set(room.id, []);
 
   for (const segment of segments) {
-    const entry = byRoom.get(segment.room_id);
-    if (!entry) continue;
+    const list = held.get(segment.room_id);
+    if (!list) continue;
     const from = Math.max(new Date(segment.check_in).getTime(), rangeStart);
     const to = Math.min(new Date(segment.check_out).getTime(), rangeEnd);
     // Written as a negation so an unparseable time (NaN) is skipped as well.
     if (!(to > from)) continue;
-    entry.segments.push(segment);
-    entry.bars.push({ segment, from: (from - rangeStart) / span, to: (to - rangeStart) / span });
-    dayEdges.forEach((edge, i) => {
-      const overlap = Math.min(to, edge.end) - Math.max(from, edge.start);
-      if (overlap > 0) entry.bookedMinutes[i] += overlap / MINUTE_MS;
-    });
+    list.push({ segment, from, to });
   }
 
-  for (const entry of byRoom.values()) {
-    entry.segments.sort(
-      (a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
+  const fraction = (at: number) => (at - rangeStart) / span;
+  const byRoom = new Map<string, RoomRangeOccupancy>();
+  for (const [roomId, list] of held) {
+    list.sort((a, b) => a.from - b.from || a.to - b.to);
+
+    const overlaps: OccupancyOverlap[] = [];
+    list.forEach((a, i) => {
+      for (const b of list.slice(i + 1)) {
+        const from = Math.max(a.from, b.from);
+        const to = Math.min(a.to, b.to);
+        if (to > from) {
+          overlaps.push({ from: fraction(from), to: fraction(to), segments: [a.segment, b.segment] });
+        }
+      }
+    });
+
+    // Booked time per day, from the union of the holds so shared time is
+    // counted once.
+    const merged: { from: number; to: number }[] = [];
+    for (const { from, to } of list) {
+      const last = merged[merged.length - 1];
+      if (last && from <= last.to) last.to = Math.max(last.to, to);
+      else merged.push({ from, to });
+    }
+    const bookedMinutes = dayEdges.map((edge) =>
+      merged.reduce((sum, m) => {
+        const overlap = Math.min(m.to, edge.end) - Math.max(m.from, edge.start);
+        return overlap > 0 ? sum + overlap / MINUTE_MS : sum;
+      }, 0)
     );
+
+    byRoom.set(roomId, {
+      bars: list.map(({ segment, from, to }, i) => ({
+        segment,
+        from: fraction(from),
+        to: fraction(to),
+        tone: (i % 2) as 0 | 1,
+      })),
+      overlaps,
+      bookedMinutes,
+      segments: list.map(({ segment }) => segment),
+    });
   }
   return byRoom;
+}
+
+/** How long two stays hold a room together, e.g. "1 hour 30 minutes". */
+export function describeOverlap(a: RoomOccupancySegment, b: RoomOccupancySegment): string {
+  const shared =
+    Math.min(Date.parse(a.check_out), Date.parse(b.check_out)) -
+    Math.max(Date.parse(a.check_in), Date.parse(b.check_in));
+  const minutes = Math.max(0, Math.round(shared / MINUTE_MS));
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const parts = [
+    hours > 0 ? `${hours} hour${hours === 1 ? "" : "s"}` : null,
+    rest > 0 || hours === 0 ? `${rest} minute${rest === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+  return parts.join(" ");
 }
 
 /** How many rooms are not booked at any moment of each day of the range. */

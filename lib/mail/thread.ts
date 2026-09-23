@@ -8,32 +8,35 @@ export { MAIL_THREAD_OF, type MailThreadKind };
 /**
  * Threading: which mail arrives as one conversation, and which stands alone.
  *
- * From the Guest House meeting notes: staff mail goes in a single thread
- * instead of a pile of standalone emails, so the Guest House Manager and the
- * approvers are not spammed — but the person who *asked* for a room gets a
- * standalone mail for each step, because each one is news to them.
+ * From the Guest House meeting notes: *"Email — try to send in a single thread
+ * instead of a standalone email."* The thread is the **booking**. Everything
+ * about one booking — sent for approval, forwarded, approved, rooms
+ * allocated, cancelled, the check-in reminder — is one conversation in each
+ * recipient's mailbox, whether that is the requester, the approver or the
+ * desk.
  *
- * - **Requesters: standalone.** No threading headers at all.
- * - **Staff, per-booking mail** (a new request, a forwarded one, a
- *   cancellation, the desk's copy of an allocation): one **approvals** thread
- *   per person per institute day.
- * - **Staff, scheduled mail** (the morning digest, the escalation nudge, the
- *   day-wise guest house log): a separate **daily log** thread per person per
- *   day.
+ * - **Per-booking mail: one thread per booking per mailbox.** A warden with
+ *   three requests on the same day has three threads, not one; each carries
+ *   the whole history of its own booking.
+ * - **Scheduled mail** (the morning digest, the escalation nudge, the day-wise
+ *   guest house log) is about a day, not a booking, so it keeps a **daily
+ *   log** thread per person per day.
  *
- * A new day starts a new thread. That is the point: today's approvals are one
- * conversation, and yesterday's do not keep bumping it.
+ * > This replaced (22 Sep 2026) a design where staff mail was grouped into one
+ * > "approvals" thread per *day*, which put every booking that arrived that
+ * > day into the same conversation and split one booking's mail across days.
  *
  * Two things have to line up for Gmail and Outlook to group messages:
  *
  * 1. **Threading headers.** Every message in a thread references a
  *    deterministic root `Message-ID`, and the first one actually sent claims
  *    that id as its own (decided at send time in `dispatch.ts`, since which
- *    message is first is only known then). The id is derived from the kind,
- *    the day and the recipient, so it needs no storage.
+ *    message is first is only known then). The id is derived from the booking
+ *    (or the day) and the recipient, so it needs no storage and survives a
+ *    restart, a redeploy or a switch of backend.
  * 2. **An identical subject.** Gmail splits a thread when the subject changes,
- *    so a threaded message's subject is the thread's, and what the message is
- *    about goes in its heading and inbox preview instead.
+ *    so every message about a booking has the booking's subject, and what the
+ *    message is about goes in its heading and inbox preview instead.
  *
  * The root is per *recipient*, which is why threaded mail is queued as one
  * message per address (`notify.ts`): one message can carry only one
@@ -41,20 +44,33 @@ export { MAIL_THREAD_OF, type MailThreadKind };
  * reliably grouped.
  */
 
-const THREAD_TITLES: Record<MailThreadKind, string> = {
-  approvals: "Guest house approvals",
-  daily_log: "Guest house daily log",
-};
-
-/** The root Message-ID of one person's thread of one kind on one institute day. */
-export function dailyThreadRoot(kind: MailThreadKind, day: string, address: string): string {
-  const who = createHash("sha256").update(address.trim().toLowerCase()).digest("hex").slice(0, 16);
-  return `<gh-${kind.replace("_", "-")}-${day}-${who}@${mailConfig().messageIdDomain}>`;
+/** A short, stable stand-in for an address, so roots do not spell it out. */
+function mailboxHash(address: string): string {
+  return createHash("sha256").update(address.trim().toLowerCase()).digest("hex").slice(0, 16);
 }
 
-/** `Guest house approvals — Mon 21 Sep 2026`: the same for every message that day. */
-export function dailyThreadSubject(kind: MailThreadKind, day: string): string {
-  return `${THREAD_TITLES[kind]} — ${formatDateValue(day, { year: true })}`;
+/** The root Message-ID of one person's thread about one booking. */
+export function bookingThreadRoot(bookingId: string, address: string): string {
+  return `<gh-booking-${bookingId}-${mailboxHash(address)}@${mailConfig().messageIdDomain}>`;
+}
+
+/**
+ * `[IITPKD-GH-2026-AB12C] Guest house booking — Bageshri`: the same for every
+ * message about the booking, which is what keeps it one thread. The reference
+ * leads so someone searching their mailbox for it finds every message.
+ */
+export function bookingThreadSubject(referenceId: string, guestHouseName: string): string {
+  return bookingSubject(referenceId, `Guest house booking — ${guestHouseName}`);
+}
+
+/** The root Message-ID of one person's daily log thread on one institute day. */
+export function dailyThreadRoot(day: string, address: string): string {
+  return `<gh-daily-log-${day}-${mailboxHash(address)}@${mailConfig().messageIdDomain}>`;
+}
+
+/** `Guest house daily log — Mon 21 Sep 2026`: the same for every message that day. */
+export function dailyThreadSubject(day: string): string {
+  return `Guest house daily log — ${formatDateValue(day, { year: true })}`;
 }
 
 /** A fresh Message-ID for a message that is not opening a thread. */
@@ -63,11 +79,9 @@ export function freshMessageId(): string {
 }
 
 /**
- * Subject for standalone mail about a booking: `[IITPKD-GH-2026-AB12C] Rooms allocated`.
- *
- * The reference id leads so someone searching their mailbox for a reference
- * finds every message about it — which is how the office actually looks these
- * up.
+ * Subject for mail about a booking: `[IITPKD-GH-2026-AB12C] Rooms allocated`.
+ * Only a standalone message uses a subject like this; a threaded one takes the
+ * thread's subject and this becomes its preview line.
  */
 export function bookingSubject(referenceId: string, what: string): string {
   return `[${referenceId}] ${what}`;

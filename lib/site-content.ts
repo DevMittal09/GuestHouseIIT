@@ -90,7 +90,7 @@ export function facilityCards(houses: SiteGuestHouse[]): ContentCard[] {
       title: "Support",
       items: [
         "Requests raised and approved online, with every step recorded",
-        "Email updates at every step of your request",
+        "Email updates on your request, kept in one thread",
         "Live room availability by day, week or month",
         "Reception desk for arrivals and departures",
       ],

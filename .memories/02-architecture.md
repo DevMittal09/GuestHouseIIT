@@ -331,16 +331,18 @@ Three things are worth knowing:
   booking) instead, over the same statuses and the same strict overlap. The two
   must agree; they are checked against each other rather than assumed.
 - **The calendar maths is pure functions in `lib/availability.ts`, not
-  component code.** `bucketOccupancyByHour()` decides which of a day's 24 hours
-  each booking holds; `availabilityRange()` and `shiftAnchor()` decide which
-  days a week or month view covers (Monday–Sunday weeks, calendar months, a
-  month step that clamps 31 January to 28 February); `bucketOccupancyByDay()`
-  clips each booking to the range as a bar and counts booked minutes per day.
-  Putting it in `lib/` follows the same reasoning as `lib/booking-search.ts`:
-  the boundary behaviour is where the bugs are, so it has to be reachable by a
-  test. A stay checking out at 11:00 releases the 11 AM hour, and a back-to-back
-  booking starting at that instant picks it up — the same half-open semantics
-  as allocation. Day arithmetic on `"yyyy-MM-dd"` strings runs in UTC
+  component code.** `availabilityRange()` and `shiftAnchor()` decide which
+  days a day, week or month view covers (Monday–Sunday weeks, calendar months,
+  a month step that clamps 31 January to 28 February); `bucketOccupancyByDay()`
+  clips each booking to the range as a bar with an alternating `tone`, finds
+  the `overlaps` between a room's bars, and counts booked minutes per day from
+  the union of the holds. The day view is a one-day range of the same function
+  (the hour-cell `bucketOccupancyByHour()` it replaced on 22 Sep 2026 could
+  not show two bookings in one hour). Putting it in `lib/` follows the same
+  reasoning as `lib/booking-search.ts`: the boundary behaviour is where the bugs
+  are, so it has to be reachable by a test. A stay checking out at 11:00 and a
+  back-to-back booking starting at that instant touch without overlapping —
+  the same half-open semantics as allocation. Day arithmetic on `"yyyy-MM-dd"` strings runs in UTC
   (`addDaysToDateValue` in `lib/tz.ts`) because a calendar date has no zone.
 - **Identity is stripped per viewer, in the action.** `getRoomAvailability`
   returns `requester_name` and `purpose_of_visit` only to `gh_manager` and

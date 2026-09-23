@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { getRoomAvailability } from "@/app/actions/availability";
 import {
-  LegendSwatch,
   OccupancyChart,
+  OccupancyLegend,
   RangeOccupancyChart,
 } from "@/components/occupancy-chart";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import {
   AVAILABILITY_VIEWS,
   availabilityRange,
   bucketOccupancyByDay,
-  bucketOccupancyByHour,
   describeRange,
   freeRoomsByDay,
   rangeProgress,
@@ -108,10 +107,6 @@ export function BookingAvailability({
   const rooms = useMemo(() => loaded?.rooms ?? [], [loaded]);
   const segments = useMemo(() => loaded?.segments ?? [], [loaded]);
 
-  const hourly = useMemo(
-    () => (range?.view === "day" ? bucketOccupancyByHour(rooms, segments, range.start) : null),
-    [rooms, segments, range]
-  );
   const daily = useMemo(
     () => (range ? bucketOccupancyByDay(rooms, segments, range) : null),
     [rooms, segments, range]
@@ -237,22 +232,18 @@ export function BookingAvailability({
 
       {rooms.length > 0 && range && (
         <>
-          <div className="flex flex-wrap items-center gap-4 text-xs">
-            <LegendSwatch className="bg-red-500" label="Booked" />
-            <LegendSwatch className="border bg-background" label="Free" />
-            {showsToday && (
-              <LegendSwatch
-                className="bg-primary"
-                label={view === "day" ? "Current hour" : "Today and the current time"}
-              />
-            )}
-          </div>
+          <OccupancyLegend
+            nowLabel={
+              showsToday ? (view === "day" ? "Current time" : "Today and the current time") : null
+            }
+          />
           <div className={cn("transition-opacity", loading && "opacity-60")}>
-            {hourly ? (
+            {daily && range.view === "day" ? (
               <OccupancyChart
                 rooms={rooms}
-                occupancy={hourly}
+                occupancy={daily}
                 currentHour={showsToday ? instituteHour() : null}
+                nowAt={rangeProgress(range)}
                 compact
               />
             ) : daily ? (

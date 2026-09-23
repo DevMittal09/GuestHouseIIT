@@ -1324,3 +1324,55 @@ the redesign on it would have meant restyling code that no longer existed and
 a large, risky merge later (invoices, units, HOD approvals, meals-only
 bookings, the new logo, a much larger booking form).
 
+
+## Owner's fixes — 22 Sep 2026
+
+### Mail threads per booking, not per day
+
+**Decision.** Every message about a booking joins that booking's thread in the
+recipient's mailbox — requester, approvers and desk alike. The root is
+`hash(booking, address)`, the subject is fixed per booking
+(`[reference] Guest house booking — <guest house>`), and the per-step subject
+moves to the preview line. Only the digest, escalation and day-wise log keep a
+per-day thread, because they are about a day and not a booking.
+
+**Why.** The 21 Sep rework threaded staff mail by day, so a warden's thread for
+Monday mixed every request of Monday, and one booking's "sent for approval"
+and "approved" landed in different threads when they happened on different
+days. The owner asked for "Sent for Approval, Approved, Forwarded" of one
+booking to read as one conversation. The 21 Sep mechanics were right and are
+kept — one message per address, and the first one *sent* claims the root — only
+the key changed. The original per-booking design had one shared root and a
+subject that changed each step, which is why Gmail split it.
+
+**Rejected.** A per-booking thread for staff only, with requester mail
+standalone: the owner listed the requester's own steps as the ones to group.
+
+### The availability chart draws bars in every view, and colours what matters
+
+**Decision.** The day view stopped colouring hour cells and draws each booking
+as a bar to the minute, like the week and month views (one `TimeGrid`, one
+`bucketOccupancyByDay`). A room's bookings alternate between two reds with a
+gap between bars; overlapping holds get an amber hatched band on top; a hover
+card gives each booking's reference, status, dates and (for staff) requester
+and purpose.
+
+**Why.** One red for every booking made a stay that begins as another ends
+indistinguishable from one long stay, and made a turnover overlap the manager
+accepted (`lib/turnover.ts`) invisible. An hour cell can only be one colour, so
+it could never show "10:30 out, 11:00 in" or two bookings sharing an hour.
+Booked minutes are now the union of the holds, so an overlap no longer counts
+twice and turns a partly booked room into "Booked".
+
+**Rejected.** A native `title` tooltip per bar (what there was: slow to appear,
+unstyled, unreadable on touch) and a Radix tooltip per bar (a month view carries
+a hundred). One portal-rendered card per chart, placed where the pointer
+entered and closed on scroll.
+
+### No personal bookings from the GH Manager's desk account
+
+**Decision.** `bookingTypesFor("gh_manager")` is official and alumni only.
+
+**Why.** The desk account books for guests the institute hosts. A manager's own
+family visit is booked from their personal staff login, as an employee, where
+it goes through the same route and is settled the same way as anyone else's.

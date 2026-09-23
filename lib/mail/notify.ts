@@ -17,7 +17,14 @@ import {
   type MailTemplateOverride,
 } from "./template-config";
 import { toInstituteDateValue } from "@/lib/tz";
-import { MAIL_THREAD_OF, bookingSubject, dailyThreadRoot, dailyThreadSubject } from "./thread";
+import {
+  MAIL_THREAD_OF,
+  bookingSubject,
+  bookingThreadRoot,
+  bookingThreadSubject,
+  dailyThreadRoot,
+  dailyThreadSubject,
+} from "./thread";
 import type { MailEventKey, NewEmailInput } from "./types";
 
 /**
@@ -97,8 +104,8 @@ interface QueueOne {
   stamp: string;
   scheduledFor?: string;
   /**
-   * Send this one on its own even though its event normally joins a daily
-   * thread — the console's test message, which borrows an event key.
+   * Send this one on its own even though its event normally joins a thread —
+   * the console's test message, which borrows an event key.
    */
   standalone?: boolean;
 }
@@ -128,7 +135,10 @@ function buildInputs(
     : params.booking
       ? bookingSubject(params.booking.booking_reference_id, params.subjectText)
       : params.subjectText;
-  const thread = params.standalone ? undefined : MAIL_THREAD_OF[params.eventKey];
+  // A booking thread needs a booking to be about; without one the message
+  // stands alone rather than inventing a thread nobody else can join.
+  const kind = params.standalone ? undefined : MAIL_THREAD_OF[params.eventKey];
+  const thread = kind === "booking" && !params.booking ? undefined : kind;
   // The intro goes above everything, the outro below it as small print — the
   // two places a standing sentence belongs without disturbing the facts the
   // template assembled from the booking.
@@ -172,15 +182,25 @@ function buildInputs(
   if (!thread) return [input(to, cc, null, itemSubject)];
 
   // One message per address: the thread root is per mailbox, and a message can
-  // reference only one root. The day is the institute date it was queued on,
-  // so only the same day's mail shares a thread.
+  // reference only one root.
+  //
+  // A booking's thread is keyed on the booking, so every step of it — sent
+  // for approval, forwarded, approved — lands in the same conversation
+  // whatever day it happens. The daily log is keyed on the institute date it
+  // was queued, so only the same day's digest and report share a thread.
   const day = toInstituteDateValue(new Date());
-  const subject = dailyThreadSubject(thread, day);
+  const booking = params.booking;
+  const subject =
+    thread === "booking" && booking
+      ? bookingThreadSubject(booking.booking_reference_id, booking.guest_house.name)
+      : dailyThreadSubject(day);
+  const rootFor = (address: string) =>
+    thread === "booking" && booking
+      ? bookingThreadRoot(booking.id, address)
+      : dailyThreadRoot(day, address);
   // Anyone copied is copied once, on the first recipient's message, not on
   // every one of them.
-  return to.map((address, i) =>
-    input([address], i === 0 ? cc : [], dailyThreadRoot(thread, day, address), subject)
-  );
+  return to.map((address, i) => input([address], i === 0 ? cc : [], rootFor(address), subject));
 }
 
 /** Queue a batch and kick the worker. Returns how many messages were new. */

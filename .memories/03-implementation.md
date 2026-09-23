@@ -68,7 +68,11 @@ Two panels sit between the stay details and the guest list:
   `mealPlanFromSlots`; a meals error from the schema appears under the card.
   Still optional — clearing the table submits no plan. See `lib/meals.ts`.
 
-Rooms are added as individual cards via `useFieldArray`. Each room card holds its own guests via a nested `useFieldArray`. The **Remove room** button deletes the room and its guests. Uploaded files are held in a `Map` keyed by field-array row id, outside react-hook-form, because `File` objects do not belong in form state.
+Rooms are added as individual cards via `useFieldArray`. Each room card holds its own guests via a nested `useFieldArray`. Every card has a **Remove room** button at its foot (added 22 Sep 2026 — until then the only way down was lowering "Number of rooms", which always dropped the *last* rooms). It removes that room — any of them, not only the last — with its guests and their uploads, asks first through `ConfirmDialog` when anything was entered, keeps the room-count box in step, and is absent while only one room is left. Uploaded files are held in a `Map` keyed by each guest row's stable `key`, outside react-hook-form, because `File` objects do not belong in form state and indices shift when a room above is removed.
+
+**The guest house field is derived, not just registered.** `offeredGuestHouses` narrows the role's list by booking type (alumni → Bageshri) and service (meals-only → guest houses that serve meals); when one remains, `guestHouseId` *is* it, and the select is controlled by that value. Before 22 Sep 2026 the value was only pre-filled when the role itself had one guest house, so the IAR Student Cell and meals-only bookings showed a single disabled option and submitted `""` ("Select a guest house").
+
+**Debitable heads** come from `debitHeadsFor(role, bookingType)` in `lib/debit-heads.ts`: personal funds for students and personal bookings; otherwise the institute heads minus `EXCLUDED_DEBIT_HEADS` — employees (faculty and staff) have no Institute Grant (struck from their list in the meeting notes, removed 22 Sep 2026). The GH Manager's desk account books official and alumni stays only, never personal.
 
 **Counts use `components/ui/quantity-input.tsx`**, not a raw number input. It keeps the typed string so the box can be cleared and retyped.
 
@@ -194,7 +198,7 @@ everyone. `app/(portal)/availability/page.tsx` (server, lists guest houses) +
 | --- | --- |
 | Page shell + guest house list | `app/(portal)/availability/page.tsx` |
 | View switch, date navigation, summary, room list | `components/availability-grid.tsx` |
-| The charts — `OccupancyChart` (day), `RangeOccupancyChart` (week / month) | `components/occupancy-chart.tsx` |
+| The charts — `OccupancyChart` (day), `RangeOccupancyChart` (week / month), one internal `TimeGrid`, `OccupancyLegend`, and the hover card with each booking's details | `components/occupancy-chart.tsx` |
 | Data fetch, window cap, identity stripping | `app/actions/availability.ts` (`getRoomAvailability`) |
 | Ranges, bucketing, badges, labels | `lib/availability.ts` |
 | Calendar-date arithmetic and labels | `lib/tz.ts` (`parseDateValue`, `addDaysToDateValue`, `formatDateValue`) |
@@ -373,7 +377,7 @@ Layout and tabs in `app/(portal)/admin/layout.tsx`; all actions in
 / `canExportPdf` / `isRequesterHistory`, advance-booking window
 (`latestCheckIn` / `isAdvanceWindowExempt`). |
 | `lib/form-config.ts` | `RoleFormConfig`, defaults per role, sanitization, custom-field validation, the relationship dependency (`parentDependencyError` / `hasQualifyingParent` / `parentDependencyHint`). |
-| `lib/availability.ts` | Availability grid maths: `bucketOccupancyByHour`, `dayBounds`, `hourLabel`, `toDateInputValue`; the week/month views' `availabilityRange`, `shiftAnchor`, `describeRange`, `bucketOccupancyByDay`, `freeRoomsByDay`, `roomRangeStatus`, `rangeProgress`, `roomsBookedAt`; `MAX_AVAILABILITY_DAYS`. |
+| `lib/availability.ts` | Availability grid maths: `dayBounds`, `hourLabel`, `toDateInputValue`; `availabilityRange`, `shiftAnchor`, `describeRange`, `bucketOccupancyByDay` (bars with alternating tones, overlaps, booked minutes — all three views), `describeOverlap`, `freeRoomsByDay`, `roomRangeStatus`, `rangeProgress`, `roomsBookedAt`; `MAX_AVAILABILITY_DAYS`. |
 | `lib/occupancy.ts` | Room capacity per type, `INFANT_AGE_LIMIT`, `roomsNeededFor`, `requestedRoomsError`, `allocationCapacityError`. |
 | `lib/report-pdf.ts` | Client-side PDF rendering for the history report (dynamically imported). |
 | `lib/form-config-server.ts` | `getEffectiveFormConfig` — saved config or defaults. |
@@ -482,7 +486,7 @@ which needed the same missing piece.
 | `redirect.ts` | `MAIL_REDIRECT_ALL_TO`, applied at **send** time |
 | `render.ts` | Blocks → HTML **and** plain text, from one description |
 | `templates.ts` | What each mail says. Pure functions, no store access |
-| `thread.ts` | Deterministic per-booking Message-ID + subject prefix |
+| `thread.ts` | Deterministic per-(booking, mailbox) thread root + the booking's fixed subject; the per-day daily-log thread |
 | `recipients.ts` | Who gets told — via `canReview()`, never a re-derived rule |
 | `notify.ts` | `notify*()` per workflow event: queue, then `after()` a dispatch |
 | `dispatch.ts` | The worker: claim → send → settle, with backoff |
@@ -565,14 +569,31 @@ own booking.
 ### One thread per booking
 
 From the meeting notes: *"Email — try to send in a single thread instead of a
-standalone email."* Two things must line up, and mail clients need **both**:
+standalone email."* Everything about one booking is one conversation in each
+recipient's mailbox — requester, approvers and desk alike (`MAIL_THREAD_OF` in
+`types.ts` maps every `booking.*` event and the check-in reminder to
+`"booking"`). Two things must line up, and mail clients need **both**:
 
-1. `threadRootFor(bookingId)` is a deterministic `Message-ID`. The requester's
-   acknowledgement claims it; every later message sets `In-Reply-To` and
-   `References` to it. Derived from the booking id, so it needs no storage.
-2. Every subject leads with the reference — `[IITPKD-GH-2026-AB12C] …`. Gmail
-   splits a thread when the subject changes, and it also means searching a
-   mailbox for a reference finds every message about it.
+1. `bookingThreadRoot(bookingId, address)` is a deterministic `Message-ID`,
+   one per booking **per mailbox**, which is why threaded mail is queued one
+   message per address. The first message actually sent to that address claims
+   it (decided in `dispatch.ts` by looking for a SENT sibling); every later one
+   sets `In-Reply-To` and `References` to it. Needs no storage.
+2. Every message has the booking's fixed subject,
+   `[IITPKD-GH-2026-AB12C] Guest house booking — Bageshri`
+   (`bookingThreadSubject`). Gmail splits a thread when the subject changes, so
+   what each step is about ("Forwarded for your review") goes in the heading
+   and the inbox preview line instead. The reference still leads, so searching
+   a mailbox for it finds every message.
+
+The digest, escalation and day-wise log are about a day rather than a booking,
+so they share a per-day **daily log** thread (`dailyThreadRoot(day, address)`).
+
+History: the first version shared one root per booking across all mailboxes and
+let the subject vary, so Gmail split it; the 21 Sep 2026 rework fixed the
+headers but threaded staff mail **per day**, which merged every booking of the
+day into one conversation. 22 Sep 2026 combined the two: per booking, per
+mailbox, fixed subject.
 
 ### HTML and text from one description
 

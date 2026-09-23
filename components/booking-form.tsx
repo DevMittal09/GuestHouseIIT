@@ -224,6 +224,9 @@ export function BookingForm({
   const [declinedMealSlots, setDeclinedMealSlots] = useState<Set<string>>(() => new Set());
   const [mealsError, setMealsError] = useState<string | null>(null);
   const [roomsToDrop, setRoomsToDrop] = useState<number | null>(null);
+  // One room picked for removal from its own card, waiting on confirmation
+  // because it has guests typed into it.
+  const [roomToRemove, setRoomToRemove] = useState<number | null>(null);
 
   const gf = config.guest_fields;
   const idDocRequired = gf.id_document === "required";
@@ -322,13 +325,33 @@ export function BookingForm({
     // that serves no meals would be offering a booking nobody can fulfil.
     .filter((g) => !mealsOnly || g.serves_meals);
   const guestHouseLocked = offeredGuestHouses.length === 1;
+  /**
+   * The guest house actually being booked. When only one is on offer it *is*
+   * that one, whatever the field last held — the dropdown shows a single
+   * option and cannot be changed, so an empty value there read as "not
+   * filled" on submit. That is what happened to the IAR Student Cell (alumni
+   * bookings are Bageshri only) and to meals-only bookings (Hamsanandi only),
+   * whose accounts may otherwise book both. Derived rather than written back
+   * with an effect, so a change of booking type cannot leave a stale answer:
+   * a choice the narrowed list no longer offers reads as no choice at all.
+   */
+  const guestHouseId = guestHouseLocked
+    ? offeredGuestHouses[0].id
+    : offeredGuestHouses.some((g) => g.id === selectedGuestHouseId)
+      ? selectedGuestHouseId
+      : "";
+  const guestHouseNote = !guestHouseLocked
+    ? null
+    : forAlumnus
+      ? ALUMNI_GUEST_HOUSE_NOTE
+      : mealsOnly && guestHouses.length > 1
+        ? `Meals are served at the ${offeredGuestHouses[0].name} guest house only.`
+        : `Your role can book the ${offeredGuestHouses[0].name} guest house only.`;
   const overridingHouse =
     canOverrideHouse &&
     forAlumnus &&
-    selectedGuestHouseId !== "" &&
-    !guestHousesForBookingType(guestHouses, bookingType).some(
-      (g) => g.id === selectedGuestHouseId
-    );
+    guestHouseId !== "" &&
+    !guestHousesForBookingType(guestHouses, bookingType).some((g) => g.id === guestHouseId);
 
   // Siblings / grandparents stay locked until a parent is on the request. The
   // rule spans the whole booking, so a parent in Room 1 unlocks Room 2.
@@ -377,7 +400,7 @@ export function BookingForm({
 
   // Meals are offered only where the chosen guest house serves them, and only
   // for the days and serving times the stay actually covers.
-  const selectedGuestHouse = guestHouses.find((g) => g.id === selectedGuestHouseId);
+  const selectedGuestHouse = guestHouses.find((g) => g.id === guestHouseId);
   const servesMeals = selectedGuestHouse?.serves_meals ?? false;
   /**
    * Meals are offered only once a guest house has been chosen *and* that guest
@@ -457,11 +480,39 @@ export function BookingForm({
     }
   };
 
+  /** Whether a room has anything typed or uploaded for its guests. */
+  const roomHasData = (room: RoomFields | undefined) =>
+    (room?.guests ?? []).some(
+      (g) => g.name.trim() || g.age.trim() || g.id_number.trim() || guestFiles.has(g.key)
+    );
+
   /** Whether the rooms about to be dropped have anything typed into them. */
   const roomsHaveData = (fromIndex: number) =>
-    (form.getValues("rooms") ?? [])
-      .slice(fromIndex)
-      .some((room) => room.guests.some((g) => g.name.trim() || g.age.trim() || g.id_number.trim()));
+    (form.getValues("rooms") ?? []).slice(fromIndex).some(roomHasData);
+
+  /**
+   * Take out one room — any of them, not only the last — with its guests and
+   * their uploads. The count box follows, so the two cannot disagree. Errors
+   * are cleared because they are addressed by index, and every room below
+   * this one has just moved up.
+   */
+  const removeRoomAt = (index: number) => {
+    for (const g of form.getValues(`rooms.${index}.guests`) ?? []) guestFiles.delete(g.key);
+    removeRoom(index);
+    clearErrors("rooms");
+    setRoomCountRaw(String(roomFields.length - 1));
+    setRoomCountError(null);
+  };
+
+  const requestRemoveRoom = (index: number) => {
+    if (roomFields.length <= 1) return;
+    // Nothing to lose, nothing to ask.
+    if (!roomHasData(form.getValues(`rooms.${index}`))) {
+      removeRoomAt(index);
+      return;
+    }
+    setRoomToRemove(index);
+  };
 
   const onRoomCountChange = (raw: string) => {
     setRoomCountRaw(raw);
@@ -519,7 +570,7 @@ export function BookingForm({
       // of booking, so a stale value cannot ride along.
       alumni_name: forAlumnus ? values.alumni_name : undefined,
       alumni_roll_number: forAlumnus ? values.alumni_roll_number : undefined,
-      guest_house_id: values.guest_house_id,
+      guest_house_id: guestHouseId,
       purpose_of_visit: values.purpose_of_visit,
       check_in: checkIn,
       check_out: checkOut,
@@ -813,20 +864,20 @@ export function BookingForm({
       <Card>
         <CardHeader>
           <CardTitle>{wantsRooms ? "Stay details" : "Meal dates"}</CardTitle>
-          {offeredGuestHouses.length === 1 && (
-            <CardDescription>
-              {forAlumnus
-                ? ALUMNI_GUEST_HOUSE_NOTE
-                : `Your role can book the ${offeredGuestHouses[0].name} guest house only.`}
-            </CardDescription>
-          )}
+          {guestHouseNote && <CardDescription>{guestHouseNote}</CardDescription>}
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="guest_house_id">Guest house *</Label>
+            {/* Controlled, so what it shows is what is submitted — see
+                `guestHouseId` above. */}
             <NativeSelect
               id="guest_house_id"
-              {...register("guest_house_id")}
+              name="guest_house_id"
+              value={guestHouseId}
+              onChange={(e) =>
+                setValue("guest_house_id", e.target.value, { shouldValidate: false })
+              }
               disabled={guestHouseLocked}
             >
               {offeredGuestHouses.length > 1 && <option value="">Select guest house…</option>}
@@ -997,9 +1048,9 @@ export function BookingForm({
           </CardHeader>
           <CardContent>
             <BookingAvailability
-              guestHouseId={selectedGuestHouseId}
+              guestHouseId={guestHouseId}
               date={checkInDate}
-              guestHouseName={guestHouses.find((g) => g.id === selectedGuestHouseId)?.name}
+              guestHouseName={selectedGuestHouse?.name}
             />
           </CardContent>
         </Card>
@@ -1124,6 +1175,9 @@ export function BookingForm({
                 idDocRequired={idDocRequired}
                 guestFiles={guestFiles}
                 err={err}
+                onRemove={
+                  roomFields.length > 1 ? () => requestRemoveRoom(roomIndex) : undefined
+                }
               />
             ))}
 
@@ -1251,6 +1305,31 @@ export function BookingForm({
         confirmLabel="Remove rooms"
         onConfirm={confirmShrink}
       />
+
+      <ConfirmDialog
+        open={roomToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) setRoomToRemove(null);
+        }}
+        title={roomToRemove === null ? "" : `Remove Room ${roomToRemove + 1}?`}
+        description={
+          roomToRemove === null
+            ? ""
+            : `The guests entered in Room ${roomToRemove + 1} are removed with it. The rooms below it move up one.`
+        }
+        consequences={
+          roomToRemove === null
+            ? undefined
+            : (form.getValues(`rooms.${roomToRemove}.guests`) ?? []).map((g, i) =>
+                g.name.trim() ? `${g.name.trim()} and their details` : `Guest ${i + 1} and their details`
+              )
+        }
+        confirmLabel="Remove room"
+        onConfirm={() => {
+          if (roomToRemove !== null) removeRoomAt(roomToRemove);
+          setRoomToRemove(null);
+        }}
+      />
     </form>
   );
 }
@@ -1271,6 +1350,7 @@ function RoomCard({
   idDocRequired,
   guestFiles,
   err,
+  onRemove,
 }: {
   roomIndex: number;
   control: Control<FormValues>;
@@ -1280,6 +1360,8 @@ function RoomCard({
   idDocRequired: boolean;
   guestFiles: Map<string, File>;
   err: (path: string) => string | undefined;
+  /** Absent when this is the only room — a booking needs at least one. */
+  onRemove?: () => void;
 }) {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -1379,6 +1461,18 @@ function RoomCard({
         </Button>
         {(guestBlocked || infantBlocked) && (
           <p className="text-xs text-muted-foreground">{guestBlocked ?? infantBlocked}</p>
+        )}
+        {onRemove && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto text-destructive hover:text-destructive"
+            onClick={onRemove}
+          >
+            <Trash2Icon />
+            Remove room
+          </Button>
         )}
       </div>
     </fieldset>

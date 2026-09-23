@@ -61,20 +61,33 @@ export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
 };
 
 /**
- * The daily thread a kind of mail joins; anything not listed is standalone.
- * Why, and how the thread is built, is in `lib/mail/thread.ts` — this lives
- * here only so the console can say which mails are threaded without pulling
- * server code into the browser.
+ * The thread a kind of mail joins; anything not listed is standalone. Why, and
+ * how the thread is built, is in `lib/mail/thread.ts` — this lives here only so
+ * the console can say which mails are threaded without pulling server code into
+ * the browser.
+ *
+ * - `booking`: everything about one booking — received, forwarded, approved,
+ *   allocated, cancelled, the check-in reminder — is one conversation in each
+ *   recipient's mailbox.
+ * - `daily_log`: the scheduled mail that is about a day rather than a booking
+ *   (the digest, the escalation nudge, the day-wise guest house log).
  */
-export type MailThreadKind = "approvals" | "daily_log";
+export type MailThreadKind = "booking" | "daily_log";
 
 export const MAIL_THREAD_OF: Partial<Record<MailEventKey, MailThreadKind>> = {
-  "booking.submitted.reviewer": "approvals",
-  "booking.pending.reviewer": "approvals",
-  "booking.allocated.desk": "approvals",
-  "booking.cancellation_requested.manager": "approvals",
-  "booking.cancellation_requested.reviewer": "approvals",
-  "booking.cancelled.desk": "approvals",
+  "booking.submitted.requester": "booking",
+  "booking.submitted.reviewer": "booking",
+  "booking.tier_approved.requester": "booking",
+  "booking.pending.reviewer": "booking",
+  "booking.rejected.requester": "booking",
+  "booking.allocated.requester": "booking",
+  "booking.allocated.desk": "booking",
+  "booking.cancellation_requested.manager": "booking",
+  "booking.cancellation_requested.reviewer": "booking",
+  "booking.cancellation_decided.requester": "booking",
+  "booking.cancelled.requester": "booking",
+  "booking.cancelled.desk": "booking",
+  "stay.reminder.requester": "booking",
   "queue.digest.reviewer": "daily_log",
   "queue.escalation.reviewer": "daily_log",
   "desk.daily_report": "daily_log",
@@ -88,8 +101,8 @@ export interface OutboundMessage {
   html: string;
   text: string;
   /**
-   * RFC 5322 threading headers. The Guest House meeting asked for staff mail
-   * to arrive as a single thread per day rather than a pile of standalone
+   * RFC 5322 threading headers. The Guest House meeting asked for mail about
+   * one booking to arrive as a single thread rather than a pile of standalone
    * messages, so every message after the first references the thread's root
    * id — see `lib/mail/thread.ts`.
    */
@@ -126,12 +139,11 @@ export interface NewEmailInput {
   subject: string;
   body_html: string;
   body_text: string;
-  /** The daily thread this message belongs to, or null for standalone mail. */
+  /** The thread this message belongs to, or null for standalone mail. */
   thread_root: string | null;
   /**
-   * Written false. Kept for rows queued before threads were daily, when the
-   * opening message was fixed at queue time; the dispatcher now decides that
-   * when it sends.
+   * Written false. Kept for rows queued when the opening message was fixed at
+   * queue time; the dispatcher now decides that when it sends.
    */
   is_thread_root: boolean;
   /** Earliest the worker may send it. Defaults to now. */

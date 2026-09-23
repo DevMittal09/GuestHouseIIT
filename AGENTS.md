@@ -227,7 +227,8 @@ cannot drift.
 - Rejection requires a non-empty reason everywhere (enforced server-side).
 - `official` bookings are restricted to `OFFICIAL_EMAIL_WHITELIST` in
   `lib/routes.ts`, and are highlighted + sorted to the top of the manager queue.
-- **Manager Overrides**: `lib/access.ts` grants `gh_manager` powers to book on behalf of others, override approvals, edit meals post-approval, and bypass guest house restrictions (like the alumni/Bageshri rule).
+- **Manager Overrides**: `lib/access.ts` grants `gh_manager` powers to book on behalf of others, override approvals, edit meals post-approval, and bypass guest house restrictions (like the alumni/Bageshri rule). The desk account books **official and alumni stays only, never personal** (`bookingTypesFor`) — a manager's own family visit goes through their personal staff login like any employee's.
+- **Debitable heads** (`lib/debit-heads.ts`): a student or personal booking is always personal funds; otherwise `debitHeadsFor(role, type)` minus `EXCLUDED_DEBIT_HEADS` — **employees (faculty and staff) cannot charge the Institute Grant**, which is for the institute's own offices. Enforced by the schema on both sides.
 
 ### Time is institute time — `lib/tz.ts`
 
@@ -569,17 +570,21 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
 - **HTML and plain text are rendered from one block list** (`lib/mail/render.ts`).
   Do not hand-write either body. Tables and inline styles only, no external
   images, and **never a link to an ID document** — mail points at the portal.
-- **Staff mail is threaded per person per day; requester mail stands alone**
-  (`lib/mail/thread.ts`, `MAIL_THREAD_OF` in `types.ts`). Reviewer and desk
-  mail about bookings joins that recipient's daily **approvals** thread; the
-  digest, escalation and day-wise log join a separate **daily log** thread. A
-  new institute day starts new threads. Threaded mail is queued **one message
-  per address** (a message carries one `References`), shares a fixed subject
-  (`Guest house approvals — Mon 21 Sep 2026`; the per-item subject moves to
-  the preview line), and the **first one actually sent** claims the root
+- **One thread per booking, in every mailbox** (`lib/mail/thread.ts`,
+  `MAIL_THREAD_OF` in `types.ts`). Everything about a booking — sent for
+  approval, forwarded, approved, allocated, cancelled, the reminder — joins
+  that booking's thread for each recipient, requester and staff alike. The
+  digest, escalation and day-wise log are about a day, not a booking, so they
+  join a per-day **daily log** thread instead. Threaded mail is queued **one
+  message per address** (a message carries one `References`; the root is
+  `hash(booking, address)`), shares a fixed subject
+  (`[IITPKD-GH-2026-AB12C] Guest house booking — Bageshri`; the per-step
+  subject moves to the preview line, because Gmail splits a thread when the
+  subject changes), and the **first one actually sent** claims the root
   `Message-ID` — decided in `dispatch.ts` by looking for a SENT sibling, not
-  at queue time, so a failed opener hands the role on. Requester mail has no
-  threading headers and a `[reference]`-led subject.
+  at queue time, so a failed opener hands the role on. **Never key a booking's
+  thread on the day** — that was built on 21 Sep 2026 and put every booking of
+  the day into one conversation.
 - `nodemailer` is in `serverExternalPackages` (dynamic requires + Node
   built-ins). Gmail app passwords are shown in four groups of four and people
   paste the spaces, so `mailConfig()` strips whitespace from
@@ -603,25 +608,37 @@ reservation, and `OCCUPIED` is a separate fact recorded at the desk. A
 room-by-room list underneath gives each booking period and a Vacant / Partly
 booked / Booked badge for the whole period shown.
 
+**Every booking is a bar, in all three views, and the bars must tell stays
+apart.** A room's bookings alternate between two reds in check-in order, with
+a gap between bars, so a stay starting as another ends reads as two; and where
+two holds overlap (a turnover the manager accepted — `lib/turnover.ts`) an
+amber hatched band is drawn over both. One red for everything made overlaps
+and back-to-back stays indistinguishable. Hovering (or tapping) a bar or band
+opens a card with the booking's reference, status, dates and — for staff —
+requester and purpose; it is one portal-rendered card per chart, not a
+tooltip per bar.
+
 - `listRoomOccupancy(guestHouseId, from, to)` (both stores) returns one segment
   per **(room, booking)** using the same `ROOM_HOLDING_STATUSES` + strict
   overlap as `getOccupiedRoomIds`. The two must agree — a throwaway parity
   check caught nothing, but that is exactly where the backends drift.
 - **All the calendar maths lives in `lib/availability.ts`, not the
-  components**, so the boundary behaviour is testable: `bucketOccupancyByHour`
-  (a stay checking out at 11:00 releases the 11 AM hour, and a same-instant
-  back-to-back booking picks it up), `availabilityRange` / `shiftAnchor` (weeks
-  run Monday–Sunday; a month step clamps 31 Jan → 28 Feb), and
-  `bucketOccupancyByDay` (bars as fractions of the range, plus booked minutes
-  per day, which drive the badges and the "N free" figure beside each date).
+  components**, so the boundary behaviour is testable: `availabilityRange` /
+  `shiftAnchor` (weeks run Monday–Sunday; a month step clamps 31 Jan → 28
+  Feb), and `bucketOccupancyByDay` — used by the day view too, as a one-day
+  range — which returns bars as fractions of the range with their `tone`, the
+  `overlaps` between a room's bars, and booked minutes per day (the union of
+  the holds, so shared time counts once), which drive the badges and the
+  "N free" figure beside each date. Half-open like room holds: a stay checking
+  out at 11:00 and one checking in at 11:00 touch without overlapping.
 - Calendar dates (`"yyyy-MM-dd"`) go through `parseDateValue` /
   `addDaysToDateValue` / `formatDateValue` in `lib/tz.ts`. They do the
   arithmetic in UTC because a calendar date has no zone; turning a date into
   instants is still `instituteDayBounds`.
-- **In the week and month views time also runs down inside each day's row**
-  (midnight at its top edge), so a stay is one continuous bar from check-in to
-  check-out (`RangeOccupancyChart`). Keep those axes: switching views should
-  zoom out, not rotate the picture.
+- **Time also runs down inside each row** (midnight at a day's top edge in the
+  week and month views), so a stay is one continuous bar from check-in to
+  check-out. Keep those axes: switching views should zoom out, not rotate the
+  picture.
 - `getRoomAvailability(guestHouseId, fromIso, toIso)`
   (`app/actions/availability.ts`, formerly `getDayAvailability`) **strips
   `requester_name` and `purpose_of_visit` unless the caller is `gh_manager` or
@@ -632,7 +649,8 @@ booked / Booked badge for the whole period shown.
 - Excluded from the 5 s polling: the component fetches client-side and has its
   own Refresh button.
 - **The charts live in `components/occupancy-chart.tsx`** — `OccupancyChart`
-  (a day) and `RangeOccupancyChart` (a week or month). The day chart is shared
+  (a day) and `RangeOccupancyChart` (a week or month), both drawn by one
+  internal `TimeGrid`, with `OccupancyLegend` as their shared key. The day chart is shared
   with the panel inside the booking form (`components/booking-availability.tsx`),
   which shows the same hour-by-hour picture for the guest house and check-in
   date being chosen. Requesters were otherwise picking dates blind. One chart,
@@ -807,6 +825,15 @@ institute's own palette (the `ui` branch) — the navy/gold look is retired.
   raw string (empty included) and leaves validation to the caller. In the schema
   that is `countField`, which reports "…is required" for a blank box instead of
   `z.coerce.number()`'s misleading "At least 1 room".
+- **A dropdown narrowed to one option must still submit that option.** The
+  booking form's guest house list is narrowed by the role, the booking type
+  (alumni → Bageshri) and the service (meals-only → guest houses that serve
+  meals). It used to pre-fill only when the *role* had one guest house, so the
+  IAR Student Cell and every meals-only booking showed a single, disabled
+  option while submitting `""` — "Select a guest house" on a field the
+  requester could not touch. `guestHouseId` in `components/booking-form.tsx`
+  is now derived from the offered list and the select is controlled by it;
+  keep any new narrowing going through `offeredGuestHouses`.
 - **`bookingPayloadSchema` must accept its own output.** The booking form
   validates on the client and sends **`parsed.data`** over the wire
   (`components/booking-form.tsx`), and `createBooking` re-parses that with the

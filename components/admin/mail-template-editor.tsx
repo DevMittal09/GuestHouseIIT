@@ -162,10 +162,11 @@ function TemplateRow({ template }: { template: MailTemplateOverride }) {
               {MAIL_THREAD_OF[template.event_key] && (
                 <>
                   {" "}
-                  This email joins the recipient&rsquo;s daily{" "}
-                  {MAIL_THREAD_OF[template.event_key] === "approvals" ? "approvals" : "log"} thread,
-                  whose subject stays the same all day so mail clients keep it together — a custom
-                  subject is shown as the message&rsquo;s preview line instead.
+                  {MAIL_THREAD_OF[template.event_key] === "booking"
+                    ? "This email joins the booking\u2019s thread in the recipient\u2019s mailbox, whose subject stays the same for every message about that booking"
+                    : "This email joins the recipient\u2019s daily log thread, whose subject stays the same all day"}{" "}
+                  so mail clients keep it together — a custom subject is shown as the
+                  message&rsquo;s preview line instead.
                 </>
               )}
             </p>

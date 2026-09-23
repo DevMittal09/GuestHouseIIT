@@ -16,15 +16,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  LegendSwatch,
   OccupancyChart,
+  OccupancyLegend,
   RangeOccupancyChart,
 } from "@/components/occupancy-chart";
 import {
   AVAILABILITY_VIEWS,
   availabilityRange,
   bucketOccupancyByDay,
-  bucketOccupancyByHour,
   describeRange,
   describeSegmentStatus,
   freeRoomsByDay,
@@ -97,12 +96,9 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
   const segments = useMemo(() => loaded?.segments ?? [], [loaded]);
   const showsOccupant = loaded?.showsOccupant ?? false;
 
-  // The day chart draws hours. Every view also takes per-day totals, which
-  // drive the badges and counts, so "booked" means the same thing in all three.
-  const hourly = useMemo(
-    () => (range?.view === "day" ? bucketOccupancyByHour(rooms, segments, range.start) : null),
-    [rooms, segments, range]
-  );
+  // One bucketing for all three views — the day chart is a one-day range —
+  // and it also drives the badges and counts, so "booked" means the same thing
+  // everywhere on the page.
   const daily = useMemo(
     () => (range ? bucketOccupancyByDay(rooms, segments, range) : null),
     [rooms, segments, range]
@@ -229,21 +225,18 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           <CardTitle>Room availability{range ? ` — ${describeRange(range)}` : ""}</CardTitle>
           <CardDescription>
             {view === "day"
-              ? "Hours of the day down the side, room numbers across the top. Red means the room is booked for that hour; blank means it is free."
-              : "Days down the side, room numbers across the top. Each day's row runs from midnight at its top edge to midnight at its bottom, so a stay is one red bar from check-in to check-out. The figure beside each date is the number of rooms free all day."}
+              ? "Hours of the day down the side, room numbers across the top. Each booking is one bar from its check-in to its check-out; blank means the room is free."
+              : "Days down the side, room numbers across the top. Each day's row runs from midnight at its top edge to midnight at its bottom, so a stay is one bar from check-in to check-out. The figure beside each date is the number of rooms free all day."}{" "}
+            Back-to-back bookings in a room alternate between two shades of red, and amber marks
+            two bookings holding the same room at once.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-4 text-xs">
-            <LegendSwatch className="bg-red-500" label="Booked" />
-            <LegendSwatch className="border bg-background" label="Vacant" />
-            {showsToday && (
-              <LegendSwatch
-                className="bg-primary"
-                label={view === "day" ? "Current hour" : "Today and the current time"}
-              />
-            )}
-          </div>
+          <OccupancyLegend
+            nowLabel={
+              showsToday ? (view === "day" ? "Current time" : "Today and the current time") : null
+            }
+          />
 
           {!range ? (
             <p className="rounded-2xl border border-dashed border-border-strong bg-card/60 p-10 text-center text-muted-foreground">
@@ -255,11 +248,12 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
             </p>
           ) : (
             <div className={cn("transition-opacity", loading && "opacity-60")}>
-              {hourly ? (
+              {daily && range.view === "day" ? (
                 <OccupancyChart
                   rooms={rooms}
-                  occupancy={hourly}
+                  occupancy={daily}
                   currentHour={showsToday ? currentHour : null}
+                  nowAt={rangeProgress(range)}
                 />
               ) : daily ? (
                 <RangeOccupancyChart
@@ -290,6 +284,9 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
               const entry = daily?.get(room.id);
               const status = roomRangeStatus(entry, range);
               const roomSegments = entry?.segments ?? [];
+              const overlapping = new Set(
+                (entry?.overlaps ?? []).flatMap((o) => o.segments.map((s) => s.booking_id))
+              );
               return (
                 <div
                   key={room.id}
@@ -326,6 +323,11 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
                             · {s.booking_reference_id} · {describeSegmentStatus(s)}
                             {s.requester_name && ` · ${s.requester_name}`}
                           </span>
+                          {overlapping.has(s.booking_id) && (
+                            <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-900 uppercase dark:bg-amber-950 dark:text-amber-200">
+                              Overlaps another booking
+                            </span>
+                          )}
                         </p>
                       ))
                     )}

@@ -550,7 +550,17 @@ against a throwaway Postgres before being written down — see
 `supabase/repairs/` holds one-off data fixes that are not migrations and are
 never applied automatically. Read each file's header before running it.
 
-Last substantive update: 2026-09-21 — **the UI redesign on the institute's own
+Last substantive update: 2026-09-22 — the owner's fixes: **mail threaded per
+booking** in every mailbox (not per day); the **availability chart** draws
+every view as bars, alternates shades between a room's bookings, marks
+overlaps in amber and shows each booking's details on hover; a **Remove room**
+button on every room card; the guest house now **pre-fills** when the list
+narrows to one (IAR Student Cell alumni bookings, meals-only bookings);
+**Institute Grant** removed for faculty and staff; and no **personal** booking
+type on the GH Manager's desk account. Still open: which guest fields should be
+optional for employees — the owner will decide later.
+
+Previous update: 2026-09-21 — **the UI redesign on the institute's own
 palette** ([10-ui-design.md](10-ui-design.md)), on the `ui` branch (first
 fast-forwarded to `main`, which was 16 commits ahead). Vermilion `#E94C26`,
 ink `#1A1A1A` and the emblem's saffron, taken from iitpkd.ac.in's CSS, replace

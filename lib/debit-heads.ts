@@ -29,9 +29,21 @@ export const INSTITUTE_DEBIT_HEADS: DebitHead[] = [
   "hostel_funds",
 ];
 
+/**
+ * Heads a role may never charge, even on an official booking.
+ *
+ * The Institute Grant is for the institute's own offices (the Director, the
+ * Registrar). Faculty and staff book on their department, a project or their
+ * professional development fund — the office struck it from their list.
+ */
+const EXCLUDED_DEBIT_HEADS: Partial<Record<Role, DebitHead[]>> = {
+  employee: ["institute_grant"],
+};
+
 export function debitHeadsFor(role: Role, bookingType: BookingType): DebitHead[] {
   if (role === "student" || bookingType === "personal") return ["personal_funds"];
-  return INSTITUTE_DEBIT_HEADS;
+  const excluded = EXCLUDED_DEBIT_HEADS[role] ?? [];
+  return INSTITUTE_DEBIT_HEADS.filter((head) => !excluded.includes(head));
 }
 
 /** The head when there is only one it can be, so the form shows it rather than asking. */
