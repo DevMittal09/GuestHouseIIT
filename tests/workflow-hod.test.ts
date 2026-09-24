@@ -112,7 +112,7 @@ describe("the HOD, scoped to their department", () => {
   });
 
   it("the warden, the manager or a stranger cannot act at the HOD stage", () => {
-    for (const id of ["warden-malhar", "gh-manager", "fa-petrichor"]) {
+    for (const id of ["warden-malhar", "gh-manager", "faculty-arun"]) {
       expect(canReview(P(id), "PENDING_HOD", priya, units)).toBe(false);
     }
   });

@@ -70,9 +70,10 @@ export interface RoutingContext {
    */
   hasHodApprover?: boolean;
   /**
-   * A club booking raised by the club's faculty in-charge (24 Sep 2026,
-   * `lib/club-booking.ts`). The Faculty Advisor stage is then skipped: the
-   * person who would sign it off is the one who raised it.
+   * A club booking raised by the club's Faculty Advisor (24 Sep 2026,
+   * `lib/club-booking.ts`). It then goes straight to the Guest House
+   * Manager: the advisor is who would have forwarded it, and the office
+   * asked that nobody else has to.
    */
   raisedByFacultyInCharge?: boolean;
 }
@@ -85,11 +86,11 @@ export interface RoutingContext {
  * the routes are all read from here.
  *
  * - **Student** → Assistant Warden.
- * - **Club** (always official) → its Faculty Advisor / council secretary →
- *   its HOD, when the club has one (Departments & Clubs → "HOD approval by").
- *   Since 24 Sep 2026 a club booking is raised by the club's faculty
- *   in-charge, and then the first stage is skipped — straight to the HOD, or
- *   to the manager.
+ * - **Club** (always official) — since 24 Sep 2026 raised by its Faculty
+ *   Advisor, and then **straight to the manager**: no forwarding by anyone,
+ *   HOD included. A club request stored before then (raised by the club's
+ *   own account) keeps the old route: council secretary → its HOD, when the
+ *   club has one (Departments & Clubs → "HOD approval by").
  * - **Employee, official** → HOD of their department — faculty and
  *   non-teaching staff alike. **Personal** → straight to the manager: it is
  *   their own money.
@@ -112,7 +113,7 @@ export function routeFor(
     case "student":
       return ["PENDING_WARDEN"];
     case "club":
-      return context.raisedByFacultyInCharge ? hod : ["PENDING_FA", ...hod];
+      return context.raisedByFacultyInCharge ? [] : ["PENDING_FA", ...hod];
     case "employee":
       return context.bookingType === "official" ? hod : [];
     case "official":

@@ -23,13 +23,15 @@ const ACCOUNTS: MockAccount[] = [
   { uid: "112201001", password: "Anjali@2026", mail: "112201001@smail.iitpkd.ac.in", name: "Anjali Menon" },
   { uid: "142202014", password: "Rahul@2026", mail: "142202014@smail.iitpkd.ac.in", name: "Rahul Nair" },
   { uid: "priya", password: "Priya@2026", mail: "priya@iitpkd.ac.in", name: "Dr. Priya Sharma" },
+  // Faculty, and Faculty Advisor of the Cultural Affairs Council and Petrichor.
+  { uid: "arun.prasad", password: "Arun@2026", mail: "arun.prasad@iitpkd.ac.in", name: "Dr. Arun Prasad" },
   { uid: "admin", password: "Director@2026", mail: "admin@iitpkd.ac.in", name: "Director's Office" },
   { uid: "petrichor", password: "Petrichor@2026", mail: "petrichor@iitpkd.ac.in", name: "Petrichor Fest Council" },
+  { uid: "sec_arts", password: "SecArts@2026", mail: "sec_arts@iitpkd.ac.in", name: "Cultural Affairs Council" },
   { uid: "alumnicell", password: "AlumniCell@2026", mail: "alumnicell@iitpkd.ac.in", name: "IAR Student Cell" },
   // ----- Reviewers / Admins -----
   { uid: "warden.malhar", password: "Malhar@2026", mail: "warden.malhar@iitpkd.ac.in", name: "Dr. Suresh Kumar" },
   { uid: "warden.saveri", password: "Saveri@2026", mail: "warden.saveri@iitpkd.ac.in", name: "Dr. Lakshmi Devi" },
-  { uid: "fa.petrichor", password: "Advisor@2026", mail: "fa.petrichor@iitpkd.ac.in", name: "Dr. Arun Prasad" },
   { uid: "hod.cse", password: "HodCse@2026", mail: "hod.cse@iitpkd.ac.in", name: "Prof. R. Venkatesh" },
   { uid: "112301045", password: "Meera@2026", mail: "112301045@smail.iitpkd.ac.in", name: "Meera Nair" },
   // Phase 4: a department office (Direct or HOD approval) and non-teaching staff.

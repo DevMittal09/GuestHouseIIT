@@ -18,7 +18,7 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 | `form_configs` | One row per requester role: `role` (PK), `config` jsonb, `updated_at`. |
 | `room_holds` | Which room each booking occupies, and when. See below — this is the interesting one. |
 | `app_settings` | Runtime key/value (`value` is jsonb). Holds the developer console password hash (a string) and, since migration 16, the **Settings** groups as objects: `rules.capacity`, `rules.booking`, `rules.meals` (and later phases' groups). A missing row means "the defaults in `lib/settings.ts`". **Service-role only — no `authenticated` policy**, because a developer policy would expose the hash to anyone who can set their own role. |
-| `units` | (Migration 15) Departments, clubs, councils and offices: `name`, `kind`, `parent_id`, `head_id`, `acting_head_id`, and (migration 16) `office_class` — `officer` / `department`, offices only. Approvers are resolved through it (`lib/units.ts`). |
+| `units` | (Migration 15) Departments, clubs, councils and offices: `name`, `kind`, `parent_id`, `head_id`, `acting_head_id`, and (migration 16) `office_class` — `officer` / `department`, offices only. (Migration 25) `faculty_advisor_id` → `profiles` (`on delete set null`) and `secretary_email`, councils and clubs only: who books for the unit and whose mailbox is copied — a club with none takes its council's. Approvers are resolved through it (`lib/units.ts`). |
 | `hostels` | (Migration 16) The hostel list. `profiles.hostel_name` references `hostels(name)` **on update cascade, on delete restrict**: a rename moves everyone, a hostel in use cannot be removed. |
 | `official_email_whitelist` | (Migration 16) Accounts allowed to submit Official / Dignitary bookings, lowercased. Replaced the constant in `lib/routes.ts`. Service-role only. |
 | `security_audit` | (Migration 16) The append-only security audit log. A trigger refuses every UPDATE, every DELETE except through `purge_security_audit(days)` (never under 180 days, CERT-In), and TRUNCATE. Service-role only. |
@@ -482,6 +482,29 @@ Current migrations:
    24 applied again, then rows: a guest with no age (`is_infant` false) and one
    aged 0 (true), a sub-head refused without `project_grant` and accepted with
    it, and 26 copy-to addresses refused.
+
+25. `00000000000025_faculty_advisors.sql` (24 Sep 2026) —
+   `units.faculty_advisor_id uuid references profiles on delete set null` and
+   `units.secretary_email text`, both allowed only on `club` / `council` rows
+   (`units_student_body_fields_check`), the mailbox checked for shape
+   (`units_secretary_email_check`), and a partial index on the advisor. A
+   **one-time backfill** copies the morning's two ways of being a club's
+   faculty in-charge into the field where it is empty: a faculty member (an
+   `employee` not in `staff`, or a `faculty_advisor` account) set as the
+   club's or council's own head, and a `faculty_advisor` account whose
+   `department_or_club` matches a club account's (trimmed; one per unit, by
+   name). Additive and idempotent. **Until it is applied** every unit reads as
+   having no advisor, so nobody can book for a club; creating a unit still
+   works (the store leaves both columns out when empty) and naming an advisor
+   says which migration is missing.
+
+   Verified in a throwaway `postgres:16-alpine` (24 Sep 2026): 1–24, legacy
+   fixtures (a faculty-headed club, a student-headed council, a staff-headed
+   club, a club matched to a `faculty_advisor` account by `' Dance '`), 25
+   applied twice — the first and last got advisors, the other two did not —
+   then `supabase/seed.sql` twice; an advisor or mailbox on a department, a
+   malformed mailbox and an unknown advisor were each refused, and deleting the
+   advisor's profile cleared the field.
 
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.

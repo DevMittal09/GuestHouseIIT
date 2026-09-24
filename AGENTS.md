@@ -209,7 +209,7 @@ are in **`.memories/12-academic-records.md`**. Keep that file and
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
 | student | personal | Assistant Warden → GH Manager | Personal |
-| club — **raised by its faculty in-charge** | official | **HOD** (if the club has an HOD unit) → GH Manager; the Faculty Advisor stage is skipped | Department / Special Funds |
+| club / council / fest — **raised by its Faculty Advisor** | official | **Direct → GH Manager** — nobody forwards it, HOD included | Department / Special Funds |
 | employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF / Special Funds |
 | employee — staff | official | **HOD** → GH Manager | Department / Special Funds |
 | employee | personal | GH Manager | Personal |
@@ -235,20 +235,40 @@ itself; a club → its `hod_unit_id`, none by default). `hodApproversFor`
 (it skips it, logged) unless an acting HOD is set. HODs work from **`/hod`**;
 club advisors / council secretaries from `/approvals` ("Club Approvals").
 
-### Clubs are booked by their faculty in-charge — `lib/club-booking.ts`
+### Clubs are booked by their Faculty Advisor — `lib/club-booking.ts`
 
-**A club's own account never submits** (24 Sep 2026): `/book` shows it who to
-ask, and `createBooking` refuses it. Its **faculty in-charge** — the club
-unit's own head or acting head, not a student and **not inherited from a
-council** (a council's head is a student secretary), or a `faculty_advisor`
-profile whose Department/Club is the club's — books at `/book?for=<club
-profile id>` (buttons on Club Approvals, My Bookings and `/book`).
+The student bodies are a hierarchy: **Faculty Advisor → student secretary
+(Technical Affairs, Cultural Affairs…) → clubs**; a fest (Petrichor) has an
+advisor of its own. **A club's or council's own account never submits**
+(24 Sep 2026): `/book` shows it who to ask, and `createBooking` refuses it.
+
+**The Faculty Advisor is an appointment, not an account** (migration 25).
+`units.faculty_advisor_id` on a council or club, set in Departments & Clubs →
+**Faculty Advisors** (developer and manager, audited), is the **only** rule —
+`facultyAdvisorOf()` takes a club's own, else its council's. Advisors change
+every year or two, so any professor can be named (`canBeFacultyAdvisor`:
+an `employee` who is not non-teaching `staff`, or a legacy `faculty_advisor`
+account), and whoever is named gets **"Booking as: Yourself / Faculty
+Advisor — X"** on `/book` (`/book?for=<club profile id>`), losing it the moment
+someone else is named. The old heuristics (a non-student club head, a
+`faculty_advisor` account matched by Department/Club) were copied into the
+field once by migration 25 and are gone from the code.
 
 - **The booking is the club's**: `user_id` / `user_role` are the club's, so
-  route, debit heads, scoping and reports are a club booking's.
-  `created_by` is the faculty member; `raisedByFacultyInCharge(booking)` tells.
-- `routeFor(…, { raisedByFacultyInCharge })` **skips `PENDING_FA`**; an HOD
-  stage stays, never given to the person who raised it.
+  debit heads, scoping and reports are a club booking's.
+  `created_by` is the advisor; `raisedByFacultyInCharge(booking)` tells.
+- `routeFor(…, { raisedByFacultyInCharge })` is **`[]` — straight to the GH
+  Manager**, even where the club has an HOD unit (the owner: "doesn't require
+  forwarding by anyone"). A club booking stored before 24 Sep keeps
+  `PENDING_FA` → HOD.
+- **Copy to starts with the secretary's mailbox** — `units.secretary_email`
+  (`sec_arts@iitpkd.ac.in`), the club's own else its council's
+  (`secretaryEmailOf`, `defaultCopyToFor`). Pre-filled, removable, more can be
+  added. A council's own account *is* its secretary's mailbox, so booking for
+  the council itself starts empty.
+- `BookingForm` is **keyed by the requester** on `/book`: switching "Booking
+  as" is a client-side navigation, and without the key React kept the mounted
+  form and its previous requester's defaults (the Copy to never appeared).
 - Use **`canReviewBooking(reviewer, booking, units)`** wherever a booking
   exists — it adds "not whoever raised it" to `canReview`, which sees only the
   requester. `actsAsRequester()` lets the creator cancel / ask to extend.
@@ -258,8 +278,10 @@ profile id>` (buttons on Club Approvals, My Bookings and `/book`).
   `clubsBookableByUser()` — never trusted.
 
 Reviewer roles: `warden` (scoped to `profile.hostel_name`), `faculty_advisor`
-(scoped to `profile.department_or_club`, the fallback when a club's unit has no
-head), `iar_cell`, `gh_manager`, `gh_caretaker`, plus `developer` (superadmin).
+(legacy: scoped to `profile.department_or_club`, the fallback at a stored
+club request's `PENDING_FA` stage when the club's unit has no head; no demo
+persona since migration 25), `iar_cell`, `gh_manager`, `gh_caretaker`, plus
+`developer` (superadmin).
 Scoping lives in `canReview()` (HODs: `hodApproversFor`), which also refuses
 `reviewer.id === requester.id` — self-approval is impossible by construction.
 `historyScope(user, units)` gives an approver by appointment their own bookings
@@ -769,7 +791,8 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
   the desk); CC = `copyToAddresses(booking)`; `addressStaffMail` drops anyone in
   To from CC and de-duplicates ignoring case. **Requester mail CCs the
   booking's own Copy-to list** (`bookings.copy_to_emails`, entered on New
-  Booking, at most 25) and, on a club booking, the faculty in-charge who
+  Booking, at most 25; pre-filled with the council secretary's mailbox when a
+  Faculty Advisor books) and, on a club booking, the Faculty Advisor who
   raised it — `requesterCopyTo()`. Different list from the card's Copy to. The
   reviewers' separate cancellation "for information" mail is retired
   (`RETIRED_MAIL_EVENTS`) — they are CC on the manager's.
@@ -1104,7 +1127,10 @@ Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase auth
 password `password123`, which is *not* a portal login — each persona signs in
 with its dummy LDAP account, listed in `.memories/11-ldap-accounts.md`): two students in different hostels (Malhar, Saveri),
 an employee, a whitelisted official (`admin@iitpkd.ac.in`), the Petrichor club,
-the IAR Student Cell, two wardens, a Petrichor faculty advisor, the IAR Office,
+the Cultural Affairs Council (`sec_arts@iitpkd.ac.in`, its secretary's mailbox),
+Dr. Arun Prasad (`arun.prasad@`, an ordinary **faculty employee** named Faculty
+Advisor of the council and of Petrichor — the old `fa.petrichor` account is
+retired), the IAR Student Cell, two wardens, the IAR Office,
 a GH manager, a GH caretaker (`gh.reception@iitpkd.ac.in`), and
 `developer@iitpkd.ac.in`. **There is no alumnus persona** — demo booking 3 is
 now the Student Cell booking for one. Five demo bookings seed every queue with
@@ -1159,6 +1185,12 @@ Migration files, applied sequentially:
    `booking_guests.age` allowed to be 0 (it was `1–120`, refusing a baby).
    Additive, safe to re-run. Until it is applied the store omits both columns
    when empty, so only bookings that use them fail.
+25. `00000000000025_faculty_advisors.sql` — `units.faculty_advisor_id` and
+   `units.secretary_email` (councils and clubs only, checked), and a one-time
+   backfill from the two old ways of being a club's faculty in-charge.
+   Additive, safe to re-run. **Until it is applied nobody can book for a
+   club** (every unit reads as having no advisor) and saving an advisor in the
+   console names this migration.
 
 Full notes per migration in `.memories/04-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine

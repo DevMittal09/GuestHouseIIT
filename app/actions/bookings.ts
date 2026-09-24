@@ -105,13 +105,13 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     if (clubId) {
       club = (await clubsBookableByUser(user)).find((c) => c.id === clubId) ?? null;
       if (!club) {
-        return { ok: false, error: "You are not set as the faculty in-charge of that club" };
+        return { ok: false, error: "You are not set as the Faculty Advisor of that council or club" };
       }
     } else {
       if (mustBookThroughFacultyInCharge(user.role)) {
         return {
           ok: false,
-          error: "Club bookings are raised by the club's faculty in-charge — ask them to book for the club.",
+          error: "Club bookings are raised by the club's Faculty Advisor — ask them to book for the club.",
         };
       }
       if (!REQUESTER_ROLES.includes(user.role) && !onBehalf) {
@@ -324,7 +324,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     const submissionRemarks =
       [
         club
-          ? `Booking raised by ${user.full_name}, faculty in-charge of ${club.full_name}, on the club's behalf — so it does not wait for Faculty Advisor approval.`
+          ? `Booking raised by ${user.full_name}, Faculty Advisor of ${club.full_name}, on its behalf — so it goes straight to the Guest House Manager.`
           : null,
         overrideNote,
         hodMissing

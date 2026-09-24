@@ -21,20 +21,25 @@ Used whenever `LDAP_URL` is **unset** (the default). They live in
 | Anjali Menon (Malhar) | Student | `112201001` | `Anjali@2026` |
 | Rahul Nair (Saveri) | Student | `142202014` | `Rahul@2026` |
 | Dr. Priya Sharma | Employee (Faculty & Staff) | `priya` | `Priya@2026` |
+| Dr. Arun Prasad | Employee (faculty), CSE — **Faculty Advisor** of the Cultural Affairs Council and Petrichor (named in Departments & Clubs, not a role), so New Booking offers "Booking as: Faculty Advisor — …" | `arun.prasad` | `Arun@2026` |
 | Director's Office | Official / Dignitary | `admin` | `Director@2026` |
-| Petrichor Fest Council | Club / Fest Council | `petrichor` | `Petrichor@2026` |
+| Petrichor Fest Council | Club / Fest Council — cannot book; Dr. Arun Prasad books for it | `petrichor` | `Petrichor@2026` |
+| Cultural Affairs Council | Club / Fest Council — the council's own account, its **secretary's mailbox** (`sec_arts@`); cannot book | `sec_arts` | `SecArts@2026` |
 | IAR Student Cell | IAR Student Cell | `alumnicell` | `AlumniCell@2026` |
 | Dr. Suresh Kumar | Hostel Warden (Malhar) | `warden.malhar` | `Malhar@2026` |
 | Dr. Lakshmi Devi | Hostel Warden (Saveri) | `warden.saveri` | `Saveri@2026` |
-| Dr. Arun Prasad | Faculty Advisor (Petrichor) | `fa.petrichor` | `Advisor@2026` |
 | Prof. R. Venkatesh | **HOD, CSE** — employee (faculty) who heads the CSE unit; sees **HOD Queue** (`/hod`) | `hod.cse` | `HodCse@2026` |
-| Meera Nair | Student — **Cultural Council secretary**, approves Petrichor at the club stage (`/approvals`) | `112301045` | `Meera@2026` |
+| Meera Nair | Student — **Cultural Affairs secretary**, approves Petrichor requests stored before 24 Sep 2026 at the club stage (`/approvals`) | `112301045` | `Meera@2026` |
 | CSE Department Office | Official — a **department office** (Direct or Requires HOD approval → CSE HOD; debited to Department) | `cse.office` | `CseOffice@2026` |
 | Ravi K. | Employee — **non-teaching staff**, CSE (official bookings go to the HOD; Department head only) | `ravi.k` | `Ravi@2026` |
 | IAR Office | IAR Office | `iar` | `IarOffice@2026` |
 | Guest House Manager | Guest House Manager | `guesthouse` | `Manager@2026` |
 | Guest House Caretaker | Guest House Caretaker | `gh.reception` | `Reception@2026` |
 | Portal Developer | Developer (Superadmin) | `developer` | `Developer@2026` |
+
+`fa.petrichor` (the old dedicated Faculty Advisor account, `Advisor@2026`) was
+**retired on 24 Sep 2026**: the advisor is now an appointment on the council,
+held by an ordinary faculty account.
 | *(no portal account)* | — | `visitor` | `Visitor@2026` |
 
 - **Usernames** are the local part of each persona's email address. For

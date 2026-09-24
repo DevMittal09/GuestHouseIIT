@@ -29,7 +29,7 @@ four recurring problems:
 | --- | --- |
 | Student | Bageshri only; request routes to their own hostel warden |
 | Employee (faculty/staff) | Both guest houses; goes straight to the manager. The one role asked **official or personal** at the top of the form |
-| Club / fest council | Both; routes to the club's faculty advisor. Official only — not asked |
+| Club / fest council | Both. Official only — not asked. **Since 24 Sep 2026 raised by its Faculty Advisor** (a professor named on the council in the console), straight to the manager |
 | IAR Student Cell | Books for its own office or **on behalf of an alumnus**; routes to the IAR Office |
 | IAR Office | Approves the Student Cell's requests, and books itself — its own requests go straight to the manager, since it is the approver |
 | Official / dignitary | Both; highest priority, bypasses intermediate review. Official only — not asked |
@@ -40,7 +40,7 @@ four recurring problems:
 | Role | Sees |
 | --- | --- |
 | Hostel warden | Only students of *their* hostel |
-| Faculty advisor | Only *their* club or council |
+| Faculty advisor | Only *their* club or council. **Since 24 Sep 2026 a professor named on the council in the console, who books for it rather than reviewing** — the council secretary reviews only club requests stored before then |
 | IAR Office | Requests from the IAR Student Cell, with the uploaded alumni ID card. Also books itself |
 | Guest house manager | Every pre-approved request; assigns actual rooms |
 | Guest house caretaker | Reception desk: today's checkouts, current occupants, upcoming stays, and marking guests in and out. **No allocation or approvals** |
@@ -206,6 +206,21 @@ vermilion redesign was left for a separate merge). Reasoning in
 | Clubs/fests cannot book for themselves; only their faculty in-charge books for them | **Done** | `lib/club-booking.ts`; `/book?for=<club>`; the booking stays the club's, `created_by` the faculty member, Faculty Advisor stage skipped |
 | "Copy to" on New Booking: any number of addresses that get every further mail | **Done** | `bookings.copy_to_emails` (up to 25), CC on every mail to the requester (`requesterCopyTo`) |
 | Special Funds as a debitable head for everyone but students, official bookings only | **Done** | `special_budget` relabelled, default for every official category, forbidden for students and personal bookings, saved Settings upgraded once |
+
+## Faculty Advisors — 24 Sep 2026, afternoon
+
+The owner's follow-up to the club rule above. Reasoning in
+[06-decisions.md](06-decisions.md) ("24 Sep 2026 (afternoon)"); the working
+summary is [15-recent-changes.md](15-recent-changes.md).
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| The hierarchy Faculty Advisor → student secretary (Tech Affairs, Cult Affairs) → clubs; the advisor books for each secretary and club | **Done** | Councils and clubs in Departments & Clubs; a council's account is its secretary's mailbox; `clubsBookableBy` |
+| Copy to defaults to the secretary (`sec_arts@`, `sec_acad@`), with more addresses allowed | **Done** | `units.secretary_email` (migration 25), inherited from the council; `defaultCopyToFor` pre-fills it; "Add another email" as before |
+| Petrichor's advisor is a faculty (employee) account | **Done** | Dr. Arun Prasad, `arun.prasad@`; `fa.petrichor` retired |
+| Every professor can book as a Faculty Advisor; each council mapped to its advisor in the backend; the developer can change it | **Done** | `units.faculty_advisor_id`, Departments & Clubs → Faculty Advisors (developer and manager, audited); "Booking as" on `/book` for whoever is named |
+| An advisor's booking needs no forwarding — straight to the GH Manager | **Done** | `routeFor` returns `[]` for it, HOD stage included |
+| Copy to on every new booking | **Already built** (morning) | Every role, room and meals-only |
 
 ## Scope decisions made during the build
 

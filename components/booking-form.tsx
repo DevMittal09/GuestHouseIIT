@@ -213,14 +213,21 @@ export function BookingForm({
   projects = [],
   hodApprovers = [],
   forClub = null,
+  defaultCopyTo = [],
 }: {
   /**
-   * Set when a club's faculty in-charge is booking for the club (24 Sep
-   * 2026). `user` and `config` are then the club's, so the form is exactly
-   * the club's form; this names the club and the person raising it, and the
+   * Set when a club's Faculty Advisor is booking for the club (24 Sep 2026).
+   * `user` and `config` are then the club's, so the form is exactly the
+   * club's form; this names the club and the person raising it, and the
    * submission carries the club's id for the server to re-check.
    */
   forClub?: { id: string; name: string } | null;
+  /**
+   * What Copy to starts with — the council secretary's mailbox when a
+   * Faculty Advisor books (`defaultCopyToFor`). A default, not a rule: the
+   * requester may clear it or add more.
+   */
+  defaultCopyTo?: string[];
   /**
    * The debitable heads this requester may use per booking type, for rooms and
    * for dining — computed on the server (`bookingContextFor`) from Settings, so
@@ -351,7 +358,7 @@ export function BookingForm({
       debit_details: "",
       project_id: "",
       debit_subhead: "",
-      copy_to: [{ email: "" }],
+      copy_to: defaultCopyTo.length > 0 ? defaultCopyTo.map((email) => ({ email })) : [{ email: "" }],
       office_approval: "direct",
       on_behalf_of_name: "",
       on_behalf_of_email: "",
@@ -860,13 +867,13 @@ export function BookingForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
-      {/* A club's booking, raised by its faculty in-charge. Said at the top,
+      {/* A club's booking, raised by its Faculty Advisor. Said at the top,
           because everything below is the club's form, not theirs. */}
       {forClub && (
         <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-          You are booking for <span className="font-medium">{forClub.name}</span> as its faculty
-          in-charge. The booking is the club&apos;s — it appears under the club&apos;s account and
-          yours — and it goes on without waiting for Faculty Advisor approval, because that is you.
+          You are booking for <span className="font-medium">{forClub.name}</span> as its Faculty
+          Advisor. The booking is theirs — it appears under their account and yours — and it goes
+          straight to the Guest House Manager for approval, with nobody to forward it.
         </p>
       )}
 
@@ -1598,6 +1605,8 @@ export function BookingForm({
           <CardDescription>
             Email addresses that should get a copy of every mail sent to you about this booking —
             received, approved, rooms allocated, cancelled. Add as many as you need.
+            {defaultCopyTo.length > 0 &&
+              " The secretary's mailbox is filled in for you; clear it if they should not be copied."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

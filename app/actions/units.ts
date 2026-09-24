@@ -7,7 +7,8 @@ import { isAdminUnlocked } from "@/lib/admin-lock";
 import { requireUser } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit-server";
 import { getStore } from "@/lib/store";
-import { parentError, type Unit } from "@/lib/units";
+import { canBeFacultyAdvisor } from "@/lib/club-booking";
+import { isStudentBody, parentError, type Unit, type UnitKind } from "@/lib/units";
 import type { ActionResult } from "./bookings";
 
 /**
@@ -36,6 +37,15 @@ function fail(e: unknown): ActionResult {
         "The units table is not there yet — apply supabase/migrations/00000000000015_units_and_debit_heads.sql.",
     };
   }
+  // 42703 / PGRST204: a column the database does not have yet — the Faculty
+  // Advisor and secretary's mailbox, before migration 25.
+  if (code === "42703" || code === "PGRST204") {
+    return {
+      ok: false,
+      error:
+        "Faculty Advisors are not in the database yet — apply supabase/migrations/00000000000025_faculty_advisors.sql.",
+    };
+  }
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
 }
 
@@ -62,9 +72,42 @@ const unitSchema = z.object({
     .enum(["officer", "department", ""])
     .nullish()
     .transform((v) => (v ? v : null)),
+  // Councils, fests and clubs only (migration 25): who the Faculty Advisor
+  // is now, and the secretary's mailbox copied on the advisor's bookings.
+  faculty_advisor_id: blankToNull,
+  secretary_email: z
+    .string()
+    .nullish()
+    .transform((v) => (v && v.trim() ? v.trim().toLowerCase() : null))
+    .pipe(z.email("Enter the secretary's mailbox as a full address, e.g. sec_arts@iitpkd.ac.in").max(254).nullable()),
 });
 
 export type UnitInput = z.input<typeof unitSchema>;
+
+/**
+ * Why a unit may not have this Faculty Advisor or secretary's mailbox, or
+ * null when it may. Only a council, fest or club has either, and the advisor
+ * must be a faculty member: the console lists every professor, and anyone it
+ * names can book for the unit straight to the Guest House Manager — so a
+ * crafted request naming a student or a desk account is refused here.
+ */
+async function studentBodyError(
+  kind: UnitKind,
+  fields: { faculty_advisor_id?: string | null; secretary_email?: string | null }
+): Promise<string | null> {
+  if (!fields.faculty_advisor_id && !fields.secretary_email) return null;
+  if (!isStudentBody(kind)) {
+    return "Only a council, fest or club has a Faculty Advisor and a secretary's mailbox";
+  }
+  if (fields.faculty_advisor_id) {
+    const advisor = (await getStore().listProfiles()).find((p) => p.id === fields.faculty_advisor_id);
+    if (!advisor) return "That Faculty Advisor's account was not found";
+    if (!canBeFacultyAdvisor(advisor)) {
+      return `${advisor.full_name} cannot be a Faculty Advisor — choose a faculty member`;
+    }
+  }
+  return null;
+}
 
 export async function createUnitAction(input: UnitInput): Promise<ActionResult> {
   try {
@@ -75,6 +118,8 @@ export async function createUnitAction(input: UnitInput): Promise<ActionResult> 
       ...parsed.data,
       office_class: parsed.data.kind === "office" ? (parsed.data.office_class ?? null) : null,
     };
+    const refused = await studentBodyError(unit.kind, unit);
+    if (refused) return { ok: false, error: refused };
     await getStore().createUnit(unit as Omit<Unit, "id">);
     await recordAudit(user, "settings.changed", `unit:${unit.name}`, { created: unit });
     return done();
@@ -112,8 +157,19 @@ export async function updateUnitAction(
     if (parsed.data.office_class && kind !== "office") {
       return { ok: false, error: "Only an office can be an officer or department office" };
     }
+    const refused = await studentBodyError(kind, {
+      faculty_advisor_id: parsed.data.faculty_advisor_id,
+      secretary_email: parsed.data.secretary_email,
+    });
+    if (refused) return { ok: false, error: refused };
     const next = { ...parsed.data } as Partial<Omit<Unit, "id">>;
     if (parsed.data.kind && parsed.data.kind !== "office") next.office_class = null;
+    // A unit that stops being a council or club loses its advisor and
+    // mailbox, as the database would refuse to keep them.
+    if (parsed.data.kind && !isStudentBody(parsed.data.kind)) {
+      if (before.faculty_advisor_id) next.faculty_advisor_id = null;
+      if (before.secretary_email) next.secretary_email = null;
+    }
     await getStore().updateUnit(id, next);
     // Who heads a unit decides who approves its requests, so an appointment
     // is a security-relevant change and goes in the audit log.

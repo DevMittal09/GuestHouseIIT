@@ -862,7 +862,15 @@ export class SupabaseStore implements DataStore {
   }
 
   async createUnit(input: Omit<Unit, "id">): Promise<Unit> {
-    const { data, error } = await this.db.from("units").insert(input).select().single();
+    // Migration 25's columns are left out when empty, so a unit can still be
+    // added before it is applied; naming an advisor then says which is missing.
+    const { faculty_advisor_id, secretary_email, ...rest } = input;
+    const row = {
+      ...rest,
+      ...(faculty_advisor_id ? { faculty_advisor_id } : {}),
+      ...(secretary_email ? { secretary_email } : {}),
+    };
+    const { data, error } = await this.db.from("units").insert(row).select().single();
     if (error) {
       if (error.code === "23505") throw new Error("A unit with this name already exists");
       throw error;

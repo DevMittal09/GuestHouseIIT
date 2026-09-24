@@ -249,7 +249,7 @@ becomes untestable:
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
 | student | personal | Assistant Warden → GH Manager | Personal |
-| club — **booked by its faculty in-charge** (24 Sep 2026) | official | **HOD** (if the club has an HOD unit) → GH Manager; the Faculty Advisor stage is skipped — that is who booked | Department / Special Funds |
+| club / council / fest — **booked by its Faculty Advisor** (24 Sep 2026) | official | **Direct → GH Manager** — nobody forwards it, HOD included | Department / Special Funds |
 | employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF / Special Funds |
 | employee — staff | official | **HOD** → GH Manager | Department / Special Funds |
 | employee | personal | GH Manager | Personal |
@@ -264,13 +264,18 @@ becomes untestable:
   through the units console (`hodApproversFor`), never the requester; an HOD's
   own booking skips the HOD stage unless an acting head is set. HODs work from
   `/hod`.
-- **A club's account cannot book** (24 Sep 2026, `lib/club-booking.ts`). Its
-  faculty in-charge — the club unit's own head (not a student, not inherited
-  from a council) or its `faculty_advisor` account — books at
-  `/book?for=<club>`; the booking is the club's (`user_id`), with the faculty
-  member as `created_by`, who may cancel it, sees it on their dashboard, is
+- **A club's or council's account cannot book** (24 Sep 2026,
+  `lib/club-booking.ts`). Its **Faculty Advisor** books for it — a professor
+  named in Departments & Clubs → Faculty Advisors (`units.faculty_advisor_id`,
+  migration 25; a club's own, else its council's), because the post is a one-
+  or two-year appointment the developer changes, not an account. Whoever is
+  named gets "Booking as: Faculty Advisor — X" on `/book`
+  (`/book?for=<club>`); the booking is the club's (`user_id`), with the
+  professor as `created_by`, who may cancel it, sees it on their dashboard, is
   CC'd on the club's mail about it, and can never approve it
-  (`canReviewBooking`).
+  (`canReviewBooking`). It goes **straight to the GH Manager**, and Copy to
+  starts with the council secretary's mailbox (`units.secretary_email`,
+  e.g. `sec_arts@iitpkd.ac.in`).
 - Intermediate approval forwards to the next stage of the booking's own route.
 - The manager does **not** approve through the generic review action. Approval
   happens via `allocateRooms()`, which assigns rooms and sets `APPROVED`
@@ -599,9 +604,10 @@ guest houses and rooms only** — the five demo bookings are mock-store only.
 | Employee | `priya@iitpkd.ac.in` | `employee-priya` |
 | Official (whitelisted) | `admin@iitpkd.ac.in` | `official-admin` |
 | Club (Petrichor) | `petrichor@iitpkd.ac.in` | `club-petrichor` |
+| Council (Cultural Affairs — its secretary's mailbox) | `sec_arts@iitpkd.ac.in` | `council-cultural` |
+| Faculty, and **Faculty Advisor** of the council and Petrichor | `arun.prasad@iitpkd.ac.in` | `faculty-arun` |
 | IAR Student Cell | `alumnicell@iitpkd.ac.in` | `iar-student-cell` |
 | Wardens | `warden.malhar@`, `warden.saveri@iitpkd.ac.in` | `warden-malhar`, `warden-saveri` |
-| Faculty advisor | `fa.petrichor@iitpkd.ac.in` | `fa-petrichor` |
 | IAR Office | `iar@iitpkd.ac.in` | `iar-cell` |
 | GH manager | `guesthouse@iitpkd.ac.in` | `gh-manager` |
 | GH caretaker | `gh.reception@iitpkd.ac.in` | `gh-caretaker` |
@@ -665,7 +671,7 @@ the developer's working data.
 
 ---
 
-Migrations are numbered and applied forward only; there are twenty-four (the list, with what each needs before the app can use it, is in [04-database.md](04-database.md)). Migration 4
+Migrations are numbered and applied forward only; there are twenty-five (the list, with what each needs before the app can use it, is in [04-database.md](04-database.md)). Migration 4
 moved infants from `bookings.infants` to `booking_guests.is_infant`, and
 migration 7 moved them again, to one `bookings.has_infant` switch — see
 [06-decisions.md](06-decisions.md) for why each model changed. Migration 6 adds
@@ -679,7 +685,17 @@ against a throwaway Postgres before being written down — see
 `supabase/repairs/` holds one-off data fixes that are not migrations and are
 never applied automatically. Read each file's header before running it.
 
-Last substantive update: 2026-09-24 — the office's fourth list
+Last substantive update: 2026-09-24 (afternoon) — **Faculty Advisors by
+appointment** ([15-recent-changes.md](15-recent-changes.md),
+[06-decisions.md](06-decisions.md) "24 Sep 2026 (afternoon)"): the student
+bodies' hierarchy (advisor → secretary → clubs) in Departments & Clubs, with
+each council's Faculty Advisor and secretary's mailbox as fields the developer
+changes (migration 25); any professor named there books from their own login
+under "Booking as", straight to the Guest House Manager, with the secretary
+pre-filled in Copy to; Petrichor's advisor is now a faculty account
+(`arun.prasad@`) and `fa.petrichor` is retired.
+
+Previous update: 2026-09-24 — the office's fourth list
 ([15-recent-changes.md](15-recent-changes.md), [06-decisions.md](06-decisions.md)
 "24 Sep 2026"), on `main`: invoices reachable **after check-out** on both desk
 consoles and the Approval Log; **dining invoices without room details**;

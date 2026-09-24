@@ -37,7 +37,7 @@ import { booking, GH, guest, profile, room, useThrowawayMockDb } from "./helpers
  * The office's fourth list of corrections (24 Sep 2026): invoices after
  * check-out and for dining, project details only with a project, a project's
  * sub-head, lighter guest forms for faculty/staff and official bookings, clubs
- * booked by their faculty in-charge, per-booking Copy to, and Special Funds.
+ * booked by their Faculty Advisor, per-booking Copy to, and Special Funds.
  */
 
 const HOUSES = [GH];
@@ -218,22 +218,22 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
 
 // ------------------------------------------------------------------ clubs
 
-describe("clubs are booked by their faculty in-charge", () => {
+describe("clubs are booked by their Faculty Advisor", () => {
   const units: Unit[] = [
-    { id: "u-council", name: "Cultural Council", kind: "council", parent_id: null, head_id: "secretary", acting_head_id: null },
+    { id: "u-council", name: "Cultural Council", kind: "council", parent_id: null, head_id: "secretary", acting_head_id: null, faculty_advisor_id: "fa-dance" },
     { id: "u-club", name: "Dance Club", kind: "club", parent_id: "u-council", head_id: null, acting_head_id: null },
-    { id: "u-headed", name: "Music Club", kind: "club", parent_id: null, head_id: "dr-music", acting_head_id: null, hod_unit_id: "u-dept" },
+    { id: "u-headed", name: "Music Club", kind: "club", parent_id: null, head_id: "secretary", acting_head_id: null, hod_unit_id: "u-dept", faculty_advisor_id: "dr-music" },
     { id: "u-dept", name: "Music Department", kind: "department", parent_id: null, head_id: "hod-music", acting_head_id: null },
   ];
   const dance = profile({ id: "club-dance", role: "club", department_or_club: "Dance", unit_id: "u-club" });
   const music = profile({ id: "club-music", role: "club", department_or_club: "Music", unit_id: "u-headed" });
-  const fa = profile({ id: "fa-dance", role: "faculty_advisor", department_or_club: "Dance" });
+  const fa = profile({ id: "fa-dance", role: "employee", staff_category: "faculty" });
   const drMusic = profile({ id: "dr-music", role: "employee" });
   const secretary = profile({ id: "secretary", role: "student" });
   const hodMusic = profile({ id: "hod-music", role: "employee" });
   const everyone: Profile[] = [dance, music, fa, drMusic, secretary, hodMusic];
 
-  it("finds the faculty in-charge: the club's own head, or its Faculty Advisor — never the council's student secretary", () => {
+  it("finds the Faculty Advisor named in the console — the club's own, else its council's; never the student secretary", () => {
     expect(facultyInChargeOf(dance, everyone, units).map((p) => p.id)).toEqual(["fa-dance"]);
     expect(facultyInChargeOf(music, everyone, units).map((p) => p.id)).toEqual(["dr-music"]);
     expect(clubsBookableBy(secretary, everyone, units)).toEqual([]);
@@ -250,14 +250,14 @@ describe("clubs are booked by their faculty in-charge", () => {
     expect(mustBookThroughFacultyInCharge("employee")).toBe(false);
   });
 
-  it("skips the Faculty Advisor stage when the in-charge raised it, and keeps an HOD stage", () => {
+  it("goes straight to the Guest House Manager when the advisor raised it — even where the club has an HOD", () => {
     expect(initialStatusFor("club", "room", { bookingType: "official", raisedByFacultyInCharge: true })).toBe("PENDING_GH_MANAGER");
     expect(
       initialStatusFor("club", "room", { bookingType: "official", hasHodApprover: true, raisedByFacultyInCharge: true })
-    ).toBe("PENDING_HOD");
+    ).toBe("PENDING_GH_MANAGER");
     const stored = { user_role: "club" as const, user_id: music.id, created_by: drMusic.id, booking_type: "official" };
     expect(raisedByFacultyInCharge(stored)).toBe(true);
-    expect(approvalStagesFor(stored, music, units)).toEqual(["PENDING_HOD"]);
+    expect(approvalStagesFor(stored, music, units)).toEqual([]);
     // Raised by the club itself (a stored legacy row): the old route.
     expect(approvalStagesFor({ ...stored, created_by: null }, music, units)).toEqual(["PENDING_FA", "PENDING_HOD"]);
   });
@@ -436,18 +436,18 @@ describe("the mock store and the mail", () => {
         user_id: "club-petrichor",
         user_role: "club",
         status: "PENDING_GH_MANAGER",
-        created_by: "fa-petrichor",
+        created_by: "faculty-arun",
         debit_head: "department_budget",
         debit_details: null,
       })
     );
-    expect((await store.listBookingsForUser("fa-petrichor")).map((b) => b.id)).toContain(created.id);
+    expect((await store.listBookingsForUser("faculty-arun")).map((b) => b.id)).toContain(created.id);
     expect((await store.listBookingsForUser("club-petrichor")).map((b) => b.id)).toContain(created.id);
     const read = (await store.getBooking(created.id))!;
-    expect(read.logs[0].action_by).toBe("fa-petrichor");
+    expect(read.logs[0].action_by).toBe("faculty-arun");
     await notify.notifyBookingSubmitted(created.id);
     expect(await requesterMail(created.id, "booking.submitted.requester")).toEqual([
-      { to: ["petrichor@iitpkd.ac.in"], cc: ["fa.petrichor@iitpkd.ac.in"] },
+      { to: ["petrichor@iitpkd.ac.in"], cc: ["arun.prasad@iitpkd.ac.in"] },
     ]);
   });
 });

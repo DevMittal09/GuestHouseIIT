@@ -73,9 +73,13 @@ export const seedProfiles: Profile[] = [
   { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "priya", unit_id: "unit-cse", staff_category: "faculty" },
   // An officer office: its bookings are debited to the Institute Grant.
   { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: "Administration", roll_number: null, ldap_uid: "admin", unit_id: "unit-director-office" },
-  // Belongs to Petrichor, which sits under the Cultural Council, so its
-  // requests go to the council secretary.
+  // Belongs to Petrichor, which sits under the Cultural Affairs Council. It
+  // raises no bookings itself: its Faculty Advisor books for it (24 Sep 2026).
   { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "petrichor", unit_id: "unit-petrichor" },
+  // The council's own account is its secretary's mailbox, which outlives any
+  // one secretary. Like a club, it is booked for by the council's Faculty
+  // Advisor, and it is the address copied on the council's clubs' bookings.
+  { id: "council-cultural", email: "sec_arts@iitpkd.ac.in", full_name: "Cultural Affairs Council", role: "club", hostel_name: null, department_or_club: "Cultural Affairs", roll_number: null, ldap_uid: "sec_arts", unit_id: "unit-cultural" },
   // No alumni persona: alumni have no institute login, so the IAR Office and
   // the IAR Student Cell raise those bookings for them (migration 9).
   { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "alumnicell" },
@@ -83,12 +87,16 @@ export const seedProfiles: Profile[] = [
   // Approvers by appointment rather than by role: the HOD is an employee, the
   // council secretary a student. Change who heads a unit in the console and
   // their queue moves with it.
+  // Faculty in CSE, and Faculty Advisor of the Cultural Affairs Council and
+  // of Petrichor — an appointment in Departments & Clubs, not an account of
+  // its own, so New Booking offers him "Book as Faculty Advisor" beside his
+  // own bookings, and naming someone else there moves it to them.
+  { id: "faculty-arun", email: "arun.prasad@iitpkd.ac.in", full_name: "Dr. Arun Prasad", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "arun.prasad", unit_id: "unit-cse", staff_category: "faculty" },
   { id: "hod-cse", email: "hod.cse@iitpkd.ac.in", full_name: "Prof. R. Venkatesh (HOD, CSE)", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "hod.cse", unit_id: "unit-cse", staff_category: "faculty" },
   { id: "secretary-cultural", email: "112301045@smail.iitpkd.ac.in", full_name: "Meera Nair (Cultural Secretary)", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112301045", ldap_uid: "112301045" },
   // ----- Reviewers / Admins -----
   { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Assistant Warden, Malhar)", role: "warden", hostel_name: "Malhar", department_or_club: null, roll_number: null, ldap_uid: "warden.malhar" },
   { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Assistant Warden, Saveri)", role: "warden", hostel_name: "Saveri", department_or_club: null, roll_number: null, ldap_uid: "warden.saveri" },
-  { id: "fa-petrichor", email: "fa.petrichor@iitpkd.ac.in", full_name: "Dr. Arun Prasad (FA, Petrichor)", role: "faculty_advisor", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "fa.petrichor" },
   // A department office (Phase 4): its official bookings go Direct or to
   // the CSE HOD, as the office chooses, and are debited to the Department.
   { id: "office-cse", email: "cse.office@iitpkd.ac.in", full_name: "CSE Department Office", role: "official", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "cse.office", unit_id: "unit-cse-office" },
@@ -102,14 +110,19 @@ export const seedProfiles: Profile[] = [
 ];
 
 /**
- * The demo units. A department with an HOD, and a club under a council whose
- * secretary approves for it: the two ways approval by appointment works.
+ * The demo units. A department with an HOD, and a council with its Faculty
+ * Advisor, its secretary and a fest under it — the student bodies' hierarchy
+ * (migration 25).
  */
 export const seedUnits: Unit[] = [
   { id: "unit-cse", name: "Computer Science & Engineering", kind: "department", parent_id: null, head_id: "hod-cse", acting_head_id: null, office_class: null },
-  { id: "unit-cultural", name: "Cultural Council", kind: "council", parent_id: null, head_id: "secretary-cultural", acting_head_id: null, office_class: null },
-  // No head of its own: the council secretary approves.
-  { id: "unit-petrichor", name: "Petrichor", kind: "club", parent_id: "unit-cultural", head_id: null, acting_head_id: null, office_class: null },
+  // Its head is the student secretary (who approved club requests stored
+  // before 24 Sep 2026); its Faculty Advisor books for it and its clubs, and
+  // its secretary's mailbox is copied on those bookings.
+  { id: "unit-cultural", name: "Cultural Affairs Council", kind: "council", parent_id: null, head_id: "secretary-cultural", acting_head_id: null, office_class: null, faculty_advisor_id: "faculty-arun", secretary_email: "sec_arts@iitpkd.ac.in" },
+  // The fest has a Faculty Advisor of its own; with no secretary's mailbox of
+  // its own, its bookings copy the council's.
+  { id: "unit-petrichor", name: "Petrichor", kind: "club", parent_id: "unit-cultural", head_id: null, acting_head_id: null, office_class: null, faculty_advisor_id: "faculty-arun", secretary_email: null },
   // Officer offices (migration 16): booked against the Institute Grant.
   { id: "unit-director-office", name: "Director's Office", kind: "office", parent_id: null, head_id: null, acting_head_id: null, office_class: "officer" },
   { id: "unit-iar-office", name: "International & Alumni Relations", kind: "office", parent_id: null, head_id: null, acting_head_id: null, office_class: "officer" },

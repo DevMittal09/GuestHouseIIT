@@ -18,11 +18,12 @@ code is right and this page is a bug.
 | Student | `/dashboard` | Books for family. Their Assistant Warden reviews it. |
 | Employee (faculty or staff) | `/dashboard` | Books officially (HOD approves) or personally (straight to the manager). |
 | Official / dignitary office | `/dashboard` | Books for the institute's guests. Chooses **Direct** or **Requires HOD approval** per booking. |
-| Club / fest council | `/dashboard` | **Does not book** (24 Sep 2026). Sees and follows the bookings its faculty in-charge raises for it, and gets every mail about them. |
+| Club / fest / council account | `/dashboard` | **Does not book** (24 Sep 2026). Sees and follows the bookings its Faculty Advisor raises for it, and gets every mail about them. A council's account is its secretary's mailbox (`sec_arts@`). |
 | IAR Student Cell | `/dashboard` | Raises alumni bookings. The IAR Office reviews. |
 | IAR Office | `/iar` | Reviews the Student Cell's requests, and books for its own office. |
 | Assistant Warden | `/warden` | Reviews their own hostel's students' requests. |
-| Faculty Advisor / council secretary | `/approvals` | Reviews their club's requests. A club's **faculty in-charge** (its own unit head, not a student, or its Faculty Advisor account) **books for the club** — "Book for …" on this page. |
+| Faculty Advisor (a professor, by appointment) | `/dashboard`, `/book` | **Books for their council, fest and the clubs under it** — "Booking as: Faculty Advisor — X" on New Booking, straight to the GH Manager. Not a role: whoever Departments & Clubs → Faculty Advisors names now (a club's own, else its council's). |
+| Council secretary (a student) | `/approvals` | Reviews club requests stored before 24 Sep 2026 (the old club stage). Their mailbox is copied on the advisor's bookings. |
 | HOD (by appointment, not by role) | `/hod` | Reviews official requests from their department, its staff and its office. |
 | Guest House Manager | `/manager` | Allocates rooms, approves, runs the desk, issues invoices, takes bookings for people who cannot use the portal. |
 | Guest House Caretaker | `/caretaker` | Marks arrivals and departures, and issues the invoice — including after check-out, from "Checked out — to bill". Sees the same stays table as the manager. |
@@ -31,7 +32,10 @@ code is right and this page is a bug.
 **Approval by appointment.** An HOD is whoever heads the unit *now* (Console →
 Departments & Clubs), not whoever holds a particular role: a council secretary
 is a student, an HOD is an employee. Change the head and the waiting requests
-move with them — nothing is stamped onto the booking.
+move with them — nothing is stamped onto the booking. A **Faculty Advisor** is
+the same idea for booking rather than approving: the professor named on the
+council (migration 25), changed there when the one- or two-year appointment
+ends.
 
 **Nobody approves their own request.** `canReview` refuses it outright, and
 routing skips a stage the requester would be approving themselves.
@@ -89,25 +93,26 @@ The choice is stored on the booking (`office_approval`), so the route cannot
 change under a waiting request. An officer office (`office_class = 'officer'`)
 is debited to the Institute Grant; a department office to the Department.
 
-### 2.4 A club's stay
+### 2.4 A club's, fest's or council's stay
 
-Since 24 Sep 2026 a club does not book for itself: its **faculty in-charge**
-books for it (`/book?for=<club>`), and the booking is the club's — its account,
-its route, its debitable heads — with the faculty member as `created_by`. The
-Faculty Advisor stage is skipped, because that is who raised it.
+The student bodies are a hierarchy: **Faculty Advisor → student secretary
+(Technical Affairs, Cultural Affairs…) → clubs**, and a fest has an advisor of
+its own. Since 24 Sep 2026 none of them books for itself: the **Faculty
+Advisor** — a professor named in Departments & Clubs, the club's own else its
+council's — books for it from their own login (`/book?for=<club>`, "Booking
+as"). The booking is the club's — its account, its debitable heads — with the
+professor as `created_by`, and **nobody forwards it**.
 
 ```mermaid
 flowchart LR
-  F[Faculty in-charge books for the club] --> H{Club's unit has an HOD?<br/>other than the one booking}
-  H -->|Yes| HOD[Pending HOD Approval]
-  H -->|No| M[Pending GH Manager]
-  HOD -->|Forward| M
+  F[Faculty Advisor books as advisor<br/>Copy to: the secretary's mailbox, and any others] --> M[Pending GH Manager]
   M -->|Allocate rooms| AP[Approved]
+  M -->|Reject + reason| R[Rejected]
 ```
 
 A club request stored before the rule (demo booking 2) still takes the old
-route: Pending Club Approval with the Faculty Advisor or council secretary
-first.
+route: Pending Club Approval with the council secretary first, then the HOD
+where the club has one.
 
 ### 2.5 An alumnus's stay
 
@@ -189,7 +194,7 @@ the desk has to argue with.
 | When | What | Where |
 | --- | --- | --- |
 | Every submission and decision | Mail to the actioner, copy to everyone who has signed it off so far | `lib/mail/notify.ts` |
-| Every mail to the requester | Copied to the booking's own **Copy to** addresses (New Booking), and on a club booking to the faculty in-charge who raised it | `requesterCopyTo` in `lib/mail/recipients.ts` |
+| Every mail to the requester | Copied to the booking's own **Copy to** addresses (New Booking — pre-filled with the council secretary's mailbox when a Faculty Advisor books), and on a club booking to the Faculty Advisor who raised it | `requesterCopyTo` in `lib/mail/recipients.ts`, `defaultCopyToFor` in `lib/club-booking.ts` |
 | Every night | No-show release, ID-number erasure past the retention window, audit trimming | `/api/mail/cron` (Vercel Cron) |
 | Every few minutes | The mail outbox is dispatched | `/api/mail/dispatch` |
 | Any change to bookings, holds, blocks or invoices | Open desk screens re-fetch | `components/live-updates.tsx` |
@@ -202,7 +207,7 @@ the desk has to argue with.
 | Question | Answer in code |
 | --- | --- |
 | Who reviews this? | `routeFor`, `approvalStagesFor`, `canReview` / `canReviewBooking` (`lib/workflow.ts`) |
-| Who may book for a club? | `facultyInChargeOf`, `clubsBookableBy` (`lib/club-booking.ts`) |
+| Who may book for a club? | `facultyAdvisorOf` (`lib/units.ts`), `facultyInChargeOf`, `clubsBookableBy` (`lib/club-booking.ts`) |
 | Who heads this unit? | `approversOf`, `hodApproversFor` (`lib/units.ts`) |
 | May this role open this page? | `lib/access.ts`, and each page's own guard |
 | What may be charged? | `invoiceBlocker`, `buildInvoiceDocument` (`lib/invoice.ts`) |

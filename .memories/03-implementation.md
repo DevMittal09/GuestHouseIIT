@@ -90,9 +90,14 @@ Rooms are added as individual cards via `useFieldArray`. Each room card holds it
 - **Booking for a club** — `forClub` prop. `/book?for=<club profile id>`
   renders the club's own form (`user` and `config` are the club's) under a
   banner; the submission carries `for_club`, which `createBooking` re-checks
-  against `clubsBookableByUser`. A club's own account sees an explanation
-  naming its faculty in-charge instead of the form; a `faculty_advisor` with
-  one club is redirected straight to it, with several gets a chooser.
+  against `clubsBookableByUser`. A professor named Faculty Advisor in
+  Departments & Clubs (migration 25) gets a **Booking as** card on `/book` —
+  Yourself / Faculty Advisor — each council or club — and `defaultCopyTo`
+  pre-fills the council secretary's mailbox. The form is **keyed by the
+  requester** so switching remounts it. A club's own account sees an
+  explanation naming its Faculty Advisor instead of the form; a legacy
+  `faculty_advisor` account with one club is redirected straight to it, with
+  several gets a chooser.
 
 **Counts use `components/ui/quantity-input.tsx`**, not a raw number input. It keeps the typed string so the box can be cleared and retyped.
 
@@ -902,9 +907,10 @@ carry per-day meal plans built from their dates (`demoMeals` in
 | Employee | `priya@iitpkd.ac.in` |
 | Official (whitelisted) | `admin@iitpkd.ac.in` |
 | Club (Petrichor) | `petrichor@iitpkd.ac.in` |
+| Council (Cultural Affairs, its secretary's mailbox) | `sec_arts@iitpkd.ac.in` |
+| Faculty, **Faculty Advisor** of the council and Petrichor | `arun.prasad@iitpkd.ac.in` |
 | IAR Student Cell | `alumnicell@iitpkd.ac.in` |
 | Wardens | `warden.malhar@`, `warden.saveri@iitpkd.ac.in` |
-| Faculty advisor | `fa.petrichor@iitpkd.ac.in` |
 | IAR Office | `iar@iitpkd.ac.in` |
 | GH manager | `guesthouse@iitpkd.ac.in` |
 | GH caretaker | `gh.reception@iitpkd.ac.in` |

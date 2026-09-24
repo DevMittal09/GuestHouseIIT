@@ -348,6 +348,17 @@ function loadDb(): Db {
         u.hod_unit_id = null;
         dirty = true;
       }
+      // Migration 25's counterpart: the demo councils and fest get their
+      // Faculty Advisors and secretary's mailbox; any other unit starts with
+      // none, as it would in Postgres.
+      if (u.faculty_advisor_id === undefined) {
+        u.faculty_advisor_id = seedUnits.find((s) => s.id === u.id)?.faculty_advisor_id ?? null;
+        dirty = true;
+      }
+      if (u.secretary_email === undefined) {
+        u.secretary_email = seedUnits.find((s) => s.id === u.id)?.secretary_email ?? null;
+        dirty = true;
+      }
     }
     // Demo personas that gained a unit since (the Director's and IAR
     // offices). Only a *null* unit is filled, and only for a seeded persona,

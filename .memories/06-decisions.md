@@ -2290,3 +2290,106 @@ while the schema's minimum is 0. A baby typed as 0 could never be booked on
 Supabase; the mock store never checked. The constraint is now
 `age is null or age between 0 and 120` — null because age is optional on some
 forms.
+
+## 24 Sep 2026 (afternoon) — Faculty Advisors by appointment
+
+The owner's follow-up to the morning's club rule. The student bodies are a
+hierarchy — **Faculty Advisor → student secretary (Technical Affairs, Cultural
+Affairs) → clubs**, and a fest (Petrichor) has an advisor too. The advisor
+books for each secretary and club; Copy to starts with the secretary's mailbox
+(`sec_arts@`, `sec_acad@`); every professor should be able to book as a
+Faculty Advisor, with each council mapped to its advisor in the backend
+because the post is a one- or two-year contract that the developer changes;
+and an advisor's booking needs nobody to forward it.
+
+### The advisor is a field on the unit, not a role and not an account
+
+**Decision.** `units.faculty_advisor_id` (migration 25), edited in Departments
+& Clubs → Faculty Advisors. A club with none of its own takes its council's.
+Any faculty member may be named (`canBeFacultyAdvisor`); whoever is named gets
+"Booking as: Faculty Advisor — X" on New Booking from their **own** faculty
+login.
+
+**Why.** It is the change that happens every year or two, and the owner asked
+for exactly that: one place to name the advisor, and the booking right moving
+with it. A dedicated `faculty_advisor` account (the morning's `fa.petrichor`)
+has to be handed over, and is a second login for someone who already has one.
+It is the same argument as HODs in Phase 4 — approvers by appointment, resolved
+when someone looks. **Rejected:** a `faculty_advisor` role on the professor's
+own profile — a role is one per account, so a professor who advises a council
+could no longer book as faculty; and the role would have to be kept in step
+with the units by hand.
+
+**Why its own column, not `head_id`.** A council's head is its student
+secretary, who approved club requests at the old `PENDING_FA` stage and still
+does for requests stored before today. The advisor is a different person with a
+different power (booking, not approving). The club/council head title is now
+"Secretary" in the console.
+
+**Why inherit from the council.** "A faculty advisor for each council, with
+clubs under it": naming the Cultural Affairs advisor once covers every cultural
+club. Petrichor, which has its own, keeps its own. This reverses the morning's
+"not inherited from a council", which was about the council's *head* — a
+student — never an advisor.
+
+**One rule, not three.** The morning found the faculty in-charge two other
+ways (a non-student club head; a `faculty_advisor` account matched by
+Department/Club). Keeping them beside the field would give "who may book for
+this club" three answers and a console that shows one. Migration 25 copies
+each into the field once, so nobody who could book yesterday loses it; the
+code reads only the field.
+
+### Straight to the Guest House Manager — the HOD stage goes too
+
+**Decision.** `routeFor("club", …, { raisedByFacultyInCharge: true })` is `[]`.
+
+**Why.** The owner: the advisor's booking "doesn't require forwarding by anyone,
+it goes directly to the guest house manager". The morning had kept an HOD
+stage where the console named one for the club (`hod_unit_id`); that is
+dropped for advisor bookings. A club request stored before the rule keeps its
+old route, and one waiting at `PENDING_HOD` can still be forwarded
+(`nextStatusAfter` falls through to the manager).
+
+### The secretary's mailbox is a default in Copy to, not a rule
+
+**Decision.** `units.secretary_email`, the club's own else its council's, is
+filled into the first Copy-to row when the advisor books
+(`defaultCopyToFor`). The advisor can clear it or add more.
+
+**Why a mailbox, not the secretary's profile.** The owner gave the addresses as
+`sec_arts@` / `sec_acad@`: role mailboxes that outlive any one secretary, which
+is the same reason the advisor is a field. **Why a default.** "By default the
+copy to should be to the secretary" — and a mandatory CC would be the portal
+deciding who hears about a guest the advisor may have reasons to keep quiet.
+**Why left out for the council's own account.** The council's account *is* its
+secretary's mailbox, already mailed as the requester.
+
+**Copy to on every new booking** was already so from the morning (every role,
+room and meals-only); nothing changed there but the pre-fill.
+
+### A council books as a `club` account
+
+**Decision.** The Cultural Affairs Council has an account of role `club` on
+`sec_arts@iitpkd.ac.in`, attached to the council unit, so "book for each
+secretary" works exactly like booking for a club. **Rejected:** a new role for
+councils — every rule that keys on `club` (debit heads, scoping, reports, the
+refusal to self-book) would need a twin.
+
+### The retired `fa.petrichor` persona
+
+The owner asked for Petrichor's advisor to be a faculty (employee) account.
+Dr. Arun Prasad is now `arun.prasad@`, an ordinary CSE faculty member named
+advisor of the council and of Petrichor; the `fa.petrichor` account left both
+seeds and the dummy directory. Seeds never delete, so an existing database
+keeps the row — and on the hosted project migration 25's backfill will name it
+Petrichor's advisor, to be replaced in the console.
+
+### And the form that kept the last requester's answers
+
+"Booking as" is a set of links to `/book` and `/book?for=…`. Next's client-side
+navigation keeps the page's component tree, so the same `BookingForm` stayed
+mounted with `useForm`'s first defaults — the Faculty Advisor's form opened with
+the professor's own booking type and an empty Copy to. The end-to-end journey
+caught it; unit tests could not. The form is keyed by `requester.id` and the
+service. Any page that renders a stateful form from search params needs the
+same.

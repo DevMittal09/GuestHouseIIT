@@ -100,11 +100,11 @@ export function BookingDetails({
               .join(" · ")}
           />
         )}
-        {/* A club's booking, raised by its faculty in-charge: the submission
+        {/* A club's booking, raised by its Faculty Advisor: the submission
             log names who pressed Submit. */}
         {raisedByFacultyInCharge(booking) && (
           <Field
-            label="Raised by (faculty in-charge)"
+            label="Raised by (Faculty Advisor)"
             value={
               [...booking.logs]
                 .sort((a, b) => a.timestamp.localeCompare(b.timestamp))

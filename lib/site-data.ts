@@ -106,8 +106,8 @@ const STAGE_NAMES: Partial<Record<BookingStatus, string>> = {
  */
 function approversFor(role: Role): string[] {
   const type = defaultBookingTypeFor(role) ?? "official";
-  // A club's booking is raised by its faculty in-charge (24 Sep 2026), which
-  // is why its route starts after the Faculty Advisor stage.
+  // A club's booking is raised by its Faculty Advisor (24 Sep 2026), and so
+  // goes straight to the Guest House Manager.
   const stages = routeFor(role, "room", {
     bookingType: type,
     hasHodApprover: true,
@@ -134,7 +134,7 @@ const loadSitePolicies = unstable_cache(
     const routes = configs.map(([role, config]) => ({
       role,
       label: mustBookThroughFacultyInCharge(role)
-        ? `${ROLE_LABELS[role]} — booked by its faculty in-charge`
+        ? `${ROLE_LABELS[role]} — booked by its Faculty Advisor`
         : ROLE_LABELS[role],
       approvers: approversFor(role),
       guestHouses: config.allowed_guest_house_ids

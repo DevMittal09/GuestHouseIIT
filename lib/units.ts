@@ -31,13 +31,25 @@ export const UNIT_KIND_LABELS: Record<UnitKind, string> = {
   office: "Office",
 };
 
-/** What the head of each kind of unit is called, for the console and mail. */
+/**
+ * What the head of each kind of unit is called, for the console and mail. A
+ * club's or council's head is its student **secretary**, who approved club
+ * requests at the old club stage; its **Faculty Advisor** is a separate
+ * appointment (`faculty_advisor_id`, 24 Sep 2026), and the one who books.
+ */
 export const UNIT_HEAD_TITLES: Record<UnitKind, string> = {
   department: "HOD",
-  club: "Faculty Advisor / Secretary",
+  club: "Secretary",
   council: "Secretary",
   office: "Head",
 };
+
+/** The kinds of unit that have a Faculty Advisor and a secretary's mailbox. */
+export const STUDENT_BODY_KINDS: UnitKind[] = ["club", "council"];
+
+export function isStudentBody(kind: UnitKind): boolean {
+  return STUDENT_BODY_KINDS.includes(kind);
+}
 
 /**
  * A `type`, not an `interface`, on purpose: Supabase's generated client needs
@@ -69,6 +81,22 @@ export type Unit = {
    * to its own head; a club or council has no HOD stage.
    */
   hod_unit_id?: string | null;
+  /**
+   * Councils, fests and clubs only (migration 25): the faculty member who is
+   * the unit's **Faculty Advisor** now. An appointment of a year or two, so it
+   * is a field the console changes, never a separate account: whoever is named
+   * here books for the unit from their own faculty login, and the booking goes
+   * straight to the Guest House Manager. A club with none of its own takes its
+   * council's (`facultyAdvisorOf`).
+   */
+  faculty_advisor_id?: string | null;
+  /**
+   * Councils, fests and clubs only (migration 25): the student secretary's
+   * mailbox — `sec_arts@iitpkd.ac.in`, say — which outlives any one secretary.
+   * Filled into Copy to on every booking the Faculty Advisor raises for the
+   * unit or a club under it (`secretaryEmailOf`).
+   */
+  secretary_email?: string | null;
 };
 
 export type OfficeClass = "officer" | "department";
@@ -108,6 +136,39 @@ export function approvingUnit(unitId: string | null | undefined, units: Unit[]):
     current = current.parent_id ? byId.get(current.parent_id) : undefined;
   }
   return null;
+}
+
+/**
+ * The first value of `pick` found walking up from a unit through its parents
+ * — a club's own, else its council's. Null when nobody up the chain has one.
+ */
+function inherited(
+  unitId: string | null | undefined,
+  units: Unit[],
+  pick: (unit: Unit) => string | null | undefined
+): string | null {
+  const byId = new Map(units.map((u) => [u.id, u]));
+  let current = unitId ? byId.get(unitId) : undefined;
+  for (let depth = 0; current && depth < MAX_DEPTH; depth++) {
+    const value = pick(current)?.trim();
+    if (value) return value;
+    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+  }
+  return null;
+}
+
+/**
+ * The Faculty Advisor of a council, fest or club: its own, else the council
+ * it sits under — "a faculty advisor for each council, and clubs under it".
+ * A fest or club with an advisor of its own (Petrichor) keeps theirs.
+ */
+export function facultyAdvisorOf(unitId: string | null | undefined, units: Unit[]): string | null {
+  return inherited(unitId, units, (u) => u.faculty_advisor_id);
+}
+
+/** The secretary's mailbox for a council, fest or club: its own, else its council's. */
+export function secretaryEmailOf(unitId: string | null | undefined, units: Unit[]): string | null {
+  return inherited(unitId, units, (u) => u.secretary_email);
 }
 
 /**

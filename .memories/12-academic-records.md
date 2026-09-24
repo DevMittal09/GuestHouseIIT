@@ -137,9 +137,11 @@ in the obviously fake `+91 90000 …` range.
 | Anjali Menon (`112201001@smail…`) | Student | B.Tech, CSE, Malhar, father Ramesh Menon, mother Sreeja Menon |
 | Rahul Nair (`142202014@smail…`) | Student | M.Tech, EE, Saveri, **no parents on record → guardian Gopinath Nair** |
 | Dr. Priya Sharma (`priya@`) | Faculty / Non-faculty | FAC-1042, "Faculty — Assistant Professor", office 0491 000 1042 |
+| Dr. Arun Prasad (`arun.prasad@`) | Faculty / Non-faculty | FAC-1057, "Faculty — Associate Professor", office 0491 000 1057 |
 | Director's Office (`admin@`) | Office | Copy to: Director `director@iitpkd.ac.in` |
 | IAR Office (`iar@`) | Office | Copy to: Dean, International & Alumni Relations `dean.iar@iitpkd.ac.in` |
-| Petrichor (`petrichor@`) | Student Representative | "Fest Council — Petrichor", faculty in charge `fa.petrichor@` |
+| Petrichor (`petrichor@`) | Student Representative | "Fest Council — Petrichor", faculty in charge `arun.prasad@` |
+| Cultural Affairs Council (`sec_arts@`) | Student Representative | "Council — Cultural Affairs (Secretary)", faculty in charge `arun.prasad@` |
 | IAR Student Cell (`alumnicell@`) | Alumni Office | "International & Alumni Relations — Alumni Cell" |
 | Dr. Suresh Kumar (`warden.malhar@`) | Warden | Malhar |
 | Dr. Lakshmi Devi (`warden.saveri@`) | Warden | Saveri |

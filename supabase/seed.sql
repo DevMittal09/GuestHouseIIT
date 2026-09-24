@@ -38,7 +38,6 @@ select pg_temp.seed_user('11111111-1111-1111-1111-111111111104', 'admin@iitpkd.a
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111105', 'petrichor@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111107', 'warden.malhar@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111108', 'warden.saveri@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111109', 'fa.petrichor@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111110', 'iar@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111111', 'guesthouse@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111112', 'developer@iitpkd.ac.in');
@@ -48,6 +47,8 @@ select pg_temp.seed_user('11111111-1111-1111-1111-111111111115', 'hod.cse@iitpkd
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111116', '112301045@smail.iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111117', 'cse.office@iitpkd.ac.in');
 select pg_temp.seed_user('11111111-1111-1111-1111-111111111118', 'ravi.k@iitpkd.ac.in');
+select pg_temp.seed_user('11111111-1111-1111-1111-111111111119', 'arun.prasad@iitpkd.ac.in');
+select pg_temp.seed_user('11111111-1111-1111-1111-111111111120', 'sec_arts@iitpkd.ac.in');
 
 -- ---------------------------------------------------------------- hostels
 -- Migration 16: profiles.hostel_name references hostels(name), so the
@@ -64,7 +65,6 @@ insert into public.profiles (id, email, full_name, role, hostel_name, department
   ('11111111-1111-1111-1111-111111111105', 'petrichor@iitpkd.ac.in', 'Petrichor Fest Council', 'club', null, 'Petrichor', null),
   ('11111111-1111-1111-1111-111111111107', 'warden.malhar@iitpkd.ac.in', 'Dr. Suresh Kumar (Warden, Malhar)', 'warden', 'Malhar', null, null),
   ('11111111-1111-1111-1111-111111111108', 'warden.saveri@iitpkd.ac.in', 'Dr. Lakshmi Devi (Warden, Saveri)', 'warden', 'Saveri', null, null),
-  ('11111111-1111-1111-1111-111111111109', 'fa.petrichor@iitpkd.ac.in', 'Dr. Arun Prasad (FA, Petrichor)', 'faculty_advisor', null, 'Petrichor', null),
   ('11111111-1111-1111-1111-111111111110', 'iar@iitpkd.ac.in', 'IAR Office', 'iar_cell', null, 'International & Alumni Relations', null),
   ('11111111-1111-1111-1111-111111111111', 'guesthouse@iitpkd.ac.in', 'Guest House Manager', 'gh_manager', null, null, null),
   ('11111111-1111-1111-1111-111111111112', 'developer@iitpkd.ac.in', 'Portal Developer', 'developer', null, null, null),
@@ -75,16 +75,21 @@ insert into public.profiles (id, email, full_name, role, hostel_name, department
   ('11111111-1111-1111-1111-111111111116', '112301045@smail.iitpkd.ac.in', 'Meera Nair (Cultural Secretary)', 'student', 'Malhar', null, '112301045'),
   -- Phase 4: a department office, and non-teaching staff.
   ('11111111-1111-1111-1111-111111111117', 'cse.office@iitpkd.ac.in', 'CSE Department Office', 'official', null, 'Computer Science & Engineering', null),
-  ('11111111-1111-1111-1111-111111111118', 'ravi.k@iitpkd.ac.in', 'Ravi K. (Technical Staff, CSE)', 'employee', null, 'Computer Science & Engineering', null)
+  ('11111111-1111-1111-1111-111111111118', 'ravi.k@iitpkd.ac.in', 'Ravi K. (Technical Staff, CSE)', 'employee', null, 'Computer Science & Engineering', null),
+  -- Migration 25: a professor who is Faculty Advisor of the Cultural Affairs
+  -- Council and of Petrichor (an appointment on the units below, not a role),
+  -- and the council's own account, which is its secretary's mailbox.
+  ('11111111-1111-1111-1111-111111111119', 'arun.prasad@iitpkd.ac.in', 'Dr. Arun Prasad', 'employee', null, 'Computer Science & Engineering', null),
+  ('11111111-1111-1111-1111-111111111120', 'sec_arts@iitpkd.ac.in', 'Cultural Affairs Council', 'club', null, 'Cultural Affairs', null)
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------- units
--- Migrations 15 and 16: a department with its HOD, a council whose secretary
--- approves for the club under it, and two officer offices. The same demo
+-- Migrations 15 and 16: a department with its HOD, a council with its
+-- secretary and a fest under it, and two officer offices. The same demo
 -- units as lib/store/seed.ts.
 insert into public.units (id, name, kind, parent_id, head_id, office_class) values
   ('33333333-3333-3333-3333-333333333301', 'Computer Science & Engineering', 'department', null, '11111111-1111-1111-1111-111111111115', null),
-  ('33333333-3333-3333-3333-333333333302', 'Cultural Council', 'council', null, '11111111-1111-1111-1111-111111111116', null),
+  ('33333333-3333-3333-3333-333333333302', 'Cultural Affairs Council', 'council', null, '11111111-1111-1111-1111-111111111116', null),
   ('33333333-3333-3333-3333-333333333303', 'Petrichor', 'club', '33333333-3333-3333-3333-333333333302', null, null),
   ('33333333-3333-3333-3333-333333333304', 'Director''s Office', 'office', null, null, 'officer'),
   ('33333333-3333-3333-3333-333333333305', 'International & Alumni Relations', 'office', null, null, 'officer'),
@@ -99,9 +104,25 @@ from (values
   ('admin@iitpkd.ac.in', '33333333-3333-3333-3333-333333333304', null),
   ('iar@iitpkd.ac.in', '33333333-3333-3333-3333-333333333305', null),
   ('cse.office@iitpkd.ac.in', '33333333-3333-3333-3333-333333333306', null),
-  ('ravi.k@iitpkd.ac.in', '33333333-3333-3333-3333-333333333301', 'staff')
+  ('ravi.k@iitpkd.ac.in', '33333333-3333-3333-3333-333333333301', 'staff'),
+  ('arun.prasad@iitpkd.ac.in', '33333333-3333-3333-3333-333333333301', 'faculty'),
+  ('sec_arts@iitpkd.ac.in', '33333333-3333-3333-3333-333333333302', null)
 ) as v(email, unit_id, category)
 where p.email = v.email and p.unit_id is null;
+
+-- Migration 25: Faculty Advisors and the secretary's mailbox. Dr. Arun Prasad
+-- advises the Cultural Affairs Council and Petrichor, whose bookings copy
+-- sec_arts@ (Petrichor has no mailbox of its own, so it takes the council's).
+-- Only where nothing is set, so a re-run never undoes the console.
+update public.units u set faculty_advisor_id = v.advisor::uuid
+from (values
+  ('33333333-3333-3333-3333-333333333302', '11111111-1111-1111-1111-111111111119'),
+  ('33333333-3333-3333-3333-333333333303', '11111111-1111-1111-1111-111111111119')
+) as v(unit_id, advisor)
+where u.id = v.unit_id::uuid and u.faculty_advisor_id is null;
+
+update public.units set secretary_email = 'sec_arts@iitpkd.ac.in'
+where id = '33333333-3333-3333-3333-333333333302' and secretary_email is null;
 
 -- LDAP usernames (migration 12) — the dummy directory's uids, whose passwords
 -- are in lib/ldap/mock-directory.ts and .memories/11-ldap-accounts.md. An
@@ -117,7 +138,6 @@ from (values
   ('alumnicell@iitpkd.ac.in', 'alumnicell'),
   ('warden.malhar@iitpkd.ac.in', 'warden.malhar'),
   ('warden.saveri@iitpkd.ac.in', 'warden.saveri'),
-  ('fa.petrichor@iitpkd.ac.in', 'fa.petrichor'),
   ('iar@iitpkd.ac.in', 'iar'),
   ('guesthouse@iitpkd.ac.in', 'guesthouse'),
   ('gh.reception@iitpkd.ac.in', 'gh.reception'),
@@ -125,7 +145,9 @@ from (values
   ('hod.cse@iitpkd.ac.in', 'hod.cse'),
   ('112301045@smail.iitpkd.ac.in', '112301045'),
   ('cse.office@iitpkd.ac.in', 'cse.office'),
-  ('ravi.k@iitpkd.ac.in', 'ravi.k')
+  ('ravi.k@iitpkd.ac.in', 'ravi.k'),
+  ('arun.prasad@iitpkd.ac.in', 'arun.prasad'),
+  ('sec_arts@iitpkd.ac.in', 'sec_arts')
 ) as v(email, uid)
 where p.email = v.email and p.ldap_uid is null;
 

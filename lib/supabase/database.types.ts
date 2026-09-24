@@ -243,7 +243,7 @@ export interface Database {
       };
       units: {
         Row: Unit;
-        Insert: Insertable<Unit, "id" | "parent_id" | "head_id" | "acting_head_id" | "office_class" | "hod_unit_id">;
+        Insert: Insertable<Unit, "id" | "parent_id" | "head_id" | "acting_head_id" | "office_class" | "hod_unit_id" | "faculty_advisor_id" | "secretary_email">;
         Update: Partial<Unit>;
         Relationships: [];
       };

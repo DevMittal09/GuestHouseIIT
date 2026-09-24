@@ -52,6 +52,16 @@ const RECORDS: AcademicRecord[] = [
     email: "priya@iitpkd.ac.in",
     office_number: "0491 000 1042",
   },
+  {
+    kind: "employee",
+    employee_id: "FAC-1057",
+    name: "Dr. Arun Prasad",
+    department: "Computer Science and Engineering",
+    employee_type: "Faculty — Associate Professor",
+    phone: "+91 90000 00202",
+    email: "arun.prasad@iitpkd.ac.in",
+    office_number: "0491 000 1057",
+  },
   // ----- Offices -----
   {
     kind: "office",
@@ -75,7 +85,14 @@ const RECORDS: AcademicRecord[] = [
     representative_type: "Fest Council — Petrichor",
     email: "petrichor@iitpkd.ac.in",
     phone: "+91 90000 00401",
-    faculty_in_charge_email: "fa.petrichor@iitpkd.ac.in",
+    faculty_in_charge_email: "arun.prasad@iitpkd.ac.in",
+  },
+  {
+    kind: "student_rep",
+    representative_type: "Council — Cultural Affairs (Secretary)",
+    email: "sec_arts@iitpkd.ac.in",
+    phone: "+91 90000 00402",
+    faculty_in_charge_email: "arun.prasad@iitpkd.ac.in",
   },
   // ----- Alumni office -----
   {

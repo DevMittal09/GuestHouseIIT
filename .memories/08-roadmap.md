@@ -4,6 +4,14 @@ Ordered roughly by priority.
 
 ## 0. Loose ends from the 24 Sep 2026 round
 
+- **Apply migration 25 to the hosted project** (after 24). Until then every
+  council and club reads as having no Faculty Advisor, so nobody can book for
+  one there. Its backfill names the old `fa.petrichor` account Petrichor's
+  advisor — replace it with a faculty member in Departments & Clubs →
+  Faculty Advisors.
+- **Name each council's Faculty Advisor and secretary's mailbox** in the
+  console. Only Cultural Affairs (`sec_arts@`) is seeded; the owner's other
+  example was `sec_acad@`, and the Technical Affairs mailbox is not known.
 - **Apply migration 24 to the hosted project.** Until then a booking that
   names a Copy-to address or a project sub-head is refused on Supabase, and a
   baby typed as age 0 still is.
@@ -110,7 +118,8 @@ Still thin, in order of what would catch the most:
    follow `canReview`;
 2. the availability grid's overlap arithmetic, beyond what the store tests
    cover;
-3. an end-to-end pass for the developer console: Settings, tariffs, units;
+3. an end-to-end pass for the developer console: Settings, tariffs, units
+   (only Departments & Clubs → Faculty Advisors has one, since 24 Sep 2026);
 4. accessibility assertions inside the Playwright run (axe) rather than by eye.
 
 The original list of targets, all of which now have unit coverage:

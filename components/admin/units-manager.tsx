@@ -18,11 +18,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { canBeFacultyAdvisor } from "@/lib/club-booking";
 import {
   approversOf,
+  facultyAdvisorOf,
   hodApproversFor,
   hodUnitIdFor,
+  isStudentBody,
   OFFICE_CLASS_LABELS,
+  secretaryEmailOf,
   UNIT_HEAD_TITLES,
   UNIT_KIND_LABELS,
   type OfficeClass,
@@ -34,9 +38,9 @@ import type { Profile } from "@/lib/types";
 /**
  * Departments, clubs, councils and offices, and who approves for each.
  *
- * Built for the change that happens every two years: a new HOD or a new
- * council secretary is one select on one row, and every request waiting on
- * that unit moves to them at once.
+ * Built for the change that happens every two years: a new HOD, a new
+ * council secretary or a new Faculty Advisor is one select on one row, and
+ * every request waiting on that unit moves to them at once.
  */
 export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Profile[] }) {
   const router = useRouter();
@@ -48,6 +52,9 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
   const [deleting, setDeleting] = useState<Unit | null>(null);
 
   const people = [...profiles].sort((a, b) => a.full_name.localeCompare(b.full_name));
+  // Anyone the console may name Faculty Advisor: every faculty member.
+  const faculty = people.filter((p) => canBeFacultyAdvisor(p));
+  const studentBodies = units.filter((u) => isStudentBody(u.kind));
   const byId = new Map(profiles.map((p) => [p.id, p]));
   const members = (unitId: string) => profiles.filter((p) => p.unit_id === unitId).length;
 
@@ -82,11 +89,23 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
       <div>
         <h2 className="text-lg font-semibold">Departments &amp; Clubs</h2>
         <p className="text-sm text-muted-foreground">
-          Who approves for each department, club, council and office. When an HOD or a secretary
-          changes, change it here — requests already waiting move to the new person on their own.
-          A club with no head of its own is approved by the head of the council above it.
+          Who approves for each department, club, council and office, and who is Faculty Advisor
+          of each council and club. When an HOD, a secretary or an advisor changes, change it here
+          — requests already waiting move to the new person on their own. A club with no head of
+          its own is approved by the head of the council above it.
         </p>
       </div>
+
+      {studentBodies.length > 0 && (
+        <FacultyAdvisors
+          units={units}
+          studentBodies={studentBodies}
+          faculty={faculty}
+          byId={byId}
+          disabled={isPending}
+          run={run}
+        />
+      )}
 
       <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-4 sm:items-end">
         <div className="space-y-2 sm:col-span-2">
@@ -333,18 +352,193 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
   );
 }
 
+type Run = (work: () => Promise<{ ok: boolean; error?: string }>, success: string) => void;
+
+/**
+ * The Faculty Advisor of each council, fest and club, and the secretary's
+ * mailbox copied on their bookings (migration 25). Its own table because it
+ * is the appointment that changes every year or two, and because the person
+ * named here is who books for the unit — straight to the Guest House
+ * Manager — which is a different thing from who heads it.
+ */
+function FacultyAdvisors({
+  units,
+  studentBodies,
+  faculty,
+  byId,
+  disabled,
+  run,
+}: {
+  units: Unit[];
+  studentBodies: Unit[];
+  faculty: Profile[];
+  byId: Map<string, Profile>;
+  disabled: boolean;
+  run: Run;
+}) {
+  const nameOf = (unitId: string | null | undefined) => units.find((u) => u.id === unitId)?.name;
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-base font-semibold">Faculty Advisors</h3>
+        <p className="text-sm text-muted-foreground">
+          The professor named here books for the council, fest or club from their own login —
+          &ldquo;Book as Faculty Advisor&rdquo; on New Booking — and those bookings go straight to
+          the Guest House Manager. A club with no advisor of its own takes its council&apos;s. The
+          secretary&apos;s mailbox (e.g. sec_arts@iitpkd.ac.in) is filled into Copy to on every
+          booking the advisor raises. When the appointment changes, change it here.
+        </p>
+      </div>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Council / club</TableHead>
+              <TableHead>Faculty Advisor</TableHead>
+              <TableHead>Secretary&apos;s mailbox</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {studentBodies.map((u) => {
+              const advisorId = facultyAdvisorOf(u.id, units);
+              const mailbox = secretaryEmailOf(u.id, units);
+              // Where the value comes from the council above, say whose it is.
+              const inheritedFrom = (own: string | null | undefined, effective: string | null) =>
+                !own?.trim() && effective ? nameOf(u.parent_id) : undefined;
+              const advisorFrom = inheritedFrom(u.faculty_advisor_id, advisorId);
+              const mailboxFrom = inheritedFrom(u.secretary_email, mailbox);
+              // A stored advisor who is no longer faculty still shows, so the
+              // select does not silently read "None".
+              const current = u.faculty_advisor_id ? byId.get(u.faculty_advisor_id) : undefined;
+              const options = current && !faculty.includes(current) ? [current, ...faculty] : faculty;
+              return (
+                <TableRow key={u.id}>
+                  <TableCell>
+                    <span className="font-medium">{u.name}</span>
+                    <Badge variant="outline" className="ml-2 align-middle">
+                      {UNIT_KIND_LABELS[u.kind]}
+                    </Badge>
+                    {u.parent_id && (
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        Under {nameOf(u.parent_id) ?? "?"}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="min-w-64 space-y-1">
+                    <PersonSelect
+                      label={`Faculty Advisor of ${u.name}`}
+                      value={u.faculty_advisor_id ?? null}
+                      people={options}
+                      disabled={disabled}
+                      noneLabel={advisorFrom ? `Same as ${advisorFrom}` : "None"}
+                      onChange={(id) =>
+                        run(
+                          () => updateUnitAction(u.id, { faculty_advisor_id: id }),
+                          id
+                            ? `${byId.get(id)?.full_name ?? "Faculty Advisor"} is now Faculty Advisor of ${u.name}`
+                            : `Faculty Advisor of ${u.name} cleared`
+                        )
+                      }
+                    />
+                    {advisorFrom && advisorId ? (
+                      <p className="text-xs text-muted-foreground">
+                        {byId.get(advisorId)?.full_name ?? advisorId}, from {advisorFrom}
+                      </p>
+                    ) : !advisorId ? (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        Nobody can book for {u.name} until an advisor is named
+                      </p>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="min-w-64 space-y-1">
+                    <MailboxField
+                      // Re-mount when the saved value changes, so the box
+                      // shows what is stored after a save or a refresh.
+                      key={u.secretary_email ?? ""}
+                      unit={u}
+                      disabled={disabled}
+                      placeholder={mailboxFrom && mailbox ? mailbox : "sec_arts@iitpkd.ac.in"}
+                      run={run}
+                    />
+                    {mailboxFrom && mailbox && (
+                      <p className="text-xs text-muted-foreground">
+                        Empty: copies {mailbox}, from {mailboxFrom}
+                      </p>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+/** The secretary's mailbox for one council or club, saved on its own button. */
+function MailboxField({
+  unit,
+  disabled,
+  placeholder,
+  run,
+}: {
+  unit: Unit;
+  disabled: boolean;
+  placeholder: string;
+  run: Run;
+}) {
+  const saved = unit.secretary_email ?? "";
+  const [value, setValue] = useState(saved);
+  const changed = value.trim().toLowerCase() !== saved.toLowerCase();
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run(
+          () => updateUnitAction(unit.id, { secretary_email: value }),
+          value.trim() ? `Secretary's mailbox for ${unit.name} saved` : `Secretary's mailbox for ${unit.name} cleared`
+        );
+      }}
+    >
+      <Input
+        type="email"
+        inputMode="email"
+        autoComplete="off"
+        aria-label={`Secretary's mailbox for ${unit.name}`}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => setValue(e.target.value)}
+        disabled={disabled}
+      />
+      <Button
+        type="submit"
+        size="sm"
+        variant="outline"
+        disabled={disabled || !changed}
+        aria-label={`Save secretary's mailbox for ${unit.name}`}
+      >
+        Save
+      </Button>
+    </form>
+  );
+}
+
 function PersonSelect({
   label,
   value,
   people,
   disabled,
   onChange,
+  noneLabel = "None",
 }: {
   label: string;
   value: string | null;
   people: Profile[];
   disabled: boolean;
   onChange: (id: string) => void;
+  noneLabel?: string;
 }) {
   return (
     <NativeSelect
@@ -353,7 +547,7 @@ function PersonSelect({
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
     >
-      <option value="">None</option>
+      <option value="">{noneLabel}</option>
       {people.map((p) => (
         <option key={p.id} value={p.id}>
           {p.full_name} — {p.email}
