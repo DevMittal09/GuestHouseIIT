@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { exportHistoryCsv } from "@/app/actions/history";
 import { exportHistoryPdf } from "@/app/actions/history-pdf";
 import { BookingDetails } from "@/components/booking-details";
+import { InvoiceDialog } from "@/components/invoice-dialog";
+import { invoiceableFromArchive } from "@/lib/invoice";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -108,6 +110,7 @@ export function BookingHistory({
   pageSize,
   isOwnBookings = false,
   canExportPdf: showPdfExport = false,
+  canInvoice = false,
 }: {
   rows: BookingWithDetails[];
   total: number;
@@ -125,6 +128,12 @@ export function BookingHistory({
   isOwnBookings?: boolean;
   /** True for gh_manager / developer — shows PDF export controls. */
   canExportPdf?: boolean;
+  /**
+   * True for the desk (manager, caretaker, developer): an Invoice button on
+   * every stay that has checked out, however long ago, and on a dining
+   * booking once approved — to issue, reprint or record payment (24 Sep 2026).
+   */
+  canInvoice?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -543,6 +552,7 @@ export function BookingHistory({
                   currentUserId={currentUserId}
                   showAlumniCard={showAlumniCard}
                   isOwnBookings={isOwnBookings}
+                  canInvoice={canInvoice}
                 />
               ))}
             </TableBody>
@@ -648,11 +658,13 @@ function HistoryRow({
   currentUserId,
   showAlumniCard,
   isOwnBookings,
+  canInvoice,
 }: {
   booking: BookingWithDetails;
   currentUserId: string;
   showAlumniCard: boolean;
   isOwnBookings: boolean;
+  canInvoice: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const action = latestReviewerActionOn(booking, currentUserId);
@@ -700,6 +712,14 @@ function HistoryRow({
         </TableCell>
       )}
       <TableCell className="text-right">
+        {/* After check-out the stay leaves the desk's lists within a month;
+            here it can still be invoiced, reprinted or marked paid. The
+            dialog re-checks the role on the server. */}
+        {canInvoice && invoiceableFromArchive(booking) && (
+          <span className="mr-2 inline-block">
+            <InvoiceDialog booking={booking} />
+          </span>
+        )}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm">

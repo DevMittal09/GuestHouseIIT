@@ -6,7 +6,7 @@ import { recordAudit } from "@/lib/audit-server";
 import { getCurrentUser } from "@/lib/auth";
 import { RATE_LIMITS } from "@/lib/security";
 import { getStore } from "@/lib/store";
-import { canReview } from "@/lib/workflow";
+import { actsAsRequester, canReview } from "@/lib/workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +50,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pat
   const units = await store.listUnits().catch(() => []);
   const allowed =
     hasFullBookingAccess(user.role) ||
-    booking.user_id === user.id ||
+    // The requester, or the faculty in-charge who raised a club's booking.
+    actsAsRequester(booking, user.id) ||
     canReview(user, booking.status, booking.requester, units);
   // Not found rather than forbidden: whether a document exists is itself
   // something only the people above should learn.

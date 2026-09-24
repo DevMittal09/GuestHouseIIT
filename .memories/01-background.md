@@ -188,6 +188,25 @@ round, is [15-recent-changes.md](15-recent-changes.md).
 | Mail for one booking id should thread together, not all of a day's mail in one thread | **Done** | `bookingThreadRoot(referenceId, address)`; scheduled mail (digest, escalation, desk log) keeps a daily thread because it has no booking; requester mail still standalone |
 | Remove Institute Grant for faculty as a debitable head | **Done** | `FORBIDDEN_DEBIT_HEADS` — a floor under Settings, not a default: stripped on read, refused on save, greyed in the console |
 
+## Office corrections — 24 Sep 2026, fourth list
+
+Nine items, sent by the owner. Built on `main` (the `ui` branch holding the
+vermilion redesign was left for a separate merge). Reasoning in
+[06-decisions.md](06-decisions.md) ("24 Sep 2026"); the working summary is
+[15-recent-changes.md](15-recent-changes.md).
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| Generate the invoice after checking out too | **Done** | "Checked out — to bill" on the **caretaker's** console as well as the manager's (`awaitingSettlement`); an Invoice button beside Mark as Vacated in "Checking out today"; and on every checked-out stay in the Approval Log for the desk (`invoiceableFromArchive`) |
+| A meal booking's invoice should not carry room-booking details | **Done** | `InvoiceDocument.kind` / `meal_dates`; `invoiceFacts()` for the PDF and the preview: meal dates and head count instead of check-in/out, rooms, infants, primary guest; no room table, no A/B |
+| Remove the project details when the project fund is not the head | **Done** | Project rows only with `project_grant` (`invoiceFacts`, accounts mail) |
+| With Project as the debitable head, a text box for the sub-head on New Booking | **Done** | `bookings.debit_subhead` (migration 24), optional, only with Project; printed as "Project Sub-head" |
+| Faculty/staff: only name and gender mandatory | **Done** | `buildDefaultFormConfig("employee")`; age may now be optional anywhere (`ageField`, blank = adult) |
+| Official bookings: only gender | **Done** | `buildDefaultFormConfig("official")` |
+| Clubs/fests cannot book for themselves; only their faculty in-charge books for them | **Done** | `lib/club-booking.ts`; `/book?for=<club>`; the booking stays the club's, `created_by` the faculty member, Faculty Advisor stage skipped |
+| "Copy to" on New Booking: any number of addresses that get every further mail | **Done** | `bookings.copy_to_emails` (up to 25), CC on every mail to the requester (`requesterCopyTo`) |
+| Special Funds as a debitable head for everyone but students, official bookings only | **Done** | `special_budget` relabelled, default for every official category, forbidden for students and personal bookings, saved Settings upgraded once |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

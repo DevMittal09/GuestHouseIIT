@@ -249,12 +249,12 @@ becomes untestable:
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
 | student | personal | Assistant Warden → GH Manager | Personal |
-| club | official | Faculty Advisor / council secretary → **HOD** (if the club has an HOD unit) → GH Manager | Department |
-| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF |
-| employee — staff | official | **HOD** → GH Manager | Department |
+| club — **booked by its faculty in-charge** (24 Sep 2026) | official | **HOD** (if the club has an HOD unit) → GH Manager; the Faculty Advisor stage is skipped — that is who booked | Department / Special Funds |
+| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF / Special Funds |
+| employee — staff | official | **HOD** → GH Manager | Department / Special Funds |
 | employee | personal | GH Manager | Personal |
-| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute |
-| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department |
+| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute / Special Funds |
+| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department / Special Funds |
 | iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | Institute (alumni: Institute / Personal) |
 | iar_student_cell | alumni | IAR Office → GH Manager | Institute / Personal |
 | any | meals only | GH Manager | dining heads (Phase 6) |
@@ -264,6 +264,13 @@ becomes untestable:
   through the units console (`hodApproversFor`), never the requester; an HOD's
   own booking skips the HOD stage unless an acting head is set. HODs work from
   `/hod`.
+- **A club's account cannot book** (24 Sep 2026, `lib/club-booking.ts`). Its
+  faculty in-charge — the club unit's own head (not a student, not inherited
+  from a council) or its `faculty_advisor` account — books at
+  `/book?for=<club>`; the booking is the club's (`user_id`), with the faculty
+  member as `created_by`, who may cancel it, sees it on their dashboard, is
+  CC'd on the club's mail about it, and can never approve it
+  (`canReviewBooking`).
 - Intermediate approval forwards to the next stage of the booking's own route.
 - The manager does **not** approve through the generic review action. Approval
   happens via `allocateRooms()`, which assigns rooms and sets `APPROVED`
@@ -323,8 +330,9 @@ requirement follows the request, not the account.
 ### 4.1b The caretaker — a subset, not a second console
 
 `gh_caretaker` is the reception desk. `/caretaker` shows today's checkouts,
-current occupants, awaiting check-out and upcoming stays, and can mark guests
-Occupied / Vacated. No allocation, no approvals, no cancellations —
+current occupants, awaiting check-out, **checked out — to bill** (24 Sep 2026)
+and upcoming stays, can mark guests Occupied / Vacated, and issues invoices —
+also after check-out, and from the Approval Log for older stays. No allocation, no approvals, no cancellations —
 `canUpdateLifecycle()` / `LIFECYCLE_ROLES` gate the one action it shares with
 the manager, server-side.
 
@@ -657,7 +665,7 @@ the developer's working data.
 
 ---
 
-Migrations are numbered and applied forward only; there are nine. Migration 4
+Migrations are numbered and applied forward only; there are twenty-four (the list, with what each needs before the app can use it, is in [04-database.md](04-database.md)). Migration 4
 moved infants from `bookings.infants` to `booking_guests.is_infant`, and
 migration 7 moved them again, to one `bookings.has_infant` switch — see
 [06-decisions.md](06-decisions.md) for why each model changed. Migration 6 adds
@@ -671,7 +679,19 @@ against a throwaway Postgres before being written down — see
 `supabase/repairs/` holds one-off data fixes that are not migrations and are
 never applied automatically. Read each file's header before running it.
 
-Last substantive update: 2026-09-23 — the office's second round of
+Last substantive update: 2026-09-24 — the office's fourth list
+([15-recent-changes.md](15-recent-changes.md), [06-decisions.md](06-decisions.md)
+"24 Sep 2026"), on `main`: invoices reachable **after check-out** on both desk
+consoles and the Approval Log; **dining invoices without room details**;
+project rows only with the Project head, plus a typed **project sub-head**;
+**name and gender** the only mandatory guest details for faculty/staff and
+**gender alone** for official bookings (a blank age is an adult — it used to
+parse as 0, an infant); **clubs booked only by their faculty in-charge**;
+per-booking **Copy to** addresses CC'd on the requester's mail; and **Special
+Funds** on every official booking. Migration 24 carries the two new columns and
+lets an infant be aged 0 on Supabase.
+
+Previous update: 2026-09-23 — the office's second round of
 corrections ([06-decisions.md](06-decisions.md), "23 Sep 2026"): **Mock
 Authentication** as a door gated on Google rather than on `DEV_LOGIN`, which is
 why the demo accounts had vanished; the room-type question removed everywhere

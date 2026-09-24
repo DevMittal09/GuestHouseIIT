@@ -6,7 +6,9 @@ import {
 } from "./booking-types";
 import {
   debitDetailsPrompt,
+  debitDetailsRequired,
   debitHeadError,
+  MAX_SUBHEAD_LENGTH,
   needsProject,
   type DebitHeadsByType,
 } from "./debit-heads";
@@ -68,19 +70,87 @@ const passportField = z
   .nullish()
   .transform((v) => (v ? v.trim().toUpperCase() : null));
 
+/**
+ * A guest's age: required or optional by the role's form, never hidden
+ * (`sanitizeFormConfig`) — an infant is defined by their age.
+ *
+ * **A blank box is null, not 0.** This was `z.coerce.number()`, which turns
+ * "" into 0 — an infant — so a guest whose age nobody typed was booked as a
+ * baby, and "required" never actually fired. Where the age is optional
+ * (faculty, staff and official forms), a guest without one is an adult.
+ * Round-trip safe: the null it produces is accepted on the server's second
+ * pass, and a number passes straight through.
+ */
+function ageField(mode: FieldMode) {
+  return z
+    .union([z.string(), z.number()])
+    .nullish()
+    .transform((value, ctx) => {
+      const raw = typeof value === "number" ? value : (value ?? "").trim();
+      if (raw === "") {
+        if (mode !== "required") return null;
+        ctx.addIssue({ code: "custom", message: "Age is required" });
+        return z.NEVER;
+      }
+      const n = Number(raw);
+      if (!Number.isInteger(n)) {
+        ctx.addIssue({ code: "custom", message: "Age must be a whole number" });
+        return z.NEVER;
+      }
+      if (n < 0) {
+        ctx.addIssue({ code: "custom", message: "Age must be 0 or more" });
+        return z.NEVER;
+      }
+      if (n > 120) {
+        ctx.addIssue({ code: "custom", message: "Enter a valid age" });
+        return z.NEVER;
+      }
+      return n;
+    });
+}
+
+/** How many extra addresses a requester may copy on one booking (migration 24). */
+export const MAX_COPY_TO_EMAILS = 25;
+
+const COPY_TO_ADDRESS = /^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$/;
+
+/**
+ * The "Copy to" list on New Booking: extra addresses copied on every mail
+ * sent to the requester about the booking. Blank rows are dropped (the form
+ * sends every row, so a message lands on the row that is wrong), repeats are
+ * dropped ignoring case, and each address has to look like one. Round-trip
+ * safe: the cleaned list re-parses to itself.
+ */
+const copyToField = z
+  .array(z.string())
+  .max(MAX_COPY_TO_EMAILS * 2, `At most ${MAX_COPY_TO_EMAILS} addresses can be copied`)
+  .nullish()
+  .transform((list, ctx) => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    (list ?? []).forEach((raw, i) => {
+      const address = raw.trim();
+      if (!address) return;
+      if (!COPY_TO_ADDRESS.test(address) || address.length > 254) {
+        ctx.addIssue({ code: "custom", message: "Enter a valid email address", path: [i] });
+        return;
+      }
+      const key = address.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(address);
+    });
+    if (out.length > MAX_COPY_TO_EMAILS) {
+      ctx.addIssue({ code: "custom", message: `At most ${MAX_COPY_TO_EMAILS} addresses can be copied` });
+    }
+    return out;
+  });
+
 function guestSchema(config: RoleFormConfig) {
   const f = config.guest_fields;
   return z.object({
     name: textField(f.name, "Guest name is required"),
-    // Always required, whatever the role's form configuration says: an infant
-    // is defined by their age, and the per-room occupancy rule counts guests
-    // and infants separately. Without an age neither can be decided.
-    // `sanitizeFormConfig` pins the field to "required" for the same reason.
-    age: z.coerce
-      .number({ message: "Age is required" })
-      .int("Age must be a whole number")
-      .min(0, "Age must be 0 or more")
-      .max(120, "Enter a valid age"),
+    age: ageField(f.age),
     gender:
       f.gender === "required"
         ? z.enum(["male", "female", "other"], { message: "Gender is required" })
@@ -232,6 +302,11 @@ export function bookingPayloadSchema(
       debit_details: optionalTrimmed,
       // The project for a Project head, picked from the console's list.
       project_id: z.string().nullish().default(null),
+      // The project's sub-head, typed — only with a Project head.
+      debit_subhead: optionalTrimmed,
+      // Extra addresses copied on every mail the requester gets about this
+      // booking. Checked here on both sides; stored on the booking.
+      copy_to_emails: copyToField,
       // An office's choice: straight to the manager, or through its HOD.
       office_approval: z.enum(["direct", "hod"]).nullish().default(null),
       // Only meaningful on an alumni booking; the refinement below requires
@@ -339,16 +414,37 @@ export function bookingPayloadSchema(
           path: ["project_id"],
         });
       }
-      // A Special Budget has to say what it is. Its sanction document is
-      // checked in `createBooking`, which has the upload.
+      // The sub-head is the project's, so it travels only with one — a value
+      // typed before switching to another head must not ride along.
+      if (v.debit_subhead) {
+        if (!needsProject(v.debit_head)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "A sub-head applies only when the head is Project",
+            path: ["debit_subhead"],
+          });
+        } else if (v.debit_subhead.length > MAX_SUBHEAD_LENGTH) {
+          ctx.addIssue({
+            code: "custom",
+            message: `Keep the sub-head under ${MAX_SUBHEAD_LENGTH} characters`,
+            path: ["debit_subhead"],
+          });
+        }
+      }
+      // Special Funds may say which fund. Optional (24 Sep 2026); its
+      // sanction letter, if any, is checked in `createBooking`, which has the
+      // upload.
       const prompt = debitDetailsPrompt(v.debit_head);
-      if (prompt && (v.debit_details ?? "").length < 3) {
+      if (prompt && debitDetailsRequired(v.debit_head) && (v.debit_details ?? "").length < 3) {
         ctx.addIssue({ code: "custom", message: `${prompt} is required`, path: ["debit_details"] });
+      }
+      if (prompt && (v.debit_details ?? "").length > 300) {
+        ctx.addIssue({ code: "custom", message: "Keep this under 300 characters", path: ["debit_details"] });
       }
       if (!prompt && v.debit_details) {
         ctx.addIssue({
           code: "custom",
-          message: "Details apply only to a Special Budget",
+          message: "Details apply only to Special Funds",
           path: ["debit_details"],
         });
       }

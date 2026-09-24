@@ -11,11 +11,18 @@ import { MANAGER_HELP_LINE } from "@/lib/policy";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { REQUESTER_ROLES } from "@/lib/types";
+import { clubBookingNotice, mustBookThroughFacultyInCharge } from "@/lib/club-booking";
+import { clubsBookableByUser, facultyInChargeForClub } from "@/lib/club-booking-server";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect(SIGN_IN_PATH);
-  if (!REQUESTER_ROLES.includes(user.role)) redirect(homeForRole(user.role));
+  // Requesters, and a club's faculty in-charge, whose list is the bookings
+  // they raised for their clubs (`listBookingsForUser` includes those).
+  const clubs = await clubsBookableByUser(user);
+  if (!REQUESTER_ROLES.includes(user.role) && clubs.length === 0) redirect(homeForRole(user.role));
+  const clubAccount = mustBookThroughFacultyInCharge(user.role);
+  const booksForSelf = REQUESTER_ROLES.includes(user.role) && !clubAccount;
 
   const store = getStore();
   const [bookings, config, guestHouses] = await Promise.all([
@@ -58,21 +65,35 @@ export default async function DashboardPage() {
         title="My Bookings"
         actions={
           <div className="flex flex-wrap gap-2">
-            {canBookMeals && (
+            {booksForSelf && canBookMeals && (
               <Button asChild variant="outline">
                 <Link href="/book?service=meals_only">
                 Meal Booking{mealHouseNames && ` (${mealHouseNames})`}
               </Link>
               </Button>
             )}
-            <Button asChild>
-              <Link href="/book">New Booking (Room)</Link>
-            </Button>
+            {booksForSelf && (
+              <Button asChild>
+                <Link href="/book">New Booking (Room)</Link>
+              </Button>
+            )}
+            {/* A faculty in-charge books for each of their clubs. */}
+            {clubs.map((c) => (
+              <Button key={c.id} asChild variant={booksForSelf ? "outline" : "default"}>
+                <Link href={`/book?for=${encodeURIComponent(c.id)}`}>Book for {c.full_name}</Link>
+              </Button>
+            ))}
           </div>
         }
       >
         Track your guest house requests through the approval pipeline.
       </PageHeader>
+      {/* A club's account follows its bookings but does not raise them. */}
+      {clubAccount && (
+        <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          {clubBookingNotice(await facultyInChargeForClub(user))}
+        </p>
+      )}
       <MyBookings bookings={bookings} invoices={invoices} />
       {/* DPDP (Phase 8): take a copy, or ask the office to erase it. */}
       <MyData openRequest={openPrivacyRequest} />

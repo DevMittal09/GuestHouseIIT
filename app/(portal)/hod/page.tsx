@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { approversOf, hodUnitIdFor, isHodForAny } from "@/lib/units";
-import { canReview } from "@/lib/workflow";
+import { canReviewBooking } from "@/lib/workflow";
 
 /**
  * The HOD's queue (Phase 4): official bookings from their department — its
@@ -27,7 +27,7 @@ export default async function HodPage() {
 
   const waiting = await store.listBookings({ status: "PENDING_HOD" });
   const mine = waiting
-    .filter((b) => canReview(user, b.status, b.requester, units))
+    .filter((b) => canReviewBooking(user, b, units))
     .sort((a, b) => a.check_in.localeCompare(b.check_in));
 
   // The departments and offices whose HOD approval this person gives.

@@ -8,7 +8,9 @@ import { canAssignRooms, canBookOnBehalf, canOverrideGuestHousePolicy } from "@/
 import { requireUser } from "@/lib/auth";
 import { aadhaarDigits, bookingPayloadSchema } from "@/lib/booking-schema";
 import { needsAlumniDetails } from "@/lib/booking-types";
-import { needsDebitDocument } from "@/lib/debit-heads";
+import { acceptsDebitDocument, needsProject } from "@/lib/debit-heads";
+import { mustBookThroughFacultyInCharge } from "@/lib/club-booking";
+import { clubsBookableByUser } from "@/lib/club-booking-server";
 import { hodApproversFor } from "@/lib/units";
 import { bookingContextFor } from "@/lib/booking-context-server";
 import { describeProject } from "@/lib/projects";
@@ -34,6 +36,7 @@ import type {
   Gender,
   NewBookingGuestInput,
   NewBookingRoomInput,
+  Profile,
 } from "@/lib/types";
 import { needsRooms, REQUESTER_ROLES, RoomClashError } from "@/lib/types";
 import {
@@ -50,7 +53,8 @@ import {
 } from "@/lib/turnover";
 import {
   ACTIVE_STATUSES,
-  canReview,
+  actsAsRequester,
+  canReviewBooking,
   lapsedError,
   canUpdateLifecycle,
   approvalStagesFor,
@@ -90,17 +94,42 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     // the desk for people who never open the portal. Those are recorded as
     // theirs with the actual guest named on the booking — see `onBehalfOf`.
     const onBehalf = canBookOnBehalf(user.role);
-    if (!REQUESTER_ROLES.includes(user.role) && !onBehalf) {
-      return { ok: false, error: "Your role cannot submit booking requests" };
+
+    // A club's booking is raised by its faculty in-charge, never by the
+    // club's own account (24 Sep 2026, `lib/club-booking.ts`). The club named
+    // here is re-checked against the units and profiles, so a crafted
+    // request cannot book in the name of a club the caller is not in charge
+    // of.
+    const clubId = readText(formData, "for_club");
+    let club: Profile | null = null;
+    if (clubId) {
+      club = (await clubsBookableByUser(user)).find((c) => c.id === clubId) ?? null;
+      if (!club) {
+        return { ok: false, error: "You are not set as the faculty in-charge of that club" };
+      }
+    } else {
+      if (mustBookThroughFacultyInCharge(user.role)) {
+        return {
+          ok: false,
+          error: "Club bookings are raised by the club's faculty in-charge — ask them to book for the club.",
+        };
+      }
+      if (!REQUESTER_ROLES.includes(user.role) && !onBehalf) {
+        return { ok: false, error: "Your role cannot submit booking requests" };
+      }
+      if (user.role === "official" && !isWhitelistedOfficial(user.email, await getOfficialEmails())) {
+        return { ok: false, error: "This account is not whitelisted for official bookings" };
+      }
     }
-    if (user.role === "official" && !isWhitelistedOfficial(user.email, await getOfficialEmails())) {
-      return { ok: false, error: "This account is not whitelisted for official bookings" };
-    }
+    // Whose booking it is: the club's, when its faculty in-charge raises it —
+    // so it is routed, debited, scoped and reported as a club booking — and
+    // otherwise the signed-in person's.
+    const requester = club ?? user;
 
     // Who the stay is actually for. Required when the manager is booking for
     // someone else, because otherwise the booking says only that the manager
     // is staying — and the desk has no way to find out who is arriving.
-    const onBehalfOf = onBehalf
+    const onBehalfOf = onBehalf && !club
       ? {
           name: readText(formData, "on_behalf_of_name"),
           email: readText(formData, "on_behalf_of_email"),
@@ -111,7 +140,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       return { ok: false, error: "Enter the name of the guest this booking is for" };
     }
 
-    const config = await getEffectiveFormConfig(user.role);
+    const config = await getEffectiveFormConfig(requester.role);
     const store = getStore();
 
     // Whether meals can be booked at all on this account, which decides
@@ -126,10 +155,10 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     if (typeof rawPayload !== "string") return { ok: false, error: "Malformed submission" };
     // The same Settings, debitable heads and projects the page handed the
     // form, from the same computation, so the two validate alike.
-    const bookingContext = await bookingContextFor(user);
+    const bookingContext = await bookingContextFor(requester);
     const parsed = bookingPayloadSchema(config, {
       mealsAvailable,
-      requesterEmail: user.email,
+      requesterEmail: requester.email,
       rules: bookingContext.rules,
       debitHeads: bookingContext.debitHeads,
       projectIds: bookingContext.projects.map((p) => p.id),
@@ -261,14 +290,13 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       return { ok: false, error: "Alumni ID card upload is mandatory" };
     }
 
-    // The sanction behind a Special Budget. Checked here rather than in the
-    // schema because this is where the upload is.
+    // The sanction letter behind Special Funds, when the requester has one.
+    // Optional since 24 Sep 2026 — the office asked for the head, not for a
+    // document. Checked here rather than in the schema because this is where
+    // the upload is.
     let debitDocumentUrl: string | null = null;
-    if (needsDebitDocument(payload.debit_head)) {
-      const document = formData.get("debit_document");
-      if (!(document instanceof File) || document.size === 0) {
-        return { ok: false, error: "Upload the sanction document for the Special Budget" };
-      }
+    const document = formData.get("debit_document");
+    if (acceptsDebitDocument(payload.debit_head) && document instanceof File && document.size > 0) {
       const prepared = await prepareUpload(document);
       if (!prepared.ok) return { ok: false, error: `Sanction document: ${prepared.error}` };
       debitDocumentUrl = await store.saveDocument(prepared.file, "debit-documents");
@@ -276,24 +304,31 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
 
     // Who approves, if anyone: the route for this role and kind of booking
     // (`routeFor`), with the HOD whoever heads the requester's department or
-    // office right now — read from the console, never the requester.
-    const officeApproval = isOfficeRole(user.role) && wantsRooms ? payload.office_approval : null;
+    // office right now — read from the console, never the requester. The
+    // person raising a club's booking is never its HOD stage either: they
+    // cannot approve what they raised.
+    const officeApproval = isOfficeRole(requester.role) && wantsRooms ? payload.office_approval : null;
     const routing = {
       bookingType: payload.booking_type,
-      staffCategory: user.staff_category ?? null,
+      staffCategory: requester.staff_category ?? null,
       officeApproval,
-      hasHodApprover: hodApproversFor(user, bookingContext.units).length > 0,
+      hasHodApprover:
+        hodApproversFor(requester, bookingContext.units).filter((id) => id !== user.id).length > 0,
+      raisedByFacultyInCharge: club !== null,
     };
-    const status = initialStatusFor(user.role, payload.service_type, routing);
+    const status = initialStatusFor(requester.role, payload.service_type, routing);
     // A request that should have waited for an HOD, but could not because
     // nobody other than the requester is set to give it, says so in its log —
     // otherwise it looks as if the approval was skipped on purpose.
-    const hodMissing = hodStageMissing(user.role, payload.service_type, routing);
+    const hodMissing = hodStageMissing(requester.role, payload.service_type, routing);
     const submissionRemarks =
       [
+        club
+          ? `Booking raised by ${user.full_name}, faculty in-charge of ${club.full_name}, on the club's behalf — so it does not wait for Faculty Advisor approval.`
+          : null,
         overrideNote,
         hodMissing
-          ? "Booking submitted. Nobody other than the requester is set to give HOD approval for this unit in the console, so the HOD stage was skipped."
+          ? "Booking submitted. Nobody other than the person booking is set to give HOD approval for this unit in the console, so the HOD stage was skipped."
           : null,
       ]
         .filter(Boolean)
@@ -309,9 +344,9 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     }
 
     const booking = await store.createBooking({
-      user_id: user.id,
+      user_id: requester.id,
       guest_house_id: payload.guest_house_id,
-      user_role: user.role,
+      user_role: requester.role,
       // A meals-only booking is the kitchen's business, so it goes straight
       // to the manager rather than through the room approval chain.
       status,
@@ -330,6 +365,11 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       debit_head: payload.debit_head,
       debit_details: project ? describeProject(project) : payload.debit_details,
       debit_document_url: debitDocumentUrl,
+      debit_subhead: needsProject(payload.debit_head) ? payload.debit_subhead : null,
+      // The requester is mailed anyway; copying them to themselves is noise.
+      copy_to_emails: payload.copy_to_emails.filter(
+        (address) => address.toLowerCase() !== requester.email.toLowerCase()
+      ),
       project_id: project?.id ?? null,
       office_approval: officeApproval,
       custom_fields: customValues.length > 0 ? customValues : null,
@@ -337,8 +377,9 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       rooms,
       submission_remarks: submissionRemarks,
       // Both parties are recorded: the booking hangs off the manager's
-      // account for referential integrity, and names the guest it is for.
-      created_by: onBehalfOf ? user.id : null,
+      // account for referential integrity, and names the guest it is for —
+      // or off the club's account, naming the faculty in-charge who raised it.
+      created_by: onBehalfOf || club ? user.id : null,
       on_behalf_of_name: onBehalfOf?.name ?? null,
       on_behalf_of_email: onBehalfOf?.email ?? null,
       on_behalf_of_phone: onBehalfOf?.phone ?? null,
@@ -371,7 +412,9 @@ export async function reviewBooking(
     // Unit approvals (an HOD, a club's advisor or council secretary) are
     // decided by who heads the requester's unit now, so the units come too.
     const units = await store.listUnits();
-    if (!canReview(user, booking.status, booking.requester, units)) {
+    // Also refuses whoever raised it — a club's faculty in-charge who is the
+    // club's HOD too cannot sign off their own request.
+    if (!canReviewBooking(user, booking, units)) {
       return { ok: false, error: "You are not authorised to review this booking" };
     }
     if (action === "reject" && !reason?.trim()) {
@@ -619,7 +662,8 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
     const user = await requireUser();
     const store = getStore();
     const booking = await store.getBooking(bookingId);
-    if (!booking || booking.user_id !== user.id) return { ok: false, error: "Booking not found" };
+    // The requester, or the faculty in-charge who raised a club's booking.
+    if (!booking || !actsAsRequester(booking, user.id)) return { ok: false, error: "Booking not found" };
     if (!reason?.trim()) return { ok: false, error: "A cancellation reason is required" };
 
     const TERMINAL_STATUSES: BookingStatus[] = [

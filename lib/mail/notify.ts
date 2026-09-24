@@ -8,6 +8,7 @@ import {
   copyToAddresses,
   deskRecipients,
   managerRecipients,
+  requesterCopyTo,
   requesterRecipient,
   reviewersForStatus,
 } from "./recipients";
@@ -256,6 +257,8 @@ export async function notifyBookingSubmitted(bookingId: string): Promise<void> {
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const requester = requesterRecipient(booking);
+    // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+    const requesterCc = await requesterCopyTo(booking);
     const reviewers = await reviewersForStatus(booking, booking.status);
     const copyTo = await copyToAddresses(booking);
     const stamp = booking.created_at;
@@ -265,6 +268,7 @@ export async function notifyBookingSubmitted(bookingId: string): Promise<void> {
         eventKey: "booking.submitted.requester",
         booking,
         to: [requester.email],
+        cc: requesterCc,
         subjectText: "Booking request received",
         doc: t.submittedToRequester(booking),
         stamp,
@@ -297,6 +301,8 @@ export async function notifyTierApproved(
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const requester = requesterRecipient(booking);
+    // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+    const requesterCc = await requesterCopyTo(booking);
     // To moves with the booking: whoever `canReview()` lets act on the stage
     // it has just entered. The approver who forwarded it stays in CC.
     const nextReviewers = await reviewersForStatus(booking, booking.status);
@@ -308,6 +314,7 @@ export async function notifyTierApproved(
         eventKey: "booking.tier_approved.requester",
         booking,
         to: [requester.email],
+        cc: requesterCc,
         subjectText:
           booking.status === "PENDING_HOD"
             ? "Approved — now with the HOD"
@@ -342,12 +349,15 @@ export async function notifyRejected(
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const requester = requesterRecipient(booking);
+    // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+    const requesterCc = await requesterCopyTo(booking);
 
     await queueMessages([
       requester && {
         eventKey: "booking.rejected.requester",
         booking,
         to: [requester.email],
+        cc: requesterCc,
         subjectText: "Request not approved",
         doc: t.rejectedToRequester(booking, reviewer.full_name, reason),
         stamp: booking.updated_at,
@@ -366,6 +376,8 @@ export async function notifyRoomsAllocated(bookingId: string, manager: Profile):
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const requester = requesterRecipient(booking);
+    // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+    const requesterCc = await requesterCopyTo(booking);
     const desk = await deskRecipients();
     const copyTo = await copyToAddresses(booking);
     const stamp = booking.updated_at;
@@ -375,6 +387,7 @@ export async function notifyRoomsAllocated(bookingId: string, manager: Profile):
         eventKey: "booking.allocated.requester",
         booking,
         to: [requester.email],
+        cc: requesterCc,
         subjectText: "Confirmed — rooms allocated",
         doc: t.allocatedToRequester(booking),
         stamp,
@@ -441,12 +454,15 @@ export async function notifyCancellationDecided(
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const requester = requesterRecipient(booking);
+    // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+    const requesterCc = await requesterCopyTo(booking);
 
     await queueMessages([
       requester && {
         eventKey: "booking.cancellation_decided.requester",
         booking,
         to: [requester.email],
+        cc: requesterCc,
         subjectText:
           outcome === "approved" ? "Cancellation approved" : "Cancellation declined",
         doc: t.cancellationDecidedToRequester(booking, outcome, manager.full_name, reason),
@@ -472,6 +488,8 @@ export async function notifyCancelled(
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const requester = requesterRecipient(booking);
+    // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+    const requesterCc = await requesterCopyTo(booking);
     const desk = heldRooms ? await deskRecipients() : [];
     const copyTo = desk.length > 0 ? await copyToAddresses(booking) : [];
     const stamp = booking.updated_at;
@@ -485,6 +503,7 @@ export async function notifyCancelled(
             eventKey: "booking.cancelled.requester",
             booking,
             to: [requester.email],
+            cc: requesterCc,
             subjectText: "Booking cancelled",
             doc: t.cancelledToRequester(booking, reason),
             stamp,
@@ -530,13 +549,15 @@ export async function notifyInvoiceIssued(invoiceId: string): Promise<void> {
       .map((id) => profiles.find((p) => p.id === id)?.email)
       .filter((e): e is string => Boolean(e));
     const requester = requesterRecipient(booking);
+    // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+    const requesterCc = await requesterCopyTo(booking);
 
     await queueMessages([
       {
         eventKey: "invoice.issued.accounts",
         booking,
         to: [accounts],
-        cc: [...hods, ...(requester ? [requester.email] : [])],
+        cc: [...hods, ...(requester ? [requester.email] : []), ...requesterCc],
         subjectText: `Invoice ${invoice.invoice_number}`,
         doc: t.invoiceToAccounts(booking, invoice.document),
         stamp: invoice.issued_at ?? invoice.created_at,
@@ -581,11 +602,14 @@ export async function notifyExtensionDecided(
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const requester = requesterRecipient(booking);
+    // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+    const requesterCc = await requesterCopyTo(booking);
     await queueMessages([
       requester && {
         eventKey: "booking.extension_decided.requester",
         booking,
         to: [requester.email],
+        cc: requesterCc,
         subjectText: approved ? "Stay extended" : "Extension not approved",
         doc: t.extensionDecidedToRequester(booking, approved, until, note),
         stamp: `${booking.updated_at}:${approved ? "yes" : "no"}`,
@@ -599,11 +623,14 @@ export async function notifyNoShowReleased(bookingId: string, automatic: boolean
     const booking = await freshBooking(bookingId);
     if (!booking) return;
     const requester = requesterRecipient(booking);
+    // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+    const requesterCc = await requesterCopyTo(booking);
     await queueMessages([
       requester && {
         eventKey: "booking.no_show.requester",
         booking,
         to: [requester.email],
+        cc: requesterCc,
         subjectText: "Booking released — guest did not arrive",
         doc: t.noShowToRequester(booking, automatic, reason),
         // Once per booking: a re-run of the automatic release sends nothing.

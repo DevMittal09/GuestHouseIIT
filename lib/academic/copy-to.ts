@@ -33,6 +33,9 @@ export type CopyToRoute = {
   user_role: Role;
   service_type?: ServiceType;
   booking_type?: BookingType | string;
+  /** Who raised it, where that is not the requester — a club's faculty in-charge. */
+  user_id?: string | null;
+  created_by?: string | null;
 };
 
 /** Pure core: the approvers of the chain, from profiles and units already loaded. */
@@ -104,11 +107,17 @@ export async function copyToFor(
   return { entries: unique, failed };
 }
 
-/** The form's route before a booking exists: the role's default booking type. */
-export function formRouteFor(requester: Profile): CopyToRoute {
+/**
+ * The form's route before a booking exists: the role's default booking type.
+ * `raisedBy` is the faculty in-charge filling in a club's form, whose own
+ * stage the route then skips.
+ */
+export function formRouteFor(requester: Profile, raisedBy?: Profile | null): CopyToRoute {
   return {
     user_role: requester.role,
     service_type: "room",
     booking_type: defaultBookingTypeFor(requester.role) ?? undefined,
+    user_id: requester.id,
+    created_by: raisedBy?.id ?? null,
   };
 }

@@ -72,6 +72,28 @@ Two panels sit between the stay details and the guest list:
 
 Rooms are added as individual cards via `useFieldArray`. Each room card holds its own guests via a nested `useFieldArray`. The **Remove room** button deletes the room and its guests. Uploaded files are held in a `Map` keyed by field-array row id, outside react-hook-form, because `File` objects do not belong in form state.
 
+**Added 24 Sep 2026** (the office's fourth list — [15-recent-changes.md](15-recent-changes.md)):
+
+- **Copy to (optional)** — a card of email rows (`copy_to`, its own
+  `useFieldArray` of `{ email }`), "Add another email", at most
+  `MAX_COPY_TO_EMAILS` (25). The form sends every row; the schema's
+  `copyToField` drops blanks and repeats and puts an error on the bad row
+  (`copy_to_emails.<i>` → `copy_to.<i>.email`). Stored as
+  `bookings.copy_to_emails`; every mail **to the requester** is CC'd to it.
+- **Project sub-head** — an optional text box under the project list when the
+  head is Project (`debit_subhead`, 120 chars). Sent only with Project.
+- **Special Funds** — the head's name box and sanction letter are both
+  optional now (`debitDetailsRequired` is false, `acceptsDebitDocument`
+  replaced `needsDebitDocument`).
+- **Age** — labelled per the form config; where optional it says "Needed only
+  for a child below 5", and a blank age is an adult (`ageField` in the schema).
+- **Booking for a club** — `forClub` prop. `/book?for=<club profile id>`
+  renders the club's own form (`user` and `config` are the club's) under a
+  banner; the submission carries `for_club`, which `createBooking` re-checks
+  against `clubsBookableByUser`. A club's own account sees an explanation
+  naming its faculty in-charge instead of the form; a `faculty_advisor` with
+  one club is redirected straight to it, with several gets a chooser.
+
 **Counts use `components/ui/quantity-input.tsx`**, not a raw number input. It keeps the typed string so the box can be cleared and retyped.
 
 Several policy rules are applied here as well as in the schema:
@@ -449,7 +471,9 @@ IAR Office) approves those *and* books itself, going straight to
 
 `gh_caretaker` + `/caretaker` + `components/caretaker-console.tsx`. A deliberate
 **subset** of the manager's console: today's checkouts, current occupants,
-awaiting check-out, upcoming stays, and marking guests Occupied / Vacated.
+awaiting check-out, **checked out — to bill** (since 24 Sep 2026: reception
+issues the invoice, and a vacated stay used to vanish from this console with
+its bill open), upcoming stays, and marking guests Occupied / Vacated.
 No allocation, no approvals, no cancellations — it never even loads the pending
 queue.
 
@@ -458,8 +482,9 @@ Shared rather than copied, so the two consoles cannot drift:
 - **`components/stays-table.tsx`** — the allocated-stays table and its lifecycle
   buttons, used by both consoles. Renders through `displayStatus()`.
 - **`components/checkouts-today.tsx`** — rooms due back today, earliest first,
-  overdue flagged, Mark as Vacated inline. Only an `OCCUPIED` stay can be
-  vacated; an approved guest who never arrived is closed off by the manager.
+  overdue flagged, Mark as Vacated and **Invoice** inline. Only an `OCCUPIED`
+  stay can be vacated; an approved guest who never arrived is closed off by the
+  manager.
 
 `canUpdateLifecycle()` / `LIFECYCLE_ROLES` (`lib/workflow.ts`) gate the one
 action the two roles share, server-side in `updateBookingLifecycle`.
@@ -546,7 +571,17 @@ desk for a desk record — and **CC is the booking's Copy-to list**
 console first, else the academic record). `addressStaffMail` removes anyone
 already in To from CC and de-duplicates both ignoring case. When the booking
 moves on, the next mail's To moves with it and the approver who forwarded it
-stays in CC. Requester mail has no CC.
+stays in CC.
+
+**Requester mail has its own CC** (24 Sep 2026, `requesterCopyTo()` in
+`lib/mail/recipients.ts`): the addresses the requester added under **Copy to**
+on New Booking (`bookings.copy_to_emails`), and — on a club booking raised by
+its faculty in-charge — that faculty member, since the To is the club's
+account. Every "Requester" row below carries it, as do the check-in reminder
+and the official invoice to Accounts. Staff mail does not: an outsider has no
+use for "awaiting your review". Two different lists both called Copy to — the
+card's (approvers, staff CC) and the booking's (named by the requester,
+requester CC).
 
 | Event | To | CC | Carries |
 | --- | --- | --- | --- |
@@ -745,6 +780,23 @@ are in `public/invoice/`. The flow, in the manager's and caretaker's consoles
   (`canIssueInvoices`); only the manager and developer cancel
   (`canCancelInvoices`). Each action re-checks and writes `invoice.issued`,
   `invoice.paid` or `invoice.cancelled` to the security audit log.
+- **After check-out (24 Sep 2026).** Where the desk reaches an invoice:
+  the Invoice button on an occupied stay and in **Checking out today**
+  (`components/checkouts-today.tsx`); **Checked out — to bill** on both
+  `/manager` and `/caretaker` — vacated in the last `UNSETTLED_WINDOW_DAYS`
+  (30) and not yet paid, one rule, `awaitingSettlement()`; and the **Approval
+  Log** (`/history`), which gives the desk an Invoice button on every
+  checked-out stay and approved dining booking, however old
+  (`invoiceableFromArchive`), for reprints and late bills.
+- **What the page prints (24 Sep 2026).** `invoiceFacts()` builds the two
+  columns of facts for the PDF *and* the desk's preview. Project Detail,
+  Project Number and Project Sub-head appear **only with the Project head**; a
+  Special Fund's name only with Special Funds. A **dining** invoice
+  (`InvoiceDocument.kind`, read through `invoiceKind()` so older snapshots
+  work) prints Meal Date(s) (`describeMealDates`) and No. of Guests instead of
+  check-in/out, rooms, infants and primary guest, has no room table, and its
+  totals read Total / Grand Total (including GST) rather than A+B
+  (`invoiceTotalLabels`). The accounts mail follows the same rules.
 
 ## Dining (Phase 6)
 

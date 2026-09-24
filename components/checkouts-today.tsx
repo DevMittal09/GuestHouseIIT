@@ -5,6 +5,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { updateBookingLifecycle } from "@/app/actions/bookings";
+import { InvoiceDialog } from "@/components/invoice-dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -104,7 +105,9 @@ function CheckoutRow({ booking, nowIso }: { booking: BookingWithDetails; nowIso:
     startTransition(async () => {
       const result = await updateBookingLifecycle(booking.id, "VACATED");
       if (result.ok) {
-        toast.success(`${booking.booking_reference_id} — ${STATUS_LABELS.VACATED}`);
+        toast.success(
+          `${booking.booking_reference_id} — ${STATUS_LABELS.VACATED}. Its invoice is under "Checked out — to bill".`
+        );
         router.refresh();
       } else {
         toast.error(result.error);
@@ -134,14 +137,19 @@ function CheckoutRow({ booking, nowIso }: { booking: BookingWithDetails; nowIso:
       </TableCell>
       <TableCell className="text-right">
         {canVacate ? (
-          <Button
-            size="sm"
-            className="bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500"
-            disabled={isPending}
-            onClick={vacate}
-          >
-            {isPending ? "Updating…" : "Mark as Vacated"}
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              size="sm"
+              className="bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500"
+              disabled={isPending}
+              onClick={vacate}
+            >
+              {isPending ? "Updating…" : "Mark as Vacated"}
+            </Button>
+            {/* The bill, beside the check-out it goes with. After Vacated the
+                stay moves to "Checked out — to bill", invoice and all. */}
+            <InvoiceDialog booking={booking} />
+          </div>
         ) : (
           <span className="text-xs text-muted-foreground">Not checked in</span>
         )}

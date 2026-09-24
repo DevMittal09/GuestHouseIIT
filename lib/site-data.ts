@@ -13,6 +13,7 @@ import {
 } from "./types";
 import { defaultBookingTypeFor } from "./booking-types";
 import { isAdvanceWindowExempt, isOfficeRole, routeFor } from "./workflow";
+import { mustBookThroughFacultyInCharge } from "./club-booking";
 import type { BookingStatus } from "./types";
 
 /**
@@ -105,8 +106,18 @@ const STAGE_NAMES: Partial<Record<BookingStatus, string>> = {
  */
 function approversFor(role: Role): string[] {
   const type = defaultBookingTypeFor(role) ?? "official";
-  const stages = routeFor(role, "room", { bookingType: type, hasHodApprover: true, officeApproval: "direct" });
-  const names = stages.map((s) => STAGE_NAMES[s] ?? s);
+  // A club's booking is raised by its faculty in-charge (24 Sep 2026), which
+  // is why its route starts after the Faculty Advisor stage.
+  const stages = routeFor(role, "room", {
+    bookingType: type,
+    hasHodApprover: true,
+    officeApproval: "direct",
+    raisedByFacultyInCharge: mustBookThroughFacultyInCharge(role),
+  });
+  const names = stages.map((s) =>
+    // A club has an HOD stage only where the console names one for it.
+    s === "PENDING_HOD" && role === "club" ? "HOD (where the club has one)" : (STAGE_NAMES[s] ?? s)
+  );
   if (isOfficeRole(role)) names.push("HOD (if the office asks for it)");
   return [...names, ROLE_LABELS.gh_manager];
 }
@@ -122,7 +133,9 @@ const loadSitePolicies = unstable_cache(
 
     const routes = configs.map(([role, config]) => ({
       role,
-      label: ROLE_LABELS[role],
+      label: mustBookThroughFacultyInCharge(role)
+        ? `${ROLE_LABELS[role]} — booked by its faculty in-charge`
+        : ROLE_LABELS[role],
       approvers: approversFor(role),
       guestHouses: config.allowed_guest_house_ids
         .map((id) => nameOf.get(id))

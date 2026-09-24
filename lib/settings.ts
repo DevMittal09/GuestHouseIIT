@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEFAULT_DEBIT_RULES, debitRulesSchema, type DebitRules } from "./debit-heads";
+import { DEFAULT_DEBIT_RULES, debitRulesSchema, upgradeDebitRules, type DebitRules } from "./debit-heads";
 import type { MealKey, RoomType } from "./types";
 
 /**
@@ -416,11 +416,17 @@ export function parseRuleGroup<G extends RuleGroup>(group: G, stored: unknown): 
  * Saving capacity once from the console writes the combined cap, after which
  * this leaves the row alone for good. The `booking_guests` trigger applies the
  * same repair in SQL (migration 23), so the database and the app agree.
+ *
+ * **Debitable heads, 24 Sep 2026.** Special Funds joined every official
+ * category's list. A row saved before that replaces the default lists
+ * wholesale and would never offer it; `upgradeDebitRules` adds it once and
+ * marks the row current, so a later untick in the console sticks.
  */
 function upgradeStoredGroup(
   group: RuleGroup,
   stored: Record<string, unknown>
 ): Record<string, unknown> {
+  if (group === "debit") return upgradeDebitRules(stored);
   if (group !== "capacity" || "max_occupants_per_room" in stored) return stored;
   const rest = { ...stored };
   delete rest.max_infants_per_room;

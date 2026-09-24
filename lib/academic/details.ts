@@ -30,7 +30,11 @@ export type AcademicDetails = {
   sample: boolean;
 };
 
-export async function academicDetailsFor(profile: Profile): Promise<AcademicDetails> {
+export async function academicDetailsFor(
+  profile: Profile,
+  /** The faculty in-charge filling in a club's form, when that is who is. */
+  raisedBy: Profile | null = null
+): Promise<AcademicDetails> {
   const kind = academicRecordKindFor(profile.role);
   const lookup = await academicRecordFor(profile);
   const record = lookup.status === "found" ? lookup.record : null;
@@ -38,19 +42,20 @@ export async function academicDetailsFor(profile: Profile): Promise<AcademicDeta
     kind,
     status: lookup.status,
     rows: record ? academicRecordRows(record) : profileRows(profile),
-    copyTo: kind ? await copyToFor(profile, kind) : null,
+    copyTo: kind ? await copyToFor(profile, kind, raisedBy) : null,
     sample: record !== null && isMockAcademicSource(),
   };
 }
 
 async function copyToFor(
   profile: Profile,
-  kind: AcademicRecordKind
+  kind: AcademicRecordKind,
+  raisedBy: Profile | null
 ): Promise<CopyTo | null> {
   if (COPY_TO_RULE[kind].length === 0) return null;
   // The same rule the staff mail uses for CC (`lib/academic/copy-to.ts`), for
   // the request as the form opens — the role's default booking type.
-  const { entries, failed } = await copyToRecipients(profile, formRouteFor(profile));
+  const { entries, failed } = await copyToRecipients(profile, formRouteFor(profile, raisedBy));
   return {
     entries,
     emptyNote: failed

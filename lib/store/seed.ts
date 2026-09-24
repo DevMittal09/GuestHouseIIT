@@ -207,6 +207,8 @@ type DemoBooking = Omit<
   | "debit_head"
   | "debit_details"
   | "debit_document_url"
+  | "debit_subhead"
+  | "copy_to_emails"
   | "project_id"
   | "office_approval"
 > &
@@ -395,6 +397,8 @@ function withDefaults(b: DemoBooking): Booking {
     debit_head: DEMO_DEBIT_HEADS[b.user_role] ?? (b.booking_type === "personal" ? "personal_funds" : null),
     debit_details: null,
     debit_document_url: null,
+    debit_subhead: null,
+    copy_to_emails: [],
     project_id: null,
     office_approval: b.user_role === "official" || b.user_role === "iar_cell" ? "direct" : null,
     ...b,

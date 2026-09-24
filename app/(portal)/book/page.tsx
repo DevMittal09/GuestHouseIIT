@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BookingForm } from "@/components/booking-form";
 import { getCurrentUser } from "@/lib/auth";
@@ -13,28 +14,74 @@ import { REQUESTER_ROLES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/ty
 import { firstBookableMealDate } from "@/lib/meals";
 import { PageHeader } from "@/components/page-header";
 import { AcademicDetailsCard } from "@/components/academic-details";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { clubBookingNotice, mustBookThroughFacultyInCharge } from "@/lib/club-booking";
+import { clubsBookableByUser, facultyInChargeForClub } from "@/lib/club-booking-server";
 
 export default async function BookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ service?: string }>;
+  searchParams: Promise<{ service?: string; for?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect(SIGN_IN_PATH);
+  const { service, for: forParam } = await searchParams;
+
+  // A club's bookings are raised by its faculty in-charge (24 Sep 2026). The
+  // club's own account is told who that is instead of being given a form the
+  // server would refuse.
+  if (mustBookThroughFacultyInCharge(user.role)) {
+    const inCharge = await facultyInChargeForClub(user);
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        <PageHeader title="New Booking Request">
+          Club and fest bookings are made by the club&apos;s faculty in-charge.
+        </PageHeader>
+        <Card>
+          <CardHeader>
+            <CardTitle>Ask your faculty in-charge to book</CardTitle>
+            <CardDescription>{clubBookingNotice(inCharge)}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline">
+              <Link href="/dashboard">See the club&apos;s bookings</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // The clubs this person is faculty in-charge of — usually none.
+  const clubs = await clubsBookableByUser(user);
+  const club = forParam ? (clubs.find((c) => c.id === forParam) ?? null) : null;
+  if (forParam && !club) redirect("/book");
+
   // The Guest House Manager is not a requester, but they take bookings at the
   // desk for people who never open the portal — the form asks them who the
   // stay is for and records both parties.
-  const onBehalf = canBookOnBehalf(user.role);
-  if (!REQUESTER_ROLES.includes(user.role) && !onBehalf) redirect(homeForRole(user.role));
-  if (user.role === "official" && !isWhitelistedOfficial(user.email, await getOfficialEmails())) {
+  const onBehalf = canBookOnBehalf(user.role) && !club;
+  const requestsForSelf = REQUESTER_ROLES.includes(user.role) || canBookOnBehalf(user.role);
+  if (!club && !requestsForSelf) {
+    // A faculty advisor account books only for its club: straight to it when
+    // there is one, a choice when there are several, home when there is none.
+    if (clubs.length === 1) redirect(`/book?for=${encodeURIComponent(clubs[0].id)}`);
+    if (clubs.length === 0) redirect(homeForRole(user.role));
+    return <ClubChooser clubs={clubs} />;
+  }
+  if (!club && user.role === "official" && !isWhitelistedOfficial(user.email, await getOfficialEmails())) {
     redirect("/dashboard");
   }
+  // Whose form this is: the club's, when its faculty in-charge is booking for
+  // it — `createBooking` builds the same from `for_club`.
+  const requester = club ?? user;
 
   // The same context `createBooking` builds, so the form offers exactly what
   // the server accepts: Settings, debitable heads, projects, the HOD.
   const [config, context] = await Promise.all([
-    getEffectiveFormConfig(user.role),
-    bookingContextFor(user),
+    getEffectiveFormConfig(requester.role),
+    bookingContextFor(requester),
   ]);
   const guestHouses = (await getStore().listGuestHouses()).filter((g) =>
     config.allowed_guest_house_ids.includes(g.id)
@@ -44,9 +91,8 @@ export default async function BookPage({
   // is what the portal home's "Meal / Dining booking" button links to; an
   // unknown or ineligible value falls back to the ordinary room flow rather
   // than erroring, because a hand-edited URL is not worth a dead end.
-  const { service } = await searchParams;
   const allowedServices = serviceTypesFor(
-    user.role,
+    requester.role,
     guestHouses.some((g) => g.serves_meals)
   );
   const initialServiceType = allowedServices.includes(service as ServiceType)
@@ -58,25 +104,48 @@ export default async function BookPage({
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title={
-          mealsOnly
-            ? SERVICE_TYPE_LABELS.meals_only
-            : onBehalf
-              ? "New Booking (on behalf of a guest)"
-              : "New Booking Request"
+          club
+            ? `New Booking for ${club.full_name}`
+            : mealsOnly
+              ? SERVICE_TYPE_LABELS.meals_only
+              : onBehalf
+                ? "New Booking (on behalf of a guest)"
+                : "New Booking Request"
         }
       >
-        {mealsOnly
-          ? "Meals at the guest house with no room booked. Tell the kitchen how many people, which days and whether it is vegetarian — it goes straight to the Guest House Manager. Each meal has to be booked before the previous one finishes being served."
-          : onBehalf
-            ? "Take a booking for someone who cannot use the portal themselves. It is recorded against your account and names them as the guest."
-            : "Fill in the stay and guest details — the request enters the approval pipeline for your role automatically."}
+        {club
+          ? "You are booking for the club as its faculty in-charge. The request is the club's: it follows the club's form and route, and every mail about it reaches the club's account with you copied."
+          : mealsOnly
+            ? "Meals at the guest house with no room booked. Tell the kitchen how many people, which days and whether it is vegetarian — it goes straight to the Guest House Manager. Each meal has to be booked before the previous one finishes being served."
+            : onBehalf
+              ? "Take a booking for someone who cannot use the portal themselves. It is recorded against your account and names them as the guest."
+              : "Fill in the stay and guest details — the request enters the approval pipeline for your role automatically."}
       </PageHeader>
+      {/* A faculty in-charge booking for themselves is offered the club too. */}
+      {!club && clubs.length > 0 && (
+        <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+          Booking for a club you are faculty in-charge of?{" "}
+          {clubs.map((c, i) => (
+            <span key={c.id}>
+              {i > 0 && " · "}
+              <Link href={`/book?for=${encodeURIComponent(c.id)}`} className="font-medium underline underline-offset-4">
+                Book for {c.full_name}
+              </Link>
+            </span>
+          ))}
+        </p>
+      )}
       {/* Who is asking, from the academic database. Outside the form because
           nothing in it is editable, and above it so the requester checks it
-          first. */}
-      <AcademicDetailsCard user={user} title="Requester details" />
+          first. For a club's booking, that is the club. */}
+      <AcademicDetailsCard
+        user={requester}
+        title={club ? "Club details" : "Requester details"}
+        raisedBy={club ? user : null}
+      />
       <BookingForm
-        user={user}
+        forClub={club ? { id: club.id, name: club.full_name } : null}
+        user={requester}
         guestHouses={guestHouses}
         config={config}
         initialServiceType={initialServiceType}
@@ -89,6 +158,32 @@ export default async function BookPage({
         projects={context.projects}
         hodApprovers={context.hodApprovers}
       />
+    </div>
+  );
+}
+
+/** A faculty in-charge of several clubs picks which one they are booking for. */
+function ClubChooser({ clubs }: { clubs: { id: string; full_name: string; email: string }[] }) {
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <PageHeader title="New Booking for a Club">
+        You are the faculty in-charge of more than one club. Choose the one this booking is for.
+      </PageHeader>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {clubs.map((c) => (
+          <Card key={c.id}>
+            <CardHeader>
+              <CardTitle>{c.full_name}</CardTitle>
+              <CardDescription>{c.email}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild>
+                <Link href={`/book?for=${encodeURIComponent(c.id)}`}>Book for {c.full_name}</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }

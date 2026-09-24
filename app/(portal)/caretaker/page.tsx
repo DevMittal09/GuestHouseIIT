@@ -7,6 +7,7 @@ import { getStore } from "@/lib/store";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
+import { awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
 import { PageHeader } from "@/components/page-header";
 
 export default async function CaretakerPage({
@@ -33,12 +34,25 @@ export default async function CaretakerPage({
 
   // Only the two statuses that put a guest in a room. Pending requests are the
   // manager's business, so the caretaker never loads them.
-  const [allApproved, allOccupied] = await Promise.all([
+  // And the stays that have left without settling, because reception issues
+  // the invoice (24 Sep 2026) — the same list the manager has.
+  const [allApproved, allOccupied, allVacated] = await Promise.all([
     store.listBookings({ status: "APPROVED", guestHouseId: current.id }),
     store.listBookings({ status: "OCCUPIED", guestHouseId: current.id }),
+    store.listBookings({ status: "VACATED", guestHouseId: current.id }),
   ]);
 
   const now = new Date();
+  const recentlyVacated = allVacated.filter(
+    (b) => Date.parse(b.check_out) >= now.getTime() - UNSETTLED_WINDOW_DAYS * 86_400_000
+  );
+  const toBill = awaitingSettlement(
+    recentlyVacated,
+    recentlyVacated.length > 0
+      ? await store.listInvoices({ bookingIds: recentlyVacated.map((b) => b.id) }).catch(() => [])
+      : [],
+    now
+  );
   const stays = [...allApproved, ...allOccupied].sort((a, b) =>
     a.check_in.localeCompare(b.check_in)
   );
@@ -84,6 +98,7 @@ export default async function CaretakerPage({
         upcoming={upcomingStays}
         overdue={overdueStays}
         checkoutsToday={checkoutsToday}
+        toBill={toBill}
         nowIso={now.toISOString()}
       />
     </div>

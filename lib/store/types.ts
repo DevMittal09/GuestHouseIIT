@@ -107,6 +107,10 @@ export interface DataStore {
   createBooking(input: NewBookingInput): Promise<Booking>;
   getBooking(id: string): Promise<BookingWithDetails | null>;
   listBookings(filter: BookingFilter): Promise<BookingWithDetails[]>;
+  /**
+   * A person's own bookings, and any they raised for someone else — a club's
+   * faculty in-charge sees the club bookings they made (`created_by`).
+   */
   listBookingsForUser(userId: string): Promise<BookingWithDetails[]>;
 
   /**

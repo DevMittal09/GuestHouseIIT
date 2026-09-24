@@ -155,6 +155,8 @@ export interface Database {
           | "debit_head"
           | "debit_details"
           | "debit_document_url"
+          | "debit_subhead"
+          | "copy_to_emails"
           | "project_id"
           | "office_approval"
           | "created_at"

@@ -9,10 +9,10 @@ import { getRules } from "@/lib/settings-server";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
+import { awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
 import { PageHeader } from "@/components/page-header";
 
 /** How far back the desk's "checked out, not yet settled" list reaches. */
-const UNSETTLED_WINDOW_DAYS = 30;
 
 export default async function ManagerPage({
   searchParams,
@@ -76,21 +76,16 @@ export default async function ManagerPage({
    * the accounts section's business, through the archive and the monthly
    * collections export, not the desk's daily list.
    */
-  const recentlyVacated = allVacated
-    .filter((b) => b.service_type !== "meals_only")
-    .filter((b) => Date.parse(b.check_out) >= now.getTime() - UNSETTLED_WINDOW_DAYS * 86_400_000);
-  const settled = new Set(
-    (
-      await store
-        .listInvoices({ bookingIds: recentlyVacated.map((b) => b.id) })
-        .catch(() => [])
-    )
-      .filter((i) => i.status === "paid")
-      .map((i) => i.booking_id)
+  const recentlyVacated = allVacated.filter(
+    (b) => Date.parse(b.check_out) >= now.getTime() - UNSETTLED_WINDOW_DAYS * 86_400_000
   );
-  const toBill = recentlyVacated
-    .filter((b) => !settled.has(b.id))
-    .sort((a, b) => b.check_out.localeCompare(a.check_out));
+  const toBill = awaitingSettlement(
+    recentlyVacated,
+    recentlyVacated.length > 0
+      ? await store.listInvoices({ bookingIds: recentlyVacated.map((b) => b.id) }).catch(() => [])
+      : [],
+    now
+  );
 
   // "Today" is the guest house's day, not the server's — see lib/tz.ts.
   const { start: dayStart, end: dayEnd } = instituteDayBounds(toInstituteDateValue(now));

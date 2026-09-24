@@ -31,6 +31,9 @@ import {
   gstRowLabel,
   GST_INCLUDED_NOTE,
   INVOICE_STATUS_LABELS,
+  invoiceFacts,
+  invoiceKind,
+  invoiceTotalLabels,
   PAYMENT_MODE_LABELS,
   PAYMENT_MODES,
   type InvoiceDocument,
@@ -357,16 +360,14 @@ function InvoicePreview({
   counts: Record<keyof MealCounts, string> | null;
   onCount: (meal: keyof MealCounts, value: string) => void;
 }) {
-  const facts: [string, string][] = [
-    ["Booked by", doc.booked_by],
-    ["Department/Section/Institute", doc.unit],
-    ["Debitable head", doc.debit_head_label],
-    ...(doc.project_number ? ([["Project", `${doc.project_number} — ${doc.project_title ?? ""}`]] as [string, string][]) : []),
-    ["Primary guest", doc.primary_guest],
-    ["Check-in", formatDateTime(doc.check_in)],
-    ["Check-out", formatDateTime(doc.check_out)],
-    ["Rooms · guests · infants", `${doc.rooms} · ${doc.guests} · ${doc.infants}`],
-  ];
+  // The same facts the PDF prints (`invoiceFacts`): project rows only with
+  // the Project head, and on a dining invoice nothing about rooms.
+  const { left, right } = invoiceFacts(doc);
+  const facts = [...left, ...right]
+    .filter(([label]) => !/^Invoice (No|Date)/.test(label))
+    .map(([label, value]) => [label.replace(/\s*:\s*$/, ""), value] as [string, string]);
+  const dining = invoiceKind(doc) === "dining";
+  const labels = invoiceTotalLabels(doc);
   return (
     <div className="space-y-3 text-sm">
       <dl className="grid gap-x-4 gap-y-1 rounded-lg border p-3 sm:grid-cols-2">
@@ -380,39 +381,44 @@ function InvoicePreview({
 
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full min-w-[28rem] text-sm">
+          {/* A dining booking had no room, so there is no room table. */}
+          {!dining && (
+            <>
+              <thead className="bg-muted/60">
+                <tr>
+                  <th className="p-2 text-left font-medium">Room (with extra beds)</th>
+                  <th className="p-2 text-right font-medium">Day(s)</th>
+                  <th className="p-2 text-right font-medium">Tariff</th>
+                  <th className="p-2 text-right font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {doc.room_lines.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="p-2 text-muted-foreground">
+                      No rooms
+                    </td>
+                  </tr>
+                )}
+                {doc.room_lines.map((l, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="p-2">{l.description}</td>
+                    <td className="p-2 text-right tabular-nums">{l.days}</td>
+                    <td className="p-2 text-right tabular-nums">{l.rate === null ? "⚠ no rate" : formatINR(l.rate)}</td>
+                    <td className="p-2 text-right tabular-nums">{formatINR(l.amount)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t font-medium">
+                  <td colSpan={3} className="p-2 text-right">
+                    Sub Total (A)
+                  </td>
+                  <td className="p-2 text-right tabular-nums">{formatINR(doc.subtotal_rooms)}</td>
+                </tr>
+              </tbody>
+            </>
+          )}
           <thead className="bg-muted/60">
-            <tr>
-              <th className="p-2 text-left font-medium">Room (with extra beds)</th>
-              <th className="p-2 text-right font-medium">Day(s)</th>
-              <th className="p-2 text-right font-medium">Tariff</th>
-              <th className="p-2 text-right font-medium">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {doc.room_lines.length === 0 && (
-              <tr>
-                <td colSpan={4} className="p-2 text-muted-foreground">
-                  No rooms
-                </td>
-              </tr>
-            )}
-            {doc.room_lines.map((l, i) => (
-              <tr key={i} className="border-t">
-                <td className="p-2">{l.description}</td>
-                <td className="p-2 text-right tabular-nums">{l.days}</td>
-                <td className="p-2 text-right tabular-nums">{l.rate === null ? "⚠ no rate" : formatINR(l.rate)}</td>
-                <td className="p-2 text-right tabular-nums">{formatINR(l.amount)}</td>
-              </tr>
-            ))}
-            <tr className="border-t font-medium">
-              <td colSpan={3} className="p-2 text-right">
-                Sub Total (A)
-              </td>
-              <td className="p-2 text-right tabular-nums">{formatINR(doc.subtotal_rooms)}</td>
-            </tr>
-          </tbody>
-          <thead className="bg-muted/60">
-            <tr className="border-t">
+            <tr className={dining ? undefined : "border-t"}>
               <th className="p-2 text-left font-medium">Dining</th>
               <th className="p-2 text-right font-medium">No(s)</th>
               <th className="p-2 text-right font-medium">Tariff</th>
@@ -441,8 +447,8 @@ function InvoicePreview({
               </tr>
             ))}
             {[
-              ["Sub Total (B)", doc.subtotal_dining],
-              ["Total (A+B)", doc.total],
+              ...(dining ? [] : [["Sub Total (B)", doc.subtotal_dining]]),
+              [labels.total, doc.total],
               [gstRowLabel(doc).replace(/:$/, ""), doc.gst],
             ].map(([label, value]) => (
               <tr key={String(label)} className="border-t font-medium">
@@ -454,7 +460,7 @@ function InvoicePreview({
             ))}
             <tr className="border-t bg-muted/40 text-base font-semibold">
               <td colSpan={3} className="p-2 text-right">
-                Grand Total
+                {labels.grandTotal}
               </td>
               <td className="p-2 text-right tabular-nums">{formatINR(doc.grand_total)}</td>
             </tr>

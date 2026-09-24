@@ -1,4 +1,10 @@
-import { formatINR, formatInvoiceDate, type InvoiceDocument } from "@/lib/invoice";
+import {
+  describeMealDates,
+  formatINR,
+  formatInvoiceDate,
+  invoiceKind,
+  type InvoiceDocument,
+} from "@/lib/invoice";
 import { formatDateTime, formatDate } from "@/lib/format";
 import { describeMealDays, describeMeals, MEAL_LABELS, mealsOn } from "@/lib/meals";
 import { describeParty } from "@/lib/occupancy";
@@ -737,12 +743,27 @@ export function invoiceToAccounts(booking: BookingWithDetails, invoice: InvoiceD
           ["Invoice date", formatInvoiceDate(invoice.invoice_date)],
           ["Booked by", `${invoice.booked_by} — ${invoice.unit}`],
           ["Debitable head", invoice.debit_head_label],
-          ...(invoice.project_number
+          // The project only with the Project head, and its sub-head with it.
+          ...(invoice.debit_head === "project_grant" && invoice.project_number
             ? ([["Project", `${invoice.project_number} — ${invoice.project_title ?? ""}`]] as [string, string][])
             : []),
-          ["Primary guest", invoice.primary_guest],
-          ["Rooms (A)", formatINR(invoice.subtotal_rooms)],
-          ["Dining (B)", formatINR(invoice.subtotal_dining)],
+          ...(invoice.debit_head === "project_grant" && invoice.project_subhead
+            ? ([["Project sub-head", invoice.project_subhead]] as [string, string][])
+            : []),
+          ...(invoice.debit_head === "special_budget" && invoice.special_fund
+            ? ([["Special fund", invoice.special_fund]] as [string, string][])
+            : []),
+          // A dining invoice has no rooms and no primary guest to name.
+          ...(invoiceKind(invoice) === "dining"
+            ? ([
+                ["Meal date(s)", describeMealDates(invoice)],
+                ["Dining", formatINR(invoice.subtotal_dining)],
+              ] as [string, string][])
+            : ([
+                ["Primary guest", invoice.primary_guest],
+                ["Rooms (A)", formatINR(invoice.subtotal_rooms)],
+                ["Dining (B)", formatINR(invoice.subtotal_dining)],
+              ] as [string, string][])),
           ["GST (CGST + SGST)", `${formatINR(invoice.gst)} = ${formatINR(invoice.cgst ?? 0)} + ${formatINR(invoice.sgst ?? 0)}`],
           ["Grand total", formatINR(invoice.grand_total)],
         ],

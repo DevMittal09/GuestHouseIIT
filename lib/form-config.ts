@@ -126,16 +126,20 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
         unique_relationships: [...STUDENT_UNIQUE_RELATIONSHIPS],
         banner_text: DOUBLE_PREFERENCE_BANNER,
       };
+    // Faculty and staff (24 Sep 2026): **name and gender are the only
+    // mandatory guest details**; everything else is optional. The requester
+    // is a member of the institute, identifiable from their own account.
+    // There is still no ID upload for their guests — the office asked for it
+    // to go (23 Sep) — and an Aadhaar number typed is still validated.
     case "employee":
       return {
         ...base,
         relationship_style: "free_text",
         guest_fields: {
-          ...base.guest_fields,
-          // No ID proof from an employee's guests: the requester is a member
-          // of the institute, identifiable from their own account, and the
-          // office asked for the upload to go. The Aadhaar number is still
-          // taken for the guest house register, and still validated if typed.
+          name: "required",
+          age: "optional",
+          gender: "required",
+          relationship: "optional",
           id_number: "optional",
           id_document: "hidden",
         },
@@ -168,13 +172,15 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
         },
         relationship_style: "free_text",
       };
+    // An official booking needs only the guest's gender (24 Sep 2026) — the
+    // desk allocates rooms by it. A dignitary's name, age and ID are asked
+    // for but never demanded.
     case "official":
       return {
         ...base,
         guest_fields: {
           name: "optional",
-          // Required everywhere; see `sanitizeFormConfig`.
-          age: "required",
+          age: "optional",
           gender: "required",
           relationship: "hidden",
           id_number: "optional",
@@ -234,12 +240,14 @@ export function sanitizeFormConfig(
     allowed_guest_house_ids: ids.length > 0 ? ids : guestHouses.map((g) => g.id),
     guest_fields: {
       ...config.guest_fields,
-      // Age is not configurable, whatever a stored config says. A guest below
+      // Age may be required or optional, never hidden. A guest below
       // `INFANT_AGE_LIMIT` is an infant, and the per-room limit counts guests
-      // and infants separately — with the age hidden or blank, neither the
-      // form nor the server could tell which a guest is. Pinning it here means
-      // a configuration saved before the rule existed cannot switch it off.
-      age: "required",
+      // and infants separately, so the box must always be there for an
+      // infant's age. Where it is optional (faculty, staff and official
+      // forms since 24 Sep 2026) a guest left without one is an adult. A
+      // stored "hidden" — from before this rule — reads as required, as it
+      // always has.
+      age: config.guest_fields.age === "optional" ? "optional" : "required",
     },
     parent_relationships: dependents.length === 0 ? [] : parents,
     dependent_relationships: dependents,

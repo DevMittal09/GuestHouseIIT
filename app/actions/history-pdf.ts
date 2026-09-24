@@ -102,7 +102,7 @@ function toReportRow(b: BookingWithDetails): ReportRow {
     category: ROLE_LABELS[b.user_role],
     debitHead:
       b.debit_head === "project_grant" && b.debit_details
-        ? `Project ${b.debit_details.split(" — ")[0]}`
+        ? `Project ${b.debit_details.split(" — ")[0]}${b.debit_subhead ? ` / ${b.debit_subhead}` : ""}`
         : invoiceHeadLabel(b.debit_head),
     guestHouse: b.guest_house?.name ?? "—",
     checkIn: formatDateTime(b.check_in),

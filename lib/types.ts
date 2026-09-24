@@ -230,7 +230,10 @@ export const DEBIT_HEAD_LABELS: Record<DebitHead, string> = {
   professional_development_fund: "Professional Development Fund",
   project_grant: "Project Grant",
   department_budget: "Department Budget",
-  special_budget: "Special Budget",
+  // Stored as `special_budget` since migration 15; the office calls it
+  // Special Funds (24 Sep 2026), offered on every official booking but a
+  // student's.
+  special_budget: "Special Funds",
   personal_funds: "Personal Funds",
   alumni_fund: "Alumni Fund",
   student_fund: "Student Fund",
@@ -308,8 +311,10 @@ export type Booking = {
   has_foreign_national: boolean;
   /**
    * Who actually submitted the booking, when that is not the requester — the
-   * Guest House Manager booking on someone's behalf. Null on a booking the
-   * requester raised themselves.
+   * Guest House Manager booking on someone's behalf, or a club's faculty
+   * in-charge booking for the club (24 Sep 2026: a club cannot book for
+   * itself — `lib/club-booking.ts`). Null on a booking the requester raised
+   * themselves.
    */
   created_by: string | null;
   /**
@@ -336,8 +341,20 @@ export type Booking = {
    * the justification for a Special Budget. Null otherwise.
    */
   debit_details: string | null;
-  /** The sanction for a Special Budget, uploaded with the request. */
+  /** The sanction for Special Funds, when the requester uploaded one. */
   debit_document_url: string | null;
+  /**
+   * The project's sub-head, typed by the requester when the head is Project
+   * (migration 24) — "Travel", "Contingency". Null otherwise, and on every
+   * booking made before the question existed.
+   */
+  debit_subhead: string | null;
+  /**
+   * Extra addresses the requester asked to be copied on every mail sent to
+   * them about this booking (migration 24). Always an array downstream —
+   * empty when nobody was added, and on older rows.
+   */
+  copy_to_emails: string[];
   /**
    * The project debited when the head is Project (migration 18). The
    * project's number and title are also kept in `debit_details` as they were
@@ -538,6 +555,10 @@ export interface NewBookingInput {
   debit_head: DebitHead | null;
   debit_details: string | null;
   debit_document_url: string | null;
+  /** The project's sub-head, only with a Project head (migration 24). */
+  debit_subhead?: string | null;
+  /** Addresses copied on the requester's mail about this booking (migration 24). */
+  copy_to_emails?: string[];
   project_id?: string | null;
   office_approval?: "direct" | "hod" | null;
   meal_preference: MealPreference | null;
@@ -565,7 +586,11 @@ export interface NewBookingInput {
    * not added afterwards as a status change that never happened.
    */
   submission_remarks?: string | null;
-  /** Set only when someone booked on another person's behalf. */
+  /**
+   * Set only when someone booked on another person's behalf: the Guest House
+   * Manager at the desk (then it equals `user_id`), or a club's faculty
+   * in-charge booking for the club (then `user_id` is the club's account).
+   */
   created_by?: string | null;
   on_behalf_of_name?: string | null;
   on_behalf_of_email?: string | null;

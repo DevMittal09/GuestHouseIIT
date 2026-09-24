@@ -107,8 +107,15 @@ Rules worth keeping:
   role's default booking type; the mail uses the booking's own, so an
   employee's *personal* booking copies nobody. Rules by kind: student,
   student rep, employee and alumni office → the approvers of the chain;
-  office → the approvers (if its route has any) plus its head. Requester mail
-  carries no CC, and the record itself is still never mailed.
+  office → the approvers (if its route has any) plus its head. The record
+  itself is still never mailed.
+- **A second "Copy to" exists since 24 Sep 2026, and it is not this one.** On
+  New Booking the requester may type extra addresses (`bookings.copy_to_emails`)
+  that are CC'd on the *requester's* mail. The card's list is the approval
+  chain on *staff* mail. Different people, different mail — keep them apart.
+- **On a club's form filled in by its faculty in-charge** the card shows the
+  club's record ("Club details"), and its Copy-to line leaves out the Faculty
+  Advisor stage the booking will skip (`formRouteFor(club, raisedBy)`).
 - **The card is outside the `<form>`** on `/book`. It is read-only and
   submits nothing, and nothing from the record is stored on the booking.
 - **Personal data.** The student record holds parents' names and a phone

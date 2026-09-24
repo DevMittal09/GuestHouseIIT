@@ -146,10 +146,11 @@ describe("club: advisor or council secretary first, then the HOD it answers to",
 
 describe("debitable heads from the brief, per category", () => {
   it.each<[string, Role, BookingType, string[]]>([
-    ["faculty", "employee-priya" as Role, "official", ["department_budget", "project_grant", "professional_development_fund"]],
-    ["staff", "staff-ravi" as Role, "official", ["department_budget"]],
-    ["officer office", "official-admin" as Role, "official", ["institute_grant"]],
-    ["department office", "office-cse" as Role, "official", ["department_budget"]],
+    // Special Funds on every official booking since 24 Sep 2026.
+    ["faculty", "employee-priya" as Role, "official", ["department_budget", "project_grant", "professional_development_fund", "special_budget"]],
+    ["staff", "staff-ravi" as Role, "official", ["department_budget", "special_budget"]],
+    ["officer office", "official-admin" as Role, "official", ["institute_grant", "special_budget"]],
+    ["department office", "office-cse" as Role, "official", ["department_budget", "special_budget"]],
     ["personal", "employee-priya" as Role, "personal", ["personal_funds"]],
     ["student", "student-anjali" as Role, "personal", ["personal_funds"]],
   ])("%s", (_label, id, type, heads) => {
@@ -161,8 +162,8 @@ describe("debitable heads from the brief, per category", () => {
   it("dining never offers Project; staff get Department only", () => {
     const priya = P("employee-priya");
     const dining = debitHeadsByType("employee", ["official"], priya, units, DEFAULT_DEBIT_RULES, "dining");
-    expect(dining.official).toEqual(["department_budget", "professional_development_fund", "personal_funds"]);
-    expect(DEFAULT_DEBIT_RULES.dining.staff).toEqual(["department_budget"]);
+    expect(dining.official).toEqual(["department_budget", "professional_development_fund", "personal_funds", "special_budget"]);
+    expect(DEFAULT_DEBIT_RULES.dining.staff).toEqual(["department_budget", "special_budget"]);
   });
 
   /**

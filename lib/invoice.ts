@@ -6,6 +6,7 @@ import {
   addDaysToDateValue,
   formatDateValue,
   formatInstituteDate,
+  formatInstituteDateTime,
   parseDateValue,
   toInstituteDateValue,
 } from "./tz";
@@ -352,6 +353,12 @@ export function halves(tax: number): { cgst: number; sgst: number } {
 /** Everything printed on an invoice. Stored whole as the issued invoice's snapshot. */
 export type InvoiceDocument = {
   version: 1;
+  /**
+   * A stay, or a dining (meals-only) booking, which has no rooms, no check-in
+   * and no check-out — so its invoice prints none of them (24 Sep 2026).
+   * Absent on snapshots issued before then; read it through `invoiceKind`.
+   */
+  kind?: "stay" | "dining";
   booking_id: string;
   booking_reference: string;
   guest_house: string;
@@ -361,6 +368,12 @@ export type InvoiceDocument = {
   debit_head_label: string;
   project_title: string | null;
   project_number: string | null;
+  /** The project's sub-head the requester typed (migration 24). */
+  project_subhead?: string | null;
+  /** Which special fund, when the head is Special Funds and the requester said. */
+  special_fund?: string | null;
+  /** A dining booking's days, "yyyy-MM-dd", in order. Empty on a stay. */
+  meal_dates?: string[];
   /** Null until issued; the preview prints "DRAFT". */
   invoice_number: string | null;
   invoice_date: string;
@@ -535,6 +548,7 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
 
   return {
     version: 1,
+    kind: mealsOnly ? "dining" : "stay",
     booking_id: booking.id,
     booking_reference: booking.booking_reference_id,
     guest_house: house,
@@ -548,6 +562,9 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     debit_head_label: invoiceHeadLabel(booking.debit_head),
     project_title: project?.title || null,
     project_number: project?.number || null,
+    project_subhead: needsProject(booking.debit_head) ? (booking.debit_subhead ?? null) : null,
+    special_fund: booking.debit_head === "special_budget" ? (booking.debit_details ?? null) : null,
+    meal_dates: mealsOnly ? [...new Set(booking.meals.map((d) => d.date))].sort() : [],
     invoice_number: ctx.invoiceNumber ?? null,
     invoice_date: ctx.invoiceDate ?? new Date().toISOString(),
     primary_guest: primary,
@@ -579,6 +596,87 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
 /** "12 Oct 2026" for the Invoice Date line. */
 export function formatInvoiceDate(iso: string): string {
   return formatInstituteDate(iso);
+}
+
+/**
+ * Whether an invoice is for a stay or for dining alone. Snapshots issued
+ * before `kind` existed are read from their shape: a dining booking had no
+ * rooms and no room lines.
+ */
+export function invoiceKind(doc: Pick<InvoiceDocument, "kind" | "rooms" | "room_lines">): "stay" | "dining" {
+  if (doc.kind) return doc.kind;
+  return doc.rooms === 0 && doc.room_lines.length === 0 ? "dining" : "stay";
+}
+
+/**
+ * A dining booking's days as the invoice prints them: one range when they
+ * run on consecutive days ("12 Oct 2026 – 14 Oct 2026"), else a list.
+ * Snapshots without `meal_dates` fall back to the first and last day booked.
+ */
+export function describeMealDates(doc: Pick<InvoiceDocument, "meal_dates" | "check_in" | "check_out">): string {
+  const dates =
+    doc.meal_dates && doc.meal_dates.length > 0
+      ? doc.meal_dates
+      : [...new Set([toInstituteDateValue(doc.check_in), toInstituteDateValue(doc.check_out)])].sort();
+  const day = (d: string) => formatDateValue(d, { year: true, weekday: false });
+  if (dates.length === 1) return day(dates[0]);
+  const consecutive = dates.every((d, i) => i === 0 || addDaysToDateValue(dates[i - 1], 1) === d);
+  return consecutive ? `${day(dates[0])} – ${day(dates[dates.length - 1])}` : dates.map(day).join(", ");
+}
+
+/**
+ * The facts printed above the tariff table, left (who pays) and right (what
+ * was booked), for the PDF and the desk's preview alike — so the two cannot
+ * disagree about what an invoice says.
+ *
+ * - **Project details only with the Project head** (24 Sep 2026). They used
+ *   to print on every invoice, blank, which read as a project that had not
+ *   been filled in. The sub-head follows the project; a Special Fund's name
+ *   follows that head.
+ * - **A dining invoice says nothing about rooms**: no check-in or check-out,
+ *   no rooms, no infants, no primary guest — the days the kitchen cooked and
+ *   the head count instead.
+ */
+export function invoiceFacts(doc: InvoiceDocument): { left: [string, string][]; right: [string, string][] } {
+  const left: [string, string][] = [
+    ["Booked By (Name) : ", doc.booked_by],
+    ["Department/Section/Institute: ", doc.unit],
+    ["Debitable head: ", doc.debit_head_label],
+  ];
+  if (doc.debit_head === "project_grant") {
+    left.push(["Project Detail: ", doc.project_title ?? ""], ["Project Number: ", doc.project_number ?? ""]);
+    if (doc.project_subhead) left.push(["Project Sub-head: ", doc.project_subhead]);
+  }
+  if (doc.debit_head === "special_budget" && doc.special_fund) {
+    left.push(["Special Fund: ", doc.special_fund]);
+  }
+  const right: [string, string][] = [
+    ["Invoice No.: ", doc.invoice_number ?? "DRAFT — not yet issued"],
+    ["Invoice Date: ", formatInvoiceDate(doc.invoice_date)],
+  ];
+  if (invoiceKind(doc) === "dining") {
+    right.push(["Meal Date(s): ", describeMealDates(doc)], ["No. of Guests(s): ", String(doc.guests)]);
+  } else {
+    right.push(
+      ["Primary Guest Name: ", doc.primary_guest],
+      ["Check-In Date & Time: ", formatInstituteDateTime(doc.check_in)],
+      ["Check-Out Date & Time: ", formatInstituteDateTime(doc.check_out)],
+      ["No. of Room(s) : ", String(doc.rooms)],
+      ["No. of Guests(s): ", String(doc.guests)],
+      ["No. of Infants(s): ", String(doc.infants)]
+    );
+  }
+  return { left, right };
+}
+
+/** The totals rows under the tariff table — a dining invoice has no A and B. */
+export function invoiceTotalLabels(doc: Pick<InvoiceDocument, "kind" | "rooms" | "room_lines">): {
+  total: string;
+  grandTotal: string;
+} {
+  return invoiceKind(doc) === "dining"
+    ? { total: "Total", grandTotal: "Grand Total (including GST)" }
+    : { total: "Total (A+B)", grandTotal: "Grand Total (A+B including GST)" };
 }
 
 export const INVOICE_TITLE = (guestHouse: string) => `INVOICE - IIT Palakkad ${guestHouse} Guest House`;
@@ -633,6 +731,52 @@ export function invoiceBlocker(
     return "There is nothing to charge: no rooms were allocated and no meals were served.";
   }
   return null;
+}
+
+// ------------------------------------------------------ after check-out
+
+/**
+ * How far back the desk's "Checked out — to bill" list reaches. Older stays
+ * are still invoiced from the Approval Log; this is only the daily list.
+ */
+export const UNSETTLED_WINDOW_DAYS = 30;
+
+/**
+ * Stays that have checked out and are not yet paid for, newest first — the
+ * desk's list of bills to settle, on the manager's console and the
+ * caretaker's alike (24 Sep 2026: the caretaker issues invoices at
+ * reception, and had no way back to a stay once it was marked Vacated).
+ *
+ * A dining booking is not here: it never checks out, and the kitchen page
+ * has its own "Dining to invoice". A cancelled invoice leaves the stay on
+ * the list, since the bill is open again.
+ */
+export function awaitingSettlement(
+  vacated: BookingWithDetails[],
+  invoices: Pick<InvoiceRecord, "booking_id" | "status">[],
+  now: Date = new Date(),
+  windowDays: number = UNSETTLED_WINDOW_DAYS
+): BookingWithDetails[] {
+  const since = now.getTime() - windowDays * 86_400_000;
+  const paid = new Set(invoices.filter((i) => i.status === "paid").map((i) => i.booking_id));
+  return vacated
+    .filter((b) => b.status === "VACATED" && b.service_type !== "meals_only")
+    .filter((b) => Date.parse(b.check_out) >= since && !paid.has(b.id))
+    .sort((a, b) => b.check_out.localeCompare(a.check_out));
+}
+
+/**
+ * Whether the desk can open an invoice for this booking from the archive —
+ * after check-out, however long ago. Before that the consoles offer it: an
+ * occupied stay from its row, a dining booking from the kitchen page.
+ */
+export function invoiceableFromArchive(
+  booking: Pick<BookingWithDetails, "status" | "service_type">
+): boolean {
+  if (booking.service_type === "meals_only") {
+    return booking.status === "APPROVED" || booking.status === "OCCUPIED" || booking.status === "VACATED";
+  }
+  return booking.status === "OCCUPIED" || booking.status === "VACATED";
 }
 
 // ------------------------------------------------------------ the record

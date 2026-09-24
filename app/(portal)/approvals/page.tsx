@@ -1,11 +1,14 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { clubsBookableByUser } from "@/lib/club-booking-server";
 import { PageHeader } from "@/components/page-header";
 import { ReviewQueue } from "@/components/review-queue";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { approvesClubsFor, UNIT_HEAD_TITLES } from "@/lib/units";
-import { canReview } from "@/lib/workflow";
+import { canReviewBooking } from "@/lib/workflow";
 
 /**
  * One queue for everyone who approves by appointment rather than by role.
@@ -30,7 +33,7 @@ export default async function ApprovalsPage() {
   // The club stage only; HOD approvals have their own queue at /hod.
   const club = await store.listBookings({ status: "PENDING_FA" });
   const mine = club
-    .filter((b) => canReview(user, b.status, b.requester, units))
+    .filter((b) => canReviewBooking(user, b, units))
     .sort((a, b) => a.check_in.localeCompare(b.check_in));
 
   const headed = units.filter(
@@ -43,9 +46,26 @@ export default async function ApprovalsPage() {
       `${u.acting_head_id === user.id && u.head_id !== user.id ? "Acting " : ""}${UNIT_HEAD_TITLES[u.kind]}, ${u.name}`
   );
 
+  // A faculty in-charge raises the club's bookings themselves (24 Sep 2026),
+  // so the way in is here, on the page they land on.
+  const clubs = await clubsBookableByUser(user);
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Club Approvals">
+      <PageHeader
+        title="Club Approvals"
+        actions={
+          clubs.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {clubs.map((c) => (
+                <Button key={c.id} asChild>
+                  <Link href={`/book?for=${encodeURIComponent(c.id)}`}>Book for {c.full_name}</Link>
+                </Button>
+              ))}
+            </div>
+          ) : undefined
+        }
+      >
         {roles.length > 0 ? (
           <>
             Requests waiting on you as <span className="font-medium">{roles.join("; ")}</span>.

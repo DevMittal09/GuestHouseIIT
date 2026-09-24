@@ -18,14 +18,14 @@ code is right and this page is a bug.
 | Student | `/dashboard` | Books for family. Their Assistant Warden reviews it. |
 | Employee (faculty or staff) | `/dashboard` | Books officially (HOD approves) or personally (straight to the manager). |
 | Official / dignitary office | `/dashboard` | Books for the institute's guests. Chooses **Direct** or **Requires HOD approval** per booking. |
-| Club / fest council | `/dashboard` | Books officially. Its Faculty Advisor or council secretary reviews, then the HOD if the club has one. |
+| Club / fest council | `/dashboard` | **Does not book** (24 Sep 2026). Sees and follows the bookings its faculty in-charge raises for it, and gets every mail about them. |
 | IAR Student Cell | `/dashboard` | Raises alumni bookings. The IAR Office reviews. |
 | IAR Office | `/iar` | Reviews the Student Cell's requests, and books for its own office. |
 | Assistant Warden | `/warden` | Reviews their own hostel's students' requests. |
-| Faculty Advisor / council secretary | `/approvals` | Reviews their club's requests. |
+| Faculty Advisor / council secretary | `/approvals` | Reviews their club's requests. A club's **faculty in-charge** (its own unit head, not a student, or its Faculty Advisor account) **books for the club** — "Book for …" on this page. |
 | HOD (by appointment, not by role) | `/hod` | Reviews official requests from their department, its staff and its office. |
 | Guest House Manager | `/manager` | Allocates rooms, approves, runs the desk, issues invoices, takes bookings for people who cannot use the portal. |
-| Guest House Caretaker | `/caretaker` | Marks arrivals and departures. Sees the same stays table as the manager. |
+| Guest House Caretaker | `/caretaker` | Marks arrivals and departures, and issues the invoice — including after check-out, from "Checked out — to bill". Sees the same stays table as the manager. |
 | Developer | `/admin` | Settings, accounts, units, tariffs, forms, mail templates, audit. |
 
 **Approval by appointment.** An HOD is whoever heads the unit *now* (Console →
@@ -91,15 +91,23 @@ is debited to the Institute Grant; a department office to the Department.
 
 ### 2.4 A club's stay
 
+Since 24 Sep 2026 a club does not book for itself: its **faculty in-charge**
+books for it (`/book?for=<club>`), and the booking is the club's — its account,
+its route, its debitable heads — with the faculty member as `created_by`. The
+Faculty Advisor stage is skipped, because that is who raised it.
+
 ```mermaid
 flowchart LR
-  C[Club submits] --> FA[Pending Club Approval<br/>Faculty Advisor or council secretary]
-  FA -->|Forward| H{Club's unit has an HOD?}
+  F[Faculty in-charge books for the club] --> H{Club's unit has an HOD?<br/>other than the one booking}
   H -->|Yes| HOD[Pending HOD Approval]
   H -->|No| M[Pending GH Manager]
   HOD -->|Forward| M
   M -->|Allocate rooms| AP[Approved]
 ```
+
+A club request stored before the rule (demo booking 2) still takes the old
+route: Pending Club Approval with the Faculty Advisor or council secretary
+first.
 
 ### 2.5 An alumnus's stay
 
@@ -139,7 +147,7 @@ flowchart TD
   CR -->|Manager agrees| CA[Cancellation Approved — rooms freed]
   O -->|Guest leaves| V[Vacated — rooms freed]
   O -->|Extension asked for and granted| O
-  V --> B[Checked out — to bill]
+  V --> B[Checked out — to bill<br/>manager and caretaker, 30 days;<br/>after that from the Approval Log]
   B -->|Issue & print| ISS[Invoice issued — numbered and frozen]
   ISS -->|Payment recorded| PAID[Paid]
   ISS -->|Cancel with a reason| CANC[Cancelled invoice — a corrected one may be issued]
@@ -181,6 +189,7 @@ the desk has to argue with.
 | When | What | Where |
 | --- | --- | --- |
 | Every submission and decision | Mail to the actioner, copy to everyone who has signed it off so far | `lib/mail/notify.ts` |
+| Every mail to the requester | Copied to the booking's own **Copy to** addresses (New Booking), and on a club booking to the faculty in-charge who raised it | `requesterCopyTo` in `lib/mail/recipients.ts` |
 | Every night | No-show release, ID-number erasure past the retention window, audit trimming | `/api/mail/cron` (Vercel Cron) |
 | Every few minutes | The mail outbox is dispatched | `/api/mail/dispatch` |
 | Any change to bookings, holds, blocks or invoices | Open desk screens re-fetch | `components/live-updates.tsx` |
@@ -192,7 +201,8 @@ the desk has to argue with.
 
 | Question | Answer in code |
 | --- | --- |
-| Who reviews this? | `routeFor`, `approvalStagesFor`, `canReview` (`lib/workflow.ts`) |
+| Who reviews this? | `routeFor`, `approvalStagesFor`, `canReview` / `canReviewBooking` (`lib/workflow.ts`) |
+| Who may book for a club? | `facultyInChargeOf`, `clubsBookableBy` (`lib/club-booking.ts`) |
 | Who heads this unit? | `approversOf`, `hodApproversFor` (`lib/units.ts`) |
 | May this role open this page? | `lib/access.ts`, and each page's own guard |
 | What may be charged? | `invoiceBlocker`, `buildInvoiceDocument` (`lib/invoice.ts`) |

@@ -248,6 +248,15 @@ function loadDb(): Db {
         b.project_id = null;
         dirty = true;
       }
+      // Migration 24's counterpart: nobody copied, no sub-head.
+      if (b.copy_to_emails === undefined) {
+        b.copy_to_emails = [];
+        dirty = true;
+      }
+      if (b.debit_subhead === undefined) {
+        b.debit_subhead = null;
+        dirty = true;
+      }
       if (b.created_by === undefined) {
         b.created_by = null;
         b.on_behalf_of_name = null;
@@ -562,6 +571,8 @@ export class MockStore implements DataStore {
       debit_head: input.debit_head,
       debit_details: input.debit_details,
       debit_document_url: input.debit_document_url,
+      debit_subhead: input.debit_subhead ?? null,
+      copy_to_emails: input.copy_to_emails ?? [],
       project_id: input.project_id ?? null,
       office_approval: input.office_approval ?? null,
       meal_preference: input.meal_preference,
@@ -611,12 +622,14 @@ export class MockStore implements DataStore {
         });
       }
     });
-    const requester = db.profiles.find((p) => p.id === input.user_id);
+    // Whoever actually pressed Submit: the requester, or the faculty
+    // in-charge who raised a club's booking for it.
+    const submitter = db.profiles.find((p) => p.id === (input.created_by ?? input.user_id));
     db.booking_logs.push({
       id: randomUUID(),
       booking_id: booking.id,
-      action_by: input.user_id,
-      action_by_name: requester?.full_name ?? "Unknown",
+      action_by: input.created_by ?? input.user_id,
+      action_by_name: submitter?.full_name ?? "Unknown",
       previous_status: null,
       new_status: input.status,
       remarks: input.submission_remarks ?? "Booking submitted",
@@ -695,8 +708,9 @@ export class MockStore implements DataStore {
 
   async listBookingsForUser(userId: string): Promise<BookingWithDetails[]> {
     const db = loadDb();
+    // Their own, and any a faculty in-charge raised for a club.
     return db.bookings
-      .filter((b) => b.user_id === userId)
+      .filter((b) => b.user_id === userId || b.created_by === userId)
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .map((b) => this.hydrate(db, b));
   }

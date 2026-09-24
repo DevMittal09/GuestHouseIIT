@@ -12,7 +12,7 @@ import { getStore } from "@/lib/store";
 import { canExportPdf, canViewHistory, historyScope, isRequesterHistory } from "@/lib/workflow";
 import { PageHeader } from "@/components/page-header";
 import { CollectionsExport } from "@/components/collections-export";
-import { canExportCollections } from "@/lib/access";
+import { canExportCollections, canIssueInvoices } from "@/lib/access";
 import { toInstituteDateValue } from "@/lib/tz";
 
 export default async function HistoryPage({
@@ -76,6 +76,7 @@ export default async function HistoryPage({
         pageSize={HISTORY_PAGE_SIZE}
         isOwnBookings={scope.isOwnBookings}
         canExportPdf={canExportPdf(user.role)}
+        canInvoice={canIssueInvoices(user.role)}
       />
     </div>
   );

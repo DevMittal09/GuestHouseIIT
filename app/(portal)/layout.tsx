@@ -12,6 +12,8 @@ import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
 import { isRequesterHistory } from "@/lib/workflow";
 import { getStore } from "@/lib/store";
 import { approvesClubsFor, isHodForAny } from "@/lib/units";
+import { mustBookThroughFacultyInCharge } from "@/lib/club-booking";
+import { clubsBookableByUser } from "@/lib/club-booking-server";
 
 /**
  * The signed-in shell, in the guest house website's style: a white header with
@@ -24,8 +26,14 @@ export default async function PortalLayout({ children }: { children: React.React
   if (!user) redirect(SIGN_IN_PATH);
 
   // Who may raise a booking, and who reads an approval log, are two different
-  // questions now that the IAR Office does both.
-  const canBook = REQUESTER_ROLES.includes(user.role);
+  // questions now that the IAR Office does both. A club's account has its
+  // bookings but raises none (its faculty in-charge does, 24 Sep 2026), and
+  // a faculty in-charge — a faculty advisor account, say — has the club's.
+  const clubs = await clubsBookableByUser(user);
+  const hasBookings = REQUESTER_ROLES.includes(user.role) || clubs.length > 0;
+  const canBook =
+    (REQUESTER_ROLES.includes(user.role) && !mustBookThroughFacultyInCharge(user.role)) ||
+    clubs.length > 0;
   const readsOwnHistory = isRequesterHistory(user.role);
   // Approvers by appointment - an HOD, a council secretary - hold no reviewer
   // role, so the nav asks the units rather than the role. A missing units
@@ -37,12 +45,8 @@ export default async function PortalLayout({ children }: { children: React.React
   const hod = isHodForAny(user.id, units);
 
   const nav: NavItem[] = [
-    ...(canBook
-      ? [
-          { href: "/dashboard", label: "My Bookings" },
-          { href: "/book", label: "New Booking" },
-        ]
-      : []),
+    ...(hasBookings ? [{ href: "/dashboard", label: "My Bookings" }] : []),
+    ...(canBook ? [{ href: "/book", label: "New Booking" }] : []),
     ...(user.role === "warden" ? [{ href: "/warden", label: "Assistant Warden Queue" }] : []),
     ...(hod ? [{ href: "/hod", label: "HOD Queue" }] : []),
     ...(approves ? [{ href: "/approvals", label: "Club Approvals" }] : []),

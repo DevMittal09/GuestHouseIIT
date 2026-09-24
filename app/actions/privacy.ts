@@ -48,6 +48,9 @@ export async function exportMyData(): Promise<
         rooms: b.assigned_rooms.map((r) => r.room_number),
         meals: b.meals,
         debitable_head: b.debit_head,
+        project_subhead: b.debit_subhead ?? null,
+        // Addresses the requester chose to copy on this booking's mail.
+        copy_to: b.copy_to_emails ?? [],
         privacy_notice_version: b.privacy_notice_version ?? null,
         consent_at: b.privacy_consent_at ?? null,
         guests: b.guests.map((g) => ({

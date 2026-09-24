@@ -10,11 +10,17 @@ import { headsAnyUnit, type Unit } from "@/lib/units";
 import {
   ACTIVE_STATUSES,
   ROOM_HOLDING_STATUSES,
-  canReview,
+  canReviewBooking,
   checksOutOn,
   stayPhase,
 } from "@/lib/workflow";
-import { addressesOf, managerRecipients, profilesWithRole, requesterRecipient } from "./recipients";
+import {
+  addressesOf,
+  managerRecipients,
+  profilesWithRole,
+  requesterCopyTo,
+  requesterRecipient,
+} from "./recipients";
 import { queueMessages } from "./notify";
 import * as t from "./templates";
 
@@ -109,7 +115,7 @@ export async function queueReviewerDigests(now: Date): Promise<number> {
     // `canReview` again, not a hand-rolled hostel or club match: the digest
     // must list exactly what this person's buttons can act on.
     const mine = pending
-      .filter((booking) => canReview(reviewer, booking.status, booking.requester, units))
+      .filter((booking) => canReviewBooking(reviewer, booking, units))
       .sort((a, b) => a.check_in.localeCompare(b.check_in));
     // Silence is the right mail for an empty queue.
     if (mine.length === 0) continue;
@@ -149,6 +155,8 @@ export async function queueCheckInReminders(now: Date): Promise<number> {
         eventKey: "stay.reminder.requester",
         booking,
         to: [requester.email],
+        // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+        cc: await requesterCopyTo(booking),
         subjectText: "Your stay begins tomorrow",
         doc: t.reminderToRequester(booking),
         // Keyed on the arrival date, so this cannot fire twice even if the
@@ -276,7 +284,7 @@ export async function queueEscalations(now: Date): Promise<number> {
   let queued = 0;
   for (const reviewer of reviewers) {
     const mine = stale
-      .filter((booking) => canReview(reviewer, booking.status, booking.requester, units))
+      .filter((booking) => canReviewBooking(reviewer, booking, units))
       .sort((a, b) => (a.updated_at ?? a.created_at).localeCompare(b.updated_at ?? b.created_at));
     if (mine.length === 0) continue;
 

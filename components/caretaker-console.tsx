@@ -24,12 +24,15 @@ export function CaretakerConsole({
   upcoming,
   overdue,
   checkoutsToday,
+  toBill = [],
   nowIso,
 }: {
   current: BookingWithDetails[];
   upcoming: BookingWithDetails[];
   overdue: BookingWithDetails[];
   checkoutsToday: BookingWithDetails[];
+  /** Checked out, invoice not yet paid — the same list as the manager's. */
+  toBill?: BookingWithDetails[];
   nowIso: string;
 }) {
   return (
@@ -69,6 +72,27 @@ export function CaretakerConsole({
             rooms. Close them off once the room is handed back.
           </p>
           <StaysTable bookings={overdue} showOverdue />
+        </section>
+      )}
+
+      {/* Checked out and still owing (24 Sep 2026). Reception issues the
+          invoice, and a stay marked Vacated used to vanish from this console
+          with its bill still open — the manager had this list, the desk that
+          hands the invoice over did not. */}
+      {toBill.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold">
+            Checked out — to bill{" "}
+            <Badge variant="secondary" className="align-middle">
+              {toBill.length}
+            </Badge>
+          </h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            These guests have left and their invoice is not yet paid. Issue it, print it again, or
+            record the payment — they leave this list once it is settled. Older stays are invoiced
+            from the Approval Log.
+          </p>
+          <StaysTable bookings={toBill} />
         </section>
       )}
 

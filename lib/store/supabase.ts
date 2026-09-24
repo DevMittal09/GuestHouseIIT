@@ -191,6 +191,8 @@ export class SupabaseStore implements DataStore {
       on_behalf_of_name,
       on_behalf_of_email,
       on_behalf_of_phone,
+      copy_to_emails,
+      debit_subhead,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars -- discarded on purpose; see above
       submission_remarks: _submissionRemarks,
       ...bookingInput
@@ -213,6 +215,11 @@ export class SupabaseStore implements DataStore {
         on_behalf_of_name: on_behalf_of_name ?? null,
         on_behalf_of_email: on_behalf_of_email ?? null,
         on_behalf_of_phone: on_behalf_of_phone ?? null,
+        // Named only when there is something to store, so a database without
+        // migration 24 still takes every booking that copies nobody and has
+        // no sub-head — which is most of them.
+        ...(copy_to_emails && copy_to_emails.length > 0 ? { copy_to_emails } : {}),
+        ...(debit_subhead ? { debit_subhead } : {}),
       })
       .select()
       .single();
@@ -250,17 +257,25 @@ export class SupabaseStore implements DataStore {
       }
     }
 
-    const requester = await this.getProfile(input.user_id);
+    // Whoever actually pressed Submit: the requester, or the faculty
+    // in-charge who raised a club's booking for it.
+    const submitter = await this.getProfile(created_by ?? input.user_id);
     const { error: logError } = await this.db.from("booking_logs").insert({
       booking_id: booking.id,
-      action_by: input.user_id,
-      action_by_name: requester?.full_name ?? "Unknown",
+      action_by: created_by ?? input.user_id,
+      action_by_name: submitter?.full_name ?? "Unknown",
       new_status: input.status,
       remarks: input.submission_remarks ?? "Booking submitted",
     });
     if (logError) throw logError;
     // A fresh booking holds nothing until the manager allocates rooms.
-    return { ...booking, meals: normalizeMeals(booking.meals, booking), assigned_room_ids: [] };
+    return {
+      ...booking,
+      meals: normalizeMeals(booking.meals, booking),
+      copy_to_emails: booking.copy_to_emails ?? [],
+      debit_subhead: booking.debit_subhead ?? null,
+      assigned_room_ids: [],
+    };
   }
 
   /**
@@ -373,6 +388,9 @@ export class SupabaseStore implements DataStore {
           r.debit_head ?? (r.booking_type === "personal" ? "personal_funds" : null),
         debit_details: r.debit_details ?? null,
         debit_document_url: r.debit_document_url ?? null,
+        // Before migration 24: nobody copied, no sub-head.
+        debit_subhead: r.debit_subhead ?? null,
+        copy_to_emails: r.copy_to_emails ?? [],
         // Before migration 18: no project, and an office booking was direct.
         project_id: r.project_id ?? null,
         office_approval:
@@ -420,10 +438,12 @@ export class SupabaseStore implements DataStore {
   }
 
   async listBookingsForUser(userId: string): Promise<BookingWithDetails[]> {
+    // Their own, and any a faculty in-charge raised for a club. Ids are uuids
+    // (or the mock's slugs), so nothing here can break out of the filter.
     const { data, error } = await this.db
       .from("bookings")
       .select(BOOKING_SELECT)
-      .eq("user_id", userId)
+      .or(`user_id.eq.${userId},created_by.eq.${userId}`)
       .order("created_at", { ascending: false });
     if (error) throw error;
     return this.hydrate(data as unknown as BookingRow[]);

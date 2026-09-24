@@ -2151,3 +2151,142 @@ row** with a later `effective_from` instead of editing the ₹750 one: a rate in
 force priced past stays and `tariffs_guard` refuses to touch it, by design.
 `resolveTariff` then prices each night at whatever was in force that night.
 Hamsanandi and the meal rates are untouched.
+
+## 24 Sep 2026 — the office's fourth list of corrections
+
+Nine items, built on `main`. The working copy was on the `ui` branch (the 21
+Sep vermilion redesign, 3 commits of its own and 24 behind `main`); every item
+touched code that exists only on `main` — the office-template invoice, the
+projects list, dining, Settings — so the owner chose to build on `main` and
+leave the redesign to be merged separately. A trial merge of `main` into `ui`
+gave 30 conflicting files (~80 hunks), mostly `booking-form.tsx`.
+
+### Invoices after check-out: the desk's list, on both consoles, and the archive
+
+**Decision.** `awaitingSettlement()` is the one rule for "Checked out — to
+bill" and both `/manager` and `/caretaker` show it; "Checking out today" has an
+Invoice button; the Approval Log offers Invoice to the desk on every
+checked-out stay and approved dining booking.
+
+**Why.** Reception issues invoices (Phase 5: "the caretaker issues and records
+payments"), but only the manager's console listed stays that had left. At the
+desk the bill vanished with the guest. The Approval Log covers what the 30-day
+list does not — a paid invoice to reprint, a stay from last quarter — without
+making the daily list longer. **Rejected:** widening the window, which grows
+the list every day and still ends somewhere.
+
+### A dining invoice is its own shape, read from the snapshot
+
+**Decision.** `InvoiceDocument.kind` and `meal_dates`, and one function,
+`invoiceFacts()`, for the PDF and the desk's preview. Dining drops check-in,
+check-out, rooms, infants, primary guest, the room table and the A/B labels.
+
+**Why.** A dining booking has no room; the old invoice printed "No. of
+Room(s): 0", an empty room table with two ruled rows and "Sub Total (A):
+₹0.00", and check-in/out times of midnight and 23:59 that nobody chose.
+**Snapshots stay frozen**: `kind` is absent on invoices issued before today and
+`invoiceKind()` reads it from the shape (no rooms, no room lines), so reprinting
+an old dining invoice drops the empty table without any figure changing.
+
+### Project rows only with Project; the sub-head typed, not listed
+
+**Decision.** Project Detail / Number / Sub-head print only when the head is
+Project. The sub-head is a free-text column, `bookings.debit_subhead`, not part
+of the Projects list.
+
+**Why.** Blank project rows on a department-funded invoice read as a form
+someone forgot to finish. Sub-heads differ per project and per year and the
+office has not supplied a list; the owner asked for a text box. It is kept out
+of `debit_details` (which snapshots "number — title (PI)" and is parsed back by
+`projectFromDetails`) so neither string has to be split twice. The database
+checks it only exists alongside `project_grant`.
+
+### Name and gender for faculty/staff, gender for official — and a blank age is an adult
+
+**Decision.** Change the two roles' defaults; let a form make age *optional*
+(never hidden); a blank age parses to `null`, which is an adult.
+
+**Why.** The office asked for exactly those mandatory fields. Age had been
+pinned to required because infants are defined by it; optional keeps the box
+(an infant's age is still typed) while no longer demanding it for every adult
+colleague. **This also fixed a bug:** `z.coerce.number()` made "" into 0 — an
+infant — so a blank age was never "required" anywhere, it was a baby. The
+`ageField` transform is round-trip safe (null in, null out). **Kept:** a foreign
+national still needs nationality and passport number on every form — that is
+the register the guest house keeps for foreigners, not a portal preference.
+**Rejected:** hiding the optional fields for official bookings — "only gender
+needed" read as "only gender mandatory", and the office can still hide fields
+in the Form Builder.
+
+### A club's booking is raised by its faculty in-charge, and stays the club's
+
+**Decision.** The club's account cannot submit; a faculty in-charge submits
+for it via `/book?for=<club>`. The booking's `user_id`/`user_role` are the
+club's; `created_by` is the faculty member; the Faculty Advisor stage is
+skipped.
+
+**Why the club owns it.** Everything downstream — routing (a club's HOD unit),
+debit heads (the club category), approval-log scoping, reports, the club's
+own dashboard — already keys on the requester being the club. Recording it as
+the faculty member's own booking would have made a club booking look like a
+faculty member's official stay and sent it to *their* department's HOD.
+`created_by` already existed for the manager's desk bookings.
+
+**Who is the faculty in-charge.** The club unit's own head or acting head
+(not a student, and not inherited from its council — a council's head is a
+student secretary), or a `faculty_advisor` profile with the club's
+Department/Club — how the demo's Petrichor advisor is set up. The academic
+record's "Faculty in Charge Email" is **not** consulted: it is an outside
+lookup, and the console is where appointments are maintained.
+
+**Why the FA stage goes.** The person who would forward it is the one who
+raised it. An HOD stage stays; the creator is excluded from it
+(`canReviewBooking`, and the HOD count in `createBooking`), so a faculty
+in-charge who is also the HOD cannot approve their own request.
+
+**Assumed.** "Clubs/fests and all" is the `club` role (Club / Fest Council).
+The IAR Student Cell is unchanged — its requests already go to the IAR Office.
+
+### Copy to is per booking, CC on the requester's mail
+
+**Decision.** `bookings.copy_to_emails`, any number up to 25, CC on every mail
+to the requester about the booking. Not on staff mail.
+
+**Why.** The owner asked for "further mails" to reach addresses named on the
+booking — a secretary, the guest, a co-organiser — which is the requester's
+correspondence. Staff mail has its own CC (the approval chain) and its "please
+review" wording would only confuse an outsider. The list lives on the booking,
+not the profile, because it changes from one request to the next. The 25 cap is
+a guard against a crafted request turning the outbox into a mailing list;
+blank rows and repeats are dropped silently, a malformed address is an error on
+its row. The requester's own address is dropped (they are To already).
+
+**Not to confuse with** the Requester details card's "Copy to" line — the
+approvers who get CC on staff mail (`lib/academic/copy-to.ts`). Different list,
+different audience; the card's wording was left alone.
+
+### Special Funds reuses `special_budget`, with a one-time upgrade for saved Settings
+
+**Decision.** Relabel `special_budget` as Special Funds, add it to
+`STANDARD_DEBIT_HEADS` and to every official category's default, forbid it for
+students and personal bookings, make its details and sanction letter optional,
+and upgrade saved Settings rows once through `DebitRules.revision`.
+
+**Why reuse.** Migration 15 already created the value for the same idea, the
+database check allows it, and no default offered it — so no stored booking
+changes meaning. **Why optional fields.** The office asked for the head; the
+old Special Budget's mandatory justification and upload would have been a new
+obstacle nobody asked for. **Why a revision number.** Settings rows replace
+default lists wholesale and the console only lists heads in use, so a row
+saved before today would never offer Special Funds and nobody could tick it.
+A row without `revision` is upgraded on read; saving from the console writes
+`revision: 2`, after which an untick sticks. **Rejected:** a floor like the
+Institute Grant ban — that would take the choice away from the office for good.
+
+### Migration 24 also fixes infants on Supabase
+
+`booking_guests.age` had `check (age between 1 and 120)` since migration 1,
+while the schema's minimum is 0. A baby typed as 0 could never be booked on
+Supabase; the mock store never checked. The constraint is now
+`age is null or age between 0 and 120` — null because age is optional on some
+forms.

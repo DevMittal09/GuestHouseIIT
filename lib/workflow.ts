@@ -3,6 +3,7 @@ import type { BookingSearchCriteria } from "./booking-search";
 import type { BookingStatus, Profile, Role, ServiceType, StaffCategory } from "./types";
 import { approversOf, hodApproversFor, unitsGovernedBy, type Unit } from "./units";
 import { formatDateTime } from "./format";
+import { raisedByFacultyInCharge } from "./club-booking";
 import { TURNOVER_GRACE_HOURS } from "./turnover";
 import { DEFAULT_RULES } from "./settings";
 
@@ -68,6 +69,12 @@ export interface RoutingContext {
    * submission log says so — rather than waiting forever.
    */
   hasHodApprover?: boolean;
+  /**
+   * A club booking raised by the club's faculty in-charge (24 Sep 2026,
+   * `lib/club-booking.ts`). The Faculty Advisor stage is then skipped: the
+   * person who would sign it off is the one who raised it.
+   */
+  raisedByFacultyInCharge?: boolean;
 }
 
 /**
@@ -80,6 +87,9 @@ export interface RoutingContext {
  * - **Student** → Assistant Warden.
  * - **Club** (always official) → its Faculty Advisor / council secretary →
  *   its HOD, when the club has one (Departments & Clubs → "HOD approval by").
+ *   Since 24 Sep 2026 a club booking is raised by the club's faculty
+ *   in-charge, and then the first stage is skipped — straight to the HOD, or
+ *   to the manager.
  * - **Employee, official** → HOD of their department — faculty and
  *   non-teaching staff alike. **Personal** → straight to the manager: it is
  *   their own money.
@@ -102,7 +112,7 @@ export function routeFor(
     case "student":
       return ["PENDING_WARDEN"];
     case "club":
-      return ["PENDING_FA", ...hod];
+      return context.raisedByFacultyInCharge ? hod : ["PENDING_FA", ...hod];
     case "employee":
       return context.bookingType === "official" ? hod : [];
     case "official":
@@ -150,9 +160,12 @@ export const REVIEWER_STAGE: Partial<Record<Role, BookingStatus>> = {
   gh_manager: "PENDING_GH_MANAGER",
 };
 
+/** Who a stored booking was raised by, where that matters to its route. */
+type RaisedBy = { user_role?: Role; user_id?: string | null; created_by?: string | null };
+
 /** The routing context of a stored booking, from its requester and the units now. */
 export function routingContextFor(
-  booking: { booking_type?: string; office_approval?: OfficeApproval | null },
+  booking: { booking_type?: string; office_approval?: OfficeApproval | null } & RaisedBy,
   requester: Pick<Profile, "id" | "staff_category" | "unit_id">,
   units: Unit[]
 ): RoutingContext {
@@ -161,6 +174,13 @@ export function routingContextFor(
     staffCategory: requester.staff_category ?? null,
     officeApproval: booking.office_approval ?? null,
     hasHodApprover: hodApproversFor(requester, units).length > 0,
+    raisedByFacultyInCharge: booking.user_role
+      ? raisedByFacultyInCharge({
+          user_role: booking.user_role,
+          user_id: booking.user_id ?? requester.id,
+          created_by: booking.created_by ?? null,
+        })
+      : false,
   };
 }
 
@@ -176,6 +196,8 @@ export function approvalStagesFor(
     service_type?: ServiceType;
     booking_type?: string;
     office_approval?: OfficeApproval | null;
+    user_id?: string | null;
+    created_by?: string | null;
   },
   requester: Pick<Profile, "id" | "staff_category" | "unit_id">,
   units: Unit[] = []
@@ -265,6 +287,35 @@ export function canReview(
   if (reviewer.role === "faculty_advisor")
     return reviewer.department_or_club === requester.department_or_club;
   return true;
+}
+
+/**
+ * `canReview`, for a booking that exists: also refuses whoever **raised** it.
+ * `canReview` sees only the requester, and a club booking's requester is the
+ * club — so a faculty in-charge who is also the club's HOD would otherwise be
+ * asked to approve the request they raised themselves.
+ */
+export function canReviewBooking(
+  reviewer: Profile,
+  booking: { status: BookingStatus; requester: Profile; created_by?: string | null },
+  units: Unit[] = []
+): boolean {
+  if (booking.created_by && booking.created_by === reviewer.id) return false;
+  return canReview(reviewer, booking.status, booking.requester, units);
+}
+
+/**
+ * Whether this person may act for a booking as its requester — ask to cancel
+ * it, ask to extend it. The requester, and whoever raised it for them: a
+ * club's faculty in-charge (24 Sep 2026). The Guest House Manager's desk
+ * bookings are the manager's own already (`user_id`), so this adds nobody
+ * there.
+ */
+export function actsAsRequester(
+  booking: { user_id: string; created_by?: string | null },
+  userId: string
+): boolean {
+  return booking.user_id === userId || (Boolean(booking.created_by) && booking.created_by === userId);
 }
 
 export const ACTIVE_STATUSES: BookingStatus[] = [

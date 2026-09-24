@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cancelBooking } from "@/app/actions/bookings";
+import { raisedByFacultyInCharge } from "@/lib/club-booking";
 import { requestExtensionAction } from "@/app/actions/operations";
 import { BookingDetails } from "@/components/booking-details";
 import { StatusBadge } from "@/components/status-badge";
@@ -106,7 +107,17 @@ function BookingRow({ booking, invoice }: { booking: BookingWithDetails; invoice
 
   return (
     <TableRow>
-      <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
+      <TableCell className="font-mono text-xs">
+        {booking.booking_reference_id}
+        {/* A club's booking raised by its faculty in-charge shows on both
+            their lists; name the club so the faculty member can tell theirs
+            from the club's. */}
+        {raisedByFacultyInCharge(booking) && (
+          <span className="mt-0.5 block font-sans text-muted-foreground">
+            For {booking.requester.full_name}
+          </span>
+        )}
+      </TableCell>
       <TableCell>{booking.guest_house.name}</TableCell>
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
       <TableCell>{formatDateTime(booking.check_out)}</TableCell>

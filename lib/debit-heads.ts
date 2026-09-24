@@ -11,12 +11,16 @@ import type { Unit } from "./units";
  *
  * | Category | Room booking | Dining (Phase 6) |
  * | --- | --- | --- |
- * | Faculty | Department / Project / PDF | Department / PDF / Personal |
- * | Non-teaching staff | Department | Department |
- * | Officer office (Director, Registrar…) | Institute | Institute |
- * | Department office | Department | Department |
- * | Club | Department | — |
+ * | Faculty | Department / Project / PDF / Special Funds | Department / PDF / Personal / Special Funds |
+ * | Non-teaching staff | Department / Special Funds | Department / Special Funds |
+ * | Officer office (Director, Registrar…) | Institute / Special Funds | Institute / Special Funds |
+ * | Department office | Department / Special Funds | Department / Special Funds |
+ * | Club | Department / Special Funds | — |
  * | Personal booking (anyone) | Personal | — |
+ *
+ * **Special Funds** (24 Sep 2026) is offered on every *official* booking —
+ * never a student's, never a personal one. It is stored as `special_budget`,
+ * the value migration 15 created for the same idea.
  *
  * The allowed list is computed on the server (`debitHeadsByType`) and handed
  * to the booking form, and the schema checks the choice against the same list
@@ -66,22 +70,24 @@ export const DEBIT_CATEGORY_LABELS: Record<DebitCategory, string> = {
   manager: "Guest House Manager, booking at the desk",
 };
 
-/** The heads the office's invoice template names; the others are legacy (migration 15). */
+/** The heads the office uses; the others are legacy (migration 15). */
 export const STANDARD_DEBIT_HEADS: DebitHead[] = [
   "department_budget",
   "institute_grant",
   "professional_development_fund",
   "personal_funds",
   "project_grant",
+  "special_budget",
 ];
 
-/** How the head prints on the invoice: "Department / Institute / PDF / Personal / Project". */
+/** How the head prints on the invoice: "Department / Institute / PDF / Personal / Project / Special Funds". */
 export const INVOICE_HEAD_LABELS: Partial<Record<DebitHead, string>> = {
   department_budget: "Department",
   institute_grant: "Institute",
   professional_development_fund: "PDF",
   personal_funds: "Personal",
   project_grant: "Project",
+  special_budget: "Special Funds",
 };
 
 export function invoiceHeadLabel(head: DebitHead | null | undefined): string {
@@ -94,15 +100,40 @@ export type DebitRules = {
   room: Record<DebitCategory, DebitHead[]>;
   /** Meals-only / dining bookings (Phase 6). Never Project. */
   dining: Record<DebitCategory, DebitHead[]>;
+  /**
+   * Which shape of the defaults a saved row was made from. A row saved before
+   * revision 2 has never seen Special Funds, so `upgradeDebitRules` adds it
+   * once; a row saved since then is the office's own choice and is left
+   * alone, even where Special Funds was unticked. Absent on rows saved before
+   * 24 Sep 2026.
+   */
+  revision?: number;
 };
+
+/** Revision 2 (24 Sep 2026): Special Funds on every official booking. */
+export const DEBIT_RULES_REVISION = 2;
+
+/**
+ * The categories Special Funds is offered to by default: every official
+ * booking. Not students, not a personal booking, and not a booking for an
+ * alumnus — that one is Institute or the alumnus's own money.
+ */
+export const SPECIAL_FUNDS_CATEGORIES: DebitCategory[] = [
+  "faculty",
+  "staff",
+  "officer_office",
+  "department_office",
+  "club",
+  "manager",
+];
 
 export const DEFAULT_DEBIT_RULES: DebitRules = {
   room: {
-    faculty: ["department_budget", "project_grant", "professional_development_fund"],
-    staff: ["department_budget"],
-    officer_office: ["institute_grant"],
-    department_office: ["department_budget"],
-    club: ["department_budget"],
+    faculty: ["department_budget", "project_grant", "professional_development_fund", "special_budget"],
+    staff: ["department_budget", "special_budget"],
+    officer_office: ["institute_grant", "special_budget"],
+    department_office: ["department_budget", "special_budget"],
+    club: ["department_budget", "special_budget"],
     student: ["personal_funds"],
     iar_student_cell: ["institute_grant"],
     alumni: ["institute_grant", "personal_funds"],
@@ -110,18 +141,45 @@ export const DEFAULT_DEBIT_RULES: DebitRules = {
     manager: [...STANDARD_DEBIT_HEADS],
   },
   dining: {
-    faculty: ["department_budget", "professional_development_fund", "personal_funds"],
-    staff: ["department_budget"],
-    officer_office: ["institute_grant"],
-    department_office: ["department_budget"],
-    club: ["department_budget"],
+    faculty: ["department_budget", "professional_development_fund", "personal_funds", "special_budget"],
+    staff: ["department_budget", "special_budget"],
+    officer_office: ["institute_grant", "special_budget"],
+    department_office: ["department_budget", "special_budget"],
+    club: ["department_budget", "special_budget"],
     student: ["personal_funds"],
     iar_student_cell: ["institute_grant"],
     alumni: ["personal_funds"],
     personal: ["personal_funds"],
-    manager: ["department_budget", "institute_grant", "professional_development_fund", "personal_funds"],
+    manager: ["department_budget", "institute_grant", "professional_development_fund", "personal_funds", "special_budget"],
   },
+  revision: DEBIT_RULES_REVISION,
 };
+
+/**
+ * Bring a saved Settings row up to the current defaults' shape, once.
+ *
+ * Settings rows replace the default lists wholesale, so a row saved before
+ * Special Funds existed would never offer it — and the console could not
+ * show it either, because the grid only lists heads in use. A row without
+ * `revision` is exactly such a row: Special Funds is added to the categories
+ * that get it by default, and the row is marked current. Saving from the
+ * console writes the revision, after which this leaves the row alone for
+ * good, so a head the office unticks stays unticked.
+ */
+export function upgradeDebitRules(stored: Record<string, unknown>): Record<string, unknown> {
+  const revision = typeof stored.revision === "number" ? stored.revision : 1;
+  if (revision >= DEBIT_RULES_REVISION) return stored;
+  const add = (lists: unknown) => {
+    if (!lists || typeof lists !== "object") return lists;
+    const out: Record<string, unknown> = { ...(lists as Record<string, unknown>) };
+    for (const category of SPECIAL_FUNDS_CATEGORIES) {
+      const list = out[category];
+      if (Array.isArray(list) && !list.includes("special_budget")) out[category] = [...list, "special_budget"];
+    }
+    return out;
+  };
+  return { ...stored, room: add(stored.room), dining: add(stored.dining), revision: DEBIT_RULES_REVISION };
+}
 
 const DEBIT_HEAD_VALUES = [
   "institute_grant",
@@ -154,6 +212,10 @@ export const debitHeadSchema = z.enum(DEBIT_HEAD_VALUES);
  */
 export const FORBIDDEN_DEBIT_HEADS: Partial<Record<DebitCategory, DebitHead[]>> = {
   faculty: ["institute_grant"],
+  // Special Funds are for official bookings (24 Sep 2026): never a student's
+  // stay, never a personal one.
+  student: ["special_budget"],
+  personal: ["special_budget"],
 };
 
 /** Whether this category may ever be offered that head. */
@@ -184,6 +246,7 @@ const headList = (category: DebitCategory, label: string, allowProject: boolean)
     );
 
 export const debitRulesSchema = z.object({
+  revision: z.number().int().optional(),
   room: z.object(
     Object.fromEntries(
       DEBIT_CATEGORIES.map((c) => [c, headList(c, `Room — ${DEBIT_CATEGORY_LABELS[c]}`, true)])
@@ -257,13 +320,24 @@ export function fixedDebitHead(allowed: DebitHead[] | undefined): DebitHead | nu
   return allowed && allowed.length === 1 ? allowed[0] : null;
 }
 
-/** What must be written down beside the head, or null when the head is enough. */
+/**
+ * What may be written down beside the head, or null when the head takes
+ * nothing. Special Funds asks which fund; it is optional, like the sanction
+ * letter, because the office asked for the head and nothing more — but the
+ * accounts section is better off with it, so the box is offered.
+ */
 export function debitDetailsPrompt(head: DebitHead | null | undefined): string | null {
-  return head === "special_budget" ? "Details of the special budget" : null;
+  return head === "special_budget" ? "Which special fund (name or sanction reference)" : null;
 }
 
-/** A Special Budget has to be backed by its sanction, uploaded with the request. */
-export function needsDebitDocument(head: DebitHead | null | undefined): boolean {
+/** Whether the details above are mandatory. None are, today. */
+export function debitDetailsRequired(head: DebitHead | null | undefined): boolean {
+  void head;
+  return false;
+}
+
+/** Special Funds may carry its sanction letter. Optional since 24 Sep 2026. */
+export function acceptsDebitDocument(head: DebitHead | null | undefined): boolean {
   return head === "special_budget";
 }
 
@@ -272,18 +346,23 @@ export function needsProject(head: DebitHead | null | undefined): boolean {
   return head === "project_grant";
 }
 
+/** Longest sub-head accepted; the database checks the same (migration 24). */
+export const MAX_SUBHEAD_LENGTH = 120;
+
 /**
- * "Project Grant — SP/2025/017 — Storage (Dr. A)", or "Not recorded" for a
- * booking made before the question existed. The same words on screen, in mail
- * and in exports.
+ * "Project Grant — SP/2025/017 — Storage (Dr. A) · Sub-head: Travel", or
+ * "Not recorded" for a booking made before the question existed. The same
+ * words on screen, in mail and in exports.
  */
 export function describeDebit(booking: {
   debit_head: DebitHead | null;
   debit_details: string | null;
+  debit_subhead?: string | null;
 }): string {
   if (!booking.debit_head) return "Not recorded";
   const label = DEBIT_HEAD_LABELS[booking.debit_head];
-  return booking.debit_details ? `${label} — ${booking.debit_details}` : label;
+  const withDetails = booking.debit_details ? `${label} — ${booking.debit_details}` : label;
+  return booking.debit_subhead ? `${withDetails} · Sub-head: ${booking.debit_subhead}` : withDetails;
 }
 
 /** What a personal booking tells the requester about paying. */

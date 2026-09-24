@@ -44,12 +44,44 @@ export async function reviewersFor(booking: BookingWithDetails): Promise<Profile
   return reviewersForStatus(booking, booking.status);
 }
 
-/** As `reviewersFor`, for a stage the booking is about to enter. */
+/**
+ * As `reviewersFor`, for a stage the booking is about to enter. Never whoever
+ * raised it: a club's faculty in-charge who is also its HOD is not mailed to
+ * approve their own request (`canReviewBooking`).
+ */
 export async function reviewersForStatus(
   booking: BookingWithDetails,
   status: BookingStatus
 ): Promise<Profile[]> {
-  return reviewersOfRequester(booking.requester, status);
+  const reviewers = await reviewersOfRequester(booking.requester, status);
+  return reviewers.filter((p) => !booking.created_by || p.id !== booking.created_by);
+}
+
+/**
+ * Who is copied on every mail **to the requester** about this booking
+ * (24 Sep 2026):
+ *
+ * - the addresses the requester added under "Copy to" on New Booking
+ *   (`bookings.copy_to_emails`), however many;
+ * - on a club booking raised by the club's faculty in-charge, that faculty
+ *   member — the mail goes to the club's account, and the person who
+ *   actually booked has to hear what happened to it.
+ *
+ * Staff mail keeps its own CC (`copyToAddresses`, the approval chain). Never
+ * throws: a failed profile lookup costs the faculty in-charge's copy, not the
+ * mail.
+ */
+export async function requesterCopyTo(booking: BookingWithDetails): Promise<string[]> {
+  const addresses = [...(booking.copy_to_emails ?? [])];
+  if (booking.created_by && booking.created_by !== booking.user_id) {
+    try {
+      const creator = await getStore().getProfile(booking.created_by);
+      if (creator && mailable(creator)) addresses.push(creator.email);
+    } catch (error) {
+      console.error("[mail] could not read who raised the booking; copying without them", error);
+    }
+  }
+  return addresses;
 }
 
 /**

@@ -48,6 +48,17 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
   those rows day by day with the serving windows from `lib/meals.ts`.
 - `has_infant boolean` (migration 7) — whether any infants accompany the party.
   One flag however many. From migration 11, infants also have `booking_guests` rows with `is_infant` set (derived from age < 5).
+- `copy_to_emails text[]` (migration 24) — extra addresses CC'd on every mail
+  to the requester about the booking; default `{}`, at most 25
+  (`bookings_copy_to_emails_check`).
+- `debit_subhead text` (migration 24) — the project sub-head the requester
+  typed; only with `debit_head = 'project_grant'`, 1–120 characters
+  (`bookings_debit_subhead_check`).
+- `created_by` also marks a **club booking raised by its faculty in-charge**
+  (24 Sep 2026): `user_id` is the club's account, `created_by` the faculty
+  member. On the manager's desk bookings the two are equal.
+- `booking_guests.age` is nullable and, since migration 24, `0`–`120` (it was
+  `1`–`120`, which refused a baby typed as 0). A null age is an adult.
 
 > **There is no `assigned_room_ids` column.** It was dropped in migration 3.
 > `Booking.assigned_room_ids` still exists in the domain type but is **derived
@@ -455,6 +466,22 @@ Current migrations:
    `max_infants_per_room: 1` (2 + 2 refused — a stored choice is obeyed), with a
    widened row (3 + 3 accepted), and a `is_legacy` room card of nine guests still
    exempt. Migration 23 then applied a second time.
+
+24. `00000000000024_copy_to_and_project_subhead.sql` (24 Sep 2026) —
+   `bookings.copy_to_emails text[] not null default '{}'` (at most 25) and
+   `bookings.debit_subhead text` (only with `project_grant`, 1–120 chars), and
+   `booking_guests_age_check` relaxed to `age is null or age between 0 and
+   120`. Additive and idempotent. Special Funds needs nothing here — it is
+   `special_budget`, which migration 15 already allows. **Until it is
+   applied**, the Supabase store leaves both columns out of the insert when
+   they are empty, so bookings without a Copy-to address or a sub-head still
+   go through; one that uses either is refused, and a baby aged 0 is still
+   refused.
+
+   Verified in a throwaway `postgres:16-alpine` (24 Sep 2026): 1–24 applied,
+   24 applied again, then rows: a guest with no age (`is_infant` false) and one
+   aged 0 (true), a sub-head refused without `project_grant` and accepted with
+   it, and 26 copy-to addresses refused.
 
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.

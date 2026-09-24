@@ -13,135 +13,127 @@ wrong file. Try [06-decisions.md](06-decisions.md).
 
 ---
 
-## Round of 23 September 2026 — the office's third correction list
+## Round of 24 September 2026 — the office's fourth correction list
 
-Seven items, reported after the office worked through the portal. One turned
-out to be already built; the other six are below. Everything was verified with
-`npm run lint`, `npm test` (219), `npm run build` and `npm run test:e2e` (14).
+Nine items, built on `main` (the `ui` branch holds only the 21 Sep vermilion
+redesign and is 24 commits behind; it was deliberately not merged in this
+round). Verified with `npm run lint`, `npm run typecheck`, `npm test` (245,
+26 new in `tests/fourth-round.test.ts`), a production build on the mock store,
+`npm run test:e2e` (15, one new: `e2e/club-booking.spec.ts`), and migration 24
+applied twice over 1–23 in a throwaway `postgres:16-alpine`, with row-level
+checks of its three constraints.
 
-### 1. The IAR Student Cell was asked to pick a guest house it was never offered
+### 1. Invoice after checking out
 
-**Symptom.** The Student Cell books only for alumni, and alumni are
-accommodated at Bageshri — so the form has exactly one guest house to offer.
-It rendered that as a **disabled `<select>`** with one option, and the
-requester was told "Select a guest house".
+The manager had "Checked out — to bill"; **reception, which issues the
+invoice, had nothing** — a stay marked Vacated vanished from `/caretaker` with
+its bill open. Now:
 
-**Fix.** One guest house is not a choice, so it is no longer a dropdown at all.
-`components/booking-form.tsx` renders the name as a statement and puts the id
-in a **hidden registered input**, and the value is computed *before* `useForm`
-(`initialGuestHouseId`) so it is in the server-rendered HTML rather than
-arriving with an effect. A disabled control that the browser may or may not
-submit is no longer anywhere in the path.
+- `awaitingSettlement()` in `lib/invoice.ts` is the one rule for the list
+  (vacated in the last `UNSETTLED_WINDOW_DAYS` = 30, not paid, no dining),
+  used by `/manager` **and** `/caretaker` (new "Checked out — to bill" section
+  in `components/caretaker-console.tsx`).
+- **Checking out today** (`components/checkouts-today.tsx`) has an Invoice
+  button beside Mark as Vacated, and the toast after vacating says where the
+  invoice went.
+- **The Approval Log** (`/history`) has an Invoice button for the desk
+  (`canIssueInvoices`) on every checked-out stay — however old — and on a
+  dining booking once approved (`invoiceableFromArchive`). This is how a paid
+  or month-old invoice is reprinted.
 
-This applies to every role with one guest house, so **students** (Bageshri
-only) get it too.
+### 2. A dining invoice has no room details
 
-> Verified end to end: `e2e/alumni-and-relationships.spec.ts` signs in as the
-> Student Cell, asserts there is no `select[name="guest_house_id"]`, and
-> submits the booking through to the IAR Office's queue.
+`InvoiceDocument.kind` (`"stay" | "dining"`, read through `invoiceKind()` so
+snapshots issued before it still work) and `meal_dates`. For dining, the PDF
+and the desk's preview print **Meal Date(s)** and **No. of Guests** instead of
+check-in/out, rooms, infants and primary guest, and drop the room table and
+"Sub Total (A)": totals read **Total** and **Grand Total (including GST)**. The
+accounts mail does the same. One list of facts, `invoiceFacts()`, feeds the PDF
+and the preview so they cannot disagree.
 
-### 2. A student could enter two mothers
+### 3. Project details only with the Project head
 
-**Symptom.** Nothing stopped "Mother" being picked for two different guests —
-two names, both described as the requester's mother, and no way at the desk to
-tell which was right.
+The PDF printed "Project Detail:" and "Project Number:" on **every** invoice,
+blank. `invoiceFacts()` prints them only when the head is Project, followed by
+the new **Project Sub-head**; with Special Funds it prints the fund's name if
+one was given. The accounts mail and the history PDF export follow.
 
-**Fix.** A new `unique_relationships` list on `RoleFormConfig`, defaulted for
-students to Mother, Father, Guardian, Grandmother, Grandfather. **Siblings is
-deliberately not on it** — a student may bring two.
+### 4. A project's sub-head, typed
 
-- `duplicateRelationshipError()` / `duplicateRelationships()` in
-  `lib/form-config.ts` are the matcher, called by the form *and*
-  `bookingPayloadSchema`, like `parentDependencyError` beside it.
-- The rule spans the whole request: a mother in Room 1 and another in Room 2
-  is still two mothers.
-- The form greys the option out on every *other* guest
-  (`usedUniqueRelationships`), with "— already on this request" on the option,
-  so it cannot be picked rather than being rejected at the end. A guest never
-  has its own current answer taken away.
-- The schema flags the **repeat**, not the original: the first one is almost
-  always the one meant.
-- Free-text roles are exempt — there is no option list to be unique within,
-  and "Mother " and "mother" would be two different answers.
-- Editable in the Form Builder as **"One of each"**.
+`bookings.debit_subhead` (migration 24). On New Booking, choosing Project shows
+an optional **Project sub-head** text box under the project list. The schema
+refuses a sub-head with any other head; the database checks the same.
+`describeDebit()` appends "· Sub-head: …", so screens, mail and CSV all show it.
 
-### 3. Removing a room — already built
+### 5. Faculty/staff: only name and gender are mandatory
 
-The office asked for a way to remove a room card. It was already there: each
-`RoomCard` above the first carries a **Remove room** button on its border,
-with a confirm dialog that says how many guests go with it and that the rooms
-after it move up. No change needed.
+`buildDefaultFormConfig("employee")`: name and gender **required**; age,
+relationship, Aadhaar **optional**; ID upload still hidden. Age can now be
+optional at all: `sanitizeFormConfig` keeps "optional" (a stored "hidden" still
+reads as required) and the schema's new `ageField` treats a blank box as
+**null — an adult**. That fixed a real bug: `z.coerce.number()` turned "" into
+**0, an infant**, so "Age is required" never fired anywhere.
 
-### 4. An overlap in room availability read as an ordinary booking
+### 6. Official bookings: only gender
 
-**Symptom.** Where the manager had accepted a changeover (`isOverridable` — up
-to two hours of genuine overlap), the availability grid drew plain red, which
-is what a single stay looks like. The overlap was invisible.
+`buildDefaultFormConfig("official")`: gender required; name, age, Aadhaar, ID
+optional; relationship hidden, as before.
 
-**Fix.** Overlaps are now their own band, in their own colour.
+> **Saved forms win over defaults.** If either role was ever saved from the
+> Form Builder, press **Reset to spec defaults** for it, or set the fields by
+> hand. The local mock database has no saved forms; the hosted project was not
+> checked.
 
-- `bucketOccupancyByHour` returns `overlaps` — the segments holding each hour,
-  when there is more than one.
-- `bucketOccupancyByDay` returns `overlaps` — the intersecting stretches,
-  computed by `overlapSpans()` over the room's segments and clipped to the
-  range.
-- `bg-overlap` in `app/globals.css`: **solid violet**, filling the overlapping
-  stretch. It shipped as violet with a vertical stripe and a `◆` on range
-  bars; the office asked the same day for a plain colour in the overlapping
-  area instead, because the stripe over two red bars looked like a glitch. The
-  turnaround's 135° diagonal and maintenance's cross-hatch are unchanged.
-- Legend swatch added on `/availability` and in the booking form's panel.
+### 7. Clubs are booked only by their faculty in-charge
 
-### 5. The Guest House Manager can no longer book "personal"
+`lib/club-booking.ts`. A club's own account gets an explanation naming its
+faculty in-charge instead of the form; `createBooking` refuses it too. The
+**faculty in-charge** — the club unit's own head (not a student, not inherited
+from a council) or a `faculty_advisor` account whose Department/Club matches —
+books from `/book?for=<club profile id>` (a "Book for …" button on Club
+Approvals, My Bookings, and `/book`). The booking **is the club's**
+(`user_id` = club, `user_role: "club"`, `created_by` = the faculty member), so
+routing, debit heads, scoping and reports are unchanged, except:
 
-`bookingTypesFor("gh_manager")` is `["official", "alumni"]`. The desk account
-is the guest house, not a person; staff in that post hold an ordinary
-institute account for their own family's stays. A private booking can no
-longer be raised, invoiced or approved from the console that also approves it.
+- **the Faculty Advisor stage is skipped** (`routeFor` with
+  `raisedByFacultyInCharge`); an HOD stage, where the club has one, stays;
+- the creator can never approve it (`canReviewBooking`), cancel/extend it like
+  the requester (`actsAsRequester`), sees it on their dashboard
+  (`listBookingsForUser` includes `created_by`), and is **CC** on every mail to
+  the club about it;
+- the submission log names the faculty member (both stores log `created_by`).
 
-### 6. Mail threads on the booking, not on the day
+Demo booking 2 (Petrichor, `PENDING_FA`) is left as a request from before the
+rule.
 
-**Was.** Staff booking mail joined one "approvals" thread per person per
-institute day. A club's request, an unrelated cancellation and a dignitary's
-allocation landed in one conversation because they happened on the same
-morning — and two messages about the *same* booking a day apart were split.
+### 8. Copy to, per booking
 
-**Now.** `MailThreadKind` is `"booking" | "daily_log"`.
+`bookings.copy_to_emails` (migration 24, at most 25 — `MAX_COPY_TO_EMAILS`).
+A "Copy to (optional)" card on New Booking with "Add another email"; blank
+rows and repeats dropped, bad addresses flagged on their row. **Every mail to
+the requester about the booking** — acknowledgement, approvals, rejection,
+allocation, cancellation, extension, no-show, the check-in reminder, and the
+official invoice to Accounts — is CC'd to the list (`requesterCopyTo()` in
+`lib/mail/recipients.ts`). Staff mail keeps its own CC (the approval chain).
+Shown on the booking details as "Copy to".
 
-- `bookingThreadRoot(referenceId, address)` keys the thread on the reference
-  id and the mailbox, so everything about `IITPKD-GH-2026-AB12C` to one person
-  is one conversation, however many days it spans.
-- The thread's subject is `[IITPKD-GH-2026-AB12C] Guest house booking`,
-  identical on every message (Gmail splits a thread when the subject changes);
-  what each message is about leads its heading and its inbox preview.
-- **Scheduled mail keeps a daily thread** — the digest, the escalation nudge
-  and the day-wise desk log are about a queue, not a booking, so there is
-  nothing else to hang them on.
-- **Requester mail is unchanged**: still standalone, still
-  `[reference] Rooms allocated`. Each step is news to them, and a standalone
-  subject can say what happened. Say so if that should change too.
+### 9. Special Funds on every official booking
 
-### 7. Faculty can no longer debit the Institute Grant
-
-It was not in `DEFAULT_DEBIT_RULES` already, but Settings → Debitable heads
-could tick it back on. It is now a floor under Settings, not just a default:
-`FORBIDDEN_DEBIT_HEADS` in `lib/debit-heads.ts`, applied three ways —
-`allowedHeads()` strips it on read (so a stored row that still lists it is
-ignored rather than breaking the page), `debitRulesSchema` refuses to save it,
-and the console's grid renders that cell greyed with the reason in its
-tooltip. The offices that actually hold the grant keep it.
-
----
+`special_budget` (migration 15's value) is now labelled **Special Funds**, in
+`STANDARD_DEBIT_HEADS`, and on by default for faculty, staff, both kinds of
+office, clubs and the desk — room and dining. **Never students or personal
+bookings**: `FORBIDDEN_DEBIT_HEADS` now includes it for `student` and
+`personal`. The fund's name and a sanction letter are both **optional** (the
+old Special Budget demanded both). A Settings row saved before this gains it
+once (`upgradeDebitRules`, `DebitRules.revision` = 2); an untick saved after
+that stands.
 
 ## Also changed while in there
 
-**`e2e/global-setup.ts` wipes `.e2e-db.json` before every run.** The mock
-store keeps the sign-in throttle in the database it writes (8 attempts per uid
-per 15 minutes), so running the suite twice inside that window locked the
-dummy accounts out and the journeys failed on a sign-in that had nothing wrong
-with it. Seeded data is rebuilt on load, so there is nothing to preserve.
-
-**`tests/booking-rules.test.ts`'s capacity fixture** built a room of three
-guests all related as "Father", which the new one-of-each rule correctly
-refuses. It is one Father and then siblings now — the only shape that isolates
-the capacity rules from the relationship rules.
+- **Migration 24 relaxes `booking_guests.age`** from `between 1 and 120` to
+  `age is null or between 0 and 120`. On Supabase a baby typed as 0 was
+  refused although the portal has always accepted 0.
+- Until migration 24 is applied the Supabase store leaves both new columns out
+  of the insert when they are empty, so only bookings that use them fail.
+- `e2e/booking-journey.spec.ts` expected the stay to vanish from reception
+  after check-out; it now expects it under "Checked out — to bill".

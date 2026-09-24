@@ -2,6 +2,22 @@
 
 Ordered roughly by priority.
 
+## 0. Loose ends from the 24 Sep 2026 round
+
+- **Apply migration 24 to the hosted project.** Until then a booking that
+  names a Copy-to address or a project sub-head is refused on Supabase, and a
+  baby typed as age 0 still is.
+- **Check the hosted `form_configs` for `employee` and `official`.** The new
+  defaults (name + gender for faculty/staff, gender alone for official) apply
+  only to a role with no saved row; if either was saved from the Form Builder,
+  press Reset to spec defaults for it.
+- **Merge `main` into `ui`** (or the other way) — the vermilion redesign on
+  `ui` and everything since Phase 1 on `main` have diverged: 30 conflicting
+  files at the last trial merge, `components/booking-form.tsx` most of all.
+- **Sub-heads are free text.** If the office ever supplies each project's
+  sub-heads, they would sit on `projects` and the text box would become a
+  list, as the project itself did.
+
 ## 1. Real authentication (blocks production)
 
 **Mostly done (Phase 8, 22 Sep 2026).** Sessions are rows in `sessions` with an

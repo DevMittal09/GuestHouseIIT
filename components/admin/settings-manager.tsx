@@ -637,6 +637,9 @@ function MealWindowsSection({ current }: { current: Rules["meals"] }) {
 
 // ------------------------------------------------------------- debitable heads
 
+/** The two grids; `revision` rides along in the draft untouched. */
+type DebitKind = "room" | "dining";
+
 function DebitHeadsSection({ current }: { current: Rules["debit"] }) {
   const [draft, setDraft] = useState<DebitRules>(current);
   // The five heads the invoice names, plus any legacy head a saved row still
@@ -648,14 +651,14 @@ function DebitHeadsSection({ current }: { current: Rules["debit"] }) {
       .filter((h) => !STANDARD_DEBIT_HEADS.includes(h)) as DebitHead[]),
   ].filter((h, i, all) => all.indexOf(h) === i);
 
-  const toggle = (kind: keyof DebitRules, category: (typeof DEBIT_CATEGORIES)[number], head: DebitHead) =>
+  const toggle = (kind: DebitKind, category: (typeof DEBIT_CATEGORIES)[number], head: DebitHead) =>
     setDraft((d) => {
       const list = d[kind][category];
       const next = list.includes(head) ? list.filter((h) => h !== head) : [...list, head];
       return { ...d, [kind]: { ...d[kind], [category]: next } };
     });
 
-  const grid = (kind: keyof DebitRules, title: string) => (
+  const grid = (kind: DebitKind, title: string) => (
     <div className="space-y-2">
       <p className="text-sm font-medium">{title}</p>
       <div className="overflow-x-auto rounded-md border">

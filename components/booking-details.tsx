@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { countryName } from "@/lib/countries";
 import { describeDebit } from "@/lib/debit-heads";
+import { raisedByFacultyInCharge } from "@/lib/club-booking";
 import { formatDateTime } from "@/lib/format";
 import { describeMeals, MEAL_KEYS, MEAL_LABELS } from "@/lib/meals";
 import { countBedGuests, describeParty, ROOM_TYPE_LABELS } from "@/lib/occupancy";
@@ -99,6 +100,18 @@ export function BookingDetails({
               .join(" · ")}
           />
         )}
+        {/* A club's booking, raised by its faculty in-charge: the submission
+            log names who pressed Submit. */}
+        {raisedByFacultyInCharge(booking) && (
+          <Field
+            label="Raised by (faculty in-charge)"
+            value={
+              [...booking.logs]
+                .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+                .find((l) => l.previous_status === null)?.action_by_name ?? "—"
+            }
+          />
+        )}
         <Field
           label={mealsOnly ? "First day of meals" : "Check-in"}
           value={formatDateTime(booking.check_in)}
@@ -144,6 +157,10 @@ export function BookingDetails({
 
       <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
         <Field label="Debitable head" value={describeDebit(booking)} />
+        {/* Who else hears about it: every mail to the requester is copied. */}
+        {(booking.copy_to_emails ?? []).length > 0 && (
+          <Field label="Copy to" value={booking.copy_to_emails.join(", ")} />
+        )}
         {booking.debit_document_url && (
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide">

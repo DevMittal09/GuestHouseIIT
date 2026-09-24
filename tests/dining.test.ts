@@ -67,11 +67,11 @@ describe("who may book meals without a room", () => {
     expect(serviceTypesFor("employee", false)).toEqual(["room"]);
   });
 
-  it("dining heads: Department / PDF / Personal for faculty, Department for staff, never Project", () => {
+  it("dining heads: Department / PDF / Personal / Special Funds for faculty, Department / Special Funds for staff, never Project", () => {
     const faculty = debitHeadsByType("employee", ["official"], { staff_category: "faculty", unit_id: null }, [], DEFAULT_DEBIT_RULES, "dining");
-    expect(faculty.official).toEqual(["department_budget", "professional_development_fund", "personal_funds"]);
+    expect(faculty.official).toEqual(["department_budget", "professional_development_fund", "personal_funds", "special_budget"]);
     const staff = debitHeadsByType("employee", ["official"], { staff_category: "staff", unit_id: null }, [], DEFAULT_DEBIT_RULES, "dining");
-    expect(staff.official).toEqual(["department_budget"]);
+    expect(staff.official).toEqual(["department_budget", "special_budget"]);
     for (const heads of Object.values(DEFAULT_DEBIT_RULES.dining)) expect(heads).not.toContain("project_grant");
   });
 });

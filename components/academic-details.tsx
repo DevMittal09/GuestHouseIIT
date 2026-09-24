@@ -19,16 +19,25 @@ import { ROLE_LABELS, type Profile } from "@/lib/types";
  * holds up this card and nothing else. Falls back to the portal profile when
  * there is no record or the database cannot be reached.
  */
-export function AcademicDetailsCard({ user, title }: { user: Profile; title: string }) {
+export function AcademicDetailsCard({
+  user,
+  title,
+  raisedBy = null,
+}: {
+  user: Profile;
+  title: string;
+  /** A club's faculty in-charge filling in the club's form (24 Sep 2026). */
+  raisedBy?: Profile | null;
+}) {
   return (
     <Suspense fallback={<Pending title={title} />}>
-      <Details user={user} title={title} />
+      <Details user={user} title={title} raisedBy={raisedBy} />
     </Suspense>
   );
 }
 
-async function Details({ user, title }: { user: Profile; title: string }) {
-  const details = await academicDetailsFor(user);
+async function Details({ user, title, raisedBy }: { user: Profile; title: string; raisedBy: Profile | null }) {
+  const details = await academicDetailsFor(user, raisedBy);
   return (
     <Card>
       <CardHeader>

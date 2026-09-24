@@ -19,7 +19,7 @@ import {
 import { getStore } from "@/lib/store";
 import { instituteIso } from "@/lib/tz";
 import { RoomClashError, type Profile, type RoomType } from "@/lib/types";
-import { canUpdateLifecycle } from "@/lib/workflow";
+import { actsAsRequester, canUpdateLifecycle } from "@/lib/workflow";
 import type { ActionResult } from "./bookings";
 
 /**
@@ -85,7 +85,7 @@ export async function requestExtensionAction(bookingId: string, untilLocal: stri
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     // Not found rather than forbidden: someone else's booking is not theirs to ask about.
-    if (!booking || booking.user_id !== user.id) return { ok: false, error: "Booking not found" };
+    if (!booking || !actsAsRequester(booking, user.id)) return { ok: false, error: "Booking not found" };
     const why = reason?.trim() ?? "";
     if (why.length < 3) return { ok: false, error: "Say why you need to stay longer" };
     const until = instituteIso(untilLocal);

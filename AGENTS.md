@@ -196,7 +196,9 @@ are in **`.memories/12-academic-records.md`**. Keep that file and
 - **Copy to is one rule, `lib/academic/copy-to.ts`**: the approvers of every
   stage of the request's chain (`approvalStagesFor` + `canReview()`), never
   from the record, plus an office's head (Departments & Clubs, else the
-  record). The card shows it; **staff mail puts it in CC** (Phase 2).
+  record). The card shows it; **staff mail puts it in CC** (Phase 2). Not to
+  be confused with the booking's own **Copy to** addresses the requester types
+  on New Booking, which CC the *requester's* mail (24 Sep 2026).
 - **The record is never stored, logged or mailed.** It holds parents' names
   and phone numbers.
 
@@ -207,12 +209,12 @@ are in **`.memories/12-academic-records.md`**. Keep that file and
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
 | student | personal | Assistant Warden → GH Manager | Personal |
-| club | official | Faculty Advisor / council secretary → **HOD** (if the club has an HOD unit) → GH Manager | Department |
-| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF |
-| employee — staff | official | **HOD** → GH Manager | Department |
+| club — **raised by its faculty in-charge** | official | **HOD** (if the club has an HOD unit) → GH Manager; the Faculty Advisor stage is skipped | Department / Special Funds |
+| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF / Special Funds |
+| employee — staff | official | **HOD** → GH Manager | Department / Special Funds |
 | employee | personal | GH Manager | Personal |
-| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute |
-| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department |
+| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute / Special Funds |
+| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department / Special Funds |
 | iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | Institute (alumni: Institute / Personal) |
 | iar_student_cell | alumni | IAR Office → GH Manager | Institute / Personal |
 | any | meals only | GH Manager | dining heads (Phase 6) |
@@ -233,6 +235,28 @@ itself; a club → its `hod_unit_id`, none by default). `hodApproversFor`
 (it skips it, logged) unless an acting HOD is set. HODs work from **`/hod`**;
 club advisors / council secretaries from `/approvals` ("Club Approvals").
 
+### Clubs are booked by their faculty in-charge — `lib/club-booking.ts`
+
+**A club's own account never submits** (24 Sep 2026): `/book` shows it who to
+ask, and `createBooking` refuses it. Its **faculty in-charge** — the club
+unit's own head or acting head, not a student and **not inherited from a
+council** (a council's head is a student secretary), or a `faculty_advisor`
+profile whose Department/Club is the club's — books at `/book?for=<club
+profile id>` (buttons on Club Approvals, My Bookings and `/book`).
+
+- **The booking is the club's**: `user_id` / `user_role` are the club's, so
+  route, debit heads, scoping and reports are a club booking's.
+  `created_by` is the faculty member; `raisedByFacultyInCharge(booking)` tells.
+- `routeFor(…, { raisedByFacultyInCharge })` **skips `PENDING_FA`**; an HOD
+  stage stays, never given to the person who raised it.
+- Use **`canReviewBooking(reviewer, booking, units)`** wherever a booking
+  exists — it adds "not whoever raised it" to `canReview`, which sees only the
+  requester. `actsAsRequester()` lets the creator cancel / ask to extend.
+- `listBookingsForUser` returns `created_by` bookings too; both stores log the
+  submission under `created_by`; requester mail CCs the creator.
+- `for_club` in the form data is **re-checked** against
+  `clubsBookableByUser()` — never trusted.
+
 Reviewer roles: `warden` (scoped to `profile.hostel_name`), `faculty_advisor`
 (scoped to `profile.department_or_club`, the fallback when a club's unit has no
 head), `iar_cell`, `gh_manager`, `gh_caretaker`, plus `developer` (superadmin).
@@ -247,11 +271,17 @@ heads per requester category are the Setting `rules.debit` (room and dining).
 debit the Institute Grant** (23 Sep 2026), which is the offices' money.
 `allowedHeads()` strips a forbidden head on read (so a stored row that still
 lists one is ignored, not fatal), `debitRulesSchema` refuses to save it, and the
-console greys that cell.
+console greys that cell. **Special Funds** (`special_budget`, relabelled
+24 Sep 2026) is in every official category's default and in
+`FORBIDDEN_DEBIT_HEADS` for `student` and `personal`; its fund name and
+sanction letter are optional. A Settings row saved before it is upgraded
+**once** (`upgradeDebitRules`, `DebitRules.revision`) — keep the revision if
+you change a default list again.
 `bookingContextFor(user)` computes them once for the page and for
 `createBooking`. Project → a project from the Projects console
 (`projects` table, paste import); the number and title are snapshotted into
-`debit_details`.
+`debit_details`, and an optional typed **sub-head** goes in `debit_subhead`
+(migration 24; the schema and the database refuse it with any other head).
 
 ### Booking type — `lib/booking-types.ts`
 
@@ -278,8 +308,8 @@ dropping it would orphan them.
 ### Guest House Caretaker — `gh_caretaker`
 
 Reception desk; a deliberate **subset** of `/manager` at `/caretaker`: today's
-checkouts, current occupants, awaiting check-out, upcoming stays, and marking
-guests Occupied / Vacated. No allocation, no approvals, no cancellations.
+checkouts, current occupants, awaiting check-out, **checked out — to bill**,
+upcoming stays, marking guests Occupied / Vacated, and issuing invoices. No allocation, no approvals, no cancellations.
 `canUpdateLifecycle()` / `LIFECYCLE_ROLES` gate the one action it shares with
 the manager, server-side. It reuses `components/stays-table.tsx` and
 `components/checkouts-today.tsx` rather than owning copies, so the two consoles
@@ -394,7 +424,14 @@ Current defaults worth knowing: students are Bageshri-only and see the "double
 shared rooms will get first preference" banner; employee and official use
 free-text relationship; **club and official hide the relationship field**;
 club ID uploads are optional; alumni ID card is mandatory; **employee collects
-no ID document** (`id_document: "hidden"`, `id_number: "optional"`).
+no ID document** (`id_document: "hidden"`). Since 24 Sep 2026 **faculty/staff
+require only name and gender** and **official requires only gender**; the rest
+is optional.
+
+**Age may be optional, never hidden** (`sanitizeFormConfig`; a stored
+"hidden" reads as required). The schema's `ageField` makes a blank age
+**null, an adult**. It was `z.coerce.number()`, which turned "" into **0 — an
+infant** — so "Age is required" never fired. Don't go back to coercing it.
 
 ### The parent-dependency rule (students)
 
@@ -730,7 +767,10 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
 - **To is the actioner; "Copy to" is CC** on every staff mail about a booking
   (owner's decision, Phase 2). To = `reviewersForStatus(booking, status)` (or
   the desk); CC = `copyToAddresses(booking)`; `addressStaffMail` drops anyone in
-  To from CC and de-duplicates ignoring case. Requester mail has no CC. The
+  To from CC and de-duplicates ignoring case. **Requester mail CCs the
+  booking's own Copy-to list** (`bookings.copy_to_emails`, entered on New
+  Booking, at most 25) and, on a club booking, the faculty in-charge who
+  raised it — `requesterCopyTo()`. Different list from the card's Copy to. The
   reviewers' separate cancellation "for information" mail is retired
   (`RETIRED_MAIL_EVENTS`) — they are CC on the manager's.
 - **`MAIL_REDIRECT_ALL_TO` is applied at send time**, so the outbox keeps an
@@ -845,6 +885,21 @@ booked / Booked badge for the whole period shown.
   date being chosen. Requesters were otherwise picking dates blind. One chart,
   one action, one bucketing — so what the requester sees and what the manager
   sees cannot drift.
+
+## Invoices — `lib/invoice.ts`
+
+Issued invoices are **snapshots** (`InvoiceDocument`), drawn by
+`lib/invoice-pdf.ts` on the server; never recompute an issued one.
+
+- **One list of printed facts**, `invoiceFacts()`, for the PDF and the desk's
+  preview (`components/invoice-dialog.tsx`). Project rows only with the
+  Project head; a dining invoice (`invoiceKind()` — `kind` is absent on older
+  snapshots, so read it through the function) prints meal dates and head count
+  and no room table, check-in/out, rooms or infants.
+- **After check-out**: `awaitingSettlement()` is the "Checked out — to bill"
+  list on **both** `/manager` and `/caretaker`; the Approval Log gives the desk
+  an Invoice button on any checked-out stay or approved dining booking
+  (`invoiceableFromArchive`). Don't let a vacated stay become unreachable.
 
 ## Settings — the rules the console can change (`lib/settings.ts`)
 
@@ -1099,6 +1154,11 @@ Migration files, applied sequentially:
    Additive, replaces only a function, safe to re-run. **Until it is applied,
    Supabase refuses a second infant in a room** although the form and the schema
    allow it.
+24. `00000000000024_copy_to_and_project_subhead.sql` — `bookings.copy_to_emails`
+   (≤ 25) and `bookings.debit_subhead` (Project only), and
+   `booking_guests.age` allowed to be 0 (it was `1–120`, refusing a baby).
+   Additive, safe to re-run. Until it is applied the store omits both columns
+   when empty, so only bookings that use them fail.
 
 Full notes per migration in `.memories/04-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine

@@ -11,7 +11,7 @@ import {
   type UseFormRegister,
   type UseFormRegisterReturn,
 } from "react-hook-form";
-import { PlusIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react";
+import { MailPlusIcon, PlusIcon, Trash2Icon, TriangleAlertIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { createBooking } from "@/app/actions/bookings";
 import { BookingAvailability } from "@/components/booking-availability";
@@ -47,6 +47,7 @@ import {
   bookingPayloadSchema,
   checkOutOrderError,
   infantHelpText,
+  MAX_COPY_TO_EMAILS,
 } from "@/lib/booking-schema";
 import { DEFAULT_RULES, type CapacityRules, type Rules } from "@/lib/settings";
 import {
@@ -89,9 +90,11 @@ import { cn } from "@/lib/utils";
 import { isOfficeRole, latestCheckIn } from "@/lib/workflow";
 import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import {
+  acceptsDebitDocument,
   debitDetailsPrompt,
+  debitDetailsRequired,
   fixedDebitHead,
-  needsDebitDocument,
+  MAX_SUBHEAD_LENGTH,
   needsProject,
   type DebitHeadsByType,
   PAY_AT_CHECKOUT_NOTE,
@@ -141,10 +144,18 @@ interface FormValues {
   booking_type: BookingType;
   /** Which budget pays. Ignored when the booking can only be paid one way. */
   debit_head: "" | DebitHead;
-  /** The case for a Special Budget. */
+  /** Which special fund, with the Special Funds head. Optional. */
   debit_details: string;
   /** The project for a Project head, from the console's list. */
   project_id: string;
+  /** The project's sub-head, typed. Optional, and only with a Project head. */
+  debit_subhead: string;
+  /**
+   * Extra addresses copied on every mail sent to the requester about this
+   * booking. Objects rather than strings because react-hook-form's field
+   * arrays key their rows by an id on each item.
+   */
+  copy_to: { email: string }[];
   /** An office's choice: straight to the manager, or through its HOD. */
   office_approval: "" | "direct" | "hod";
   /** Only when the Guest House Manager is booking for somebody else. */
@@ -201,7 +212,15 @@ export function BookingForm({
   debitHeads = { room: {}, dining: {} },
   projects = [],
   hodApprovers = [],
+  forClub = null,
 }: {
+  /**
+   * Set when a club's faculty in-charge is booking for the club (24 Sep
+   * 2026). `user` and `config` are then the club's, so the form is exactly
+   * the club's form; this names the club and the person raising it, and the
+   * submission carries the club's id for the server to re-check.
+   */
+  forClub?: { id: string; name: string } | null;
   /**
    * The debitable heads this requester may use per booking type, for rooms and
    * for dining — computed on the server (`bookingContextFor`) from Settings, so
@@ -241,9 +260,8 @@ export function BookingForm({
   // Files live outside RHF: a stable Map keyed by each guest row's own `key`.
   const [guestFiles] = useState(() => new Map<string, File>());
   const [alumniCard, setAlumniCard] = useState<File | null>(null);
-  // The sanction behind a Special Budget, uploaded with the request.
+  // The sanction letter behind Special Funds, when the requester has one.
   const [debitDocument, setDebitDocument] = useState<File | null>(null);
-  const [debitDocumentError, setDebitDocumentError] = useState<string | null>(null);
   const [alumniCardError, setAlumniCardError] = useState<string | null>(null);
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   // Meal choices live outside react-hook-form as "date|meal" keys (`mealSlot`):
@@ -332,6 +350,8 @@ export function BookingForm({
       debit_head: "",
       debit_details: "",
       project_id: "",
+      debit_subhead: "",
+      copy_to: [{ email: "" }],
       office_approval: "direct",
       on_behalf_of_name: "",
       on_behalf_of_email: "",
@@ -353,6 +373,11 @@ export function BookingForm({
   const { register, handleSubmit, control, setError, clearErrors, formState, setValue } = form;
   const { fields: roomFields, append: appendRoom, remove: removeRoom } =
     useFieldArray({ control, name: "rooms" });
+  const {
+    fields: copyToFields,
+    append: appendCopyTo,
+    remove: removeCopyTo,
+  } = useFieldArray({ control, name: "copy_to" });
 
   const wantsRooms = !mealsOnly;
   const checkInTime = useWatch({ control, name: "check_in_time" });
@@ -378,6 +403,7 @@ export function BookingForm({
   const chosenHead: DebitHead | null = fixedHead ?? (chosenHeadRaw || null);
   const paymentHead = chosenHead;
   const debitPrompt = debitDetailsPrompt(chosenHead);
+  const debitDetailsMandatory = debitDetailsRequired(chosenHead);
   // The Alumni ID card is demanded by the role's form config *or* by this
   // request being raised for an alumnus, since the IAR accounts book both ways
   // from one form.
@@ -653,6 +679,12 @@ export function BookingForm({
       debit_head: paymentHead,
       debit_details: debitPrompt ? values.debit_details : undefined,
       project_id: needsProject(paymentHead) ? values.project_id || null : null,
+      // The sub-head belongs to the project; a value typed before switching
+      // to another head is not sent.
+      debit_subhead: needsProject(paymentHead) ? values.debit_subhead : undefined,
+      // Every row, blank ones included, so a message lands on the row that is
+      // wrong; the schema drops the blanks and repeats.
+      copy_to_emails: values.copy_to.map((row) => row.email),
       // Only an office chooses, and only for a stay.
       office_approval:
         isOfficeRole(config.role) && !mealsOnly ? values.office_approval || null : null,
@@ -720,6 +752,12 @@ export function BookingForm({
           setMealsError(issue.message);
           continue;
         }
+        // The schema's list is the form's rows, one to one.
+        if (issue.path[0] === "copy_to_emails") {
+          const row = typeof issue.path[1] === "number" ? issue.path[1] : 0;
+          setError(`copy_to.${row}.email` as FieldPath<FormValues>, { message: issue.message });
+          continue;
+        }
         setError(issue.path.join(".") as FieldPath<FormValues>, { message: issue.message });
       }
     }
@@ -753,11 +791,6 @@ export function BookingForm({
       }
     }
     setCustomErrors(nextCustomErrors);
-    setDebitDocumentError(null);
-    if (needsDebitDocument(paymentHead) && !debitDocument) {
-      hasError = true;
-      setDebitDocumentError("Upload the sanction document for the Special Budget");
-    }
     if (hasError || !parsed.success) {
       toast.error("Please fix the highlighted fields");
       return;
@@ -774,9 +807,12 @@ export function BookingForm({
       });
     }
     if (alumniCard) formData.set("alumni_card", alumniCard);
-    if (needsDebitDocument(paymentHead) && debitDocument) {
+    if (acceptsDebitDocument(paymentHead) && debitDocument) {
       formData.set("debit_document", debitDocument);
     }
+    // The server checks again that the signed-in person is this club's
+    // faculty in-charge; this only says which club.
+    if (forClub) formData.set("for_club", forClub.id);
     if (onBehalf) {
       formData.set("on_behalf_of_name", values.on_behalf_of_name);
       formData.set("on_behalf_of_email", values.on_behalf_of_email);
@@ -824,6 +860,16 @@ export function BookingForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
+      {/* A club's booking, raised by its faculty in-charge. Said at the top,
+          because everything below is the club's form, not theirs. */}
+      {forClub && (
+        <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          You are booking for <span className="font-medium">{forClub.name}</span> as its faculty
+          in-charge. The booking is the club&apos;s — it appears under the club&apos;s account and
+          yours — and it goes on without waiting for Faculty Advisor approval, because that is you.
+        </p>
+      )}
+
       {/* Why the stay is booked. It decides the approval route and how the
           stay is settled. Roles with a single option are not asked — the value
           is still recorded on the booking. */}
@@ -983,30 +1029,44 @@ export function BookingForm({
                 </div>
               )}
 
+              {/* The project's sub-head, typed — the list of projects does not
+                  carry sub-heads, and they differ per project. Optional. */}
+              {needsProject(chosenHead) && (
+                <div className="space-y-2">
+                  <Label htmlFor="debit_subhead">Project sub-head (optional)</Label>
+                  <Input
+                    id="debit_subhead"
+                    maxLength={MAX_SUBHEAD_LENGTH}
+                    placeholder="e.g. Travel, Contingency, Consumables"
+                    {...register("debit_subhead")}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The head within the project that the accounts section should debit. It is printed
+                    on the invoice under the project.
+                  </p>
+                  <FieldError message={err("debit_subhead")} />
+                </div>
+              )}
+
               {debitPrompt && (
                 <div className="space-y-2">
-                  <Label htmlFor="debit_details">{debitPrompt} *</Label>
-                  {chosenHead === "special_budget" ? (
-                    <Textarea
-                      id="debit_details"
-                      rows={3}
-                      placeholder="What the special budget is, who sanctioned it, and the reference number"
-                      {...register("debit_details")}
-                    />
-                  ) : (
-                    <Input
-                      id="debit_details"
-                      placeholder="e.g. SP/2025/017 — Autonomous Navigation Testbed"
-                      {...register("debit_details")}
-                    />
-                  )}
+                  <Label htmlFor="debit_details">
+                    {debitPrompt}
+                    {debitDetailsMandatory ? " *" : " (optional)"}
+                  </Label>
+                  <Input
+                    id="debit_details"
+                    maxLength={300}
+                    placeholder="e.g. Director's discretionary fund — sanction DO/2026/114"
+                    {...register("debit_details")}
+                  />
                   <FieldError message={err("debit_details")} />
                 </div>
               )}
 
-              {needsDebitDocument(chosenHead) && (
+              {acceptsDebitDocument(chosenHead) && (
                 <div className="space-y-2">
-                  <Label htmlFor="debit_document">Sanction document *</Label>
+                  <Label htmlFor="debit_document">Sanction letter (optional)</Label>
                   <Input
                     id="debit_document"
                     type="file"
@@ -1016,7 +1076,6 @@ export function BookingForm({
                   <p className="text-xs text-muted-foreground">
                     JPG, PNG, WEBP or PDF, up to 5 MB.
                   </p>
-                  <FieldError message={debitDocumentError ?? undefined} />
                 </div>
               )}
             </>
@@ -1529,6 +1588,67 @@ export function BookingForm({
         </Card>
       )}
 
+      {/* Copy to (24 Sep 2026): anyone else who should hear about this
+          booking — a secretary, the guest, a colleague. Every mail the
+          requester gets about it is copied to them. As many as are needed,
+          up to a ceiling a crafted request cannot run past. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Copy to (optional)</CardTitle>
+          <CardDescription>
+            Email addresses that should get a copy of every mail sent to you about this booking —
+            received, approved, rooms allocated, cancelled. Add as many as you need.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {copyToFields.map((field, i) => (
+            <div key={field.id} className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Label htmlFor={`copy_to_${i}`} className="sr-only">
+                  Copy to address {i + 1}
+                </Label>
+                <Input
+                  id={`copy_to_${i}`}
+                  type="email"
+                  inputMode="email"
+                  autoComplete="off"
+                  placeholder="name@example.com"
+                  {...register(`copy_to.${i}.email`)}
+                />
+                {copyToFields.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove copy-to address ${i + 1}`}
+                    onClick={() => removeCopyTo(i)}
+                  >
+                    <XIcon />
+                  </Button>
+                )}
+              </div>
+              <FieldError message={err(`copy_to.${i}.email`)} />
+            </div>
+          ))}
+          <FieldError message={err("copy_to_emails")} />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={copyToFields.length >= MAX_COPY_TO_EMAILS}
+            onClick={() => appendCopyTo({ email: "" }, { shouldFocus: true })}
+          >
+            <MailPlusIcon />
+            Add another email
+          </Button>
+          {copyToFields.length >= MAX_COPY_TO_EMAILS && (
+            <p className="text-xs text-muted-foreground">
+              {MAX_COPY_TO_EMAILS} addresses is the most one booking can copy.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
         {MANAGER_HELP_LINE}
       </p>
@@ -1848,10 +1968,17 @@ function GuestRow({
           </div>
         )}
         <div className="space-y-2">
-          {/* Always asked: the age is what decides whether this person is an
-              infant, and the per-room limit counts the two separately. */}
-          <Label>Age *</Label>
+          {/* Always shown — the age is what decides whether this person is an
+              infant, and the per-room limit counts the two separately — but
+              mandatory only where the role's form says so. Left blank on a
+              form where it is optional, the guest is an adult. */}
+          <Label>Age{star(gf.age)}</Label>
           <Input type="number" min={0} max={120} {...register(`${base}.age`)} />
+          {gf.age !== "required" && !age?.trim() && (
+            <p className="text-xs text-muted-foreground">
+              Needed only for a child below {INFANT_AGE_LIMIT}.
+            </p>
+          )}
           <FieldError message={err(`${base}.age`)} />
         </div>
         {gf.gender !== "hidden" && (

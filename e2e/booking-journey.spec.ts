@@ -68,7 +68,17 @@ test("a student's stay goes from request to a paid invoice", async ({ page }) =>
   await rowFor(page, reference)
     .getByRole("button", { name: /Mark as Vacated|Early check-out/ })
     .click();
-  await expect(rowFor(page, reference)).toHaveCount(0, { timeout: 30_000 });
+  // It leaves the stays in the building and waits under "Checked out — to
+  // bill" — on reception's console too, since reception hands the invoice
+  // over (24 Sep 2026); it used to vanish from here with the bill still open.
+  const toBill = page.locator("section", {
+    has: page.getByRole("heading", { name: /Checked out — to bill/ }),
+  });
+  await expect(toBill.locator("tr", { hasText: reference })).toBeVisible({ timeout: 30_000 });
+  await expect(
+    toBill.locator("tr", { hasText: reference }).getByRole("button", { name: "Invoice", exact: true })
+  ).toBeVisible();
+  await expect(page.locator("tr", { hasText: reference })).toHaveCount(1);
 
   // ------------------------------------------------- the invoice, and paying
   // A checked-out stay waits under "Checked out — to bill" until it is paid.

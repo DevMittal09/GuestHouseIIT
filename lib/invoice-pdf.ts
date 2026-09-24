@@ -9,17 +9,19 @@ import {
 } from "./invoice-assets.generated";
 import {
   formatINR,
-  formatInvoiceDate,
   gstBreakdownLines,
   gstRowLabel,
   GST_INCLUDED_NOTE,
   INVOICE_TITLE,
+  invoiceFacts,
+  invoiceKind,
+  invoiceTotalLabels,
   PAYMENT_MODE_LABELS,
   type InvoiceDocument,
   type InvoiceRecord,
 } from "./invoice";
 import { MEAL_LABELS } from "./meals";
-import { formatInstituteDate, formatInstituteDateTime } from "./tz";
+import { formatInstituteDate } from "./tz";
 
 /**
  * The invoice PDF, drawn on the server from an invoice's snapshot (Phase 5).
@@ -132,23 +134,9 @@ function details(doc: jsPDF, invoice: InvoiceDocument, top: number): number {
   cell(doc, TABLE_X, top, leftW, bandH, "Booking Details", { fill: BAND, bold: true });
   cell(doc, TABLE_X + leftW, top, rightW, bandH, "Invoice Details", { fill: BAND, bold: true });
 
-  const left: [string, string][] = [
-    ["Booked By (Name) : ", invoice.booked_by],
-    ["Department/Section/Institute: ", invoice.unit],
-    ["Debitable head: ", invoice.debit_head_label],
-    ["Project Detail: ", invoice.project_title ?? ""],
-    ["Project Number: ", invoice.project_number ?? ""],
-  ];
-  const right: [string, string][] = [
-    ["Invoice No.: ", invoice.invoice_number ?? "DRAFT — not yet issued"],
-    ["Invoice Date: ", formatInvoiceDate(invoice.invoice_date)],
-    ["Primary Guest Name: ", invoice.primary_guest],
-    ["Check-In Date & Time: ", formatInstituteDateTime(invoice.check_in)],
-    ["Check-Out Date & Time: ", formatInstituteDateTime(invoice.check_out)],
-    ["No. of Room(s) : ", String(invoice.rooms)],
-    ["No. of Guests(s): ", String(invoice.guests)],
-    ["No. of Infants(s): ", String(invoice.infants)],
-  ];
+  // One list of facts for this and the desk's preview (`invoiceFacts`):
+  // project rows only with the Project head, no room facts on dining.
+  const { left, right } = invoiceFacts(invoice);
 
   // Each fact is "Label: value" on one paragraph, wrapping inside its column,
   // with the template's 3 pt before and after.
@@ -213,13 +201,18 @@ function tariffTables(doc: jsPDF, invoice: InvoiceDocument, top: number): number
     y += ROW_H;
   };
 
-  headRow("Room Details (with additional bed details)", "Day(s)");
-  for (const line of invoice.room_lines) {
-    bodyRow(line.description, String(line.days), line.rate === null ? "—" : formatINR(line.rate), formatINR(line.amount));
+  // A dining booking had no room, so its invoice has no room table and no
+  // "Sub Total (A)" of nothing — only the meals (24 Sep 2026).
+  const dining = invoiceKind(invoice) === "dining";
+  if (!dining) {
+    headRow("Room Details (with additional bed details)", "Day(s)");
+    for (const line of invoice.room_lines) {
+      bodyRow(line.description, String(line.days), line.rate === null ? "—" : formatINR(line.rate), formatINR(line.amount));
+    }
+    // The template has two ruled rows; a one-room stay keeps the second, blank.
+    for (let i = invoice.room_lines.length; i < 2; i++) bodyRow("", "", "", "");
+    totalRow("Sub Total (A):", formatINR(invoice.subtotal_rooms));
   }
-  // The template has two ruled rows; a one-room stay keeps the second, blank.
-  for (let i = invoice.room_lines.length; i < 2; i++) bodyRow("", "", "", "");
-  totalRow("Sub Total (A):", formatINR(invoice.subtotal_rooms));
 
   headRow("Dining Charges Details", "No(s)");
   for (const line of invoice.meal_lines) {
@@ -230,10 +223,11 @@ function tariffTables(doc: jsPDF, invoice: InvoiceDocument, top: number): number
       formatINR(line.amount)
     );
   }
-  totalRow("Sub Total (B):", formatINR(invoice.subtotal_dining));
-  totalRow("Total (A+B)", formatINR(invoice.total));
+  const labels = invoiceTotalLabels(invoice);
+  if (!dining) totalRow("Sub Total (B):", formatINR(invoice.subtotal_dining));
+  totalRow(`${labels.total}${dining ? ":" : ""}`, formatINR(invoice.total));
   totalRow(gstRowLabel(invoice), formatINR(invoice.gst));
-  totalRow("Grand Total (A+B including GST):", formatINR(invoice.grand_total));
+  totalRow(`${labels.grandTotal}:`, formatINR(invoice.grand_total));
   return y;
 }
 

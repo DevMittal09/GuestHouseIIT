@@ -3,6 +3,7 @@ import { canIssueInvoices } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { invoiceFilename, renderInvoicePdf } from "@/lib/invoice-pdf";
 import { getStore } from "@/lib/store";
+import { actsAsRequester } from "@/lib/workflow";
 
 /**
  * An issued invoice as a PDF, drawn from its snapshot (Phase 5). The desk may
@@ -21,7 +22,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!canIssueInvoices(user.role)) {
     const booking = await store.getBooking(invoice.booking_id);
     // Not found rather than forbidden: do not confirm the invoice exists.
-    if (!booking || booking.user_id !== user.id) return new NextResponse("Invoice not found", { status: 404 });
+    // The requester, or the faculty in-charge who raised a club's booking.
+    if (!booking || !actsAsRequester(booking, user.id)) return new NextResponse("Invoice not found", { status: 404 });
   }
   const pdf = renderInvoicePdf(invoice.document, invoice);
   const download = new URL(request.url).searchParams.get("download") === "1";
