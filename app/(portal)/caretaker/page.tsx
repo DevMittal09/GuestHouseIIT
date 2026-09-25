@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
 import { awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
 import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 
 export default async function CaretakerPage({
   searchParams,
@@ -68,7 +69,18 @@ export default async function CaretakerPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Guest House Reception">
+      <PageHeader
+        title="Guest House Reception"
+        actions={
+          // The kitchen's head count for the day, and the dining bookings to
+          // bill — open to reception, and until now reachable only by URL.
+          current.serves_meals ? (
+            <Button asChild variant="outline">
+              <Link href={`/manager/meals?gh=${encodeURIComponent(current.name)}`}>Meal counts</Link>
+            </Button>
+          ) : undefined
+        }
+      >
         Who is in the building, who arrives next, and who leaves today. Room allocation and
         approvals are handled by the Guest House Manager.
       </PageHeader>

@@ -4,7 +4,7 @@
 
 | Layer | Choice | Version |
 | --- | --- | --- |
-| Framework | Next.js App Router (Turbopack) | 16.3.1 |
+| Framework | Next.js App Router (Turbopack) | 16.3.x |
 | UI runtime | React | 19.2.8 |
 | Language | TypeScript | 5.x |
 | Styling | Tailwind CSS | 4.x |
@@ -14,8 +14,9 @@
 | Backend | Supabase (Postgres + Storage), optional | @supabase/supabase-js 2.x |
 | Toasts | sonner | 2.x |
 
-The test suite is Vitest (`npm test`, `tests/`, since 21 Sep 2026). The rest of the verification approach is described in
-[05-deployment.md](05-deployment.md#verifying-changes).
+Also: date-fns, jsPDF (+ autotable), nodemailer, ldapts. Tests: Vitest
+(`npm test`, `tests/`) and Playwright (`npm run test:e2e`, `e2e/`). How to run
+and verify: [23-running-and-testing.md](23-running-and-testing.md).
 
 ## Shape of the app
 
@@ -23,35 +24,43 @@ The test suite is Vitest (`npm test`, `tests/`, since 21 Sep 2026). The rest of 
 app/
   (site)/                  PUBLIC website (19 Sep 2026): / home, book-room, book-meal,
                            guidelines, gallery, contact, privacy, sign-in,
-                           mock-login (developer persona picker, DEV_LOGIN only)
-                           — see 10-ui-design.md
+                           mock-login (Mock Authentication — open while Google is
+                           unconfigured) — see 16-public-site-and-ui.md
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
     dashboard/             requester's own bookings
-    book/                  the booking form
-    warden/  fa/  iar/     reviewer queues (one component, three scopings)
+    book/                  the booking form (and "Booking as" for Faculty Advisors)
+    warden/ hod/ approvals/ iar/   reviewer queues (one ReviewQueue component);
+                           fa/ only redirects to approvals/
     availability/          read-only room availability grid (every role)
-    history/               booking history (requesters) / approval log (all roles)
-    manager/               room allocation console
-    admin/                 developer superadmin console
+    history/               booking history (requesters) / approval log (staff)
+    manager/  manager/meals/   allocation console and the kitchen's day
+    caretaker/             reception
+    admin/                 the console (13 sections; manager 9, developer all)
   actions/                 all mutations (server actions)
+  api/                     the only route handlers: auth/google/{start,callback},
+                           documents/[...path], invoices/[id]/pdf,
+                           invoices/preview/[bookingId], mail/{cron,dispatch}
 components/                feature components + components/ui primitives
 lib/                       domain logic: types, workflow, form config, tz, store
 supabase/                  migrations + seed SQL
 ```
 
 Everything that writes data goes through a **server action** in `app/actions/`.
-There are no API routes. Pages are server components that read through the store
-and pass plain data to client components.
+The route handlers under `app/api/` exist only where a server action cannot
+serve: the Google OAuth redirect and callback, file downloads (documents,
+invoice PDFs) and the two cron endpoints. Pages are server components that read
+through the store and pass plain data to client components.
 
 ## The four ideas that explain most of the codebase
 
 ### 1. One data interface, two implementations
 
-`lib/store/types.ts` declares a `DataStore` interface (36 methods — the last
-six are the email outbox, added 16 Sep 2026). Two classes implement it:
+`lib/store/types.ts` declares a `DataStore` interface. Two classes implement
+it:
 
-- `lib/store/mock.ts` — a JSON file (`.local-db.json`) plus `public/uploads/`.
+- `lib/store/mock.ts` — a JSON file (`.local-db.json`) plus `.uploads/`
+  (outside `public/`, served only through `/api/documents`).
   Zero setup, so the app runs immediately after `npm install`.
 - `lib/store/supabase.ts` — Postgres tables plus a private Storage bucket.
 
@@ -64,9 +73,9 @@ six are the email outbox, added 16 Sep 2026). Two classes implement it:
 
 The mock store rewrites the entire JSON file on every mutation. It is
 single-process and not concurrency-safe — fine for development, never for
-production. It also self-heals on load: missing seeded profiles and a missing
-`form_configs` key are added to older files, so introducing a new persona does
-not require deleting the database.
+production. It also self-heals on load: missing seeded profiles, units and
+keys later features introduced are added to older files, so introducing a new
+persona or column does not require deleting the database.
 
 ### 2. Authentication has exactly one swap point
 
@@ -75,11 +84,12 @@ session is a **row** in `sessions` and the cookie holds an opaque token
 (`lib/sessions.ts`); `lib/auth.ts` is the only module that reads it. The
 sign-in card (`/sign-in`, also embedded in the public `/book-room` and
 `/book-meal`) opens a session through two doors: **LDAP** username + password,
-and **"Sign in with Google"** — the real OpenID Connect flow when
-`GOOGLE_CLIENT_ID` is set, and the persona picker at `/mock-login` only where
-the developer doors are switched on (`DEV_LOGIN=true`, never in production).
-The pre-Phase-8 `gh_mock_user` cookie is honoured on the same condition and
-nowhere else. `/` is the public website, so signed-out guards redirect to
+and a second button that is **"Sign in with Google"** (the real OpenID
+Connect flow) when `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL`
+are set, and **"Mock Authentication"** — the persona picker at `/mock-login` —
+otherwise (`mockLoginEnabled()`; `MOCK_LOGIN=false` closes it). The
+pre-Phase-8 `gh_mock_user` cookie is honoured only with `DEV_LOGIN=true`
+outside production. `/` is the public website, so signed-out guards redirect to
 `SIGN_IN_PATH`, not `/`.
 
 LDAP is the third environment-selected seam, alongside the store and the
@@ -88,20 +98,21 @@ mailer:
 | Condition | Directory | Accounts come from |
 | --- | --- | --- |
 | `LDAP_URL` set | `lib/ldap/ldap-directory.ts` (`ldapts`, search-then-bind) | the institute LDAP server |
-| otherwise | `lib/ldap/mock-directory.ts` | dummy accounts ([11-ldap-accounts.md](11-ldap-accounts.md)) |
+| otherwise | `lib/ldap/mock-directory.ts` | dummy accounts ([30-credentials-and-access.md](30-credentials-and-access.md)) |
 
 The directory only answers "is this the password for this username". Identity
 inside the portal (role, hostel, club) stays in `profiles`, joined by
 `profiles.ldap_uid` (migration 12). So the directory never needs to know about
 the portal's roles, and a directory login with no profile gets in nowhere.
 
-**No other module contains auth logic.** The cookie is still unsigned, so a
-signed or server-side session plus real Google OAuth is the remaining
-production migration. Resist the temptation to read cookies or sessions
-anywhere else.
+**No other module contains auth logic.** The session is a server-side row
+keyed by the SHA-256 of an opaque cookie token (Phase 8), so a forged cookie
+gets nothing. What remains for production is connecting the real directory
+(`LDAP_URL`) and configuring Google (or closing Mock Authentication). Resist the
+temptation to read cookies or sessions anywhere else.
 
 Authorization is separate and always server-side: every server action re-checks
-the caller (`requireUser`, explicit role checks, `canReview`, `requireDeveloper`).
+the caller (`requireUser`, explicit role checks, `canReview` / `canReviewBooking`, `requireConsole(section)`).
 The UI hiding a button is never the security boundary.
 
 ### 3. The booking form is data, not code
@@ -142,7 +153,8 @@ The config also carries a *relationship dependency*, which is how the institute
 rule "siblings and grandparents only when a parent is staying" is expressed
 without hardcoding a role check:
 
-- `parent_relationships` — options that satisfy the dependency (Mother, Father);
+- `parent_relationships` — options that satisfy the dependency (Mother, Father,
+  Guardian);
 - `dependent_relationships` — options gated behind it (Grandmother,
   Grandfather, Siblings).
 
@@ -203,32 +215,36 @@ because the rendered string no longer depends on which machine rendered it.
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
 | student | personal | Assistant Warden → GH Manager | Personal |
-| club | official | Faculty Advisor / council secretary → **HOD** (if the club has an HOD unit) → GH Manager | Department |
-| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF |
-| employee — staff | official | **HOD** → GH Manager | Department |
+| club — raised by its **Faculty Advisor** | official | **Direct → GH Manager** (a club request stored before 24 Sep 2026: council secretary → HOD if any → GH Manager) | Department / Special Funds |
+| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF / Special Funds |
+| employee — staff | official | **HOD** → GH Manager | Department / Special Funds |
 | employee | personal | GH Manager | Personal |
-| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute |
-| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department |
-| iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | Institute (alumni: Institute / Personal) |
+| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute / Special Funds |
+| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department / Special Funds |
+| iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | its office class (alumni: Institute / Personal) |
 | iar_student_cell | alumni | IAR Office → GH Manager | Institute / Personal |
 | any | meals only | GH Manager | dining heads (Phase 6) |
 | alumni | *retired* | kept only for stored bookings | — |
 
 Rules encoded there:
 
-- Check-in must fall within **one month** of today (`latestCheckIn`).
-  `isAdvanceWindowExempt()` exempts **`official` only** — dignitary visits are
-  arranged on the institute's own notice, and the same exemption is why they
-  bypass intermediate review. The cap applies to check-in, not check-out: a stay
-  that starts inside the window may run past it.
-- An intermediate approval always forwards to `PENDING_GH_MANAGER`.
+- Check-in must fall within **one month** of today (`latestCheckIn`, a
+  Setting). `isAdvanceWindowExempt()` exempts **`official`, `gh_manager` and
+  `developer`** — dignitary visits are arranged on the institute's own notice,
+  and the desk books whatever the institute has already committed to. The cap
+  applies to check-in, not check-out.
+- An intermediate approval forwards to the **next stage of the booking's own
+  route** (`nextStatusAfter` over `approvalStagesFor`), else the GH Manager.
 - The manager does **not** approve through the generic review action. Approval
   happens via `allocateRooms()`, which assigns rooms and sets `APPROVED` in one
   step; `reviewBooking` explicitly refuses manager approvals. This makes
   "approved with no rooms assigned" unrepresentable.
 - Rejection requires a non-empty reason, enforced server-side at every tier.
 - Reviewer scoping lives in `canReview()`: wardens are limited to their
-  `hostel_name`, faculty advisors to their `department_or_club`.
+  `hostel_name`; HODs and council secretaries are found **by appointment**
+  through `units` (`hodApproversFor`, `approversOf`); a legacy
+  `faculty_advisor` account falls back to its `department_or_club`. Where a
+  booking exists, `canReviewBooking` also refuses whoever raised it.
 
 ### Post-approval lifecycle
 
@@ -242,10 +258,13 @@ APPROVED → OCCUPIED → VACATED
 
 - `OCCUPIED` — the guest has checked in.
 - `VACATED` — the guest has checked out; rooms are released.
-- `CANCELLATION_REQUESTED` — the requester asks to cancel an already-approved
-  booking (with a mandatory reason). The manager reviews and either approves
-  (`CANCELLATION_APPROVED`) or rejects the cancellation.
-- Direct `CANCELLED` is only available pre-approval or by the manager.
+- `CANCELLATION_REQUESTED` — the requester asks to cancel (with a mandatory
+  reason) — **from any open status, pending or approved**; a stay already
+  Occupied is ended at the desk instead. The manager approves
+  (`CANCELLATION_APPROVED`) or declines, which restores the status the booking
+  had.
+- Direct `CANCELLED` is the manager's (`managerCancelBooking`, a no-show
+  release) or the developer's force-status override.
 
 `ROOM_HOLDING_STATUSES` (`APPROVED`, `OCCUPIED`, `CANCELLATION_REQUESTED`) in
 `lib/workflow.ts` defines which statuses keep rooms reserved. Room occupancy
@@ -270,7 +289,9 @@ as though it were occupied.
 ## Room allocation and clash detection
 
 `components/room-grid.tsx` renders the cinema-style grid — green available, red
-occupied, blue selected — grouped into double-sharing and single rooms.
+occupied (disabled), blue selected, hatched turnaround, amber soft overlap — and
+splits into double-sharing and single sections only when both kinds exist
+(both guest houses are all double sharing today).
 
 **Occupancy is read for the booking's own dates and nothing else.** The grid
 used to carry its own date/time selector, but `allocateRooms()` always wrote
@@ -284,7 +305,7 @@ at all. Browsing other dates belongs to `/availability`.
 
 `room_holds` holds one row per (booking, room) with a `tstzrange` period and an
 **exclusion constraint** that refuses two overlapping holds on the same room.
-See [04-database.md](04-database.md#room_holds--occupancy-the-database-can-enforce)
+See [22-database.md](22-database.md#room_holds--occupancy-the-database-can-enforce)
 for the DDL.
 
 The old design read occupancy, decided there was no clash, then wrote — a
@@ -320,11 +341,12 @@ clash, as before.
 and 3 once an extra bed is rolled in; a single sleeps 1, or 2. The field is
 named `withExtraBed` rather than `max` deliberately — the third occupant is not
 a property of the room, it is a bed somebody has to arrange, and
-`extraBedsNeeded()` puts that number in front of the manager at allocation time.
+`extraBedsFor(guests, rooms)` puts that number in front of the manager at
+allocation time, counted against the rooms actually picked.
 
 **Infants** — under 5 years, sharing a guardian's bed — are entered as guest rows within a room card (migration 11), with their `is_infant` flag computed automatically based on age. They occupy no bed, but they count towards the room's **combined** limit: a room card holds `max_occupants_per_room` people (4) of whom at most `max_guests_per_room` (3) may need a bed and at most `max_infants_per_room` (3) may be infants. That combination — 3 + 1, 2 + 2 or 1 + 3, never 3 + 2 — is the office's own rule (23 Sep 2026) and is why there are three settings rather than two. Prior to migration 11, infants were just a boolean switch on the booking, so legacy bookings were migrated into synthetic room cards while retaining their original infant flags. `describeParty(booking)` supports both shapes.
 It is checked twice because two different things are known at the two moments:
-`requestedRoomsError()` at submission, when only a room *count* exists, and
+`roomPartyError()` per room card at submission (the combination above), and
 `allocationCapacityError()` at allocation, when the manager has picked actual
 rooms with actual types. The booking form adds a third, softer check — it will
 not let you add more guests than the rooms you picked can sleep.
@@ -343,7 +365,7 @@ axes. The day view has a row per hour; the week and month views a row per day,
 with time also running down *inside* each day's row, so a stay is drawn as one
 continuous bar from check-in to check-out rather than a colour per day. Keeping
 time vertical at every scale is deliberate — switching views zooms out instead
-of rotating the picture (see [06-decisions.md](06-decisions.md)).
+of rotating the picture (see [03-decisions.md](03-decisions.md)).
 
 **The chart itself is `components/occupancy-chart.tsx`**, shared with
 `components/booking-availability.tsx`, which embeds the same picture in the
@@ -387,9 +409,9 @@ Three things are worth knowing:
 
 | Role type | What they see | Nav label |
 | --- | --- | --- |
-| Requesters (student, employee, official, club, alumni) | Their own bookings only (`userId` scope) | "Booking History" |
-| Reviewers (warden, FA, IAR) | Their jurisdiction + own approval decisions | "Approval Log" |
-| Admins (GH manager, developer) | All bookings across the system | "Approval Log" |
+| Requesters (student, employee, official, club, IAR Student Cell) | Their own bookings only (`userId` scope); approvers by appointment also get their units' requests | "Booking History" |
+| Reviewers (warden, legacy FA account, IAR Office) | Their jurisdiction | "Approval Log" |
+| Desk and developer (GH manager, caretaker, developer) | All bookings | "Approval Log" |
 
 `searchBookings(criteria)` is the one data operation behind `/history`. The
 matching rules are *not* in either store — they live in `lib/booking-search.ts`
@@ -511,8 +533,8 @@ Everything else follows from those two:
   handlers in the app; everything else is a server action. Both are guarded by
   `CRON_SECRET`.
 
-Depth in [03-implementation.md](03-implementation.md); the reasoning and the
-rejected alternatives in [06-decisions.md](06-decisions.md).
+Who gets which mail: [14-notifications.md](14-notifications.md); the reasoning
+and the rejected alternatives in [03-decisions.md](03-decisions.md).
 
 ## Audit trail
 

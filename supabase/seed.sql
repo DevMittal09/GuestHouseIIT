@@ -125,7 +125,7 @@ update public.units set secretary_email = 'sec_arts@iitpkd.ac.in'
 where id = '33333333-3333-3333-3333-333333333302' and secretary_email is null;
 
 -- LDAP usernames (migration 12) — the dummy directory's uids, whose passwords
--- are in lib/ldap/mock-directory.ts and .memories/11-ldap-accounts.md. An
+-- are in lib/ldap/mock-directory.ts and .memories/30-credentials-and-access.md. An
 -- update rather than a column in the insert above so that re-running the seed
 -- fills them in on a database seeded before migration 12.
 update public.profiles p set ldap_uid = v.uid

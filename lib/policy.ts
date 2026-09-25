@@ -10,6 +10,7 @@
  */
 
 import { DEFAULT_RULES } from "./settings";
+import { GUEST_HOUSE_CONTACT } from "./site";
 import { addDaysToDateValue, parseDateValue, toInstituteDateValue } from "./tz";
 import type { BookingType, GuestHouse, Role } from "./types";
 
@@ -177,13 +178,19 @@ export const PETS_POLICY_ACKNOWLEDGEMENT =
 /**
  * Who to contact when the form will not allow what the requester needs — a
  * stay over the cap, an alumni booking at the other guest house, a category
- * that no longer exists. Placeholders until the office supplies the real ones.
+ * that no longer exists.
+ *
+ * The guest house office's own phone and email, from the one place they are
+ * kept (`GUEST_HOUSE_CONTACT`, `lib/site.ts` — the numbers on the office's
+ * invoice template, also on the public site). This used to be a placeholder of
+ * its own (+91 04923 226 100, guesthouse@), so the portal showed a different
+ * number from the website and the invoice.
  */
 export const GUEST_HOUSE_MANAGER_CONTACT = {
   name: "Guest House Manager",
-  phone: "+91 04923 226 100",
-  email: "guesthouse@iitpkd.ac.in",
-};
+  phone: GUEST_HOUSE_CONTACT.phone,
+  email: GUEST_HOUSE_CONTACT.email,
+} as const;
 
 /** The one-line help shown on the booking form and the portal home page. */
-export const MANAGER_HELP_LINE = `Facing trouble booking? Contact the Guest House Manager — ${GUEST_HOUSE_MANAGER_CONTACT.name}, ${GUEST_HOUSE_MANAGER_CONTACT.phone}, ${GUEST_HOUSE_MANAGER_CONTACT.email}.`;
+export const MANAGER_HELP_LINE = `Facing trouble booking? Contact the ${GUEST_HOUSE_MANAGER_CONTACT.name} on ${GUEST_HOUSE_MANAGER_CONTACT.phone} or ${GUEST_HOUSE_MANAGER_CONTACT.email}.`;

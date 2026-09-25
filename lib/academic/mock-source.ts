@@ -3,7 +3,7 @@ import type { AcademicRecord, AcademicRecordKind, AcademicSource } from "./types
 /**
  * Dummy academic records, one per seeded persona that the academic database
  * would describe, standing in until the real database is connected
- * (`ACADEMIC_DB_URL`). Listed in `.memories/12-academic-records.md` — keep the
+ * (`ACADEMIC_DB_URL`). Listed in `.memories/17-academic-records.md` — keep the
  * two in step.
  *
  * Matched by institute email, so these line up with the profiles in

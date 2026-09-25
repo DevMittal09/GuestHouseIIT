@@ -3,7 +3,7 @@
  *
  * Six kinds of record, one per kind of account, each with the fields the
  * guest house office asked to see at the top of New Booking (21 Sep 2026).
- * `.memories/12-academic-records.md` has the list and how to connect the real
+ * `.memories/17-academic-records.md` has the list and how to connect the real
  * database.
  *
  * Every field except `kind` is nullable. Real records have gaps, and a gap is

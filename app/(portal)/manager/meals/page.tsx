@@ -105,13 +105,22 @@ export default async function DailyMealsPage({
     toInvoice = dining.filter((b) => !invoiced.has(b.id));
   }
 
+  // Back to wherever this person works: reception reaches this page too, and
+  // the manager's console would only bounce the caretaker to their home page.
+  const back =
+    user.role === "gh_caretaker"
+      ? { href: `/caretaker?gh=${encodeURIComponent(current.name)}`, label: "Back to reception" }
+      : user.role === "gh_manager"
+        ? { href: `/manager?gh=${encodeURIComponent(current.name)}`, label: "Back to the desk" }
+        : { href: homeForRole(user.role), label: "Back" };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title={`Meals for ${formatDateValue(day, { year: true })}`}
         actions={
           <Button asChild variant="outline">
-            <Link href={`/manager?gh=${encodeURIComponent(current.name)}`}>Back to the desk</Link>
+            <Link href={back.href}>{back.label}</Link>
           </Button>
         }
       >

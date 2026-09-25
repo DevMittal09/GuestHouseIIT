@@ -30,9 +30,18 @@ export function canManageAnyBooking(role: Role): boolean {
   return hasFullBookingAccess(role);
 }
 
-/** Submit a booking in someone else's name, recording both parties. */
+/**
+ * Submit a booking in someone else's name, recording both parties — the desk
+ * taking a booking for a guest who never opens the portal.
+ *
+ * **The manager only**, not the developer (24 Sep 2026). The developer runs
+ * the portal, not the guest house: the role has no booking types
+ * (`bookingTypesFor`) and no route (`routeFor`), so offering it New Booking
+ * only led to a form that could not be submitted. A developer who needs a
+ * booking made uses the manager's desk, or an ordinary account.
+ */
 export function canBookOnBehalf(role: Role): boolean {
-  return hasFullBookingAccess(role);
+  return role === "gh_manager";
 }
 
 /**

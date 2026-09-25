@@ -4,20 +4,21 @@ How to get the Guest House Portal from "feature-complete demo" to something the
 Administration Section actually runs on. Ordered by what blocks what, not by
 what is most fun to build.
 
-Companion to [08-roadmap.md](08-roadmap.md), which lists gaps. This one says how
+Companion to [04-roadmap.md](04-roadmap.md), which lists gaps. This one says how
 to close them and in what order.
 
-> **Status, 23 Sep 2026.** Most of this plan was carried out in the ten-phase
-> programme of 21–23 Sep 2026: Settings, mail addressing, the turnaround
-> buffer, HOD approval and debitable heads, invoices, dining, operational
-> states, security, performance and tests, and the documentation you are
-> reading. What each phase actually did — and what it deliberately did not — is
-> in [06-decisions.md](06-decisions.md) under "Phase 1" to "Phase 9", with the
-> operational view in [14-security.md](14-security.md) and
-> [05-deployment.md](05-deployment.md#production-runbook). Where this plan and
-> those pages disagree, those pages are newer. The two items still open are
-> connecting the real directory and moving request-scoped reads off the
-> service-role key.
+> **Read this as history (banner added 24 Sep 2026).** This is the plan
+> written on **2 Sep 2026**, when authentication was a persona cookie, there was
+> no mail, no tests and no billing. Almost all of it has been carried out — as
+> the ten-phase programme of 21–23 Sep 2026 and the office's correction rounds
+> — often differently from what is sketched here (LDAP rather than
+> Supabase-Auth Google; `units` rather than `account_directory`; a Gmail sender
+> rather than the relay, for now). Statements below such as "identity is fake",
+> "nothing tells anyone anything" or "build (2) now" describe **2 Sep**, not
+> today. **What is actually left is [04-roadmap.md](04-roadmap.md)**; what was
+> done and why is [03-decisions.md](03-decisions.md) ("Phase 1" onwards). Kept
+> because its reasoning — hosting options, the Computer Centre asks, the DPDP
+> and Aadhaar notes, the rollout order — still applies.
 
 > **Review notes (2026-09-02):** This plan was cross-referenced against the
 > actual codebase. Key findings:
@@ -265,7 +266,7 @@ domain. Confirm with the IAR cell. If it doesn't:
    keep their routes: every signed-out guard redirects to `/sign-in`
    (`SIGN_IN_PATH`). (`/` is the public website since 19 Sep 2026.) Real LDAP
    usernames are loaded onto profiles as described in
-   [11-ldap-accounts.md](11-ldap-accounts.md) §3.
+   [31-ldap-sign-in.md](31-ldap-sign-in.md) §3.
 6. Move request-scoped reads to the anon key with the user's session so **RLS
    becomes the real boundary**. Keep one service-role client, used only by
    `app/actions/admin.ts` for user creation.
@@ -654,7 +655,7 @@ Three, with separate Supabase projects:
 
 ### Migration discipline
 
-`04-database.md` says to update `00000000000001_init.sql` when the schema
+`22-database.md` says to update `00000000000001_init.sql` when the schema
 changes. That is fine today and dangerous the moment production exists — you can
 never edit an applied migration. Change the rule now to: **every schema change is
 a new numbered file, applied forward only.** Adopt the Supabase CLI (`supabase

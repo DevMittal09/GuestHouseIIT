@@ -200,16 +200,16 @@ check-out (hover for which); that is `stayMealDays` working, not a bug.
 
 ## A tab suddenly shows a different user
 
-Expected, and not fixable in the UI. The mock session is a cookie, which belongs
-to the browser and not to a tab, so signing in as another persona anywhere
-changes every tab — and the 5 s polling makes the others re-render as that
-persona within seconds. To use two accounts at once, use a private window or a
-second browser profile.
+Expected, and not fixable in the UI. The session cookie belongs to the
+browser, not to a tab, so signing in as another persona anywhere changes every
+tab — and the live updates (`components/live-updates.tsx`) make the others
+re-render as that persona. To use two accounts at once, use a private window or
+a second browser profile.
 
 A `TabSessionGuard` that detected the mismatch and blocked the affected tab was
 built and then **reverted**: the blocking overlay was intrusive and it added
 work to every page load for a demo-only concern. Don't rebuild it — see
-[06-decisions.md](06-decisions.md). Genuine per-tab sessions need real
+[03-decisions.md](03-decisions.md). Genuine per-tab sessions need real
 authentication.
 
 ## Form Builder changes appear to do nothing
@@ -247,9 +247,10 @@ The mock store can be driven directly with
 1000 candidate rows.
 
 **Fix.** The result carries `truncated: true` and the UI shows an amber banner
-asking for a date range or guest house filter. If this starts happening often,
-that is the signal to move keyword matching into Postgres (a `tsvector` column
-maintained by a trigger) rather than raising the cap.
+asking for a date range or guest house filter. Since migration 22 the keyword
+is pushed down to Postgres (`bookings.search_text`, a generated tsvector with
+a GIN index), which narrows the candidates first; guests' names are
+deliberately not in it and are still matched in JavaScript.
 
 ## shadcn/ui init fails
 
@@ -298,7 +299,7 @@ files in. Do not try to re-scaffold in place.
 **Explanation.** Server-side code uses the service-role key and bypasses RLS.
 Debugging with the anon key from curl will legitimately show `[]`. Use the
 service-role key for out-of-band inspection, and see the honesty note in
-[04-database.md](04-database.md#row-level-security).
+[22-database.md](22-database.md#row-level-security).
 
 ## `next dev` will not start
 
@@ -359,7 +360,7 @@ database.)
 
 **Fix.** `NEXT_PUBLIC_SUPABASE_URL= npm run build` as well as for `next start`,
 then rebuild normally when done. Recipe in
-[05-deployment.md](05-deployment.md).
+[23-running-and-testing.md](23-running-and-testing.md).
 
 ## Signed-out users land on the public home page instead of a sign-in form
 
@@ -378,7 +379,7 @@ Since 19 Sep 2026 the card takes an LDAP username, not an email address.
   `userPrincipalName`.
 - **"Incorrect username or password"**: the directory refused the login. With
   no `LDAP_URL`, only the dummy accounts in
-  [11-ldap-accounts.md](11-ldap-accounts.md) exist. `password123` is **not** a
+  [31-ldap-sign-in.md](31-ldap-sign-in.md) exist. `password123` is **not** a
   portal password any more.
 - **"…valid but is not registered on the guest house portal"**: the password
   was right, but no profile has that `ldap_uid`. Set it in Users & Roles (Edit,
@@ -391,11 +392,13 @@ Since 19 Sep 2026 the card takes an LDAP username, not an email address.
   - a wrong service password
   - anonymous search refused, which shows up as `noSuchObject` (code 0x20)
   - an untrusted TLS certificate (use `NODE_EXTRA_CA_CERTS`)
-- **"Too many attempts"**: 10 failures in 5 minutes for that username. The
-  count is in-process, so a server restart clears it.
+- **"Too many attempts"**: 8 attempts in 15 minutes for that username
+  (`RATE_LIMITS.signIn`). The count is a **row in the database**
+  (`rate_limits` / the mock's `.local-db.json`), so a restart does not clear
+  it — wait, or on a throwaway mock database delete the file.
 
-A developer-created account with no LDAP username can still use "Sign in with
-Google" (the persona picker) in development.
+A console-created account with no LDAP username can still sign in through
+**Mock Authentication** while Google is unconfigured.
 
 ## Resizing the camera photos gets killed (exit 137)
 
@@ -404,7 +407,7 @@ in one Python process exhausted memory and the kernel OOM-killed it.
 
 **Fix.** One photo per process, and `im.draft("RGB", (2000, 2000))` before
 loading so the JPEG decoder works at reduced scale. Recipe in
-[10-ui-design.md](10-ui-design.md#photographs).
+[16-public-site-and-ui.md](16-public-site-and-ui.md#photographs).
 
 ## The portal felt slow, and what was actually measured (Phase 9)
 
@@ -473,15 +476,17 @@ keeping the file.
 sets `reuseExistingServer: !process.env.CI`, so a server left listening on 3100
 from an earlier run is reused — and `next start` read `.next` when it *started*.
 Rebuild and re-run, and the tests are exercising the old code while reporting on
-the new. **`pkill -f "next start"` before re-running**, or expect to be
-confused. (This is the `next start` cousin of the "`npm run build` kills a
+the new. **`pkill -f "[n]ext start"` before re-running**, or expect to be
+confused. (The brackets matter: a bare `pkill -f "next start"` inside a
+compound shell command matches that command's own shell and kills it, exit
+144.) (This is the `next start` cousin of the "`npm run build` kills a
 running `next dev`" warning in `AGENTS.md`.)
 
 A clean loop, then:
 
 ```bash
 export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 20
-pkill -f "next start"                     # the database is wiped by global-setup
+pkill -f "[n]ext start"                   # the database is wiped by global-setup
 NEXT_PUBLIC_SUPABASE_URL= npm run build   # empty, or the bundle talks to hosted Supabase
 npm run test:e2e
 npm run build                             # rebuild normally afterwards
@@ -496,3 +501,36 @@ it up first if it holds anything you care about.
 **`npx playwright install chromium`, not `--with-deps`.** The `--with-deps` form
 shells out to `sudo` for system packages and dies on a machine with no askpass
 helper. The browser download on its own needs no root.
+
+---
+
+## Switching "Booking as" kept the previous person's form (24 Sep 2026)
+
+**Symptom.** A professor chose "Faculty Advisor — Petrichor" on New Booking:
+the heading changed, but the form below kept their own defaults — the
+secretary never appeared in Copy to. Caught by `e2e/club-booking.spec.ts`.
+
+**Cause.** "Booking as" is a set of links within `/book`. Next's client-side
+navigation keeps the page's component tree, so the same `BookingForm` stayed
+mounted, and `useForm` reads its `defaultValues` only on the first mount.
+
+**Fix.** `app/(portal)/book/page.tsx` keys the form by
+`${requester.id}:${service}`, so a new requester is a new form. Any page that
+renders a stateful form from search params needs the same.
+
+## A pending club request nobody can approve
+
+Club requests stored before 24 Sep 2026 sit at **Pending Club Approval**
+(`PENDING_FA`). Their approver is the head of the club's unit, or of the council
+above it (a student secretary), or — when neither is set — a `faculty_advisor`
+account matched by Department/Club. Name a head in Departments & Clubs, or let
+the manager decide it (the manager may act past any stage). New club bookings
+never enter this stage: their Faculty Advisor raises them and they go straight
+to the manager.
+
+## Nobody can book for a club
+
+The club (and its council) has no **Faculty Advisor** named in Departments &
+Clubs → Faculty Advisors, or the one named is not a faculty account, or — on
+Supabase — migration 25 is not applied (every unit then reads as having no
+advisor). The club's own account says "nobody is set as yours yet".

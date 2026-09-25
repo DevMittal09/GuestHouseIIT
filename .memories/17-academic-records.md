@@ -21,7 +21,7 @@ the display order (`academicRecordRows` in `lib/academic/fields.ts`).
 | **Student** (`student`) | `student` | Roll Number, Name, Program, Department, Email ID, Phone Number, Father's Name, Mother's Name, *Guardian's Name* (see below), Hostel | The approver: the Assistant Warden of their hostel |
 | **Faculty / Non-faculty** (`employee`) | `employee` | Employee ID, Name, Department, Employee Type, Phone Number, Email ID, Office Number | — |
 | **Office** (`office`) | `official`, `iar_cell` | Department, Email ID, Phone Number | The HOD / head of the office, from the office's record |
-| **Student Representative** (`student_rep`) | `club` | Type of Representative, Email ID, Phone Number, Faculty in Charge Email | The approver: the club's Faculty Advisor |
+| **Student Representative** (`student_rep`) | `club` | Type of Representative, Email ID, Phone Number, Faculty in Charge Email | The approvers of the route — **none** on a booking its Faculty Advisor raises, which goes straight to the manager (legacy club requests: the council secretary) |
 | **Alumni Office** (`alumni_office`) | `iar_student_cell` | Department, Email ID, Phone Number | — |
 | **Warden / Assistant Warden** (`warden`) | `warden` | Name, Phone Number, Email, Hostel | — |
 
@@ -113,15 +113,20 @@ Rules worth keeping:
   New Booking the requester may type extra addresses (`bookings.copy_to_emails`)
   that are CC'd on the *requester's* mail. The card's list is the approval
   chain on *staff* mail. Different people, different mail — keep them apart.
-- **On a club's form filled in by its faculty in-charge** the card shows the
-  club's record ("Club details"), and its Copy-to line leaves out the Faculty
-  Advisor stage the booking will skip (`formRouteFor(club, raisedBy)`).
+- **On a club's form filled in by its Faculty Advisor** the card shows the
+  club's record ("Club details"), and its Copy-to line follows that booking's
+  route (`formRouteFor(club, raisedBy)`) — which since 24 Sep 2026 has no
+  stage at all, so it names nobody. The requester-side copy (the council
+  secretary's mailbox) is the booking's own **Copy to** field, not this line.
+- The "Faculty in Charge Email" on a student-representative record is
+  **display only**: who may book for a club is decided by the Faculty Advisor
+  named in Departments & Clubs, never by the academic record.
 - **The card is outside the `<form>`** on `/book`. It is read-only and
   submits nothing, and nothing from the record is stored on the booking.
 - **Personal data.** The student record holds parents' names and a phone
   number. It is shown only to the person it describes, is never stored or
   logged by the portal, and never goes into mail. Keep it that way. The DPDP
-  notes in [09-production-plan.md](09-production-plan.md) apply.
+  notes in [05-production-plan.md](05-production-plan.md) apply.
 - **A dashed "Demo build" note** appears under the card while a dummy record
   is shown (`isMockAcademicSource()`), as the sign-in page does for the dummy
   LDAP accounts.
@@ -218,7 +223,7 @@ ours. For example, `"fatherName"` becomes `father_name`, or nested
 `{ parents: { father } }` is flattened there. If the URL layout differs (for
 example `/students/{roll}`), change the `new URL(…)` line in
 `HttpAcademicSource.find`. The roll number can be derived from a student email
-(the local part), as [09-production-plan.md](09-production-plan.md) shows.
+(the local part), as [05-production-plan.md](05-production-plan.md) shows.
 
 ### Option B: some other transport (direct SQL, a nightly CSV, a synced table)
 
@@ -290,7 +295,7 @@ This is what was done on 21 Sep 2026, and it is quick to repeat:
   `profiles.hostel_name` and `department_or_club`, set by the developer
   console. Once the real database is trusted, filling those from the record
   at sign-in (just-in-time provisioning, see
-  [09-production-plan.md](09-production-plan.md)) removes the hand-typed
+  [05-production-plan.md](05-production-plan.md)) removes the hand-typed
   hostel that the warden scoping depends on.
 
 ## 6. What was verified (21 Sep 2026)

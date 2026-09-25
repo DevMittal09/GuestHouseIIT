@@ -1,8 +1,10 @@
 # Database
 
-Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
-`supabase/seed.sql`. Generated TypeScript types are hand-maintained in
-`lib/supabase/database.types.ts`.
+Schema lives in `supabase/migrations/` — **25 numbered files, applied in order,
+forward only** (the first is `00000000000001_initial_schema.sql`); demo data in
+`supabase/seed.sql`. The TypeScript types are hand-maintained in
+`lib/supabase/database.types.ts`. The mock store (`lib/store/mock.ts`) mirrors
+every table in `.local-db.json` and self-heals old files.
 
 ## Tables
 
@@ -54,9 +56,9 @@ Schema lives in `supabase/migrations/00000000000001_init.sql`; demo data in
 - `debit_subhead text` (migration 24) — the project sub-head the requester
   typed; only with `debit_head = 'project_grant'`, 1–120 characters
   (`bookings_debit_subhead_check`).
-- `created_by` also marks a **club booking raised by its faculty in-charge**
-  (24 Sep 2026): `user_id` is the club's account, `created_by` the faculty
-  member. On the manager's desk bookings the two are equal.
+- `created_by` also marks a **club booking raised by its Faculty Advisor**
+  (24 Sep 2026): `user_id` is the club's account, `created_by` the professor.
+  On the manager's desk bookings the two are equal.
 - `booking_guests.age` is nullable and, since migration 24, `0`–`120` (it was
   `1`–`120`, which refused a baby typed as 0). A null age is an adult.
 
@@ -115,15 +117,25 @@ constraint exists to stop cannot occur in a single-process JSON store.
 user_role:      student, employee, official, club, alumni,
                 warden, faculty_advisor, iar_cell, gh_manager, developer,
                 iar_student_cell, gh_caretaker
-booking_status: PENDING_WARDEN, PENDING_FA, PENDING_IAR, PENDING_GH_MANAGER,
-                APPROVED, OCCUPIED, VACATED, REJECTED, CANCELLED,
-                CANCELLATION_REQUESTED, CANCELLATION_APPROVED
+booking_status: PENDING_WARDEN, PENDING_FA, PENDING_HOD, PENDING_IAR,
+                PENDING_GH_MANAGER, APPROVED, OCCUPIED, VACATED, REJECTED,
+                CANCELLED, CANCELLATION_REQUESTED, CANCELLATION_APPROVED
 room_type:      single, double_sharing
 booking_type:   official, personal, alumni
 citizenship:    indian, other
 service_type:   room, room_meals, meals_only
 meal_preference: veg, non_veg
+email_status:   QUEUED, SENDING, SENT, FAILED
 ```
+
+Checked text columns rather than enums: `bookings.debit_head`
+(`institute_grant`, `professional_development_fund`, `project_grant`,
+`department_budget`, `special_budget` = Special Funds, `personal_funds`, and
+the legacy `alumni_fund`, `student_fund`, `hostel_funds`),
+`bookings.office_approval` (`direct` / `hod`), `units.kind`
+(`department`, `club`, `council`, `office`), `units.office_class`
+(`officer` / `department`), `profiles.staff_category` (`faculty` / `staff`),
+`invoices.status` (draft / issued / paid / cancelled).
 
 > `guest_houses.name` has **no `check` constraint**. It originally allowed only
 > 'Bageshri' and 'Hamsanandi'; that was removed when admins gained the ability to
@@ -131,7 +143,8 @@ meal_preference: veg, non_veg
 
 ## Row-level security
 
-RLS is enabled on all eight tables. The shape:
+RLS is enabled on **every** table (each migration since 10 enables it on what
+it adds, mostly with no `authenticated` policy at all). The original shape:
 
 - `room_holds` are **readable by any authenticated user** — `/availability`
   shows every role which rooms are free — while writes follow
@@ -244,16 +257,19 @@ the dependency, and `unique_relationships` for the one-of-each rule (23 Sep
 2026) — all `string[]`. Rows saved before any of them are missing the keys
 entirely; `sanitizeFormConfig` backfills them from the spec defaults on read, so
 no data fix-up is required. See
-[02-architecture.md](02-architecture.md) for the degradation rules.
+[20-architecture.md](20-architecture.md) for the degradation rules.
 
 ## Storage
 
-A **private** bucket named `documents` holds Aadhaar/ID scans and alumni cards.
-Files are written under `guest-ids/` and `alumni-cards/`. The Supabase store
-returns a long-lived signed URL after upload; the bucket is never public.
+A **private** bucket named `documents` holds ID scans, alumni cards and
+Special Funds sanction letters (`guest-ids/`, `alumni-cards/`,
+`debit-documents/`). Since Phase 8 the booking stores the object path, and a
+file is served only through `/api/documents/…`, which checks who is asking,
+writes a `document.viewed` audit row and signs a **five-minute** link (the
+year-long signed URL it replaced was, in effect, a permanent public link).
 
-In mock mode the same files land in `public/uploads/` — convenient locally,
-obviously not a production posture.
+In mock mode the same files land in `.uploads/` in the repo root — outside
+`public/`, git-ignored, and served by the same route.
 
 ## Migrations
 
@@ -293,7 +309,7 @@ Current migrations:
    on `lower(ldap_uid)`). Additive, nullable, safe to re-run. **Not backfilled
    from email on purpose** — a guessed identity mapping signs one person in as
    another; the office loads real usernames by console import or SQL
-   ([11-ldap-accounts.md](11-ldap-accounts.md) §3). **Until it is applied, LDAP
+   ([31-ldap-sign-in.md](31-ldap-sign-in.md) §3). **Until it is applied, LDAP
    sign-in finds nobody on Supabase and saving a user in the console fails**
    (the update names the column). `supabase/seed.sql` sets the demo personas'
    usernames with an idempotent `update`, so re-run it afterwards. Verified in a
@@ -342,7 +358,7 @@ Current migrations:
    3 + 1 limits from `rules.capacity`; `security_audit` with its append-only
    triggers and `purge_security_audit()`. Verified in a throwaway Postgres 16
    with old-shape rows (untrimmed and blank hostel names), applied three times,
-   plus the seed twice — see [05-deployment.md](05-deployment.md#verifying-changes).
+   plus the seed twice — see [23-running-and-testing.md](23-running-and-testing.md#verifying-changes).
 
 17. `00000000000017_turnaround_buffer.sql` (Phase 3, Sep 2026). The turnaround
    buffer: `room_hold_guard(during, overridden, buffer)` (ordinary
@@ -520,7 +536,7 @@ Current migrations:
 > `auth` / `storage` schemas and roles, old-shape bookings inserted, 7 and 8
 > applied twice with the session zone set to New York, and every converted row
 > compared with what `normalizeMeals` produces for the same stay. The recipe is
-> in [05-deployment.md](05-deployment.md#verifying-changes).
+> in [23-running-and-testing.md](23-running-and-testing.md#verifying-changes).
 
 > Migration 3 is **destructive**: it drops `bookings.assigned_room_ids` after
 > backfilling. Its `on conflict do nothing` also swallows any pre-existing
@@ -529,7 +545,9 @@ Current migrations:
 
 When you change the schema you must update, in the same commit:
 
-1. `supabase/migrations/00000000000001_init.sql` (or a new migration file),
+1. **a new numbered migration file** — never edit one that may have been
+   applied; test it in a throwaway Postgres
+   ([23-running-and-testing.md](23-running-and-testing.md#verifying-changes)),
 2. `lib/supabase/database.types.ts`,
 3. `lib/types.ts` domain shapes,
 4. `lib/store/mock.ts` **and** `lib/store/supabase.ts`,
@@ -540,12 +558,18 @@ When you change the schema you must update, in the same commit:
 Not migrations, never applied automatically, each with a header explaining what
 it is for and how to check it applies to your data.
 
-- `2026-09-10-utc-parsed-bookings.sql` — shifts the bookings that were stored
-  5h30m late by the pre-`lib/tz.ts` `toIso()` running on a UTC host, and
-  rebuilds their `room_holds` through `set_room_holds()` (the dates and the
-  holds must move together or the availability grid disagrees with the
-  booking). Runs in one transaction, so a shift that would collide with another
-  booking aborts the whole thing rather than half-applying.
+| File | What it fixes |
+| --- | --- |
+| `2026-09-10-utc-parsed-bookings.sql` | Shifts bookings stored 5h30m late by the pre-`lib/tz.ts` `toIso()` on a UTC host, and rebuilds their `room_holds` through `set_room_holds()` in one transaction (a shift that would collide aborts the lot). **Not idempotent** — never run twice |
+| `2026-09-17-retire-alumni-persona.sql` | Deletes the demo alumnus persona from a project seeded before migration 9 and seats the IAR Student Cell |
+| `2026-09-17-add-caretaker-persona.sql` | Seats the GH Caretaker persona (run after the one above) |
+| `2026-09-21-clear-test-bookings.sql` | **Destroys data**: clears the test bookings made while the portal was built |
+| `2026-09-23-all-rooms-double-sharing.sql` | Converts every room to double sharing |
+| `2026-09-23-real-room-numbers.sql` | Creates the office's real rooms; deletes a dummy room nothing references and deactivates one something does; recounts `total_rooms` |
+| `2026-09-23-bageshri-rate-1000.sql` | Adds a ₹1,000 Bageshri rate row with a later `effective_from` (the ₹750 row in force cannot be edited) |
+
+Whether the hosted project still needs any of them is not recorded — each
+header says how to check.
 
 ## Resetting data
 

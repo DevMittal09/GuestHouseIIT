@@ -6,7 +6,7 @@ type MockAccount = DirectoryEntry & { password: string };
 /**
  * Dummy LDAP accounts, one per seeded persona, standing in for the institute
  * directory until it is reachable. Listed with their passwords in
- * `.memories/11-ldap-accounts.md` — keep the two in step.
+ * `.memories/30-credentials-and-access.md` — keep the two in step.
  *
  * This is the *directory*, not the portal's user list: it answers "is this the
  * right password for this uid", and `profiles.ldap_uid` then says which portal

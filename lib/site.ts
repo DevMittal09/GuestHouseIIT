@@ -59,8 +59,11 @@ export const INSTITUTE_CONTACT = {
  * The guest house office, as printed at the foot of the office's own invoice
  * template (public/GHM_Invoice.docx, Sep 2026) — the phone, email and address
  * the office itself hands to guests. (The number on the iitpkd.ac.in guest
- * house page, +91 88483 94440, was used before.) The invoice's copy of these is
- * a Setting (Tariffs & Invoicing), so a change there does not reach this page.
+ * house page, +91 88483 94440, was used before.) **The one source in code**: the
+ * portal's "Facing trouble booking?" line (`lib/policy.ts`) and the invoice's
+ * default contact (`DEFAULT_RULES.invoice.contact`) read it too. The invoice's
+ * copy is then a Setting (Tariffs & Invoicing), so a change there does not
+ * reach this page.
  * TODO(site): whether front-office hours should be published.
  */
 export const GUEST_HOUSE_CONTACT = {
@@ -95,7 +98,7 @@ export type SitePhoto = { src: string | null; alt: string };
  * The photographs supplied by the guest house office (`Images/` in the repo
  * root, 6000×4000 camera originals, not committed). The site serves 2000px
  * copies from `public/site/photos/`, made with EXIF orientation applied and
- * metadata stripped — see .memories/10-ui-design.md for the recipe when adding
+ * metadata stripped — see .memories/16-public-site-and-ui.md for the recipe when adding
  * more.
  */
 function photo(file: string, alt: string): SitePhoto {

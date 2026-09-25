@@ -5,7 +5,7 @@ something goes wrong. Written for whoever runs this after us — the office's IT
 staff as much as a developer.
 
 Design decisions and why they were taken are in
-[06-decisions.md](06-decisions.md#phase-8-security-22-sep-2026); this page is
+[03-decisions.md](03-decisions.md#phase-8-security-22-sep-2026); this page is
 the operational view.
 
 ---
@@ -40,9 +40,15 @@ never exposed to the browser, never logged, and never committed.
   login. 30 minutes idle, 12 hours absolute, revocable one at a time or all at
   once, rotated whenever a session gains privilege. `__Host-gh_session` in
   production. `lib/auth.ts` is the only reader.
-- **The developer sign-in doors do not exist in production**: `/mock-login`
-  404s, `loginAs` refuses, and `lib/env.ts` refuses to boot production with
-  `DEV_LOGIN` set.
+- **Mock Authentication** — the one-click persona picker (`/mock-login`,
+  `loginAs`) — is open **whenever Google sign-in is not configured, production
+  included** (`mockLoginEnabled()`, 23 Sep 2026: the office's demo deployment
+  needs it). Configuring Google closes it; `MOCK_LOGIN=false` closes it early.
+  **Anyone who reaches it can become any account**, so a deployment holding
+  real bookings must do one or the other. `lib/env.ts` separately refuses to
+  boot production with `DEV_LOGIN` set (the legacy `gh_mock_user` cookie door).
+- Sign-in attempts: 8 per username per 15 minutes; console unlock 6 per 15
+  minutes; second-factor codes 10 per 10 minutes — all counted in the database.
 
 ### Authorisation
 
@@ -120,7 +126,7 @@ never exposed to the browser, never logged, and never committed.
 | `SUPABASE_SERVICE_ROLE_KEY` | Hosting provider's environment only | Rotate immediately in Supabase → Settings → API, redeploy, then read the audit log for what was done with it |
 | `ID_ENCRYPTION_KEY` | Hosting provider's environment | Generate a new one, move the old value into `ID_ENCRYPTION_KEYS_OLD`, redeploy; rows re-encrypt as they are written |
 | `CRON_SECRET` | Hosting provider + the cron configuration | Rotate and redeploy; the endpoints refuse the old value at once |
-| `MAIL_PASSWORD` | Hosting provider | Rotate with the institute's mail administrator |
+| `MAIL_APP_PASSWORD` (or `MAIL_PASSWORD`) | Hosting provider | Rotate with the institute's mail administrator (today a Gmail app password) |
 | `GOOGLE_CLIENT_SECRET` | Hosting provider | Rotate in the Google Cloud console |
 | LDAP service password | Hosting provider | Rotate with the directory administrators |
 
@@ -142,8 +148,8 @@ one, never paste one into an issue.**
    affected people under the DPDP Act. The institute's own incident process
    decides who files; the portal's part is the evidence. The runbook, with
    who to contact, is in
-   [05-deployment.md](05-deployment.md#incident-response).
-4. **Write it down.** A short note in [07-troubleshooting.md](07-troubleshooting.md)
+   [23-running-and-testing.md](24-deployment-runbook.md#incident-response).
+4. **Write it down.** A short note in [25-troubleshooting.md](25-troubleshooting.md)
    — what happened, what was done, what would have prevented it.
 
 `public/.well-known/security.txt` tells a finder where to report a
@@ -159,11 +165,17 @@ vulnerability. Keep its `Expires` date current.
   secrets at all** — nothing in CI can reach the hosted project, by
   construction.
 - Migrations are tested in a throwaway Postgres before they are committed
-  ([05-deployment.md](05-deployment.md#verifying-changes)).
+  ([23-running-and-testing.md](23-running-and-testing.md#verifying-changes)).
 
 ---
 
 ## 6. What is deliberately not done yet
+
+**Real sign-in in front of real data.** Until `LDAP_URL` is set the dummy
+directory accepts the published passwords in
+[30-credentials-and-access.md](30-credentials-and-access.md), and until Google
+is configured (or `MOCK_LOGIN=false`) Mock Authentication is open. Both are
+fine for the demo deployment and both must change before real bookings.
 
 **Per-request, user-scoped database clients.** Every table has RLS on and no
 `authenticated` write policy, and the policies are tested with two users in the
@@ -172,7 +184,7 @@ service-role key from one server-only module. Making the store per-request
 would mean minting Supabase JWTs and rewriting every write path to satisfy the
 policies. Today the boundary is the server: every action re-checks the caller.
 This is the first item of the next security phase
-([08-roadmap.md](08-roadmap.md)).
+([04-roadmap.md](04-roadmap.md)).
 
 **A second factor for staff other than developers.** Wardens, HODs and the
 manager sign in with the institute directory and nothing more. The seam is

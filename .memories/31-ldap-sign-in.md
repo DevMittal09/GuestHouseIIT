@@ -1,80 +1,52 @@
-# LDAP sign-in and the dummy LDAP accounts
+# LDAP sign-in — how it works, and switching to the real directory
 
 Since **19 Sep 2026** the sign-in card on `/sign-in`, `/book-room` and
-`/book-meal` asks for an **LDAP username and password**, with a
-**"Sign in with Google"** button beneath it. Google is not connected yet: the
-button opens the old persona picker at `/mock-login`, which stands in for it
-during development.
+`/book-meal` asks for an **LDAP username and password**. Beneath it, a second
+button reads **Mock Authentication** (the one-click persona picker at
+`/mock-login`) while Google sign-in is unconfigured, and **Sign in with
+Google** once `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL` are set.
 
-Read this when you need a login, when connecting the real directory, or when
-loading the institute's real LDAP usernames.
+Read this when connecting the real directory or loading the institute's real
+LDAP usernames. **The dummy accounts and their passwords are in
+[30-credentials-and-access.md](30-credentials-and-access.md#1-demo-logins-dummy-ldap-directory)**
+— keep that table and `lib/ldap/mock-directory.ts` in step.
 
 ---
 
-## 1. Dummy LDAP accounts (development)
+## 1. The dummy directory
 
-Used whenever `LDAP_URL` is **unset** (the default). They live in
-`lib/ldap/mock-directory.ts`. **Keep that file and this table in step.**
-
-| Persona | Role | LDAP username | Password |
-| --- | --- | --- | --- |
-| Anjali Menon (Malhar) | Student | `112201001` | `Anjali@2026` |
-| Rahul Nair (Saveri) | Student | `142202014` | `Rahul@2026` |
-| Dr. Priya Sharma | Employee (Faculty & Staff) | `priya` | `Priya@2026` |
-| Dr. Arun Prasad | Employee (faculty), CSE — **Faculty Advisor** of the Cultural Affairs Council and Petrichor (named in Departments & Clubs, not a role), so New Booking offers "Booking as: Faculty Advisor — …" | `arun.prasad` | `Arun@2026` |
-| Director's Office | Official / Dignitary | `admin` | `Director@2026` |
-| Petrichor Fest Council | Club / Fest Council — cannot book; Dr. Arun Prasad books for it | `petrichor` | `Petrichor@2026` |
-| Cultural Affairs Council | Club / Fest Council — the council's own account, its **secretary's mailbox** (`sec_arts@`); cannot book | `sec_arts` | `SecArts@2026` |
-| IAR Student Cell | IAR Student Cell | `alumnicell` | `AlumniCell@2026` |
-| Dr. Suresh Kumar | Hostel Warden (Malhar) | `warden.malhar` | `Malhar@2026` |
-| Dr. Lakshmi Devi | Hostel Warden (Saveri) | `warden.saveri` | `Saveri@2026` |
-| Prof. R. Venkatesh | **HOD, CSE** — employee (faculty) who heads the CSE unit; sees **HOD Queue** (`/hod`) | `hod.cse` | `HodCse@2026` |
-| Meera Nair | Student — **Cultural Affairs secretary**, approves Petrichor requests stored before 24 Sep 2026 at the club stage (`/approvals`) | `112301045` | `Meera@2026` |
-| CSE Department Office | Official — a **department office** (Direct or Requires HOD approval → CSE HOD; debited to Department) | `cse.office` | `CseOffice@2026` |
-| Ravi K. | Employee — **non-teaching staff**, CSE (official bookings go to the HOD; Department head only) | `ravi.k` | `Ravi@2026` |
-| IAR Office | IAR Office | `iar` | `IarOffice@2026` |
-| Guest House Manager | Guest House Manager | `guesthouse` | `Manager@2026` |
-| Guest House Caretaker | Guest House Caretaker | `gh.reception` | `Reception@2026` |
-| Portal Developer | Developer (Superadmin) | `developer` | `Developer@2026` |
-
-`fa.petrichor` (the old dedicated Faculty Advisor account, `Advisor@2026`) was
-**retired on 24 Sep 2026**: the advisor is now an appointment on the council,
-held by an ordinary faculty account.
-| *(no portal account)* | — | `visitor` | `Visitor@2026` |
+Used whenever `LDAP_URL` is **unset** (`lib/ldap/mock-directory.ts`): one
+account per seeded persona, plus `visitor`, which deliberately has no portal
+account and shows the "valid LDAP account, not registered on the portal" path.
 
 - **Usernames** are the local part of each persona's email address. For
-  students that is the roll number, which matches the real format: the user
-  gave `142301026` as an example of a real IIT Palakkad LDAP username. The
-  format for staff is **unconfirmed**.
+  students that is the roll number, which matches the real format (the owner
+  gave `142301026` as a real IIT Palakkad LDAP username). The staff format is
+  **unconfirmed**.
 - **Usernames are case-insensitive and trimmed.** Passwords are
   case-sensitive, as in LDAP.
-- **`visitor` is deliberately not linked to any profile.** It shows the
-  "Your LDAP account is valid but is not registered on the guest house portal"
-  path.
-- **The developer console is still behind its own console password** (default
-  `0000`), after signing in as `developer`.
-- **`password123` is no longer a portal password.** It survives only as the
-  Supabase Auth password in `supabase/seed.sql` and for console-created users.
-  Nothing signs in with those auth users; they exist because
-  `profiles.id → auth.users`.
-- **The sign-in page shows one sample** (`priya` / `Priya@2026`, via
-  `SAMPLE_ACCOUNT`) in the dashed demo note, and only while the dummy directory
-  is in use.
+- **`password123` is not a portal password.** It is the Supabase Auth password
+  in `supabase/seed.sql` and for console-created users; nothing signs in with
+  those auth users.
+- **The sign-in page shows one sample** (`priya` / `Priya@2026`,
+  `SAMPLE_ACCOUNT`) in the dashed demo note, only while the dummy directory is
+  in use.
 
 ## 2. How sign-in works
 
 ```
 LDAP form ─▶ signInWithLdap() (app/actions/auth.ts)
               1. normalise the uid; reject blanks, "@" (unless the directory uses email usernames), bad characters
-              2. throttle: 10 failures / 5 min per `ldap:<uid>` (shares lib/admin-lock.ts's counter)
+              2. throttle: 8 attempts / 15 min per `ldap:<uid>` (a row in the database — RATE_LIMITS.signIn)
               3. getDirectory().authenticate(uid, password)      ← "is this the password?"
                    LDAP_URL set → LdapDirectory (ldapts, search-then-bind)
-                   otherwise    → MockDirectory (the table above)
+                   otherwise    → MockDirectory (accounts in 30-credentials-and-access.md)
               4. profileForDirectoryEntry(entry) (lib/ldap/link.ts) ← "which portal account?"
                    profiles.ldap_uid match, else (opt-in) link by email
-              5. set the gh_mock_user cookie, redirect to safe `next` or homeForRole()
+              5. create a session row (opaque cookie), redirect to safe `next` or homeForRole()
 
-Google button ─▶ /mock-login?next=… ─▶ loginAs(profileId, next)   (placeholder for OAuth)
+Second button, Google unconfigured ─▶ "Mock Authentication" ─▶ /mock-login?next=… ─▶ loginAs(profileId, next)
+Second button, Google configured   ─▶ "Sign in with Google" ─▶ /api/auth/google/start ─▶ callback (lib/oidc.ts)
 ```
 
 Two questions, two systems. **The directory checks the password. The portal's
@@ -86,14 +58,14 @@ Error messages:
 - **"Incorrect username or password"** covers both an unknown user and a wrong
   password, so the page cannot be used to find out which usernames exist.
 - **"Not registered"** is only shown *after* the password is proven.
-- **A directory outage** reads "could not be reached … or sign in with Google",
-  and the real error is logged.
+- **A directory outage** reads "could not be reached …", and the real error
+  is logged.
 
 Session: a row in `sessions` since Phase 8, with an opaque token in the cookie
-(`lib/sessions.ts`). LDAP proves who typed the password; the session row is
-what proves, on every later request, that the person holding the cookie is the
-one who did. The unsigned `gh_mock_user` cookie it replaced is honoured only
-where the developer doors are on, and never in production.
+(`lib/sessions.ts`; 30 min idle, 12 h absolute). LDAP proves who typed the
+password; the session row is what proves, on every later request, that the
+person holding the cookie is the one who did. The unsigned `gh_mock_user`
+cookie it replaced is honoured only with `DEV_LOGIN=true` outside production.
 
 ## 3. Moving to the real LDAP accounts
 

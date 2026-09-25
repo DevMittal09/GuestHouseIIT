@@ -1,5 +1,12 @@
 # Background
 
+The problem, the people, and **every list of requirements the institute has
+handed over, with what became of each** — the chronological record of what was
+asked. The dated story of how it was built is
+[02-timeline.md](02-timeline.md); the product as it now stands is
+[10-roles-and-features.md](10-roles-and-features.md) and
+[11-booking-forms.md](11-booking-forms.md).
+
 ## The problem
 
 IIT Palakkad runs two guest houses, **Bageshri** and **Hamsanandi**, used by very
@@ -23,16 +30,17 @@ four recurring problems:
 
 ## Who uses it
 
-**Requesters** (submit bookings):
+**Requesters** (submit bookings) — *as first specified; the current rules per
+role are in [10-roles-and-features.md](10-roles-and-features.md)*:
 
 | Role | Notes |
 | --- | --- |
 | Student | Bageshri only; request routes to their own hostel warden |
-| Employee (faculty/staff) | Both guest houses; goes straight to the manager. The one role asked **official or personal** at the top of the form |
+| Employee (faculty/staff) | Both guest houses. Asked **official or personal** at the top of the form. Official → their **HOD** → manager (since Phase 4, 22 Sep 2026); personal → manager |
 | Club / fest council | Both. Official only — not asked. **Since 24 Sep 2026 raised by its Faculty Advisor** (a professor named on the council in the console), straight to the manager |
-| IAR Student Cell | Books for its own office or **on behalf of an alumnus**; routes to the IAR Office |
+| IAR Student Cell | Books **on behalf of an alumnus** only (its "Official" option was withdrawn); routes to the IAR Office |
 | IAR Office | Approves the Student Cell's requests, and books itself — its own requests go straight to the manager, since it is the approver |
-| Official / dignitary | Both; highest priority, bypasses intermediate review. Official only — not asked |
+| Official / dignitary | Both; highest priority; must be on the official whitelist. Official only — not asked. Chooses **Direct** or **Requires HOD approval** per booking (Phase 4) |
 | ~~Alumni~~ | **Retired 16 Sep 2026.** Alumni have no institute login, so they cannot sign in; the two IAR accounts book for them. The role survives only on bookings already in the archive |
 
 **Reviewers and administrators:**
@@ -64,7 +72,7 @@ of **10 Sep 2026**:
 
 | # | Requirement | Status | Where |
 | --- | --- | --- | --- |
-| 1 | Parents may stay freely; siblings and grandparents only when a father or mother is also staying | **Done** | `parent_relationships` / `dependent_relationships` on `RoleFormConfig`, enforced by `parentDependencyError()` — see [03-implementation.md](03-implementation.md). Joined 23 Sep 2026 by `unique_relationships` / `duplicateRelationshipError()`: a student has one mother, so a singular relationship may appear only once |
+| 1 | Parents may stay freely; siblings and grandparents only when a father or mother is also staying | **Done** | `parent_relationships` / `dependent_relationships` on `RoleFormConfig`, enforced by `parentDependencyError()` — see [21-implementation.md](21-implementation.md). Joined 23 Sep 2026 by `unique_relationships` / `duplicateRelationshipError()`: a student has one mother, so a singular relationship may appear only once |
 | 2 | Room availability grid for all users, showing room details, booking periods and vacant/occupied status | **Done** | `/availability` + `lib/availability.ts` + `app/actions/availability.ts` |
 | 3 | Day-wise guest house log / occupancy report, emailed automatically to the Guest House Manager | **Done** | `queueDailyDeskReports()` in `lib/mail/digest.ts`, driven by `/api/mail/cron`. One report per guest house per day to the manager *and* the caretaker: arrivals, departures, who is in house, stays past check-out still holding rooms, and what awaits allocation. Rendered as HTML tables, not a PDF, because `lib/report-pdf.ts` is client-side (jsPDF) and there is no browser in a cron job |
 | 4 | Bookings only within a one-month advance window | **Done** | `latestCheckIn()` / `isAdvanceWindowExempt()` in `lib/workflow.ts`, applied by `bookingPayloadSchema` on client and server |
@@ -75,7 +83,7 @@ of **10 Sep 2026**:
 > scheduled jobs — so `lib/mail/` provides both: a `Mailer` seam with SMTP /
 > file / dry-run implementations, an `email_outbox` queue (migration 10) that
 > keeps a slow or broken mail host from ever failing a booking, and two cron
-> routes. See the mail section in [03-implementation.md](03-implementation.md).
+> routes. See the mail section in [21-implementation.md](21-implementation.md).
 
 ## Meeting notes — 15 Sep 2026
 
@@ -109,12 +117,12 @@ The remainder of the same meeting notes. Status as of **16 Sep 2026**:
 | Remove alumni login; IAR cell books for them (office or on behalf of an alumnus), with alumni student ID and ID card as PDF/image | **Done** | Alumni persona and login removed; `iar_cell` (IAR Office) and a new `iar_student_cell` both book with an office/alumni choice. Alumni bookings carry `alumni_name`, `alumni_roll_number` and the ID card (JPG/PNG/WEBP/PDF, 5 MB) |
 | IAR student cell's requests go to the IAR office for approval | **Done** | `initialStatusFor()`: `iar_student_cell` → `PENDING_IAR` → manager; `iar_cell` → manager directly, because routing it to its own queue would be self-approval. `canReview()` also refuses `reviewer.id === requester.id` |
 | Warning messages for dangerous tasks like deleting a guest house | **Done** | `components/ui/confirm-dialog.tsx` replaced every `window.confirm`: it lists what will be lost and makes the operator type the guest house name, user email or booking reference |
-| Invoices with payment account details; invoice at checkout for GHM and caretaker; official invoices routed to accounts | **Done** (Phase 5, Sep 2026) | The office's template reproduced as a PDF with the bank details; issued and printed at check-out from the manager and caretaker consoles; official invoices mailed to Accounts with the PDF; tariffs by date in Tariffs & Invoicing. See 03-implementation → Invoices |
-| ±4 hour buffer on bookings | Not started | Would change the overlap rule, so it touches `room_holds.during` and every occupancy query at once |
-| HOD approval for a faculty member's booking; debitable heads (dept / project / personal fund) | Not started | The routing hook is `initialStatusFor()`, which takes only the role today — its doc comment marks where the booking type becomes an argument |
-| Dining/lunch booking at the guest house with debitable heads | Not started | Distinct from the per-day meal plan, which is about head counts, not billing |
-| Email in a single thread rather than standalone messages | **Done** (reworked 21 Sep 2026) | `lib/mail/thread.ts`. Staff (approvers, forwardees, GHM, desk) get one **approvals** thread per day for booking mail and a separate **daily log** thread for the digest/escalation/day-wise log, so they are not spammed; a new day starts a new thread. Requesters get a standalone mail for each step. Threads need both a shared root Message-ID (claimed by the first message sent) and an identical subject |
-| Documentation for every booking workflow | Not started | |
+| Invoices with payment account details; invoice at checkout for GHM and caretaker; official invoices routed to accounts | **Done** (Phase 5, Sep 2026) | The office's template reproduced as a PDF with the bank details; issued and printed at check-out from the manager and caretaker consoles; official invoices mailed to Accounts with the PDF; tariffs by date in Tariffs & Invoicing. See [15-billing-and-invoices.md](15-billing-and-invoices.md) |
+| ±4 hour buffer on bookings | **Done** (Phase 3, 21 Sep 2026) | A turnaround buffer after each stay, 4 h by default, a Setting; padded in `room_holds.guard`, not `during` (migration 17) |
+| HOD approval for a faculty member's booking; debitable heads (dept / project / personal fund) | **Done** (Phase 4, 22 Sep 2026) | `routeFor`, `units` + `hodApproversFor`, `/hod`; `lib/debit-heads.ts`, the Projects list (migrations 15, 18) |
+| Dining/lunch booking at the guest house with debitable heads | **Done** (Phase 6, 22 Sep 2026; reworked 23 Sep) | Service type "Meals only" for faculty, staff and offices; dining debit heads; the kitchen's day at `/manager/meals` |
+| Email in a single thread rather than standalone messages | **Done** (reworked 21 and 23 Sep 2026) | `lib/mail/thread.ts`. Staff mail about a booking joins one thread **per booking** per mailbox; the digest, escalation and day-wise log keep a **daily** thread; requesters get a standalone mail for each step. See [14-notifications.md](14-notifications.md) |
+| Documentation for every booking workflow | **Done** (Phase 10, 23 Sep 2026) | [12-workflows.md](12-workflows.md), with every pipeline drawn out |
 
 ## Requester details from the academic database — 21 Sep 2026
 
@@ -128,11 +136,11 @@ database and written instructions for doing so.
 
 | Requirement | Status | Where |
 | --- | --- | --- |
-| Show each kind of account's listed fields at the top of New Booking | **Done** (dummy data) | `lib/academic/`, `components/academic-details.tsx`; field list and role mapping in [12-academic-records.md](12-academic-records.md) §1 |
+| Show each kind of account's listed fields at the top of New Booking | **Done** (dummy data) | `lib/academic/`, `components/academic-details.tsx`; field list and role mapping in [17-academic-records.md](17-academic-records.md) §1 |
 | Guardian's name only when father's and mother's are empty | **Done** | `parentRows` in `lib/academic/fields.ts` |
 | Copy to: the approver (students, student reps), the HOD (offices) | **Done** — shown on the form and **CC on every staff mail** (Phase 2: To = the actioner, Copy to = CC) | `lib/academic/copy-to.ts`, `lib/mail/addressing.ts`; approvers through `canReview()`. HOD *approval* is Phase 4 |
 | Wardens' fields | **Done** | Wardens never open New Booking, so the card is on `/warden`, below the queue |
-| Provision for the real database, and how-to | **Done** | `ACADEMIC_DB_URL` / `ACADEMIC_DB_TOKEN` → `HttpAcademicSource`; [12-academic-records.md](12-academic-records.md) §4 |
+| Provision for the real database, and how-to | **Done** | `ACADEMIC_DB_URL` / `ACADEMIC_DB_TOKEN` → `HttpAcademicSource`; [17-academic-records.md](17-academic-records.md) §4 |
 
 ## Design handoff — 19 Sep 2026
 
@@ -146,14 +154,14 @@ the guest house's **map location** included, and then supplied 14 photographs
 
 Built the same day: the public site at `/`, sign-in moved to `/sign-in`, and
 the portal restyled to match. What was built, what was left out and why, and
-what is still waiting on the office: [10-ui-design.md](10-ui-design.md).
+what is still waiting on the office: [16-public-site-and-ui.md](16-public-site-and-ui.md).
 
 ## Office corrections — 23 Sep 2026
 
 Ten items from the guest house office, verbatim in substance. Most are the same
 complaint in different places: **the portal asks questions whose answer is
 already known.** Reasoning in
-[06-decisions.md](06-decisions.md) ("23 Sep 2026").
+[03-decisions.md](03-decisions.md) ("23 Sep 2026").
 
 | Asked for | Status | Where |
 | --- | --- | --- |
@@ -174,9 +182,9 @@ already known.** Reasoning in
 
 Seven more, from working the portal after the round above. Same theme again in
 places: **the portal asks questions whose answer is already known, and hides
-the ones that matter.** Reasoning in [06-decisions.md](06-decisions.md)
+the ones that matter.** Reasoning in [03-decisions.md](03-decisions.md)
 ("the office's third round"); the working summary, which is replaced each
-round, is [15-recent-changes.md](15-recent-changes.md).
+round, is [99-recent-changes.md](99-recent-changes.md).
 
 | Asked for | Status | Where |
 | --- | --- | --- |
@@ -192,8 +200,8 @@ round, is [15-recent-changes.md](15-recent-changes.md).
 
 Nine items, sent by the owner. Built on `main` (the `ui` branch holding the
 vermilion redesign was left for a separate merge). Reasoning in
-[06-decisions.md](06-decisions.md) ("24 Sep 2026"); the working summary is
-[15-recent-changes.md](15-recent-changes.md).
+[03-decisions.md](03-decisions.md) ("24 Sep 2026"); the working summary is
+[99-recent-changes.md](99-recent-changes.md).
 
 | Asked for | Status | Where |
 | --- | --- | --- |
@@ -210,8 +218,8 @@ vermilion redesign was left for a separate merge). Reasoning in
 ## Faculty Advisors — 24 Sep 2026, afternoon
 
 The owner's follow-up to the club rule above. Reasoning in
-[06-decisions.md](06-decisions.md) ("24 Sep 2026 (afternoon)"); the working
-summary is [15-recent-changes.md](15-recent-changes.md).
+[03-decisions.md](03-decisions.md) ("24 Sep 2026 (afternoon)"); the working
+summary is [99-recent-changes.md](99-recent-changes.md).
 
 | Asked for | Status | Where |
 | --- | --- | --- |
@@ -230,13 +238,13 @@ summary is [15-recent-changes.md](15-recent-changes.md).
   optional without a developer. That drove the configurable form system and the
   admin console, which are now the most distinctive parts of the project.
 - **Authentication was deliberately deferred, then built.** See
-  [06-decisions.md](06-decisions.md) — the app used a mock persona picker with a
+  [03-decisions.md](03-decisions.md) — the app used a mock persona picker with a
   single, well-marked swap point. Since 19 Sep 2026 sign-in is **LDAP**, against
   dummy accounts until the institute directory is connected (`LDAP_URL`), and
   since Phase 8 (22 Sep 2026) the session is a row with an opaque cookie and
   "Sign in with Google" is the real OpenID Connect flow. See
-  [11-ldap-accounts.md](11-ldap-accounts.md) and
-  [14-security.md](14-security.md).
+  [31-ldap-sign-in.md](31-ldap-sign-in.md) and
+  [26-security.md](26-security.md).
 - **Email notifications are built; SMS is not.** `lib/mail/` covers every
   workflow transition plus daily digests, reminders and escalations. SMS would
   be a second `Mailer`-shaped seam and has not been asked for.
@@ -250,4 +258,4 @@ operational states, security, performance and tests, documentation), and
 running against a hosted Supabase project. **Not yet deployed.** Two gates
 remain: pointing sign-in at the institute's real LDAP directory, and moving
 request-scoped database reads off the service-role key
-([08-roadmap.md](08-roadmap.md) §1).
+([04-roadmap.md](04-roadmap.md) §1).

@@ -4,6 +4,9 @@ What each person does, and where a request goes when they do it. This is the
 portal as the office works it — one section per role, then the pipelines drawn
 out, then the states a booking can be in.
 
+The role-by-role feature list is [10-roles-and-features.md](10-roles-and-features.md);
+what each form asks is [11-booking-forms.md](11-booking-forms.md).
+
 Everything here is enforced in `lib/workflow.ts` (routing and permissions),
 `lib/units.ts` (who heads what), `lib/access.ts` (what a role may open) and
 `lib/invoice.ts` (what may be billed). If this page and the code disagree, the
@@ -158,6 +161,21 @@ flowchart TD
   ISS -->|Cancel with a reason| CANC[Cancelled invoice — a corrected one may be issued]
 ```
 
+### 2.8 A requester cancels
+
+```mermaid
+flowchart LR
+  B[Any open booking<br/>pending or approved] -->|Requester: Cancel + reason| CR[Cancellation Requested]
+  CR -->|Manager approves| CA[Cancellation Approved — rooms freed]
+  CR -->|Manager declines + reason| BACK[Back to the status it had]
+  OCC[Occupied] -.->|not from the portal| DESK[Ended at the desk]
+```
+
+A requester (or the Faculty Advisor who raised a club booking) never cancels
+outright: every cancel is a request the manager decides, pending bookings
+included. The manager cancels directly (`managerCancelBooking`), and the
+developer can force any status from the console.
+
 A room is held exactly while the booking is in a room-holding status, so
 check-out, cancellation and the no-show release all free the room with no
 separate step. What the room *was* is kept on the booking's room cards, because
@@ -177,7 +195,7 @@ that is what the invoice is priced from.
 | `APPROVED` | Rooms held, guest not yet in | Desk |
 | `OCCUPIED` | Guest in the building | Desk |
 | `VACATED` | Guest gone, room free | Manager (the bill) |
-| `CANCELLATION_REQUESTED` | Requester asked to cancel | Manager |
+| `CANCELLATION_REQUESTED` | Requester asked to cancel (from any open status) | Manager |
 | `CANCELLATION_APPROVED` | Cancelled at the requester's ask | — |
 | `REJECTED` | Refused, with a reason the requester sees | — |
 | `CANCELLED` | Cancelled by the office, or released as a no-show | — |

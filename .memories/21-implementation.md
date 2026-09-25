@@ -1,28 +1,33 @@
 # Implementation
 
-What exists today, with file paths.
+What exists today, with file paths — the engineering map. What the product
+does for each role is in [10-roles-and-features.md](10-roles-and-features.md)
+and [11-booking-forms.md](11-booking-forms.md); this page says where the code
+for it lives.
 
 ## Entry and session
 
 | Concern | File |
 | --- | --- |
-| Public website (home, booking entry points, guidelines, gallery, contact) | `app/(site)/*`, `components/site/*` — see [10-ui-design.md](10-ui-design.md) |
+| Public website (home, booking entry points, guidelines, gallery, contact) | `app/(site)/*`, `components/site/*` — see [16-public-site-and-ui.md](16-public-site-and-ui.md) |
 | Sign-in (LDAP + Google button) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` → `components/login-form.tsx` |
 | Google sign-in (real OpenID Connect: state, PKCE, verified id_token) | `lib/oidc.ts`, `app/api/auth/google/start`, `app/api/auth/google/callback` |
-| Developer persona picker — **only with `DEV_LOGIN=true`, 404 in production** | `app/(site)/mock-login/page.tsx` |
+| **Mock Authentication** persona picker — open while Google is unconfigured (`mockLoginEnabled()`), 404 otherwise or with `MOCK_LOGIN=false` | `app/(site)/mock-login/page.tsx`, `loginAs` |
 | Sessions (rows, opaque token, idle/absolute expiry, rotation, revoke) | `lib/sessions.ts` |
 | Login / logout actions | `app/actions/auth.ts` (`signInWithLdap` — directory check, `ldap:<uid>` throttle, profile by `ldap_uid`, safe `next`; `loginAs(id, next)`; `logout` → `/sign-in`) |
-| Academic records (the Requester details card) | `lib/academic/` — `index.ts` (`getAcademicSource()` from env; `academicRecordFor()`, cached and never throwing), `http-source.ts` (real; `recordFromJson` is the field mapping), `mock-source.ts` (dummy records), `fields.ts` (role → kind, display order, guardian and Copy-to rules), `details.ts` (rows + Copy to for the card). See [12-academic-records.md](12-academic-records.md) |
-| LDAP directory | `lib/ldap/` — `index.ts` (`getDirectory()` from env), `ldap-directory.ts` (real), `mock-directory.ts` (dummy accounts), `link.ts` (entry → profile, opt-in link by email), `import.ts` (bulk import planner), `uid.ts` (client-safe rules). See [11-ldap-accounts.md](11-ldap-accounts.md) |
+| Academic records (the Requester details card) | `lib/academic/` — `index.ts` (`getAcademicSource()` from env; `academicRecordFor()`, cached and never throwing), `http-source.ts` (real; `recordFromJson` is the field mapping), `mock-source.ts` (dummy records), `fields.ts` (role → kind, display order, guardian and Copy-to rules), `details.ts` (rows + Copy to for the card). See [17-academic-records.md](17-academic-records.md) |
+| LDAP directory | `lib/ldap/` — `index.ts` (`getDirectory()` from env), `ldap-directory.ts` (real), `mock-directory.ts` (dummy accounts), `link.ts` (entry → profile, opt-in link by email), `import.ts` (bulk import planner), `uid.ts` (client-safe rules). See [31-ldap-sign-in.md](31-ldap-sign-in.md) |
 | Where signed-out visitors go | `SIGN_IN_PATH` in `lib/routes.ts` (`/` is the public home page) |
 | Session read | `lib/auth.ts` (`getCurrentUser`, `requireUser`) |
 | Post-login landing per role | `lib/routes.ts` (`homeForRole`) |
 | Authenticated shell + nav | `app/(portal)/layout.tsx` (sticky navy `NavBar` from `components/site/site-nav.tsx`), page titles via `components/page-header.tsx` |
 
-Nav links are role-aware: requesters see Dashboard / New Booking / Booking History,
-reviewers see their queue + Approval Log, the manager sees the console +
-Approval Log, the developer sees `/admin` + Approval Log. **Room Availability is
-shown to every role**, between the role-specific links and the log.
+Nav links are role-aware — the exact menu per role is in
+[10-roles-and-features.md](10-roles-and-features.md). **Room Availability is
+shown to every role**, between the role-specific links and the log. Approver
+links (HOD Queue, Club Approvals) and "My Bookings" for a Faculty Advisor come
+from the units, not the role (`isHodForAny`, `approvesClubsFor`,
+`clubsBookableByUser`).
 
 ## Booking submission
 
@@ -32,7 +37,7 @@ shown to every role**, between the role-specific links and the log.
   outside it. The signed-in person's record from the academic database
   (`lib/academic/`), streamed in behind Suspense, with a Copy-to line; falls
   back to the portal profile when there is no record or the database is down.
-  The same card is on `/warden`. See [12-academic-records.md](12-academic-records.md).
+  The same card is on `/warden`. See [17-academic-records.md](17-academic-records.md).
 - **Form:** `components/booking-form.tsx` — renders entirely from the config:
   fields appear, become optional, or vanish per `FieldMode`; relationship is a
   dropdown or a text input; custom fields render in an "Additional information"
@@ -72,7 +77,7 @@ Two panels sit between the stay details and the guest list:
 
 Rooms are added as individual cards via `useFieldArray`. Each room card holds its own guests via a nested `useFieldArray`. The **Remove room** button deletes the room and its guests. Uploaded files are held in a `Map` keyed by field-array row id, outside react-hook-form, because `File` objects do not belong in form state.
 
-**Added 24 Sep 2026** (the office's fourth list — [15-recent-changes.md](15-recent-changes.md)):
+**Added 24 Sep 2026** (the office's fourth list — [99-recent-changes.md](99-recent-changes.md)):
 
 - **Copy to (optional)** — a card of email rows (`copy_to`, its own
   `useFieldArray` of `{ email }`), "Add another email", at most
@@ -103,48 +108,53 @@ Rooms are added as individual cards via `useFieldArray`. Each room card holds it
 
 Several policy rules are applied here as well as in the schema:
 
-- **Service Type & Meals Preference.** The form first asks what is being booked: "Room", "Room & Meals", or "Meals Only" (depending on role). "Meals Only" hides the room cards entirely and asks for a guest count instead. A "Meal preference" (Veg/Non-Veg) is asked if meals are requested.
-- **Pets Policy.** A mandatory "I have read and understood that pets are not allowed" checkbox must be ticked before submission.
-- **Room capacity.** A room can hold up to 3 guests + 1 infant. The "+ Add guest" button inside a room card disables itself when this cap is reached. `roomOccupancyError` in the schema enforces this server-side.
+- **Service Type & Meals Preference.** The form asks what is being booked: "Room booking", "Room + Meals", or "Meals only" (by role, and only where a guest house serves meals). "Meals only" replaces the stay with a list of dates and a guest count. A meal preference (Vegetarian / Non-Vegetarian) is required whenever meals are booked.
+- **Pets Policy.** A notice only ("Pets are not allowed in the guest house premises"); the tick box was removed at the office's request. `pets_policy_acknowledged` is still parsed for old payloads.
+- **Room capacity.** A room card holds at most 4 people, of whom at most 3 need a bed and at most 3 are infants (all Settings). Both "Add" buttons stop at the limit (`addGuestBlockedReason` / `addInfantBlockedReason`); `roomPartyError` in the schema enforces it server-side, and the `booking_guests` trigger in the database.
 - **Infants.** Infants are added as regular guest rows, and are classified as infants based on the age typed in (under 5 years).
 - **Citizenship.** Asked per guest: Indian or Other. If "Other" is selected, Nationality and Passport Number become mandatory fields.
 
 - **Relationship dependency.** The form watches every guest's relationship with
   `useWatch` (never `watch()` — React Compiler lint). Until some guest is marked
-  Mother or Father, the Grandmother / Grandfather / Siblings options render
+  Mother, Father or Guardian, the Grandmother / Grandfather / Siblings options render
   `disabled` and greyed, each labelled "— needs a parent on this request", with
   an amber hint above the guest list. The gating is cosmetic; the enforcement is
   `parentDependencyError()` inside the zod schema, which attaches the message to
   every offending guest row.
 - **Advance-booking window.** `latestCheckIn(config.role)` sets `max` on the
   check-in date input and prints the last bookable date under it. For
-  `official` the helper returns null, so no `max` is emitted at all.
-- **Max Stay Duration.** `stayLengthError` limits bookings to a maximum of 14 nights, with exemptions for official bookings and managers.
+  `official`, `gh_manager` and `developer` the helper returns null, so no `max`
+  is emitted at all.
+- **Max Stay Duration.** `stayLengthError` (`lib/policy.ts`) limits bookings to 14 nights (a Setting), exempting `official`, `gh_manager`, `developer` and `director.office@`.
 
 Both limits are computed once in a `useState` initializer rather than on every
 render, so the value cannot drift mid-session.
 
 Dates use a native date input; **times use `components/ui/time-select.tsx`** —
 three dropdowns (hour / minute / AM-PM). See
-[07-troubleshooting.md](07-troubleshooting.md) for why native time inputs are
+[25-troubleshooting.md](25-troubleshooting.md) for why native time inputs are
 banned.
 
 ## Requester dashboard
 
 `app/(portal)/dashboard/page.tsx` + `components/my-bookings.tsx`: the user's own
-bookings, current status, assigned rooms once approved, rejection reason when
-rejected, and the full status history. Cancellation is allowed while a booking is
-still pending (`cancelBooking`). For already-approved bookings, the requester can
-submit a **cancellation request** (`requestCancellation` in
-`app/actions/bookings.ts`) with a mandatory reason — this sets the status to
-`CANCELLATION_REQUESTED` and the GH Manager reviews it.
+bookings (and, for a Faculty Advisor, the club bookings they raised), current
+status, assigned rooms once approved, rejection reason when rejected, the full
+status history, and the invoice once issued. **Cancel** (`cancelBooking` in
+`app/actions/bookings.ts`, reason required) always files a
+**cancellation request** — pending or approved alike — which sets
+`CANCELLATION_REQUESTED`; the GH Manager approves or declines it. An Occupied
+stay cannot be cancelled by the requester. "Request extension" asks the
+manager for a later check-out. The DPDP panel ("Download my data", "Ask for
+erasure") sits below.
 
 ## Reviewer portals
 
-One component, three scopings — `components/review-queue.tsx`, rendered by
-`app/(portal)/warden|fa|iar/page.tsx`. Each shows the pending queue for that
-tier, full booking details, guest list with ID documents, and Approve / Reject
-with a mandatory reason on rejection. The IAR view embeds the alumni ID card.
+One component, four scopings — `components/review-queue.tsx`, rendered by
+`app/(portal)/warden|hod|approvals|iar/page.tsx` (`/fa` only redirects to
+`/approvals`). Each shows the pending queue for that tier, full booking
+details, guest list with ID documents, and Forward / Reject with a mandatory
+reason on rejection. The IAR view embeds the alumni ID card.
 
 Scoping is applied in the store query *and* re-checked in `canReview()` inside
 `reviewBooking`, so a crafted request cannot approve another hostel's student.
@@ -173,8 +183,9 @@ for.
 - **Book on behalf**: The manager can submit bookings on behalf of other guests, optionally capturing the name/email/phone of a guest without a portal account.
 - **Overrides**: The manager can override normal approval flows (approve instantly), override guest house policies (e.g. book alumni at Hamsanandi), and view occupancy across all guest houses.
 - **Meal Editing**: The manager can edit the meal preference of a booking after it has been approved.
-- Rooms are grouped under **Double sharing rooms** and **Single rooms**, each
-  with its formal occupancy line from `describeCapacity()` ("Occupancy: 2
+- Rooms are split into **Double sharing rooms** and **Single rooms** only when
+  both exist (`splitByType`; today every room is double sharing), each with its
+  formal occupancy line from `describeCapacity()` ("Occupancy: 2
   guests (maximum 3 with an extra bed)"). The allocation summary is four
   labelled figures — **Rooms selected** (with the room numbers), **Guests**,
   **Capacity of selection** (standard, with the maximum including extra beds)
@@ -287,7 +298,7 @@ comparing the key of the request its data answers with the current one, rather
 than keeping a flag — no `setState` in the effect body. While a new period loads,
 the previous chart stays on screen, dimmed.
 
-Polling is off on this route (`NO_POLL_PREFIXES`): the component fetches its own
+Refreshing is off on this route (`NO_REFRESH_PREFIXES` in `components/live-updates.tsx`): the component fetches its own
 data client-side, so a server refresh would do nothing but work. There is a
 manual Refresh button instead.
 
@@ -310,11 +321,11 @@ archive counterpart to `canReview()`:
 
 | Role | Sees |
 | --- | --- |
-| student/employee/official/club/alumni | only their own bookings (`userId` scope) |
+| student/employee/official/club/iar_student_cell/alumni | only their own bookings (`userId` scope) — plus, for anyone who approves by appointment (an HOD, a council secretary), the requests of the units they govern (`approverScope`) |
 | warden | `userRole: student` + their own `hostel_name` |
-| faculty_advisor | `userRole: club` + their own `department_or_club` |
-| iar_cell | `userRole: alumni` |
-| gh_manager / developer | everything (every booking reaches the manager) |
+| faculty_advisor (legacy account) | `userRole: club` + their own `department_or_club` |
+| iar_cell | `userRoles: alumni, iar_student_cell, iar_cell` |
+| gh_manager / gh_caretaker / developer | everything |
 
 `criteriaFromParams()` spreads the scope **last**, so a hand-edited query string
 can only ever narrow the result set, never widen it. A warden with no
@@ -392,39 +403,66 @@ Refreshing is deliberately **off** on this route (`NO_REFRESH_PREFIXES` in
 `components/live-updates.tsx`): the archive is historical, and re-fetching
 would only re-run a full scan and churn the table under the reader.
 
-## Developer console (`/admin`)
+## The console (`/admin`)
 
-Layout and tabs in `app/(portal)/admin/layout.tsx`; all actions in
-`app/actions/admin.ts`, each gated by `requireDeveloper()` (14 call sites).
+Layout and tabs in `app/(portal)/admin/layout.tsx`, sections and who may open
+each in `CONSOLE_SECTIONS` (`lib/access.ts`) — the manager nine, the developer
+all thirteen (table in [10-roles-and-features.md](10-roles-and-features.md#who-can-open-which-console-section)).
+Every action re-checks with `requireConsole(section)` (or its sibling in
+`app/actions/{units,settings,invoices,projects,operations,mail-templates}.ts`):
+the role, the console unlock, and for a developer's dangerous actions the
+second factor.
+
+The first four sections, which predate the split:
 
 | Tab | UI | Capabilities |
 | --- | --- | --- |
-| Users & Roles | `components/admin/users-manager.tsx` | Create/edit/delete profiles; assign any of the 10 roles; set hostel, department/club, roll number (these drive warden and FA scoping) and **LDAP username**. **Import LDAP usernames** bulk-loads `email, ldap username` pairs, all or nothing. Cannot delete yourself or drop your own developer role. In Supabase mode, creating a user also creates a Supabase Auth user (password `password123`) — needs the service-role key. |
+| Users & Roles | `components/admin/users-manager.tsx` | Create/edit/delete profiles; assign any of the 12 roles (a manager cannot create or edit a developer); set hostel, department/club, roll number (these drive warden and FA scoping) and **LDAP username**. **Import LDAP usernames** bulk-loads `email, ldap username` pairs, all or nothing. Cannot delete yourself or drop your own developer role. In Supabase mode, creating a user also creates a Supabase Auth user (password `password123`) — needs the service-role key. |
 | Guest Houses & Rooms | `components/admin/guest-houses-manager.tsx` | Create/rename/delete guest houses; add, enable/disable, delete rooms. `total_rooms` is recounted from active rooms automatically. Deleting is blocked when bookings reference the guest house, or when a room is assigned to a booking (disable it instead). A **Serves meals** switch per guest house (`setGuestHouseMealsAction` → `updateGuestHouse`) decides whether the booking form offers meals there; new guest houses start with it off. |
 | Form Builder | `components/admin/form-config-editor.tsx` | Per requester role: allowed guest houses, every guest field's mode, relationship style and options, the relationship dependency (two checkbox lists — which options unlock, which are restricted), alumni-card mode, banner text, and custom fields. Editing the option list re-filters both dependency lists so they cannot reference a deleted option; save is blocked when a restriction has nothing to unlock it. "Reset to spec defaults" deletes the saved row. |
-| All Bookings | `components/admin/bookings-manager.tsx` | Every booking with status filters, an audit-logged force-status override (remark required), and hard delete. |
+| All Bookings | `components/admin/bookings-manager.tsx` | Developer only. Every booking with status filters, an audit-logged force-status override (remark required; refuses Occupied before check-in), and hard delete. |
+
+The later sections: **Departments & Clubs** (`units-manager.tsx` — heads, acting
+heads, office class, whose HOD approves, and the **Faculty Advisors** table
+with each council's advisor and secretary's mailbox), **Projects**
+(`projects-manager.tsx`, paste import), **Tariffs & Invoicing**
+(`billing-manager.tsx`), **Email Templates** (`mail-template-editor.tsx`),
+**Mail Outbox** (`mail-outbox.tsx`), **Settings** (`settings-manager.tsx`,
+developer), **Security** (`security-manager.tsx` — second factor, sessions,
+data requests), **Audit Log** (`audit-log.tsx`, developer), **Console Access**
+(`console-access.tsx`, developer). Maintenance blocks and bulk rooms live in
+Guest Houses & Rooms.
 
 ## Shared domain modules
 
 | File | Contents |
 | --- | --- |
-| `lib/types.ts` | Domain shapes and label maps. Declared as `type` aliases, not interfaces, so Supabase's generated `Insert`/`Update` helpers accept them. |
-| `lib/workflow.ts` | Pipelines, status transitions, `canReview` scoping,
-`ROOM_HOLDING_STATUSES`, lifecycle transitions, `historyScope` / `canViewHistory`
-/ `canExportPdf` / `isRequesterHistory`, advance-booking window
-(`latestCheckIn` / `isAdvanceWindowExempt`). |
-| `lib/form-config.ts` | `RoleFormConfig`, defaults per role, sanitization, custom-field validation, the relationship dependency (`parentDependencyError` / `hasQualifyingParent` / `parentDependencyHint`) and the one-of-each rule (`duplicateRelationshipError` / `usedUniqueRelationships` / `uniqueRelationshipHint`). |
-| `lib/availability.ts` | Availability grid maths: `bucketOccupancyByHour`, `dayBounds`, `hourLabel`, `toDateInputValue`, `overlapSpans`; the week/month views' `availabilityRange`, `shiftAnchor`, `describeRange`, `bucketOccupancyByDay`, `freeRoomsByDay`, `roomRangeStatus`, `rangeProgress`, `roomsBookedAt`; `MAX_AVAILABILITY_DAYS`. |
-| `lib/occupancy.ts` | Room capacity per type, `INFANT_AGE_LIMIT`, `roomsNeededFor`, `requestedRoomsError`, `allocationCapacityError`. |
-| `lib/report-pdf.ts` | Client-side PDF rendering for the history report (dynamically imported). |
+| `lib/types.ts` | Domain shapes and label maps (`ROLE_LABELS`, `STATUS_LABELS`, `REQUESTER_ROLES`, `DEBIT_HEAD_LABELS`…). Declared as `type` aliases, not interfaces, so Supabase's generated `Insert`/`Update` helpers accept them. |
+| `lib/workflow.ts` | `routeFor` (the pipeline), `initialStatusFor`, `approvalStagesFor`, `nextStatusAfter`, `canReview` / `canReviewBooking`, `actsAsRequester`, `ROOM_HOLDING_STATUSES`, `stayPhase`, `occupancyNotStartedError`, `hasLapsed`, `displayStatus`, `LIFECYCLE_ROLES`, `historyScope`, `canExportPdf`, the advance window (`latestCheckIn` / `isAdvanceWindowExempt`). |
+| `lib/units.ts` | Units and appointments: `approversOf`, `hodUnitIdFor`, `hodApproversFor`, `unitsGovernedBy`, `isHodForAny`, `approvesClubsFor`, `facultyAdvisorOf`, `secretaryEmailOf`, `parentError`. |
+| `lib/club-booking.ts` (+ `-server.ts`) | Clubs booked by their Faculty Advisor: `canBeFacultyAdvisor`, `facultyInChargeOf`, `clubsBookableBy`, `defaultCopyToFor`, `raisedByFacultyInCharge`, `clubBookingNotice`; `clubsBookableByUser` (cached per request). |
+| `lib/access.ts` | Desk powers (`canBookOnBehalf`, `canOverrideGuestHousePolicy`, `canManageAnyBooking`…), `CONSOLE_SECTIONS`, `canUseConsoleSection`, `assignableRoles`, invoice powers. |
+| `lib/booking-types.ts` | `bookingTypesFor`, `offersBookingTypeChoice`, `needsAlumniDetails`, `MEALS_ONLY_ROLES`, `serviceTypesFor`. |
+| `lib/form-config.ts` | `RoleFormConfig`, `buildDefaultFormConfig`, `sanitizeFormConfig`, custom-field validation, the relationship dependency (`parentDependencyError`…) and one-of-each (`duplicateRelationshipError`…). |
 | `lib/form-config-server.ts` | `getEffectiveFormConfig` — saved config or defaults. |
-| `lib/booking-schema.ts` | Config-driven zod schema. |
-| `lib/booking-search.ts` | Archive search: criteria, query tokenizer, pure matchers,
-faceting, sorting, paging, query-string parsing. Shared by both stores. |
-| `lib/routes.ts` | Role landing pages, official email whitelist. |
-| `lib/format.ts` | Date/time formatting helpers, all delegating to `lib/tz.ts`. |
-| `lib/tz.ts` | The institute timezone (`Asia/Kolkata`): `instituteIso` to parse a typed wall-clock time, `formatInstitute*` / `instituteHour` / `instituteDayBounds` to read instants back. Nothing else may parse a naked datetime string or format without a zone. Also calendar-date helpers for `"yyyy-MM-dd"` strings — `parseDateValue`, `dateValueOf`, `addDaysToDateValue`, `weekdayOfDateValue`, `formatDateValue` ("Tue 15 Sep"), `formatMonthOfDateValue` — which do day arithmetic in UTC because a calendar date has no zone. |
-| `lib/meals.ts` | Meal keys and labels; `MEAL_SERVING_WINDOWS` and the `MEAL_TIMES` labels derived from them; `stayMealDays` / `mealUnavailableReason` (which meals a stay can have); `normalizeMeals` (the only reader — cleans arrays, expands the legacy whole-stay object); `mealPlanError` (the schema's rule); `mealSlot` / `mealPlanFromSlots` / `mealSlotsFromDeclined` / `declinedFromMealSlots` (the form's selection, which defaults to every meal); `describeMeals` / `describeMealDays` / `mealDayCounts`. |
+| `lib/booking-schema.ts` | `bookingPayloadSchema` — the config-driven zod schema both sides run; `checkOutOrderError`, `MAX_COPY_TO_EMAILS`, Aadhaar format. |
+| `lib/booking-context-server.ts` | `bookingContextFor` — the Settings, debitable heads, projects and HOD names the form and `createBooking` both use. |
+| `lib/debit-heads.ts` | Categories, `DEFAULT_DEBIT_RULES`, `FORBIDDEN_DEBIT_HEADS`, `debitCategoryFor`, `debitHeadsByType`, `upgradeDebitRules`, `describeDebit`. |
+| `lib/policy.ts` | Stay cap and its exemptions (`stayLengthError`), the alumni guest house, the pets notice, the manager contact line. |
+| `lib/settings.ts` (+ `-server.ts`, `-impact.ts`) | `DEFAULT_RULES`, the Settings schemas, `getRules` / `getOfficialEmails` / `getHostels`, and what a change would break. |
+| `lib/occupancy.ts` | Capacity per room type, `INFANT_AGE_LIMIT`, `roomPartyError` and the Add-button reasons, `extraBedsFor`, `allocationCapacityError`, `describeCapacity`. |
+| `lib/turnover.ts` | The turnaround buffer and accepted-overlap guard (`holdGuard`), conflict kinds, `TURNOVER_GRACE_HOURS`. |
+| `lib/availability.ts` | Availability grid maths: `bucketOccupancyByHour`, `bucketOccupancyByDay`, `overlapSpans`, `availabilityRange`, `shiftAnchor`, `roomRangeStatus`, `freeRoomsByDay`; `MAX_AVAILABILITY_DAYS`. |
+| `lib/meals.ts` | Meal keys and windows, `stayMealDays`, the notice period (`isMealBookable`, `mealLeadTimeError`, `firstBookableMealDate`), `normalizeMeals` (the only reader), the form's slot helpers, `kitchenHeadCount`. |
+| `lib/invoice.ts`, `lib/tariffs.ts`, `lib/invoice-pdf.ts` | Invoices (see [15-billing-and-invoices.md](15-billing-and-invoices.md)). |
+| `lib/operations.ts` | Extensions, no-shows, room ranges ("B-101 to B-120"), maintenance blocks. |
+| `lib/booking-search.ts` | Archive search: criteria, tokenizer, pure matchers, faceting, sorting, paging, date presets. Shared by both stores. |
+| `lib/sessions.ts`, `lib/auth.ts`, `lib/oidc.ts`, `lib/totp.ts`, `lib/security.ts`, `lib/admin-lock.ts`, `lib/crypto.ts`, `lib/uploads.ts`, `lib/env.ts` | Security (see [26-security.md](26-security.md)). |
+| `lib/routes.ts` | `SIGN_IN_PATH` and `homeForRole`. (The official whitelist moved to Settings in migration 16.) |
+| `lib/format.ts`, `lib/tz.ts` | Formatting, all delegating to `lib/tz.ts` — the institute timezone (`Asia/Kolkata`): `instituteIso` to parse, `formatInstitute*` / `instituteHour` / `instituteDayBounds` to read back, and UTC-safe helpers for `"yyyy-MM-dd"` calendar dates. |
+| `lib/report-pdf.ts` | Client-side PDF rendering for the history report (dynamically imported). |
+| `lib/revalidate.ts` | The three cache sets actions invalidate. |
+| `lib/site.ts`, `lib/site-data.ts`, `lib/site-content.ts` | The public website's editable values and its content rendered from `lib/`. |
 
 ## UI primitives
 
@@ -464,8 +502,9 @@ both ways. `lib/booking-types.ts` is the one policy:
 The form asks it first, in a card above "Requester details"
 (`components/booking-form.tsx`), because it decides the approval route.
 
-**The IAR split.** Alumni have no institute login. `iar_student_cell` books for
-its own office or for an alumnus and routes to `PENDING_IAR`; `iar_cell` (the
+**The IAR split.** Alumni have no institute login. `iar_student_cell` books
+**only for an alumnus** (its "Official" option was withdrawn) and routes to
+`PENDING_IAR`; `iar_cell` (the
 IAR Office) approves those *and* books itself, going straight to
 `PENDING_GH_MANAGER` — routing it to its own queue would be self-approval.
 `canReview()` additionally refuses `reviewer.id === requester.id`.
@@ -503,315 +542,15 @@ a guest house and all its rooms.
 
 ## Email notifications — `lib/mail/`
 
-Built 16 Sep 2026. Two Administration Section requirements (allocation mail,
-the day-wise log) plus the meeting note about single-threaded email, all of
-which needed the same missing piece.
+Moved to [14-notifications.md](14-notifications.md): the transport seam, the
+outbox, who gets which mail (To / CC), threads, digests, the cron and the
+Mail Outbox console.
 
-### The shape
+## Invoices, tariffs and dining
 
-| File | What it is |
-| --- | --- |
-| `types.ts` | `Mailer`, `OutboundMessage`, the `MailEventKey` union, the outbox row |
-| `config.ts` | Env reading, `portalUrl()`, `cronAuthorized()` |
-| `index.ts` | `getMailer()` — picks the transport from the environment |
-| `smtp.ts` | `SmtpMailer` (nodemailer, pooled) |
-| `file.ts` | `FileMailer` → `.local-mail/*.eml`, and `DryRunMailer` |
-| `redirect.ts` | `MAIL_REDIRECT_ALL_TO`, applied at **send** time |
-| `render.ts` | Blocks → HTML **and** plain text, from one description |
-| `templates.ts` | What each mail says. Pure functions, no store access |
-| `thread.ts` | Daily per-person thread roots and subjects; the `[reference]` subject for standalone mail |
-| `recipients.ts` | Who gets told — via `canReview()`, never a re-derived rule; `copyToAddresses()` for CC |
-| `addressing.ts` | `addressStaffMail(to, copyTo)`: CC minus anyone in To, de-duplicated ignoring case |
-| `notify.ts` | `notify*()` per workflow event: queue, then `after()` a dispatch |
-| `dispatch.ts` | The worker: claim → send → settle, with backoff |
-| `digest.ts` | The scheduled jobs (digests, reminders, desk report, escalations) |
-
-Transport is chosen the way `lib/store/index.ts` chooses a backend:
-
-| Condition | Transport | Mail goes to |
-| --- | --- | --- |
-| `MAIL_DRY_RUN=true` | `DryRunMailer` | nowhere (one log line) |
-| `MAIL_USER` + `MAIL_APP_PASSWORD` | `SmtpMailer` | the SMTP host |
-| otherwise | `FileMailer` | `.local-mail/*.eml` |
-
-The file mailer exists for the same reason `MockStore` does: a first run needs
-no credentials and no network. Open an `.eml` in any mail client to see exactly
-what a recipient would have got.
-
-### Nothing sends inside a server action
-
-Actions **queue**; `lib/mail/dispatch.ts` sends. Three reasons, and the third
-is the one that bites silently:
-
-1. A slow SMTP host would add its latency to every booking submission.
-2. A failed send must not fail a booking that is already stored.
-3. On a serverless host, un-awaited work is frozen the moment the function
-   responds — mail started and not awaited simply vanishes.
-
-So `notify.ts` writes to `email_outbox` (migration 10) and schedules a dispatch
-with `after()` from `next/server`, which runs once the response is out. The
-cron route is the safety net for anything queued while SMTP was down.
-
-**Every `notify*()` swallows its own errors.** If migration 10 is not applied,
-or a profile has no address, the booking still succeeds and the failure is a
-log line. A notification is worth less than the request it describes.
-
-### The hooks are in the actions, not in `updateBookingStatus()`
-
-Tempting, and wrong. The store method sees a status pair; only the action knows
-*why* — which reason the reviewer typed, which rooms the manager picked,
-whether a cancellation was approved or declined. Hooking the store would mean
-reconstructing intent from a status transition, and would also mail on the
-developer console's **force-status override**, which is a repair tool: a
-developer fixing a bad row should not send a parent a confirmation.
-
-### What is sent — To is the actioner, "Copy to" is CC
-
-The owner's rule (Phase 2, 21 Sep 2026): on every **staff** mail about a
-booking, **To is the one person who must act next** — found through
-`canReview()` for the booking's current status (`reviewersForStatus`), or the
-desk for a desk record — and **CC is the booking's Copy-to list**
-(`lib/academic/copy-to.ts`): everyone who approves any stage of its chain
-(`approvalStagesFor`) and, for an office, its head (Departments & Clubs
-console first, else the academic record). `addressStaffMail` removes anyone
-already in To from CC and de-duplicates both ignoring case. When the booking
-moves on, the next mail's To moves with it and the approver who forwarded it
-stays in CC.
-
-**Requester mail has its own CC** (24 Sep 2026, `requesterCopyTo()` in
-`lib/mail/recipients.ts`): the addresses the requester added under **Copy to**
-on New Booking (`bookings.copy_to_emails`), and — on a club booking raised by
-its faculty in-charge — that faculty member, since the To is the club's
-account. Every "Requester" row below carries it, as do the check-in reminder
-and the official invoice to Accounts. Staff mail does not: an outsider has no
-use for "awaiting your review". Two different lists both called Copy to — the
-card's (approvers, staff CC) and the booking's (named by the requester,
-requester CC).
-
-| Event | To | CC | Carries |
-| --- | --- | --- | --- |
-| Submitted | Requester | — | Reference, summary, "nothing needed yet" |
-| Submitted | First actioner (warden / advisor or council secretary / HOD / IAR Office / manager) | Copy to | Who asked, a link to their queue |
-| Tier approved | Requester | — | Progress, what happens next |
-| Tier approved | Next actioner | Copy to (incl. who forwarded it) | Who forwarded it |
-| Rejected | Requester | — | **The reason, verbatim** |
-| Rooms allocated | Requester | — | Room numbers, check-in, what ID to carry |
-| Rooms allocated | Manager + caretaker | Copy to | Copy for the desk register |
-| Cancellation requested | Manager (decides) | Copy to (whoever reviewed it) | Reason; rooms stay held until they decide |
-| Cancellation decided | Requester | — | Outcome, and that the booking stands if declined |
-| Cancelled | Requester (unless they did it); desk if rooms were held | Copy to, on the desk mail | Reason |
-| Day before check-in | Requester | — | Rooms, directions, what to bring |
-| Daily | Each reviewer with a non-empty queue | — | One digest, not one mail per request |
-| Daily | Manager + caretaker | — | Per guest house: the day-wise log |
-| Pending > 48 h | Reviewer | Manager | Escalation nudge |
-
-The separate "Cancellation requested — for your information" mail to
-reviewers (`booking.cancellation_requested.reviewer`) was retired: they are CC
-on the manager's mail instead. The key stays in the union for old outbox rows
-and is hidden from the template editor (`RETIRED_MAIL_EVENTS`).
-
-`email_outbox.cc_emails` has existed since migration 10, and every transport
-already sent CC (`SmtpMailer`, `FileMailer` writes a `Cc:` header,
-`DryRunMailer` logs it), so Phase 2 needed **no migration** — the change is who
-goes in it. Addresses the office adds to a template's CC in Email Templates are
-merged into the same CC line.
-
-**Digests matter more than they look.** Per-request mail to a warden during
-fest week trains them to filter the portal into spam, and then the portal stops
-working. The manager is deliberately *not* digested — their pending
-allocations are a section of the daily desk report, and two mails listing the
-same queue is how a report stops being read.
-
-### Recipients come from `canReview()`
-
-`reviewersFor()` filters profiles through the very predicate that decides
-whether their button works. Re-deriving "wardens of this hostel" in the mail
-layer would be a second copy of the scoping rule, and the two would drift — the
-Malhar warden would start getting mail about Saveri students while still,
-correctly, being unable to act on them. `canReview` also refuses
-`reviewer.id === requester.id`, so the IAR Office is never asked to approve its
-own booking.
-
-### Threads: per booking for staff, standalone for requesters
-
-From the meeting notes: *"Email — try to send in a single thread instead of a
-standalone email."* Staff mail about a booking joins that recipient's thread
-**for that booking**; the scheduled mail that has no booking (digest,
-escalation, desk report) joins a **daily log** thread; requester mail stands
-alone with a `[reference]`-led subject. Two things must line up for mail
-clients to group messages:
-
-1. `bookingThreadRoot(referenceId, address)` — or `dailyThreadRoot("daily_log",
-   day, address)` for the scheduled mail — is a deterministic root
-   `Message-ID`; the first message actually **sent** claims it (decided in
-   `dispatch.ts`), and every later one sets `In-Reply-To` / `References` to it.
-2. Every message in a thread shares the thread's subject
-   (`[IITPKD-GH-2026-AB12C] Guest house booking`, or `Guest house daily log —
-   Mon 21 Sep 2026`); what the message is about moves to its heading and inbox
-   preview.
-
-Threaded mail is queued **one message per To address** (a message carries one
-`References`). **CC rides on the first To's message only**, so a copied
-warden or HOD receives it once and it joins that recipient's thread — every
-later message about the same booking to the same To carries the same root.
-
-> **Was per person per *day* until 23 Sep 2026.** Threading on the day grouped
-> by when a message happened to be queued, so unrelated requests shared a
-> conversation and one booking's messages were split across days. See
-> [06-decisions.md](06-decisions.md), "Mail threads on the booking, not on the
-> day".
-
-### HTML and text from one description
-
-`render.ts` takes a list of blocks (`paragraph`, `facts`, `callout`, `table`,
-`list`, `button`, `note`) and renders both bodies. A template that wrote the
-two separately would drift until the text part was wrong — and the text part is
-what every HTML-refusing client and every screen reader reads.
-
-Email constraints baked into the markup: tables for layout, inline styles only
-(Gmail strips `<style>`), no external images (blocked by default, and the
-portal may be on localhost). The header uses dark brown on amber rather than
-the site's white-on-amber, which fails WCAG AA — the fix `AGENTS.md`
-recommends, applied here from the start.
-
-**Never put an ID document link in a mail body.** Reviewer mail says the
-documents are in the portal and links to the page.
-
-### `MAIL_REDIRECT_ALL_TO` is applied at send time
-
-The outbox always records who the message was genuinely for; the redirect
-rewrites the envelope in `dispatch.ts`. So flipping the variable changes where
-mail goes without rewriting history, and the console's outbox still answers
-"was the warden *supposed* to get this?". The redirected copy carries an
-`X-Original-To` header and a banner in the body, because the header is exactly
-what nobody looks at when wondering why a test mailbox is full of other
-people's bookings. **CC is swallowed too**: the redirected message has an empty
-CC, `X-Original-To` holds the original To and `X-Original-Cc` the original CC,
-and the banner names both.
-
-Set it on every non-production deployment. Without it, one person pointing a
-staging server at real data mails a real parent.
-
-### Idempotency is the whole safety story
-
-`email_outbox.idempotency_key` is unique, and `enqueueEmails` inserts with
-`on conflict do nothing`. The key is
-`event:booking:stamp:recipients` — the stamp being the booking's `updated_at`
-for a transition, or the institute calendar date for a digest. That gives:
-
-- a retried server action queues nothing new;
-- a digest is once per reviewer per day, so **the cron schedule is advisory** —
-  a missed 8am run still delivers at 9am and a second run at 9:05 does nothing;
-- two dispatchers never send the same message, because claiming is a single
-  `for update skip locked` statement (`claim_queued_emails`, migration 10).
-
-### Scheduling
-
-`/api/mail/dispatch` drains the outbox; `/api/mail/cron` runs the daily jobs
-and then drains. Both accept GET and POST (cron runners disagree), and both are
-guarded by `CRON_SECRET` — **required in production**, optional outside it so
-`npm run dev` stays usable. 8am IST is `30 2 * * *` in UTC.
-
-### The Mail Outbox console
-
-`/admin/mail` (developer only, behind the console lock) lists the queue, what
-failed and why, and offers Retry, "Send queued now" and "Send a test message".
-The test goes through the queue rather than calling the transport directly, so
-a pass proves the whole path and not merely that a password was accepted.
-Bodies are deliberately not returned to the client: the question there is
-delivery, and the content is the booking, one click away in All Bookings.
-
-## Invoices and tariffs (Phase 5)
-
-The office's invoice template is `public/GHM_Invoice.docx`; its header images
-are in `public/invoice/`. The flow, in the manager's and caretaker's consoles
-(the **Invoice** button on an occupied or vacated stay, `components/invoice-dialog.tsx`):
-**preview → correct the meal counts → Issue & print → Mark paid**.
-
-- **Pure rules — `lib/invoice.ts`, `lib/tariffs.ts`.** Money is integer paise.
-  `chargeableDays()` (calendar nights by default, or 24-hour blocks with a
-  grace — Setting `day_basis` / `grace_hours`), `splitByRate()` (a mid-stay
-  rate change prints two rows), `extraBedsByRoom()` (guests in a room card
-  beyond the room type's beds), `mealCovers()` (meals ticked × bed-occupying
-  guests, or a dining booking's head count), `gstPaise()` (basis points,
-  half-up to the rupee), `formatINR()` (₹1,23,456.00, written out, not `Intl`),
-  `financialYear()` (1 April rollover, institute time) and
-  `splitGst()` / `roomGstPercent()` (the rates are **GST-inclusive** by default:
-  the grand total is the rates, taxable value and CGST/SGST are backed out),
-  `buildInvoiceDocument()`, which assembles every printed field into an
-  `InvoiceDocument`. `actualStayTimes()` reads the desk's OCCUPIED / VACATED
-  log entries; an occupied stay is billed to its booked check-out.
-- **Tariffs** are effective-dated rows (`tariffs`, migration 19), each
-  optionally narrowed by guest house, room type, booking type and requester
-  role. `resolveTariff()` takes the most specific row in force (guest house >
-  requester > booking type > room type), then the latest. A rate in force is
-  never edited or deleted (trigger `tariffs_guard`, `tariffLockedError`); a new
-  price is a new row. A charge no rate covers is a *problem* on the document
-  and blocks issuing (`invoiceBlocker`) — nothing is ever priced at ₹0 by
-  omission.
-- **Issuing** (`app/actions/invoices.ts` → `store.issueInvoice` →
-  `issue_invoice()`) takes the financial year's next serial
-  (`GH/2026-27/0001`, prefix and width are Settings) and stores the whole
-  document as the snapshot in one transaction. Issued invoices are immutable
-  (trigger `invoices_guard`): only the payment can be recorded (cash, UPI with
-  its id, account transfer with its UTR) and the invoice cancelled with a
-  reason. A correction is a cancellation plus a new invoice that records
-  `replaces_invoice_id`. A draft row only carries the desk's meal-count
-  correction; it has no number and is priced afresh when shown.
-- **The PDF** (`lib/invoice-pdf.ts`, server only) is drawn with jsPDF to the
-  template's measurements, from the snapshot, never recomputed. Fonts and
-  artwork are embedded from `lib/invoice-assets.generated.ts` (regenerate with
-  `node scripts/build-invoice-assets.mjs`): Arimo (Arial-metric, has ₹) and
-  the **Hindi half of the footer address as an image** rendered from the
-  template's Palanquin Dark — jsPDF cannot shape Devanagari. Routes:
-  `/api/invoices/[id]/pdf` (desk: any; requester: their own issued invoices;
-  others 404) and `/api/invoices/preview/[bookingId]` (desk only, DRAFT
-  watermark). The requester's issued invoices show as **Invoice** on
-  `/dashboard`.
-- **Official invoices go to Accounts.** On issue, `notifyInvoiceIssued()`
-  queues `invoice.issued.accounts` To the Setting `accounts_email`, CC the
-  requester's HOD (`hodApproversFor`) and the requester, with an attachment
-  *reference* on the outbox row (`email_outbox.attachments`); the dispatcher
-  renders the PDF at send time. Personal bookings are not mailed. Nothing is
-  mailed until the office sets the address.
-- **Tariffs & Invoicing console** (`/admin/billing`, manager and developer):
-  the rates table with an add form (future rates removable), and the invoice
-  Settings group `rules.invoice` — numbering, day basis, GST %, GSTIN, Accounts
-  email, bank details and the footer contact line.
-- **Collections** (`lib/collections.ts`): the monthly CSV on `/history` for the
-  desk — every invoice issued or paid in the month, then totals by payment
-  mode and by debitable head.
-- **Who:** manager, caretaker and developer preview, issue and mark paid
-  (`canIssueInvoices`); only the manager and developer cancel
-  (`canCancelInvoices`). Each action re-checks and writes `invoice.issued`,
-  `invoice.paid` or `invoice.cancelled` to the security audit log.
-- **After check-out (24 Sep 2026).** Where the desk reaches an invoice:
-  the Invoice button on an occupied stay and in **Checking out today**
-  (`components/checkouts-today.tsx`); **Checked out — to bill** on both
-  `/manager` and `/caretaker` — vacated in the last `UNSETTLED_WINDOW_DAYS`
-  (30) and not yet paid, one rule, `awaitingSettlement()`; and the **Approval
-  Log** (`/history`), which gives the desk an Invoice button on every
-  checked-out stay and approved dining booking, however old
-  (`invoiceableFromArchive`), for reprints and late bills.
-- **What the page prints (24 Sep 2026).** `invoiceFacts()` builds the two
-  columns of facts for the PDF *and* the desk's preview. Project Detail,
-  Project Number and Project Sub-head appear **only with the Project head**; a
-  Special Fund's name only with Special Funds. A **dining** invoice
-  (`InvoiceDocument.kind`, read through `invoiceKind()` so older snapshots
-  work) prints Meal Date(s) (`describeMealDates`) and No. of Guests instead of
-  check-in/out, rooms, infants and primary guest, has no room table, and its
-  totals read Total / Grand Total (including GST) rather than A+B
-  (`invoiceTotalLabels`). The accounts mail follows the same rules.
-
-## Dining (Phase 6)
-
-Meals without a room (`service_type: "meals_only"`) for faculty, staff and
-offices (`MEALS_ONLY_ROLES`) at guest houses that serve meals; `/book-meal`
-opens `/book?service=meals_only`. `/manager/meals` is the kitchen's day
-(manager and caretaker): plates per meal from `kitchenHeadCount`, confirmed and
-pending bookings, and **Dining to invoice** — approved dining bookings whose
-meals have begun and have no invoice. The daily desk report carries the same
-plates and the day's dining bookings.
+Moved to [15-billing-and-invoices.md](15-billing-and-invoices.md): tariffs,
+building and issuing an invoice, the PDF, payments, Accounts mail, dining
+bookings and the kitchen's day.
 
 ## Operational states (Phase 7)
 
@@ -879,7 +618,7 @@ out on a second run inside 15 minutes.
 `#41506A`, borders `#E1E5EC`, white background, 3px corners, no shadows;
 Source Serif 4 headings and Source Sans 3 body via `next/font`. Tokens and the
 brand utilities (`bg-navy`, `text-gold-dark`, `bg-band`, …) live in
-`app/globals.css`. Full table and rules in [10-ui-design.md](10-ui-design.md).
+`app/globals.css`. Full table and rules in [16-public-site-and-ui.md](16-public-site-and-ui.md).
 
 Logos: `public/IITPKD_NEW_LOGO.png` (the stacked institute logo on a
 transparent background, in both headers since 21 Sep 2026; it replaced the
@@ -894,11 +633,14 @@ templates (`lib/mail/render.ts`) still carry their own inline amber header.
 
 Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase, auth
 password `password123` — not a portal login; each persona signs in with its
-dummy LDAP account from [11-ldap-accounts.md](11-ldap-accounts.md)): 13 personas and 5 bookings positioned so every queue has
-something in it. Rooms: Bageshri 10 double + 10 single, Hamsanandi 8 + 8.
-Hamsanandi serves meals and Bageshri does not; the two Hamsanandi demo bookings
-carry per-day meal plans built from their dates (`demoMeals` in
-`lib/store/seed.ts`), and bk-demo-4 has the infant switch on.
+dummy LDAP account from [30-credentials-and-access.md](30-credentials-and-access.md)):
+**18 personas**, 6 units and — mock only — **6 demo bookings** positioned so
+every queue has something in it (DM001 student at the warden, DM002 Petrichor
+at the legacy club stage, DM003 Student Cell alumni at the IAR Office, DM004
+faculty at the manager, DM005 Director's Office approved, DM006 a meals-only
+booking at the manager). Rooms are the office's real list: Bageshri 201, 202,
+203, 204, 206, 302, 303, 305, 306, 307 (10) and Hamsanandi A4, B1–B4, C1–C4,
+D1–D4 (13), all double sharing. Hamsanandi serves meals and Bageshri does not.
 
 | Persona | Email |
 | --- | --- |
@@ -920,5 +662,6 @@ carry per-day meal plans built from their dates (`demoMeals` in
 IAR Student Cell booking on behalf of Vikram Iyer (`101601023`), sitting in the
 IAR Office's queue, so the new pipeline has something in it on first run.
 
-Whitelisted official addresses (`lib/routes.ts`): `admin@`, `director.office@`,
-`registrar@iitpkd.ac.in`.
+Whitelisted official addresses are a Setting (`official_email_whitelist`):
+`admin@`, `director.office@`, `registrar@iitpkd.ac.in`, plus `cse.office@` in
+both seeds.

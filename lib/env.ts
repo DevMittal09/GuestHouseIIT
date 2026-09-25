@@ -33,7 +33,7 @@ export function devLoginEnabled(): boolean {
  *
  * > This is a placeholder, not authentication: anyone who can reach the page
  * > can become any account on it. It must not be open on a deployment holding
- * > real bookings — see `.memories/08-roadmap.md` item 1.
+ * > real bookings — see `.memories/04-roadmap.md` item 1.
  */
 export function mockLoginEnabled(): boolean {
   if (process.env.MOCK_LOGIN === "false") return false;

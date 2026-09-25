@@ -13,10 +13,18 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 Read this before touching the code. It captures the decisions and the traps that
 are not obvious from reading files, so you don't have to rediscover them.
 
+> **New session? Start with `.memories/README.md`**, then
+> `.memories/99-recent-changes.md`. That folder is the project's full memory —
+> background and every requirement round, the timeline, the product as
+> configured role by role and form by form (`10`–`17`, checked against the code
+> on 24 Sep 2026), the engineering notes, every demo login and where each real
+> secret lives, and the roadmap. This file is the terse list of rules.
+
 **What it is:** a booking + multi-stage approval portal for IIT Palakkad's two
-guest houses, **Bageshri** and **Hamsanandi**. Five kinds of requester submit
-bookings; each goes through role-specific approvals and ends at a Guest House
-Manager who assigns actual rooms on a visual grid. A **developer** superadmin
+guest houses, **Bageshri** and **Hamsanandi**. Students, faculty and staff,
+institute offices, the two IAR accounts and — through their Faculty Advisor —
+clubs and councils submit bookings; each goes through role-specific approvals
+and ends at a Guest House Manager who assigns actual rooms on a visual grid. A **developer** superadmin
 role can reconfigure almost everything from the UI.
 
 **Stack:** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript ·
@@ -78,7 +86,7 @@ Beyond the suites, behaviour is verified these ways:
 3. **Headless Chrome** for client-rendered UI (dialogs, the meal grid, the
    week/month charts), driven over the DevTools protocol with Node 20's
    `--experimental-websocket` — no packages needed. Recipe and gotchas in
-   `.memories/05-deployment.md`. Migrations are checked in a throwaway
+   `.memories/23-running-and-testing.md`. Migrations are checked in a throwaway
    `postgres:16-alpine` container the same way — never against the hosted
    project.
 
@@ -135,10 +143,10 @@ the card at `/sign-in`, which is also embedded in the public `/book-room` and
   password (`lib/ldap/`: `getDirectory()` returns the real `LdapDirectory`
   when `LDAP_URL` is set, otherwise the dummy `MockDirectory`). Then
   **`profiles.ldap_uid`** (migration 12) says which portal account that is.
-  A valid LDAP login with no profile gets in nowhere. The dummy logins, and
-  how to switch to the real accounts, are in
-  **`.memories/11-ldap-accounts.md`**. Keep that file and
-  `lib/ldap/mock-directory.ts` in step.
+  A valid LDAP login with no profile gets in nowhere. The dummy logins are
+  in **`.memories/30-credentials-and-access.md`** (keep it and
+  `lib/ldap/mock-directory.ts` in step); how to switch to the real accounts
+  is **`.memories/31-ldap-sign-in.md`**.
 - **"Mock Authentication"** → `/mock-login` (the persona picker) → `loginAs()`.
   A **placeholder** for Google OAuth and the one-click role switcher. It is open
   while `googleOauth()` is null (`mockLoginEnabled()` in `lib/env.ts`) — **not**
@@ -167,10 +175,12 @@ Rules for the LDAP door:
 to a `next` path only via `safeNextPath()`.
 
 **Everything else in the app only calls
-`getCurrentUser()`/`requireUser()`.** The cookie is still unsigned, so anyone
-can claim any profile id. LDAP proves who typed a password, not who holds the
-cookie. A signed or server-side session plus real Google OAuth is the
-remaining production migration. Do not scatter auth logic elsewhere.
+`getCurrentUser()`/`requireUser()`.** The session is a server-side row keyed by
+the SHA-256 of an opaque cookie token (Phase 8: 30 min idle, 12 h absolute), so
+a forged cookie gets nothing. What remains before real use is connecting the
+institute LDAP and closing Mock Authentication (configure Google or
+`MOCK_LOGIN=false` — it is open in production too while Google is unset). Do
+not scatter auth logic elsewhere.
 
 Every server action re-checks authorization server-side (`requireUser`, role
 checks, `canReview`). Keep it that way: the UI hiding a button is never the
@@ -181,7 +191,7 @@ security boundary.
 The card at the top of `/book` (and on `/warden`) shows the person's record
 from the **institute's academic database**, with a per-kind field list and a
 **Copy to** line. The fields, dummy data and how to connect the real database
-are in **`.memories/12-academic-records.md`**. Keep that file and
+are in **`.memories/17-academic-records.md`**. Keep that file and
 `lib/academic/mock-source.ts` in step.
 
 - **Same seam as the store / mailer / directory:** `getAcademicSource()` is the
@@ -319,8 +329,9 @@ ordinary institute account. It is `["official", "alumni"]`.
 `alumni` means *on behalf of an alumnus*, who has no login: it requires
 `alumni_name`, `alumni_roll_number` and the Alumni ID card upload. The card is
 demanded by `config.alumni_card === "required"` **or** by the booking being for
-an alumnus — the IAR accounts book both ways from one form, so the requirement
-follows the request, not the account.
+an alumnus — the IAR Office books both ways from one form (the Student Cell
+books for alumni only), so the requirement follows the request, not the
+account.
 
 **Alumni have no login.** There is no alumni persona and `alumni` is not in
 `REQUESTER_ROLES`. It stays in the `Role` union and in `BOOKING_CATEGORY_ROLES`
@@ -348,7 +359,8 @@ cannot drift.
   `getOfficialEmails()`, matched with `isWhitelistedOfficial`). It used to be a
   constant in `lib/routes.ts`. They are highlighted + sorted to the top of the
   manager queue.
-- **Manager Overrides**: `lib/access.ts` grants `gh_manager` powers to book on behalf of others, override approvals, edit meals post-approval, and bypass guest house restrictions (like the alumni/Bageshri rule).
+- **Manager Overrides**: `lib/access.ts` grants `gh_manager` powers to book on behalf of others, override approvals, edit meals post-approval, and bypass guest house restrictions (like the alumni/Bageshri rule). **Booking on behalf is the manager's alone** (`canBookOnBehalf`) — the developer has no booking types or route, so `/book` sends it back to the console.
+- **The guest house's phone and email live in one place**, `GUEST_HOUSE_CONTACT` (`lib/site.ts`): the public site, the "Facing trouble booking?" line and the invoice's default contact read it.
 
 ### Time is institute time — `lib/tz.ts`
 
@@ -377,8 +389,10 @@ Check-in must be within **one month** of today by default — a Setting
 (`rules.booking.advance_booking_months`), passed as `latestCheckIn(role, from,
 months)`; the 14-night maximum stay is `rules.booking.max_stay_nights` (0 = no
 limit). `latestCheckIn` in `lib/workflow.ts` is the single source of truth; `isAdvanceWindowExempt()`
-exempts **`official` only**, because dignitary visits are arranged on the
-institute's own notice. The limit applies to `check_in` only — a stay that
+exempts **`official`, `gh_manager` and `developer`**, because dignitary visits
+are arranged on the institute's own notice and the desk books what the
+institute has already committed to. The same three (plus
+`director.office@`) are exempt from the stay cap (`lib/policy.ts`). The limit applies to `check_in` only — a stay that
 starts inside the window may run past it.
 
 `bookingPayloadSchema` applies it on client *and* server, so the `max` on the
@@ -409,10 +423,12 @@ Vacated, still holding rooms) and **Upcoming stays**. Before that split a
 booking for next week sat under the same heading as a guest in the building and
 read as though it were occupied.
 
-Cancellation flow: a requester can request cancellation of an approved/occupied
-booking (`requestCancellation` action, requires reason). The manager reviews via
-`approveCancellation` / `rejectCancellation`. Direct cancellation pre-approval
-uses the existing `cancelBooking` action.
+Cancellation flow: a requester's **Cancel** (`cancelBooking`, reason required)
+**always** files `CANCELLATION_REQUESTED` — from any open status, pending or
+approved; an Occupied stay is ended at the desk instead. The manager decides
+via `approveCancellation` (→ `CANCELLATION_APPROVED`, rooms freed) /
+`rejectCancellation` (restores the status the booking had). The manager
+cancels directly with `managerCancelBooking`.
 
 ## The form-config system (most important non-obvious part)
 
@@ -899,8 +915,9 @@ booked / Booked badge for the whole period shown.
   (62)** because every role can call it. Everyone else gets periods and
   reference ids only. Do not widen this without a reason — the grid answers "is
   this room free", which needs no guest identity.
-- Excluded from the 5 s polling: the component fetches client-side and has its
-  own Refresh button.
+- Excluded from live refreshing (`NO_REFRESH_PREFIXES` in
+  `components/live-updates.tsx`): the component fetches client-side and has
+  its own Refresh button.
 - **The charts live in `components/occupancy-chart.tsx`** — `OccupancyChart`
   (a day) and `RangeOccupancyChart` (a week or month). The day chart is shared
   with the panel inside the booking form (`components/booking-availability.tsx`),
@@ -953,10 +970,12 @@ manager + developer). Every value defaults to what the code did before.
 ## Developer console lock
 
 `/admin` sits behind a console password (`lib/admin-lock.ts`). Default **`0000`**
-until a developer sets one from **Console Access**.
+until a developer sets one from **Console Access**. It guards the manager's
+console sections as well as the developer's.
 
-- **Enforced in `requireDeveloper()`**, not just the layout — a crafted request
-  with a developer persona cookie but no unlock gets nothing. Keep it that way.
+- **Enforced in `requireConsole(section)`** (and its siblings in the other
+  console action files), not just the layout — a crafted request with no
+  unlock gets nothing. Keep it that way.
 - Stored as a scrypt hash in `app_settings` (migration 5), never plaintext, and
   never sent to the client: read it inside a server action and return a verdict.
 - The unlock is an HMAC-signed, httpOnly cookie (`gh_admin_unlock`, 8 h) whose
@@ -964,17 +983,22 @@ until a developer sets one from **Console Access**.
   outstanding unlock for free.
 - A missing `app_settings` table degrades to the default password rather than
   throwing — otherwise the only page that could fix it would 500.
-- Attempts are throttled per user, in-process (10 per 5 min). It resets on
-  restart and does not span instances; real rate limiting belongs at the edge.
+- Attempts are throttled in the database (`RATE_LIMITS.consoleUnlock`: 6 per
+  15 min), so a restart does not reset them.
 
-> **This is a speed bump, not authentication.** Identity is still a persona
-> cookie, so anyone can claim to be the developer — the password only stops
-> casual poking during a demo. Do not describe it as securing the console.
+> **One layer among several.** Identity is a real session (Phase 8), and a
+> developer also needs a TOTP second factor, proved again within 10 minutes
+> before role changes, Settings and deletes (`stepUpProblem`). The password is
+> still a shared secret — change it from `0000` before go-live.
 
-## Developer console (`/admin`, role `developer`)
+## The console (`/admin` — manager 9 sections, developer all 13)
 
-`app/(portal)/admin/*` + `components/admin/*`, actions in `app/actions/admin.ts`
-(every one gated by `requireDeveloper()`):
+`app/(portal)/admin/*` + `components/admin/*`; sections and their roles in
+`CONSOLE_SECTIONS` (`lib/access.ts`). Developer-only: All Bookings, Settings,
+Audit Log, Console Access. Actions in `app/actions/admin.ts` (and
+`units.ts`, `settings.ts`, `invoices.ts`, `projects.ts`, `operations.ts`,
+`mail-templates.ts`), each gated by `requireConsole(section)` or its sibling.
+The full who-opens-what table is in `.memories/10-roles-and-features.md`.
 
 - **Destructive actions ask properly.** `components/ui/confirm-dialog.tsx`
   replaced every `window.confirm`: it lists what will be lost and, for guest
@@ -1006,7 +1030,7 @@ itself, so callers pass only `new_status`. `action_by_name` is denormalized so
 history survives account deletion (`action_by` is nullable / `on delete set
 null`).
 
-## Public website and branding — read `.memories/10-ui-design.md` first
+## Public website and branding — read `.memories/16-public-site-and-ui.md` first
 
 Since 19 Sep 2026, built from `design_handoff/` (a reference, not code to copy).
 
@@ -1057,11 +1081,11 @@ Since 19 Sep 2026, built from `design_handoff/` (a reference, not code to copy).
   the browser as an opaque `NetworkError`. `next.config.ts` raises
   `experimental.serverActions.bodySizeLimit` to `25mb`. Per-file validation
   (5 MB, JPG/PNG/WEBP/PDF) lives in `app/actions/bookings.ts`.
-- **One cookie, every tab.** The mock session is a cookie, so signing in as a
-  different persona in one tab changes who *every* open tab is, and the 5 s
-  polling makes the others re-render as that persona. This is inherent to cookie
+- **One cookie, every tab.** The session is a browser cookie, so signing in as
+  a different persona in one tab changes who *every* open tab is, and live
+  updates make the others re-render as that persona. This is inherent to cookie
   auth, not a bug to patch in the UI — a blocking "this browser switched user"
-  guard was built and **reverted** (see [.memories/06-decisions.md](.memories/06-decisions.md));
+  guard was built and **reverted** (see [.memories/03-decisions.md](.memories/03-decisions.md));
   don't rebuild it. Two identities at once need two browser profiles or a
   private window, and genuine per-tab sessions arrive with real auth.
 - **Never use `datetime-local` or `type="time"`.** Firefox makes them
@@ -1125,7 +1149,7 @@ Since 19 Sep 2026, built from `design_handoff/` (a reference, not code to copy).
 
 Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase auth
 password `password123`, which is *not* a portal login — each persona signs in
-with its dummy LDAP account, listed in `.memories/11-ldap-accounts.md`): two students in different hostels (Malhar, Saveri),
+with its dummy LDAP account, listed in `.memories/30-credentials-and-access.md`): two students in different hostels (Malhar, Saveri),
 an employee, a whitelisted official (`admin@iitpkd.ac.in`), the Petrichor club,
 the Cultural Affairs Council (`sec_arts@iitpkd.ac.in`, its secretary's mailbox),
 Dr. Arun Prasad (`arun.prasad@`, an ordinary **faculty employee** named Faculty
@@ -1133,13 +1157,13 @@ Advisor of the council and of Petrichor — the old `fa.petrichor` account is
 retired), the IAR Student Cell, two wardens, the IAR Office,
 a GH manager, a GH caretaker (`gh.reception@iitpkd.ac.in`), and
 `developer@iitpkd.ac.in`. **There is no alumnus persona** — demo booking 3 is
-now the Student Cell booking for one. Five demo bookings seed every queue with
-something to look at.
+now the Student Cell booking for one. Six demo bookings (mock store only) seed
+every queue with something to look at.
 
 ## Supabase setup
 
 Migration files, applied sequentially:
-1. `supabase/migrations/00000000000001_init.sql` (tables, enums, RLS, private `documents` bucket)
+1. `supabase/migrations/00000000000001_initial_schema.sql` (tables, enums, RLS, private `documents` bucket)
 2. `supabase/migrations/00000000000002_booking_lifecycle.sql` (adds `OCCUPIED`, `VACATED`, `CANCELLATION_REQUESTED`, `CANCELLATION_APPROVED` to `booking_status`)
 3. `supabase/migrations/00000000000003_room_holds_and_infants.sql` (`room_holds` + exclusion constraint + `set_room_holds()`, backfills and **drops** `bookings.assigned_room_ids`, adds `bookings.infants`). Destructive — read its header comment before running it against real data.
 4. `supabase/migrations/00000000000004_infant_guests.sql` (adds `booking_guests.is_infant`, **drops** `bookings.infants`)
@@ -1174,6 +1198,9 @@ Migration files, applied sequentially:
 16. `00000000000016_settings_and_audit.sql` — `hostels`,
    `official_email_whitelist`, `units.office_class`, the occupancy trigger
    reading Settings, `security_audit`.
+17–22. Turnaround buffer, HOD approval and projects, tariffs and invoices,
+   operational states, sessions and security, search and indexes — one line
+   each in `.memories/22-database.md`.
 23. `00000000000023_room_occupancy_combination.sql` — `check_room_occupancy()`
    becomes the office's combination: at most 3 needing a bed, at most 3 infants,
    at most **4 people in all** (`rules.capacity.max_occupants_per_room`).
@@ -1192,9 +1219,9 @@ Migration files, applied sequentially:
    club** (every unit reads as having no advisor) and saving an advisor in the
    console names this migration.
 
-Full notes per migration in `.memories/04-database.md`. Migrations are tested
+Full notes per migration in `.memories/22-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine
-without it (`.memories/05-deployment.md`) — never the hosted project.
+without it (`.memories/23-running-and-testing.md`) — never the hosted project.
 
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are
 not applied automatically. Read the header of each before running it.

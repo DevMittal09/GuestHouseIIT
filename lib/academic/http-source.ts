@@ -21,7 +21,7 @@ const TIMEOUT_MS = 3000;
 
 /**
  * The institute's academic database, over HTTP. The contract (also in
- * `.memories/12-academic-records.md`):
+ * `.memories/17-academic-records.md`):
  *
  * ```
  * GET {ACADEMIC_DB_URL}/records/{kind}?email={institute email}

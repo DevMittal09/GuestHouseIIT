@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DEFAULT_DEBIT_RULES, debitRulesSchema, upgradeDebitRules, type DebitRules } from "./debit-heads";
+import { GUEST_HOUSE_CONTACT } from "./site";
 import type { MealKey, RoomType } from "./types";
 
 /**
@@ -227,10 +228,13 @@ export const DEFAULT_RULES: Rules = {
       ifsc: "SBIN0006640",
       branch: "KANJIKODE",
     },
+    // The office's phone and email as the public site and the help line show
+    // them (`lib/site.ts`), so the three start out the same; the office can
+    // still change the invoice's copy here.
     contact: {
       address: "Kanjikode West, Palakkad, Kerala",
-      phone: "+91 491 209 2016",
-      email: "ghm@iitpkd.ac.in",
+      phone: GUEST_HOUSE_CONTACT.phone,
+      email: GUEST_HOUSE_CONTACT.email,
     },
   },
   privacy: {

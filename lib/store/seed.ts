@@ -64,7 +64,7 @@ export const seedRooms: Room[] = [
 
 // `ldap_uid` is each persona's dummy LDAP username — the local part of the
 // address, as in the institute directory. Passwords are in
-// lib/ldap/mock-directory.ts and .memories/11-ldap-accounts.md.
+// lib/ldap/mock-directory.ts and .memories/30-credentials-and-access.md.
 export const seedProfiles: Profile[] = [
   // ----- Requesters -----
   { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112201001", ldap_uid: "112201001" },

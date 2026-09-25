@@ -36,7 +36,8 @@ app/
     gallery/            /gallery
     contact/            /contact     with the map
     sign-in/            /sign-in     general sign-in; where every portal guard redirects
-    mock-login/         /mock-login  persona picker (moved here from app/mock-login, same URL)
+    mock-login/         /mock-login  Mock Authentication persona picker (open while Google is unconfigured)
+    privacy/            /privacy     the versioned DPDP privacy notice
   (portal)/             SIGNED-IN portal — unchanged routes, restyled shell
 ```
 
@@ -57,6 +58,13 @@ would go stale until the next build.
 
 ## Sign-in: what changed and what did not
 
+> **Current state (23–24 Sep 2026):** the card asks for an **LDAP username +
+> password**; the second button reads **"Mock Authentication"** (no Google
+> "G" mark) and opens `/mock-login?next=…` while Google is unconfigured, and
+> reads **"Sign in with Google"** (real OpenID Connect) once
+> `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL` are set. The notes
+> below are the history of how it got there.
+
 > **Superseded in part (19 Sep 2026, later the same day):** the card now asks
 > for an **LDAP username + password** (`signInWithLdap`) and has a **"Sign in
 > with Google"** button (Google's "G" mark, white outlined button under an "or"
@@ -67,7 +75,7 @@ would go stale until the next build.
 > in use, and says what the Google button does. The username placeholder is
 > `e.g. 142301026`, the real format the user gave for students. The email
 > form, its client domain check and `DEMO_PASSWORD` are gone. See
-> [11-ldap-accounts.md](11-ldap-accounts.md). The bullets below describe the
+> [31-ldap-sign-in.md](31-ldap-sign-in.md). The bullets below describe the
 > email form as it was; `next` and `safeNextPath()` still work the same way,
 > and `isInstituteEmail()` is kept for real Google sign-in.
 
@@ -147,7 +155,7 @@ the base layer, and shadcn's `CardTitle` / `DialogTitle` already use
 | `components/site/site-nav.tsx` | `NavBar` — the navy bar with the gold active underline, **shared by the site and the portal**. Client component (`usePathname`). `exact` paths only light on themselves (`/`); others also cover sub-paths (`/admin/users` lights Developer Console) |
 | `components/site/sign-in-panel.tsx` | Two-column title + domain notice + sign-in card, or the signed-in "Continue" card |
 | `components/page-header.tsx` | Portal page title block: serif `h1`, gold rule, description, optional `actions`. Used by every portal page |
-| `components/login-form.tsx` | The sign-in card: LDAP username + password, "or", "Sign in with Google" (→ `/mock-login?next=`), `next`, `submitLabel`, `footnote`, dummy-login note (`sampleAccount`) |
+| `components/login-form.tsx` | The sign-in card: LDAP username + password, "or", **Mock Authentication** (→ `/mock-login?next=`) or **Sign in with Google** when configured, `next`, `submitLabel`, `footnote`, dummy-login note (`sampleAccount`) |
 
 `components/auth-masthead.tsx` was deleted (only the old `/` and `/mock-login`
 used it).
@@ -168,8 +176,8 @@ before — only the rendering changed.
   home guest-house cards, the Food facility card and the Book Meal page. **No
   guest house name is hardcoded** — add one in the developer console and the
   site shows it.
-- `getSitePolicies()` — per requester role: approver chain (derived from
-  `initialStatusFor()` + `REVIEWER_STAGE`), the guest houses its effective form
+- `getSitePolicies()` — per requester role: approver chain (read from
+  `routeFor()`, the pipeline itself), the guest houses its effective form
   config allows (so "Student — Bageshri only" comes from the Form Builder, not
   from copy), the advance-window exemption, and the student parent rule if the
   saved student config still carries it.
@@ -251,8 +259,8 @@ address and the footer link to it too. To pin the guest house itself, replace
 | From the prototype | Why not |
 | --- | --- |
 | "Keep me signed in", "Forgot password" | The mock session has neither; a control that does nothing is worse than none. Real auth brings both |
-| A meal-only booking flow ("Meal requests close the previous evening", "attach to your room booking automatically") | The backend has no such flow. Meals are chosen per day **inside the room request**, only where `serves_meals`. `/book-meal` says exactly that and sends the visitor to `/book`. A separate dining booking is in the meeting notes as *not started* |
-| "Tariff and payment" guideline card, "GST applies" | Not on the public site. Rates live in Tariffs & Invoicing and change by date; GST is a Setting that is 0 until the office sets it. The Guidelines intro points to the office |
+| The prototype's meal-only flow ("Meal requests close the previous evening", "attach to your room booking automatically") | Built differently since: **Meals only** is a service type inside `/book` (Phase 6, reworked 23 Sep 2026 as a set of dates with the kitchen's notice period — a meal must be booked before the previous one finishes being served). `/book-meal` explains it and signs in to `/book?service=meals_only`. Nothing is "attached" to a room booking automatically |
+| A rate card on the public site | Rates live in Tariffs & Invoicing and change by date. The Guidelines page has a **"Charges and settlement"** card (Phase 10) built from the invoice Settings: the day basis, the grace hours, and that **the tariff includes GST** |
 | "Requests at least seven days in advance", "Check-in from 12:00 noon / check-out by 11:00" | Contradict the backend: the window is one month *maximum*, and times are chosen per booking |
 | "24-hour front office", "Doctor on call", front-office hours | Unconfirmed; the facilities cards use the iitpkd.ac.in amenity list (TODO-marked) and backend-true service lines |
 | `image-slot.js` | Prototype-only, per the handoff. `design_handoff/**` is excluded from ESLint |
@@ -264,7 +272,7 @@ address and the footer link to it too. To pin the guest house itself, replace
   routes 307 → `/sign-in` signed out; 11 portal routes 200 for their personas;
   `/sign-in` signed in → 307 to the role home.
 - Headless Chrome (DevTools protocol, recipe in
-  [05-deployment.md](05-deployment.md#verifying-changes)): a gmail address is
+  [23-running-and-testing.md](23-running-and-testing.md#verifying-changes)): a gmail address is
   refused on the client with the domain message; `priya@` via Book a room lands
   on `/book`; wrong password gives the generic message; a student's `@smail`
   address signs in; a warden via Book a room ends on `/warden`; Switch user
@@ -280,8 +288,9 @@ address and the footer link to it too. To pin the guest house itself, replace
 - Everything tagged `TODO(site)`: contact details, map pin, guidelines PDF URL,
   amenity lines, house rules, photo attribution.
 - The design asks for SSO on the booking pages. LDAP is in (dummy accounts
-  until `LDAP_URL`); real Google OAuth replaces only the button's target,
-  `/mock-login` and `loginAs` — roadmap item 1.
+  until `LDAP_URL`); real Google sign-in is built and switches on with its
+  three environment variables, which also closes Mock Authentication —
+  [04-roadmap.md](04-roadmap.md) item 1.
 - Mail templates (`lib/mail/render.ts`) still use the old amber header styling;
   they are inline-styled HTML and were out of scope. Align them if the office
   wants the emails to match.

@@ -11,7 +11,7 @@ npm run dev
 ```
 
 Open http://localhost:3000 and sign in with any of the dummy LDAP accounts (listed
-in `.memories/11-ldap-accounts.md` — e.g. `priya` / `Priya@2026`). With no Supabase
+in `.memories/30-credentials-and-access.md` — e.g. `priya` / `Priya@2026`). With no Supabase
 env vars set, the app runs against a local mock data layer:
 
 - **Database** → `.local-db.json` (auto-seeded on first run; delete it to reset demo data)
@@ -145,11 +145,13 @@ The data layer is a single interface (`lib/store/types.ts`) with two implementat
 `MockStore` and `SupabaseStore` — selected automatically in `lib/store/index.ts`.
 
 **Signing in.** The sign-in page takes an **LDAP username and password**, checked against
-dummy accounts (one per demo persona — listed in `.memories/11-ldap-accounts.md`, e.g.
+dummy accounts (one per demo persona — listed in `.memories/30-credentials-and-access.md`, e.g.
 `priya` / `Priya@2026`) until `LDAP_URL` points it at the institute directory (see
-`.env.example`). **"Sign in with Google"** is the real OpenID Connect flow when
-`GOOGLE_CLIENT_ID` is set, restricted to institute domains; where it is not configured the
-button is not shown at all. The `password123` above is not a portal login. Apply migration
+`.env.example`). The second button is **"Sign in with Google"** — the real OpenID Connect
+flow, restricted to institute domains — once `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+`APP_URL` are set; until then it reads **"Mock Authentication"** and opens a one-click
+persona picker (`/mock-login`). That door is open in production too while Google is unset,
+so a deployment with real data must configure Google or set `MOCK_LOGIN=false`. The `password123` above is not a portal login. Apply migration
 12 so profiles can carry their LDAP username (`profiles.ldap_uid`); real usernames are
 loaded from the developer console (Users & Roles → Import LDAP usernames).
 
@@ -159,8 +161,7 @@ Guests' ID numbers are encrypted at rest and shown as their last four digits. Up
 documents live in the private `documents` bucket and are served only through
 `/api/documents/…`, which checks who is asking, writes an audit row, and signs a
 five-minute link. In production the server refuses to start without `APP_URL`,
-`CRON_SECRET` and `ID_ENCRYPTION_KEY`, and refuses outright if the developer sign-in doors
-are switched on. See `.memories/14-security.md`.
+`CRON_SECRET` and `ID_ENCRYPTION_KEY`, and refuses outright if `DEV_LOGIN` is set. See `.memories/26-security.md`.
 
 ## Email notifications
 
@@ -250,9 +251,10 @@ e2e/                     Playwright journeys, run against a production build
 
 ## Documentation
 
-`.memories/` is the long-form documentation: how it is built
-(`02-architecture.md`, `03-implementation.md`), the database and every migration
-(`04-database.md`), running and deploying with the production runbook
-(`05-deployment.md`), why things are the way they are (`06-decisions.md`), what to do when
-something breaks (`07-troubleshooting.md`), the workflows role by role
-(`13-workflows.md`) and security (`14-security.md`).
+`.memories/` is the project's memory — **start at `.memories/README.md`**.
+It holds the background and every requirement round (`01`–`05`), the product
+as configured — roles and features, booking forms, workflows, settings, mail,
+billing (`10`–`17`), the engineering notes — architecture, implementation,
+database, running and testing, the deployment runbook, troubleshooting,
+security (`20`–`26`), every demo login and where each real secret lives
+(`30`–`31`), and the most recent round of changes (`99`).

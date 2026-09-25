@@ -1,8 +1,20 @@
 # Decision log
 
-Each entry: what was decided, why, and what it costs.
+Each entry: what was decided, why, and what it costs — **in the order it was
+decided**. Entries are a record, not a description of the present: they are
+not rewritten when a later decision reverses them. Instead a dated
+**Superseded** / **Updated** note sits under the heading. For how things are
+*now*, read [10-roles-and-features.md](10-roles-and-features.md),
+[11-booking-forms.md](11-booking-forms.md), [12-workflows.md](12-workflows.md)
+and [13-settings-and-defaults.md](13-settings-and-defaults.md). The dated
+summary of every session is [02-timeline.md](02-timeline.md).
 
 ## Mock authentication with one swap point
+
+> **Superseded.** Phase 8 (22 Sep 2026) made the session a server-side row
+> with an opaque cookie, and 23 Sep 2026 turned the persona picker into the
+> **Mock Authentication** door, open only while Google is unconfigured. The
+> "one swap point" (`lib/auth.ts`) still holds.
 
 **Decision.** Ship a persona picker backed by a cookie, with all session reading
 confined to `getCurrentUser()` in `lib/auth.ts`.
@@ -34,7 +46,7 @@ signed-out guard already redirects there.
 
 **Cost.** A second path onto the same cookie, and a password that is not a
 secret — it is printed under the form. Neither is authentication, and both must
-be deleted together when real auth lands (09-production-plan.md step 5), not
+be deleted together when real auth lands (05-production-plan.md step 5), not
 left behind a flag.
 
 **Detail worth keeping.** A wrong password and an unknown address return the
@@ -53,6 +65,10 @@ placeholder. See the next entry.
 
 ## LDAP sign-in, with a mocked Google door (19 Sep 2026)
 
+> **Updated.** The costs below were fixed later: the session is a row since
+> Phase 8, the throttle moved into the database (8 attempts per 15 minutes),
+> and the placeholder button reads "Mock Authentication" since 23 Sep 2026.
+
 **Decision.** The sign-in card asks for an **LDAP username and password**, with
 **"Sign in with Google"** beneath it. Google is a placeholder: it opens the
 persona picker (`/mock-login`, carrying `next`) until OAuth is set up, because
@@ -61,7 +77,7 @@ development needs one-click role switching.
 LDAP is real code behind an environment switch, like the store and the mailer.
 `LDAP_URL` selects `LdapDirectory` (`ldapts`, search-then-bind). Without it,
 `MockDirectory` serves one dummy account per persona, listed with passwords in
-[11-ldap-accounts.md](11-ldap-accounts.md) as the user asked.
+[31-ldap-sign-in.md](31-ldap-sign-in.md) as the user asked.
 
 **Identity is split in two.** The directory proves the password;
 `profiles.ldap_uid` (migration 12) says which portal account that is. The user
@@ -141,7 +157,7 @@ for each change; the Administration Section should be able to do it themselves.
 **Cost.** More indirection: reading `booking-form.tsx` no longer tells you what a
 student sees. Two mitigations — the same config drives client *and* server zod
 schemas so the rules cannot diverge, and the resolution order is documented in
-`AGENTS.md` and [02-architecture.md](02-architecture.md).
+`AGENTS.md` and [20-architecture.md](20-architecture.md).
 
 **Consequence to remember.** Editing `buildDefaultFormConfig` has no effect on a
 role that has a saved config row.
@@ -189,7 +205,7 @@ anyway. The scan cap plus a `truncated` flag keeps that honest.
 
 **It paid for itself immediately.** The one predicate that *was* pushed down
 (`statuses`) silently broke facet counts on Supabase while the mock store stayed
-correct — see [07-troubleshooting.md](07-troubleshooting.md).
+correct — see [25-troubleshooting.md](25-troubleshooting.md).
 
 ## Search state lives in the URL
 
@@ -289,9 +305,12 @@ verbatim, including white-on-amber buttons.
 
 **Cost.** White on `#f7a600` is low contrast by WCAG. Accepted deliberately for
 visual consistency; the fix (dark `--primary-foreground`) is documented in
-[03-implementation.md](03-implementation.md).
+[21-implementation.md](21-implementation.md).
 
 ## Print-Optimized HTML for PDF Reports
+
+> **Superseded** by "The PDF export is a real PDF" below (jsPDF, downloaded
+> as a file).
 
 **Decision.** The `/history` PDF export generates a print-optimized HTML string server-side, opens it in a new window, and triggers the browser's `window.print()` dialog.
 
@@ -322,6 +341,10 @@ both sides from the same config, so a crafted request would have sailed past a
 client-only check — the same reasoning that made the field modes server-enforced.
 
 ## Advance-booking window exempts officials only
+
+> **Updated.** `isAdvanceWindowExempt()` now also exempts `gh_manager` and
+> `developer` — the desk books what the institute has already committed to —
+> and the window is a Setting (Phase 1).
 
 **Decision.** Cap check-in at one month ahead for every requester category
 except `official`.
@@ -436,6 +459,11 @@ infants. A booking with **only** infants is refused — someone has to be on a b
 
 ## Infants are one switch on the booking (supersedes infant guest rows)
 
+> **Superseded** by migration 11 (Sep 2026): infants are guest rows again,
+> classified from the age typed (under 5), with the combined per-room limit of
+> 23 Sep 2026. `has_infant` survives as a derived summary and for bookings made
+> between migrations 7 and 11.
+
 **Decision (15 Sep 2026, migration 7).** Replace the per-guest "Infant"
 checkbox with one **"Infant accompanying"** switch for the whole booking,
 `bookings.has_infant`. No count, no names, no ID.
@@ -501,6 +529,11 @@ in one *single* room reported 0 extra beds. It now uses
 
 ## Room capacity varies by room type
 
+> **Updated (23 Sep 2026).** Still how allocation is checked, but both guest
+> houses are now **all double sharing**, so the single-room row only matters
+> for older data. The per-room-card rule at submission is separate — see "The
+> per-room rule is a combination" below.
+
 **Decision.** A double sleeps 2 (3 at a stretch), a single sleeps 1 (2 at a
 stretch), rather than one flat "2, max 3" for every room.
 
@@ -537,6 +570,12 @@ what the caller may see than it could before.
 
 ## A password on the developer console, enforced in the action layer
 
+> **Updated.** The console now serves the manager too (9 of 13 sections,
+> `requireConsole(section)`), the unlock throttle is in the database (6 per 15
+> minutes), and since Phase 8 identity is a real session with a second factor
+> for developers — so this password is one layer among several, not the only
+> guard.
+
 **Decision.** Gate `/admin` behind a console password (default `0000`,
 changeable in-console), and check it inside `requireDeveloper()` rather than
 only in the layout.
@@ -559,7 +598,7 @@ plaintext `0000` would have been a plaintext password in an exportable table.
 **What it costs — and what it is not.** Identity is still a persona cookie, so
 anyone can claim to be the developer; this only stops casual poking during a
 demo. It must not be described as securing the console, and it does not shorten
-the real work in [09-production-plan.md](09-production-plan.md) Phase 1. The
+the real work in [05-production-plan.md](05-production-plan.md) Phase 1. The
 throttle is in-process, so it resets on restart and does not span instances.
 
 **Degradation.** A missing `app_settings` table falls back to the default
@@ -606,7 +645,7 @@ still stored 5h30m late, so the code fix needed a data repair beside it
 (`supabase/repairs/2026-09-10-utc-parsed-bookings.sql`), which also has to
 rebuild `room_holds` because `during` is derived from the booking's dates.
 
-**What we got wrong the first time round.** [09-production-plan.md](09-production-plan.md)
+**What we got wrong the first time round.** [05-production-plan.md](05-production-plan.md)
 Phase 3 predicted this bug and prescribed "add it to `lib/format.ts` and test
 with `TZ=UTC npm run build`". Both halves were insufficient: fixing only
 formatting leaves the *parse* wrong, which is the half that corrupts stored
@@ -668,7 +707,7 @@ stay past its check-out that nobody marked Vacated is still holding its rooms, s
 it cannot be hidden. But counting it under "Current occupants" would be the same
 category error the split exists to remove. Its own section with a red count also
 turns the long-standing no-show problem
-([09-production-plan.md](09-production-plan.md) Phase 3) from invisible into
+([05-production-plan.md](05-production-plan.md) Phase 3) from invisible into
 visible.
 
 **What it costs.** Three tables where there was one, and the phase is computed at
@@ -700,6 +739,11 @@ a read-only link to `/availability`, not the pickers back.
 
 ## Per-tab session guard — built, then reverted
 
+> **Updated.** `components/auto-refresh.tsx` was replaced by
+> `components/live-updates.tsx` in Phase 9 (realtime where Supabase is
+> configured, a 30 s poll otherwise). The advice — don't rebuild the guard —
+> stands.
+
 **Decision.** Do **not** try to make browser tabs behave like independent
 sessions. `components/tab-session-guard.tsx` was written and removed the same
 day; the app polls with `components/auto-refresh.tsx` as it always did.
@@ -722,7 +766,7 @@ so it froze with an explanation instead of quietly re-rendering as someone else.
 a tab, so signing in anywhere changes every tab, and with polling the others
 follow within seconds. Nothing in the UI can fix that; the session token has to
 move somewhere per-tab, which is a change to authentication itself
-([09-production-plan.md](09-production-plan.md) Phase 1). Until then the honest
+([05-production-plan.md](05-production-plan.md) Phase 1). Until then the honest
 answer is a private window or a second browser profile.
 
 **So: do not rebuild this.** If tab bleed is raised again, the options are
@@ -1063,7 +1107,7 @@ keeping when a test runner is installed (roadmap §4).
 
 ## UI redesign from the design handoff (19 Sep 2026)
 
-Detail in [10-ui-design.md](10-ui-design.md). The decisions, with the options
+Detail in [16-public-site-and-ui.md](16-public-site-and-ui.md). The decisions, with the options
 that lost:
 
 ### The public site is a route group, `/` included
@@ -1158,6 +1202,10 @@ is a one-line change once the office supplies coordinates.
 
 ## Room-scoped guests and Service Types (Migration 11, Sep 2026)
 
+> **Updated (23 Sep 2026).** "3 guests + 1 infant per room" became the
+> office's combination: 4 people, at most 3 needing a bed, at most 3 infants
+> (migration 23).
+
 **The Problem:** The office required nationality tracking per guest (for Indian vs Foreign), an updated infant threshold (under 5 years instead of under 10), explicit room capacities (3 guests + 1 infant per room), and a "Meals Only" option for faculty/events.
 
 **The Decision:** Shift from a booking-centric guest list to a room-centric guest list (`booking_rooms`).
@@ -1170,7 +1218,7 @@ is a one-line change once the office supplies coordinates.
 
 The owner asked for each kind of account's record in the institute's academic
 database to be shown at the top of New Booking, with dummy data until the
-database is connected. Full detail: [12-academic-records.md](12-academic-records.md).
+database is connected. Full detail: [17-academic-records.md](17-academic-records.md).
 
 ### A source seam, like the store, the mailer and the directory
 
@@ -1239,7 +1287,7 @@ the flat "3 guests + 1 infant per room" from migration 11. **It is both, at
 different moments**: the flat per-card rule at submission (no room exists yet),
 the per-type rule at allocation (the manager has picked rooms). A card of 3 is
 accepted, and must then be given a double. Recorded in
-[README.md §4.3](README.md). Both are now Settings.
+[11-booking-forms.md](11-booking-forms.md) and [13-settings-and-defaults.md](13-settings-and-defaults.md). Both are now Settings.
 
 ### Scalar rules are jsonb rows; lists are tables
 
@@ -1308,7 +1356,7 @@ This development machine (Windows) has no Docker. Migrations are tested on a
 real **PostgreSQL 16** server from the `embedded-postgres` npm package, in a
 fresh temporary cluster per run (UTF-8, `C` locale — the Windows default code
 page broke on migration 12's arrows), with the same Supabase stand-ins, never
-the hosted project. Recipe in [05-deployment.md](05-deployment.md#verifying-changes).
+the hosted project. Recipe in [23-running-and-testing.md](23-running-and-testing.md#verifying-changes).
 
 ### Vitest installed in Phase 1
 
@@ -1352,6 +1400,7 @@ must act next. It supersedes "Displayed, not mailed" above.
   emptied.
 - **Threads:** unchanged — one message per To address, CC on the first message
   only, so a CC recipient receives it once and joins that To's daily thread.
+  *(Threads became per booking on 23 Sep 2026.)*
 
 ## Phase 3: the turnaround buffer (21 Sep 2026)
 
@@ -1413,7 +1462,9 @@ flag with department scoping": `units.head_id`, scoped by `hodApproversFor`.
   head ("Requires HOD approval" for the Director's office means its head);
   clubs have **no** HOD stage until the console names one (`hod_unit_id`), so
   today's club route is unchanged by default. Club → FA → HOD, as the brief
-  asks ("put the HOD after the FA").
+  asks ("put the HOD after the FA"). *(Superseded for new bookings on
+  24 Sep 2026: clubs no longer submit, and a booking raised by the club's
+  Faculty Advisor goes straight to the manager.)*
 - **Assumed — clubs' debitable head:** Department (the brief lists none). IAR
   Student Cell: Institute. On behalf of an alumnus: Institute or Personal.
   All configurable in Settings → Debitable heads.
@@ -1611,7 +1662,9 @@ stay, and adds:
   `isInstituteEmail`, and finally an existing portal account. Written with
   `fetch` and Node crypto rather than an OAuth dependency — an authentication
   library is a supply-chain risk of its own.
-- **The developer doors are gone in production**: `/mock-login` 404s and
+- **The developer doors are gone in production** *(superseded 23 Sep 2026 —
+  see "Mock authentication is a door, not a flag": the picker is now open
+  wherever Google is unconfigured, production included)*: `/mock-login` 404s and
   `loginAs` refuses unless `DEV_LOGIN=true` outside production, and `lib/env.ts`
   refuses to boot production with that flag set, or without Supabase, APP_URL,
   CRON_SECRET or ID_ENCRYPTION_KEY. `ALLOW_MOCK_STORE=true` is the one escape
@@ -1687,7 +1740,7 @@ stay, and adds:
   `site` tag for half an hour, and `revalidateEverything()` expires that tag
   when a Setting, a guest house or a room changes. `/guidelines` went from
   ~68 ms to ~27 ms warm (measured; see
-  [07-troubleshooting.md](07-troubleshooting.md)).
+  [25-troubleshooting.md](25-troubleshooting.md)).
 - **One subscription instead of a render every five seconds.**
   `components/live-updates.tsx` replaces `auto-refresh.tsx`: with Supabase it
   subscribes to `postgres_changes` on bookings, room holds, blocks and
@@ -1742,15 +1795,15 @@ stay, and adds:
 ## Phase 10: documentation (23 Sep 2026)
 
 - **Two new pages rather than more sections in old ones.**
-  [13-workflows.md](13-workflows.md) is what each role does and where a request
+  [12-workflows.md](12-workflows.md) is what each role does and where a request
   goes — every pipeline as a Mermaid diagram, the states a booking can be in,
   and what happens without anybody pressing anything.
-  [14-security.md](14-security.md) is the operational view of Phase 8: what is
+  [26-security.md](26-security.md) is the operational view of Phase 8: what is
   protected, by what, where each secret lives, and what to do about an
   incident. The reasoning stays here in the decision log; those pages say what
   is true now.
 - **A production runbook, not a deployment checklist**
-  ([05-deployment.md](05-deployment.md#production-runbook)): every environment
+  ([23-running-and-testing.md](24-deployment-runbook.md#production-runbook)): every environment
   variable with an example and what breaks without it, how to rotate each
   secret (including the one that needs care —
   `ID_ENCRYPTION_KEY`/`ID_ENCRYPTION_KEYS_OLD`), a **backup restore drill**
@@ -1800,7 +1853,7 @@ build with no Google configuration — the exact deployment where it broke.
 
 > Unchanged: this is a placeholder, not authentication. Anyone who can reach
 > the page can become any account on it. It must not be open on a deployment
-> holding real bookings — [08-roadmap.md](08-roadmap.md) item 1.
+> holding real bookings — [04-roadmap.md](04-roadmap.md) item 1.
 
 ### One room type, so stop asking
 
@@ -1951,7 +2004,7 @@ suggested.
 ## 23 Sep 2026 — the office's third round of corrections
 
 Seven items, reported after the office worked the portal. The short-lived
-summary is [15-recent-changes.md](15-recent-changes.md); what follows is the
+summary is [99-recent-changes.md](99-recent-changes.md); what follows is the
 reasoning, which stays.
 
 ### One guest house is not a question
@@ -2220,6 +2273,13 @@ in the Form Builder.
 
 ### A club's booking is raised by its faculty in-charge, and stays the club's
 
+> **Updated the same afternoon** ("Faculty Advisors by appointment", at the
+> end of this file): the faculty in-charge is now only the Faculty Advisor
+> named on the council or club in the console — the two ways described under
+> "Who is the faculty in-charge" were copied into that field by migration 25
+> and removed from the code — and the booking goes **straight to the
+> manager**; the HOD stage no longer stays.
+
 **Decision.** The club's account cannot submit; a faculty in-charge submits
 for it via `/book?for=<club>`. The booking's `user_id`/`user_role` are the
 club's; `created_by` is the faculty member; the Faculty Advisor stage is
@@ -2393,3 +2453,49 @@ the professor's own booking type and an empty Copy to. The end-to-end journey
 caught it; unit tests could not. The form is keyed by `requester.id` and the
 service. Any page that renders a stateful form from search params needs the
 same.
+
+## 24 Sep 2026 (evening) — the notes audited against the code, and three small fixes
+
+The owner asked for `.memories` to be rebuilt so a new chat starts with the
+whole project. Every file was checked against the code first; about twenty
+statements had drifted (the Mock Authentication door, the requester's cancel,
+the Student Cell's booking types, the manager's console sections, the
+exemptions, the throttles, the demo data counts, the retention default). They
+were corrected in place, older decisions here gained *Superseded* notes, and
+the folder was regrouped — context (`01`–`05`), the product as configured
+(`10`–`17`), engineering (`20`–`26`), credentials (`30`–`31`), recent (`99`).
+
+**Why real secrets are not in the credentials file.** The folder is pushed to
+GitHub. It holds what is public by design (the dummy LDAP passwords, the demo
+console password) and every real secret by name and location only.
+
+The audit also found three defects in the code. The owner said fix them:
+
+### The developer does not book
+
+**Decision.** `canBookOnBehalf` is the manager's alone; `/book` sends the
+developer back to the console. **Why.** The developer had the desk's
+book-on-behalf permission through `FULL_ACCESS_ROLES`, but no booking types
+and no route (`routeFor` throws for the role) — so New Booking opened a form
+that could never be submitted. **Rejected:** giving the developer the desk's
+booking types and a route — the developer runs the portal, not the guest
+house, and a booking raised from the console account would muddle whose
+request it was. The other full-access powers (overrides, cancelling,
+reinstating) are unchanged.
+
+### One phone number for the guest house
+
+**Decision.** `GUEST_HOUSE_CONTACT` (`lib/site.ts`) is the one source in code;
+the "Facing trouble booking?" line and the invoice's default contact read it.
+**Why.** The help line carried its own placeholder (+91 04923 226 100,
+`guesthouse@`) while the site and invoice showed the office's own number from
+its invoice template (+91 491 209 2016, `ghm@`). The invoice's copy stays a
+Setting the office can change.
+
+### Reception reaches the kitchen
+
+**Decision.** A **Meal counts** button on Reception (for a guest house that
+serves meals), and the kitchen page's back link goes to each role's own desk.
+**Why.** `/manager/meals` was already open to the caretaker — it bills dining
+from there — but only the manager's console linked to it, and its "Back to the
+desk" link sent the caretaker to `/manager`, which bounced them home.

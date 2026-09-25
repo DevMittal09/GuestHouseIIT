@@ -11,7 +11,7 @@ import { RATE_LIMITS } from "@/lib/security";
  * stops casual poking at `/admin` during a demo — nothing more. It is enforced
  * in `requireDeveloper()`, so it guards the *actions*, not just the UI, which
  * is what makes it worth having at all. It is not a substitute for real
- * authentication; see .memories/08-roadmap.md item 1.
+ * authentication; see .memories/04-roadmap.md item 1.
  */
 
 const SETTING_KEY = "admin_console_password";
