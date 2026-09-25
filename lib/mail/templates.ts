@@ -764,6 +764,11 @@ export function invoiceToAccounts(booking: BookingWithDetails, invoice: InvoiceD
                 ["Rooms (A)", formatINR(invoice.subtotal_rooms)],
                 ["Dining (B)", formatINR(invoice.subtotal_dining)],
               ] as [string, string][])),
+          // The desk's additional charges with no GST (25 Sep 2026); those
+          // charged under rooms or dining are inside the figures above.
+          ...((invoice.subtotal_other ?? 0) > 0
+            ? ([["Other charges (no GST)", formatINR(invoice.subtotal_other ?? 0)]] as [string, string][])
+            : []),
           ["GST (CGST + SGST)", `${formatINR(invoice.gst)} = ${formatINR(invoice.cgst ?? 0)} + ${formatINR(invoice.sgst ?? 0)}`],
           ["Grand total", formatINR(invoice.grand_total)],
         ],

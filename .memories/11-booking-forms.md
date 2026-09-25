@@ -1,7 +1,9 @@
 # Booking forms — what each requester is asked, and what is mandatory
 
 The New Booking form (`/book`) as each role sees it, and every rule the
-server applies to a submission. **Checked against the code on 24 Sep 2026**:
+server applies to a submission. **Checked against the code on 24 Sep 2026**,
+and updated for the 25 Sep round (infant card, filling in known guests,
+Special Funds):
 `lib/form-config.ts` (`buildDefaultFormConfig`), `lib/booking-types.ts`,
 `lib/debit-heads.ts`, `lib/booking-schema.ts` (`bookingPayloadSchema`, run on
 the client *and* the server), `app/actions/bookings.ts` (`createBooking`),
@@ -54,6 +56,24 @@ its form is not in the Form Builder and every guest field is required.
 - **Age may be optional, never hidden.** A blank age is an **adult**. An age
   **below 5** (`INFANT_AGE_LIMIT`) makes the guest an **infant**: no bed, no
   ID number, no ID document, and the relationship becomes free text.
+- **"Add infant" opens an infant card** (25 Sep 2026), not a guest card:
+  titled "Infant N", the age **chosen from a list** (below 1 year … 4 years,
+  **required** whatever the role's age mode), name / gender per the role, the
+  relationship free text, citizenship as for anyone; no Aadhaar, no ID
+  upload. The payload marks it `infant: true` and the schema refuses one
+  without an age below 5. The age still decides: a guest card given an age
+  below 5 is an infant too.
+- **Filled in from what the portal knows** (25 Sep 2026, `lib/known-guests.ts`):
+  on a guest card, choosing **Father / Mother / Guardian / Grandmother /
+  Grandfather** (the one-of-each relationships) fills the name — from the
+  student's **academic record** first (father, mother, guardian), then from
+  the requester's **own earlier bookings** — and the gender the word implies,
+  but only into an empty box or one the previous choice filled. **Fill in
+  from saved details** (a list at the top of every guest card, every role but
+  the desk) fills name, gender, relationship, citizenship and nationality from
+  the record's family or anyone on the requester's earlier bookings. Never an
+  ID number, a passport number or an age. A line under the name says where it
+  came from.
 - **Aadhaar**, if typed, must be 12 digits even where optional. Shown as the
   last four everywhere afterwards; stored encrypted.
 - **Citizenship** per guest: Indian (default) or Other. **Other makes
@@ -161,17 +181,18 @@ its form is not in the Form Builder and every guest field is required.
 | Student | Personal (not asked) | Room (Bageshri serves no meals) | Assistant Warden → GH Manager | Personal Funds | — |
 | Employee — faculty, official | Official | Room, Room + Meals, Meals only | HOD → GH Manager (meals only: GH Manager) | Department, Project, PDF, Special Funds | Department, PDF, Personal, Special Funds |
 | Employee — staff, official | Official | same | same | Department, Special Funds | Department, Special Funds |
-| Employee — personal | Personal | same | GH Manager | Personal Funds | Personal Funds |
+| Employee — personal | Personal | same | GH Manager | Personal Funds, Special Funds | Personal Funds, Special Funds |
 | Official — officer office | Official (not asked) | same | Direct → GH Manager, or its own head → GH Manager | Institute Grant, Special Funds | Institute Grant, Special Funds |
 | Official — department office | Official (not asked) | same | Direct, or the parent department's HOD → GH Manager | Department, Special Funds | Department, Special Funds |
 | Club (by its Faculty Advisor) | Official (not asked) | Room, Room + Meals | **GH Manager directly** | Department, Special Funds | — |
-| IAR Office | Official / Alumni | Room, Room + Meals, Meals only | Direct, or its head → GH Manager | Official: its office class; Alumni: Institute Grant, Personal Funds | Official: its office class; Alumni: Personal Funds |
-| IAR Student Cell | Alumni (not asked) | Room (Bageshri) | IAR Office → GH Manager | Institute Grant, Personal Funds | — |
-| GH Manager at the desk | Official / Alumni | Room, Room + Meals, Meals only | GH Manager (its own queue) | Official: Department, Institute Grant, PDF, Personal, Project, Special Funds; Alumni: Institute Grant, Personal Funds | Official: the same less Project; Alumni: Personal Funds |
+| IAR Office | Official / Alumni | Room, Room + Meals, Meals only | Direct, or its head → GH Manager | Official: its office class; Alumni: Institute Grant, Personal Funds, Special Funds | Official: its office class; Alumni: Personal Funds, Special Funds |
+| IAR Student Cell | Alumni (not asked) | Room (Bageshri) | IAR Office → GH Manager | Institute Grant, Personal Funds, Special Funds | — |
+| GH Manager at the desk | Official / Alumni | Room, Room + Meals, Meals only | GH Manager (its own queue) | Official: Department, Institute Grant, PDF, Personal, Project, Special Funds; Alumni: Institute Grant, Personal Funds, Special Funds | Official: the same less Project; Alumni: Personal Funds, Special Funds |
 
+**Special Funds is offered to everyone except students** (25 Sep 2026).
 **Floors under Settings** (`FORBIDDEN_DEBIT_HEADS`, cannot be ticked back on):
-faculty never the Institute Grant; students and personal bookings never
-Special Funds.
+faculty never the Institute Grant; students never Special Funds. A student's
+booking is always the *student* category, never *personal*.
 
 **A meals-only booking** skips every approval stage and goes straight to the
 GH Manager, whoever raises it.

@@ -27,11 +27,16 @@ import type { BookingWithDetails, DebitHead, MealKey, Room } from "./types";
  * floating-point hair; it becomes rupees only for display and in the
  * reporting columns of the `invoices` table.
  *
- * The layout follows the office's template (`public/GHM_Invoice.docx`)
- * exactly: Booking Details | Invoice Details, a room table with a row per room
- * and per extra bed, a dining table of exactly Breakfast, Lunch and Dinner,
- * then Sub Total (A), Sub Total (B), Total (A+B), GST on Total and the Grand
- * Total.
+ * The layout follows the office's template (`public/GHM_Invoice.docx`, as
+ * revised on 25 Sep 2026): Booking Details | Invoice Details, a room table with
+ * a row per room and per extra bed, then Room Charges Subtotal (A) and GST @ 18%
+ * on it; a dining table of Breakfast, Lunch and Dinner, then Dining Charges
+ * Subtotal (B) and GST @ 5% on it; and the Grand Total. The desk's
+ * **additional charges** (25 Sep 2026) print inside the section they are
+ * charged under — or, with no GST, in an Other Charges table of their own.
+ * Snapshots issued before then (`version: 1`) keep the layout they were
+ * printed with: Sub Total (A), Sub Total (B), Total (A+B), GST on Total.
+ * `invoiceTable()` is the one description of both, for the PDF and the preview.
  */
 
 export type InvoiceStatus = "draft" | "issued" | "paid" | "cancelled";
@@ -62,6 +67,101 @@ export function paymentReferenceError(mode: PaymentMode, reference: string | nul
 }
 
 export type MealCounts = Record<MealKey, number>;
+
+// ------------------------------------------------------- additional charges
+
+/**
+ * Where the desk's additional charge is printed, which decides its GST:
+ * with the room charges (accommodation GST — an extra bed arranged at the
+ * desk), with the dining charges (food GST — an extra dinner), or on its own
+ * with no GST (a broken vase: compensation for damage, not a supply).
+ */
+export type ExtraChargeSection = "room" | "dining" | "other";
+
+export const EXTRA_CHARGE_SECTIONS: ExtraChargeSection[] = ["room", "dining", "other"];
+
+/**
+ * A charge the desk adds while invoicing (25 Sep 2026) — an extra bed, a
+ * broken vase — with a comment saying what it was. Kept on the draft as typed
+ * (`invoices.extra_charges`, migration 26) and priced into the snapshot's
+ * `extra_lines` when the invoice is issued.
+ */
+export type ExtraCharge = {
+  section: ExtraChargeSection;
+  description: string;
+  comment: string | null;
+  quantity: number;
+  /** Paise per unit, as the desk typed it: GST-inclusive when the tariffs are. */
+  unit_price: number;
+};
+
+export const MAX_EXTRA_CHARGES = 20;
+export const MAX_EXTRA_CHARGE_PAISE = 10_00_000_00; // ₹10,00,000 a unit
+
+/**
+ * The desk's additional charges as typed, checked — or the first thing wrong
+ * with them, worded for the desk. Amounts arrive as rupees (a number or the
+ * text of the box); they are kept as integer paise. A dining invoice has no
+ * room charges to add to.
+ */
+export function parseExtraCharges(
+  input: unknown,
+  kind: "stay" | "dining"
+): { ok: true; charges: ExtraCharge[] } | { ok: false; error: string } {
+  if (input === null || input === undefined) return { ok: true, charges: [] };
+  if (!Array.isArray(input)) return { ok: false, error: "Additional charges could not be read" };
+  if (input.length > MAX_EXTRA_CHARGES) {
+    return { ok: false, error: `At most ${MAX_EXTRA_CHARGES} additional charges on one invoice` };
+  }
+  const charges: ExtraCharge[] = [];
+  for (const [i, raw] of input.entries()) {
+    const row = (raw ?? {}) as Record<string, unknown>;
+    const n = `Additional charge ${i + 1}`;
+    const section = row.section;
+    if (!EXTRA_CHARGE_SECTIONS.includes(section as ExtraChargeSection)) {
+      return { ok: false, error: `${n}: choose what it is charged under` };
+    }
+    if (section === "room" && kind === "dining") {
+      return { ok: false, error: `${n}: a dining invoice has no room charges — charge it under dining or other` };
+    }
+    const description = typeof row.description === "string" ? row.description.trim() : "";
+    if (description.length < 2) return { ok: false, error: `${n}: say what it is for, e.g. Extra bed or Broken vase` };
+    if (description.length > 80) return { ok: false, error: `${n}: keep the description under 80 characters` };
+    const comment = typeof row.comment === "string" ? row.comment.trim() : "";
+    if (comment.length > 200) return { ok: false, error: `${n}: keep the comment under 200 characters` };
+    const quantity = Number(typeof row.quantity === "string" ? row.quantity.trim() : row.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) {
+      return { ok: false, error: `${n}: the quantity must be a whole number from 1 to 999` };
+    }
+    const amountText = typeof row.amount === "string" ? row.amount.trim() : row.amount;
+    const rupees = Number(amountText);
+    if (amountText === "" || amountText === null || amountText === undefined || !Number.isFinite(rupees) || rupees <= 0) {
+      return { ok: false, error: `${n}: enter the amount in rupees` };
+    }
+    const paise = Math.round(rupees * 100);
+    if (Math.abs(paise - rupees * 100) > 1e-6) return { ok: false, error: `${n}: the amount can have at most two decimals` };
+    if (paise > MAX_EXTRA_CHARGE_PAISE) return { ok: false, error: `${n}: the amount is too large` };
+    charges.push({
+      section: section as ExtraChargeSection,
+      description,
+      comment: comment || null,
+      quantity,
+      unit_price: paise,
+    });
+  }
+  return { ok: true, charges };
+}
+
+/** Stored charges back into the shape the desk's form holds (rupees as text). */
+export function extraChargeFormRows(charges: ExtraCharge[] | null | undefined) {
+  return (charges ?? []).map((c) => ({
+    section: c.section,
+    description: c.description,
+    comment: c.comment ?? "",
+    quantity: String(c.quantity),
+    amount: (c.unit_price / 100).toFixed(2).replace(/\.00$/, ""),
+  }));
+}
 
 // ------------------------------------------------------------------ money
 
@@ -308,6 +408,21 @@ export type InvoiceMealLine = {
   gst_percent: number;
 };
 
+/** An additional charge as printed: the desk's figures, priced like a tariff line. */
+export type InvoiceExtraLine = {
+  section: ExtraChargeSection;
+  description: string;
+  comment: string | null;
+  quantity: number;
+  /** Paise per unit before GST — what the Rate column prints. */
+  rate: number;
+  amount: number;
+  /** The price per unit including GST, when the tariffs include it. */
+  rate_incl: number | null;
+  amount_incl: number;
+  gst_percent: number;
+};
+
 /** One row of the tax breakdown: taxable value and GST for a SAC at a rate. */
 export type GstBreakdown = {
   label: "Accommodation" | "Food";
@@ -335,15 +450,6 @@ export function splitGst(gross: number, percent: number, inclusive: boolean): { 
   return { taxable: gross, tax: Math.round((gross * Math.round(percent * 100)) / 10_000) };
 }
 
-/**
- * The accommodation rate for a room charged `ratePaise` a day: the lower rate
- * while the room's value (before GST) is at most the threshold, else the higher.
- */
-export function roomGstPercent(ratePaise: number, rules: InvoiceRules): number {
-  const value = rules.prices_include_gst ? splitGst(ratePaise, rules.gst_room_percent, true).taxable : ratePaise;
-  return value <= rules.gst_room_threshold * 100 ? rules.gst_room_percent : rules.gst_room_above_percent;
-}
-
 /** CGST and SGST, half each; an odd paisa goes to SGST. */
 export function halves(tax: number): { cgst: number; sgst: number } {
   const cgst = Math.floor(tax / 2);
@@ -352,7 +458,11 @@ export function halves(tax: number): { cgst: number; sgst: number } {
 
 /** Everything printed on an invoice. Stored whole as the issued invoice's snapshot. */
 export type InvoiceDocument = {
-  version: 1;
+  /**
+   * 2 since 25 Sep 2026: GST per section (18% on rooms, 5% on food) and the
+   * desk's additional charges. 1: the layout before — GST on the total.
+   */
+  version: 1 | 2;
   /**
    * A stay, or a dining (meals-only) booking, which has no rooms, no check-in
    * and no check-out — so its invoice prints none of them (24 Sep 2026).
@@ -384,11 +494,23 @@ export type InvoiceDocument = {
   guests: number;
   infants: number;
   room_lines: InvoiceRoomLine[];
+  /** Taxable value of the room section: its tariff lines and its additional charges. */
   subtotal_rooms: number;
   /** Always Breakfast, Lunch, Dinner, in that order. */
   meal_lines: InvoiceMealLine[];
+  /** Taxable value of the dining section: the meals and its additional charges. */
   subtotal_dining: number;
-  /** Taxable value, A + B. */
+  /** The desk's additional charges, each printed in its section (version 2). */
+  extra_lines?: InvoiceExtraLine[];
+  /** Additional charges with no GST — the Other Charges table (version 2). */
+  subtotal_other?: number;
+  /** The rates applied to each section, as printed ("GST @ 18% on Subtotal (A)") — version 2. */
+  gst_room_percent?: number;
+  gst_meal_percent?: number;
+  /** GST on each section, paise (version 2). */
+  gst_rooms?: number;
+  gst_dining?: number;
+  /** Taxable value, A + B (+ other charges). */
   total: number;
   /** The effective rate on the whole invoice (rounded), for reports. */
   gst_percent: number;
@@ -414,6 +536,8 @@ export type InvoiceContext = {
   capacity: CapacityRules;
   /** The desk's corrected meal counts; the computed covers when absent. */
   mealCounts?: MealCounts | null;
+  /** The desk's additional charges, already checked (`parseExtraCharges`). */
+  extraCharges?: ExtraCharge[] | null;
   invoiceNumber?: string | null;
   /** Defaults to now. */
   invoiceDate?: string;
@@ -478,26 +602,23 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
         kind: "room",
         description: `${room.room_number} — ${typeLabel}${groups.length > 1 ? ` (${dayRange(g.from, g.to)})` : ""}`,
         days: g.days,
-        ...price(g.rate, g.days, g.rate === null ? rules.gst_room_percent : roomGstPercent(g.rate, rules)),
+        ...price(g.rate, g.days, rules.gst_room_percent),
       });
     }
     if (extra > 0) {
       const bedGroups = splitByRate(days, (d) => priceOf("extra_bed", room.room_type, d));
       for (const g of bedGroups) {
         if (g.rate === null) missing("extra_bed", g.from, `the extra bed in ${room.room_number}`);
-        // An extra bed is part of the room's accommodation: the room's slab.
-        const roomRate = priceOf("room", room.room_type, g.from);
+        // An extra bed is part of the room's accommodation, taxed with it.
         roomLines.push({
           kind: "extra_bed",
           description: `Extra bed${extra > 1 ? ` ×${extra}` : ""} — ${room.room_number}${bedGroups.length > 1 ? ` (${dayRange(g.from, g.to)})` : ""}`,
           days: g.days,
-          ...price(g.rate, g.days * extra, roomGstPercent((roomRate ?? 0) + (g.rate ?? 0) * extra, rules)),
+          ...price(g.rate, g.days * extra, rules.gst_room_percent),
         });
       }
     }
   }
-  const subtotalRooms = roomLines.reduce((n, l) => n + l.amount, 0);
-
   // ---- dining: exactly the three rows the template prints. A meal is priced
   // at the rate in force on the first day of the stay; counts are covers, or
   // the desk's correction.
@@ -509,30 +630,51 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     if (count > 0 && rate === null) missing(meal, mealDate, `${MEAL_LABELS[meal].toLowerCase()}`);
     return { meal, count, ...price(rate, count, rules.gst_meal_percent) };
   });
-  const subtotalDining = mealLines.reduce((n, l) => n + l.amount, 0);
 
-  // ---- totals
-  // Grouped by SAC and rate, as a tax invoice shows them. Inclusive: the
-  // grand total is the sum of the prices exactly. Exclusive: GST is added per
-  // group and the grand total rounded half-up to the rupee.
-  const total = subtotalRooms + subtotalDining;
-  const groups = new Map<string, GstBreakdown>();
-  const add = (label: GstBreakdown["label"], sac: string, percent: number, taxable: number, gross: number) => {
-    const key = `${label}|${percent}`;
-    const g = groups.get(key) ?? { label, sac, percent, taxable: 0, tax: 0, cgst: 0, sgst: 0 };
-    g.taxable += taxable;
-    g.tax += gross - taxable;
-    groups.set(key, g);
-  };
-  for (const l of roomLines) add("Accommodation", rules.sac_room, l.gst_percent, l.amount, l.amount_incl);
-  for (const l of mealLines) if (l.count > 0) add("Food", rules.sac_meal, l.gst_percent, l.amount, l.amount_incl);
-  const gstBreakdown = [...groups.values()].map((g) => {
-    const tax = inclusive ? g.tax : gstPaise(g.taxable, g.percent);
-    return { ...g, tax, ...halves(tax) };
+  // ---- the desk's additional charges, priced as the tariffs are: GST backed
+  // out of the typed amount when the tariffs include it, added otherwise.
+  // Other charges carry none.
+  const extraLines: InvoiceExtraLine[] = (ctx.extraCharges ?? []).map((c) => {
+    const percent = c.section === "room" ? rules.gst_room_percent : c.section === "dining" ? rules.gst_meal_percent : 0;
+    const p = price(c.unit_price, c.quantity, percent);
+    return {
+      section: c.section,
+      description: c.description,
+      comment: c.comment,
+      quantity: c.quantity,
+      rate: p.rate ?? c.unit_price,
+      amount: p.amount,
+      rate_incl: p.rate_incl,
+      amount_incl: p.amount_incl,
+      gst_percent: percent,
+    };
   });
-  const gst = gstBreakdown.reduce((n, g) => n + g.tax, 0);
+  const extrasIn = (section: ExtraChargeSection) => extraLines.filter((l) => l.section === section);
+
+  // ---- totals, per section as the template prints them: Subtotal (A) and
+  // GST on it, Subtotal (B) and GST on it. Inclusive: each section's GST is
+  // what its prices hold, so the grand total is the prices exactly.
+  // Exclusive: GST is added on each subtotal, and the grand total is rounded
+  // half-up to the rupee.
+  const subtotalRooms = [...roomLines, ...extrasIn("room")].reduce((n, l) => n + l.amount, 0);
+  const subtotalDining = [...mealLines, ...extrasIn("dining")].reduce((n, l) => n + l.amount, 0);
+  const subtotalOther = extrasIn("other").reduce((n, l) => n + l.amount, 0);
+  const sectionGst = (lines: { amount: number; amount_incl: number }[], taxable: number, percent: number) =>
+    inclusive ? lines.reduce((n, l) => n + (l.amount_incl - l.amount), 0) : gstPaise(taxable, percent);
+  const gstRooms = sectionGst([...roomLines, ...extrasIn("room")], subtotalRooms, rules.gst_room_percent);
+  const gstDining = sectionGst([...mealLines, ...extrasIn("dining")], subtotalDining, rules.gst_meal_percent);
+  const total = subtotalRooms + subtotalDining + subtotalOther;
+  const gst = gstRooms + gstDining;
   const grandTotal = inclusive ? total + gst : roundHalfUpToRupee(total + gst);
-  const { cgst, sgst } = { cgst: gstBreakdown.reduce((n, g) => n + g.cgst, 0), sgst: gstBreakdown.reduce((n, g) => n + g.sgst, 0) };
+  // The tax lines under the table, one per SAC, as a tax invoice shows them.
+  const gstBreakdown: GstBreakdown[] = [
+    { label: "Accommodation" as const, sac: rules.sac_room, percent: rules.gst_room_percent, taxable: subtotalRooms, tax: gstRooms },
+    { label: "Food" as const, sac: rules.sac_meal, percent: rules.gst_meal_percent, taxable: subtotalDining, tax: gstDining },
+  ]
+    .filter((g) => g.taxable > 0)
+    .map((g) => ({ ...g, ...halves(g.tax) }));
+  const cgst = gstBreakdown.reduce((n, g) => n + g.cgst, 0);
+  const sgst = gstBreakdown.reduce((n, g) => n + g.sgst, 0);
 
   // ---- who and what
   const requester = booking.requester;
@@ -547,7 +689,7 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
   const mealsOnly = booking.service_type === "meals_only";
 
   return {
-    version: 1,
+    version: 2,
     kind: mealsOnly ? "dining" : "stay",
     booking_id: booking.id,
     booking_reference: booking.booking_reference_id,
@@ -577,6 +719,12 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     subtotal_rooms: subtotalRooms,
     meal_lines: mealLines,
     subtotal_dining: subtotalDining,
+    extra_lines: extraLines,
+    subtotal_other: subtotalOther,
+    gst_room_percent: rules.gst_room_percent,
+    gst_meal_percent: rules.gst_meal_percent,
+    gst_rooms: gstRooms,
+    gst_dining: gstDining,
     total,
     gst_percent: total > 0 ? Math.round((gst * 10_000) / total) / 100 : 0,
     gst,
@@ -681,6 +829,163 @@ export function invoiceTotalLabels(doc: Pick<InvoiceDocument, "kind" | "rooms" |
 
 export const INVOICE_TITLE = (guestHouse: string) => `INVOICE - IIT Palakkad ${guestHouse} Guest House`;
 
+/** One row of the tariff table: a room, an extra bed, a meal, or an additional charge. */
+export type InvoiceTableRow = {
+  label: string;
+  /** A second line under the label — an additional charge's comment. */
+  note: string | null;
+  /** Day(s) or No(s). */
+  qty: number;
+  /** Paise, before GST; null when no tariff covers it. */
+  rate: number | null;
+  amount: number;
+  /** The three meal rows, which the desk corrects before issuing. */
+  meal: MealKey | null;
+  /** A charge no tariff prices — the reason the invoice cannot be issued. */
+  unpriced: boolean;
+};
+
+export type InvoiceTableSection = {
+  key: "rooms" | "dining" | "other";
+  /** The first column's heading. */
+  heading: string;
+  /** The quantity column's heading. */
+  qtyHeading: string;
+  rows: InvoiceTableRow[];
+  /** Ruled rows the template keeps even when a short table leaves them blank. */
+  minRows: number;
+  /** The rows under the section: its subtotal and the GST on it. */
+  totals: { label: string; amount: number }[];
+};
+
+/**
+ * The tariff table as printed — the PDF and the desk's preview both draw
+ * this, so they cannot disagree about what an invoice says.
+ *
+ * **Version 2** (25 Sep 2026, the office's revised template): the Rate
+ * column; Room Charges Subtotal (A) and GST @ 18% on it; Dining Charges
+ * Subtotal (B) and GST @ 5% on it; Other Charges (no GST) when the desk added
+ * any; Grand Total (Including GST). Additional charges print in their
+ * section, their comment under the description.
+ *
+ * **Version 1** snapshots print exactly as they were issued: the Tariff
+ * column, Sub Total (A), Sub Total (B), Total (A+B), GST on Total.
+ */
+export function invoiceTable(doc: InvoiceDocument): {
+  rateHeading: string;
+  sections: InvoiceTableSection[];
+  closing: { label: string; amount: number }[];
+} {
+  const dining = invoiceKind(doc) === "dining";
+  const roomRows: InvoiceTableRow[] = doc.room_lines.map((l) => ({
+    label: l.description,
+    note: null,
+    qty: l.days,
+    rate: l.rate,
+    amount: l.amount,
+    meal: null,
+    unpriced: l.rate === null,
+  }));
+  const mealRows: InvoiceTableRow[] = doc.meal_lines.map((l) => ({
+    label: MEAL_LABELS[l.meal],
+    note: null,
+    qty: l.count,
+    rate: l.rate,
+    amount: l.amount,
+    meal: l.meal,
+    unpriced: l.rate === null && l.count > 0,
+  }));
+  const extraRows = (section: ExtraChargeSection): InvoiceTableRow[] =>
+    (doc.extra_lines ?? [])
+      .filter((l) => l.section === section)
+      .map((l) => ({
+        label: l.description,
+        note: l.comment,
+        qty: l.quantity,
+        rate: l.rate,
+        amount: l.amount,
+        meal: null,
+        unpriced: false,
+      }));
+
+  if (doc.version !== 2) {
+    const labels = invoiceTotalLabels(doc);
+    const sections: InvoiceTableSection[] = [];
+    if (!dining) {
+      sections.push({
+        key: "rooms",
+        heading: "Room Details (with additional bed details)",
+        qtyHeading: "Day(s)",
+        rows: roomRows,
+        minRows: 2,
+        totals: [{ label: "Sub Total (A):", amount: doc.subtotal_rooms }],
+      });
+    }
+    sections.push({
+      key: "dining",
+      heading: "Dining Charges Details",
+      qtyHeading: "No(s)",
+      rows: mealRows,
+      minRows: 0,
+      totals: dining ? [] : [{ label: "Sub Total (B):", amount: doc.subtotal_dining }],
+    });
+    return {
+      rateHeading: "Tariff",
+      sections,
+      closing: [
+        { label: `${labels.total}${dining ? ":" : ""}`, amount: doc.total },
+        { label: gstRowLabel(doc), amount: doc.gst },
+        { label: `${labels.grandTotal}:`, amount: doc.grand_total },
+      ],
+    };
+  }
+
+  // A dining invoice has no (A), so its sections go unlettered.
+  const letter = (l: string) => (dining ? "" : ` (${l})`);
+  const pct = (n: number | undefined) => `${n ?? 0}%`;
+  const sections: InvoiceTableSection[] = [];
+  if (!dining) {
+    sections.push({
+      key: "rooms",
+      heading: "Room Details (with additional bed details)",
+      qtyHeading: "Day(s)",
+      rows: [...roomRows, ...extraRows("room")],
+      minRows: 2,
+      totals: [
+        { label: `Room Charges Subtotal${letter("A")}:`, amount: doc.subtotal_rooms },
+        { label: `GST @ ${pct(doc.gst_room_percent)} on Subtotal${letter("A")}:`, amount: doc.gst_rooms ?? 0 },
+      ],
+    });
+  }
+  sections.push({
+    key: "dining",
+    heading: "Dining Charges",
+    qtyHeading: "No(s)",
+    rows: [...mealRows, ...extraRows("dining")],
+    minRows: 0,
+    totals: [
+      { label: `Dining Charges Subtotal${letter("B")}:`, amount: doc.subtotal_dining },
+      { label: `GST @ ${pct(doc.gst_meal_percent)} on Subtotal${letter("B")}:`, amount: doc.gst_dining ?? 0 },
+    ],
+  });
+  const other = extraRows("other");
+  if (other.length > 0) {
+    sections.push({
+      key: "other",
+      heading: "Other Charges (no GST)",
+      qtyHeading: "No(s)",
+      rows: other,
+      minRows: 0,
+      totals: [{ label: `Other Charges Subtotal${letter("C")}:`, amount: doc.subtotal_other ?? 0 }],
+    });
+  }
+  return {
+    rateHeading: "Rate",
+    sections,
+    closing: [{ label: "Grand Total (Including GST):", amount: doc.grand_total }],
+  };
+}
+
 /** "GST on Total (CGST 2.5% + SGST 2.5%):" — the rate when there is one. */
 export function gstRowLabel(doc: Pick<InvoiceDocument, "gst_breakdown" | "gst">): string {
   const rates = [...new Set((doc.gst_breakdown ?? []).map((g) => g.percent))];
@@ -710,7 +1015,7 @@ export const GST_INCLUDED_NOTE = "The tariff rates include GST; the amounts abov
  */
 export function invoiceBlocker(
   booking: Pick<BookingWithDetails, "status" | "service_type" | "meals">,
-  doc: Pick<InvoiceDocument, "problems" | "room_lines" | "meal_lines">,
+  doc: Pick<InvoiceDocument, "problems" | "room_lines" | "meal_lines" | "extra_lines">,
   now: Date = new Date()
 ): string | null {
   if (booking.service_type === "meals_only") {
@@ -727,8 +1032,12 @@ export function invoiceBlocker(
     return "An invoice is issued at check-out, once the guest has checked in.";
   }
   if (doc.problems.length > 0) return doc.problems[0];
-  if (doc.room_lines.length === 0 && doc.meal_lines.every((l) => l.count === 0)) {
-    return "There is nothing to charge: no rooms were allocated and no meals were served.";
+  if (
+    doc.room_lines.length === 0 &&
+    doc.meal_lines.every((l) => l.count === 0) &&
+    (doc.extra_lines ?? []).length === 0
+  ) {
+    return "There is nothing to charge: no rooms were allocated, no meals were served and no charges were added.";
   }
   return null;
 }
@@ -793,6 +1102,8 @@ export type InvoiceRecord = {
   document: InvoiceDocument | null;
   /** The desk's corrected meal counts, or null to use the computed covers. */
   meal_counts: MealCounts | null;
+  /** The desk's additional charges as typed (migration 26); the snapshot holds them priced. */
+  extra_charges: ExtraCharge[];
   debit_head: string | null;
   project_number: string | null;
   subtotal_rooms: number;
@@ -834,6 +1145,8 @@ export type IssueInvoiceInput = {
   digits: number;
   document: InvoiceDocument;
   mealCounts: MealCounts | null;
+  /** The desk's additional charges as typed; none when absent. */
+  extraCharges?: ExtraCharge[];
   issuedBy: string;
   replaces: string | null;
 };

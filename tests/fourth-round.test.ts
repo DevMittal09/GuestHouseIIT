@@ -171,16 +171,16 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
     expect(parse("employee", payload(guest1, { debit_head: "project_grant", project_id: "p1" })).success).toBe(true);
   });
 
-  it("offers Special Funds on every official booking, never a student's or a personal one", () => {
+  // Widened on 25 Sep 2026 to everyone except students — see fifth-round.test.ts.
+  it("offers Special Funds to everyone except students", () => {
     const priya = { staff_category: "faculty" as const, unit_id: null };
     const room = debitHeadsByType("employee", ["official", "personal"], priya, [], DEFAULT_DEBIT_RULES, "room");
     expect(room.official).toContain("special_budget");
-    expect(room.personal).toEqual(["personal_funds"]);
-    for (const category of ["faculty", "staff", "officer_office", "department_office", "club", "manager"] as const) {
+    expect(room.personal).toEqual(["personal_funds", "special_budget"]);
+    for (const category of ["faculty", "staff", "officer_office", "department_office", "club", "manager", "personal", "alumni", "iar_student_cell"] as const) {
       expect(DEFAULT_DEBIT_RULES.room[category]).toContain("special_budget");
     }
     expect(DEFAULT_DEBIT_RULES.room.student).not.toContain("special_budget");
-    expect(DEFAULT_DEBIT_RULES.room.personal).not.toContain("special_budget");
     // A floor under Settings, like the faculty's Institute Grant.
     const forced = debitHeadsByType("student", ["personal"], priya, [], {
       ...DEFAULT_DEBIT_RULES,
@@ -201,11 +201,11 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
     const old = { room: { ...DEFAULT_DEBIT_RULES.room, staff: ["department_budget"] }, dining: DEFAULT_DEBIT_RULES.dining };
     const upgraded = parseRuleGroup("debit", old);
     expect(upgraded.room.staff).toEqual(["department_budget", "special_budget"]);
-    expect(upgraded.revision).toBe(2);
+    expect(upgraded.revision).toBe(3);
     // Saved since: the office's untick stands.
     const unticked = parseRuleGroup("debit", { ...upgraded, room: { ...upgraded.room, staff: ["department_budget"] } });
     expect(unticked.room.staff).toEqual(["department_budget"]);
-    expect(upgradeDebitRules({ revision: 2, room: { staff: [] } })).toEqual({ revision: 2, room: { staff: [] } });
+    expect(upgradeDebitRules({ revision: 3, room: { staff: [] } })).toEqual({ revision: 3, room: { staff: [] } });
   });
 
   it("describes the head with its sub-head, the same words everywhere", () => {

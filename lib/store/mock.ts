@@ -68,6 +68,7 @@ import { tariffLockedError, type NewTariffInput, type Tariff } from "@/lib/tarif
 import {
   invoiceColumnsFrom,
   InvoiceStateError,
+  type ExtraCharge,
   type InvoiceFilter,
   type InvoiceRecord,
   type IssueInvoiceInput,
@@ -1600,7 +1601,12 @@ export class MockStore implements DataStore {
     return (loadDb().invoices ?? []).find((i) => i.id === id) ?? null;
   }
 
-  async saveInvoiceDraft(bookingId: string, mealCounts: MealCounts | null, userId: string): Promise<InvoiceRecord> {
+  async saveInvoiceDraft(
+    bookingId: string,
+    mealCounts: MealCounts | null,
+    userId: string,
+    extraCharges?: ExtraCharge[]
+  ): Promise<InvoiceRecord> {
     const db = loadDb();
     const invoices = (db.invoices ??= []);
     const live = invoices.find((i) => i.booking_id === bookingId && i.status !== "cancelled");
@@ -1608,15 +1614,12 @@ export class MockStore implements DataStore {
       throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} — cancel it first to issue a corrected one.`);
     }
     const now = new Date().toISOString();
-    if (live) {
-      live.meal_counts = mealCounts;
-      live.updated_at = now;
-      saveDb(db);
-      return live;
-    }
-    const draft = blankInvoice(bookingId, userId, now);
+    const draft = live ?? blankInvoice(bookingId, userId, now);
     draft.meal_counts = mealCounts;
-    invoices.push(draft);
+    if (extraCharges !== undefined) draft.extra_charges = extraCharges;
+    draft.extra_charges ??= [];
+    draft.updated_at = now;
+    if (!live) invoices.push(draft);
     saveDb(db);
     return draft;
   }
@@ -1644,6 +1647,7 @@ export class MockStore implements DataStore {
       seq,
       document,
       meal_counts: input.mealCounts,
+      extra_charges: input.extraCharges ?? [],
       ...invoiceColumnsFrom(document),
       issued_at: document.invoice_date,
       issued_by: input.issuedBy,
@@ -1891,6 +1895,7 @@ function blankInvoice(bookingId: string, userId: string, now: string): InvoiceRe
     seq: null,
     document: null,
     meal_counts: null,
+    extra_charges: [],
     debit_head: null,
     project_number: null,
     subtotal_rooms: 0,

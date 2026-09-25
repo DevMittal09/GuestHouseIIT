@@ -79,22 +79,25 @@ and **dining** (meals only). Defaults:
 | Department offices | Department, Special Funds | Department, Special Funds |
 | Student clubs | Department, Special Funds | Department, Special Funds |
 | Students | Personal Funds | Personal Funds |
-| IAR Student Cell (official — no longer used) | Institute Grant | Institute Grant |
-| On behalf of an alumnus | Institute Grant, Personal Funds | Personal Funds |
-| Any personal booking | Personal Funds | Personal Funds |
+| IAR Student Cell (official — no longer used) | Institute Grant, Special Funds | Institute Grant, Special Funds |
+| On behalf of an alumnus | Institute Grant, Personal Funds, Special Funds | Personal Funds, Special Funds |
+| Any personal booking (not a student's) | Personal Funds, Special Funds | Personal Funds, Special Funds |
 | GH Manager at the desk | Department, Institute Grant, PDF, Personal, Project, Special Funds | the same less Project |
 
 - **Dining can never be charged to a Project** (schema).
 - **Floors** (`FORBIDDEN_DEBIT_HEADS`, greyed in the grid, stripped on read,
-  refused on save): **faculty never Institute Grant**; **students and personal
-  bookings never Special Funds**.
-- The category comes from the booking: personal → *personal*, on behalf of
-  an alumnus → *alumni*, else the account — faculty or staff by
-  `profiles.staff_category` (none = faculty), an office by its unit's
-  `office_class` (none = department office).
-- Special Funds is stored as `special_budget`. A Settings row saved before
-  24 Sep 2026 gains it once (`upgradeDebitRules`, `revision: 2`); after that an
-  untick sticks.
+  refused on save): **faculty never Institute Grant**; **students never
+  Special Funds** (since 25 Sep 2026 Special Funds is for everyone else,
+  personal and alumni bookings included).
+- The category: a **student** is always *student* (checked first, 25 Sep
+  2026 — a student's booking is personal, and used to fall into *personal*);
+  otherwise personal → *personal*, on behalf of an alumnus → *alumni*, else
+  the account — faculty or staff by `profiles.staff_category` (none =
+  faculty), an office by its unit's `office_class` (none = department office).
+- Special Funds is stored as `special_budget`. A saved Settings row gains it
+  once per revision (`upgradeDebitRules`): revision 2 (24 Sep) for the
+  official categories, revision 3 (25 Sep) for personal, alumni and the IAR
+  Student Cell. After that an untick sticks.
 - Legacy heads (Alumni Fund, Student Fund, Hostel Funds) stay valid for stored
   rows and can be ticked on here, but no default offers them.
 
@@ -139,7 +142,7 @@ edited or deleted — a new price is a new row. Seeded from the tariff sheet:
 | Serial | `GH/<financial year>/0001` — prefix `GH`, 4 digits, restarts every 1 April |
 | Day basis / grace | Calendar **nights**; grace 4 h (used by the 24-hour basis) |
 | Rates include GST | **Yes** — the grand total is the rates; taxable value and CGST/SGST are backed out |
-| GST | Rooms 5% up to ₹7,500/day, 18% above; food 5%. SAC 996311 (rooms), 996331 (food). Intra-state: half CGST, half SGST |
+| GST | **Rooms and extra beds 18%, food 5%**, each on its own subtotal (25 Sep 2026; the ₹7,500 slab is gone — a saved row is upgraded once, `upgradeInvoiceRules`, revision 2). Additional charges take their section's rate; "other" none. SAC 996311 (rooms), 996331 (food). Intra-state: half CGST, half SGST |
 | GSTIN | `32AAAAI9910J1ZR` (from the office's template — to confirm) |
 | Accounts email | **empty** — nothing is mailed to Accounts until it is set |
 | Bank | Guest house IIT PKD · SBI · A/c 39938270076 · IFSC SBIN0006640 · Kanjikode branch |
@@ -172,6 +175,9 @@ edited or deleted — a new price is a new row. Seeded from the tariff sheet:
 | Uploads ≤ **5 MB**, JPG/PNG/WEBP/PDF | `lib/uploads.ts` | Server action body limit 25 MB (`next.config.ts`) |
 | Early check-in / accepted overlap **2 h** | `TURNOVER_GRACE_HOURS`, `lib/turnover.ts` | Occupied can be marked 2 h before check-in; a changeover the manager accepts may overlap ≤ 2 h |
 | "Checked out — to bill" window **30 days** | `UNSETTLED_WINDOW_DAYS`, `lib/invoice.ts` | Older ones are invoiced from the Approval Log |
+| Additional charges ≤ **20** per invoice; description 2–80, comment ≤ 200 chars; quantity 1–999; ≤ ₹10,00,000 each | `parseExtraCharges`, `lib/invoice.ts` (and migration 26's check) | |
+| Extend or bring a check-in forward by at most **60 days** at a time | `extensionError`, `earlierCheckInError`, `lib/operations.ts` | |
+| Filled in from earlier bookings: at most **15** people | `MAX_KNOWN_FROM_BOOKINGS`, `lib/known-guests.ts` | The record's family comes first |
 | Escalation after **48 h** pending | `ESCALATION_HOURS`, `lib/mail/digest.ts` | |
 | Availability window ≤ **62 days** | `MAX_AVAILABILITY_DAYS` | |
 | Archive scan cap **1,000** (Supabase), CSV export cap **5,000** | `SEARCH_SCAN_LIMIT`, `HISTORY_EXPORT_LIMIT` | |

@@ -2,7 +2,8 @@
 
 The finished product, role by role: how each person signs in, where they land,
 what their menu shows, what they can do and what they cannot. **Checked
-against the code on 24 Sep 2026** — `lib/access.ts`, `lib/routes.ts`,
+against the code on 24 Sep 2026**, updated for the 25 Sep round —
+`lib/access.ts`, `lib/routes.ts`,
 `app/(portal)/layout.tsx`, every page's guard and every server action's gate.
 If this page and the code disagree, the code is right and this page is a bug.
 
@@ -95,7 +96,10 @@ Everything a requester can do with a booking they own (or raised for a club):
 - **Books:** personal stays for family (not asked — the type is recorded
   silently). **Bageshri only** by default (stated on the form, no dropdown), so
   no meals (Bageshri serves none). Debited to **Personal Funds** (shown, not
-  asked).
+  asked) — never Special Funds.
+- **Father / Mother / Guardian filled in** from their academic record when
+  chosen on a guest (25 Sep 2026), and **Fill in from saved details** on every
+  guest card (the record's family and people from their earlier bookings).
 - **Route:** Assistant Warden of the hostel on their profile → GH Manager.
 - **Special rules:** relationship dropdown with the parent rule (siblings and
   grandparents only alongside Mother / Father / Guardian) and one-of-each
@@ -113,7 +117,7 @@ Everything a requester can do with a booking they own (or raised for a club):
   department); personal → straight to the GH Manager.
 - **Debitable heads (official, room):** Department / Project / PDF / Special
   Funds — **never the Institute Grant**. Dining: Department / PDF / Personal /
-  Special Funds. Personal: Personal Funds.
+  Special Funds. Personal: Personal Funds / Special Funds (since 25 Sep 2026).
 - **Guest details:** only **name and gender** are mandatory; no ID upload.
 - **Also, when appointed:** HOD Queue (`/hod`) if they head a department;
   Club Approvals if they head a club/council; **Booking as: Faculty Advisor —
@@ -222,6 +226,13 @@ manager) when something has waited over **48 hours**.
 - **Queue:** `/warden` — **Pending Assistant Warden Review** for students
   whose profile hostel matches theirs (exact text). Their own academic record
   card sits below the queue.
+- **The student's record beside each request** (25 Sep 2026): the Review
+  dialog shows the student's academic record — roll number, programme,
+  phone, **father's, mother's (or guardian's) name**, hostel — and each Father
+  / Mother / Guardian on the request against the name on record (matches /
+  partly matches / differs / not on record). The queue row says **✓ Matches
+  record** or **⚠ Check names**. Only the requests in their own queue; the
+  record is shown, never stored or mailed.
 - **Approval Log:** student requests from their hostel. No hostel on their
   profile → an explanation instead of a log.
 - **Cannot book.** Menu: Assistant Warden Queue · Room Availability ·
@@ -266,7 +277,8 @@ Faculty Advisor raises.
   **Upcoming stays**.
 - **Mark Occupied** (from 2 hours before check-in, never earlier) / **Mark
   Vacated**.
-- **Manage** a stay: extend; approve / decline a requester's extension; move
+- **Manage** a stay: extend — a **later check-out** or, since 25 Sep 2026, an
+  **earlier check-in**; approve / decline a requester's extension; move
   rooms (reason, audited); release a no-show; change dates or meals; cancel;
   reinstate a cancelled or rejected booking.
 - **Cancellation requests:** approve (rooms freed) or decline (reason).
@@ -274,7 +286,8 @@ Faculty Advisor raises.
   or on behalf of an alumnus, never personal — with the guest's name required;
   may override the alumni-at-Bageshri rule (logged). Exempt from the booking
   window and the stay cap.
-- **Invoices:** preview, correct meal counts, issue & print, mark paid,
+- **Invoices:** preview, correct meal counts, **add additional charges with
+  comments** (extra bed, broken vase — 25 Sep 2026), issue & print, mark paid,
   **cancel** (the manager and developer only).
 - **Kitchen** (`/manager/meals`): plates per meal per day, confirmed and
   pending dining, "Dining to invoice".
@@ -293,8 +306,10 @@ A deliberate **subset** of the manager's console — reception.
 
 - **Reception** (`/caretaker`): Checking out today, Current occupants,
   Awaiting check-out, **Checked out — to bill**, Upcoming stays.
-- **Mark Occupied / Vacated**; **extend a stay**.
-- **Invoices:** preview, issue & print, mark paid — **not cancel**.
+- **Mark Occupied / Vacated**; **extend a stay** — later check-out or
+  **earlier check-in** (25 Sep 2026).
+- **Invoices:** preview, correct meal counts, **add additional charges**,
+  issue & print, mark paid — **not cancel**.
 - **Kitchen** (`/manager/meals`): a **Meal counts** button on Reception for a
   guest house that serves meals; the kitchen page's back link returns to
   Reception.

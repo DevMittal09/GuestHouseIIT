@@ -305,27 +305,14 @@ function InvoiceRulesSection({ current }: { current: InvoiceRules }) {
   const [draft, setDraft] = useState<InvoiceRules>(current);
   const top = (k: "serial_prefix" | "gstin" | "accounts_email" | "sac_room" | "sac_meal") => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, [k]: e.target.value }));
-  type NumKey =
-    | "serial_digits"
-    | "grace_hours"
-    | "gst_room_percent"
-    | "gst_room_threshold"
-    | "gst_room_above_percent"
-    | "gst_meal_percent";
+  type NumKey = "serial_digits" | "grace_hours" | "gst_room_percent" | "gst_meal_percent";
   const num = (k: NumKey) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, [k]: e.target.value === "" ? ("" as unknown as number) : Number(e.target.value) }));
   const bank = (k: keyof InvoiceRules["bank"]) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, bank: { ...d.bank, [k]: e.target.value } }));
   const contact = (k: keyof InvoiceRules["contact"]) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, contact: { ...d.contact, [k]: e.target.value } }));
-  const valid = [
-    draft.serial_digits,
-    draft.grace_hours,
-    draft.gst_room_percent,
-    draft.gst_room_threshold,
-    draft.gst_room_above_percent,
-    draft.gst_meal_percent,
-  ].every(
+  const valid = [draft.serial_digits, draft.grace_hours, draft.gst_room_percent, draft.gst_meal_percent].every(
     (v) => typeof v === "number" && Number.isFinite(v)
   );
   const sample = `${draft.serial_prefix || "GH"}/2026-27/${"1".padStart(Number(draft.serial_digits) || 4, "0")}`;
@@ -396,14 +383,8 @@ function InvoiceRulesSection({ current }: { current: InvoiceRules }) {
           </span>
         </label>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="GST on rooms (%)" id="i-gst-room">
+          <Field label="GST on rooms and extra beds (%)" id="i-gst-room">
             <Input id="i-gst-room" type="number" min={0} max={28} step="0.01" value={draft.gst_room_percent} onChange={num("gst_room_percent")} />
-          </Field>
-          <Field label="…up to a room value of (₹/day)" id="i-gst-threshold">
-            <Input id="i-gst-threshold" type="number" min={0} value={draft.gst_room_threshold} onChange={num("gst_room_threshold")} />
-          </Field>
-          <Field label="GST on rooms above that (%)" id="i-gst-room-above">
-            <Input id="i-gst-room-above" type="number" min={0} max={28} step="0.01" value={draft.gst_room_above_percent} onChange={num("gst_room_above_percent")} />
           </Field>
           <Field label="GST on food (%)" id="i-gst-meal">
             <Input id="i-gst-meal" type="number" min={0} max={28} step="0.01" value={draft.gst_meal_percent} onChange={num("gst_meal_percent")} />
@@ -416,8 +397,10 @@ function InvoiceRulesSection({ current }: { current: InvoiceRules }) {
           </Field>
         </div>
         <p className="text-xs text-muted-foreground">
-          Defaults are the rates in force since 22 Sep 2025: accommodation up to ₹7,500 a day 5% (without
-          ITC), above it 18%; food 5%. The guest house is in Kerala, so each is printed as half CGST, half SGST.
+          Defaults are the office&apos;s rates: accommodation 18%, food 5%, each charged on its own subtotal
+          (&ldquo;GST @ 18% on Subtotal (A)&rdquo;). The guest house is in Kerala, so each is printed as half
+          CGST, half SGST. Additional charges the desk adds take the rate of the section they are charged
+          under; &ldquo;other&rdquo; charges carry none.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

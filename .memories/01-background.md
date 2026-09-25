@@ -230,6 +230,24 @@ summary is [99-recent-changes.md](99-recent-changes.md).
 | An advisor's booking needs no forwarding — straight to the GH Manager | **Done** | `routeFor` returns `[]` for it, HOD stage included |
 | Copy to on every new booking | **Already built** (morning) | Every role, room and meals-only |
 
+## Office corrections — 25 Sep 2026, fifth list
+
+Relayed by the owner. Reasoning in [03-decisions.md](03-decisions.md)
+("25 Sep 2026"); the working summary is
+[99-recent-changes.md](99-recent-changes.md).
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| The Assistant Warden (whoever forwards for students) sees the student's parents' / guardian's names while approving, to check the request | **Done** | `/warden`: the student's academic record in the Review dialog, each Father / Mother / Guardian on the request checked against it, and a "✓ Matches record" / "⚠ Check names" badge on the queue row — `lib/academic/family.ts`, `components/student-record-check.tsx` |
+| A student choosing Father / Mother on a guest gets the name filled in from the database, not typed | **Done** | Choosing a one-of-each relationship fills the name (and the gender it implies) from the academic record — `lib/known-guests.ts`, `GuestRow` |
+| The same for every user, wherever New Booking asks for something the database already holds | **Done** | "Fill in from saved details" on every guest card: the record's family, then the people on the requester's own earlier bookings (name, gender, relationship, citizenship — never an ID number or an age). The other record kinds describe the requester only, so for them it is the earlier bookings |
+| Additional charges with comments at invoicing, for the caretaker and manager (extra beds, a broken vase…) | **Done** | Invoice dialog → Additional charges; each charged under rooms (18%), dining (5%) or other (no GST), with a comment printed under it; migration 26 keeps them on the draft |
+| Meals the caretaker adds while invoicing are not reflected in the final price | **Fixed** | The figures only repriced after "Save counts", so the preview and the Issue dialog's grand total stayed old. They now reprice as the desk types (`priceInvoiceDraft`) |
+| GST is 18% on rooms and 5% on food; the invoice template was edited, the generator not | **Done** | Settings defaults 18 / 5, the ₹7,500 slab removed (a saved row is upgraded once); the PDF and preview follow the revised template — Rate column, GST @ 18% on Subtotal (A), GST @ 5% on Subtotal (B), Grand Total (Including GST) |
+| Special Funds as a debitable head for everyone except students | **Done** | Every category's default but students' (personal, alumni and the Student Cell added); a student's booking now reads the Students row (it used to fall under "personal") |
+| "Add infant" should open an infant card, not a guest card | **Done** | "Infant N" card: age chosen below 5, no Aadhaar or ID upload; the schema requires the age on it |
+| The manager (and caretaker, if they extend) can extend a stay to an **earlier check-in**, not only a later check-out | **Done** | Manage → Extend the stay → Earlier check-in, manager and caretaker (the same people who extend) |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

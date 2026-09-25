@@ -54,7 +54,10 @@ Playwright then starts a **production** server on the mock store, on
 `./.e2e-db.json`, and signs in through the LDAP form as each role.
 `e2e/global-setup.ts` deletes that database first — the sign-in throttle is a
 row in it (8 per uid per 15 min), so a second run inside the window used to
-lock the dummy accounts out and fail on a sign-in that was fine. `next start`
+lock the dummy accounts out and fail on a sign-in that was fine. Within a run,
+`signIn()` (`e2e/helpers.ts`) signs each account in through the form **once**
+and reuses its session after that — the suite needs the manager more than 8
+times, and every attempt counts. `next start`
 is still reused if one is listening on 3100, so `pkill -f "next start"` after
 rebuilding. Lint, types, unit tests and the journeys all run in CI
 (`.github/workflows/ci.yml`) with no secrets at all.
@@ -210,7 +213,18 @@ are in **`.memories/17-academic-records.md`**. Keep that file and
   be confused with the booking's own **Copy to** addresses the requester types
   on New Booking, which CC the *requester's* mail (24 Sep 2026).
 - **The record is never stored, logged or mailed.** It holds parents' names
-  and phone numbers.
+  and phone numbers. It is shown to the person it describes and, since
+  25 Sep 2026, to the **Assistant Warden** reviewing that student's request:
+  `/warden` builds `studentRecordPanels()` (`lib/academic/family-server.ts`)
+  for the requests already in their queue only, with each Father / Mother /
+  Guardian on the request checked against the record (`checkFamily`,
+  `lib/academic/family.ts`).
+- **Known guests are filled in** (25 Sep 2026, `lib/known-guests.ts`): a
+  student's father / mother / guardian from the record, then the adults of the
+  requester's own earlier bookings (`knownGuestsFor`, not for the desk). Name,
+  gender, relationship, citizenship only — **never an ID or passport number
+  or an age** back to the browser. Auto-fill on choosing a relationship only
+  for `unique_relationships`, and never over something typed.
 
 ## Roles, pipelines, and where they are encoded
 
@@ -304,11 +318,14 @@ debit the Institute Grant** (23 Sep 2026), which is the offices' money.
 `allowedHeads()` strips a forbidden head on read (so a stored row that still
 lists one is ignored, not fatal), `debitRulesSchema` refuses to save it, and the
 console greys that cell. **Special Funds** (`special_budget`, relabelled
-24 Sep 2026) is in every official category's default and in
-`FORBIDDEN_DEBIT_HEADS` for `student` and `personal`; its fund name and
-sanction letter are optional. A Settings row saved before it is upgraded
-**once** (`upgradeDebitRules`, `DebitRules.revision`) — keep the revision if
-you change a default list again.
+24 Sep 2026) is in **every category's default but students'** (25 Sep 2026)
+and in `FORBIDDEN_DEBIT_HEADS` for `student` only; its fund name and
+sanction letter are optional. A Settings row is upgraded **once per
+revision** (`upgradeDebitRules`, `DebitRules.revision`, now 3,
+`SPECIAL_FUNDS_ADDED_AT`) — bump the revision if you change a default list
+again. **`debitCategoryFor` returns `student` for a student before looking at
+the booking type**: a student's only type is personal, and filing them under
+*personal* (as it did until 25 Sep) would hand them Special Funds.
 `bookingContextFor(user)` computes them once for the page and for
 `createBooking`. Project → a project from the Projects console
 (`projects` table, paste import); the number and title are snapshotted into
@@ -422,6 +439,13 @@ matching read side: `/manager` groups stays by phase, not by status, into
 Vacated, still holding rooms) and **Upcoming stays**. Before that split a
 booking for next week sat under the same heading as a guest in the building and
 read as though it were occupied.
+
+**The desk moves a stay's dates** from Manage (manager and caretaker —
+`canUpdateLifecycle`): a later check-out (`extendStayAction`,
+`extensionError`) or, since 25 Sep 2026, an **earlier check-in**
+(`advanceCheckInAction`, `earlierCheckInError`) — approved or occupied, at
+most 60 days, the holds moved by `updateBookingDetails` so a clash is refused.
+The inputs are a date box and `TimeSelect`, not `datetime-local`.
 
 Cancellation flow: a requester's **Cancel** (`cancelBooking`, reason required)
 **always** files `CANCELLATION_REQUESTED` — from any open status, pending or
@@ -698,7 +722,7 @@ all three are in `roomPartyError`, and migration 23 teaches the
 guests)` — because one guest and three infants is a full room. The wording is
 derived (`maximalRoomParties` / `describeRoomParties`), never written out.
 
-**Infants** (under `INFANT_AGE_LIMIT` = 5) are entered as normal guests in a room card. They are classified as infants based on the age typed in. They share a guardian's bed and take no bed capacity, but they count towards the combined limit above. **An infant's relationship is a free text box** whatever the role's `relationship_style` is — the dropdown lists adults' relationships and has no "Nephew" on it — so the dropdown-membership check is a `superRefine` over the rooms that skips infants, not a field-level refinement.
+**Infants** (under `INFANT_AGE_LIMIT` = 5) are entered in a room card — since 25 Sep 2026 **"Add infant" opens an infant card** (`kind: "infant"` on the form row: age chosen from 0–4, no ID fields; the payload's `infant: true` makes the schema require an age below 5). They are classified as infants based on the age typed in — the age still decides, on a guest card too. They share a guardian's bed and take no bed capacity, but they count towards the combined limit above. **An infant's relationship is a free text box** whatever the role's `relationship_style` is — the dropdown lists adults' relationships and has no "Nephew" on it — so the dropdown-membership check is a `superRefine` over the rooms that skips infants, not a field-level refinement.
 
 > **Stored bookings can still hold legacy synthetic rooms** — migration 11 migrated older bookings into single synthetic rooms and left their infant flags unchanged.
 
@@ -940,6 +964,19 @@ Issued invoices are **snapshots** (`InvoiceDocument`), drawn by
   list on **both** `/manager` and `/caretaker`; the Approval Log gives the desk
   an Invoice button on any checked-out stay or approved dining booking
   (`invoiceableFromArchive`). Don't let a vacated stay become unreachable.
+- **GST is per section** (25 Sep 2026, the office's revised template): 18% on
+  Room Charges Subtotal (A), 5% on Dining Charges Subtotal (B), Other Charges
+  (C) none, one Grand Total. **`invoiceTable(doc)` is the one layout** for the
+  PDF and the preview. New documents are `version: 2`; a `version: 1`
+  snapshot must keep printing as issued (Total (A+B), GST on Total) — never
+  "upgrade" an issued invoice's layout.
+- **Additional charges** (`parseExtraCharges`, ≤ 20): each is charged under
+  `room` / `dining` / `other`, which decides its GST; typed on the draft
+  (`invoices.extra_charges`, migration 26), priced into `extra_lines` on the
+  snapshot. The Supabase store writes the draft before `issue_invoice()`.
+- **What the desk types is repriced live** (`priceInvoiceDraft`, 350 ms after
+  typing stops), and the Issue dialog quotes that total. Don't go back to
+  repricing only on save — added meals then looked uncharged.
 
 ## Settings — the rules the console can change (`lib/settings.ts`)
 
@@ -1218,6 +1255,10 @@ Migration files, applied sequentially:
    Additive, safe to re-run. **Until it is applied nobody can book for a
    club** (every unit reads as having no advisor) and saving an advisor in the
    console names this migration.
+26. `00000000000026_invoice_additional_charges.sql` — `invoices.extra_charges`
+   (jsonb array, ≤ 20): the desk's additional charges on the draft. Additive,
+   safe to re-run. Until it is applied the store leaves the column out when
+   there are none, so only invoices with an additional charge are refused.
 
 Full notes per migration in `.memories/22-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine

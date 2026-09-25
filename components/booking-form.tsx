@@ -8,8 +8,10 @@ import {
   useWatch,
   type Control,
   type FieldPath,
+  type UseFormGetValues,
   type UseFormRegister,
   type UseFormRegisterReturn,
+  type UseFormSetValue,
 } from "react-hook-form";
 import { MailPlusIcon, PlusIcon, Trash2Icon, TriangleAlertIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +35,13 @@ import { QuantityInput } from "@/components/ui/quantity-input";
 import { TimeSelect } from "@/components/ui/time-select";
 import { Textarea } from "@/components/ui/textarea";
 import { COUNTRIES } from "@/lib/countries";
+import {
+  describeKnownGuest,
+  impliedGender,
+  knownSourceOf,
+  prefillFor,
+  type KnownGuest,
+} from "@/lib/known-guests";
 import {
   addGuestBlockedReason,
   addInfantBlockedReason,
@@ -121,6 +130,12 @@ interface GuestFields {
    * the person below them.
    */
   key: string;
+  /**
+   * Which button made the card (25 Sep 2026): "Add infant" makes an infant
+   * card — age below 5 chosen from a list, no ID — rather than a guest card
+   * that turns into an infant only once a small age is typed.
+   */
+  kind: "guest" | "infant";
   name: string;
   age: string;
   gender: "" | "male" | "female" | "other";
@@ -178,9 +193,10 @@ interface FormValues {
   custom: Record<string, string | boolean>;
 }
 
-function newGuest(): GuestFields {
+function newGuest(kind: GuestFields["kind"] = "guest"): GuestFields {
   return {
     key: crypto.randomUUID(),
+    kind,
     name: "",
     age: "",
     gender: "",
@@ -214,7 +230,15 @@ export function BookingForm({
   hodApprovers = [],
   forClub = null,
   defaultCopyTo = [],
+  knownGuests = [],
 }: {
+  /**
+   * People the portal already knows this requester books for — the family on
+   * a student's academic record, then the guests of their own earlier
+   * bookings (`knownGuestsFor`). Choosing Father / Mother / Guardian fills
+   * the name in, and every guest card can be filled from the list.
+   */
+  knownGuests?: KnownGuest[];
   /**
    * Set when a club's Faculty Advisor is booking for the club (24 Sep 2026).
    * `user` and `config` are then the club's, so the form is exactly the
@@ -377,7 +401,7 @@ export function BookingForm({
       custom: {},
     },
   });
-  const { register, handleSubmit, control, setError, clearErrors, formState, setValue } = form;
+  const { register, handleSubmit, control, setError, clearErrors, formState, setValue, getValues } = form;
   const { fields: roomFields, append: appendRoom, remove: removeRoom } =
     useFieldArray({ control, name: "rooms" });
   const {
@@ -466,6 +490,9 @@ export function BookingForm({
     allGuests.map((g) => g?.relationship)
   );
   const uniqueHint = uniqueRelationshipHint(config);
+  // Who is already on the request, so "Fill from saved details" does not
+  // offer the same person twice.
+  const namesOnRequest = allGuests.map((g) => g?.name?.trim().toLowerCase()).filter((n): n is string => !!n);
 
   const totals = describeTotals({
     rooms: (watchedRooms ?? []).length,
@@ -719,6 +746,8 @@ export function BookingForm({
               age: g.age,
               gender: g.gender === "" ? undefined : g.gender,
               relationship: g.relationship === "" ? undefined : g.relationship,
+              // Only on an infant card, whose age must then be below the limit.
+              infant: g.kind === "infant" ? true : undefined,
               // Not sent for a foreign national: the field is hidden for one,
               // so anything still in it was typed before the answer changed.
               id_number:
@@ -971,8 +1000,8 @@ export function BookingForm({
         </Card>
       )}
 
-      {/* Who pays. A student, or anyone booking personally, pays at checkout
-          and has nothing to choose — so it is stated, not asked. */}
+      {/* Who pays. A student pays at checkout and has nothing to choose — so
+          it is stated, not asked. */}
       <Card>
         <CardHeader>
           <CardTitle>Debitable head</CardTitle>
@@ -1015,6 +1044,12 @@ export function BookingForm({
                 ))}
               </div>
               <FieldError message={err("debit_head")} />
+              {/* Personal Funds is a choice beside Special Funds since 25 Sep
+                  2026, so the note that used to follow the fixed head
+                  follows the choice instead. */}
+              {chosenHead === "personal_funds" && !mealsOnly && (
+                <p className="text-sm text-muted-foreground">{PAY_AT_CHECKOUT_NOTE}</p>
+              )}
 
               {needsProject(chosenHead) && (
                 <div className="space-y-2">
@@ -1506,6 +1541,10 @@ export function BookingForm({
                 guestFiles={guestFiles}
                 err={err}
                 capacity={rules.capacity}
+                knownGuests={knownGuests}
+                namesOnRequest={namesOnRequest}
+                setValue={setValue}
+                getValues={getValues}
                 onRemove={roomFields.length > 1 ? () => setRoomToRemove(roomIndex) : undefined}
               />
             ))}
@@ -1763,6 +1802,10 @@ function RoomCard({
   guestFiles,
   err,
   capacity,
+  knownGuests,
+  namesOnRequest,
+  setValue,
+  getValues,
   onRemove,
 }: {
   roomIndex: number;
@@ -1776,6 +1819,10 @@ function RoomCard({
   guestFiles: Map<string, File>;
   err: (path: string) => string | undefined;
   capacity: CapacityRules;
+  knownGuests: KnownGuest[];
+  namesOnRequest: string[];
+  setValue: UseFormSetValue<FormValues>;
+  getValues: UseFormGetValues<FormValues>;
   /** Absent on the only room: a booking always has at least one. */
   onRemove?: () => void;
 }) {
@@ -1786,6 +1833,11 @@ function RoomCard({
   const watched = useWatch({ control, name: `rooms.${roomIndex}.guests` }) ?? [];
   const infants = countInfants(watched.map((g) => ({ is_infant: isInfantEntry(g) })));
   const guests = watched.length - infants;
+  // "Guest 2", "Infant 1": each card numbered among its own kind.
+  const numberOf = (index: number) => {
+    const infant = isInfantEntry(watched[index]);
+    return watched.slice(0, index + 1).filter((g) => isInfantEntry(g) === infant).length;
+  };
 
   const guestBlocked = addGuestBlockedReason(guests, infants, capacity);
   const infantBlocked = addInfantBlockedReason(infants, guests, capacity);
@@ -1830,6 +1882,11 @@ function RoomCard({
             guestKey={watched[guestIndex]?.key ?? field.id}
             guestFiles={guestFiles}
             err={err}
+            number={numberOf(guestIndex)}
+            knownGuests={knownGuests}
+            namesOnRequest={namesOnRequest}
+            setValue={setValue}
+            getValues={getValues}
             canRemove={fields.length > 1}
             onRemove={() => {
               const key = watched[guestIndex]?.key;
@@ -1858,7 +1915,7 @@ function RoomCard({
           variant="outline"
           size="sm"
           disabled={Boolean(infantBlocked)}
-          onClick={() => append(newGuest(), { shouldFocus: false })}
+          onClick={() => append(newGuest("infant"), { shouldFocus: false })}
         >
           <PlusIcon />
           Add infant (below {INFANT_AGE_LIMIT})
@@ -1899,6 +1956,11 @@ function GuestRow({
   guestKey,
   guestFiles,
   err,
+  number,
+  knownGuests,
+  namesOnRequest,
+  setValue,
+  getValues,
   canRemove,
   onRemove,
 }: {
@@ -1914,16 +1976,26 @@ function GuestRow({
   guestKey: string;
   guestFiles: Map<string, File>;
   err: (path: string) => string | undefined;
+  /** This card's number among its own kind: Guest 2, Infant 1. */
+  number: number;
+  knownGuests: KnownGuest[];
+  namesOnRequest: string[];
+  setValue: UseFormSetValue<FormValues>;
+  getValues: UseFormGetValues<FormValues>;
   canRemove: boolean;
   onRemove: () => void;
 }) {
   const base = `rooms.${roomIndex}.guests.${guestIndex}` as const;
   const gf = config.guest_fields;
+  const kind = useWatch({ control, name: `${base}.kind` });
   const citizenship = useWatch({ control, name: `${base}.citizenship` });
   const age = useWatch({ control, name: `${base}.age` });
   const relationship = useWatch({ control, name: `${base}.relationship` });
-  const isInfant = isInfantEntry({ age });
+  const name = useWatch({ control, name: `${base}.name` });
+  const infantCard = kind === "infant";
+  const isInfant = isInfantEntry({ age, kind });
   const star = (mode: "required" | "optional" | "hidden") => (mode === "required" ? " *" : "");
+  const set = { shouldDirty: true, shouldValidate: false } as const;
   /**
    * Why an option is not selectable here, or null when it is. Two reasons,
    * and they read differently on the option, so the requester is told which
@@ -1944,14 +2016,70 @@ function GuestRow({
     return null;
   };
 
+  // ---- filling in what the portal already knows (25 Sep 2026)
+
+  /** The dropdown's own spelling of a relationship, or null if it has none. */
+  const optionFor = (rel: string | null) =>
+    rel ? (config.relationship_options.find((o) => o.toLowerCase() === rel.trim().toLowerCase()) ?? null) : null;
+  /**
+   * Who choosing this relationship fills in: only a one-of-each relationship
+   * (Father, Mother, Guardian…), since there is one such person. A second
+   * sibling must not arrive with the first one's name.
+   */
+  const autoFillFor = (rel: string | null | undefined) =>
+    rel && config.unique_relationships.some((u) => u.toLowerCase() === rel.trim().toLowerCase())
+      ? prefillFor(knownGuests, rel)
+      : null;
+  /**
+   * The relationship dropdown changed from `prev` to `next`. The name (and the
+   * gender the word implies) is filled in when the box is empty, or still
+   * holds what the previous choice filled in — never over something typed.
+   */
+  const onRelationshipChosen = (prev: string, next: string) => {
+    const before = autoFillFor(prev);
+    const after = autoFillFor(next);
+    const currentName = (getValues(`${base}.name`) ?? "").trim();
+    if (gf.name !== "hidden" && (currentName === "" || currentName === before?.name)) {
+      setValue(`${base}.name`, after?.name ?? "", set);
+    }
+    const currentGender = getValues(`${base}.gender`);
+    const beforeGender = before?.gender ?? impliedGender(prev);
+    if (gf.gender !== "hidden" && (currentGender === "" || currentGender === beforeGender)) {
+      setValue(`${base}.gender`, after?.gender ?? impliedGender(next) ?? "", set);
+    }
+  };
+  /** "Fill in from saved details": everything the portal holds about that person. */
+  const fillFrom = (k: KnownGuest) => {
+    if (gf.name !== "hidden") setValue(`${base}.name`, k.name, set);
+    const gender = k.gender ?? impliedGender(k.relationship);
+    if (gf.gender !== "hidden" && gender) setValue(`${base}.gender`, gender, set);
+    if (gf.relationship !== "hidden" && k.relationship) {
+      // A dropdown takes only its own options, and not one another guest holds.
+      const option = config.relationship_style === "dropdown" ? optionFor(k.relationship) : k.relationship;
+      if (option && !lockReason(option)) setValue(`${base}.relationship`, option, set);
+    }
+    setValue(`${base}.citizenship`, k.citizenship, set);
+    setValue(`${base}.nationality`, k.nationality ?? "", set);
+  };
+  const ownName = name?.trim().toLowerCase() ?? "";
+  // Not someone already on the request — except this card's own person.
+  const offered = infantCard
+    ? []
+    : knownGuests.filter((k) => {
+        const n = k.name.toLowerCase();
+        return n === ownName || !namesOnRequest.includes(n);
+      });
+  const source = knownSourceOf(knownGuests, name, relationship);
+  const relationshipField = register(`${base}.relationship`);
+
   return (
-    <div className="rounded-md border bg-muted/20 p-3">
+    <div className={cn("rounded-md border p-3", infantCard ? "border-primary/30 bg-primary/5" : "bg-muted/20")}>
       <div className="mb-2 flex items-center justify-between">
         <p className="text-sm font-medium">
-          Guest {guestIndex + 1}
+          {infantCard ? `Infant ${number}` : `Guest ${number}`}
           {isInfant && (
             <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-normal text-primary">
-              Infant — shares a bed, no ID needed
+              {infantCard ? `Below ${INFANT_AGE_LIMIT} · shares a guardian's bed · no ID needed` : "Infant — shares a bed, no ID needed"}
             </span>
           )}
         </p>
@@ -1960,7 +2088,7 @@ function GuestRow({
             type="button"
             variant="ghost"
             size="sm"
-            aria-label={`Remove guest ${guestIndex + 1} from room ${roomIndex + 1}`}
+            aria-label={`Remove ${infantCard ? "infant" : "guest"} ${number} from room ${roomIndex + 1}`}
             onClick={onRemove}
           >
             <Trash2Icon />
@@ -1968,28 +2096,73 @@ function GuestRow({
         )}
       </div>
 
+      {offered.length > 0 && (
+        <div className="mb-3 space-y-1">
+          <Label htmlFor={`${base}.known`}>Fill in from saved details</Label>
+          <NativeSelect
+            id={`${base}.known`}
+            value=""
+            onChange={(e) => {
+              const k = offered[Number(e.target.value)];
+              if (k) fillFrom(k);
+            }}
+          >
+            <option value="">Choose someone on your record or from an earlier booking…</option>
+            {offered.map((k, i) => (
+              <option key={`${k.name}|${k.relationship ?? ""}`} value={i}>
+                {describeKnownGuest(k)}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {gf.name !== "hidden" && (
           <div className="space-y-2">
             <Label>Name{star(gf.name)}</Label>
-            <Input placeholder="Full name" {...register(`${base}.name`)} />
+            <Input placeholder={infantCard ? "Infant's full name" : "Full name"} {...register(`${base}.name`)} />
+            {source && (
+              <p className="text-xs text-muted-foreground">
+                {source.source === "record"
+                  ? `As on your academic record (${source.relationship}).`
+                  : `As on your booking ${source.reference}.`}
+              </p>
+            )}
             <FieldError message={err(`${base}.name`)} />
           </div>
         )}
-        <div className="space-y-2">
-          {/* Always shown — the age is what decides whether this person is an
-              infant, and the per-room limit counts the two separately — but
-              mandatory only where the role's form says so. Left blank on a
-              form where it is optional, the guest is an adult. */}
-          <Label>Age{star(gf.age)}</Label>
-          <Input type="number" min={0} max={120} {...register(`${base}.age`)} />
-          {gf.age !== "required" && !age?.trim() && (
-            <p className="text-xs text-muted-foreground">
-              Needed only for a child below {INFANT_AGE_LIMIT}.
-            </p>
-          )}
-          <FieldError message={err(`${base}.age`)} />
-        </div>
+        {infantCard ? (
+          <div className="space-y-2">
+            {/* A list rather than a number box: an infant's age is below the
+                limit by definition, so nothing else is offered. */}
+            <Label>Age *</Label>
+            <NativeSelect {...register(`${base}.age`)}>
+              <option value="">Select…</option>
+              {Array.from({ length: INFANT_AGE_LIMIT }, (_, n) => (
+                <option key={n} value={n}>
+                  {n === 0 ? "Below 1 year" : `${n} year${n === 1 ? "" : "s"}`}
+                </option>
+              ))}
+            </NativeSelect>
+            <FieldError message={err(`${base}.age`)} />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {/* Always shown — the age is what decides whether this person is an
+                infant, and the per-room limit counts the two separately — but
+                mandatory only where the role's form says so. Left blank on a
+                form where it is optional, the guest is an adult. */}
+            <Label>Age{star(gf.age)}</Label>
+            <Input type="number" min={0} max={120} {...register(`${base}.age`)} />
+            {gf.age !== "required" && !age?.trim() && (
+              <p className="text-xs text-muted-foreground">
+                Needed only for a child below {INFANT_AGE_LIMIT} — or use Add infant.
+              </p>
+            )}
+            <FieldError message={err(`${base}.age`)} />
+          </div>
+        )}
         {gf.gender !== "hidden" && (
           <div className="space-y-2">
             <Label>Gender{star(gf.gender)}</Label>
@@ -2011,7 +2184,14 @@ function GuestRow({
                 on it, and a child who has to be typed as "Siblings" to get
                 past the form tells the desk the wrong thing. */}
             {config.relationship_style === "dropdown" && !isInfant ? (
-              <NativeSelect {...register(`${base}.relationship`)}>
+              <NativeSelect
+                {...relationshipField}
+                onChange={(e) => {
+                  const prev = getValues(`${base}.relationship`) ?? "";
+                  void relationshipField.onChange(e);
+                  onRelationshipChosen(prev, e.target.value);
+                }}
+              >
                 <option value="">Select…</option>
                 {config.relationship_options.map((r) => {
                   const locked = lockReason(r);
@@ -2032,7 +2212,7 @@ function GuestRow({
                 placeholder={
                   isInfant ? "e.g. Daughter, niece…" : "e.g. Colleague, collaborator…"
                 }
-                {...register(`${base}.relationship`)}
+                {...relationshipField}
               />
             )}
             <FieldError message={err(`${base}.relationship`)} />
@@ -2112,8 +2292,13 @@ function GuestRow({
   );
 }
 
-/** Whether a form row's typed age makes it an infant. */
-function isInfantEntry(guest: { age?: string } | undefined): boolean {
+/**
+ * Whether a form row is an infant: a card made by "Add infant", or a guest
+ * card whose typed age is below the limit (the server's rule — the age
+ * decides).
+ */
+function isInfantEntry(guest: { age?: string; kind?: GuestFields["kind"] } | undefined): boolean {
+  if (guest?.kind === "infant") return true;
   const raw = guest?.age?.trim();
   if (!raw) return false;
   const n = Number(raw);

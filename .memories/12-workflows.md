@@ -62,7 +62,9 @@ flowchart LR
 ```
 
 The warden is scoped to their own hostel: `warden.hostel_name` must match the
-student's.
+student's. Since 25 Sep 2026 the warden reviews each request beside the
+student's academic record, with every Father / Mother / Guardian on the
+request checked against the names on file (`lib/academic/family.ts`).
 
 ### 2.2 An employee's stay
 
@@ -150,13 +152,14 @@ first meal.
 ```mermaid
 flowchart TD
   AP[Approved — rooms held] -->|Guest arrives| O[Occupied]
+  AP -->|Guest arriving early: desk brings the check-in forward| AP
   AP -->|Nobody arrives; automatic release after the no-show window| CAN[Cancelled — rooms freed]
   AP -->|Requester asks to cancel| CR[Cancellation Requested]
   CR -->|Manager agrees| CA[Cancellation Approved — rooms freed]
   O -->|Guest leaves| V[Vacated — rooms freed]
   O -->|Extension asked for and granted| O
   V --> B[Checked out — to bill<br/>manager and caretaker, 30 days;<br/>after that from the Approval Log]
-  B -->|Issue & print| ISS[Invoice issued — numbered and frozen]
+  B -->|Meal counts corrected, additional charges added, Issue & print| ISS[Invoice issued — numbered and frozen]
   ISS -->|Payment recorded| PAID[Paid]
   ISS -->|Cancel with a reason| CANC[Cancelled invoice — a corrected one may be issued]
 ```
@@ -175,6 +178,13 @@ A requester (or the Faculty Advisor who raised a club booking) never cancels
 outright: every cancel is a request the manager decides, pending bookings
 included. The manager cancels directly (`managerCancelBooking`), and the
 developer can force any status from the console.
+
+**Moving the dates at the desk** (manager or caretaker): a later check-out,
+or since 25 Sep 2026 an earlier check-in — an approved or current stay, at
+most 60 days either way, refused if another stay (or its turnaround) holds
+one of the rooms by then. Without the earlier check-in, a guest arriving a
+day early could not be marked Occupied, which is refused before the booked
+check-in.
 
 A room is held exactly while the booking is in a room-holding status, so
 check-out, cancellation and the no-show release all free the room with no

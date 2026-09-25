@@ -9,6 +9,7 @@ import { formatDateTime } from "@/lib/format";
 import { notifyExtensionDecided, notifyExtensionRequested } from "@/lib/mail/notify";
 import { releaseNoShow } from "@/lib/no-show-server";
 import {
+  earlierCheckInError,
   extensionError,
   noShowReleasable,
   planRoomRange,
@@ -75,6 +76,36 @@ export async function extendStayAction(bookingId: string, untilLocal: string, re
     return { ok: true };
   } catch (e) {
     return fail(e, "extending the stay");
+  }
+}
+
+/**
+ * The desk brings a stay's check-in forward (manager or caretaker, 25 Sep
+ * 2026) — a guest arriving before the booked time. The holds move through
+ * the same path as any date change, so a room someone else still has by then
+ * refuses it, and the turnaround buffer before it is kept.
+ */
+export async function advanceCheckInAction(bookingId: string, fromLocal: string, reason: string): Promise<ActionResult> {
+  try {
+    const user = await requireUser();
+    if (!canUpdateLifecycle(user.role)) return { ok: false, error: "Only the guest house desk can move a stay's check-in" };
+    if (!reason?.trim()) return { ok: false, error: "Say why the check-in is being brought forward — it goes in the log" };
+    const store = getStore();
+    const booking = await store.getBooking(bookingId);
+    if (!booking) return { ok: false, error: "Booking not found" };
+    const from = instituteIso(fromLocal);
+    const problem = earlierCheckInError(booking, from);
+    if (problem) return { ok: false, error: problem };
+    await store.updateBookingDetails(bookingId, { check_in: from }, {
+      action_by: user.id,
+      action_by_name: user.full_name,
+      new_status: booking.status,
+      remarks: `Check-in brought forward to ${formatDateTime(from)} by ${user.full_name}: ${reason.trim()}`,
+    });
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return fail(e, "moving the check-in");
   }
 }
 

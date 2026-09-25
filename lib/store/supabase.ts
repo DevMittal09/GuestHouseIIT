@@ -53,6 +53,7 @@ import { decryptValue, encryptValue } from "@/lib/crypto";
 import {
   invoiceErrorFrom,
   InvoiceStateError,
+  type ExtraCharge,
   type InvoiceFilter,
   type InvoiceRecord,
   type IssueInvoiceInput,
@@ -1438,7 +1439,12 @@ export class SupabaseStore implements DataStore {
     return data ? hydrateInvoice(data) : null;
   }
 
-  async saveInvoiceDraft(bookingId: string, mealCounts: MealCounts | null, userId: string): Promise<InvoiceRecord> {
+  async saveInvoiceDraft(
+    bookingId: string,
+    mealCounts: MealCounts | null,
+    userId: string,
+    extraCharges?: ExtraCharge[]
+  ): Promise<InvoiceRecord> {
     const { data: live, error: readError } = await this.db
       .from("invoices")
       .select("*")
@@ -1449,20 +1455,35 @@ export class SupabaseStore implements DataStore {
     if (live && live.status !== "draft") {
       throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} — cancel it first to issue a corrected one.`);
     }
+    // The charges column is migration 26. Named only when there is
+    // something to write in it — or something already there to clear — so
+    // an install without the migration still saves meal counts.
+    const hadCharges = Array.isArray(live?.extra_charges) && live.extra_charges.length > 0;
+    const charges =
+      extraCharges !== undefined && (extraCharges.length > 0 || hadCharges) ? { extra_charges: extraCharges } : {};
     const write = live
-      ? this.db.from("invoices").update({ meal_counts: mealCounts, updated_at: new Date().toISOString() }).eq("id", live.id)
-      : this.db.from("invoices").insert({ booking_id: bookingId, meal_counts: mealCounts, created_by: userId });
+      ? this.db
+          .from("invoices")
+          .update({ meal_counts: mealCounts, ...charges, updated_at: new Date().toISOString() })
+          .eq("id", live.id)
+      : this.db.from("invoices").insert({ booking_id: bookingId, meal_counts: mealCounts, ...charges, created_by: userId });
     const { data, error } = await write.select("*").single();
     if (error) {
       // Two desks saving the first draft at once: the partial unique index
       // lets one win; the other retries as an update.
-      if (error.code === "23505") return this.saveInvoiceDraft(bookingId, mealCounts, userId);
+      if (error.code === "23505") return this.saveInvoiceDraft(bookingId, mealCounts, userId, extraCharges);
       throw error;
     }
     return hydrateInvoice(data);
   }
 
   async issueInvoice(input: IssueInvoiceInput): Promise<InvoiceRecord> {
+    // `issue_invoice()` promotes the draft and leaves its other columns as
+    // they are, so the charges as typed are written to the draft first; the
+    // snapshot, which is what is printed, carries them priced either way.
+    if ((input.extraCharges ?? []).length > 0) {
+      await this.saveInvoiceDraft(input.bookingId, input.mealCounts, input.issuedBy, input.extraCharges);
+    }
     const { data, error } = await this.db.rpc("issue_invoice", {
       p_booking_id: input.bookingId,
       p_fy: input.fy,
@@ -1727,6 +1748,8 @@ function hydrateInvoice(row: Record<string, unknown>): InvoiceRecord {
   return {
     ...(row as unknown as InvoiceRecord),
     document: doc && Object.keys(doc).length > 0 ? (doc as InvoiceRecord["document"]) : null,
+    // Absent until migration 26 is applied.
+    extra_charges: Array.isArray(row.extra_charges) ? (row.extra_charges as InvoiceRecord["extra_charges"]) : [],
     subtotal_rooms: n(row.subtotal_rooms),
     subtotal_dining: n(row.subtotal_dining),
     total: n(row.total),

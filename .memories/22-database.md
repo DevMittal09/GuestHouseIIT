@@ -135,7 +135,8 @@ the legacy `alumni_fund`, `student_fund`, `hostel_funds`),
 `bookings.office_approval` (`direct` / `hod`), `units.kind`
 (`department`, `club`, `council`, `office`), `units.office_class`
 (`officer` / `department`), `profiles.staff_category` (`faculty` / `staff`),
-`invoices.status` (draft / issued / paid / cancelled).
+`invoices.status` (draft / issued / paid / cancelled). `invoices.extra_charges`
+(migration 26) is jsonb, an array of at most 20.
 
 > `guest_houses.name` has **no `check` constraint**. It originally allowed only
 > 'Bageshri' and 'Hamsanandi'; that was removed when admins gained the ability to
@@ -521,6 +522,27 @@ Current migrations:
    then `supabase/seed.sql` twice; an advisor or mailbox on a department, a
    malformed mailbox and an unknown advisor were each refused, and deleting the
    advisor's profile cleared the field.
+
+26. `00000000000026_invoice_additional_charges.sql` (25 Sep 2026) —
+   `invoices.extra_charges jsonb not null default '[]'`, checked to be an
+   array of at most 20 (`invoices_extra_charges_shape`): the desk's
+   additional charges **as typed on the draft** (`{section, description,
+   comment, quantity, unit_price}` — paise), the way `meal_counts` holds the
+   meal-count correction. The issued snapshot carries them priced
+   (`document->'extra_lines'`), so nothing else needed the database.
+   `issue_invoice()` is unchanged: it promotes the draft and leaves the column
+   as it is, and `SupabaseStore.issueInvoice` writes the draft first when
+   there are charges; `invoices_guard` then freezes it like every column.
+   Additive and idempotent. **Until it is applied** invoices without
+   additional charges work as before (the store leaves the column out when
+   there is nothing in it); a draft or invoice with a charge is refused with a
+   message naming this file.
+
+   Verified in a throwaway `postgres:16-alpine` (25 Sep 2026): 1–26 applied,
+   26 applied again; a draft with one charge inserted; a non-array and 21
+   charges refused by the check; `issue_invoice()` promoted the draft keeping
+   its charge; changing the charges of the issued invoice refused by
+   `invoices_guard` (`INVOICE_IMMUTABLE`).
 
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.

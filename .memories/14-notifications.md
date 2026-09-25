@@ -27,7 +27,7 @@ the code on 24 Sep 2026** — `lib/mail/types.ts` (the events),
 | `queue.digest.reviewer` | Daily digest of waiting requests | Each reviewer with a non-empty queue | — |
 | `queue.escalation.reviewer` | Waiting over 48 h | Reviewer | Manager |
 | `desk.daily_report` | Day-wise log per guest house (arrivals, departures, in house, awaiting check-out, pending allocation, kitchen plates) | Manager + caretaker | — |
-| `invoice.issued.accounts` | Official invoice, PDF attached | Accounts email (Setting) | Requester's HOD, the requester (+ Copy to) |
+| `invoice.issued.accounts` | Official invoice, PDF attached; the summary lists Rooms (A), Dining (B) and — since 25 Sep 2026 — Other charges (no GST) when there are any | Accounts email (Setting) | Requester's HOD, the requester (+ Copy to) |
 | `booking.cancellation_requested.reviewer` | *Retired* — reviewers are CC on the manager's mail now | — | — |
 
 **Two different "Copy to" lists — keep them apart.** The **approval chain**

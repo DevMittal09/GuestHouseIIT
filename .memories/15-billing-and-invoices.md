@@ -1,14 +1,16 @@
 # Billing — tariffs, invoices, payments and dining
 
-Phases 5 and 6 (22 Sep 2026) and the 24 Sep corrections. **Checked against the
-code on 24 Sep 2026** — `lib/invoice.ts`, `lib/tariffs.ts`,
-`lib/invoice-pdf.ts`, `app/actions/invoices.ts`, `lib/access.ts`.
+Phases 5 and 6 (22 Sep 2026), the 24 Sep corrections and the 25 Sep ones
+(GST per section, additional charges, live repricing). **Checked against the
+code on 25 Sep 2026** — `lib/invoice.ts`, `lib/tariffs.ts`,
+`lib/invoice-pdf.ts`, `app/actions/invoices.ts`, `components/invoice-dialog.tsx`,
+`lib/access.ts`.
 
 ## Who does what
 
 | Action | Manager | Caretaker | Developer | Requester |
 | --- | --- | --- | --- | --- |
-| Preview, correct meal counts, **issue & print** | ✓ | ✓ | ✓ | — |
+| Preview, correct meal counts, **add additional charges**, issue & print | ✓ | ✓ | ✓ | — |
 | **Mark paid** (cash / UPI + transaction id / transfer + UTR) | ✓ | ✓ | ✓ | — |
 | **Cancel** an issued invoice (reason; a correction is cancel + reissue) | ✓ | — | ✓ | — |
 | Tariffs & invoice settings (console) | ✓ | — | ✓ | — |
@@ -29,10 +31,57 @@ Rates and invoice settings with their defaults are in
 
 ## How it works — invoices and tariffs (Phase 5)
 
-The office's invoice template is `public/GHM_Invoice.docx`; its header images
-are in `public/invoice/`. The flow, in the manager's and caretaker's consoles
-(the **Invoice** button on an occupied or vacated stay, `components/invoice-dialog.tsx`):
-**preview → correct the meal counts → Issue & print → Mark paid**.
+The office's invoice template is `public/GHM_Invoice.docx` (revised by the
+owner on 25 Sep 2026); its header images are in `public/invoice/`. The flow,
+in the manager's and caretaker's consoles (the **Invoice** button on an
+occupied or vacated stay, `components/invoice-dialog.tsx`): **preview →
+correct the meal counts and add any additional charges (the figures reprice
+as you type) → Save draft (optional) → Issue & print → Mark paid**.
+
+### GST and the table as printed (25 Sep 2026)
+
+- **18% on rooms and extra beds, 5% on food**, each charged on its own
+  subtotal: Room Charges Subtotal (A), **GST @ 18% on Subtotal (A)**; Dining
+  Charges Subtotal (B), **GST @ 5% on Subtotal (B)**; Other Charges Subtotal
+  (C) with no GST when the desk added any; **Grand Total (Including GST)**. The
+  column is **Rate**. The old ₹7,500 slab (5% below, 18% above) is gone; a
+  saved Settings row is upgraded once (`upgradeInvoiceRules`, revision 2).
+- **Rates include GST** is still a Setting and still on: the grand total is
+  the prices, and the taxable value (the Rate and Amount columns, the
+  subtotals) is backed out at 18% / 5%. **Office to confirm** the tariffs are
+  inclusive at 18%; if not, untick it and GST is added on each subtotal
+  (rounded half-up to the rupee).
+- **`invoiceTable(doc)`** (`lib/invoice.ts`) is the one description of the
+  table — sections, rows, totals, closing row — drawn by both the PDF and the
+  dialog's preview. Invoices are `InvoiceDocument.version: 2`; a `version: 1`
+  snapshot (issued before 25 Sep) prints exactly as it was issued: Tariff,
+  Sub Total (A), Sub Total (B), Total (A+B), GST on Total.
+- A table too long for the page (many additional charges) **continues on the
+  next page**, with the bank details at the foot of every page and "Page n of
+  m".
+
+### Additional charges (25 Sep 2026)
+
+Extra beds arranged at the desk, a broken vase — anything the tariff does not
+cover. In the Invoice dialog, **Additional charges → Add a charge**: what it
+was, **Charged under** (Room charges (A) at the room GST, Dining charges (B)
+at the food GST, or Other — no GST, for damage or loss), quantity, **₹ each**
+(including GST when the tariffs are), and a **comment** printed under it on
+the invoice. At most 20; the amount has at most two decimals; a dining invoice
+has no room section to charge to (`parseExtraCharges`). They are kept as typed
+on the draft (`invoices.extra_charges`, **migration 26**) and frozen priced in
+the snapshot (`extra_lines`). A stay with only an additional charge can be
+invoiced. Until migration 26 is applied on Supabase, invoices without charges
+still work and one with a charge is refused naming the migration.
+
+### Meal counts reprice as they are typed (25 Sep 2026)
+
+The desk's meal-count box used to change the amounts only after **Save
+counts**, and the Issue dialog quoted the old grand total — which read as
+added meals not being charged. `priceInvoiceDraft` now reprices the unsaved
+counts and charges a moment after typing stops; the Issue dialog quotes that
+total, and issuing uses exactly those figures. **Preview PDF** prints the
+*saved* draft, so it asks for **Save draft** first.
 
 - **Pure rules — `lib/invoice.ts`, `lib/tariffs.ts`.** Money is integer paise.
   `chargeableDays()` (calendar nights by default, or 24-hour blocks with a
@@ -42,8 +91,8 @@ are in `public/invoice/`. The flow, in the manager's and caretaker's consoles
   guests, or a dining booking's head count), `gstPaise()` (basis points,
   half-up to the rupee), `formatINR()` (₹1,23,456.00, written out, not `Intl`),
   `financialYear()` (1 April rollover, institute time) and
-  `splitGst()` / `roomGstPercent()` (the rates are **GST-inclusive** by default:
-  the grand total is the rates, taxable value and CGST/SGST are backed out),
+  `splitGst()` (the rates are **GST-inclusive** by default: the grand total is
+  the rates, taxable value and CGST/SGST are backed out),
   `buildInvoiceDocument()`, which assembles every printed field into an
   `InvoiceDocument`. `actualStayTimes()` reads the desk's OCCUPIED / VACATED
   log entries; an occupied stay is billed to its booked check-out.
@@ -63,7 +112,8 @@ are in `public/invoice/`. The flow, in the manager's and caretaker's consoles
   its id, account transfer with its UTR) and the invoice cancelled with a
   reason. A correction is a cancellation plus a new invoice that records
   `replaces_invoice_id`. A draft row only carries the desk's meal-count
-  correction; it has no number and is priced afresh when shown.
+  correction and additional charges; it has no number and is priced afresh
+  when shown.
 - **The PDF** (`lib/invoice-pdf.ts`, server only) is drawn with jsPDF to the
   template's measurements, from the snapshot, never recomputed. Fonts and
   artwork are embedded from `lib/invoice-assets.generated.ts` (regenerate with
@@ -82,8 +132,8 @@ are in `public/invoice/`. The flow, in the manager's and caretaker's consoles
   mailed until the office sets the address.
 - **Tariffs & Invoicing console** (`/admin/billing`, manager and developer):
   the rates table with an add form (future rates removable), and the invoice
-  Settings group `rules.invoice` — numbering, day basis, GST %, GSTIN, Accounts
-  email, bank details and the footer contact line.
+  Settings group `rules.invoice` — numbering, day basis, GST on rooms and on
+  food, SACs, GSTIN, Accounts email, bank details and the footer contact line.
 - **Collections** (`lib/collections.ts`): the monthly CSV on `/history` for the
   desk — every invoice issued or paid in the month, then totals by payment
   mode and by debitable head.

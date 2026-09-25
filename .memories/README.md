@@ -52,18 +52,18 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest ·
 Playwright. **Node 20** via nvm (the machine default is 18).
 
-**Status, 24 Sep 2026.** Feature-complete for every workflow specified; taken
+**Status, 25 Sep 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme (Settings, mail
 addressing, turnaround buffer, HOD approval and debitable heads, invoices,
 dining, operational states, security, performance and tests, documentation)
-and four rounds of the office's corrections. **Not deployed for real use.**
+and five rounds of the office's corrections. **Not deployed for real use.**
 Runs locally on the mock store, and against one hosted Supabase project with
 demo data. Gates before real bookings: connect the institute LDAP, close Mock
 Authentication (configure Google or `MOCK_LOGIN=false`), production secrets,
 the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 
-**Numbers.** 25 migrations · 12 roles (10 active) · 18 demo personas · 6 demo
-bookings · 263 unit tests · 19 end-to-end journeys · 13 console sections.
+**Numbers.** 26 migrations · 12 roles (10 active) · 18 demo personas · 6 demo
+bookings · 289 unit tests · 22 end-to-end journeys · 13 console sections.
 
 ---
 
@@ -99,7 +99,7 @@ bookings · 263 unit tests · 19 end-to-end journeys · 13 console sections.
 | --- | --- |
 | [20-architecture.md](20-architecture.md) | How it is put together and why: two stores, one auth seam, config-driven forms, institute time, holds in the database |
 | [21-implementation.md](21-implementation.md) | Feature → file map |
-| [22-database.md](22-database.md) | Tables, enums, RLS, storage, **all 25 migrations**, the one-off repairs |
+| [22-database.md](22-database.md) | Tables, enums, RLS, storage, **all 26 migrations**, the one-off repairs |
 | [23-running-and-testing.md](23-running-and-testing.md) | Running locally, the mock vs hosted database, the test suites, every way of verifying a change |
 | [24-deployment-runbook.md](24-deployment-runbook.md) | Deploying, environment variables, the office's Settings, rotation, backups, incidents |
 | [25-troubleshooting.md](25-troubleshooting.md) | Every error already hit, with cause and fix |
@@ -130,18 +130,22 @@ bookings · 263 unit tests · 19 end-to-end journeys · 13 console sections.
 | Club / fest / council account | **Cannot book** — its Faculty Advisor books for it; it sees the bookings and gets the mail |
 | IAR Student Cell | Books **for an alumnus** only → **IAR Office** → manager |
 | IAR Office | Books (official / alumni) **and** approves the Student Cell |
-| Assistant Warden, HOD, council secretary | Approve by queue; an HOD or secretary is **an appointment in the console, not a role** |
-| **Guest House Manager** | Final approval by **allocating rooms**; the whole desk; books for guests; invoices; 9 console sections |
-| Guest House Caretaker | Reception: check-in/out, extend, invoices |
+| Assistant Warden, HOD, council secretary | Approve by queue; an HOD or secretary is **an appointment in the console, not a role**. The warden sees each student's academic record and a check of the parents on the request against it |
+| **Guest House Manager** | Final approval by **allocating rooms**; the whole desk (incl. an earlier check-in or later check-out); books for guests; invoices with additional charges; 9 console sections |
+| Guest House Caretaker | Reception: check-in/out, extend (earlier check-in or later check-out), invoices with additional charges |
 | Developer | The whole console (13 sections), behind a password and TOTP |
 
-Every booking: a **debitable head** is mandatory; **Copy to** is optional
+Every booking: a **debitable head** is mandatory (Special Funds for everyone
+but students); **Copy to** is optional
 (≤ 25, CC on every mail to the requester); **privacy consent** is mandatory;
 check-in within **1 month**, at most **14 nights**; a room card holds **4
 people, at most 3 needing a bed, at most 3 infants** (under 5); meals only at a
 guest house that serves them, booked **before the previous meal finishes being
-served**. A **turnaround buffer** of 4 h separates stays. All times are
-**Asia/Kolkata**. Details: files 10–13.
+served**. A **turnaround buffer** of 4 h separates stays. Guests the portal
+already knows (a student's parents on record, people from earlier bookings)
+are filled in; "Add infant" opens an infant card. Invoices charge **GST 18% on
+rooms, 5% on food**, each on its own subtotal. All times are
+**Asia/Kolkata**. Details: files 10–15.
 
 ## Where the rules live in code
 
@@ -157,8 +161,10 @@ served**. A **turnaround buffer** of 4 h separates stays. All times are
 | Settings and their defaults | `lib/settings.ts` |
 | Stay cap, alumni guest house, contact line | `lib/policy.ts` |
 | Capacity and infants | `lib/occupancy.ts` |
+| Guests filled in from the record and earlier bookings | `lib/known-guests.ts` (+ `known-guests-server.ts`) |
+| The warden's check of a student's family | `lib/academic/family.ts` (+ `family-server.ts`) |
 | Meals, serving windows, notice period | `lib/meals.ts` |
-| Invoices and tariffs | `lib/invoice.ts`, `lib/tariffs.ts` |
+| Invoices and tariffs (GST per section, additional charges, `invoiceTable`) | `lib/invoice.ts`, `lib/tariffs.ts`, `lib/invoice-pdf.ts` |
 | Mail | `lib/mail/` |
 | Institute time | `lib/tz.ts` |
 | Data access | `lib/store/` (`types.ts` interface; `mock.ts`, `supabase.ts`) |

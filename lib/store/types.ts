@@ -39,6 +39,7 @@ import type {
   UserMfa,
 } from "@/lib/security";
 import type {
+  ExtraCharge,
   InvoiceFilter,
   InvoiceRecord,
   IssueInvoiceInput,
@@ -323,11 +324,17 @@ export interface DataStore {
   listInvoices(filter: InvoiceFilter): Promise<InvoiceRecord[]>;
   getInvoice(id: string): Promise<InvoiceRecord | null>;
   /**
-   * Save the desk's meal-count correction on the booking's draft, creating
-   * the draft if there is none. Throws `InvoiceStateError` once the booking
-   * has a live issued invoice.
+   * Save the desk's meal-count correction — and, when given, its additional
+   * charges (migration 26; left as they are when omitted) — on the booking's
+   * draft, creating the draft if there is none. Throws `InvoiceStateError`
+   * once the booking has a live issued invoice.
    */
-  saveInvoiceDraft(bookingId: string, mealCounts: MealCounts | null, userId: string): Promise<InvoiceRecord>;
+  saveInvoiceDraft(
+    bookingId: string,
+    mealCounts: MealCounts | null,
+    userId: string,
+    extraCharges?: ExtraCharge[]
+  ): Promise<InvoiceRecord>;
   /**
    * Number and issue the booking's invoice in one step: the financial year's
    * next serial and the snapshot are written together (`issue_invoice()`),

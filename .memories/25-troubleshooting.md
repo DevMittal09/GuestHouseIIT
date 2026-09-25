@@ -472,6 +472,12 @@ broken sign-in page — and did, the day a spec was added that signed a few more
 accounts in. Seeded data is rebuilt on load, so there is nothing to preserve by
 keeping the file.
 
+*And within one run (25 Sep 2026):* the suite came to sign the manager in nine
+times — over the limit inside a single run — and the last journeys stopped at
+sign-in with "Too many attempts — try again in 777s" in the page snapshot.
+`signIn()` now reuses each account's session after its first form sign-in, so
+the count is one per account per run.
+
 **2. `reuseExistingServer` serves the previous build.** `playwright.config.ts`
 sets `reuseExistingServer: !process.env.CI`, so a server left listening on 3100
 from an earlier run is reused — and `next start` read `.next` when it *started*.

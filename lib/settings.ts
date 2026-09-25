@@ -110,14 +110,12 @@ export type InvoiceRules = {
    */
   prices_include_gst: boolean;
   /**
-   * GST on accommodation, percent — 5% (without ITC) for a room whose value is
-   * at most `gst_room_threshold` a day, since 22 Sep 2025; above it,
-   * `gst_room_above_percent` (18%). Applied per room line by its daily rate.
+   * GST on accommodation, percent: **18%** on every room and extra bed, as
+   * the office's revised invoice prints it ("GST @ 18% on Subtotal (A)",
+   * 25 Sep 2026). It replaced a 5% / 18% slab split at ₹7,500 a day.
    */
   gst_room_percent: number;
-  gst_room_threshold: number;
-  gst_room_above_percent: number;
-  /** GST on food served (restaurant service), percent: 5% without ITC. */
+  /** GST on food served (restaurant service), percent: 5%. */
   gst_meal_percent: number;
   /** SAC codes printed with the tax breakdown. */
   sac_room: string;
@@ -137,7 +135,15 @@ export type InvoiceRules = {
   };
   /** The address line at the foot of the invoice (the Hindi half is fixed artwork). */
   contact: { address: string; phone: string; email: string };
+  /**
+   * Which shape of the defaults a saved row was made from — see
+   * `upgradeInvoiceRules`. Absent on rows saved before 25 Sep 2026.
+   */
+  revision?: number;
 };
+
+/** Revision 2 (25 Sep 2026): a flat 18% on rooms and 5% on food, no slab. */
+export const INVOICE_RULES_REVISION = 2;
 
 /**
  * How long personal data is kept (Phase 8, DPDP). The daily job clears ID
@@ -201,21 +207,18 @@ export const DEFAULT_RULES: Rules = {
     },
   },
   debit: DEFAULT_DEBIT_RULES,
-  // From the office's invoice template (public/GHM_Invoice.docx). GST is 0
-  // until the office says otherwise, and nothing is mailed to Accounts until
-  // an address is entered.
+  // From the office's invoice template (public/GHM_Invoice.docx). Nothing is
+  // mailed to Accounts until an address is entered.
   invoice: {
     serial_prefix: "GH",
     serial_digits: 4,
     day_basis: "night",
     grace_hours: 4,
-    // The office's rates include GST. Rates as in force since 22 Sep 2025 (the
-    // 56th GST Council): accommodation up to ₹7,500 a day 5% without ITC, above
-    // it 18%; restaurant service 5%. Intra-state (Kerala), so CGST + SGST.
+    // The office's rates include GST. Accommodation 18%, food 5%, as the
+    // revised template prints them (25 Sep 2026). Intra-state (Kerala), so
+    // each is half CGST, half SGST.
     prices_include_gst: true,
-    gst_room_percent: 5,
-    gst_room_threshold: 7500,
-    gst_room_above_percent: 18,
+    gst_room_percent: 18,
     gst_meal_percent: 5,
     sac_room: "996311",
     sac_meal: "996331",
@@ -236,6 +239,7 @@ export const DEFAULT_RULES: Rules = {
       phone: GUEST_HOUSE_CONTACT.phone,
       email: GUEST_HOUSE_CONTACT.email,
     },
+    revision: INVOICE_RULES_REVISION,
   },
   privacy: {
     // A year covers a full audit cycle and the institute's own queries about a
@@ -340,8 +344,6 @@ export const invoiceRulesSchema = z.object({
   grace_hours: whole("Grace", 0, 12),
   prices_include_gst: z.boolean(),
   gst_room_percent: percent("GST on rooms"),
-  gst_room_threshold: whole("Room value for the higher GST rate", 0, 1_000_000),
-  gst_room_above_percent: percent("GST on rooms above the threshold"),
   gst_meal_percent: percent("GST on food"),
   sac_room: z.string().trim().regex(/^\d{4,8}$/, "A SAC code is 4–8 digits"),
   sac_meal: z.string().trim().regex(/^\d{4,8}$/, "A SAC code is 4–8 digits"),
@@ -371,6 +373,7 @@ export const invoiceRulesSchema = z.object({
     phone: text("Phone", 40),
     email: z.email("The contact email is not an address"),
   }),
+  revision: z.number().int().optional(),
 });
 
 export const privacyRulesSchema = z.object({
@@ -421,20 +424,43 @@ export function parseRuleGroup<G extends RuleGroup>(group: G, stored: unknown): 
  * this leaves the row alone for good. The `booking_guests` trigger applies the
  * same repair in SQL (migration 23), so the database and the app agree.
  *
- * **Debitable heads, 24 Sep 2026.** Special Funds joined every official
- * category's list. A row saved before that replaces the default lists
- * wholesale and would never offer it; `upgradeDebitRules` adds it once and
- * marks the row current, so a later untick in the console sticks.
+ * **Debitable heads, 24 and 25 Sep 2026.** Special Funds joined every official
+ * category's list, then every category but students'. A row saved before
+ * replaces the default lists wholesale and would never offer it;
+ * `upgradeDebitRules` adds it once and marks the row current, so a later
+ * untick in the console sticks.
+ *
+ * **Invoice GST, 25 Sep 2026.** `upgradeInvoiceRules`.
  */
 function upgradeStoredGroup(
   group: RuleGroup,
   stored: Record<string, unknown>
 ): Record<string, unknown> {
   if (group === "debit") return upgradeDebitRules(stored);
+  if (group === "invoice") return upgradeInvoiceRules(stored);
   if (group !== "capacity" || "max_occupants_per_room" in stored) return stored;
   const rest = { ...stored };
   delete rest.max_infants_per_room;
   return rest;
+}
+
+/**
+ * A saved invoice group from before 25 Sep 2026 held the room GST as a slab —
+ * 5% up to `gst_room_threshold` (₹7,500) a day, `gst_room_above_percent`
+ * above it. The office's revised invoice has one rate per section, 18% on
+ * rooms and 5% on food, and the owner gave both. The slab's fields are
+ * dropped and both rates taken from the defaults, **once**: the row is marked
+ * current, and a rate changed in the console after that stands.
+ */
+export function upgradeInvoiceRules(stored: Record<string, unknown>): Record<string, unknown> {
+  const revision = typeof stored.revision === "number" ? stored.revision : 1;
+  if (revision >= INVOICE_RULES_REVISION) return stored;
+  const rest = { ...stored };
+  delete rest.gst_room_threshold;
+  delete rest.gst_room_above_percent;
+  delete rest.gst_room_percent;
+  delete rest.gst_meal_percent;
+  return { ...rest, revision: INVOICE_RULES_REVISION };
 }
 
 /** First validation message for a proposed group, or null when it is acceptable. */

@@ -151,7 +151,8 @@ describe("debitable heads from the brief, per category", () => {
     ["staff", "staff-ravi" as Role, "official", ["department_budget", "special_budget"]],
     ["officer office", "official-admin" as Role, "official", ["institute_grant", "special_budget"]],
     ["department office", "office-cse" as Role, "official", ["department_budget", "special_budget"]],
-    ["personal", "employee-priya" as Role, "personal", ["personal_funds"]],
+    // Special Funds for everyone except students since 25 Sep 2026.
+    ["personal", "employee-priya" as Role, "personal", ["personal_funds", "special_budget"]],
     ["student", "student-anjali" as Role, "personal", ["personal_funds"]],
   ])("%s", (_label, id, type, heads) => {
     const p = P(id as string);

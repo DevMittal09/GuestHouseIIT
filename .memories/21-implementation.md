@@ -41,7 +41,13 @@ from the units, not the role (`isHodForAny`, `approvesClubsFor`,
 - **Form:** `components/booking-form.tsx` — renders entirely from the config:
   fields appear, become optional, or vanish per `FieldMode`; relationship is a
   dropdown or a text input; custom fields render in an "Additional information"
-  card; the alumni upload card appears only when not hidden.
+  card; the alumni upload card appears only when not hidden. Each guest row
+  has a `kind`: "Add infant" appends an **infant card** (age list 0–4, no ID;
+  the payload's `infant: true` makes the schema require the age). `GuestRow`
+  fills known guests in (25 Sep 2026): `knownGuests` from `/book` —
+  `knownGuestsFor()` in `lib/known-guests-server.ts` over the academic record
+  and the requester's own bookings (`lib/known-guests.ts`) — on choosing a
+  one-of-each relationship, and from **Fill in from saved details**.
 - **Validation:** `lib/booking-schema.ts` builds a zod schema *from the config*,
   used on both sides. Custom-field values are validated by
   `validateCustomValue()` in `lib/form-config.ts`.
@@ -158,6 +164,14 @@ reason on rejection. The IAR view embeds the alumni ID card.
 
 Scoping is applied in the store query *and* re-checked in `canReview()` inside
 `reviewBooking`, so a crafted request cannot approve another hostel's student.
+
+**The warden's family check** (25 Sep 2026): `/warden` builds
+`studentRecordPanels(bookings)` (`lib/academic/family-server.ts`) and passes
+them to `ReviewQueue` as `studentRecords`; `components/student-record-check.tsx`
+draws the record and the Father / Mother / Guardian table in the Review
+dialog (`StudentRecordCheck`) and the badge in the Guests cell
+(`FamilyBadge`). The comparison is `checkFamily` / `compareNames` in
+`lib/academic/family.ts`. The other queues pass nothing.
 
 `components/booking-details.tsx`, shared by every reviewer dialog, the manager
 and the requester, shows the party ("3 guests, with infant(s)") and, when meals
@@ -550,16 +564,22 @@ Mail Outbox console.
 
 Moved to [15-billing-and-invoices.md](15-billing-and-invoices.md): tariffs,
 building and issuing an invoice, the PDF, payments, Accounts mail, dining
-bookings and the kitchen's day.
+bookings and the kitchen's day. Since 25 Sep 2026: `invoiceTable()` (the
+table the PDF and the preview both draw, version 1 and 2), `parseExtraCharges`
+and `extra_lines` (additional charges), `priceInvoiceDraft` /
+`saveInvoiceDraftAction` in `app/actions/invoices.ts` (live repricing and the
+draft), the `ExtraChargesEditor` in `components/invoice-dialog.tsx`.
 
 ## Operational states (Phase 7)
 
 `components/manage-stay-dialog.tsx` on every approved / current stay in the
-reception tables: extend (manager, caretaker), approve / decline a requester's
+reception tables: extend — a later check-out (`extendStayAction`) or an
+earlier check-in (`advanceCheckInAction`, 25 Sep 2026), manager and caretaker,
+each a date box plus `TimeSelect` — approve / decline a requester's
 extension, move rooms (`reassignRooms`, audited), release a no-show, cancel.
 Requesters ask for an extension from their booking view. Actions are in
 `app/actions/operations.ts`; pure rules in `lib/operations.ts`
-(`extensionError`, `noShowReleasable`, `planRoomRange`, `roomBlockError`,
+(`extensionError`, `earlierCheckInError`, `noShowReleasable`, `planRoomRange`, `roomBlockError`,
 `blockSegment`); the automatic no-show release in `lib/no-show-server.ts`, run by
 `/api/mail/cron` before the daily mail. Maintenance blocks (`room_blocks`) are
 managed in Guest Houses & Rooms, merged into availability as segments with

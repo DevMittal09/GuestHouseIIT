@@ -1539,6 +1539,11 @@ template was in `public/`. The header images are `word/media/image1.jpg` and
   half-up to the rupee per SAC group. An extra bed takes its room's slab.
   **Office to confirm** with its accountant that the guest house supplies are
   taxable at these rates (an institute guest house can have exemptions).
+
+  > *Superseded 25 Sep 2026:* the slab is gone. The owner gave the rates —
+  > **18% on rooms, 5% on food** — and the office's revised template charges
+  > each on its own subtotal ("GST @ 18% on Subtotal (A)"). Rates-include-GST
+  > is still a Setting and still on. See "25 Sep 2026" below.
 - **Numbering** is per financial year, `GH/2026-27/0001` (prefix and width are
   Settings), taken by `issue_invoice()` in the same transaction as the insert:
   no gaps, no duplicates, and a refused issue spends no number (verified).
@@ -2343,6 +2348,11 @@ A row without `revision` is upgraded on read; saving from the console writes
 `revision: 2`, after which an untick sticks. **Rejected:** a floor like the
 Institute Grant ban — that would take the choice away from the office for good.
 
+> *Superseded in part 25 Sep 2026:* Special Funds is now offered to
+> **everyone except students** — personal and alumni bookings and the IAR
+> Student Cell included — and only students are floored. Revision 3. See
+> "25 Sep 2026" below.
+
 ### Migration 24 also fixes infants on Supabase
 
 `booking_guests.age` had `check (age between 1 and 120)` since migration 1,
@@ -2499,3 +2509,149 @@ serves meals), and the kitchen page's back link goes to each role's own desk.
 **Why.** `/manager/meals` was already open to the caretaker — it bills dining
 from there — but only the manager's console linked to it, and its "Back to the
 desk" link sent the caretaker to `/manager`, which bounced them home.
+
+## 25 Sep 2026 — the office's fifth list of corrections
+
+Nine items relayed by the owner; all done. The list and its status are in
+[01-background.md](01-background.md).
+
+### The Assistant Warden sees the student's record, and a check of the family against it
+
+**Decision.** On `/warden`, the Review dialog of a student's request shows the
+student's academic record (the same rows as the student's own card, parents'
+and guardian's names included) and a table: each Father / Mother / Guardian on
+the request beside the name on record, with a verdict — matches, partly
+matches, differs, not on record. The queue row carries a one-glance badge
+(`✓ Matches record` / `⚠ Check names`). `lib/academic/family.ts` compares
+(case, spacing, punctuation and titles ignored; "Ramesh" against "Ramesh
+Menon" is *partly*); `studentRecordPanels` builds it on the warden's page.
+
+**Why the warden may now see the record.** Until today the record was shown
+only to the person it describes. The office asked for the forwarding approver
+to verify the parents, and the Assistant Warden is the student's own hostel's
+approver — `canReview` already scoped the queue to them. The panels are built
+for the requests in that queue and nothing else, and the record is still
+never stored, logged or mailed. **Rejected:** snapshotting the record's
+parents onto the booking at submission — it would put the parents' names in
+the database for every stay, which the DPDP notes avoid, and the warden
+decides within days, while the record is current. Only the warden's queue
+gets the panel: the other approvers see no students.
+
+### Guests the portal already knows are filled in, not typed
+
+**Decision.** `KnownGuest` (`lib/known-guests.ts`) from two sources, in order:
+the academic record's father, mother and guardian (students only — the other
+record kinds describe the requester, not a family), then the adults on the
+requester's own earlier bookings. Choosing a one-of-each relationship (Father,
+Mother, Guardian, Grandmother, Grandfather — the Form Builder's
+`unique_relationships`) fills the name and the gender it implies when the name
+box is empty, or still holds what the previous choice filled in. Every guest
+card has **Fill in from saved details**, which fills name, gender,
+relationship, citizenship and nationality. A line under the name says where it
+came from ("As on your academic record (Father)").
+
+**Why these fields and no others.** The ID number and passport number are
+stored encrypted and are the requester's to type again — sending them back to
+the browser to save typing is the wrong trade. The age is left out because it
+changes and it decides who is an infant (last year's four-year-old is five).
+Infants are left out for the same reason. **Why only one-of-each relationships
+fill automatically:** there is one father; there may be two siblings, and the
+second must not arrive with the first one's name. **Why not for the desk:** the
+manager's "own" bookings are other people's guests. **Why a booking raised for
+a club does not count:** those guests are the club's, not the professor's.
+**Rejected:** matching the relationship typed in a free-text box — typing
+"Mother-in-law" passes through "Mother" and would fill the wrong name.
+
+### Additional charges: charged under a section, which decides the GST
+
+**Decision.** The desk can add up to 20 charges while invoicing — what it was,
+a comment printed under it, a quantity and an amount — each **charged under**
+Room charges (A, accommodation GST), Dining charges (B, food GST) or Other (no
+GST, its own table, Subtotal (C)). They are priced like tariff lines (the
+typed amount includes GST when the tariffs do), kept as typed on the draft
+(`invoices.extra_charges`, migration 26), and frozen priced in the snapshot
+(`extra_lines`).
+
+**Why a section rather than a free GST rate per line.** The office's revised
+template prints one GST rate per section ("GST @ 18% on Subtotal (A)"); a line
+at another rate inside (A) would make that row untrue. An extra bed is
+accommodation, a birthday cake is food, a broken vase is compensation for
+damage — which is not a supply, so no GST, and it cannot sit under (A) or (B)
+without being taxed. **Rejected:** negative charges (discounts) — not asked
+for, and a discount on a tax invoice has its own rules. **Rejected:** changing
+`issue_invoice()` to take the charges — the Supabase store writes the draft
+first and the function promotes it, so the SQL stays as migration 19 left it.
+
+### Typed meal counts reprice at once
+
+**Decision.** `priceInvoiceDraft` prices the unsaved counts and charges; the
+dialog calls it 350 ms after the desk stops typing and shows those figures,
+and the Issue dialog quotes that grand total. "Save counts" became "Save
+draft"; Preview PDF still wants a saved draft (it prints the saved one).
+
+**Why.** The report — "the extra meals are not reflected in the final price" —
+was the preview: the amounts and the grand total only moved after Save counts,
+and the Issue dialog quoted the old total. Issuing did use the typed counts,
+but nothing on screen said so. **Rejected:** pricing in the browser — the
+tariffs and rules are server data, and the dialog's rule has always been
+"nothing is shown that the server did not price".
+
+### GST 18% on rooms, 5% on food, per section — and old invoices print as issued
+
+**Decision.** `gst_room_percent` 18 (every room line and extra bed),
+`gst_meal_percent` 5; the ₹7,500 slab and its two Settings are gone. A saved
+invoice-Settings row from before is upgraded **once** (`upgradeInvoiceRules`,
+`InvoiceRules.revision` 2): the slab dropped, both rates from the defaults.
+New invoices are `InvoiceDocument.version: 2` — Rate column, Room Charges
+Subtotal (A) + GST on it, Dining Charges Subtotal (B) + GST on it, Other
+Charges when there are any, Grand Total (Including GST) — the owner's edit of
+`public/GHM_Invoice.docx`. `invoiceTable()` is the one description of the
+table for the PDF and the preview; a `version: 1` snapshot is laid out exactly
+as it was issued (Tariff, Sub Total (A)/(B), Total (A+B), GST on Total).
+
+**Why reset a saved rate.** A row saved before today holds `5` because that
+was the default, not because anyone chose it — the same reasoning as the
+capacity and debit upgrades. After the upgrade a rate set in the console
+stands. **Why keep rates-include-GST on.** The owner gave the rates, not a
+change of pricing; with it on, the guest pays the same and the taxable value
+backed out is smaller. **Office to confirm** that the tariffs are
+GST-inclusive at 18% — if they are exclusive, untick "Rates include GST".
+**Why the PDF learnt to turn a page.** Additional charges make the table
+longer; it used to run into the bank-details box. It now continues on the next
+page, with the footer on every page.
+
+### Special Funds for everyone but students — and a student is a student
+
+**Decision.** Special Funds joins the personal, alumni and IAR Student Cell
+defaults (room and dining); only students are floored. Debit rules revision 3
+adds it once to a saved row, per revision, so a category the office unticked
+after revision 2 stays unticked. **`debitCategoryFor` checks the student role
+first.** A student's only booking type is personal, so their bookings used to
+fall into the "personal" category and the Students row in Settings was never
+read — harmless while the two lists matched, a leak the moment personal
+bookings were offered Special Funds.
+
+### "Add infant" makes an infant card
+
+**Decision.** The form row has a `kind`; "Add infant" appends an infant card —
+"Infant N", its age a list of 0–4, no Aadhaar and no ID upload, the
+relationship free text. The payload marks it `infant: true`, and the schema
+then requires an age below 5 on it (on both sides), so an infant card cannot
+arrive as an adult on a form where ages are optional. **The age still
+decides** who is an infant: a guest card with an age below 5 is still one, as
+before. **Rejected:** an `is_infant` column filled from the card — the stored
+flag has always been derived from the age, and two sources could disagree.
+
+### An earlier check-in, for whoever may extend
+
+**Decision.** Manage → Extend the stay has **Earlier check-in** beside Later
+check-out, for the manager and the caretaker (`canUpdateLifecycle`, the same
+people who extend). `earlierCheckInError` mirrors `extensionError`: an
+approved or current stay, earlier than the booked check-in, by at most
+60 days. The holds
+move through `updateBookingDetails`, so a room someone else still holds — or
+their turnaround — refuses it. Logged; no mail, as a desk extension sends
+none. **Why.** A guest arriving a day early could not be marked Occupied
+(refused before the booked check-in) and the only way round was cancelling
+and rebooking. The Manage dialog's date boxes also stopped using
+`datetime-local`, which the traps list forbids: a date box and `TimeSelect`.

@@ -15,10 +15,13 @@ import {
   buildInvoiceDocument,
   financialYear,
   invoiceBlocker,
+  invoiceKind,
   InvoiceStateError,
   mealCovers,
+  parseExtraCharges,
   paymentReferenceError,
   PAYMENT_MODES,
+  type ExtraCharge,
   type InvoiceDocument,
   type InvoiceRecord,
   type MealCounts,
@@ -33,8 +36,9 @@ import type { BookingWithDetails, Profile } from "@/lib/types";
 import type { ActionResult } from "./bookings";
 
 /**
- * Invoices (Phase 5): preview → correct the meal counts → issue & print →
- * mark paid, from the manager's and caretaker's consoles.
+ * Invoices (Phase 5): preview → correct the meal counts and add any
+ * additional charges → issue & print → mark paid, from the manager's and
+ * caretaker's consoles.
  *
  * Every action re-checks the caller's role here; the buttons being hidden is
  * not the boundary. Issuing freezes the whole printed document as the
@@ -45,10 +49,17 @@ import type { ActionResult } from "./bookings";
 
 const MIGRATION_HINT =
   "Invoices are not set up yet — apply supabase/migrations/00000000000019_tariffs_and_invoices.sql.";
+const EXTRA_CHARGES_HINT =
+  "Additional charges are not set up yet — apply supabase/migrations/00000000000026_invoice_additional_charges.sql.";
 
 function fail(e: unknown): { ok: false; error: string } {
   if (e instanceof InvoiceStateError) return { ok: false, error: e.message };
   const code = (e as { code?: string } | null)?.code;
+  const message = (e as { message?: string } | null)?.message ?? "";
+  // A missing column is migration 26, the only one that added to invoices since.
+  if ((code === "42703" || code === "PGRST204") && message.includes("extra_charges")) {
+    return { ok: false, error: EXTRA_CHARGES_HINT };
+  }
   if (code === "42P01" || code === "PGRST205" || code === "PGRST202") return { ok: false, error: MIGRATION_HINT };
   console.error("[invoices]", e);
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
@@ -70,13 +81,26 @@ function cleanCounts(counts: MealCounts | null | undefined): MealCounts | null {
   return { breakfast: n(counts.breakfast), lunch: n(counts.lunch), dinner: n(counts.dinner) };
 }
 
-async function priceBooking(booking: BookingWithDetails, mealCounts: MealCounts | null, extra: { invoiceNumber?: string; invoiceDate?: string } = {}) {
+/** The desk's additional charges, checked for this booking — or why they cannot be used. */
+function cleanCharges(booking: BookingWithDetails, input: unknown): ExtraCharge[] {
+  const parsed = parseExtraCharges(input, booking.service_type === "meals_only" ? "dining" : "stay");
+  if (!parsed.ok) throw new InvoiceStateError(parsed.error);
+  return parsed.charges;
+}
+
+async function priceBooking(
+  booking: BookingWithDetails,
+  mealCounts: MealCounts | null,
+  extraCharges: ExtraCharge[],
+  extra: { invoiceNumber?: string; invoiceDate?: string } = {}
+) {
   const [rules, tariffs] = await Promise.all([getRules(), getStore().listTariffs()]);
   return buildInvoiceDocument(booking, {
     tariffs,
     rules: rules.invoice,
     capacity: rules.capacity,
     mealCounts,
+    extraCharges,
     ...extra,
   });
 }
@@ -90,6 +114,13 @@ export type InvoicePanel = {
   document: InvoiceDocument;
   /** The covers worked out from the booking, for "reset to computed". */
   computedCounts: MealCounts;
+  /** The additional charges on the draft (or the issued invoice), as the desk typed them. */
+  extraCharges: ExtraCharge[];
+  /** For the charge editor's labels: whether amounts include GST, and each section's rate. */
+  pricesIncludeGst: boolean;
+  gstRoomPercent: number;
+  gstMealPercent: number;
+  kind: "stay" | "dining";
   /** Why it cannot be issued now, or null. */
   blocker: string | null;
   /** Earlier invoices, cancelled. */
@@ -109,7 +140,8 @@ export async function getInvoicePanel(
     const invoices = await store.listInvoices({ bookingId });
     const live = invoices.find((i) => i.status !== "cancelled") ?? null;
     const document =
-      live?.document ?? (await priceBooking(booking, live?.meal_counts ?? null));
+      live?.document ?? (await priceBooking(booking, live?.meal_counts ?? null, live?.extra_charges ?? []));
+    const rules = (await getRules()).invoice;
     return {
       ok: true,
       panel: {
@@ -118,6 +150,11 @@ export async function getInvoicePanel(
         current: live,
         document,
         computedCounts: mealCovers(booking),
+        extraCharges: live?.extra_charges ?? [],
+        pricesIncludeGst: rules.prices_include_gst,
+        gstRoomPercent: rules.gst_room_percent,
+        gstMealPercent: rules.gst_meal_percent,
+        kind: invoiceKind(document),
         blocker: live && live.status !== "draft" ? null : invoiceBlocker(booking, document),
         history: invoices.filter((i) => i.status === "cancelled"),
         canCancel: canCancelInvoices(user.role),
@@ -128,13 +165,43 @@ export async function getInvoicePanel(
   }
 }
 
-/** Keep the desk's meal-count correction on the draft. */
-export async function saveInvoiceMealCounts(bookingId: string, counts: MealCounts | null): Promise<ActionResult> {
+/**
+ * What the invoice would say with the counts and charges the desk has typed,
+ * saved or not — so the figures on screen, and the total the Issue dialog
+ * quotes, follow every change as it is made. Nothing is written.
+ *
+ * Before 25 Sep 2026 the preview repriced only after "Save counts": meals
+ * the caretaker added showed the old amounts and the old grand total, which
+ * read as the extra meals not being charged.
+ */
+export async function priceInvoiceDraft(
+  bookingId: string,
+  counts: MealCounts | null,
+  charges: unknown
+): Promise<{ ok: true; document: InvoiceDocument; blocker: string | null } | { ok: false; error: string }> {
+  try {
+    await requireDesk();
+    const booking = await getStore().getBooking(bookingId);
+    if (!booking) return { ok: false, error: "Booking not found" };
+    const document = await priceBooking(booking, cleanCounts(counts), cleanCharges(booking, charges));
+    return { ok: true, document, blocker: invoiceBlocker(booking, document) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Keep the desk's meal-count correction and additional charges on the draft. */
+export async function saveInvoiceDraftAction(
+  bookingId: string,
+  counts: MealCounts | null,
+  charges: unknown
+): Promise<ActionResult> {
   try {
     const user = await requireDesk();
     const store = getStore();
-    if (!(await store.getBooking(bookingId))) return { ok: false, error: "Booking not found" };
-    await store.saveInvoiceDraft(bookingId, cleanCounts(counts), user.id);
+    const booking = await store.getBooking(bookingId);
+    if (!booking) return { ok: false, error: "Booking not found" };
+    await store.saveInvoiceDraft(bookingId, cleanCounts(counts), user.id, cleanCharges(booking, charges));
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -148,7 +215,8 @@ export async function saveInvoiceMealCounts(bookingId: string, counts: MealCount
  */
 export async function issueInvoiceAction(
   bookingId: string,
-  counts: MealCounts | null
+  counts: MealCounts | null,
+  charges: unknown = []
 ): Promise<{ ok: true; invoiceId: string; number: string } | { ok: false; error: string }> {
   try {
     const user = await requireDesk();
@@ -156,8 +224,9 @@ export async function issueInvoiceAction(
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
     const mealCounts = cleanCounts(counts);
+    const extraCharges = cleanCharges(booking, charges);
     const now = new Date().toISOString();
-    const document = await priceBooking(booking, mealCounts, { invoiceDate: now });
+    const document = await priceBooking(booking, mealCounts, extraCharges, { invoiceDate: now });
     const blocker = invoiceBlocker(booking, document);
     if (blocker) return { ok: false, error: blocker };
 
@@ -174,6 +243,7 @@ export async function issueInvoiceAction(
       digits: rules.serial_digits,
       document,
       mealCounts,
+      extraCharges,
       issuedBy: user.id,
       replaces: replaced?.id ?? null,
     });
@@ -181,6 +251,7 @@ export async function issueInvoiceAction(
       booking: booking.booking_reference_id,
       grand_total: invoice.grand_total,
       replaces: replaced?.invoice_number ?? null,
+      additional_charges: extraCharges.length,
     });
     await notifyInvoiceIssued(invoice.id);
     revalidatePath("/manager");

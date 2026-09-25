@@ -80,6 +80,28 @@ export function extensionError(
   return null;
 }
 
+/**
+ * Why this stay cannot start earlier, at `from`, or null when it can
+ * (25 Sep 2026). The mirror of an extension: the desk brings the check-in
+ * forward for a guest arriving before the booked time — without it an early
+ * arrival could not be marked Occupied, which is refused before the booked
+ * check-in (`occupancyNotStartedError`).
+ */
+export function earlierCheckInError(
+  booking: Pick<BookingWithDetails, "status" | "check_in" | "service_type">,
+  from: string
+): string | null {
+  if (booking.service_type === "meals_only") return "A dining booking has no stay to move";
+  if (!["APPROVED", "OCCUPIED"].includes(booking.status)) {
+    return "Only an approved or current stay can be moved";
+  }
+  const t = Date.parse(from);
+  if (!Number.isFinite(t)) return "Choose the new check-in date and time";
+  if (t >= Date.parse(booking.check_in)) return "The new check-in must be earlier than the current one";
+  if (Date.parse(booking.check_in) - t > 60 * 86_400_000) return "Bring the check-in forward by at most 60 days at a time";
+  return null;
+}
+
 // ------------------------------------------------------------- no-shows
 
 /** Whether the desk recorded the guest arriving. */

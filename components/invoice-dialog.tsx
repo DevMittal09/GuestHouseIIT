@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
+import { PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import {
   cancelInvoiceAction,
   getInvoicePanel,
   issueInvoiceAction,
   markInvoicePaidAction,
-  saveInvoiceMealCounts,
+  priceInvoiceDraft,
+  saveInvoiceDraftAction,
   type InvoicePanel,
 } from "@/app/actions/invoices";
 import { Badge } from "@/components/ui/badge";
@@ -26,16 +28,17 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  extraChargeFormRows,
   formatINR,
   gstBreakdownLines,
-  gstRowLabel,
   GST_INCLUDED_NOTE,
   INVOICE_STATUS_LABELS,
   invoiceFacts,
-  invoiceKind,
-  invoiceTotalLabels,
+  invoiceTable,
+  MAX_EXTRA_CHARGES,
   PAYMENT_MODE_LABELS,
   PAYMENT_MODES,
+  type ExtraChargeSection,
   type InvoiceDocument,
   type MealCounts,
   type PaymentMode,
@@ -45,19 +48,77 @@ import { formatDateTime, formatDate } from "@/lib/format";
 import { toInstituteDateValue } from "@/lib/tz";
 import type { BookingWithDetails } from "@/lib/types";
 
+/** An additional charge as the desk is typing it: rupees and quantity as text. */
+type ChargeRow = {
+  key: string;
+  section: ExtraChargeSection;
+  description: string;
+  comment: string;
+  quantity: string;
+  amount: string;
+};
+
+type CountRows = Record<keyof MealCounts, string>;
+
+/** What the server said the typed counts and charges come to. */
+type Priced = {
+  /** The typed state this answer is for; stale once the desk types again. */
+  key: string;
+  document: InvoiceDocument | null;
+  blocker: string | null;
+  error: string | null;
+};
+
+const newCharge = (section: ExtraChargeSection): ChargeRow => ({
+  key: crypto.randomUUID(),
+  section,
+  description: "",
+  comment: "",
+  quantity: "1",
+  amount: "",
+});
+
+const countRowsOf = (doc: InvoiceDocument): CountRows => ({
+  breakfast: String(doc.meal_lines[0].count),
+  lunch: String(doc.meal_lines[1].count),
+  dinner: String(doc.meal_lines[2].count),
+});
+
+const parseCounts = (counts: CountRows): MealCounts => {
+  const n = (v: string) => Math.max(0, Math.floor(Number(v) || 0));
+  return { breakfast: n(counts.breakfast), lunch: n(counts.lunch), dinner: n(counts.dinner) };
+};
+
+/** The charges as the server takes them — the row keys stay here. */
+const chargesPayload = (rows: ChargeRow[]) =>
+  rows.map(({ section, description, comment, quantity, amount }) => ({ section, description, comment, quantity, amount }));
+
+/** Comparable form of what the desk has typed, to tell saved from unsaved. */
+const draftKeyOf = (counts: CountRows | null, rows: ChargeRow[]) =>
+  JSON.stringify({ counts: counts ? parseCounts(counts) : null, charges: chargesPayload(rows) });
+
 /**
  * The invoice at the desk (Phase 5): preview, correct the meal counts the
- * kitchen actually served, issue & print, then record the payment.
+ * kitchen actually served, add any additional charges (25 Sep 2026 — an extra
+ * bed, a broken vase, with a comment), issue & print, then record the payment.
  *
- * Everything shown is what the server priced — the dialog fetches the panel
- * on opening and after every step, so it never prints a figure the server
- * would not. Once issued, the preview *is* the stored snapshot.
+ * Everything shown is what the server priced. The figures follow every change
+ * as it is typed — `priceInvoiceDraft` reprices the unsaved counts and charges
+ * a moment after the desk stops typing — so the amounts, the grand total and
+ * the total quoted by the Issue dialog are always what will be issued. (Until
+ * 25 Sep 2026 they changed only after "Save counts", and meals added at the
+ * desk looked as if they were not being charged.) Once issued, the preview
+ * *is* the stored snapshot.
  */
 export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "id" | "booking_reference_id"> }) {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<InvoicePanel | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [counts, setCounts] = useState<Record<keyof MealCounts, string> | null>(null);
+  const [counts, setCounts] = useState<CountRows | null>(null);
+  const [charges, setCharges] = useState<ChargeRow[]>([]);
+  /** What was last saved (or loaded), to tell whether anything is unsaved. */
+  const [savedKey, setSavedKey] = useState<string>("");
+  const [priced, setPriced] = useState<Priced | null>(null);
   const [isPending, startTransition] = useTransition();
   const [confirmIssue, setConfirmIssue] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -74,12 +135,12 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
     }
     setError(null);
     setPanel(result.panel);
-    const shown = result.panel.document.meal_lines;
-    setCounts({
-      breakfast: String(shown[0].count),
-      lunch: String(shown[1].count),
-      dinner: String(shown[2].count),
-    });
+    const nextCounts = countRowsOf(result.panel.document);
+    const nextCharges = extraChargeFormRows(result.panel.extraCharges).map((c) => ({ ...c, key: crypto.randomUUID() }));
+    setCounts(nextCounts);
+    setCharges(nextCharges);
+    setSavedKey(draftKeyOf(nextCounts, nextCharges));
+    setPriced(null);
   }, [booking.id]);
 
   useEffect(() => {
@@ -87,17 +148,33 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
   }, [open, load]);
 
   const issued = panel?.current && panel.current.status !== "draft" ? panel.current : null;
-  const editable = !issued;
+  const editable = !!panel && !issued;
+  const draftKey = draftKeyOf(counts, charges);
+  const dirty = editable && !!counts && draftKey !== savedKey;
 
-  const parsedCounts = (): MealCounts | null => {
-    if (!counts) return null;
-    const n = (v: string) => Math.max(0, Math.floor(Number(v) || 0));
-    return { breakfast: n(counts.breakfast), lunch: n(counts.lunch), dinner: n(counts.dinner) };
-  };
-  const countsChanged =
-    !!panel &&
-    !!counts &&
-    panel.document.meal_lines.some((l) => String(l.count) !== counts[l.meal]);
+  // Reprice what the desk has typed, a moment after they stop typing. Only the
+  // answer for the current state is shown; an older one is dropped.
+  useEffect(() => {
+    if (!dirty || !counts) return;
+    const key = draftKey;
+    const timer = setTimeout(() => {
+      void priceInvoiceDraft(booking.id, parseCounts(counts), chargesPayload(charges)).then((result) =>
+        setPriced(
+          result.ok
+            ? { key, document: result.document, blocker: result.blocker, error: null }
+            : { key, document: null, blocker: null, error: result.error }
+        )
+      );
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [dirty, draftKey, counts, charges, booking.id]);
+
+  const current = dirty && priced?.key === draftKey ? priced : null;
+  /** Repricing has not caught up with the last change yet. */
+  const pricing = dirty && !current;
+  // While repricing, the last figures stay on screen rather than flickering.
+  const shownDoc = (dirty ? (current?.document ?? priced?.document) : null) ?? panel?.document ?? null;
+  const problem = dirty ? (current?.error ?? current?.blocker ?? null) : (panel?.blocker ?? null);
 
   const run = (work: () => Promise<{ ok: boolean; error?: string }>, success: string, after?: () => void) =>
     startTransition(async () => {
@@ -116,7 +193,7 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
 
   const issue = () =>
     startTransition(async () => {
-      const result = await issueInvoiceAction(booking.id, parsedCounts());
+      const result = await issueInvoiceAction(booking.id, counts ? parseCounts(counts) : null, chargesPayload(charges));
       setConfirmIssue(false);
       if (!result.ok) {
         toast.error(result.error);
@@ -126,6 +203,9 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
       openPdf(result.invoiceId);
       await load();
     });
+
+  const updateCharge = (key: string, patch: Partial<ChargeRow>) =>
+    setCharges((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -147,7 +227,7 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
           <DialogDescription>
             {issued
               ? `${issued.invoice_number}, issued ${issued.issued_at ? formatDateTime(issued.issued_at) : ""}. An issued invoice cannot be changed — a correction is a cancellation and a new invoice.`
-              : "Check the meal counts against the kitchen's tally, then issue. Issuing numbers the invoice and freezes it."}
+              : "Check the meal counts against the kitchen's tally and add any additional charges, then issue. The figures update as you type. Issuing numbers the invoice and freezes it."}
           </DialogDescription>
         </DialogHeader>
 
@@ -158,25 +238,37 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
         )}
         {!panel && !error && <p className="py-8 text-center text-sm text-muted-foreground">Pricing the stay…</p>}
 
-        {panel && counts && (
+        {panel && counts && shownDoc && (
           <>
             <InvoicePreview
-              doc={panel.document}
+              doc={shownDoc}
               counts={editable ? counts : null}
               onCount={(meal, value) => setCounts((c) => (c ? { ...c, [meal]: value } : c))}
+              pricing={pricing}
             />
 
-            {editable && panel.blocker && (
+            {editable && (
+              <ExtraChargesEditor
+                rows={charges}
+                panel={panel}
+                onAdd={() => setCharges((rows) => [...rows, newCharge(panel.kind === "dining" ? "dining" : "room")])}
+                onChange={updateCharge}
+                onRemove={(key) => setCharges((rows) => rows.filter((r) => r.key !== key))}
+              />
+            )}
+
+            {editable && problem && (
               <p
                 role="alert"
                 className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100"
               >
-                ⚠ {panel.blocker}
+                ⚠ {problem}
               </p>
             )}
 
             {editable && (
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {dirty && <span className="mr-auto text-xs text-muted-foreground">Unsaved changes</span>}
                 <Button
                   variant="outline"
                   disabled={isPending}
@@ -189,20 +281,25 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={isPending || !countsChanged}
-                  onClick={() => run(() => saveInvoiceMealCounts(booking.id, parsedCounts()), "Meal counts saved")}
+                  disabled={isPending || !dirty || !!current?.error}
+                  onClick={() =>
+                    run(
+                      () => saveInvoiceDraftAction(booking.id, parseCounts(counts), chargesPayload(charges)),
+                      "Draft saved"
+                    )
+                  }
                 >
-                  Save counts
+                  Save draft
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={isPending || countsChanged}
-                  title={countsChanged ? "Save the counts first" : undefined}
+                  disabled={isPending || dirty}
+                  title={dirty ? "Save the draft first" : undefined}
                   onClick={() => window.open(`/api/invoices/preview/${booking.id}`, "_blank", "noopener")}
                 >
                   Preview PDF
                 </Button>
-                <Button disabled={isPending || !!panel.blocker} onClick={() => setConfirmIssue(true)}>
+                <Button disabled={isPending || pricing || !!problem} onClick={() => setConfirmIssue(true)}>
                   Issue &amp; print
                 </Button>
               </div>
@@ -303,13 +400,13 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
           open={confirmIssue}
           onOpenChange={setConfirmIssue}
           title="Issue this invoice?"
-          description={`It takes the next number for this financial year and can never be edited afterwards — a mistake means cancelling it and issuing another. Grand total ${panel ? formatINR(panel.document.grand_total) : ""}.`}
+          description={`It takes the next number for this financial year and can never be edited afterwards — a mistake means cancelling it and issuing another. Grand total ${shownDoc ? formatINR(shownDoc.grand_total) : ""}.`}
           consequences={
-            countsChanged ? ["The meal counts you have typed are used, even though they are not saved yet."] : undefined
+            dirty ? ["The meal counts and charges you have typed are used, even though they are not saved yet."] : undefined
           }
           confirmLabel="Issue & print"
           confirmVariant="default"
-          pending={isPending}
+          pending={isPending || pricing}
           onConfirm={issue}
         />
         <ConfirmDialog
@@ -350,15 +447,134 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
   );
 }
 
-/** The invoice's figures laid out like the printed page, meal counts editable before issue. */
+/**
+ * The desk's additional charges: what it was, what it is charged under (which
+ * decides its GST), how many, the amount each, and a comment.
+ */
+function ExtraChargesEditor({
+  rows,
+  panel,
+  onAdd,
+  onChange,
+  onRemove,
+}: {
+  rows: ChargeRow[];
+  panel: InvoicePanel;
+  onAdd: () => void;
+  onChange: (key: string, patch: Partial<ChargeRow>) => void;
+  onRemove: (key: string) => void;
+}) {
+  const dining = panel.kind === "dining";
+  const sectionLabels: [ExtraChargeSection, string][] = [
+    ...(dining ? [] : ([["room", `Room charges (A) — GST ${panel.gstRoomPercent}%`]] as [ExtraChargeSection, string][])),
+    ["dining", `Dining charges${dining ? "" : " (B)"} — GST ${panel.gstMealPercent}%`],
+    ["other", "Other — no GST (damage, loss)"],
+  ];
+  return (
+    <section className="space-y-3 rounded-lg border p-3">
+      <div>
+        <p className="text-sm font-medium">Additional charges</p>
+        <p className="text-xs text-muted-foreground">
+          Anything to add at checkout — an extra bed arranged at the desk, a broken vase — with a comment saying what
+          it was. Each is printed in the section it is charged under and taxed at that section&apos;s rate. Enter the
+          amount {panel.pricesIncludeGst ? "including GST, as the tariffs are" : "before GST"}.
+        </p>
+      </div>
+      {rows.length === 0 && <p className="text-sm text-muted-foreground">None.</p>}
+      {rows.map((row, i) => (
+        <div key={row.key} className="space-y-2 rounded-md border bg-muted/20 p-3">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_5rem_7rem]">
+            <div className="min-w-0 space-y-1">
+              <Label htmlFor={`charge-desc-${row.key}`}>Charge {i + 1}</Label>
+              <Input
+                id={`charge-desc-${row.key}`}
+                value={row.description}
+                maxLength={80}
+                placeholder="e.g. Extra bed, Broken vase"
+                onChange={(e) => onChange(row.key, { description: e.target.value })}
+              />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <Label htmlFor={`charge-section-${row.key}`}>Charged under</Label>
+              <NativeSelect
+                id={`charge-section-${row.key}`}
+                value={row.section}
+                onChange={(e) => onChange(row.key, { section: e.target.value as ExtraChargeSection })}
+              >
+                {sectionLabels.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`charge-qty-${row.key}`}>Qty</Label>
+              <Input
+                id={`charge-qty-${row.key}`}
+                inputMode="numeric"
+                className="text-right tabular-nums"
+                value={row.quantity}
+                onChange={(e) => onChange(row.key, { quantity: e.target.value.replace(/[^\d]/g, "") })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`charge-amount-${row.key}`}>₹ each</Label>
+              <Input
+                id={`charge-amount-${row.key}`}
+                inputMode="decimal"
+                className="text-right tabular-nums"
+                value={row.amount}
+                placeholder="0.00"
+                onChange={(e) => onChange(row.key, { amount: e.target.value.replace(/[^\d.]/g, "") })}
+              />
+            </div>
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1 space-y-1">
+              <Label htmlFor={`charge-comment-${row.key}`}>Comment (printed under the charge)</Label>
+              <Input
+                id={`charge-comment-${row.key}`}
+                value={row.comment}
+                maxLength={200}
+                placeholder="e.g. Vase in B-104 broken on 3 Oct"
+                onChange={(e) => onChange(row.key, { comment: e.target.value })}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label={`Remove charge ${i + 1}`}
+              onClick={() => onRemove(row.key)}
+            >
+              <Trash2Icon />
+            </Button>
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" disabled={rows.length >= MAX_EXTRA_CHARGES} onClick={onAdd}>
+        <PlusIcon />
+        Add a charge
+      </Button>
+    </section>
+  );
+}
+
+/**
+ * The invoice's figures laid out like the printed page — `invoiceTable`, the
+ * same description the PDF draws — with the meal counts editable before issue.
+ */
 function InvoicePreview({
   doc,
   counts,
   onCount,
+  pricing,
 }: {
   doc: InvoiceDocument;
-  counts: Record<keyof MealCounts, string> | null;
+  counts: CountRows | null;
   onCount: (meal: keyof MealCounts, value: string) => void;
+  pricing: boolean;
 }) {
   // The same facts the PDF prints (`invoiceFacts`): project rows only with
   // the Project head, and on a dining invoice nothing about rooms.
@@ -366,8 +582,8 @@ function InvoicePreview({
   const facts = [...left, ...right]
     .filter(([label]) => !/^Invoice (No|Date)/.test(label))
     .map(([label, value]) => [label.replace(/\s*:\s*$/, ""), value] as [string, string]);
-  const dining = invoiceKind(doc) === "dining";
-  const labels = invoiceTotalLabels(doc);
+  const table = invoiceTable(doc);
+  const figure = pricing ? "opacity-60 transition-opacity" : "transition-opacity";
   return (
     <div className="space-y-3 text-sm">
       <dl className="grid gap-x-4 gap-y-1 rounded-lg border p-3 sm:grid-cols-2">
@@ -381,89 +597,33 @@ function InvoicePreview({
 
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full min-w-[28rem] text-sm">
-          {/* A dining booking had no room, so there is no room table. */}
-          {!dining && (
-            <>
-              <thead className="bg-muted/60">
-                <tr>
-                  <th className="p-2 text-left font-medium">Room (with extra beds)</th>
-                  <th className="p-2 text-right font-medium">Day(s)</th>
-                  <th className="p-2 text-right font-medium">Tariff</th>
-                  <th className="p-2 text-right font-medium">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {doc.room_lines.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="p-2 text-muted-foreground">
-                      No rooms
-                    </td>
-                  </tr>
-                )}
-                {doc.room_lines.map((l, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="p-2">{l.description}</td>
-                    <td className="p-2 text-right tabular-nums">{l.days}</td>
-                    <td className="p-2 text-right tabular-nums">{l.rate === null ? "⚠ no rate" : formatINR(l.rate)}</td>
-                    <td className="p-2 text-right tabular-nums">{formatINR(l.amount)}</td>
-                  </tr>
-                ))}
-                <tr className="border-t font-medium">
-                  <td colSpan={3} className="p-2 text-right">
-                    Sub Total (A)
-                  </td>
-                  <td className="p-2 text-right tabular-nums">{formatINR(doc.subtotal_rooms)}</td>
-                </tr>
-              </tbody>
-            </>
-          )}
-          <thead className="bg-muted/60">
-            <tr className={dining ? undefined : "border-t"}>
-              <th className="p-2 text-left font-medium">Dining</th>
-              <th className="p-2 text-right font-medium">No(s)</th>
-              <th className="p-2 text-right font-medium">Tariff</th>
-              <th className="p-2 text-right font-medium">Amount</th>
-            </tr>
-          </thead>
+          {table.sections.map((section, s) => (
+            <SectionRows
+              key={section.key}
+              section={section}
+              first={s === 0}
+              rateHeading={table.rateHeading}
+              counts={counts}
+              onCount={onCount}
+              figure={figure}
+            />
+          ))}
           <tbody>
-            {doc.meal_lines.map((l) => (
-              <tr key={l.meal} className="border-t">
-                <td className="p-2">{MEAL_LABELS[l.meal]}</td>
-                <td className="p-2 text-right">
-                  {counts ? (
-                    <Input
-                      aria-label={`${MEAL_LABELS[l.meal]} served`}
-                      inputMode="numeric"
-                      className="ml-auto h-8 w-20 text-right tabular-nums"
-                      value={counts[l.meal]}
-                      onChange={(e) => onCount(l.meal, e.target.value.replace(/[^\d]/g, ""))}
-                    />
-                  ) : (
-                    <span className="tabular-nums">{l.count}</span>
-                  )}
-                </td>
-                <td className="p-2 text-right tabular-nums">{l.rate === null ? "—" : formatINR(l.rate)}</td>
-                <td className="p-2 text-right tabular-nums">{formatINR(l.amount)}</td>
-              </tr>
-            ))}
-            {[
-              ...(dining ? [] : [["Sub Total (B)", doc.subtotal_dining]]),
-              [labels.total, doc.total],
-              [gstRowLabel(doc).replace(/:$/, ""), doc.gst],
-            ].map(([label, value]) => (
-              <tr key={String(label)} className="border-t font-medium">
+            {table.closing.map((t, i) => (
+              <tr
+                key={t.label}
+                className={
+                  i === table.closing.length - 1
+                    ? "border-t bg-muted/40 text-base font-semibold"
+                    : "border-t font-medium"
+                }
+              >
                 <td colSpan={3} className="p-2 text-right">
-                  {label}
+                  {t.label.replace(/:$/, "")}
                 </td>
-                <td className="p-2 text-right tabular-nums">{formatINR(Number(value))}</td>
+                <td className={`p-2 text-right tabular-nums ${figure}`}>{formatINR(t.amount)}</td>
               </tr>
             ))}
-            <tr className="border-t bg-muted/40 text-base font-semibold">
-              <td colSpan={3} className="p-2 text-right">
-                {labels.grandTotal}
-              </td>
-              <td className="p-2 text-right tabular-nums">{formatINR(doc.grand_total)}</td>
-            </tr>
           </tbody>
         </table>
       </div>
@@ -477,9 +637,81 @@ function InvoicePreview({
       )}
       {counts && (
         <p className="text-xs text-muted-foreground">
-          Meal counts are covers — meals ticked × guests eating (infants excluded). Amounts update after Save counts.
+          Meal counts are covers — meals ticked × guests eating (infants excluded). Amounts and the grand total
+          update as you type{pricing ? " — updating…" : "."}
         </p>
       )}
     </div>
+  );
+}
+
+function SectionRows({
+  section,
+  first,
+  rateHeading,
+  counts,
+  onCount,
+  figure,
+}: {
+  section: ReturnType<typeof invoiceTable>["sections"][number];
+  first: boolean;
+  rateHeading: string;
+  counts: CountRows | null;
+  onCount: (meal: keyof MealCounts, value: string) => void;
+  figure: string;
+}) {
+  return (
+    <>
+      <thead className="bg-muted/60">
+        <tr className={first ? undefined : "border-t"}>
+          <th className="p-2 text-left font-medium">{section.heading}</th>
+          <th className="p-2 text-right font-medium">{section.qtyHeading}</th>
+          <th className="p-2 text-right font-medium">{rateHeading}</th>
+          <th className="p-2 text-right font-medium">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {section.rows.length === 0 && (
+          <tr>
+            <td colSpan={4} className="p-2 text-muted-foreground">
+              {section.key === "rooms" ? "No rooms" : "None"}
+            </td>
+          </tr>
+        )}
+        {section.rows.map((row, i) => (
+          <tr key={`${row.label}-${i}`} className="border-t">
+            <td className="p-2">
+              {row.label}
+              {row.note && <span className="block text-xs text-muted-foreground">{row.note}</span>}
+            </td>
+            <td className="p-2 text-right">
+              {row.meal && counts ? (
+                <Input
+                  aria-label={`${MEAL_LABELS[row.meal]} served`}
+                  inputMode="numeric"
+                  className="ml-auto h-8 w-20 text-right tabular-nums"
+                  value={counts[row.meal]}
+                  onChange={(e) => onCount(row.meal!, e.target.value.replace(/[^\d]/g, ""))}
+                />
+              ) : (
+                <span className="tabular-nums">{row.qty}</span>
+              )}
+            </td>
+            <td className={`p-2 text-right tabular-nums ${figure}`}>
+              {row.rate === null ? (row.unpriced ? "⚠ no rate" : "—") : formatINR(row.rate)}
+            </td>
+            <td className={`p-2 text-right tabular-nums ${figure}`}>{formatINR(row.amount)}</td>
+          </tr>
+        ))}
+        {section.totals.map((t) => (
+          <tr key={t.label} className="border-t font-medium">
+            <td colSpan={3} className="p-2 text-right">
+              {t.label.replace(/:$/, "")}
+            </td>
+            <td className={`p-2 text-right tabular-nums ${figure}`}>{formatINR(t.amount)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </>
   );
 }

@@ -124,12 +124,47 @@ Rules worth keeping:
 - **The card is outside the `<form>`** on `/book`. It is read-only and
   submits nothing, and nothing from the record is stored on the booking.
 - **Personal data.** The student record holds parents' names and a phone
-  number. It is shown only to the person it describes, is never stored or
-  logged by the portal, and never goes into mail. Keep it that way. The DPDP
-  notes in [05-production-plan.md](05-production-plan.md) apply.
+  number. It is shown to the person it describes and — since 25 Sep 2026 —
+  to the **Assistant Warden reviewing that student's request** (§2a). It is
+  never stored or logged by the portal, and never goes into mail. Keep it
+  that way. The DPDP notes in [05-production-plan.md](05-production-plan.md)
+  apply.
+- **The record's family fills in guests** (25 Sep 2026). On New Booking,
+  choosing Father / Mother / Guardian on a guest fills the name from the
+  student's record (`knownGuestsFromRecord` in `lib/known-guests.ts`), and
+  "Fill in from saved details" offers them. The names go only to the
+  student's own browser, as the card above already does. The other kinds of
+  record describe the requester, not a family, so they add nobody.
 - **A dashed "Demo build" note** appears under the card while a dummy record
   is shown (`isMockAcademicSource()`), as the sign-in page does for the dummy
   LDAP accounts.
+
+## 2a. The Assistant Warden's check (25 Sep 2026)
+
+The office asked that whoever forwards a student's request can verify the
+parents on it. On `/warden`, `studentRecordPanels` (`lib/academic/family-server.ts`)
+looks up the record of each student whose request is in the warden's queue —
+the same cached, never-throwing `academicRecordFor` — and the Review dialog
+shows it (`components/student-record-check.tsx`): the record's rows, then a
+table of Father / Mother / Guardian — the name on record, the guests on the
+request with that relationship, and a verdict from `checkFamily`
+(`lib/academic/family.ts`):
+
+| Verdict | When |
+| --- | --- |
+| Matches the record | The same name, ignoring case, spacing, punctuation and titles (Mr, Dr, Smt, Shri…) |
+| Partly matches — check | One name inside the other ("Ramesh" / "Ramesh Menon"), or the same words reordered |
+| Differs from the record | Anything else |
+| Not on record | The request names one; the record has no such name |
+| Not on this request | On record, and nobody with that relationship is on the request |
+
+The queue row carries **✓ Matches record** (every parent or guardian on the
+request matches) or **⚠ Check names**. Infants are never compared, whatever
+relationship was typed for them. With no record or an outage, the dialog says
+so and the warden checks the names themselves — the queue still works.
+
+Only the warden's queue gets this: `canReview` already confines it to their
+hostel's students, and no other approver sees students.
 
 ## 3. The dummy records
 
@@ -287,10 +322,11 @@ This is what was done on 21 Sep 2026, and it is quick to repeat:
   mail (§2). An office's head is CC'd on every staff mail about its bookings;
   whether the head also *approves* is the office's per-booking choice
   ("Requires HOD approval", Phase 4).
-- **Nothing from the record is stored on the booking.** Reviewers do not see
-  the requester's phone or parents. If they need to, snapshot the rows onto
-  the booking at submission (as `custom_fields` snapshots its labels), so a
-  later edit in the academic database does not rewrite history.
+- **Nothing from the record is stored on the booking.** Since 25 Sep 2026
+  the Assistant Warden *sees* a student's record while reviewing (§2a), read
+  live. Other reviewers still do not. If a later stage needs it after the
+  record may have changed, snapshot the rows onto the booking at submission
+  (as `custom_fields` snapshots its labels).
 - **The profile is not synced from the record.** Routing still uses
   `profiles.hostel_name` and `department_or_club`, set by the developer
   console. Once the real database is trusted, filling those from the record

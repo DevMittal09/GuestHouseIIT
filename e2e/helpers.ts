@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Cookie, type Page } from "@playwright/test";
 import path from "node:path";
 
 /**
@@ -29,13 +29,35 @@ export const ACCOUNTS = {
 /** A 1×1 PNG that passes the upload sniffer, for guest ID documents. */
 export const ID_DOCUMENT = path.join(process.cwd(), "e2e", "fixtures", "id-document.png");
 
+/**
+ * Each account's session cookies, kept for the rest of the run.
+ *
+ * The sign-in throttle counts every attempt — 8 per username per 15 minutes
+ * (`RATE_LIMITS.signIn`) — and by 25 Sep 2026 the suite needed the manager
+ * more often than that, so the journeys that came last were locked out with
+ * "Too many attempts". A person at the desk stays signed in, and so does the
+ * suite now: the **first** sign-in of each account goes through the form, and
+ * later ones reuse its session. If the server no longer knows the session,
+ * `/sign-in` shows the form again and the form is used.
+ */
+const sessions = new Map<string, Cookie[]>();
+
 export async function signIn(page: Page, account: { uid: string; password: string }): Promise<void> {
   await page.context().clearCookies();
+  const saved = sessions.get(account.uid);
+  if (saved) {
+    await page.context().addCookies(saved);
+    // A live session is sent on from /sign-in to its home.
+    await page.goto("/sign-in");
+    if (!new URL(page.url()).pathname.startsWith("/sign-in")) return;
+    await page.context().clearCookies();
+  }
   await page.goto("/sign-in");
   await page.getByLabel("LDAP username").fill(account.uid);
   await page.getByLabel("LDAP password").fill(account.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"), { timeout: 30_000 });
+  sessions.set(account.uid, await page.context().cookies());
 }
 
 /** The institute's own clock — the one every date on the form is read in. */
@@ -161,7 +183,10 @@ export async function fillGuest(
   const field = (leaf: string) => page.locator(`[name="${base}.${leaf}"]`);
 
   await field("name").fill(person.name);
-  await field("age").fill(person.age);
+  // An infant card ("Add infant") offers its ages as a list; a guest card is a number box.
+  const age = field("age");
+  if (await age.evaluate((el) => el.tagName === "SELECT")) await age.selectOption(person.age);
+  else await age.fill(person.age);
   if (await field("gender").count()) await field("gender").selectOption(person.gender ?? "female");
   const relationship = field("relationship");
   if (await relationship.count()) {

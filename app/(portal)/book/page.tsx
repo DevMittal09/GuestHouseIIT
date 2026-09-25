@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { clubBookingNotice, defaultCopyToFor, mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser, facultyInChargeForClub } from "@/lib/club-booking-server";
+import { knownGuestsFor } from "@/lib/known-guests-server";
 
 export default async function BookPage({
   searchParams,
@@ -80,9 +81,12 @@ export default async function BookPage({
 
   // The same context `createBooking` builds, so the form offers exactly what
   // the server accepts: Settings, debitable heads, projects, the HOD.
-  const [config, context] = await Promise.all([
+  // …and who the form can fill in: the family on the requester's academic
+  // record and the guests of their earlier bookings (25 Sep 2026).
+  const [config, context, knownGuests] = await Promise.all([
     getEffectiveFormConfig(requester.role),
     bookingContextFor(requester),
+    knownGuestsFor(requester),
   ]);
   const guestHouses = (await getStore().listGuestHouses()).filter((g) =>
     config.allowed_guest_house_ids.includes(g.id)
@@ -164,6 +168,7 @@ export default async function BookPage({
         projects={context.projects}
         hodApprovers={context.hodApprovers}
         defaultCopyTo={defaultCopyTo}
+        knownGuests={knownGuests}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { reviewBooking } from "@/app/actions/bookings";
 import { BookingDetails } from "@/components/booking-details";
+import { FamilyBadge, StudentRecordCheck } from "@/components/student-record-check";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,16 +29,23 @@ import {
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
 import { lapsedError } from "@/lib/workflow";
+import type { StudentRecordPanel } from "@/lib/academic/family";
 import type { BookingWithDetails } from "@/lib/types";
 
 export function ReviewQueue({
   bookings,
   emptyMessage,
   showAlumniCard = false,
+  studentRecords = {},
 }: {
   bookings: BookingWithDetails[];
   emptyMessage: string;
   showAlumniCard?: boolean;
+  /**
+   * The Assistant Warden's check of each student's family against the
+   * academic record, by booking id (25 Sep 2026). Absent on every other queue.
+   */
+  studentRecords?: Record<string, StudentRecordPanel>;
 }) {
   if (bookings.length === 0) {
     return (
@@ -62,7 +70,7 @@ export function ReviewQueue({
         </TableHeader>
         <TableBody>
           {bookings.map((b) => (
-            <ReviewRow key={b.id} booking={b} showAlumniCard={showAlumniCard} />
+            <ReviewRow key={b.id} booking={b} showAlumniCard={showAlumniCard} studentRecord={studentRecords[b.id]} />
           ))}
         </TableBody>
       </Table>
@@ -73,9 +81,11 @@ export function ReviewQueue({
 function ReviewRow({
   booking,
   showAlumniCard,
+  studentRecord,
 }: {
   booking: BookingWithDetails;
   showAlumniCard: boolean;
+  studentRecord?: StudentRecordPanel;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -119,7 +129,10 @@ function ReviewRow({
       </TableCell>
       <TableCell>{booking.guest_house.name}</TableCell>
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
-      <TableCell>{booking.guests.length}</TableCell>
+      <TableCell>
+        {booking.guests.length}
+        <FamilyBadge panel={studentRecord} />
+      </TableCell>
       <TableCell>{booking.rooms_requested}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
@@ -137,6 +150,7 @@ function ReviewRow({
                   That is the only place it can go — you either forward it or reject it.
                 </DialogDescription>
               </DialogHeader>
+              {studentRecord && <StudentRecordCheck panel={studentRecord} />}
               <BookingDetails booking={booking} showAlumniCard={showAlumniCard} />
               <DialogFooter className="gap-2">
                 <RejectDialog booking={booking} onDone={() => setDetailOpen(false)} />

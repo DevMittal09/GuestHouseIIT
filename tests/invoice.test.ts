@@ -240,12 +240,13 @@ describe("the invoice document", () => {
     expect([doc.rooms, doc.guests, doc.infants]).toEqual([2, 4, 1]);
     expect(doc.debit_head_label).toBe("Project");
     expect(doc.project_number).toBe("SP/2025/017");
-    // The tariffs include GST at 5%: the Tariff column is the rate before GST
-    // (₹2,000 / 1.05 = ₹1,904.76), the Amount that rate × days.
+    // The tariffs include GST — 18% on rooms since 25 Sep 2026: the Rate
+    // column is the rate before GST (₹2,000 / 1.18 = ₹1,694.92), the Amount
+    // that rate × days.
     expect(doc.room_lines.map((l) => [l.description, l.days, l.rate, l.amount, l.amount_incl])).toEqual([
-      ["B-204 — Double sharing", 2, 190_476, 380_952, 400_000],
-      ["Extra bed — B-204", 2, 47_619, 95_238, 100_000],
-      ["B-110 — Single", 2, 190_476, 380_952, 400_000],
+      ["B-204 — Double sharing", 2, 169_492, 338_984, 400_000],
+      ["Extra bed — B-204", 2, 42_373, 84_746, 100_000],
+      ["B-110 — Single", 2, 169_492, 338_984, 400_000],
     ]);
     // 4 diners: dinner ×2 days, breakfast ×2, lunch ×1.
     expect(doc.meal_lines.map((l) => [l.meal, l.count, l.rate, l.amount_incl])).toEqual([
@@ -258,7 +259,7 @@ describe("the invoice document", () => {
     expect(doc.total + doc.gst).toBe(doc.grand_total);
     expect(doc.subtotal_rooms + doc.subtotal_dining).toBe(doc.total);
     expect(doc.gst_breakdown.map((g) => [g.label, g.sac, g.percent, g.taxable + g.tax])).toEqual([
-      ["Accommodation", "996311", 5, 900_000],
+      ["Accommodation", "996311", 18, 900_000],
       ["Food", "996331", 5, 192_000],
     ]);
     for (const g of doc.gst_breakdown) expect(g.cgst + g.sgst).toBe(g.tax);
@@ -298,12 +299,13 @@ describe("the invoice document", () => {
     expect(doc.grand_total).toBe(1_223_000);
   });
 
-  it("uses the higher accommodation rate above ₹7,500 a day", () => {
+  // The ₹7,500 slab (5% below, 18% above) was replaced by a flat 18% on
+  // rooms on 25 Sep 2026 — see fifth-round.test.ts.
+  it("taxes every room line at the one accommodation rate, however dear", () => {
     const rows = [...TARIFFS, t({ guest_house_id: GH.id, item: "room", requester_role: "employee", rate: 9000 })];
     const doc = buildInvoiceDocument(stay, { tariffs: rows, rules: RULES, capacity: CAP });
-    const room = doc.room_lines.find((l) => l.kind === "room")!;
-    expect(room.gst_percent).toBe(18); // ₹9,000 incl. 5% is ₹8,571 before GST, above ₹7,500
-    expect(room.rate).toBe(762_712); // ₹9,000 / 1.18
+    expect(new Set(doc.room_lines.map((l) => l.gst_percent))).toEqual(new Set([18]));
+    expect(doc.room_lines.find((l) => l.kind === "room")!.rate).toBe(762_712); // ₹9,000 / 1.18
     expect(doc.grand_total).toBe(2 * 2 * 900_000 + 100_000 + 192_000);
   });
 

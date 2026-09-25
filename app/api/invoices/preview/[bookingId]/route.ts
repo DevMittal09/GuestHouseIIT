@@ -8,8 +8,8 @@ import { getStore } from "@/lib/store";
 
 /**
  * The desk's print preview of an invoice not yet issued: priced now, with the
- * saved meal-count correction, and marked DRAFT across the page. Nothing is
- * numbered or stored.
+ * saved meal-count correction and additional charges, and marked DRAFT across
+ * the page. Nothing is numbered or stored.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ bookingId: string }> }) {
   const user = await getCurrentUser();
@@ -29,6 +29,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ boo
     rules: rules.invoice,
     capacity: rules.capacity,
     mealCounts: draft?.meal_counts ?? null,
+    extraCharges: draft?.extra_charges ?? [],
   });
   return new NextResponse(Buffer.from(renderInvoicePdf(document, null)), {
     headers: {

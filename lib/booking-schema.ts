@@ -172,6 +172,10 @@ function guestSchema(config: RoleFormConfig) {
     citizenship: z.enum(["indian", "other"], { message: "Select the guest's citizenship" }),
     nationality: optionalTrimmed,
     passport_number: passportField,
+    // Entered on an infant card ("Add infant", 25 Sep 2026). The age still
+    // decides who is an infant; this only makes the card's age mandatory and
+    // below the limit, so an infant card cannot arrive as an adult.
+    infant: z.boolean().nullish(),
   });
 }
 
@@ -284,7 +288,7 @@ export function bookingPayloadSchema(
         message: "Choose whether this is an official or a personal booking",
       }),
       // Who pays. Checked against the role and the kind of booking below: a
-      // student or a personal booking is always personal funds.
+      // student's booking is always personal funds.
       debit_head: z
         .enum([
           "institute_grant",
@@ -524,6 +528,23 @@ export function bookingPayloadSchema(
       if (v.rooms.length === 0) {
         ctx.addIssue({ code: "custom", message: "Add at least one room", path: ["rooms"] });
       }
+    })
+    .superRefine((v, ctx) => {
+      // An infant card's age is its whole point: required whatever the role's
+      // form says about ages, and below the limit.
+      v.rooms.forEach((room, i) => {
+        room.guests.forEach((g, j) => {
+          if (!g.infant || isInfantAge(g.age)) return;
+          ctx.addIssue({
+            code: "custom",
+            message:
+              g.age === null
+                ? "Choose the infant's age"
+                : `An infant is below ${INFANT_AGE_LIMIT} — add a guest instead`,
+            path: ["rooms", i, "guests", j, "age"],
+          });
+        });
+      });
     })
     .superRefine((v, ctx) => {
       // The per-room occupancy rule, applied card by card so the message lands

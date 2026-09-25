@@ -41,8 +41,8 @@ form, all approval tiers, the room grid, invoices, the desk and the console.
 | --- | --- | --- |
 | `npm run lint` | ESLint incl. the strict React Compiler rules | must stay clean |
 | `npm run typecheck` | `next typegen && tsc --noEmit` | `npm run build` also typechecks |
-| `npm test` | Vitest, `tests/` — 15 files, 263 checks (24 Sep 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
-| `npm run test:e2e` | Playwright, `e2e/` — 19 journeys | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
+| `npm test` | Vitest, `tests/` — 16 files, 289 checks (25 Sep 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
+| `npm run test:e2e` | Playwright, `e2e/` — 22 journeys (about 50 s) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
 
 Playwright journeys: `booking-journey` (student → warden → manager → desk →
 invoice → paid), `official-and-dining` (faculty through the HOD; a meals-only
@@ -53,7 +53,27 @@ moves who can book), `room-party` (2 guests + 2 infants in a room),
 `alumni-and-relationships` (Student Cell alumni booking; no second Mother),
 `sign-in` (Mock Authentication on a production build), `desk-links`
 (Reception → kitchen → back; the developer turned away from New Booking; the
-help line's number), `public-site` (320 px, desktop and phone).
+help line's number), `public-site` (320 px, desktop and phone), and
+`fifth-round` (25 Sep 2026: a student's Father filled in from the record, the
+infant card, the warden's "✓ Matches record"; reception bringing the seeded
+DM005 stay's check-in forward; an invoice whose grand total follows typed
+breakfasts and a "Broken vase" additional charge, then issued).
+
+**Each account signs in through the form once per run** (25 Sep 2026).
+`signIn()` in `e2e/helpers.ts` keeps each account's session cookies for the
+rest of the run and reuses them, falling back to the form if the server no
+longer knows the session. The sign-in throttle counts every attempt (8 per
+username per 15 minutes), and the suite had come to need the manager nine
+times — the last journeys failed at sign-in with "Too many attempts", which
+looked like broken tests. Keep it; a journey that must see the form itself
+signs in without the helper (`sign-in.spec.ts`).
+
+**Pick a room once the grid has loaded.** The allocation grid draws its tiles
+before the stay's occupancy arrives ("Loading occupancy…"), so a tile clicked
+at once may turn out to be inside another stay's turnaround and the dialog
+asks for **Override & Allocate** instead. `fifth-round.spec.ts` waits for the
+loading line to go and picks a tile whose title has its "Occupancy:" line —
+only a simply free room's does.
 
 A clean e2e loop — and kill a leftover server with a pattern that cannot match
 its own shell (`pkill -f "[n]ext start"`; a bare `pkill -f "next start"` in the

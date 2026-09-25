@@ -10,17 +10,14 @@ import {
 import {
   formatINR,
   gstBreakdownLines,
-  gstRowLabel,
   GST_INCLUDED_NOTE,
   INVOICE_TITLE,
   invoiceFacts,
-  invoiceKind,
-  invoiceTotalLabels,
+  invoiceTable,
   PAYMENT_MODE_LABELS,
   type InvoiceDocument,
   type InvoiceRecord,
 } from "./invoice";
-import { MEAL_LABELS } from "./meals";
 import { formatInstituteDate } from "./tz";
 
 /**
@@ -42,6 +39,12 @@ import { formatInstituteDate } from "./tz";
  *
  * Drawn here rather than in the browser so the same bytes are printed at the
  * desk, downloaded from the dashboard and attached to the mail to Accounts.
+ *
+ * **The table is `invoiceTable()`**, the same description the desk's preview
+ * draws, so version 1 snapshots reprint as issued and version 2 invoices carry
+ * the revised template's per-section GST. A table the desk's additional
+ * charges make longer than the page continues on the next one; the bank
+ * details are printed at the foot of every page.
  */
 
 const MM_PER_TWIP = 25.4 / 1440;
@@ -56,7 +59,12 @@ const PAD = 1.9;
 const BAND: [number, number, number] = [0xb7, 0xb7, 0xb7];
 const HEAD: [number, number, number] = [0xd9, 0xd9, 0xd9];
 const BODY_PT = 11;
+const NOTE_PT = 9;
 const PT = 25.4 / 72;
+/** Where the footer's box starts, less a gap: the table stops above it. */
+const CONTENT_BOTTOM = 258;
+/** Where a continuation page starts. */
+const CONTINUED_TOP = MARGIN + 4;
 
 type Stamp = Pick<InvoiceRecord, "status" | "payment_mode" | "payment_reference" | "paid_at" | "cancel_reason" | "cancelled_at">;
 
@@ -106,13 +114,6 @@ function cell(
     doc.text(line, tx, ty, { align });
     ty += lineH;
   }
-}
-
-/** Height a cell needs for `text` at the body size, never less than a template row. */
-function rowHeight(doc: jsPDF, text: string, w: number): number {
-  font(doc, "normal");
-  const lines = doc.splitTextToSize(text, w - PAD * 2).length;
-  return Math.max(ROW_H, lines * BODY_PT * PT * 1.15 + 3);
 }
 
 function header(doc: jsPDF, invoice: InvoiceDocument): number {
@@ -174,72 +175,105 @@ function details(doc: jsPDF, invoice: InvoiceDocument, top: number): number {
   return y0 + h;
 }
 
-function tariffTables(doc: jsPDF, invoice: InvoiceDocument, top: number): number {
-  const xs = [TABLE_X, TABLE_X + COLS[0], TABLE_X + COLS[0] + COLS[1], TABLE_X + COLS[0] + COLS[1] + COLS[2]];
-  let y = top;
-  cell(doc, TABLE_X, y, TABLE_W, ROW_H, "Tariff Details", { fill: BAND, bold: true, align: "center" });
-  y += ROW_H;
+/** The running y position, moved to a new page when the next block will not fit. */
+type Cursor = { y: number };
 
-  const headRow = (first: string, second: string) => {
-    cell(doc, xs[0], y, COLS[0], ROW_H, first, { fill: HEAD, bold: true, align: "center" });
-    cell(doc, xs[1], y, COLS[1], ROW_H, second, { fill: HEAD, bold: true, align: "center" });
-    cell(doc, xs[2], y, COLS[2], ROW_H, "Tariff", { fill: HEAD, bold: true, align: "center" });
-    cell(doc, xs[3], y, COLS[3], ROW_H, "Amount", { fill: HEAD, bold: true, align: "center" });
-    y += ROW_H;
-  };
-  const bodyRow = (label: string, qty: string, rate: string, amount: string) => {
-    const h = rowHeight(doc, label, COLS[0]);
-    cell(doc, xs[0], y, COLS[0], h, label);
-    cell(doc, xs[1], y, COLS[1], h, qty, { align: "center" });
-    cell(doc, xs[2], y, COLS[2], h, rate, { align: "right" });
-    cell(doc, xs[3], y, COLS[3], h, amount, { align: "right" });
-    y += h;
-  };
-  const totalRow = (label: string, amount: string) => {
-    cell(doc, xs[0], y, COLS[0] + COLS[1] + COLS[2], ROW_H, label, { bold: true, align: "right" });
-    cell(doc, xs[3], y, COLS[3], ROW_H, amount, { bold: true, align: "right" });
-    y += ROW_H;
-  };
-
-  // A dining booking had no room, so its invoice has no room table and no
-  // "Sub Total (A)" of nothing — only the meals (24 Sep 2026).
-  const dining = invoiceKind(invoice) === "dining";
-  if (!dining) {
-    headRow("Room Details (with additional bed details)", "Day(s)");
-    for (const line of invoice.room_lines) {
-      bodyRow(line.description, String(line.days), line.rate === null ? "—" : formatINR(line.rate), formatINR(line.amount));
-    }
-    // The template has two ruled rows; a one-room stay keeps the second, blank.
-    for (let i = invoice.room_lines.length; i < 2; i++) bodyRow("", "", "", "");
-    totalRow("Sub Total (A):", formatINR(invoice.subtotal_rooms));
-  }
-
-  headRow("Dining Charges Details", "No(s)");
-  for (const line of invoice.meal_lines) {
-    bodyRow(
-      MEAL_LABELS[line.meal],
-      String(line.count),
-      line.rate === null ? "—" : formatINR(line.rate),
-      formatINR(line.amount)
-    );
-  }
-  const labels = invoiceTotalLabels(invoice);
-  if (!dining) totalRow("Sub Total (B):", formatINR(invoice.subtotal_dining));
-  totalRow(`${labels.total}${dining ? ":" : ""}`, formatINR(invoice.total));
-  totalRow(gstRowLabel(invoice), formatINR(invoice.gst));
-  totalRow(`${labels.grandTotal}:`, formatINR(invoice.grand_total));
-  return y;
+function room(doc: jsPDF, at: Cursor, h: number) {
+  if (at.y + h <= CONTENT_BOTTOM) return;
+  doc.addPage();
+  at.y = CONTINUED_TOP;
 }
 
-function signatures(doc: jsPDF, invoice: InvoiceDocument, top: number, stamp: Stamp | null) {
-  font(doc, "bold", 10);
-  doc.text(`GSTIN No.:${invoice.gstin}`, MARGIN + 1.3, top + 5);
+/** A label with an optional smaller note beneath it (an additional charge's comment). */
+function labelLines(doc: jsPDF, label: string, note: string | null, w: number) {
+  font(doc, "normal");
+  const main = doc.splitTextToSize(label, w - PAD * 2) as string[];
+  font(doc, "normal", NOTE_PT);
+  const sub = note ? (doc.splitTextToSize(note, w - PAD * 2) as string[]) : [];
+  const h = main.length * BODY_PT * PT * 1.15 + sub.length * NOTE_PT * PT * 1.15;
+  return { main, sub, h: Math.max(ROW_H, h + 3) };
+}
+
+function labelCell(doc: jsPDF, x: number, y: number, w: number, lines: ReturnType<typeof labelLines>) {
+  doc.rect(x, y, w, lines.h, "S");
+  const bodyH = BODY_PT * PT * 1.15;
+  const noteH = NOTE_PT * PT * 1.15;
+  const blockH = lines.main.length * bodyH + lines.sub.length * noteH;
+  let ty = y + (lines.h - blockH) / 2;
+  font(doc, "normal");
+  for (const line of lines.main) {
+    doc.text(line, x + PAD, ty + bodyH * 0.78);
+    ty += bodyH;
+  }
+  font(doc, "normal", NOTE_PT);
+  doc.setTextColor(0x44, 0x44, 0x44);
+  for (const line of lines.sub) {
+    doc.text(line, x + PAD, ty + noteH * 0.78);
+    ty += noteH;
+  }
+  doc.setTextColor(0, 0, 0);
+}
+
+function tariffTables(doc: jsPDF, invoice: InvoiceDocument, top: number): number {
+  const xs = [TABLE_X, TABLE_X + COLS[0], TABLE_X + COLS[0] + COLS[1], TABLE_X + COLS[0] + COLS[1] + COLS[2]];
+  const at: Cursor = { y: top };
+  const table = invoiceTable(invoice);
+  room(doc, at, ROW_H * 3);
+  cell(doc, TABLE_X, at.y, TABLE_W, ROW_H, "Tariff Details", { fill: BAND, bold: true, align: "center" });
+  at.y += ROW_H;
+
+  const headRow = (first: string, second: string) => {
+    // A heading is never left alone at the foot of a page.
+    room(doc, at, ROW_H * 2);
+    cell(doc, xs[0], at.y, COLS[0], ROW_H, first, { fill: HEAD, bold: true, align: "center" });
+    cell(doc, xs[1], at.y, COLS[1], ROW_H, second, { fill: HEAD, bold: true, align: "center" });
+    cell(doc, xs[2], at.y, COLS[2], ROW_H, table.rateHeading, { fill: HEAD, bold: true, align: "center" });
+    cell(doc, xs[3], at.y, COLS[3], ROW_H, "Amount", { fill: HEAD, bold: true, align: "center" });
+    at.y += ROW_H;
+  };
+  const bodyRow = (label: string, note: string | null, qty: string, rate: string, amount: string) => {
+    const lines = labelLines(doc, label, note, COLS[0]);
+    room(doc, at, lines.h);
+    labelCell(doc, xs[0], at.y, COLS[0], lines);
+    cell(doc, xs[1], at.y, COLS[1], lines.h, qty, { align: "center" });
+    cell(doc, xs[2], at.y, COLS[2], lines.h, rate, { align: "right" });
+    cell(doc, xs[3], at.y, COLS[3], lines.h, amount, { align: "right" });
+    at.y += lines.h;
+  };
+  const totalRow = (label: string, amount: string) => {
+    room(doc, at, ROW_H);
+    cell(doc, xs[0], at.y, COLS[0] + COLS[1] + COLS[2], ROW_H, label, { bold: true, align: "right" });
+    cell(doc, xs[3], at.y, COLS[3], ROW_H, amount, { bold: true, align: "right" });
+    at.y += ROW_H;
+  };
+
+  // A dining booking had no room, so its invoice has no room table — only
+  // the meals (24 Sep 2026). `invoiceTable` leaves the section out.
+  for (const section of table.sections) {
+    headRow(section.heading, section.qtyHeading);
+    for (const row of section.rows) {
+      bodyRow(row.label, row.note, String(row.qty), row.rate === null ? "—" : formatINR(row.rate), formatINR(row.amount));
+    }
+    // The template has two ruled room rows; a one-room stay keeps the second, blank.
+    for (let i = section.rows.length; i < section.minRows; i++) bodyRow("", null, "", "", "");
+    for (const t of section.totals) totalRow(t.label, formatINR(t.amount));
+  }
+  for (const t of table.closing) totalRow(t.label, formatINR(t.amount));
+  return at.y;
+}
+
+function signatures(doc: jsPDF, invoice: InvoiceDocument, start: number, stamp: Stamp | null) {
   // The tax breakdown a tax invoice needs: taxable value and CGST / SGST per
   // SAC and rate. Snapshots from before it existed have none.
   const lines = [
     ...gstBreakdownLines(invoice),
     ...(invoice.prices_include_gst ? [GST_INCLUDED_NOTE] : []),
   ];
+  const at: Cursor = { y: start };
+  room(doc, at, Math.max(18, 9.5 + lines.length * 3.6 + 8) + 2);
+  const top = at.y;
+  font(doc, "bold", 10);
+  doc.text(`GSTIN No.:${invoice.gstin}`, MARGIN + 1.3, top + 5);
   font(doc, "normal", 8);
   lines.forEach((line, i) => doc.text(line, MARGIN + 1.3, top + 9.5 + i * 3.6));
   const sigY = Math.max(top + 18, top + 9.5 + lines.length * 3.6 + 8);
@@ -342,20 +376,30 @@ export function renderInvoicePdf(invoice: InvoiceDocument, stamp: Stamp | null =
   y = details(doc, invoice, y);
   y = tariffTables(doc, invoice, y);
   signatures(doc, invoice, y, stamp);
-  footer(doc, invoice);
 
-  if (!invoice.invoice_number) watermark(doc, "DRAFT", [0x80, 0x80, 0x80]);
-  if (stamp?.status === "cancelled") {
-    watermark(doc, "CANCELLED", [0xb0, 0x00, 0x00]);
-    font(doc, "normal", 8);
-    doc.setTextColor(0xb0, 0, 0);
-    doc.text(
-      `Cancelled ${stamp.cancelled_at ? formatInstituteDate(stamp.cancelled_at) : ""}: ${stamp.cancel_reason ?? ""}`,
-      PAGE_W / 2,
-      256,
-      { align: "center", maxWidth: TABLE_W }
-    );
-    doc.setTextColor(0, 0, 0);
+  // The bank details and any watermark on every page, once the table has
+  // decided how many there are.
+  const pages = doc.getNumberOfPages();
+  for (let page = 1; page <= pages; page++) {
+    doc.setPage(page);
+    footer(doc, invoice);
+    if (pages > 1) {
+      font(doc, "normal", 8);
+      doc.text(`Page ${page} of ${pages}`, PAGE_W - MARGIN, PAGE_H - 4, { align: "right" });
+    }
+    if (!invoice.invoice_number) watermark(doc, "DRAFT", [0x80, 0x80, 0x80]);
+    if (stamp?.status === "cancelled") {
+      watermark(doc, "CANCELLED", [0xb0, 0x00, 0x00]);
+      font(doc, "normal", 8);
+      doc.setTextColor(0xb0, 0, 0);
+      doc.text(
+        `Cancelled ${stamp.cancelled_at ? formatInstituteDate(stamp.cancelled_at) : ""}: ${stamp.cancel_reason ?? ""}`,
+        PAGE_W / 2,
+        256,
+        { align: "center", maxWidth: TABLE_W }
+      );
+      doc.setTextColor(0, 0, 0);
+    }
   }
   return new Uint8Array(doc.output("arraybuffer"));
 }

@@ -16,10 +16,10 @@ import type { Unit } from "./units";
  * | Officer office (Director, Registrar…) | Institute / Special Funds | Institute / Special Funds |
  * | Department office | Department / Special Funds | Department / Special Funds |
  * | Club | Department / Special Funds | — |
- * | Personal booking (anyone) | Personal | — |
+ * | Personal booking (anyone) | Personal / Special Funds | Personal / Special Funds |
  *
- * **Special Funds** (24 Sep 2026) is offered on every *official* booking —
- * never a student's, never a personal one. It is stored as `special_budget`,
+ * **Special Funds** is offered to **everyone except students** (25 Sep 2026;
+ * on 24 Sep it was official bookings only). It is stored as `special_budget`,
  * the value migration 15 created for the same idea.
  *
  * The allowed list is computed on the server (`debitHeadsByType`) and handed
@@ -101,31 +101,36 @@ export type DebitRules = {
   /** Meals-only / dining bookings (Phase 6). Never Project. */
   dining: Record<DebitCategory, DebitHead[]>;
   /**
-   * Which shape of the defaults a saved row was made from. A row saved before
-   * revision 2 has never seen Special Funds, so `upgradeDebitRules` adds it
-   * once; a row saved since then is the office's own choice and is left
-   * alone, even where Special Funds was unticked. Absent on rows saved before
-   * 24 Sep 2026.
+   * Which shape of the defaults a saved row was made from. Each revision
+   * added Special Funds to more categories, so `upgradeDebitRules` adds it
+   * once to the categories a row has not yet been offered it for; a row saved
+   * since then is the office's own choice and is left alone, even where
+   * Special Funds was unticked. Absent on rows saved before 24 Sep 2026.
    */
   revision?: number;
 };
 
-/** Revision 2 (24 Sep 2026): Special Funds on every official booking. */
-export const DEBIT_RULES_REVISION = 2;
+/**
+ * Revision 2 (24 Sep 2026): Special Funds on every official booking.
+ * Revision 3 (25 Sep 2026): Special Funds for everyone except students.
+ */
+export const DEBIT_RULES_REVISION = 3;
 
 /**
- * The categories Special Funds is offered to by default: every official
- * booking. Not students, not a personal booking, and not a booking for an
- * alumnus — that one is Institute or the alumnus's own money.
+ * The categories Special Funds reached at each revision. A row is upgraded by
+ * every revision after its own, so a category the office unticked after
+ * revision 2 stays unticked when revision 3 arrives.
  */
-export const SPECIAL_FUNDS_CATEGORIES: DebitCategory[] = [
-  "faculty",
-  "staff",
-  "officer_office",
-  "department_office",
-  "club",
-  "manager",
-];
+const SPECIAL_FUNDS_ADDED_AT: Record<number, DebitCategory[]> = {
+  2: ["faculty", "staff", "officer_office", "department_office", "club", "manager"],
+  3: ["iar_student_cell", "alumni", "personal"],
+};
+
+/**
+ * The categories Special Funds is offered to by default: **everyone except
+ * students** (25 Sep 2026). A student's stay is always their own money.
+ */
+export const SPECIAL_FUNDS_CATEGORIES: DebitCategory[] = DEBIT_CATEGORIES.filter((c) => c !== "student");
 
 export const DEFAULT_DEBIT_RULES: DebitRules = {
   room: {
@@ -135,9 +140,9 @@ export const DEFAULT_DEBIT_RULES: DebitRules = {
     department_office: ["department_budget", "special_budget"],
     club: ["department_budget", "special_budget"],
     student: ["personal_funds"],
-    iar_student_cell: ["institute_grant"],
-    alumni: ["institute_grant", "personal_funds"],
-    personal: ["personal_funds"],
+    iar_student_cell: ["institute_grant", "special_budget"],
+    alumni: ["institute_grant", "personal_funds", "special_budget"],
+    personal: ["personal_funds", "special_budget"],
     manager: [...STANDARD_DEBIT_HEADS],
   },
   dining: {
@@ -147,9 +152,9 @@ export const DEFAULT_DEBIT_RULES: DebitRules = {
     department_office: ["department_budget", "special_budget"],
     club: ["department_budget", "special_budget"],
     student: ["personal_funds"],
-    iar_student_cell: ["institute_grant"],
-    alumni: ["personal_funds"],
-    personal: ["personal_funds"],
+    iar_student_cell: ["institute_grant", "special_budget"],
+    alumni: ["personal_funds", "special_budget"],
+    personal: ["personal_funds", "special_budget"],
     manager: ["department_budget", "institute_grant", "professional_development_fund", "personal_funds", "special_budget"],
   },
   revision: DEBIT_RULES_REVISION,
@@ -159,20 +164,24 @@ export const DEFAULT_DEBIT_RULES: DebitRules = {
  * Bring a saved Settings row up to the current defaults' shape, once.
  *
  * Settings rows replace the default lists wholesale, so a row saved before
- * Special Funds existed would never offer it — and the console could not
- * show it either, because the grid only lists heads in use. A row without
- * `revision` is exactly such a row: Special Funds is added to the categories
- * that get it by default, and the row is marked current. Saving from the
- * console writes the revision, after which this leaves the row alone for
- * good, so a head the office unticks stays unticked.
+ * Special Funds reached a category would never offer it there — and the
+ * console could not show it either, because the grid only lists heads in use.
+ * A row's `revision` says which categories it has already been offered it
+ * for (none without one): Special Funds is added to the categories each later
+ * revision brought in, and the row is marked current. Saving from the console
+ * writes the revision, after which this leaves the row alone for good, so a
+ * head the office unticks stays unticked.
  */
 export function upgradeDebitRules(stored: Record<string, unknown>): Record<string, unknown> {
   const revision = typeof stored.revision === "number" ? stored.revision : 1;
   if (revision >= DEBIT_RULES_REVISION) return stored;
+  const categories = Object.entries(SPECIAL_FUNDS_ADDED_AT)
+    .filter(([at]) => Number(at) > revision)
+    .flatMap(([, list]) => list);
   const add = (lists: unknown) => {
     if (!lists || typeof lists !== "object") return lists;
     const out: Record<string, unknown> = { ...(lists as Record<string, unknown>) };
-    for (const category of SPECIAL_FUNDS_CATEGORIES) {
+    for (const category of categories) {
       const list = out[category];
       if (Array.isArray(list) && !list.includes("special_budget")) out[category] = [...list, "special_budget"];
     }
@@ -212,10 +221,9 @@ export const debitHeadSchema = z.enum(DEBIT_HEAD_VALUES);
  */
 export const FORBIDDEN_DEBIT_HEADS: Partial<Record<DebitCategory, DebitHead[]>> = {
   faculty: ["institute_grant"],
-  // Special Funds are for official bookings (24 Sep 2026): never a student's
-  // stay, never a personal one.
+  // Special Funds are for everyone except students (25 Sep 2026): a
+  // student's stay is always their own money.
   student: ["special_budget"],
-  personal: ["special_budget"],
 };
 
 /** Whether this category may ever be offered that head. */
@@ -260,11 +268,18 @@ export const debitRulesSchema = z.object({
 });
 
 /**
- * The requester's category for this kind of booking. A personal booking is
- * "personal" and one for an alumnus "alumni", whoever makes it; otherwise the
- * account decides — faculty or staff for an employee (uncategorised counts as
- * faculty, the wider set), and the office's class for an office (unclassified
- * counts as a department office, the narrower).
+ * The requester's category for this kind of booking. A student is always
+ * "student"; otherwise a personal booking is "personal" and one for an
+ * alumnus "alumni", whoever makes it, and the account decides the rest —
+ * faculty or staff for an employee (uncategorised counts as faculty, the
+ * wider set), and the office's class for an office (unclassified counts as a
+ * department office, the narrower).
+ *
+ * **The student check comes first** (25 Sep 2026). A student's only booking
+ * type is personal, so before this their bookings fell into "personal" and
+ * the Students row in Settings was never read — harmless while the two lists
+ * were the same, and a leak the moment Special Funds was offered on personal
+ * bookings but not to students.
  */
 export function debitCategoryFor(
   role: Role,
@@ -272,11 +287,10 @@ export function debitCategoryFor(
   requester: Pick<Profile, "staff_category" | "unit_id">,
   units: Unit[]
 ): DebitCategory {
+  if (role === "student") return "student";
   if (bookingType === "personal") return "personal";
   if (bookingType === "alumni") return "alumni";
   switch (role) {
-    case "student":
-      return "student";
     case "employee":
       return requester.staff_category === "staff" ? "staff" : "faculty";
     case "official":

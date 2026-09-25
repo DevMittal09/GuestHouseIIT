@@ -30,8 +30,22 @@ move request-scoped database access off the service-role key so row-level
 security becomes the boundary rather than a second line behind the server
 ([26-security.md](26-security.md) §6).
 
-## 2. Loose ends from the 24 Sep 2026 rounds
+## 2. Loose ends from the 24 and 25 Sep 2026 rounds
 
+- **Apply migration 26 to the hosted project** (with 24 and 25 if missing).
+  Until it is applied, an invoice with an additional charge is refused there;
+  everything else works.
+- **Confirm the GST treatment with the office's accountant** (25 Sep 2026):
+  the tariffs are read as **including** GST at 18% on rooms and 5% on food
+  (Settings → Tariffs & Invoicing, "Rates include GST"), so the guest pays the
+  tariff and the taxable value is backed out; if the tariffs are before GST,
+  untick it. And that damage or loss recovered from a guest ("Other" charges)
+  carries no GST.
+- **The hosted invoice Settings row** is upgraded to 18% / 5% on read the
+  first time; saving Tariffs & Invoicing once writes it (revision 2).
+- **Office to confirm "Fill in from saved details"** is welcome for every
+  role: it offers the people on a requester's own earlier bookings (names,
+  gender, relationship, citizenship only).
 - **Apply migrations 24 and 25 to the hosted project** (and check what else it
   is missing — its state is not recorded). Until 25, nobody can book for a club
   there; until 24, a booking with a Copy-to address or a project sub-head is
@@ -90,7 +104,7 @@ From the original plan's "Phase 0", still open:
 
 ## 5. Tests that are still thin
 
-`npm test` (263 checks) and `npm run test:e2e` (19 journeys) run in CI. What
+`npm test` (289 checks) and `npm run test:e2e` (22 journeys) run in CI. What
 would catch the most next:
 
 1. the mail layer end to end — rendering, outbox claim and retry, recipients

@@ -211,8 +211,8 @@ export const STAFF_CATEGORY_LABELS: Record<StaffCategory, string> = {
  * Where the money for a stay comes from.
  *
  * Recorded on every booking so the accounts section knows which budget to
- * debit. A personal booking is always `personal_funds` — the guest settles at
- * checkout; everything else chooses one of these when it is made.
+ * debit. A student's booking is always `personal_funds` — the guest settles
+ * at checkout; everyone else chooses one of these when it is made.
  */
 export type DebitHead =
   | "institute_grant"
@@ -231,8 +231,8 @@ export const DEBIT_HEAD_LABELS: Record<DebitHead, string> = {
   project_grant: "Project Grant",
   department_budget: "Department Budget",
   // Stored as `special_budget` since migration 15; the office calls it
-  // Special Funds (24 Sep 2026), offered on every official booking but a
-  // student's.
+  // Special Funds (24 Sep 2026), offered to everyone except students
+  // (25 Sep 2026).
   special_budget: "Special Funds",
   personal_funds: "Personal Funds",
   alumni_fund: "Alumni Fund",
