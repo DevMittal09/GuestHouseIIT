@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SignInPanel } from "@/components/site/sign-in-panel";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
-import { PAGE_PHOTOS } from "@/lib/site";
+import { SIGN_IN_PHOTOS } from "@/lib/site";
 import { joinNames } from "@/lib/site-content";
 import { getSiteGuestHouses } from "@/lib/site-data";
 import { canBookOnBehalf } from "@/lib/access";
@@ -21,7 +21,7 @@ export default async function BookRoomPage() {
     <SignInPanel
       title="Book a room"
       intro={`Sign in to request a room at ${where}.`}
-      photo={PAGE_PHOTOS.bookRoom}
+      photo={SIGN_IN_PHOTOS.bookRoom}
       user={user}
       continueTo={canBook || !user ? "/book" : homeForRole(user.role)}
       continueLabel={canBook ? "Continue to booking" : "Go to your portal"}

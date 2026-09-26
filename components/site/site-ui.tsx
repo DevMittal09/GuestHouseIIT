@@ -7,9 +7,9 @@ import type { SitePhoto } from "@/lib/site";
 /**
  * Building blocks of the public website, in the institute's own palette
  * (iitpkd.ac.in: vermilion, charcoal, a warm light band, Source Serif
- * headings). Photographs carry the pages; type and whitespace do the rest.
- * No drop shadows, no decorative gradients (a dark wash over a photo, for
- * legible text, is the only one), near-square corners. Server components.
+ * headings). Clean and institutional: photographs **contained** in the
+ * layout (never full-bleed), bordered cards, generous whitespace, 6–8px
+ * corners, no shadows, no gradients. Server components.
  */
 
 export function Container({ className, ...props }: React.ComponentProps<"div">) {
@@ -61,78 +61,46 @@ export function PageTitle({
 }
 
 /**
- * The top of a content page: a breadcrumb back to Home, the page's `<h1>`, a
- * lead and an optional note. With a `photo` it is a banner — the photograph
- * under a dark wash, the words in white; without one, the warm band.
+ * The top of a content page, as institute sites do it: a light band with a
+ * breadcrumb back to Home, the page's `<h1>`, a lead and an optional note.
+ * (It carried a photo banner for an afternoon on 26 Sep 2026; the owner found
+ * full-width photographs overwhelming, so pages open on type again.)
  */
 export function PageMasthead({
   title,
   intro,
   note,
   aside,
-  photo,
 }: {
   title: string;
   intro?: React.ReactNode;
-  /** A small line under the lead — an edition note, a count. Inherits its colour. */
+  /** A small line under the lead — an edition note, a count. */
   note?: React.ReactNode;
   aside?: React.ReactNode;
-  photo?: SitePhoto;
 }) {
-  const banner = Boolean(photo?.src);
   return (
-    <div
-      className={cn(
-        "relative isolate overflow-hidden",
-        banner ? "bg-ink text-white" : "border-b border-border bg-band"
-      )}
-    >
-      {banner && photo?.src && (
-        <>
-          <Image src={photo.src} alt="" fill priority sizes="100vw" className="-z-10 object-cover" />
-          <div aria-hidden className="absolute inset-0 -z-10 bg-linear-to-t from-ink/90 via-ink/55 to-ink/25" />
-        </>
-      )}
-      <Container className={banner ? "pt-24 pb-12 sm:pt-32 sm:pb-16 lg:pt-44 lg:pb-20" : "pt-10 pb-12 sm:pt-12 sm:pb-14"}>
-        <nav
-          aria-label="Breadcrumb"
-          className={cn("mb-5 text-[13px]", banner ? "text-white/75" : "text-muted-foreground")}
-        >
+    <div className="border-b border-border bg-band">
+      <Container className="pt-9 pb-11 sm:pt-11 sm:pb-14">
+        <nav aria-label="Breadcrumb" className="mb-5 text-[13px] text-muted-foreground">
           <ol className="flex flex-wrap items-center gap-x-2">
             <li>
-              <Link
-                href="/"
-                className={banner ? "text-white/75 hover:text-white" : "text-muted-foreground hover:text-ink"}
-              >
+              <Link href="/" className="text-muted-foreground hover:text-ink">
                 Home
               </Link>
             </li>
             <li aria-hidden>/</li>
-            <li aria-current="page" className={banner ? "text-white" : "text-ink"}>
+            <li aria-current="page" className="text-ink">
               {title}
             </li>
           </ol>
         </nav>
         <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
           <div className="min-w-0 max-w-[60ch]">
-            <h1
-              className={cn(
-                "text-[clamp(40px,5.6vw,68px)] leading-[1] font-semibold tracking-[-0.025em]",
-                banner ? "text-white" : "text-ink"
-              )}
-            >
+            <h1 className="text-[clamp(34px,4.4vw,50px)] leading-[1.06] font-semibold tracking-[-0.02em] text-ink">
               {title}
             </h1>
-            {intro && (
-              <p className={cn("mt-5 text-[17.5px] leading-[1.6]", banner ? "text-white/85" : "text-body")}>
-                {intro}
-              </p>
-            )}
-            {note && (
-              <p className={cn("mt-4 text-[14px] leading-[1.55]", banner ? "text-white/70" : "text-muted-foreground")}>
-                {note}
-              </p>
-            )}
+            {intro && <p className="mt-4 text-[17px] leading-[1.6] text-body">{intro}</p>}
+            {note && <p className="mt-3 text-[14px] leading-[1.55] text-muted-foreground">{note}</p>}
           </div>
           {aside && <div className="min-w-0">{aside}</div>}
         </div>
@@ -165,7 +133,7 @@ export function SectionHead({
         <h2
           id={id}
           className={cn(
-            "max-w-[20ch] text-[clamp(32px,4vw,50px)] leading-[1.04] font-semibold tracking-[-0.02em]",
+            "max-w-[24ch] text-[clamp(28px,3.2vw,40px)] leading-[1.1] font-semibold tracking-[-0.015em]",
             dark ? "text-white" : "text-ink"
           )}
         >
@@ -220,7 +188,7 @@ export function ArrowLink({
 }
 
 const BUTTON_BASE =
-  "inline-flex items-center justify-center gap-2 rounded-[3px] px-6 py-3.5 text-[15px] font-semibold tracking-[0.01em] transition-colors duration-200";
+  "inline-flex items-center justify-center gap-2 rounded-[6px] px-6 py-3 text-[15px] font-semibold transition-colors duration-200";
 
 /** Link styles for the public site's button kinds. */
 export const siteButton = {
@@ -260,7 +228,7 @@ export function SitePhotoFrame({
 }) {
   return (
     <div
-      className={cn("relative min-w-0 overflow-hidden rounded-[2px] bg-band", className)}
+      className={cn("relative min-w-0 overflow-hidden rounded-[8px] bg-band", className)}
       style={aspect ? { aspectRatio: aspect } : undefined}
     >
       {photo.src ? (

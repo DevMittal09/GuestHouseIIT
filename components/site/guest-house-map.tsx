@@ -37,7 +37,7 @@ export function GuestHouseMap({ pins }: { pins: MapPin[] }) {
   const panelId = `${id}-panel`;
 
   return (
-    <div className="min-w-0 border border-border bg-white">
+    <div className="min-w-0 overflow-hidden rounded-[8px] border border-border bg-white">
       {pins.length > 1 && (
         <div
           role="tablist"

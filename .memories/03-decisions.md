@@ -2815,6 +2815,10 @@ specifically.
 header, footer, portal header. The header lies transparent over the hero on
 `/`, and the charcoal utility strip is gone.
 
+> **Superseded in part (26 Sep 2026, evening):** the header no longer lies
+> over a photograph — it is a plain white bar, sticky from `lg`. The lockup
+> itself stands.
+
 **Why.** The stacked logo file's own "IIT PALAKKAD" was ~8px tall at header
 size — the main reason the header looked cheap. Setting the name in the
 site's typefaces makes the lockup crisp at any size and on photographs.
@@ -2823,6 +2827,10 @@ it is a JPEG with a white background, unusable over a photograph.
 
 ### "Less plain" through photographs, not effects
 
+> **Superseded (26 Sep 2026, evening):** full-screen and banner photographs
+> read as "so weird" to the owner. Photos are now contained in the layout;
+> see "26 Sep 2026 (evening)" below.
+
 **Decision.** Photo banners behind inner-page titles (`PAGE_PHOTOS`), a
 split ink/photo panel, a closing photo band, split-screen sign-in pages.
 Dark washes over photos for legibility are the only gradients.
@@ -2830,4 +2838,30 @@ Dark washes over photos for legibility are the only gradients.
 **Why.** The site's best material is the office's photographs; the morning
 version used three of them. Effects (gradients, glass, shadows) are what the
 "AI look" research warned against.
+
+## 26 Sep 2026 (evening) — clean and institutional: photographs contained
+
+The owner on the afternoon version: "it looks so weird. Make it look clean
+and professional. The image filling the page this much looks so weird. Look
+online for ideas and inspirations." Detail in
+[16-public-site-and-ui.md](16-public-site-and-ui.md) ("The evening brief").
+
+**Decision.** Photographs are **contained in the layout**: a split hero
+(headline, buttons and the front-office number beside one 4:3 photo), a
+bordered card per guest house, eight amenity cards, a row of four equal
+thumbnails, a boxed closing call to action; plain light mastheads on inner
+pages; the form beside a contained photo on sign-in pages. The header is a
+plain white bar, sticky from `lg`. 8px corners on cards and photos, 6px on
+buttons and inputs, no shadows, no gradients.
+
+**Why.** The closest peer, IIT Madras's Taramani Guest House site, and the
+clean hotel and university sites in design roundups all keep photography
+inside a grid; full-screen photo heroes are a luxury-resort convention, and
+on an institute's guest-house site they read as out of place. Cards and a
+split hero are what visitors of an institutional site expect, which is
+what "professional" means here.
+**Rejected:** a full-width photo at a smaller height — still a banner, and
+still the thing the owner called weird. **Kept from the afternoon:** the
+lockup, no figures, no routes or role names, no captions, instructions on
+the Guidelines.
 

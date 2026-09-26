@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mealBookingDeadline } from "@/lib/meals";
 import { DEFAULT_RULES, type Rules } from "@/lib/settings";
 import { GUEST_HOUSE_LOCATIONS, guestHouseMapPins, INSTITUTE_MAP, MRBS_URL, SITE_LINKS } from "@/lib/site";
-import { amenities, BOOKING_STEPS, guidelineSections, MEAL_NOTICE_RULE } from "@/lib/site-content";
+import { amenities, BOOKING_STEPS, guidelineSections, houseSummary, MEAL_NOTICE_RULE } from "@/lib/site-content";
 import type { SiteGuestHouse } from "@/lib/site-data";
 import { ROLE_LABELS, type Role } from "@/lib/types";
 
@@ -76,10 +76,22 @@ describe("footer links", () => {
   });
 });
 
+describe("guest house cards", () => {
+  it("say what each house offers, without counts", () => {
+    expect(houseSummary(BAGESHRI)).toBe("Double-sharing rooms.");
+    expect(houseSummary(HAMSANANDI)).toBe("Double-sharing rooms, with meals served on site.");
+    expect(houseSummary({ ...BAGESHRI, roomsByType: { double_sharing: 4, single: 2 } })).toBe(
+      "Double-sharing and single rooms."
+    );
+  });
+});
+
 describe("amenities", () => {
-  it("lists dining only where a guest house serves meals", () => {
+  it("lists dining only where a guest house serves meals, and always eight for an even grid", () => {
     expect(amenities([BAGESHRI, HAMSANANDI]).map((a) => a.key)).toContain("dining");
     expect(amenities([BAGESHRI]).map((a) => a.key)).not.toContain("dining");
+    expect(amenities([BAGESHRI, HAMSANANDI])).toHaveLength(8);
+    expect(amenities([BAGESHRI])).toHaveLength(8);
   });
 });
 

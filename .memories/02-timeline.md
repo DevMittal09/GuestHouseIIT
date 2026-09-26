@@ -25,7 +25,7 @@ the notes of each session. The reasoning behind each step is in
 | **24 Sep (evening)** | Three defects the audit found, fixed: the developer is no longer offered New Booking (book on behalf is the manager's alone), one source for the guest house's phone and email (`lib/site.ts`) so the help line stops showing a placeholder, and a **Meal counts** link from Reception to the kitchen page with a back link to Reception. |
 | **25 Sep** | The office's **fifth list**: the student's academic record and a family check for the Assistant Warden; guests **filled in** from the record and from earlier bookings; **additional charges** on invoices (migration 26); typed meal counts repriced at once; **GST 18% rooms / 5% food** per section, to the office's revised template; **Special Funds for everyone but students**; the **infant card**; an **earlier check-in** at the desk. |
 
-| **26 Sep** | **Public site redesigned** in iitpkd.ac.in's own palette (ink, vermilion, saffron): **a map tab per guest house**, **MRBS** and institute links in the footer, a numbered Guidelines document with placeholder house rules, **large booking tiles** on My Bookings; the portal follows through the tokens. The morning's version (computed figures, route tables) was then made **photo-led and quiet** at the owner's request: a new emblem-and-type lockup, the header over the hero, photo banners, no captions, and **no requester categories, approvers or role names on the public site**. |
+| **26 Sep** | **Public site redesigned** in iitpkd.ac.in's own palette (ink, vermilion, saffron): **a map tab per guest house**, **MRBS** and institute links in the footer, a numbered Guidelines document with placeholder house rules, **large booking tiles** on My Bookings; the portal follows through the tokens. The morning's version (computed figures, route tables) was made **photo-led and quiet** in the afternoon (a new emblem-and-type lockup, no captions, **no requester categories, approvers or role names on the public site**), and in the evening **clean and institutional**, modelled on IIT Madras's Taramani Guest House: photos contained in a split hero and cards, never full-screen. |
 
 ## Branches
 
@@ -39,4 +39,4 @@ the notes of each session. The reasoning behind each step is in
 
 26 migrations · 7 one-off repairs · 12 roles (10 active, 2 legacy) · 18 demo
 personas · 6 demo bookings · 23 real rooms (Bageshri 10, Hamsanandi 13) ·
-304 unit tests · 26 end-to-end journeys · 13 console sections.
+305 unit tests · 26 end-to-end journeys · 13 console sections.

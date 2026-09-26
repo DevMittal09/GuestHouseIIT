@@ -3,7 +3,7 @@ import Link from "next/link";
 import { SignInPanel } from "@/components/site/sign-in-panel";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
-import { PAGE_PHOTOS } from "@/lib/site";
+import { SIGN_IN_PHOTOS } from "@/lib/site";
 import { joinNames, servingHouses } from "@/lib/site-content";
 import { getSiteGuestHouses } from "@/lib/site-data";
 import { canBookOnBehalf } from "@/lib/access";
@@ -38,7 +38,7 @@ export default async function BookMealPage() {
           ? `Sign in to book meals at ${where}.`
           : "Meals are not being served at the guest houses at present. You can still sign in to request a room."
       }
-      photo={PAGE_PHOTOS.bookMeal}
+      photo={SIGN_IN_PHOTOS.bookMeal}
       user={user}
       continueTo={canBook || !user ? MEAL_BOOKING_PATH : homeForRole(user.role)}
       continueLabel={canBook ? "Continue to booking" : "Go to your portal"}

@@ -63,7 +63,7 @@ Authentication (configure Google or `MOCK_LOGIN=false`), production secrets,
 the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 
 **Numbers.** 26 migrations · 12 roles (10 active) · 18 demo personas · 6 demo
-bookings · 304 unit tests · 26 end-to-end journeys · 13 console sections.
+bookings · 305 unit tests · 26 end-to-end journeys · 13 console sections.
 
 ---
 

@@ -109,7 +109,7 @@ From the original plan's "Phase 0", still open:
 
 ## 5. Tests that are still thin
 
-`npm test` (304 checks) and `npm run test:e2e` (26 journeys) run in CI. What
+`npm test` (305 checks) and `npm run test:e2e` (26 journeys) run in CI. What
 would catch the most next:
 
 1. the mail layer end to end — rendering, outbox claim and retry, recipients

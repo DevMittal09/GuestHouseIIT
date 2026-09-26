@@ -211,23 +211,14 @@ export const PHOTOS = {
 } as const;
 
 export const HOME_PHOTOS = {
+  /** Beside the headline — contained in the layout, never full-width. */
   hero: PHOTOS.courtyard,
-  /** Beside the guest-house names — the grounds, not either house in particular. */
-  houses: PHOTOS.block,
-  /** The mosaic: one large, two small, one wide. */
-  mosaic: [PHOTOS.bedroom, PHOTOS.livingDining, PHOTOS.bathroom, PHOTOS.meetingHall],
-  /** Behind "Planning a visit?". */
-  closing: PHOTOS.gazebo,
+  /** The row of thumbnails above "View all photographs". */
+  preview: [PHOTOS.bedroom, PHOTOS.livingDining, PHOTOS.bathroom, PHOTOS.meetingHall],
 };
 
-/**
- * The banner behind each inner page's title, and the photograph beside the
- * sign-in pages. Decorative (empty alt): the page's title says what it is.
- */
-export const PAGE_PHOTOS = {
-  guidelines: PHOTOS.walkway,
-  gallery: PHOTOS.lounge,
-  contact: PHOTOS.gazebo,
+/** The photograph beside each sign-in page's form. Decorative (empty alt). */
+export const SIGN_IN_PHOTOS = {
   signIn: PHOTOS.livingRoom,
   bookRoom: PHOTOS.bedroomWardrobe,
   bookMeal: PHOTOS.hall,

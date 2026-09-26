@@ -643,12 +643,12 @@ in `app/globals.css`. Full table, contrast rules and the history (the 19 Sep
 navy/gold from the design handoff) in [16-public-site-and-ui.md](16-public-site-and-ui.md).
 
 Public-site modules (26 Sep): `components/site/brand.tsx` (`BrandBlock`, the
-lockup, also in the portal header), `site-header.tsx` (client header, over
-the hero on `/`), `site-chrome.tsx` (`SiteFooter`), `guest-house-map.tsx`
-(map tabs), `PageMasthead` (photo banners) / `SectionHead` / `ArrowLink` in
-`site-ui.tsx`; `amenities` / `BOOKING_STEPS` / `guidelineSections` /
+lockup, also in the portal header), `site-header.tsx` (the white header,
+sticky from `lg`), `site-chrome.tsx` (`SiteFooter`), `guest-house-map.tsx`
+(map tabs), `PageMasthead` / `SectionHead` / `ArrowLink` in
+`site-ui.tsx`; `amenities` / `houseSummary` / `BOOKING_STEPS` / `guidelineSections` /
 `mealTimetable` in `lib/site-content.ts`; `GUEST_HOUSE_LOCATIONS` /
-`guestHouseMapPins` / `MRBS_URL` / `HOME_PHOTOS` / `PAGE_PHOTOS` in
+`guestHouseMapPins` / `MRBS_URL` / `HOME_PHOTOS` / `SIGN_IN_PHOTOS` in
 `lib/site.ts`. The My Bookings tiles are `BookingDoor` in
 `app/(portal)/dashboard/page.tsx`.
 

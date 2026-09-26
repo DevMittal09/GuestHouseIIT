@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Container, PageMasthead, SectionHead, SitePhotoFrame } from "@/components/site/site-ui";
-import { GALLERY_SECTIONS, PAGE_PHOTOS, type SitePhoto } from "@/lib/site";
+import { GALLERY_SECTIONS, type SitePhoto } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Gallery" };
@@ -20,7 +20,6 @@ export default function GalleryPage() {
     <>
       <PageMasthead
         title="Gallery"
-        photo={PAGE_PHOTOS.gallery}
         intro="The grounds, the rooms and suites, and the common spaces."
       />
 
@@ -68,7 +67,7 @@ function GalleryItem({ photo, featured }: { photo: SitePhoto; featured: boolean 
           href={photo.src}
           target="_blank"
           rel="noopener noreferrer"
-          className="group block h-full rounded-[2px]"
+          className="group block h-full rounded-[8px]"
         >
           {frame}
           <span className="sr-only">(opens the full-size photograph)</span>

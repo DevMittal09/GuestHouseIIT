@@ -62,11 +62,24 @@ export const MEAL_NOTICE_RULE =
 
 // ------------------------------------------------------------------ home page
 
+/**
+ * One line about a guest house for its card on the home page — what it
+ * offers, from the store, with no counts: "Double-sharing rooms, with meals
+ * served on site."
+ */
+export function houseSummary(house: SiteGuestHouse): string {
+  const types = roomTypesIn([house]).map((type) => ROOM_TYPE_LABELS[type].toLowerCase().replace(" ", "-"));
+  const rooms = types.length > 0 ? `${joinNames(types).replace(/^./, (c) => c.toUpperCase())} rooms` : "Rooms";
+  return house.serves_meals ? `${rooms}, with meals served on site.` : `${rooms}.`;
+}
+
 /** An amenity on the home page: a short label, and which icon draws it. */
 export type Amenity = { key: string; label: string };
 
 /**
- * The home page's amenities — short labels only.
+ * The home page's amenities — short labels only, and always eight, so the
+ * grid is two full rows of four: Dining where a guest house serves meals,
+ * Reception otherwise.
  * TODO(site): from the guest house page on iitpkd.ac.in; the office to
  * confirm they hold for every guest house.
  */
@@ -77,10 +90,11 @@ export function amenities(houses: SiteGuestHouse[]): Amenity[] {
     { key: "wifi", label: "Wi-Fi" },
     { key: "tv", label: "Television" },
     { key: "fridge", label: "Refrigerator" },
-    ...(servingHouses(houses).length > 0 ? [{ key: "dining", label: "Dining" }] : []),
     { key: "meeting", label: "Meeting room" },
     { key: "gym", label: "Exercise room" },
-    { key: "reception", label: "Reception" },
+    servingHouses(houses).length > 0
+      ? { key: "dining", label: "Dining" }
+      : { key: "reception", label: "Reception" },
   ];
 }
 

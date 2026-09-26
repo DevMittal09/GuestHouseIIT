@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowDown } from "lucide-react";
-import { Container, Label, PageMasthead, siteButton } from "@/components/site/site-ui";
-import { GUEST_HOUSE_CONTACT, GUIDELINES_PDF_URL, GUIDELINES_PROVISIONAL, PAGE_PHOTOS } from "@/lib/site";
+import { Container, PageMasthead, SectionHead, siteButton } from "@/components/site/site-ui";
+import { GUEST_HOUSE_CONTACT, GUIDELINES_PDF_URL, GUIDELINES_PROVISIONAL } from "@/lib/site";
 import { BOOKING_STEPS, guidelineSections, joinNames, type GuidelineSection } from "@/lib/site-content";
 import { getSiteGuestHouses } from "@/lib/site-data";
 import { getRules } from "@/lib/settings-server";
@@ -40,7 +40,6 @@ export default async function GuidelinesPage() {
     <>
       <PageMasthead
         title="Guidelines"
-        photo={PAGE_PHOTOS.guidelines}
         intro="How booking works, and what to expect before and during your stay."
         note={
           GUIDELINES_PROVISIONAL && provisional.length > 0 ? (
@@ -53,9 +52,9 @@ export default async function GuidelinesPage() {
         }
         aside={
           GUIDELINES_PDF_URL && (
-            <a href={GUIDELINES_PDF_URL} target="_blank" rel="noopener noreferrer" className={siteButton.light}>
+            <a href={GUIDELINES_PDF_URL} target="_blank" rel="noopener noreferrer" className={siteButton.ink}>
               Download as PDF
-              <ArrowDown aria-hidden className="size-4 text-vermilion-deep" />
+              <ArrowDown aria-hidden className="size-4 text-saffron" />
               <span className="sr-only">(opens in a new tab)</span>
             </a>
           )
@@ -63,23 +62,17 @@ export default async function GuidelinesPage() {
       />
 
       {/* ------------------------------------------------ how booking works */}
-      <section aria-labelledby="how-title" className="border-b border-border bg-band">
-        <Container className="py-[clamp(64px,8vw,112px)]">
-          <Label>In five steps</Label>
-          <h2
-            id="how-title"
-            className="mt-4 text-[clamp(30px,3.6vw,46px)] leading-[1.05] font-semibold tracking-[-0.02em] text-ink"
-          >
-            How booking works
-          </h2>
-          <ol className="mt-12 grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-x-8 gap-y-10">
+      <section aria-labelledby="how-title">
+        <Container className="pt-[clamp(56px,7vw,88px)]">
+          <SectionHead id="how-title" label="In five steps" title="How booking works" />
+          <ol className="mt-8 grid grid-cols-[repeat(auto-fit,minmax(min(190px,100%),1fr))] gap-4">
             {BOOKING_STEPS.map((step, i) => (
-              <li key={step.title} className="border-t border-ink pt-5">
-                <span className="font-heading text-[40px] leading-none font-semibold text-vermilion tabular-nums">
+              <li key={step.title} className="rounded-[8px] border border-border bg-white p-6">
+                <span className="flex size-9 items-center justify-center rounded-full bg-vermilion-soft text-[15px] font-semibold text-vermilion-deep tabular-nums">
                   {i + 1}
                 </span>
-                <h3 className="mt-4 text-[20px] font-semibold text-ink">{step.title}</h3>
-                <p className="mt-2 text-[15px] leading-[1.6] text-body">{step.body}</p>
+                <h3 className="mt-5 text-[19px] font-semibold text-ink">{step.title}</h3>
+                <p className="mt-1.5 text-[14.5px] leading-[1.6] text-body">{step.body}</p>
               </li>
             ))}
           </ol>
@@ -152,7 +145,7 @@ function GuidelineBlock({ section, number }: { section: GuidelineSection; number
           {section.title}
         </h2>
         {section.provisional && (
-          <span className="rounded-[2px] border border-notice-border bg-notice px-2 py-0.5 text-[12px] font-semibold tracking-[0.04em] text-ink">
+          <span className="rounded-full border border-notice-border bg-notice px-2.5 py-0.5 text-[12px] font-semibold text-ink">
             To be confirmed
           </span>
         )}

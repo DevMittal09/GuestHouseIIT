@@ -134,7 +134,7 @@ export function LoginForm({
           <button
             type="submit"
             disabled={isPending || username.trim() === "" || password === ""}
-            className="w-full cursor-pointer rounded-[3px] bg-vermilion-deep p-3.5 text-[15.5px] font-semibold text-white transition-colors duration-150 hover:bg-vermilion-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full cursor-pointer rounded-[6px] bg-vermilion-deep p-3.5 text-[15.5px] font-semibold text-white transition-colors duration-150 hover:bg-vermilion-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isPending ? "Signing in…" : submitLabel}
           </button>
@@ -154,7 +154,7 @@ export function LoginForm({
             <Link
               href={secondDoorHref}
               prefetch={false}
-              className="flex w-full items-center justify-center gap-3 rounded-[3px] border border-ink bg-white p-3 text-[15.5px] font-semibold text-ink transition-colors duration-150 hover:bg-ink hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion"
+              className="flex w-full items-center justify-center gap-3 rounded-[6px] border border-ink bg-white p-3 text-[15.5px] font-semibold text-ink transition-colors duration-150 hover:bg-ink hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion"
             >
               {/* The Google mark belongs only on the real Google flow — on the
                   placeholder it would claim something the button does not do. */}
@@ -173,7 +173,7 @@ export function LoginForm({
         Everything below is for development and demos, and goes when real
         authentication lands — see .memories/04-roadmap.md item 1.
       */}
-      <div className="mt-8 border border-dashed border-border-strong px-4 py-3 text-center text-[13px] leading-normal text-muted-foreground">
+      <div className="mt-8 rounded-[6px] border border-dashed border-border-strong px-4 py-3 text-center text-[13px] leading-normal text-muted-foreground">
         Demo build —{" "}
         {sampleAccount ? (
           <>

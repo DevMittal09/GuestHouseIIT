@@ -278,6 +278,12 @@ Asked by the owner. Reasoning in [03-decisions.md](03-decisions.md)
 | Do not show the backend logic — who the users are, who approves whom | **Done** | No categories, routes or role names on any public page; a unit test guards it |
 | No instruction text or meal timings on the landing page | **Done** | Meals, times and the notice rule are in Guidelines §4 |
 
+### The same day, evening — third request
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| "It looks so weird" — make it clean and professional; the image filling the page is too much; look online for ideas | **Done** | Researched peer (IIT Madras Taramani Guest House) and clean hotel/university sites; photos now contained — a split hero with one photo, guest-house cards, amenity cards, a thumbnail row, a boxed call to action; plain mastheads; the header a white bar |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 import { googleOauth, mockLoginEnabled } from "@/lib/env";
 import { LoginForm } from "@/components/login-form";
-import { PageTitle, siteButton } from "@/components/site/site-ui";
+import { Container, PageTitle, siteButton } from "@/components/site/site-ui";
 import { isMockDirectory } from "@/lib/ldap";
 import { SAMPLE_ACCOUNT } from "@/lib/ldap/mock-directory";
 import { LOGIN_DOMAIN, type SitePhoto } from "@/lib/site";
@@ -11,10 +11,10 @@ import { ROLE_LABELS, type Profile } from "@/lib/types";
 
 /**
  * The gated entry points of the public site (`/book-room`, `/book-meal`,
- * `/sign-in`): a split screen — the title, one line of lead and the sign-in
- * form on the left, a photograph filling the right on wide screens. Someone
- * already signed in is offered a way through instead of a second form.
- * Renders its own full-width layout, so a page uses it without a `Container`.
+ * `/sign-in`): the title, one line of lead and the sign-in form on the left,
+ * a contained photograph on the right on wide screens (it filled half the
+ * screen for an afternoon; too much). Someone already signed in is offered a
+ * way through instead of a second form. Renders its own `Container`.
  */
 export function SignInPanel({
   title,
@@ -42,8 +42,8 @@ export function SignInPanel({
   notice?: string | null;
 }) {
   return (
-    <div className="grid lg:min-h-[calc(100svh-88px)] lg:grid-cols-2">
-      <div className="flex justify-center px-[clamp(16px,5vw,72px)] py-[clamp(48px,7vw,104px)]">
+    <Container className="grid items-center gap-x-16 gap-y-10 py-[clamp(44px,6.5vw,88px)] lg:grid-cols-12">
+      <div className="min-w-0 lg:col-span-5">
         <div className="w-full max-w-[460px]">
           <PageTitle kicker="Guest house portal" intro={intro}>
             {title}
@@ -88,11 +88,13 @@ export function SignInPanel({
         </div>
       </div>
 
-      <div className="relative hidden bg-band lg:block">
+      <div className="hidden lg:col-span-6 lg:col-start-7 lg:block">
         {photo.src && (
-          <Image src={photo.src} alt="" fill sizes="50vw" className="object-cover" />
+          <div className="relative aspect-[4/5] max-h-[620px] w-full overflow-hidden rounded-[8px] bg-band">
+            <Image src={photo.src} alt="" fill sizes="560px" className="object-cover" />
+          </div>
         )}
       </div>
-    </div>
+    </Container>
   );
 }

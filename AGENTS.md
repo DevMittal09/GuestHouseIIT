@@ -1070,8 +1070,10 @@ null`).
 ## Public website and branding — read `.memories/16-public-site-and-ui.md` first
 
 Built 19 Sep 2026 from `design_handoff/`; **redesigned 26 Sep 2026** in the
-institute's own palette, then made quieter and more visual the same day at
-the owner's second request.
+institute's own palette, over three passes that day. Where it landed: **clean
+and institutional**, modelled on peer guest-house sites (IIT Madras's
+Taramani Guest House) — photographs **contained** in the layout, never
+full-screen (the owner called a full-screen hero "so weird").
 
 - **What the public site may say (the owner, 26 Sep 2026):** never the
   portal's internals — **no requester categories, no approval chains, no role
@@ -1090,14 +1092,18 @@ the owner's second request.
   `/gallery`, `/contact`, `/privacy`, `/sign-in`, `/mock-login`. Chrome:
   `components/site/brand.tsx` (**`BrandBlock`** — the emblem-only
   `iitpkd-logo.png` beside "Guest House" in the serif and a tracked tagline;
-  shared with the portal header), `site-header.tsx` (client; **lies
-  transparent over the hero on `/`**, white elsewhere; links in the header,
-  a sideways-scrolling row below `lg`), `site-chrome.tsx` (`SiteFooter`: an
-  MRBS line, then address, front office, both guest houses' directions,
-  institute links). No utility strip. `NavBar` (`site-nav.tsx`) is shared:
+  shared with the portal header), `site-header.tsx` (a white bar, sticky from
+  `lg`; links in the header, a sideways-scrolling row below `lg`),
+  `site-chrome.tsx` (`SiteFooter`: an MRBS line, then address, front office,
+  both guest houses' directions, institute links). No utility strip. `NavBar` (`site-nav.tsx`) is shared:
   `tone="dark"` portal bar, `"light"` / `"overlay"` site header.
-- **Inner pages open on a photo banner** (`PageMasthead photo=`), photos
-  assigned in `PAGE_PHOTOS`; sign-in pages are a split screen with a photo.
+- **Layout:** home = a split hero (headline, two buttons, the front-office
+  number; one 4:3 photo beside it), a card per guest house (`houseSummary`,
+  no counts), eight amenity cards, a row of four equal thumbnails, a boxed
+  closing call to action. Inner pages open on a plain light band
+  (`PageMasthead`); sign-in pages put the form beside a contained photo
+  (`SIGN_IN_PHOTOS`). Cards and photos 8px corners, buttons 6px, bordered,
+  no shadows, no gradients.
 - **Editable values** (contact, map pins, MRBS, footer links, photos, PDF URL,
   `GUIDELINES_PROVISIONAL`) live in `lib/site.ts`; `grep -rn "TODO(site)"`
   lists what the office still has to confirm — including the **placeholder
@@ -1116,8 +1122,7 @@ the owner's second request.
   only on `vermilion-deep` `#C43C1C`** (5.2:1), never on bright vermilion
   (3.8:1); saffron carries ink, never white. `--primary` is **ink** (a
   vermilion primary reads as a second red beside Reject); the call to action
-  is `Button variant="brand"`. No drop shadows, no decorative gradients — the
-  only gradients are dark washes over photographs for legible text. Source
+  is `Button variant="brand"`. No drop shadows, no gradients. Source
   Serif 4 (optical sizes) / Source Sans 3 via `next/font`. Tokens in
   `app/globals.css`; the portal is restyled **through the shadcn tokens**.
 - **My Bookings leads with two large doors**, "New room booking" (vermilion)

@@ -1,10 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { BrandBlock } from "@/components/site/brand";
 import { NavBar, type NavItem } from "@/components/site/site-nav";
-import { cn } from "@/lib/utils";
 
 export const SITE_NAV: NavItem[] = [
   { href: "/", label: "Home" },
@@ -15,16 +11,13 @@ export const SITE_NAV: NavItem[] = [
   { href: "/contact", label: "Contact Us" },
 ];
 
-const GUTTER = "px-[clamp(16px,4vw,40px)]";
-
 /**
- * The public site's header: the lockup, the six pages and Sign in / My portal.
- *
- * On the home page it lies **over the photograph**, transparent, in white —
- * the page opens on the picture rather than on a white bar. Everywhere else it
- * is a white bar with a hairline. A client component only to read the path.
+ * The public site's header: a white bar with the lockup, the six pages and
+ * Sign in / My portal — sticky on wide screens, so the links stay in reach.
  * Below `lg` the links move to a second row that scrolls sideways inside
  * itself, so a phone gets one line of links rather than a block of them.
+ * (For an afternoon on 26 Sep 2026 it lay transparent over a full-screen
+ * photograph on `/`; the owner found that weird, and it is a plain bar again.)
  */
 export function SiteHeader({
   portal,
@@ -32,27 +25,16 @@ export function SiteHeader({
   /** Where the signed-in visitor's portal is, or null when signed out. */
   portal: { href: string; name: string } | null;
 }) {
-  const overlay = usePathname() === "/";
-  const tone = overlay ? "overlay" : "light";
-  const button = cn(
-    "inline-flex items-center rounded-[3px] border px-4 py-2 text-[14px] font-semibold transition-colors duration-200",
-    overlay
-      ? "border-white/70 text-white hover:border-white hover:bg-white hover:text-ink"
-      : "border-ink text-ink hover:bg-ink hover:text-white"
-  );
+  const button =
+    "inline-flex items-center rounded-[6px] border border-ink px-4 py-2 text-[14px] font-semibold text-ink transition-colors duration-200 hover:bg-ink hover:text-white";
 
   return (
-    <header
-      className={cn(
-        "z-30",
-        overlay ? "absolute inset-x-0 top-0" : "relative border-b border-border bg-white"
-      )}
-    >
-      <div className={cn("mx-auto flex w-full max-w-[1240px] items-center gap-x-6 py-4 lg:py-5", GUTTER)}>
+    <header className="z-40 border-b border-border bg-white lg:sticky lg:top-0">
+      <div className="mx-auto flex w-full max-w-[1240px] items-center gap-x-6 px-[clamp(16px,4vw,40px)] py-3.5">
         <div className="min-w-0 flex-1 lg:flex-none">
-          <BrandBlock tone={overlay ? "light" : "dark"} />
+          <BrandBlock />
         </div>
-        <NavBar items={SITE_NAV} label="Main" tone={tone} className="ml-auto hidden lg:block" />
+        <NavBar items={SITE_NAV} label="Main" tone="light" className="ml-auto hidden lg:block" />
         <div className="shrink-0 lg:pl-2">
           {portal ? (
             <Link href={portal.href} className={button}>
@@ -66,9 +48,9 @@ export function SiteHeader({
           )}
         </div>
       </div>
-      <div className={cn("border-t lg:hidden", overlay ? "border-white/20" : "border-border")}>
-        <div className={cn("mx-auto w-full max-w-[1240px]", "px-[clamp(6px,3vw,32px)]")}>
-          <NavBar items={SITE_NAV} label="Main" tone={tone} scroll />
+      <div className="border-t border-border lg:hidden">
+        <div className="mx-auto w-full max-w-[1240px] px-[clamp(6px,3vw,32px)]">
+          <NavBar items={SITE_NAV} label="Main" tone="light" scroll />
         </div>
       </div>
     </header>
