@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLink, Container, Label, PageMasthead } from "@/components/site/site-ui";
 import { GuestHouseMap } from "@/components/site/guest-house-map";
-import { GUEST_HOUSE_CONTACT, guestHouseMapPins, HOW_TO_REACH_URL, MRBS_URL } from "@/lib/site";
+import { GUEST_HOUSE_CONTACT, guestHouseMapPins, HOW_TO_REACH_URL, MRBS_URL, PAGE_PHOTOS } from "@/lib/site";
 import { getSiteGuestHouses } from "@/lib/site-data";
 
 export const metadata: Metadata = { title: "Contact us" };
@@ -29,10 +29,11 @@ export default async function ContactPage() {
     <>
       <PageMasthead
         title="Contact us"
-        intro="The Guest House Office answers questions about stays, meals and invoices by phone and email. Rooms and meals themselves are requested online."
+        photo={PAGE_PHOTOS.contact}
+        intro="Questions about a stay, meals or an invoice — the Guest House Office is a call or an email away."
       />
 
-      <Container className="grid gap-x-14 gap-y-12 pt-12 pb-24 lg:grid-cols-12">
+      <Container className="grid gap-x-14 gap-y-12 pt-[clamp(56px,7vw,96px)] pb-24 lg:grid-cols-12">
         <div className="flex min-w-0 flex-col lg:col-span-4">
           <div className="border-t border-ink pt-4">
             <Label>Front office</Label>

@@ -9,9 +9,44 @@ the sign-in pages.
 | --- | --- | --- |
 | 19 Sep 2026 | `main` | The public website built from `design_handoff/` (a designer's prototype): navy `#12284C`, gold `#E8A317`, 3px corners, no shadows; the portal restyled through the shadcn tokens |
 | 21 Sep 2026 | `ui` branch only | A "WOW" redesign in the institute's vermilion with pills, shadows, gradients, frosted glass and a bento grid. Never merged; superseded by the next row |
-| **26 Sep 2026 (current)** | `main` | The owner: the site "looks ass", "too dull and dead"; wanted clean and professional, impressive, **not AI-generated-looking**, in **the colour palette of the IITPKD websites**, following the backend. Plus: a map for each guest house, MRBS and the institute site in the footer, a proper Guidelines page with placeholder house rules, and more prominent booking buttons in the portal |
+| 26 Sep 2026, morning | `main` | The owner: the site "looks ass", "too dull and dead"; wanted clean and professional, impressive, **not AI-generated-looking**, in **the colour palette of the IITPKD websites**, following the backend. Plus: a map for each guest house, MRBS and the institute site in the footer, a proper Guidelines page with placeholder house rules, and more prominent booking buttons in the portal. Built as an editorial page full of computed facts |
+| **26 Sep 2026, afternoon (current)** | `main` | The owner on the morning's version: header "should look more aesthetic", site "too plain", "too mehh"; **no figures** ("23 rooms… 1 month… 14 nights…"), **no "see them on the map"**, **no photo captions**, **"How booking works" moved to the guidelines and vaguer**, **"do not display the backend logic like who are the users, who approves who"**, no instruction text or meal timings on the landing page. Rebuilt photo-led and quiet — see "The afternoon brief" below |
 
-## The 26 Sep brief, and how it was interpreted
+## The afternoon brief (26 Sep), and how it was interpreted
+
+1. **What the public may see.** No requester categories, no approval chains,
+   no role names anywhere on the public site — the portal's internals stay in
+   the portal. `lib/site-data.ts` lost its approval-route loader;
+   `tests/public-site.test.ts` fails if any role label reaches the public
+   copy. The guidelines speak of "members of the institute", "the person
+   hosting them" and "the Guest House Office".
+2. **The landing page is visual and light.** A full-screen photograph with
+   the guest-house names as the title and two buttons; one sentence; the two
+   houses beside a photograph; a four-photo mosaic; an amenities grid of
+   short labels; a closing photo band. No figures, no meal times, no rules,
+   no map link, no captions.
+3. **Instructions go to the Guidelines** — "How booking works" as five
+   general steps (Sign in, Request, Approval, Arrival, Departure), then the
+   numbered rules including the meal timetable and the kitchen's notice.
+4. **The header.** The stacked logo file printed "IIT PALAKKAD" about 8px
+   tall under the emblem, which looked cheap. The lockup is now the
+   **emblem alone** beside "Guest House" in the serif, with a tracked
+   "IIT PALAKKAD" set in type (`BrandBlock`, `components/site/brand.tsx`),
+   used in the site header, the footer and the portal header. On `/` the
+   header lies transparent over the hero photograph; elsewhere it is white.
+   The charcoal utility strip was dropped — everything in it is in the footer.
+5. **Less plain.** Photographs carry every page: a full-bleed hero, a
+   split ink/photo panel, the mosaic, a closing photo band, and a photo
+   banner behind every inner page's title; sign-in pages are a split screen
+   with a photo. Dark washes over photos keep the type legible (the only
+   gradients on the site). Still no drop shadows, glass, pills or bento.
+
+## The morning brief (26 Sep), and how it was interpreted
+
+> **Superseded in part (26 Sep 2026, afternoon):** points 3 and the
+> "specific copy with real numbers" / "tables for tabular content" of point 2
+> — the owner asked for no figures, no routes and no instructions on the
+> landing page. The palette (point 1) stands.
 
 1. **Palette: the institute's own.** iitpkd.ac.in's theme CSS
    (`themes/iitpkd/css/typo-colors.css`, `menu.css`, read 26 Sep 2026) uses
@@ -46,11 +81,11 @@ the sign-in pages.
 app/
   layout.tsx            root: fonts (Source Sans 3 / Source Serif 4), metadata
   (site)/               PUBLIC website — open to everyone
-    layout.tsx          charcoal utility strip, header with the nav inside, footer (MRBS, directions)
+    layout.tsx          header (over the hero on /), footer (MRBS, directions)
     page.tsx            /            Home
     book-room/          /book-room   gated entry → sign in → /book
     book-meal/          /book-meal   gated entry → sign in → /book (meals live in the room form)
-    guidelines/         /guidelines  numbered document, contents list, §8–9 provisional
+    guidelines/         /guidelines  How booking works, then numbered rules; §7–8 provisional
     gallery/            /gallery
     contact/            /contact     one map tab per guest house
     sign-in/            /sign-in     general sign-in; where every portal guard redirects
@@ -125,7 +160,7 @@ On `:root`, exposed to Tailwind through `@theme inline`:
 
 | Token | Hex | Tailwind | Use |
 | --- | --- | --- | --- |
-| `--ink` | `#1A1A1A` | `bg-ink` / `text-ink` | utility strip, footers, the portal nav bar, headings, the ink band |
+| `--ink` | `#1A1A1A` | `bg-ink` / `text-ink` | footers, the portal nav bar, headings, the ink panels, the wash over photographs |
 | `--ink-soft` | `#2B2926` | `bg-ink-soft` | hover on ink |
 | `--vermilion` | `#E94C26` | `text-vermilion` / `bg-vermilion` | rules, icons, active-nav bar, display-size numbers — **never behind white text** |
 | `--vermilion-deep` | `#C43C1C` | `bg-vermilion-deep` / `text-vermilion-deep` | **buttons with white text** (5.2:1), small labels and link hover (5.8:1 on white) |
@@ -159,81 +194,81 @@ Mail templates (`lib/mail/render.ts`) still carry the old amber header.
 
 | File | What |
 | --- | --- |
-| `components/site/site-ui.tsx` | `Container` (1200px), `AccentRule` (short vermilion bar), `Label` (small caps, vermilion-deep), `PageTitle` (the sign-in pages' `<h1>`), **`PageMasthead`** (content pages: band, breadcrumb, `<h1>`, lead, optional aside and note — the grey breadcrumb band iitpkd.ac.in uses), **`SectionHead`** (full-width hairline + label + optional link, then the `<h2>`; `tone="dark"` on ink), `ArrowLink`, `BulletList` (5px vermilion squares), `siteButton.{brand,ink,outline,outlineLight}`, `NoticeBox` (saffron edge), `SitePhotoFrame` (`zoom` eases the photo on hover, motion-safe) |
-| `components/site/site-chrome.tsx` | `SITE_NAV`, `UtilityStrip` (address → institute pin, front office phone and email, iitpkd.ac.in), `BrandBlock`, `SiteHeader` (links inside the white header; a second, sideways-scrolling row below `lg`; Sign in / My portal), `SiteFooter({ pins })` — an **MRBS line** at the top ("Booking a lecture hall or meeting room?" → Open MRBS), then the guest house's address, front office, **Find us** (each guest house's Map and Directions, How to reach the campus) and **Institute** (`SITE_LINKS`), then copyright + Guidelines / Privacy notice / Portal sign-in |
-| `components/site/site-nav.tsx` | `NavBar` — `tone="dark"` (portal: charcoal bar, uppercase, vermilion bar under the current page) or `tone="light"` (site header); `scroll` for the phone row |
-| `components/site/guest-house-map.tsx` | **`GuestHouseMap`** (client): WAI-ARIA tabs, one per pin (arrow keys, Home, End), the chosen embed, its "Open in Google Maps" / "Get directions". No tab list for a single pin |
-| `components/site/sign-in-panel.tsx` | Renders its own full-width band: title + lead + notice + `aside` on the left, the white sign-in card (or "You are signed in") on the right |
+| `components/site/brand.tsx` | **`BrandBlock`** — the lockup: `iitpkd-logo.png` (emblem only) + "Guest House" (serif) + a tracked tagline (`tagline`, default "IIT Palakkad"); `tone="light"` over photos and on ink; `compact` for the portal. Used by the site header, the footer and the portal header |
+| `components/site/site-header.tsx` | **`SiteHeader`** (client, reads the path) and `SITE_NAV`: transparent and white over the hero on `/`, a white bar elsewhere; links inside the header, a sideways-scrolling row below `lg`; Sign in / My portal |
+| `components/site/site-chrome.tsx` | **`SiteFooter({ pins })`** — an **MRBS line** at the top ("Booking a lecture hall or meeting room?" → Open MRBS), then the lockup and address, front office, **Find us** (each guest house's Map and Directions, How to reach the campus), **Institute** (`SITE_LINKS`), and a bottom line (Guidelines, Contact, Privacy notice) |
+| `components/site/site-nav.tsx` | `NavBar` — `tone="dark"` (portal: charcoal bar, uppercase, vermilion bar under the current page), `"light"` (white header) or `"overlay"` (white text over the hero, saffron underline); `scroll` for the phone row |
+| `components/site/site-ui.tsx` | `Container` (1240px), `Label` (tracked capitals), `PageTitle` (the sign-in pages' `<h1>`, optional `kicker`), **`PageMasthead`** (breadcrumb, `<h1>`, lead, `note`, `aside`; with `photo` a banner under a dark wash), `SectionHead` (label + `<h2>` + optional link), `ArrowLink`, `BulletList`, `siteButton.{brand,ink,outline,light,outlineLight}`, `SitePhotoFrame` (`zoom` eases on hover) |
+| `components/site/guest-house-map.tsx` | **`GuestHouseMap`** (client): WAI-ARIA tabs, one per pin, the chosen embed, "Open in Google Maps" / "Get directions" |
+| `components/site/sign-in-panel.tsx` | A split screen: `PageTitle` + the form (or "You are signed in") on the left, a photograph filling the right from `lg` |
+| `components/login-form.tsx` | The form — no card, no second heading; submit is vermilion-deep; `domainNote` under it; the second door is **Mock Authentication** (→ `/mock-login?next=`) or **Sign in with Google** once configured. Labels "LDAP username" / "LDAP password" and the button name "Sign in" are what the e2e helpers use — keep them |
 | `components/page-header.tsx` | Portal page title: serif `h1`, a short vermilion rule, description, optional `actions` |
-| `components/login-form.tsx` | The sign-in card; submit is vermilion-deep; the second door is **Mock Authentication** (→ `/mock-login?next=`) or **Sign in with Google** once configured. Labels "LDAP username" / "LDAP password" and the button name "Sign in" are what the e2e helpers use — keep them |
 
 **The portal shell** (`app/(portal)/layout.tsx`): white header with the
-compact brand block, the user and role, Switch user; the charcoal `NavBar`,
-sticky; a slim ink footer linking the website, Guidelines, Contact, **MRBS**
-and iitpkd.ac.in.
+compact lockup ("IIT Palakkad · Booking portal"), the user and role, Switch
+user; the charcoal `NavBar`, sticky; a slim ink footer linking the website,
+Guidelines, Contact, **MRBS** and iitpkd.ac.in.
 
 **My Bookings** (`app/(portal)/dashboard/page.tsx`): under the title, large
 `BookingDoor` tiles — **New room booking** (vermilion, names the guest houses
 the role's form allows), **Meal booking** (ink, names the kitchen; only for
 `MEALS_ONLY_ROLES` where a guest house serves meals), and one **Book for
-<club>** per club a Faculty Advisor books for (outlined when they also book
-for themselves).
+<club>** per club a Faculty Advisor books for.
 
 ## The pages
 
-- **Home** — full-width courtyard photograph; a white panel overlapping its
-  lower edge with the `<h1>` "Guest houses on the campus", a lead naming the
-  guest houses, **Book a room** (vermilion) and **Book meals** (outline);
-  beside it the **figures** (`homeFacts`: rooms across the guest houses, the
-  advance window, the stay cap, meals a day where served — each dropped when
-  there is nothing behind it). Then: the guest houses side by side (rooms,
-  meals, **Requested by** from `openTo()` over the saved form configs,
-  Request a room, Directions); a captioned three-photo spread; an **ink band**
-  with the five steps (`bookingSteps`) and **Who approves your request** (a
-  table from `getSitePolicies().routes`); **Dining** (only where a guest
-  house serves meals: the kitchen's notice rule and a timetable from
-  Settings); **Facilities** (`facilityCards`, dining card dropped when Dining
-  has its own section); a band with the front office phone and email.
-- **Guidelines** — a numbered document: masthead with a **Provisional
-  edition** note while `GUIDELINES_PROVISIONAL` is true, a sticky **Contents**
-  list, then nine sections of numbered clauses (1.1, 1.2…) from
-  `guidelineSections()`: Who may book, Requests and approval (with the
-  route table), Rooms and occupancy, Check-in and check-out, Meals, Charges and
-  payment, Cancellation — all from `lib/` and Settings — and **During your
-  stay** and **Safety and help**, which are **placeholder house rules**
-  (typical institute guest-house rules) marked "To be confirmed".
-- **Gallery** — masthead with the photo count; sections by subject, each
-  opening with a `SectionHead`; a section of four or more leads with one photo
-  at double size; every photo captioned and opening full size.
-- **Contact** — masthead; the front office, email, address and a Bookings
-  note (online only; lecture halls on MRBS) on the left; **Finding the guest
-  houses** with the map tabs on the right.
-- **Book a room / Book meals / Sign in** — the sign-in band. Book a room adds
-  "Before you start" (only what every form asks); Book meals adds the serving
-  timetable and the notice rule, and its footnote mentions the
-  vegetarian / non-vegetarian choice.
-- **Privacy, Mock Authentication** — masthead / band, content unchanged.
+- **Home** — a full-screen courtyard photograph under the transparent
+  header; kicker "The guest houses of IIT Palakkad", the `<h1>` is the
+  guest-house names from the store ("Bageshri & Hamsanandi"), **Book a room**
+  and **Book meals**, "Kanjikode · Palakkad · Kerala". Then: the emblem and
+  one sentence ("The institute's guest houses welcome visiting faculty,
+  collaborators and examiners, and the families of our students and staff")
+  with a link to the guidelines; a split section — a photograph beside an ink
+  panel listing the guest houses with "Rooms" / "Rooms · Dining" and Book a
+  room; "Inside the guest houses", a four-photo mosaic with no captions and
+  View the gallery; **Amenities** (`amenities()`, icon + short label, Dining
+  only where a guest house serves meals); "Planning a visit?" over a
+  photograph with Guidelines / Contact us.
+- **Guidelines** — photo banner with a **Provisional edition** note while
+  `GUIDELINES_PROVISIONAL` is true; **How booking works** in five general
+  steps (`BOOKING_STEPS`); a sticky **Contents** list; eight numbered
+  sections from `guidelineSections(houses, rules)`: Booking a stay, Rooms and
+  occupancy, Check-in and check-out, Meals (with the **timetable** and the
+  kitchen's notice), Charges and payment, Cancellation — from `lib/` and
+  Settings, with no role names — and **During your stay** and **Safety and
+  help**, placeholder house rules marked "To be confirmed".
+- **Gallery** — photo banner; sections by subject; a section of four or more
+  leads with one photo at double size; **no visible captions** (alt text
+  kept); each opens full size.
+- **Contact** — photo banner; front office, email, address and a Bookings
+  note (online only; lecture halls on MRBS); **Finding the guest houses**
+  with the map tabs.
+- **Book a room / Book meals / Sign in** — the split screen, one line of
+  lead each. Book meals points to the guidelines for meal times.
+- **Privacy, Mock Authentication** — content unchanged.
 
-## Content comes from the backend
+## Content comes from the backend — and what stays off the site
 
-`lib/site-data.ts` (server, cached under the `site` tag) and
-`lib/site-content.ts` (pure):
+`lib/site-data.ts` (server, cached under the `site` tag) loads the guest
+houses: `getSiteGuestHouses()` — every guest house with active-room counts by
+type and `serves_meals`. **No guest house name is hardcoded** in a component.
+It swallows store errors and returns empty data.
 
-- `getSiteGuestHouses()` — every guest house with active-room counts by type
-  and `serves_meals`. **No guest house name is hardcoded** in a component.
-- `getSitePolicies()` — per requester role: approver chain (from `routeFor()`),
-  the guest houses its effective form config allows, the advance-window
-  exemption, the student parent rule, and the office's `Rules`.
-- `homeFacts`, `openTo` (with plain-English requester names: "students",
-  "faculty and staff"…), `bookingSteps`, `facilityCards`, `mealTimetable`,
-  `MEAL_NOTICE_RULE` (the wording of `isMealBookable`), `guidelineSections`.
-- Both loaders **catch store errors and return empty data**; sections that
-  need data hide themselves.
+`lib/site-content.ts` (pure): `amenities`, `BOOKING_STEPS`,
+`guidelineSections(houses, rules)`, `mealTimetable`, `MEAL_NOTICE_RULE` (the
+wording of `isMealBookable`), `servingHouses`, `joinNames`.
 
-**Rule for future edits:** if a sentence on the public site states a rule the
-portal enforces, render it from `lib/`. Only facts the backend does not model
-(amenities, house rules) are literal copy, marked `TODO(site)`.
-`tests/public-site.test.ts` checks the computed copy against the rules.
+**Two rules for future edits:**
+
+1. **Keep the portal's internals off the public site** (the owner, 26 Sep
+   2026): no requester categories, approval chains or role names. The
+   `getSitePolicies()` loader that computed them for the site (and
+   `homeFacts`, `openTo`, the route tables) was deleted for this reason; don't
+   bring it back. A unit test checks the copy for role labels.
+2. **If a sentence states a rule the portal enforces, render it from `lib/`**
+   — the advance window, stay cap, capacity, meals, charges. Only facts the
+   backend does not model (amenities, house rules) are literal copy, marked
+   `TODO(site)`.
 
 ## Configurable values — `lib/site.ts`
 
@@ -243,10 +278,11 @@ portal enforces, render it from `lib/`. Only facts the backend does not model
 **`HOW_TO_REACH_URL`**, `SITE_LINKS` (IIT Palakkad website, MRBS, the guest
 house page on iitpkd.ac.in, How to reach, Telephone directory — all checked to
 resolve on 26 Sep 2026; there is no Bageshri page on iitpkd.ac.in),
-`INSTITUTE_CONTACT`, `GUEST_HOUSE_CONTACT`, **`GUEST_HOUSE_LOCATIONS`**,
+`GUEST_HOUSE_CONTACT`, **`GUEST_HOUSE_LOCATIONS`**,
 **`INSTITUTE_MAP`**, `guestHouseMapPins()`, the photo registry (`PHOTOS`,
-`HOME_PHOTOS` — `hero` and a three-photo `spread`, `GALLERY_SECTIONS`,
-`GUEST_HOUSE_PHOTOS`). `grep -rn "TODO(site)"` lists everything awaiting the
+`HOME_PHOTOS` — `hero`, `houses`, a four-photo `mosaic`, `closing`;
+**`PAGE_PHOTOS`** — the banner or side photo of each inner page;
+`GALLERY_SECTIONS`). `GUEST_HOUSE_PHOTOS` (a per-house cover) was removed: the home page no longer shows per-house photos. `grep -rn "TODO(site)"` lists everything awaiting the
 office.
 
 Contact details are the ones on the foot of the office's own invoice template:
@@ -273,8 +309,8 @@ Contact details are the ones on the foot of the office's own invoice template:
   no entry is left off the map; if the store names none of them (it could
   not be read) every registered pin is shown under its fallback name.
 - Order is the registry's (Hamsanandi first, as the owner listed them).
-- `INSTITUTE_MAP` (the institute's own pin from the handoff) stays for the
-  utility strip's address.
+- `INSTITUTE_MAP` (the institute's own pin from the handoff) is the last
+  resort when no guest house has a pin.
 - To add a pin: resolve the share link (`curl -sS -o /dev/null -w
   '%{redirect_url}' <maps.app.goo.gl link>`), take `!3d<lat>!4d<lng>` and the
   place name from the redirect, add a line.
@@ -305,12 +341,13 @@ Contact details are the ones on the foot of the office's own invoice template:
   `PHOTOS` and place it.
 - **Attribution is unknown.** Nothing in the files says which guest house each
   shows, so the Gallery is grouped by subject (Exterior and grounds, Rooms and
-  suites, Common spaces) and the home page's guest-house panels are text only.
+  suites, Common spaces), and the home page never places a photograph where
+  it would read as one particular guest house (the houses are listed beside a
+  photo of the grounds).
   They match the iitpkd.ac.in description of Hamsanandi (blocks A–D, suites
   with hall and kitchen, a 50-seat meeting room) but that is an inference, not
   a fact — **do not attribute them without the office confirming**. When they
-  do, set `GUEST_HOUSE_PHOTOS["hamsanandi"] = PHOTOS.block` (keyed by
-  `guestHouseSlug(name)`) and the card gains its cover.
+  do, the Gallery can be grouped by guest house (`GALLERY_SECTIONS`).
 - Gallery grids use `auto-fill`, not the design's `auto-fit`: with only two
   Common-spaces photos, `auto-fit` stretched each to half the page width.
 - Alt text describes what is visible, not marketing ("Bedroom with double bed,
@@ -329,20 +366,21 @@ Contact details are the ones on the foot of the office's own invoice template:
 
 ## How it was verified (26 Sep 2026)
 
-- `npm run lint`, `npm run typecheck` clean; `npm test` **307** (new
-  `tests/public-site.test.ts`: the pins, footer links, home figures,
-  `openTo`, every guideline section against Settings, the meal notice rule
-  against `mealBookingDeadline`).
+- `npm run lint`, `npm run typecheck` clean; `npm test` **304**
+  (`tests/public-site.test.ts`: the pins, footer links, amenities, **no role
+  name in the public copy**, the guideline sections against Settings, the
+  meal timetable, the meal notice rule against `mealBookingDeadline`).
 - A production build on the mock store; `npm run test:e2e` **26**: the 320px
-  check now covers `/gallery`, `/book-meal` and `/mock-login` too; new
-  journeys for the map tabs (click and keyboard) with the footer's MRBS and
-  institute links, and for the My Bookings tiles (faculty: both doors land on
-  the right form; student: no meals door).
-- **A few Playwright screenshots** (home desktop and phone, contact,
-  guidelines, dashboard) to judge the look — kept to one pass because the
-  owner is credit-conscious. Lesson: take them after scrolling the page and
-  waiting ~1.5 s, or the `next/image` photos are still blank.
+  check covers every public page; the map tabs (click and keyboard) with the
+  footer's MRBS and institute links; the My Bookings tiles.
+- **Two short rounds of Playwright screenshots** (home desktop and phone,
+  guidelines, gallery, sign-in, contact, the portal header) to judge the look
+  — the second found the hero kicker and the closing sentence too faint over
+  the photographs, fixed with stronger washes. Lesson: scroll the page and
+  wait ~1.5 s first, or the `next/image` photos are still blank; and never
+  `pkill -f next-server` from a shell whose own command line contains it.
 - Contrast of every token pair computed (see the table above).
+
 
 ## How the first pass was verified (19 Sep 2026)
 
@@ -365,9 +403,9 @@ Contact details are the ones on the foot of the office's own invoice template:
 ## Open items
 
 - Everything tagged `TODO(site)`: the **placeholder house rules** (Guidelines
-  §8 During your stay, §9 Safety and help — set `GUIDELINES_PROVISIONAL` to
-  false once confirmed), amenity lines, the guidelines PDF URL, photo
-  attribution, front-office hours.
+  §7 During your stay, §8 Safety and help — set `GUIDELINES_PROVISIONAL` to
+  false once confirmed), the **amenities** list, the guidelines PDF URL,
+  photo attribution, front-office hours.
 - The design asks for SSO on the booking pages. LDAP is in (dummy accounts
   until `LDAP_URL`); real Google sign-in switches on with its three environment
   variables, which also closes Mock Authentication —

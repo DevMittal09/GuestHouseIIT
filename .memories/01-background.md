@@ -265,6 +265,19 @@ Asked by the owner. Reasoning in [03-decisions.md](03-decisions.md)
 | Look online for how to make it look less AI-generated | **Done** | Findings and how they were applied in [16-public-site-and-ui.md](16-public-site-and-ui.md) |
 | The New Booking and Meal Booking buttons should stand out after login | **Done** | Large vermilion / ink tiles at the top of My Bookings |
 
+### The same day, afternoon — second list
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| The header with the logo and "Guest House" should look more aesthetic | **Done** | New lockup (emblem + "Guest House" + "IIT PALAKKAD" in type), transparent over the hero on the home page — `components/site/brand.tsx`, `site-header.tsx` |
+| The site looks too plain, "mehh"; make it clean and aesthetic, not AI-generated | **Done** | Photo-led home page and photo banners on every inner page; split-screen sign-in |
+| No figures like "23 rooms / 1 month / 14 nights / 3 meals a day" | **Done** | Removed |
+| No "see them on the map" link on the landing page | **Done** | Removed (the map is on Contact) |
+| No captions on photographs | **Done** | Home mosaic and Gallery, alt text kept |
+| "How booking works" in the guidelines, and vaguer | **Done** | Five general steps at the top of `/guidelines` |
+| Do not show the backend logic — who the users are, who approves whom | **Done** | No categories, routes or role names on any public page; a unit test guards it |
+| No instruction text or meal timings on the landing page | **Done** | Meals, times and the notice rule are in Guidelines §4 |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

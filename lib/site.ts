@@ -71,13 +71,6 @@ export const SITE_LINKS = [
   { label: "Telephone directory", href: "https://iitpkd.ac.in/TelephoneDirectory" },
 ] as const;
 
-/** The institute's own switchboard line and address, shown in the utility strip. */
-export const INSTITUTE_CONTACT = {
-  phone: "0491 209 2013",
-  email: "info@iitpkd.ac.in",
-  addressLine: "Kanjikode | Palakkad | Kerala – 678623",
-} as const;
-
 /**
  * The guest house office, as printed at the foot of the office's own invoice
  * template (public/GHM_Invoice.docx, Sep 2026) — the phone, email and address
@@ -97,9 +90,9 @@ export const GUEST_HOUSE_CONTACT = {
 } as const;
 
 /**
- * Where each guest house is, keyed by `guestHouseSlug(name)` like the photo
- * registry below — guest houses are data, so a new one gets a pin by adding a
- * line here, and one without a line is simply not on the map. `query` is the
+ * Where each guest house is, keyed by `guestHouseSlug(name)` — guest houses
+ * are data, so a new one gets a pin by adding a line here, and one without a
+ * line is simply not on the map. `query` is the
  * place's own name on Google Maps: searched together with its coordinates it
  * resolves to the place itself (checked 26 Sep 2026), so the embed shows the
  * guest house's name card rather than a bare pin. `openUrl` is the link the
@@ -143,8 +136,8 @@ export type MapPin = {
 };
 
 /**
- * The institute's own pin (from the design handoff), for the utility strip's
- * address and as the map's last resort when no guest house has a location.
+ * The institute's own pin (from the design handoff): the map's last resort
+ * when no guest house has a location.
  */
 export const INSTITUTE_MAP: MapPin = {
   slug: "iit-palakkad",
@@ -219,15 +212,32 @@ export const PHOTOS = {
 
 export const HOME_PHOTOS = {
   hero: PHOTOS.courtyard,
-  /** The home page's photo spread: one large, two beside it. */
-  spread: [PHOTOS.bedroom, PHOTOS.livingDining, PHOTOS.meetingHall],
+  /** Beside the guest-house names — the grounds, not either house in particular. */
+  houses: PHOTOS.block,
+  /** The mosaic: one large, two small, one wide. */
+  mosaic: [PHOTOS.bedroom, PHOTOS.livingDining, PHOTOS.bathroom, PHOTOS.meetingHall],
+  /** Behind "Planning a visit?". */
+  closing: PHOTOS.gazebo,
+};
+
+/**
+ * The banner behind each inner page's title, and the photograph beside the
+ * sign-in pages. Decorative (empty alt): the page's title says what it is.
+ */
+export const PAGE_PHOTOS = {
+  guidelines: PHOTOS.walkway,
+  gallery: PHOTOS.lounge,
+  contact: PHOTOS.gazebo,
+  signIn: PHOTOS.livingRoom,
+  bookRoom: PHOTOS.bedroomWardrobe,
+  bookMeal: PHOTOS.hall,
 };
 
 /**
  * The Gallery page, grouped by subject. The supplied photos are not labelled
  * by guest house, so they are not attributed to one here.
  * TODO(site): once the office confirms which guest house each shows, give
- * that guest house a section (and a `GUEST_HOUSE_PHOTOS` cover) instead.
+ * that guest house a section instead.
  */
 export const GALLERY_SECTIONS: { title: string; qualifier: string; photos: SitePhoto[] }[] = [
   {
@@ -256,14 +266,7 @@ export const GALLERY_SECTIONS: { title: string; qualifier: string; photos: SiteP
   },
 ];
 
-/**
- * A cover photograph per guest house, keyed by a slug of its name
- * (`guestHouseSlug`). Guest houses are data — an admin can add one — so a
- * guest house with no entry shows its card without a picture.
- * TODO(site): e.g. `hamsanandi: PHOTOS.block`, once confirmed.
- */
-export const GUEST_HOUSE_PHOTOS: Record<string, SitePhoto> = {};
-
+/** A guest house's name as a key: "Hamsanandi" → "hamsanandi". Used by `GUEST_HOUSE_LOCATIONS`. */
 export function guestHouseSlug(name: string): string {
   return name
     .toLowerCase()

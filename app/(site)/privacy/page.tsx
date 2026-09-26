@@ -111,9 +111,8 @@ export default async function PrivacyPage() {
       <PageMasthead
         title="Privacy notice"
         intro="How the guest house portal handles the personal details you enter, under the Digital Personal Data Protection Act 2023."
-      >
-        <p className="text-[14.5px] text-muted-foreground">Version {PRIVACY_NOTICE_VERSION}</p>
-      </PageMasthead>
+        note={<>Version {PRIVACY_NOTICE_VERSION}</>}
+      />
       <Container className="pt-12 pb-24">
         <div className="max-w-[72ch]">
           {sections.map((section, i) => (

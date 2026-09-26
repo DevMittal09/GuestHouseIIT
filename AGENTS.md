@@ -1070,59 +1070,66 @@ null`).
 ## Public website and branding — read `.memories/16-public-site-and-ui.md` first
 
 Built 19 Sep 2026 from `design_handoff/`; **redesigned 26 Sep 2026** in the
-institute's own palette (the owner found the navy/gold look "dull and dead" and
-asked for something that impresses without looking AI-generated).
+institute's own palette, then made quieter and more visual the same day at
+the owner's second request.
 
-- **`app/(site)/`** is the public site: `/` home, `/book-room`, `/book-meal`,
-  `/guidelines`, `/gallery`, `/contact`, `/privacy`, `/sign-in`, `/mock-login`.
-  Chrome in `components/site/`: a charcoal utility strip, a white header with
-  the six links inside it (a sideways-scrolling row below `lg`), and a footer
-  with the front office, **both guest houses' directions, MRBS and the
-  institute links**. `NavBar` (`components/site/site-nav.tsx`) is shared:
-  `tone="dark"` is the portal's charcoal bar, `tone="light"` the site header.
-  Every portal page title is `components/page-header.tsx`.
-- **Facts come from the backend.** Guest houses, room counts, who may book
-  where, approval chains, meal times, the advance window, the stay cap,
-  capacity, GST and cancellation rules are rendered from `lib/` by
-  `lib/site-data.ts` / `lib/site-content.ts` (`homeFacts`, `openTo`,
-  `bookingSteps`, `guidelineSections`). Never hardcode on the site a rule the
-  portal enforces, and never a guest house name. Those loaders swallow store
+- **What the public site may say (the owner, 26 Sep 2026):** never the
+  portal's internals — **no requester categories, no approval chains, no role
+  names** (Assistant Warden, HOD, IAR…). The **home page is visual and light**:
+  photographs, the guest-house names, one sentence, amenities — **no figures,
+  no meal times, no instructions, no photo captions**. Rules and "How booking
+  works" (in general terms) live on `/guidelines`. `tests/public-site.test.ts`
+  fails if a role name reaches the public copy.
+- **Where a rule *is* stated** (advance window, stay cap, capacity, meal
+  times, the kitchen's notice, charges) it is rendered from `lib/` and
+  Settings by `lib/site-content.ts` (`guidelineSections`), never hardcoded,
+  and never a guest house name. `lib/site-data.ts` now only loads guest houses
+  (the approval-route loader for the site was deleted); it swallows store
   errors so the public site cannot 500.
-- **Editable values** (contact, map pins, MRBS, footer links, PDF URL, photos,
+- **`app/(site)/`**: `/` home, `/book-room`, `/book-meal`, `/guidelines`,
+  `/gallery`, `/contact`, `/privacy`, `/sign-in`, `/mock-login`. Chrome:
+  `components/site/brand.tsx` (**`BrandBlock`** — the emblem-only
+  `iitpkd-logo.png` beside "Guest House" in the serif and a tracked tagline;
+  shared with the portal header), `site-header.tsx` (client; **lies
+  transparent over the hero on `/`**, white elsewhere; links in the header,
+  a sideways-scrolling row below `lg`), `site-chrome.tsx` (`SiteFooter`: an
+  MRBS line, then address, front office, both guest houses' directions,
+  institute links). No utility strip. `NavBar` (`site-nav.tsx`) is shared:
+  `tone="dark"` portal bar, `"light"` / `"overlay"` site header.
+- **Inner pages open on a photo banner** (`PageMasthead photo=`), photos
+  assigned in `PAGE_PHOTOS`; sign-in pages are a split screen with a photo.
+- **Editable values** (contact, map pins, MRBS, footer links, photos, PDF URL,
   `GUIDELINES_PROVISIONAL`) live in `lib/site.ts`; `grep -rn "TODO(site)"`
   lists what the office still has to confirm — including the **placeholder
-  house rules** (Guidelines §8–9).
+  house rules** (Guidelines §7–8) and the amenities.
 - **The map is one pin per guest house**, `GUEST_HOUSE_LOCATIONS` keyed by
-  `guestHouseSlug(name)` (like the photo registry), read through
-  `guestHouseMapPins(storeNames)`. The embed searches the place's own Google
-  Maps name with its coordinates (`q=…&ll=…&output=embed`, no API key), which
-  resolves to the place card; the CSP's `frame-src` already allows it.
+  `guestHouseSlug(name)`, read through `guestHouseMapPins(storeNames)`. The
+  embed searches the place's Google Maps name with its coordinates
+  (`q=…&ll=…&output=embed`, no API key); the CSP's `frame-src` allows it.
   `/contact` shows them as WAI-ARIA tabs (`components/site/guest-house-map.tsx`).
 - **Book Meal has no page of its own** — meals are chosen per day inside the
   booking request (`/book`), only where `serves_meals`; `MEALS_ONLY_ROLES`
-  can pick service type `meals_only` there to book meals without a room.
-  `/book-meal` only explains this and signs in to `/book`.
-- **Palette — iitpkd.ac.in's own** (its theme CSS): ink `#1A1A1A`, vermilion
-  `#E94C26`, the emblem's saffron `#F5A300`, band `#F3F1EB`, body `#4A4541`.
-  **White text only on `vermilion-deep` `#C43C1C`** (5.2:1), never on bright
-  vermilion (3.8:1); saffron carries ink, never white. `--primary` is **ink**,
-  not vermilion (a vermilion primary reads as a second red beside Reject); the
-  vermilion call to action is `Button variant="brand"`. 4px radius, no
-  shadows, no gradients; structure from hairline rules. Source Serif 4 (with
-  its optical-size axis) / Source Sans 3 via `next/font`. Tokens and utilities
-  (`bg-ink`, `text-vermilion-deep`, `bg-band`, `text-body`, `text-on-ink`, …)
-  in `app/globals.css`. The portal is restyled **through the shadcn tokens** —
-  change a token, not forty components.
+  can pick service type `meals_only` there. `/book-meal` signs in to
+  `/book?service=meals_only` and points to the guidelines for meal times.
+- **Palette — iitpkd.ac.in's own**: ink `#1A1A1A`, vermilion `#E94C26`, the
+  emblem's saffron `#F5A300`, band `#F3F1EB`, body `#4A4541`. **White text
+  only on `vermilion-deep` `#C43C1C`** (5.2:1), never on bright vermilion
+  (3.8:1); saffron carries ink, never white. `--primary` is **ink** (a
+  vermilion primary reads as a second red beside Reject); the call to action
+  is `Button variant="brand"`. No drop shadows, no decorative gradients — the
+  only gradients are dark washes over photographs for legible text. Source
+  Serif 4 (optical sizes) / Source Sans 3 via `next/font`. Tokens in
+  `app/globals.css`; the portal is restyled **through the shadcn tokens**.
 - **My Bookings leads with two large doors**, "New room booking" (vermilion)
-  and "Meal booking" (ink), under the title — the header buttons they replaced
-  were being missed.
+  and "Meal booking" (ink).
 - **Photos:** originals in `Images/` (gitignored, ~180 MB); the site serves
   2000px, metadata-stripped copies from `public/site/photos/`. Resize one photo
   per process with PIL `draft()` or it gets OOM-killed. Their guest house is
-  unconfirmed, so the Gallery groups by subject — don't attribute them.
-- Logos: `public/IITPKD_NEW_LOGO.png` (stacked, transparent, in both headers;
-  declared at its drawn size so next/image sends a 256px copy, not 1920px) and
-  `public/iitpkd-logo.png` (emblem; `app/icon.png` is the favicon).
+  unconfirmed — **never place a photo so it reads as one particular guest
+  house**, and no visible captions.
+- Logos: `public/iitpkd-logo.png` (the emblem — the lockup and favicon;
+  `app/icon.png` is the same file) and `public/IITPKD_NEW_LOGO.png` (stacked,
+  no longer used in the headers: its "IIT PALAKKAD" came out ~8px tall).
 - Verified at **320 px**: no page-level horizontal scroll, one `<h1>` per page
   (`e2e/public-site.spec.ts` checks every public page on a 320px phone). Keep
   grids as `repeat(auto-fit|auto-fill, minmax(min(Npx,100%),1fr))`. Never

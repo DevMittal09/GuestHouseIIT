@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LiveUpdates } from "@/components/live-updates";
-import { BrandBlock } from "@/components/site/site-chrome";
+import { BrandBlock } from "@/components/site/brand";
 import { NavBar, type NavItem } from "@/components/site/site-nav";
 import { logout } from "@/app/actions/auth";
 import { getCurrentUser } from "@/lib/auth";
@@ -68,7 +68,7 @@ export default async function PortalLayout({ children }: { children: React.React
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-border bg-white">
         <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center gap-x-5 gap-y-3 px-[clamp(14px,4vw,24px)] py-3">
-          <BrandBlock subtitle="Booking portal" href={homeForRole(user.role)} compact />
+          <BrandBlock tagline="IIT Palakkad · Booking portal" href={homeForRole(user.role)} compact />
           <div className="ml-auto flex flex-wrap items-center gap-3">
             <div className="hidden text-right sm:block">
               <p className="text-sm leading-tight font-semibold text-foreground">{user.full_name}</p>

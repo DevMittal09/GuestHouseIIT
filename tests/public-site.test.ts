@@ -2,19 +2,16 @@ import { describe, expect, it } from "vitest";
 import { mealBookingDeadline } from "@/lib/meals";
 import { DEFAULT_RULES, type Rules } from "@/lib/settings";
 import { GUEST_HOUSE_LOCATIONS, guestHouseMapPins, INSTITUTE_MAP, MRBS_URL, SITE_LINKS } from "@/lib/site";
-import {
-  guidelineSections,
-  homeFacts,
-  MEAL_NOTICE_RULE,
-  openTo,
-} from "@/lib/site-content";
-import type { BookingRoute, SiteGuestHouse, SitePolicies } from "@/lib/site-data";
+import { amenities, BOOKING_STEPS, guidelineSections, MEAL_NOTICE_RULE } from "@/lib/site-content";
+import type { SiteGuestHouse } from "@/lib/site-data";
+import { ROLE_LABELS, type Role } from "@/lib/types";
 
 /**
- * The public site's redesign (26 Sep 2026): the two guest-house map pins,
- * the figures on the home page, who may request each guest house, and the
- * numbered guidelines — all computed, so each is checked against the rules
- * it claims to state.
+ * The public site (26 Sep 2026): the two guest-house map pins, the footer's
+ * links, the amenities, and the Guidelines — whose rules are computed from
+ * Settings, and which must never show the portal's internals (the owner:
+ * "do not display the backend logic like who are the users, who approves
+ * who").
  */
 
 function house(name: string, rooms: number, servesMeals: boolean): SiteGuestHouse {
@@ -30,34 +27,6 @@ function house(name: string, rooms: number, servesMeals: boolean): SiteGuestHous
 
 const BAGESHRI = house("Bageshri", 10, false);
 const HAMSANANDI = house("Hamsanandi", 13, true);
-
-const ROUTES: BookingRoute[] = [
-  {
-    role: "student",
-    label: "Student",
-    approvers: ["Assistant Warden", "Guest House Manager"],
-    guestHouses: ["Bageshri"],
-    advanceWindowExempt: false,
-  },
-  {
-    role: "employee",
-    label: "Employee (Faculty & Staff)",
-    approvers: ["HOD", "Guest House Manager"],
-    guestHouses: ["Bageshri", "Hamsanandi"],
-    advanceWindowExempt: false,
-  },
-  {
-    role: "official",
-    label: "Official / Dignitary",
-    approvers: ["HOD (if the office asks for it)", "Guest House Manager"],
-    guestHouses: ["Bageshri", "Hamsanandi"],
-    advanceWindowExempt: true,
-  },
-];
-
-function policies(rules: Rules = DEFAULT_RULES): SitePolicies {
-  return { routes: ROUTES, studentDependency: null, rules };
-}
 
 describe("guest house map pins", () => {
   it("offers a pin per guest house, in the registry's order, under the store's name", () => {
@@ -81,7 +50,7 @@ describe("guest house map pins", () => {
     }
   });
 
-  it("matches a store name to its pin whatever its case or spacing", () => {
+  it("matches a store name to its pin whatever its case", () => {
     const pins = guestHouseMapPins(["HAMSANANDI"]);
     expect(pins).toHaveLength(1);
     expect(pins[0].name).toBe("HAMSANANDI");
@@ -107,52 +76,44 @@ describe("footer links", () => {
   });
 });
 
-describe("home page figures", () => {
-  it("adds up the rooms and names the guest houses", () => {
-    const facts = homeFacts([BAGESHRI, HAMSANANDI]);
-    expect(facts[0]).toEqual({ value: "23", unit: "rooms", label: "across Bageshri and Hamsanandi" });
-  });
-
-  it("quotes the advance window and stay cap from Settings", () => {
-    const rules: Rules = {
-      ...DEFAULT_RULES,
-      booking: { ...DEFAULT_RULES.booking, advance_booking_months: 2, max_stay_nights: 7 },
-    };
-    const facts = homeFacts([BAGESHRI], rules);
-    expect(facts).toContainEqual(expect.objectContaining({ value: "2", unit: "months" }));
-    expect(facts).toContainEqual(expect.objectContaining({ value: "7", unit: "nights" }));
-  });
-
-  it("drops a figure with nothing behind it", () => {
-    const rules: Rules = { ...DEFAULT_RULES, booking: { ...DEFAULT_RULES.booking, max_stay_nights: 0 } };
-    const facts = homeFacts([BAGESHRI], rules);
-    expect(facts.map((f) => f.unit)).not.toContain("nights");
-    // Bageshri has no kitchen, so no meals figure either.
-    expect(facts.map((f) => f.unit)).not.toContain("meals a day");
-    expect(homeFacts([HAMSANANDI]).map((f) => f.unit)).toContain("meals a day");
+describe("amenities", () => {
+  it("lists dining only where a guest house serves meals", () => {
+    expect(amenities([BAGESHRI, HAMSANANDI]).map((a) => a.key)).toContain("dining");
+    expect(amenities([BAGESHRI]).map((a) => a.key)).not.toContain("dining");
   });
 });
 
-describe("who may request each guest house", () => {
-  it("reads the saved form configs through the routes", () => {
-    expect(openTo(BAGESHRI, ROUTES)).toBe("Everyone who can book");
-    expect(openTo(HAMSANANDI, ROUTES)).toBe("Everyone except students");
+describe("the public copy keeps the portal's internals to itself", () => {
+  // Every role name the portal uses, bar the ones a guest would say anyway.
+  const internal = (Object.entries(ROLE_LABELS) as [Role, string][])
+    .filter(([role]) => !["student", "developer"].includes(role))
+    .map(([, label]) => label);
+  const words = ["Warden", "HOD", "IAR", "Faculty Advisor", "Caretaker", "Official / Dignitary", "whitelist"];
+
+  const copy = [
+    ...BOOKING_STEPS.flatMap((s) => [s.title, s.body]),
+    ...guidelineSections([BAGESHRI, HAMSANANDI]).flatMap((s) => [s.title, ...s.items]),
+  ].join("\n");
+
+  it("names no role and no approval stage", () => {
+    for (const term of [...internal, ...words]) {
+      expect(copy, `the public copy mentions "${term}"`).not.toContain(term);
+    }
   });
 
-  it("says nothing when the routes could not be read", () => {
-    expect(openTo(BAGESHRI, [])).toBe("");
+  it("describes booking in general terms, in five steps", () => {
+    expect(BOOKING_STEPS.map((s) => s.title)).toEqual(["Sign in", "Request", "Approval", "Arrival", "Departure"]);
   });
 });
 
 describe("guidelines", () => {
-  const sections = guidelineSections([BAGESHRI, HAMSANANDI], policies());
+  const sections = guidelineSections([BAGESHRI, HAMSANANDI]);
   const byId = Object.fromEntries(sections.map((s) => [s.id, s]));
 
   it("is a numbered document with unique anchors", () => {
     expect(new Set(sections.map((s) => s.id)).size).toBe(sections.length);
     expect(sections.map((s) => s.id)).toEqual([
-      "eligibility",
-      "requests",
+      "booking",
       "rooms",
       "arrival",
       "meals",
@@ -163,32 +124,23 @@ describe("guidelines", () => {
     ]);
   });
 
-  it("says which guest houses each category may book", () => {
-    expect(byId.eligibility.items).toContain("Student — Bageshri only");
-    expect(byId.eligibility.items).toContain("Employee (Faculty & Staff) — any guest house");
-  });
-
   it("marks only the house rules as provisional", () => {
     expect(sections.filter((s) => s.provisional).map((s) => s.id)).toEqual(["conduct", "safety"]);
   });
 
   it("states the portal's rules from Settings", () => {
-    const requests = byId.requests.items.join(" ");
-    expect(requests).toContain("within 1 month");
-    expect(requests).toContain("at most 14 nights");
-    expect(requests).toContain("Official / Dignitary exempt");
-    expect(byId.requests.routes).toEqual(ROUTES);
+    const booking = byId.booking.items.join(" ");
+    expect(booking).toContain("within 1 month");
+    expect(booking).toContain("up to 14 nights");
 
     const rules: Rules = {
       ...DEFAULT_RULES,
       booking: { ...DEFAULT_RULES.booking, advance_booking_months: 3, max_stay_nights: 0 },
       invoice: { ...DEFAULT_RULES.invoice, gst_room_percent: 12, gst_meal_percent: 5 },
     };
-    const changed = Object.fromEntries(
-      guidelineSections([BAGESHRI, HAMSANANDI], policies(rules)).map((s) => [s.id, s])
-    );
-    expect(changed.requests.items.join(" ")).toContain("within 3 months");
-    expect(changed.requests.items.join(" ")).not.toContain("nights");
+    const changed = Object.fromEntries(guidelineSections([BAGESHRI, HAMSANANDI], rules).map((s) => [s.id, s]));
+    expect(changed.booking.items.join(" ")).toContain("within 3 months");
+    expect(changed.booking.items.join(" ")).not.toContain("nights");
     expect(changed.charges.items.join(" ")).toContain("12% on rooms and 5% on meals");
   });
 
@@ -198,12 +150,14 @@ describe("guidelines", () => {
     expect(rooms).toContain("3 guests + 1 infant");
   });
 
-  it("names the guest house that serves meals, and none when none does", () => {
-    expect(byId.meals.items[0]).toMatch(/^Served at Hamsanandi/);
-    const noKitchen = guidelineSections([BAGESHRI], policies());
-    expect(noKitchen.find((s) => s.id === "meals")?.items).toEqual([
-      "Meals are not being served at the guest houses at present",
-    ]);
+  it("gives the meal times from Settings where a guest house serves meals, and none where none does", () => {
+    expect(byId.meals.items[0]).toMatch(/^Meals are served at Hamsanandi/);
+    expect(byId.meals.timetable?.map((r) => r.meal)).toEqual(["Breakfast", "Lunch", "Dinner"]);
+    expect(byId.meals.timetable?.[0].time).toBe("7:30 – 9:30 AM");
+
+    const noKitchen = guidelineSections([BAGESHRI]).find((s) => s.id === "meals");
+    expect(noKitchen?.items).toEqual(["Meals are not being served at the guest houses at present"]);
+    expect(noKitchen?.timetable).toBeUndefined();
   });
 
   it("describes the kitchen's notice period the way the form applies it", () => {

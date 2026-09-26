@@ -6,32 +6,27 @@ import type { SitePhoto } from "@/lib/site";
 
 /**
  * Building blocks of the public website, in the institute's own palette
- * (iitpkd.ac.in: vermilion, charcoal, a light band, Source Serif headings).
- * Structure comes from hairline rules, type and whitespace — no shadows, no
- * gradients, near-square corners. Server components; nothing here needs the
- * client.
+ * (iitpkd.ac.in: vermilion, charcoal, a warm light band, Source Serif
+ * headings). Photographs carry the pages; type and whitespace do the rest.
+ * No drop shadows, no decorative gradients (a dark wash over a photo, for
+ * legible text, is the only one), near-square corners. Server components.
  */
 
 export function Container({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("mx-auto w-full max-w-[1200px] px-[clamp(16px,4vw,32px)]", className)}
+      className={cn("mx-auto w-full max-w-[1240px] px-[clamp(16px,4vw,40px)]", className)}
       {...props}
     />
   );
 }
 
-/** A short vermilion bar — the institute's accent under a title. */
-export function AccentRule({ className }: { className?: string }) {
-  return <div aria-hidden className={cn("h-[3px] w-10 bg-vermilion", className)} />;
-}
-
-/** Small uppercase label, in the deep vermilion that passes contrast at this size. */
+/** Small tracked capitals over a heading, in the deep vermilion that passes contrast at this size. */
 export function Label({ className, ...props }: React.ComponentProps<"p">) {
   return (
     <p
       className={cn(
-        "text-[12px] font-bold tracking-[0.14em] text-vermilion-deep uppercase",
+        "text-[11.5px] font-semibold tracking-[0.22em] text-vermilion-deep uppercase",
         className
       )}
       {...props}
@@ -41,69 +36,103 @@ export function Label({ className, ...props }: React.ComponentProps<"p">) {
 
 /**
  * A page's one `<h1>`, with an optional lead paragraph. For the sign-in pages,
- * where it sits in a column beside the form; content pages use
- * `PageMasthead`.
+ * where it sits beside the form; content pages use `PageMasthead`.
  */
 export function PageTitle({
   children,
   intro,
+  kicker,
   className,
 }: {
   children: React.ReactNode;
   intro?: React.ReactNode;
+  kicker?: string;
   className?: string;
 }) {
   return (
     <div className={className}>
-      <AccentRule className="mb-5" />
-      <h1 className="mb-4 text-[clamp(34px,4.6vw,50px)] leading-[1.05] font-semibold tracking-[-0.015em] text-ink">
+      {kicker && <Label className="mb-4">{kicker}</Label>}
+      <h1 className="text-[clamp(36px,4.6vw,52px)] leading-[1.04] font-semibold tracking-[-0.02em] text-ink">
         {children}
       </h1>
-      {intro && <p className="max-w-[60ch] text-[17px] leading-[1.65] text-body">{intro}</p>}
+      {intro && <p className="mt-5 max-w-[52ch] text-[17px] leading-[1.65] text-body">{intro}</p>}
     </div>
   );
 }
 
 /**
- * The band at the top of a content page: a breadcrumb back to Home, the
- * page's `<h1>` and its lead — the grey breadcrumb band iitpkd.ac.in puts on
- * its own inner pages. `aside` sits to the right on wide screens.
+ * The top of a content page: a breadcrumb back to Home, the page's `<h1>`, a
+ * lead and an optional note. With a `photo` it is a banner — the photograph
+ * under a dark wash, the words in white; without one, the warm band.
  */
 export function PageMasthead({
   title,
   intro,
+  note,
   aside,
-  children,
+  photo,
 }: {
   title: string;
   intro?: React.ReactNode;
+  /** A small line under the lead — an edition note, a count. Inherits its colour. */
+  note?: React.ReactNode;
   aside?: React.ReactNode;
-  /** A line under the lead: an edition note, a count. */
-  children?: React.ReactNode;
+  photo?: SitePhoto;
 }) {
+  const banner = Boolean(photo?.src);
   return (
-    <div className="border-b border-border bg-band">
-      <Container className="pt-8 pb-10 sm:pt-10 sm:pb-12">
-        <nav aria-label="Breadcrumb" className="mb-6 text-[13.5px] text-muted-foreground">
+    <div
+      className={cn(
+        "relative isolate overflow-hidden",
+        banner ? "bg-ink text-white" : "border-b border-border bg-band"
+      )}
+    >
+      {banner && photo?.src && (
+        <>
+          <Image src={photo.src} alt="" fill priority sizes="100vw" className="-z-10 object-cover" />
+          <div aria-hidden className="absolute inset-0 -z-10 bg-linear-to-t from-ink/90 via-ink/55 to-ink/25" />
+        </>
+      )}
+      <Container className={banner ? "pt-24 pb-12 sm:pt-32 sm:pb-16 lg:pt-44 lg:pb-20" : "pt-10 pb-12 sm:pt-12 sm:pb-14"}>
+        <nav
+          aria-label="Breadcrumb"
+          className={cn("mb-5 text-[13px]", banner ? "text-white/75" : "text-muted-foreground")}
+        >
           <ol className="flex flex-wrap items-center gap-x-2">
             <li>
-              <Link href="/" className="text-muted-foreground hover:text-vermilion-deep">
+              <Link
+                href="/"
+                className={banner ? "text-white/75 hover:text-white" : "text-muted-foreground hover:text-ink"}
+              >
                 Home
               </Link>
             </li>
             <li aria-hidden>/</li>
-            <li aria-current="page" className="text-ink">
+            <li aria-current="page" className={banner ? "text-white" : "text-ink"}>
               {title}
             </li>
           </ol>
         </nav>
         <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
-          <div className="min-w-0 max-w-[62ch]">
-            <h1 className="text-[clamp(36px,5vw,56px)] leading-[1.02] font-semibold tracking-[-0.02em] text-ink">
+          <div className="min-w-0 max-w-[60ch]">
+            <h1
+              className={cn(
+                "text-[clamp(40px,5.6vw,68px)] leading-[1] font-semibold tracking-[-0.025em]",
+                banner ? "text-white" : "text-ink"
+              )}
+            >
               {title}
             </h1>
-            {intro && <p className="mt-5 text-[17.5px] leading-[1.6] text-body">{intro}</p>}
-            {children && <div className="mt-4">{children}</div>}
+            {intro && (
+              <p className={cn("mt-5 text-[17.5px] leading-[1.6]", banner ? "text-white/85" : "text-body")}>
+                {intro}
+              </p>
+            )}
+            {note && (
+              <p className={cn("mt-4 text-[14px] leading-[1.55]", banner ? "text-white/70" : "text-muted-foreground")}>
+                {note}
+              </p>
+            )}
           </div>
           {aside && <div className="min-w-0">{aside}</div>}
         </div>
@@ -112,11 +141,7 @@ export function PageMasthead({
   );
 }
 
-/**
- * How a section of a long page opens: a full-width hairline with the
- * section's label on it and, optionally, a link at the far end; then the
- * heading. Newspaper furniture rather than a centred title over a card grid.
- */
+/** A section's heading, with small capitals over it and an optional link at the far end. */
 export function SectionHead({
   label,
   title,
@@ -125,49 +150,33 @@ export function SectionHead({
   tone = "light",
   className,
 }: {
-  label: string;
+  label?: string;
   title: React.ReactNode;
   id?: string;
-  link?: { href: string; label: string; external?: boolean };
+  link?: { href: string; label: string };
   tone?: "light" | "dark";
   className?: string;
 }) {
   const dark = tone === "dark";
   return (
-    <div className={className}>
-      <div
-        className={cn(
-          "flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t pt-3.5",
-          dark ? "border-white/25" : "border-ink"
-        )}
-      >
-        <p
+    <div className={cn("flex flex-wrap items-end justify-between gap-x-8 gap-y-4", className)}>
+      <div className="min-w-0">
+        {label && <Label className={cn("mb-4", dark && "text-saffron")}>{label}</Label>}
+        <h2
+          id={id}
           className={cn(
-            "text-[12px] font-bold tracking-[0.14em] uppercase",
-            dark ? "text-saffron" : "text-vermilion-deep"
+            "max-w-[20ch] text-[clamp(32px,4vw,50px)] leading-[1.04] font-semibold tracking-[-0.02em]",
+            dark ? "text-white" : "text-ink"
           )}
         >
-          {label}
-        </p>
-        {link && (
-          <ArrowLink
-            href={link.href}
-            external={link.external}
-            className={dark ? "text-white hover:text-saffron" : undefined}
-          >
-            {link.label}
-          </ArrowLink>
-        )}
+          {title}
+        </h2>
       </div>
-      <h2
-        id={id}
-        className={cn(
-          "mt-5 max-w-[22ch] text-[clamp(30px,3.8vw,44px)] leading-[1.08] font-semibold tracking-[-0.015em]",
-          dark ? "text-white" : "text-ink"
-        )}
-      >
-        {title}
-      </h2>
+      {link && (
+        <ArrowLink href={link.href} className={dark ? "text-white hover:text-saffron" : undefined}>
+          {link.label}
+        </ArrowLink>
+      )}
     </div>
   );
 }
@@ -190,13 +199,13 @@ export function ArrowLink({
       {children}
       <Icon
         aria-hidden
-        className="size-4 transition-transform duration-200 motion-safe:group-hover:translate-x-0.5"
+        className="size-4 transition-transform duration-200 motion-safe:group-hover:translate-x-1"
       />
       {external && <span className="sr-only">(opens in a new tab)</span>}
     </>
   );
   const classes = cn(
-    "group inline-flex items-center gap-1.5 text-[15px] font-semibold text-ink underline decoration-vermilion decoration-2 underline-offset-[6px] transition-colors duration-150 hover:text-vermilion-deep",
+    "group inline-flex items-center gap-2 text-[15px] font-semibold text-ink transition-colors duration-200 hover:text-vermilion-deep",
     className
   );
   return external ? (
@@ -210,46 +219,23 @@ export function ArrowLink({
   );
 }
 
-export function BulletList({ items, className }: { items: string[]; className?: string }) {
-  return (
-    <ul className={cn("flex flex-col gap-2.5", className)}>
-      {items.map((item) => (
-        <li key={item} className="relative pl-4 text-[15px] leading-normal text-body">
-          <span aria-hidden className="absolute top-[9px] left-0 size-[5px] bg-vermilion" />
-          {item}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 const BUTTON_BASE =
-  "inline-flex items-center justify-center gap-2 rounded-[3px] px-6 py-3.5 text-[15.5px] font-semibold transition-colors duration-150";
+  "inline-flex items-center justify-center gap-2 rounded-[3px] px-6 py-3.5 text-[15px] font-semibold tracking-[0.01em] transition-colors duration-200";
 
 /** Link styles for the public site's button kinds. */
 export const siteButton = {
   /** The call to action. Deep vermilion: white on the bright one is 3.8:1. */
   brand: cn(BUTTON_BASE, "bg-vermilion-deep text-white hover:bg-vermilion-hover hover:text-white"),
   ink: cn(BUTTON_BASE, "bg-ink text-white hover:bg-ink-soft hover:text-white"),
-  outline: cn(
-    BUTTON_BASE,
-    "border border-ink bg-transparent text-ink hover:bg-ink hover:text-white"
-  ),
-  /** Outlined, on an ink background. */
+  outline: cn(BUTTON_BASE, "border border-ink bg-transparent text-ink hover:bg-ink hover:text-white"),
+  /** Solid white, on a photograph or ink. */
+  light: cn(BUTTON_BASE, "bg-white text-ink hover:bg-band hover:text-ink"),
+  /** Outlined, on a photograph or ink. */
   outlineLight: cn(
     BUTTON_BASE,
-    "border border-white/60 bg-transparent text-white hover:border-white hover:bg-white hover:text-ink"
+    "border border-white/70 bg-transparent text-white hover:border-white hover:bg-white hover:text-ink"
   ),
 };
-
-export function NoticeBox({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="border-l-[3px] border-saffron bg-notice px-5 py-4">
-      <p className="mb-1.5 text-[12px] font-bold tracking-[0.14em] text-ink uppercase">{label}</p>
-      <div className="text-[15.5px] leading-[1.55] text-body">{children}</div>
-    </div>
-  );
-}
 
 /**
  * A photograph, or — until the office supplies it — a labelled placeholder of
@@ -286,7 +272,7 @@ export function SitePhotoFrame({
           priority={priority}
           className={cn(
             "object-cover",
-            zoom && "transition-transform duration-700 ease-out motion-safe:group-hover:scale-[1.03]"
+            zoom && "transition-transform duration-[900ms] ease-out motion-safe:group-hover:scale-[1.04]"
           )}
         />
       ) : (

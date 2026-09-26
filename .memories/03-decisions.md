@@ -2692,6 +2692,12 @@ is `Button variant="brand"` for the one call to action.
 
 ### Not AI-looking: specific content and hairlines, not effects
 
+> **Superseded in part (26 Sep 2026, afternoon):** the owner found the
+> result "too plain" and did not want the figures, the approval-route table,
+> the meal timetable or instruction text on the home page. The page is now
+> photo-led and quiet; see "26 Sep 2026 (afternoon)" below. The bans on
+> shadows, glass, pills and bento stand.
+
 **Decision.** No gradients, shadows, glass, pills or bento; 2–4px corners;
 hairline rules as structure (every section opens on a full-width rule with a
 label); serif display type with the optical-size axis; asymmetric 12-column
@@ -2737,6 +2743,12 @@ wrong door; a bare "MRBS" link in a list does not tell them so.
 
 ### The guidelines: portal rules computed, house rules marked provisional
 
+> **Superseded in part (26 Sep 2026, afternoon):** the "Who may book" list
+> of requester categories and the approval-route table are gone — the public
+> site no longer names roles or approvers. The sections are now eight, in
+> general terms, opened by "How booking works". Computed rules and the
+> provisional house rules stand.
+
 **Decision.** Nine numbered sections from `guidelineSections()`. Sections 1–7
 are the portal's rules, rendered from `lib/` and Settings (who may book
 where, approval routes, the advance window, the stay cap, capacity, meals and
@@ -2758,4 +2770,64 @@ the manager's "New booking for a guest" became `variant="brand"`.
 
 **Why.** Two small buttons at the far end of the title row were being missed;
 people come to this page to book. Two colours keep room and meals distinct.
+
+## 26 Sep 2026 (afternoon) — the public site made quiet, visual and discreet
+
+The owner on the morning's redesign: the header (logo and "Guest House")
+"should look more aesthetic"; the site "looks too plain", "too mehh"; no
+figures ("23 rooms… 1 month… 14 nights…"), no "see them on the map", no
+photo captions; "How booking works" into the guidelines, vaguer; "do not
+display the backend logic like who are the users, who approves who and all
+to the public"; no instruction text or meal timings on the landing page.
+Detail in [16-public-site-and-ui.md](16-public-site-and-ui.md).
+
+### The portal's internals stay off the public site
+
+**Decision.** No requester categories, approval chains or role names on any
+public page. Deleted `getSitePolicies()` (and `approversFor`), `homeFacts`,
+`openTo` and the route tables; the guidelines speak of "members of the
+institute", "the person hosting them" and "the Guest House Office". A unit
+test fails if any `ROLE_LABELS` value reaches the public copy.
+
+**Why.** The owner's instruction. It is also sound: who approves whose
+request is internal process that changes with appointments, and publishing it
+invites people to route around it. **Cost:** the site no longer tells a
+student in advance that their Assistant Warden will see the request; the
+portal says so when they book.
+
+### The landing page is a front door, not a rulebook
+
+**Decision.** Home is photographs, the guest-house names as the title, one
+sentence, the houses beside a photograph, a caption-free mosaic, short
+amenity labels, and a closing photo band. Rules, meal times and "How
+booking works" (five general steps) live on `/guidelines`.
+
+**Why.** The morning's page was accurate but read as a policy sheet, and the
+owner wanted it to impress. Hotel and campus-housing sites that feel
+premium lead with photography and very few words.
+**Rejected:** keeping the figures in a quieter style — the owner named them
+specifically.
+
+### The lockup: the emblem, and the words set in type
+
+**Decision.** `BrandBlock` uses `iitpkd-logo.png` (emblem only) beside
+"Guest House" in the serif and a tracked "IIT PALAKKAD", everywhere — site
+header, footer, portal header. The header lies transparent over the hero on
+`/`, and the charcoal utility strip is gone.
+
+**Why.** The stacked logo file's own "IIT PALAKKAD" was ~8px tall at header
+size — the main reason the header looked cheap. Setting the name in the
+site's typefaces makes the lockup crisp at any size and on photographs.
+**Rejected:** a wider header logo (the old `iitpkd-web-logo.jpg` banner) —
+it is a JPEG with a white background, unusable over a photograph.
+
+### "Less plain" through photographs, not effects
+
+**Decision.** Photo banners behind inner-page titles (`PAGE_PHOTOS`), a
+split ink/photo panel, a closing photo band, split-screen sign-in pages.
+Dark washes over photos for legibility are the only gradients.
+
+**Why.** The site's best material is the office's photographs; the morning
+version used three of them. Effects (gradients, glass, shadows) are what the
+"AI look" research warned against.
 

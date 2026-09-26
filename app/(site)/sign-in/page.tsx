@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { SignInPanel } from "@/components/site/sign-in-panel";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole } from "@/lib/routes";
+import { PAGE_PHOTOS } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -23,7 +24,8 @@ export default async function SignInPage({
   return (
     <SignInPanel
       title="Sign in"
-      intro="Sign in to the guest house portal to raise and track booking requests, review requests awaiting your approval, or run the guest house desk."
+      intro="Sign in to book and follow your stays."
+      photo={PAGE_PHOTOS.signIn}
       user={null}
       continueTo="/"
       continueLabel=""

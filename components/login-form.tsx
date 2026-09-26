@@ -22,8 +22,9 @@ function GoogleMark() {
 }
 
 /**
- * The sign-in card the institute sees, on `/sign-in`, `/book-room` and
- * `/book-meal`: an LDAP username and password, or the second door.
+ * The sign-in form the institute sees, on `/sign-in`, `/book-room` and
+ * `/book-meal` (inside `SignInPanel`, which supplies the heading): an LDAP
+ * username and password, or the second door.
  * `signInWithLdap` redirects on success, so the only state this holds is the
  * error from a failed attempt.
  *
@@ -42,6 +43,7 @@ export function LoginForm({
   footnote,
   googleSignIn = "none",
   notice,
+  domainNote,
 }: {
   /** A dummy LDAP login to show, while sign-in checks the dummy directory. */
   sampleAccount: { uid: string; password: string } | null;
@@ -53,6 +55,8 @@ export function LoginForm({
   googleSignIn?: "google" | "mock" | "none";
   /** A message from a failed sign-in (`?error=` on the way back from Google). */
   notice?: string | null;
+  /** Which accounts may sign in, shown under the fields. */
+  domainNote?: React.ReactNode;
 }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -79,16 +83,12 @@ export function LoginForm({
 
   return (
     <div className="min-w-0">
-      <div className="border border-t-[3px] border-border border-t-ink bg-white px-[clamp(18px,5vw,32px)] pt-8 pb-[34px]">
+      <div>
         {notice && (
           <p role="alert" className="mb-4 rounded-[3px] border border-red-300 bg-red-50 px-3 py-2 text-[14.5px] text-red-900">
             {notice}
           </p>
         )}
-        <h2 className="mb-1.5 text-[26px] font-semibold text-ink">Sign in</h2>
-        <p className="mb-[22px] text-[14.5px] text-muted-foreground">
-          With your institute LDAP account
-        </p>
         <form onSubmit={submit} noValidate>
           <label htmlFor="login-username" className={LABEL}>
             LDAP username
@@ -138,6 +138,9 @@ export function LoginForm({
           >
             {isPending ? "Signing in…" : submitLabel}
           </button>
+          {domainNote && (
+            <p className="mt-3 text-[13.5px] leading-[1.5] text-muted-foreground">{domainNote}</p>
+          )}
         </form>
 
         {googleSignIn !== "none" && (
@@ -170,7 +173,7 @@ export function LoginForm({
         Everything below is for development and demos, and goes when real
         authentication lands — see .memories/04-roadmap.md item 1.
       */}
-      <div className="mt-5 border border-dashed border-border-strong bg-white/60 px-4 py-3 text-center text-[13px] leading-normal text-muted-foreground">
+      <div className="mt-8 border border-dashed border-border-strong px-4 py-3 text-center text-[13px] leading-normal text-muted-foreground">
         Demo build —{" "}
         {sampleAccount ? (
           <>

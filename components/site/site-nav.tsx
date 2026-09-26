@@ -13,10 +13,13 @@ export type NavItem = { href: string; label: string };
  *
  * - `tone="dark"` — the portal's charcoal bar (iitpkd.ac.in's own menu
  *   colour), uppercase items, a 3px vermilion bar under the current page.
- * - `tone="light"` — the public site's header: the links sit in the white
- *   header itself, in sentence case, with the vermilion bar flush with the
- *   header's bottom edge. `scroll` lets the row scroll sideways inside itself
- *   on a phone instead of wrapping into a block of links.
+ * - `tone="light"` — the public site's white header: sentence-case links,
+ *   a short vermilion underline under the current page.
+ * - `tone="overlay"` — the same, in white, for the header lying over the home
+ *   page's photograph.
+ *
+ * `scroll` lets the row scroll sideways inside itself on a phone instead of
+ * wrapping into a block of links.
  */
 export function NavBar({
   items,
@@ -29,7 +32,7 @@ export function NavBar({
   items: NavItem[];
   label: string;
   exact?: string[];
-  tone?: "dark" | "light";
+  tone?: "dark" | "light" | "overlay";
   scroll?: boolean;
   className?: string;
 }) {
@@ -37,15 +40,14 @@ export function NavBar({
   const isActive = (href: string) =>
     exact.includes(href) ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
   const dark = tone === "dark";
+  const overlay = tone === "overlay";
 
   return (
     <nav aria-label={label} className={cn(dark && "bg-ink", className)}>
       <div
         className={cn(
           "flex items-stretch",
-          dark
-            ? "mx-auto w-full max-w-[1200px] flex-wrap px-[clamp(4px,1.5vw,20px)]"
-            : "h-full",
+          dark && "mx-auto w-full max-w-[1200px] flex-wrap px-[clamp(4px,1.5vw,20px)]",
           scroll && "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         )}
       >
@@ -57,12 +59,18 @@ export function NavBar({
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex shrink-0 items-center whitespace-nowrap transition-colors duration-150 focus-visible:-outline-offset-2",
+                "relative flex shrink-0 items-center whitespace-nowrap transition-colors duration-200 focus-visible:-outline-offset-2",
                 dark
                   ? "px-[clamp(9px,1.4vw,16px)] py-3.5 text-[13px] font-semibold tracking-[0.08em] text-white uppercase hover:bg-ink-soft hover:text-white"
                   : cn(
-                      "px-[clamp(8px,1.1vw,14px)] py-3 text-[15px] font-semibold",
-                      active ? "text-ink" : "text-body hover:text-vermilion-deep"
+                      "px-[clamp(9px,1vw,13px)] py-3 text-[15px] font-medium",
+                      overlay
+                        ? active
+                          ? "text-white"
+                          : "text-white/80 hover:text-white"
+                        : active
+                          ? "text-ink"
+                          : "text-body hover:text-ink"
                     )
               )}
             >
@@ -71,8 +79,13 @@ export function NavBar({
                 <span
                   aria-hidden
                   className={cn(
-                    "absolute bottom-0 h-[3px] bg-vermilion",
-                    dark ? "inset-x-0" : "inset-x-[clamp(8px,1.1vw,14px)]"
+                    "absolute",
+                    dark
+                      ? "inset-x-0 bottom-0 h-[3px] bg-vermilion"
+                      : cn(
+                          "inset-x-[clamp(9px,1vw,13px)] bottom-1.5 h-[2px]",
+                          overlay ? "bg-saffron" : "bg-vermilion"
+                        )
                   )}
                 />
               )}

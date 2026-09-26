@@ -82,9 +82,10 @@ link to the kitchen page. Still open:
   Cell) is unused since its Official option was withdrawn.
 - **Mail still uses the pre-redesign amber header**; restyle to ink/vermilion if
   the office wants mail to match the site.
-- **The Guidelines' house rules are placeholders** (§8 During your stay, §9
-  Safety and help, marked "To be confirmed"): the office to confirm or replace
-  them in `guidelineSections()` (`lib/site-content.ts`), then set
+- **The Guidelines' house rules are placeholders** (§7 During your stay, §8
+  Safety and help, marked "To be confirmed"), and the home page's amenities
+  are unconfirmed: the office to confirm or replace them in
+  `guidelineSections()` / `amenities()` (`lib/site-content.ts`), then set
   `GUIDELINES_PROVISIONAL` to false (`lib/site.ts`).
 
 ## 4. Things that need other people
@@ -108,7 +109,7 @@ From the original plan's "Phase 0", still open:
 
 ## 5. Tests that are still thin
 
-`npm test` (307 checks) and `npm run test:e2e` (26 journeys) run in CI. What
+`npm test` (304 checks) and `npm run test:e2e` (26 journeys) run in CI. What
 would catch the most next:
 
 1. the mail layer end to end — rendering, outbox claim and retry, recipients

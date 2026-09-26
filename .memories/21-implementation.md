@@ -642,12 +642,15 @@ utilities (`bg-ink`, `text-vermilion-deep`, `bg-band`, `text-on-ink`, …) live
 in `app/globals.css`. Full table, contrast rules and the history (the 19 Sep
 navy/gold from the design handoff) in [16-public-site-and-ui.md](16-public-site-and-ui.md).
 
-Public-site modules added 26 Sep: `components/site/guest-house-map.tsx` (map
-tabs), `PageMasthead` / `SectionHead` / `ArrowLink` in
-`components/site/site-ui.tsx`, `homeFacts` / `openTo` / `bookingSteps` /
-`guidelineSections` in `lib/site-content.ts`, `GUEST_HOUSE_LOCATIONS` /
-`guestHouseMapPins` / `MRBS_URL` in `lib/site.ts`; the My Bookings tiles are
-`BookingDoor` in `app/(portal)/dashboard/page.tsx`.
+Public-site modules (26 Sep): `components/site/brand.tsx` (`BrandBlock`, the
+lockup, also in the portal header), `site-header.tsx` (client header, over
+the hero on `/`), `site-chrome.tsx` (`SiteFooter`), `guest-house-map.tsx`
+(map tabs), `PageMasthead` (photo banners) / `SectionHead` / `ArrowLink` in
+`site-ui.tsx`; `amenities` / `BOOKING_STEPS` / `guidelineSections` /
+`mealTimetable` in `lib/site-content.ts`; `GUEST_HOUSE_LOCATIONS` /
+`guestHouseMapPins` / `MRBS_URL` / `HOME_PHOTOS` / `PAGE_PHOTOS` in
+`lib/site.ts`. The My Bookings tiles are `BookingDoor` in
+`app/(portal)/dashboard/page.tsx`.
 
 Logos: `public/IITPKD_NEW_LOGO.png` (the stacked institute logo on a
 transparent background, in both headers since 21 Sep 2026; it replaced the

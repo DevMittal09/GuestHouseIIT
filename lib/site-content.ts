@@ -1,27 +1,25 @@
-import { MEALS_ONLY_AUDIENCE } from "./booking-types";
 import { MEAL_KEYS, MEAL_LABELS, mealTimes } from "./meals";
-import {
-  describeRoomParties,
-  INFANT_AGE_LIMIT,
-  roomOccupancyNotice,
-  ROOM_TYPE_LABELS,
-} from "./occupancy";
-import { BOOKING_DURATION_EXEMPT_ROLES, CONTACT_FOR_LONGER_STAYS } from "./policy";
+import { describeRoomParties, INFANT_AGE_LIMIT, roomOccupancyNotice, ROOM_TYPE_LABELS } from "./occupancy";
 import { DEFAULT_RULES, type Rules } from "./settings";
 import { describeBuffer } from "./turnover";
-import type { BookingRoute, SiteGuestHouse, SitePolicies } from "./site-data";
-import { ROLE_LABELS, type Role, type RoomType } from "./types";
+import type { SiteGuestHouse } from "./site-data";
+import type { RoomType } from "./types";
 
 /**
- * Copy for the public website, built from the same constants the portal
- * enforces: room capacity, meal serving windows, the advance-booking window,
- * the stay cap, approval routes and the cancellation rules. Change a rule in
- * `lib/` and the website follows. Only facts the backend does not model — the
- * building's amenities and the house rules — are written out here, and those
- * are marked TODO(site) until the guest house office confirms them.
+ * Copy for the public website.
+ *
+ * **What the public site says, and what it keeps to itself** (26 Sep 2026,
+ * the owner): the site is for guests and the people who host them, so it
+ * never shows the portal's internals — no requester categories, no approval
+ * chains, no role names. The home page stays visual and light; rules and
+ * instructions live on the Guidelines page, in general terms.
+ *
+ * Where a rule *is* stated (the advance window, the stay cap, capacity, meal
+ * times, the kitchen's notice, charges), it is rendered from the same
+ * constants and Settings the portal enforces, so it cannot drift. Only facts
+ * the backend does not model — amenities and house rules — are written out,
+ * marked TODO(site) until the guest house office confirms them.
  */
-
-export type ContentCard = { kicker?: string; title: string; items: string[] };
 
 /** "Hamsanandi and Bageshri", "A, B and C". */
 export function joinNames(names: string[]): string {
@@ -45,27 +43,11 @@ function roomTypesIn(houses: SiteGuestHouse[]): RoomType[] {
   );
 }
 
-/** "20 rooms · 10 double sharing · 10 single". */
-export function describeRooms(house: SiteGuestHouse): string {
-  const parts = [plural(house.activeRooms, "room")];
-  for (const type of ["double_sharing", "single"] as const) {
-    const n = house.roomsByType[type];
-    if (n > 0) parts.push(`${n} ${ROOM_TYPE_LABELS[type].toLowerCase()}`);
-  }
-  return parts.join(" · ");
-}
-
 export function servingHouses(houses: SiteGuestHouse[]): SiteGuestHouse[] {
   return houses.filter((h) => h.serves_meals);
 }
 
-/** The serving times the office set in Settings (`getRules()`), one line per meal. */
-export function mealTimeLines(rules: Rules = DEFAULT_RULES): string[] {
-  const times = mealTimes(rules.meals.windows);
-  return MEAL_KEYS.map((meal) => `${MEAL_LABELS[meal]}, ${times[meal]}`);
-}
-
-/** The same, as rows for a timetable. */
+/** When each meal is served, from Settings, as rows for a timetable. */
 export function mealTimetable(rules: Rules = DEFAULT_RULES): { meal: string; time: string }[] {
   const times = mealTimes(rules.meals.windows);
   return MEAL_KEYS.map((meal) => ({ meal: MEAL_LABELS[meal], time: times[meal] }));
@@ -80,232 +62,82 @@ export const MEAL_NOTICE_RULE =
 
 // ------------------------------------------------------------------ home page
 
-export type HomeFact = { value: string; unit: string; label: string };
+/** An amenity on the home page: a short label, and which icon draws it. */
+export type Amenity = { key: string; label: string };
 
 /**
- * The figures under the home page's hero — every one computed, so the page
- * cannot advertise a window or a cap the booking form does not apply. A figure
- * with nothing behind it (no meals served, no stay cap) is left out.
+ * The home page's amenities — short labels only.
+ * TODO(site): from the guest house page on iitpkd.ac.in; the office to
+ * confirm they hold for every guest house.
  */
-export function homeFacts(houses: SiteGuestHouse[], rules: Rules = DEFAULT_RULES): HomeFact[] {
-  const facts: HomeFact[] = [];
-  const rooms = houses.reduce((sum, h) => sum + h.activeRooms, 0);
-  if (rooms > 0) {
-    facts.push({
-      value: String(rooms),
-      unit: rooms === 1 ? "room" : "rooms",
-      label: `across ${joinNames(houses.map((h) => h.name))}`,
-    });
-  }
-  const months = rules.booking.advance_booking_months;
-  facts.push({
-    value: String(months),
-    unit: months === 1 ? "month" : "months",
-    label: "the furthest ahead a check-in can be requested",
-  });
-  const nights = rules.booking.max_stay_nights;
-  if (nights > 0) {
-    facts.push({
-      value: String(nights),
-      unit: nights === 1 ? "night" : "nights",
-      label: "the longest stay a single request can cover",
-    });
-  }
-  const serving = servingHouses(houses);
-  if (serving.length > 0) {
-    facts.push({
-      value: String(MEAL_KEYS.length),
-      unit: "meals a day",
-      label: `served at ${joinNames(serving.map((h) => h.name))}, booked day by day`,
-    });
-  }
-  return facts;
-}
-
-/** Requester categories as a sentence names them: "students", "the IAR Office". */
-const REQUESTERS_IN_PROSE: Partial<Record<Role, string>> = {
-  student: "students",
-  employee: "faculty and staff",
-  official: "institute offices",
-  club: "clubs and councils",
-  iar_cell: "the IAR Office",
-  iar_student_cell: "the IAR Student Cell",
-};
-
-function inProse(role: Role): string {
-  return REQUESTERS_IN_PROSE[role] ?? ROLE_LABELS[role];
-}
-
-/**
- * Who may request a room at one guest house, from the routes the saved form
- * configs produce: "Everyone who can book", "Everyone except students", or
- * the list.
- */
-export function openTo(house: SiteGuestHouse, routes: BookingRoute[]): string {
-  if (routes.length === 0) return "";
-  const allowed = routes.filter((r) => r.guestHouses.includes(house.name));
-  if (allowed.length === routes.length) return "Everyone who can book";
-  if (allowed.length === 0) return "The Guest House Office, on a guest's behalf";
-  const excluded = routes.filter((r) => !allowed.includes(r));
-  if (excluded.length <= 2) return `Everyone except ${joinNames(excluded.map((r) => inProse(r.role)))}`;
-  const list = joinNames(allowed.map((r) => inProse(r.role)));
-  return list.charAt(0).toUpperCase() + list.slice(1);
-}
-
-export type BookingStep = { title: string; body: string };
-
-/** How a request moves, in five steps — the portal's actual pipeline. */
-export function bookingSteps(rules: Rules = DEFAULT_RULES): BookingStep[] {
+export function amenities(houses: SiteGuestHouse[]): Amenity[] {
   return [
-    {
-      title: "Sign in",
-      body: "With your institute LDAP account. Visitors without one are booked by the faculty member, office or student hosting them.",
-    },
-    {
-      title: "Raise the request",
-      body: `Dates, the guests in each room, and the budget head the stay is charged to. Check-in must fall within ${plural(
-        rules.booking.advance_booking_months,
-        "month"
-      )}.`,
-    },
-    {
-      title: "Approval",
-      body: "The request goes to the approvers for your category, listed below. You get an email at every step, and a decline always carries its reason.",
-    },
-    {
-      title: "Rooms allotted",
-      body: "The Guest House Manager assigns the actual rooms and confirms the booking by email.",
-    },
-    {
-      title: "Stay and settle",
-      body: "Reception checks guests in on arrival. The invoice is issued at check-out.",
-    },
-  ];
-}
-
-export function facilityCards(houses: SiteGuestHouse[], rules: Rules = DEFAULT_RULES): ContentCard[] {
-  const serving = servingHouses(houses);
-
-  return [
-    {
-      kicker: "Rooms",
-      title: "In the rooms",
-      items: [
-        ...roomTypesIn(houses).map((type) => capacityLine(type, rules)),
-        `Children under ${INFANT_AGE_LIMIT} share a guardian's bed and need no room of their own`,
-        // TODO(site): amenities from the guest house page on iitpkd.ac.in;
-        // confirm they hold for every guest house.
-        "Air-conditioned, with attached bathroom and geyser",
-        "Wi-Fi, television and refrigerator",
-      ],
-    },
-    {
-      kicker: "Dining",
-      title: "Dining",
-      items:
-        serving.length > 0
-          ? [
-              `Meals served at ${joinNames(serving.map((h) => h.name))}`,
-              ...mealTimeLines(rules),
-              "Chosen day by day when you request your room",
-            ]
-          : ["Meals are not being served at the guest houses at present"],
-    },
-    {
-      kicker: "Premises",
-      title: "On the premises",
-      // TODO(site): from the guest house page on iitpkd.ac.in; confirm.
-      items: ["Meeting room seating up to 50", "Exercise room", "Common water purifier"],
-    },
-    {
-      kicker: "Services",
-      title: "Service",
-      items: [
-        "Requests raised and approved online, with every step recorded",
-        "Email updates at every step of your request",
-        "Live room availability by day, week or month",
-        "Reception desk for arrivals and departures",
-      ],
-    },
+    { key: "ac", label: "Air-conditioned rooms" },
+    { key: "bath", label: "Attached bathrooms" },
+    { key: "wifi", label: "Wi-Fi" },
+    { key: "tv", label: "Television" },
+    { key: "fridge", label: "Refrigerator" },
+    ...(servingHouses(houses).length > 0 ? [{ key: "dining", label: "Dining" }] : []),
+    { key: "meeting", label: "Meeting room" },
+    { key: "gym", label: "Exercise room" },
+    { key: "reception", label: "Reception" },
   ];
 }
 
 // ----------------------------------------------------------------- guidelines
 
+export type BookingStep = { title: string; body: string };
+
 /**
- * One numbered section of the Guidelines page. `routes` asks the page to draw
- * the approval-route table under the items; `provisional` marks a section
- * whose items are placeholders the office has not confirmed yet.
+ * How booking works, for the Guidelines page — in general terms on purpose:
+ * who reviews a request depends on who raised it, and that is the portal's
+ * business, not the public page's.
+ */
+export const BOOKING_STEPS: BookingStep[] = [
+  { title: "Sign in", body: "Use your institute account. Visitors are booked by the person hosting them." },
+  { title: "Request", body: "Give the dates of the stay and the details of each guest." },
+  { title: "Approval", body: "The request is reviewed, and you hear by email at each step." },
+  { title: "Arrival", body: "Your rooms are ready and reception checks you in." },
+  { title: "Departure", body: "The invoice is settled at reception when you leave." },
+];
+
+/**
+ * One numbered section of the Guidelines page. `timetable` asks the page to
+ * draw the meal times under the items; `provisional` marks a section whose
+ * items are placeholders the office has not confirmed yet.
  */
 export type GuidelineSection = {
   id: string;
   title: string;
   items: string[];
-  routes?: BookingRoute[];
+  timetable?: { meal: string; time: string }[];
   provisional?: boolean;
 };
 
 /**
- * The Guidelines page, section by section. Sections 1–7 are the portal's own
- * rules, rendered from `lib/` and the office's Settings; 8 and 9 are house
- * rules the portal does not model.
+ * The Guidelines page, section by section. The first six are the portal's own
+ * rules in general terms, rendered from `lib/` and the office's Settings; the
+ * last two are house rules the portal does not model.
  */
-export function guidelineSections(houses: SiteGuestHouse[], policies: SitePolicies): GuidelineSection[] {
-  const { rules, routes } = policies;
-  const allHouses = houses.length;
-  // The plain role name: how a club books is its own clause below.
-  const who = routes.map((route) => {
-    const limited = route.guestHouses.length > 0 && route.guestHouses.length < allHouses;
-    return `${ROLE_LABELS[route.role]} — ${limited ? `${joinNames(route.guestHouses)} only` : "any guest house"}`;
-  });
-  const dependency = policies.studentDependency;
-  const windowExempt = routes.filter((r) => r.advanceWindowExempt).map((r) => r.label);
-  const stayExempt = routes
-    .filter((r) => BOOKING_DURATION_EXEMPT_ROLES.includes(r.role))
-    .map((r) => r.label);
+export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAULT_RULES): GuidelineSection[] {
   const serving = servingHouses(houses);
   const invoice = rules.invoice;
   const maxNights = rules.booking.max_stay_nights;
 
   return [
     {
-      id: "eligibility",
-      title: "Who may book",
+      id: "booking",
+      title: "Booking a stay",
       items: [
-        ...who,
-        "Visitors with no institute account are booked by the faculty member, office or student hosting them",
-        "Alumni are booked by the IAR Student Cell or the IAR Office on their behalf",
-        "A club or council's booking is raised by its Faculty Advisor",
-        ...(dependency
-          ? [
-              `Students may book for ${joinNames(dependency.parents).toLowerCase()} freely, and for ${joinNames(
-                dependency.dependents
-              ).toLowerCase()} only when a parent is staying too`,
-            ]
-          : []),
-      ],
-    },
-    {
-      id: "requests",
-      title: "Requests and approval",
-      items: [
-        `Check-in must fall within ${plural(rules.booking.advance_booking_months, "month")} of the day the request is made${
-          windowExempt.length > 0 ? ` (${joinNames(windowExempt)} exempt)` : ""
-        }`,
+        "Rooms are requested online by members of the institute, for themselves or for their guests",
+        "Visitors from outside the institute are booked by the person hosting them",
+        `Check-in must fall within ${plural(rules.booking.advance_booking_months, "month")} of the day the request is made`,
         ...(maxNights > 0
-          ? [
-              `A single request may cover at most ${plural(maxNights, "night")}${
-                stayExempt.length > 0 ? ` (${joinNames(stayExempt)} exempt)` : ""
-              }. ${CONTACT_FOR_LONGER_STAYS}`,
-            ]
+          ? [`A single request may cover up to ${plural(maxNights, "night")}; for a longer stay, contact the Guest House Office`]
           : []),
-        "Every request names the budget head the stay is charged to, and agrees to the privacy notice",
-        "Other addresses may be copied on the request; they receive every email the requester does",
-        "Each request goes through the approvals for the requester's category, in order, as in the table below",
-        "Rooms are allotted by the Guest House Manager on approval; a particular room is not guaranteed",
-        "A request that is declined always carries the reason",
+        "Every request is reviewed before it is confirmed; you are told by email at each step, and a request that is declined carries its reason",
+        "Rooms are allotted by the Guest House Office once a request is approved; a particular room cannot be promised",
       ],
-      routes,
     },
     {
       id: "rooms",
@@ -314,7 +146,8 @@ export function guidelineSections(houses: SiteGuestHouse[], policies: SitePolici
         ...roomTypesIn(houses).map((type) => capacityLine(type, rules)),
         roomOccupancyNotice(rules.capacity),
         `A room is full at ${describeRoomParties(rules.capacity)}`,
-        "An extra bed is rolled in by the staff and charged as its own line on the invoice",
+        `Children under ${INFANT_AGE_LIMIT} share a guardian's bed`,
+        "An extra bed is rolled in by the staff, and charged as its own line on the invoice",
       ],
     },
     {
@@ -323,11 +156,11 @@ export function guidelineSections(houses: SiteGuestHouse[], policies: SitePolici
       items: [
         "Arrival and departure times are chosen on the request, and the room is held for exactly that period",
         rules.booking.buffer_minutes > 0
-          ? `A room is held for ${describeBuffer(rules.booking.buffer_minutes)} after the booked check-out so it can be made ready for the next guest`
+          ? `Rooms are made ready between guests, so a room stays held for ${describeBuffer(rules.booking.buffer_minutes)} after the booked check-out`
           : "A room becomes free again at the booked check-out time",
-        "Reception marks guests in on arrival — never before the booked check-in",
-        "Every adult guest carries a photo identity document, and the one named on the request where the form asked for it",
-        "To arrive earlier or leave later, ask reception: the stay is moved only if the rooms are free for the new dates",
+        "Guests are checked in at reception on arrival — not before the booked check-in",
+        "Every adult guest carries a photo identity document",
+        "To arrive earlier or stay longer, ask reception; the stay is moved only if the rooms are free",
         // TODO(site): house practice, not modelled by the portal — confirm.
         "Room keys are collected from reception on arrival and returned there at check-out",
       ],
@@ -338,14 +171,12 @@ export function guidelineSections(houses: SiteGuestHouse[], policies: SitePolici
       items:
         serving.length > 0
           ? [
-              `Served at ${joinNames(serving.map((h) => h.name))}: ${mealTimeLines(rules)
-                .map((line) => line.replace(", ", " "))
-                .join("; ")}`,
-              "Meals are chosen day by day on the room request, vegetarian or non-vegetarian; every meal the stay covers is ticked by default",
+              `Meals are served at ${joinNames(serving.map((h) => h.name))}, at the times below`,
+              "Meals are chosen day by day on the request, vegetarian or non-vegetarian; every meal the stay covers is ticked to begin with",
               MEAL_NOTICE_RULE,
-              `Meals without a room can be booked by ${MEALS_ONLY_AUDIENCE}`,
             ]
           : ["Meals are not being served at the guest houses at present"],
+      timetable: serving.length > 0 ? mealTimetable(rules) : undefined,
     },
     {
       // Phase 10: the bill, from the same rules `lib/invoice.ts` prices it by.
@@ -360,16 +191,15 @@ export function guidelineSections(houses: SiteGuestHouse[], policies: SitePolici
           : `GST is added to the tariff on the invoice — ${invoice.gst_room_percent}% on rooms and ${invoice.gst_meal_percent}% on meals`,
         "An extra bed and meals served are charged in addition, each as its own line",
         "Damage or loss is recovered as an additional charge on the invoice",
-        "The invoice is issued at check-out and can be settled in cash, by UPI or by transfer; an official stay is debited to the head named on the request",
-        "A dining booking is invoiced from the day of its first meal",
+        "The invoice is issued at check-out and can be settled in cash, by UPI or by transfer; an official stay is charged to the account named on the request",
       ],
     },
     {
       id: "cancellation",
       title: "Cancellation",
       items: [
-        "A request can be cancelled from My Bookings at any time, with a reason; the Guest House Manager approves the cancellation",
-        "The rooms stay held until that decision, and are released as soon as it is approved",
+        "A request can be cancelled from My Bookings at any time, with a reason; the Guest House Office confirms the cancellation",
+        "The rooms stay held until then, and are released as soon as it is confirmed",
         "Once a guest has checked in, the stay is ended at reception instead",
       ],
     },
@@ -390,7 +220,7 @@ export function guidelineSections(houses: SiteGuestHouse[], policies: SitePolici
         "Switch off lights, fans and air-conditioning when leaving the room",
         "Keep valuables locked away; the guest house is not responsible for belongings left in rooms",
         "Rooms are cleaned daily between 9:00 AM and 12:00 noon; linen and towels are changed every third day and between guests",
-        "The Guest House Manager may end a stay that breaks these rules",
+        "The Guest House Office may end a stay that breaks these rules",
       ],
     },
     {
