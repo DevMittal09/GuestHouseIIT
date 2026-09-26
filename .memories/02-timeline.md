@@ -25,15 +25,18 @@ the notes of each session. The reasoning behind each step is in
 | **24 Sep (evening)** | Three defects the audit found, fixed: the developer is no longer offered New Booking (book on behalf is the manager's alone), one source for the guest house's phone and email (`lib/site.ts`) so the help line stops showing a placeholder, and a **Meal counts** link from Reception to the kitchen page with a back link to Reception. |
 | **25 Sep** | The office's **fifth list**: the student's academic record and a family check for the Assistant Warden; guests **filled in** from the record and from earlier bookings; **additional charges** on invoices (migration 26); typed meal counts repriced at once; **GST 18% rooms / 5% food** per section, to the office's revised template; **Special Funds for everyone but students**; the **infant card**; an **earlier check-in** at the desk. |
 
+| **26 Sep** | **Public site redesigned** in iitpkd.ac.in's own palette (ink, vermilion, saffron) and an editorial, non-template look: computed figures, guest-house panels, the approval routes as a table, a numbered Guidelines document with placeholder house rules, **a map tab per guest house**, **MRBS** and institute links in the footer; the portal follows through the tokens; **large booking tiles** on My Bookings. |
+
 ## Branches
 
 - **`main`** — everything above.
 - **`ui`** — only the 21 Sep "vermilion" redesign experiment (3 commits of its
-  own), far behind `main`; a trial merge gave 30 conflicting files. Not merged.
+  own), far behind `main`; a trial merge gave 30 conflicting files. Not merged,
+  and **superseded** by the 26 Sep redesign on `main`.
 - Dependabot branches on the remote (actions and npm updates), not merged.
 
-## Numbers, 25 Sep 2026
+## Numbers, 26 Sep 2026
 
 26 migrations · 7 one-off repairs · 12 roles (10 active, 2 legacy) · 18 demo
 personas · 6 demo bookings · 23 real rooms (Bageshri 10, Hamsanandi 13) ·
-289 unit tests · 22 end-to-end journeys · 13 console sections.
+307 unit tests · 26 end-to-end journeys · 13 console sections.

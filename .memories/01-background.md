@@ -248,6 +248,23 @@ Relayed by the owner. Reasoning in [03-decisions.md](03-decisions.md)
 | "Add infant" should open an infant card, not a guest card | **Done** | "Infant N" card: age chosen below 5, no Aadhaar or ID upload; the schema requires the age on it |
 | The manager (and caretaker, if they extend) can extend a stay to an **earlier check-in**, not only a later check-out | **Done** | Manage → Extend the stay → Earlier check-in, manager and caretaker (the same people who extend) |
 
+## Public site redesign — 26 Sep 2026
+
+Asked by the owner. Reasoning in [03-decisions.md](03-decisions.md)
+("26 Sep 2026 — the public site redesigned"); the working summary is
+[99-recent-changes.md](99-recent-changes.md).
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| A clean, professional site that impresses, not AI-generated-looking, following the backend; the UI "too dull and dead" | **Done** | Every public page redesigned — [16-public-site-and-ui.md](16-public-site-and-ui.md) |
+| Keep the mock authentication | **Kept** | "Mock Authentication" on the sign-in card and `/mock-login`, unchanged in behaviour |
+| Follow the colour palette of the IITPKD websites | **Done** | Ink `#1A1A1A`, vermilion `#E94C26`, saffron `#F5A300`, from iitpkd.ac.in's CSS and the logo; the portal follows through the tokens |
+| Map with two options, Hamsanandi and Bageshri (two Google Maps links) | **Done** | `/contact` map tabs; `GUEST_HOUSE_LOCATIONS` in `lib/site.ts`; each house's Map and Directions in the footer and on the home page |
+| The MRBS booking portal in the footer with the contact details; the iitpkd website "and everything" | **Done** | Footer: an MRBS line and button, front office, Find us, Institute links (IIT Palakkad website, MRBS, guest house page, How to reach, Telephone directory); MRBS and iitpkd.ac.in in the portal footer too |
+| A Guidelines page with dummy guidelines from what was discussed and what guest houses usually have | **Done** | `/guidelines`: nine numbered sections; 1–7 the portal's rules, 8–9 placeholder house rules marked "To be confirmed" |
+| Look online for how to make it look less AI-generated | **Done** | Findings and how they were applied in [16-public-site-and-ui.md](16-public-site-and-ui.md) |
+| The New Booking and Meal Booking buttons should stand out after login | **Done** | Large vermilion / ink tiles at the top of My Bookings |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

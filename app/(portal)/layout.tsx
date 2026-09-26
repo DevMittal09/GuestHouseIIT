@@ -8,6 +8,7 @@ import { NavBar, type NavItem } from "@/components/site/site-nav";
 import { logout } from "@/app/actions/auth";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
+import { INSTITUTE_WEBSITE, MRBS_URL } from "@/lib/site";
 import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
 import { isRequesterHistory } from "@/lib/workflow";
 import { getStore } from "@/lib/store";
@@ -17,9 +18,9 @@ import { clubsBookableByUser } from "@/lib/club-booking-server";
 
 /**
  * The signed-in shell, in the guest house website's style: a white header with
- * the institute logo and who is signed in, then the navy nav bar — sticky, so
- * the console tabs stay in reach on long queues — with a gold bar under the
- * current section.
+ * the institute logo and who is signed in, then the charcoal nav bar (the
+ * colour of iitpkd.ac.in's own menu) — sticky, so the console tabs stay in
+ * reach on long queues — with a vermilion bar under the current section.
  */
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -86,19 +87,28 @@ export default async function PortalLayout({ children }: { children: React.React
       <main className="mx-auto w-full max-w-[1200px] flex-1 px-[clamp(14px,4vw,24px)] py-8">
         {children}
       </main>
-      <footer className="bg-navy-dark text-[13.5px] text-footer-muted">
+      <footer className="bg-ink text-[13.5px] text-on-ink-muted">
         <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center justify-between gap-x-6 gap-y-2 px-[clamp(14px,4vw,24px)] py-4">
           <span>&copy; Indian Institute of Technology Palakkad</span>
           <span className="flex flex-wrap gap-x-5 gap-y-1">
-            <Link href="/" className="text-footer-text hover:text-white">
+            <Link href="/" className="text-on-ink hover:text-white">
               Guest house website
             </Link>
-            <Link href="/guidelines" className="text-footer-text hover:text-white">
+            <Link href="/guidelines" className="text-on-ink hover:text-white">
               Guidelines
             </Link>
-            <Link href="/contact" className="text-footer-text hover:text-white">
+            <Link href="/contact" className="text-on-ink hover:text-white">
               Contact
             </Link>
+            {/* Seminar halls and meeting rooms are the other booking system. */}
+            <a href={MRBS_URL} target="_blank" rel="noopener noreferrer" className="text-on-ink hover:text-white">
+              Room Booking System (MRBS)
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+            <a href={INSTITUTE_WEBSITE} target="_blank" rel="noopener noreferrer" className="text-on-ink hover:text-white">
+              iitpkd.ac.in
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
           </span>
         </div>
       </footer>

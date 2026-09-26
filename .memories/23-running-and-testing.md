@@ -41,8 +41,8 @@ form, all approval tiers, the room grid, invoices, the desk and the console.
 | --- | --- | --- |
 | `npm run lint` | ESLint incl. the strict React Compiler rules | must stay clean |
 | `npm run typecheck` | `next typegen && tsc --noEmit` | `npm run build` also typechecks |
-| `npm test` | Vitest, `tests/` — 16 files, 289 checks (25 Sep 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
-| `npm run test:e2e` | Playwright, `e2e/` — 22 journeys (about 50 s) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
+| `npm test` | Vitest, `tests/` — 17 files, 307 checks (26 Sep 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
+| `npm run test:e2e` | Playwright, `e2e/` — 26 journeys (about 70 s) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
 
 Playwright journeys: `booking-journey` (student → warden → manager → desk →
 invoice → paid), `official-and-dining` (faculty through the HOD; a meals-only
@@ -297,8 +297,10 @@ enough to drive Chrome over the DevTools protocol with no extra packages:
 Two gotchas that cost a rerun: `innerText` applies CSS `text-transform`, so an
 `uppercase` label reads "ROOMS SELECTED" (match on `textContent`); and panels
 that finish loading move the page, so scroll, wait, and *then* measure the clip
-— allowing for the sticky navy nav bar in the portal (~47 px since the 19 Sep
-2026 restyle; it was a 56 px header before).
+— allowing for the sticky charcoal nav bar in the portal (~47 px since the
+19 Sep 2026 restyle; it was a 56 px header before). For `next/image` photos,
+scroll the whole page and wait ~1.5 s before a screenshot, or they are still
+blank (26 Sep 2026).
 
 Since the public website went in (19 Sep 2026), three more checks are cheap
 and worth keeping: set the viewport to 320 px

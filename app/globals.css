@@ -47,20 +47,20 @@
   --font-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-heading: var(--font-source-serif), Georgia, serif;
-  --color-navy: var(--navy);
-  --color-navy-dark: var(--navy-dark);
-  --color-navy-hover: var(--navy-hover);
-  --color-gold: var(--gold);
-  --color-gold-hover: var(--gold-hover);
-  --color-gold-dark: var(--gold-dark);
-  --color-gold-darkest: var(--gold-darkest);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-vermilion: var(--vermilion);
+  --color-vermilion-deep: var(--vermilion-deep);
+  --color-vermilion-hover: var(--vermilion-hover);
+  --color-vermilion-soft: var(--vermilion-soft);
+  --color-saffron: var(--saffron);
   --color-body: var(--body-text);
   --color-band: var(--band);
   --color-notice: var(--notice);
   --color-notice-border: var(--notice-border);
   --color-border-strong: var(--border-strong);
-  --color-footer-text: var(--footer-text);
-  --color-footer-muted: var(--footer-muted);
+  --color-on-ink: var(--on-ink);
+  --color-on-ink-muted: var(--on-ink-muted);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -100,107 +100,118 @@
 }
 
 /*
- * Palette from the guest house design handoff (design_handoff/README.md),
- * which sits the portal visually alongside iitpkd.ac.in: navy #12284C for
- * structure and primary actions, gold #E8A317 for accents, focus rings and the
- * public call to action, body text #41506A, borders #E1E5EC. Corners are
- * near-square (3px) and nothing carries a shadow.
+ * The palette of iitpkd.ac.in itself (its theme CSS, read 26 Sep 2026:
+ * `themes/iitpkd/css/typo-colors.css`, `menu.css`): vermilion #E94C26 for
+ * links, buttons and the active menu item, charcoal #1A1A1A for the top bar
+ * and footer, #333 text and a light grey band. The emblem is saffron. Headings
+ * are Source Serif, as on the institute's site.
  *
- * This replaced the amber-on-off-white palette copied from
- * dashboard.iitpkd.ac.in. Primary buttons are now white on navy (12.9:1),
- * which also retires the white-on-amber contrast failure on the roadmap.
- * Gold is never used behind white text — gold buttons carry navy text.
+ * This replaced the design handoff's navy #12284C and gold #E8A317 (19 Sep
+ * 2026), which appear nowhere on the institute's own site.
+ *
+ * Contrast rules — keep them:
+ * - White text only on `vermilion-deep` (5.2:1), never on the bright
+ *   `vermilion` (3.8:1). Bright vermilion is for rules, icons and display-size
+ *   type.
+ * - Saffron is a highlight on ink (8.4:1) and carries ink text; never white.
+ * - `--primary` is ink, not vermilion: portal tables put Approve beside a red
+ *   Reject, and a vermilion primary read as a second red. The vermilion call to
+ *   action is the explicit `Button variant="brand"`.
+ *
+ * Corners stay near-square (4px) and nothing carries a shadow: structure comes
+ * from hairline rules and contrast, which is what an institutional page
+ * looks like and a template does not.
  */
 :root {
-  /* Brand tokens, exposed as `bg-navy`, `text-gold-dark`, `bg-band`, … */
-  --navy: #12284c;
-  --navy-dark: #0c1d38;
-  --navy-hover: #1b3765;
-  --gold: #e8a317;
-  --gold-hover: #d2910c;
-  --gold-dark: #b8790c;
-  --gold-darkest: #8a5b08;
-  --body-text: #41506a;
-  --band: #f1f3f6;
-  --notice: #fdf7e8;
-  --notice-border: #e8d5a6;
-  --border-strong: #c9d0db;
-  --footer-text: #c6cfdd;
-  --footer-muted: #9daabd;
+  /* Brand tokens, exposed as `bg-ink`, `text-vermilion`, `bg-band`, … */
+  --ink: #1a1a1a;
+  --ink-soft: #2b2926;
+  --vermilion: #e94c26;
+  --vermilion-deep: #c43c1c;
+  --vermilion-hover: #a8331a;
+  --vermilion-soft: #fdf0eb;
+  --saffron: #f5a300;
+  --body-text: #4a4541;
+  --band: #f3f1eb;
+  --notice: #fff7e6;
+  --notice-border: #efd7a3;
+  --border-strong: #cec8bf;
+  --on-ink: #d6d1ca;
+  --on-ink-muted: #a39d95;
 
   --background: #ffffff;
-  --foreground: #12284c;
+  --foreground: #1a1a1a;
   --card: #ffffff;
-  --card-foreground: #12284c;
+  --card-foreground: #1a1a1a;
   --popover: #ffffff;
-  --popover-foreground: #12284c;
-  --primary: #12284c;
+  --popover-foreground: #1a1a1a;
+  --primary: #1a1a1a;
   --primary-foreground: #ffffff;
-  --secondary: #f1f3f6;
-  --secondary-foreground: #12284c;
-  --muted: #f1f3f6;
-  --muted-foreground: #5a6880;
-  --accent: #fdf7e8;
-  --accent-foreground: #12284c;
+  --secondary: #f3f1eb;
+  --secondary-foreground: #1a1a1a;
+  --muted: #f3f1eb;
+  --muted-foreground: #6b655f;
+  --accent: #f3f1eb;
+  --accent-foreground: #1a1a1a;
   --destructive: #dc2626;
-  --border: #e1e5ec;
-  --input: #c9d0db;
-  --ring: #e8a317;
-  --chart-1: #12284c;
-  --chart-2: #e8a317;
+  --border: #e5e1da;
+  --input: #cec8bf;
+  --ring: #e94c26;
+  --chart-1: #1a1a1a;
+  --chart-2: #e94c26;
   --chart-3: #06b6d4;
   --chart-4: #22c55e;
-  --chart-5: #ef4444;
-  --radius: 0.1875rem;
+  --chart-5: #f5a300;
+  --radius: 0.25rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #12284c;
-  --sidebar-primary: #12284c;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #1a1a1a;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #fdf7e8;
-  --sidebar-accent-foreground: #12284c;
-  --sidebar-border: #e1e5ec;
-  --sidebar-ring: #e8a317;
+  --sidebar-accent: #f3f1eb;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: #e5e1da;
+  --sidebar-ring: #e94c26;
 }
 
 /* Not currently switched on anywhere (no theme provider), kept coherent. */
 .dark {
-  --body-text: #c6cfdd;
-  --band: #111f36;
+  --body-text: #d6d1ca;
+  --band: #221f1c;
   --notice: #2a2210;
   --notice-border: #5c4718;
   --border-strong: rgba(255, 255, 255, 0.2);
 
-  --background: #0b1628;
-  --foreground: #e6ebf3;
-  --card: #111f36;
-  --card-foreground: #e6ebf3;
-  --popover: #111f36;
-  --popover-foreground: #e6ebf3;
-  --primary: #e8a317;
-  --primary-foreground: #12284c;
-  --secondary: #16263f;
-  --secondary-foreground: #e6ebf3;
-  --muted: #16263f;
-  --muted-foreground: #9daabd;
-  --accent: #1b3765;
-  --accent-foreground: #f3c766;
+  --background: #141312;
+  --foreground: #f1ede7;
+  --card: #1d1b19;
+  --card-foreground: #f1ede7;
+  --popover: #1d1b19;
+  --popover-foreground: #f1ede7;
+  --primary: #f1ede7;
+  --primary-foreground: #1a1a1a;
+  --secondary: #2b2926;
+  --secondary-foreground: #f1ede7;
+  --muted: #2b2926;
+  --muted-foreground: #a39d95;
+  --accent: #2b2926;
+  --accent-foreground: #f5a300;
   --destructive: #f87171;
   --border: rgba(255, 255, 255, 0.1);
   --input: rgba(255, 255, 255, 0.18);
-  --ring: #e8a317;
-  --chart-1: #9db7e6;
-  --chart-2: #f3c766;
+  --ring: #e94c26;
+  --chart-1: #f1ede7;
+  --chart-2: #ff7a55;
   --chart-3: #22d3ee;
   --chart-4: #4ade80;
-  --chart-5: #f87171;
-  --sidebar: #111f36;
-  --sidebar-foreground: #e6ebf3;
-  --sidebar-primary: #e8a317;
-  --sidebar-primary-foreground: #12284c;
-  --sidebar-accent: #1b3765;
-  --sidebar-accent-foreground: #f3c766;
+  --chart-5: #f5a300;
+  --sidebar: #1d1b19;
+  --sidebar-foreground: #f1ede7;
+  --sidebar-primary: #f5a300;
+  --sidebar-primary-foreground: #1a1a1a;
+  --sidebar-accent: #2b2926;
+  --sidebar-accent-foreground: #f5a300;
   --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #e8a317;
+  --sidebar-ring: #e94c26;
 }
 
 @layer base {
@@ -221,8 +232,8 @@
     text-wrap: pretty;
   }
   /*
-   * A visible gold focus ring on plain links and summaries. shadcn controls
-   * draw their own ring from `--ring`, which is the same gold.
+   * A visible vermilion focus ring on plain links and summaries. shadcn
+   * controls draw their own ring from `--ring`, which is the same colour.
    */
   a:focus-visible,
   summary:focus-visible {

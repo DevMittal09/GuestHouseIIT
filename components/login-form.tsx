@@ -5,9 +5,9 @@ import Link from "next/link";
 import { KeyRoundIcon } from "lucide-react";
 import { signInWithLdap } from "@/app/actions/auth";
 
-const LABEL = "mb-[7px] block text-[13px] font-bold tracking-[0.03em] text-body";
+const LABEL = "mb-[7px] block text-[13.5px] font-semibold text-ink";
 const INPUT =
-  "block w-full rounded-[2px] border border-border-strong bg-white px-3.5 py-[13px] text-[15.5px] text-navy placeholder:text-[#8390a5] focus-visible:border-navy focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gold aria-invalid:border-destructive";
+  "block w-full rounded-[2px] border border-border-strong bg-white px-3.5 py-[13px] text-[15.5px] text-ink placeholder:text-[#8f8880] focus-visible:border-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-vermilion aria-invalid:border-destructive";
 
 /** The Google "G", as Google's sign-in button guidelines draw it. */
 function GoogleMark() {
@@ -79,13 +79,13 @@ export function LoginForm({
 
   return (
     <div className="min-w-0">
-      <div className="rounded-[2px] border border-t-[3px] border-border border-t-navy bg-white px-[clamp(18px,5vw,30px)] pt-8 pb-[34px]">
+      <div className="border border-t-[3px] border-border border-t-ink bg-white px-[clamp(18px,5vw,32px)] pt-8 pb-[34px]">
         {notice && (
           <p role="alert" className="mb-4 rounded-[3px] border border-red-300 bg-red-50 px-3 py-2 text-[14.5px] text-red-900">
             {notice}
           </p>
         )}
-        <h2 className="mb-1.5 text-[25px] font-semibold text-navy">Sign in</h2>
+        <h2 className="mb-1.5 text-[26px] font-semibold text-ink">Sign in</h2>
         <p className="mb-[22px] text-[14.5px] text-muted-foreground">
           With your institute LDAP account
         </p>
@@ -134,7 +134,7 @@ export function LoginForm({
           <button
             type="submit"
             disabled={isPending || username.trim() === "" || password === ""}
-            className="w-full cursor-pointer rounded-[3px] bg-navy p-3.5 text-[15.5px] font-bold text-white transition-colors duration-150 hover:bg-navy-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full cursor-pointer rounded-[3px] bg-vermilion-deep p-3.5 text-[15.5px] font-semibold text-white transition-colors duration-150 hover:bg-vermilion-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isPending ? "Signing in…" : submitLabel}
           </button>
@@ -151,7 +151,7 @@ export function LoginForm({
             <Link
               href={secondDoorHref}
               prefetch={false}
-              className="flex w-full items-center justify-center gap-3 rounded-[3px] border border-border-strong bg-white p-3 text-[15.5px] font-semibold text-navy transition-colors duration-150 hover:border-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+              className="flex w-full items-center justify-center gap-3 rounded-[3px] border border-ink bg-white p-3 text-[15.5px] font-semibold text-ink transition-colors duration-150 hover:bg-ink hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion"
             >
               {/* The Google mark belongs only on the real Google flow — on the
                   placeholder it would claim something the button does not do. */}
@@ -170,16 +170,16 @@ export function LoginForm({
         Everything below is for development and demos, and goes when real
         authentication lands — see .memories/04-roadmap.md item 1.
       */}
-      <div className="mt-5 border border-dashed border-border-strong bg-band px-4 py-3 text-center text-[13px] leading-normal text-muted-foreground">
+      <div className="mt-5 border border-dashed border-border-strong bg-white/60 px-4 py-3 text-center text-[13px] leading-normal text-muted-foreground">
         Demo build —{" "}
         {sampleAccount ? (
           <>
             LDAP accounts are dummy ones, e.g.{" "}
-            <code className="rounded-[2px] bg-white px-1 py-0.5 font-mono text-navy">
+            <code className="rounded-[2px] bg-band px-1 py-0.5 font-mono text-ink">
               {sampleAccount.uid}
             </code>{" "}
             /{" "}
-            <code className="rounded-[2px] bg-white px-1 py-0.5 font-mono text-navy">
+            <code className="rounded-[2px] bg-band px-1 py-0.5 font-mono text-ink">
               {sampleAccount.password}
             </code>
             .{" "}

@@ -3,9 +3,11 @@ import { Geist_Mono, Source_Sans_3, Source_Serif_4 } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-// Typography from the design handoff: Source Sans 3 for body and UI, Source
-// Serif 4 for headings. next/font self-hosts both, so no request reaches
-// Google from the visitor's browser.
+// Source Serif for headings, as on iitpkd.ac.in (which uses Source Serif Pro,
+// the predecessor of Source Serif 4), and Source Sans 3 for body and UI.
+// Source Serif 4 is loaded with its optical-size axis, so display-size
+// headings get the display cut and small ones the text cut. next/font
+// self-hosts both, so no request reaches Google from the visitor's browser.
 const sourceSans = Source_Sans_3({
   variable: "--font-source-sans",
   subsets: ["latin"],
@@ -14,6 +16,7 @@ const sourceSans = Source_Sans_3({
 const sourceSerif = Source_Serif_4({
   variable: "--font-source-serif",
   subsets: ["latin"],
+  axes: ["opsz"],
 });
 
 const geistMono = Geist_Mono({

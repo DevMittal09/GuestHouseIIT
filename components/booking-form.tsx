@@ -1722,7 +1722,7 @@ export function BookingForm({
         <Button type="button" variant="outline" onClick={() => router.push("/dashboard")}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isPending}>
+        <Button type="submit" variant="brand" size="lg" className="px-5" disabled={isPending}>
           {isPending ? "Submitting…" : "Submit booking request"}
         </Button>
       </div>

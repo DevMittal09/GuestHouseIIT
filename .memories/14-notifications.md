@@ -222,7 +222,7 @@ what every HTML-refusing client and every screen reader reads.
 Email constraints baked into the markup: tables for layout, inline styles only
 (Gmail strips `<style>`), no external images (blocked by default, and the
 portal may be on localhost). The header still uses the pre-redesign amber (dark brown on amber, which
-passes WCAG AA); restyling mail to the site's navy/gold is an open item.
+passes WCAG AA); restyling mail to the site's ink/vermilion is an open item.
 
 **Never put an ID document link in a mail body.** Reviewer mail says the
 documents are in the portal and links to the page.

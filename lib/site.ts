@@ -38,14 +38,37 @@ export function safeNextPath(next: string | null | undefined): string | null {
 /** TODO(site): the URL of the full guidelines PDF. `null` hides the button. */
 export const GUIDELINES_PDF_URL: string | null = null;
 
+/**
+ * The Guidelines page's house rules (conduct, safety) are placeholders written
+ * from what guest houses usually ask of guests, until the office sends its
+ * own. While this is true the page says it is a provisional edition.
+ * TODO(site): set to false once the office has confirmed the rules.
+ */
+export const GUIDELINES_PROVISIONAL = true;
+
 export const INSTITUTE_WEBSITE = "https://iitpkd.ac.in";
 
+/**
+ * The institute's Meeting Room Booking System — lecture halls and meeting
+ * rooms, which this portal does not book. Linked from the footer so someone
+ * who came here for a seminar room finds the right door.
+ */
+export const MRBS_URL = "https://mrbs.iitpkd.ac.in";
+
+/** "How to reach" on the institute's site: trains, buses and the airport. */
+export const HOW_TO_REACH_URL = "https://iitpkd.ac.in/how-reach";
+
+/**
+ * The footer's institute links, each checked to resolve on 26 Sep 2026. The
+ * iitpkd.ac.in guest house page is the one the institute publishes
+ * (`/guest-house-hamsanandi`); there is no Bageshri page.
+ */
 export const SITE_LINKS = [
-  { label: "IIT Palakkad Website", href: INSTITUTE_WEBSITE },
-  { label: "Guest House on iitpkd.ac.in", href: "https://iitpkd.ac.in/guest-house-hamsanandi" },
-  { label: "Room Booking System (MRBS)", href: "https://mrbs.iitpkd.ac.in" },
-  // DPDP (Phase 8): the notice the booking form asks people to agree to.
-  { label: "Privacy notice", href: "/privacy" },
+  { label: "IIT Palakkad website", href: INSTITUTE_WEBSITE },
+  { label: "Room Booking System (MRBS)", href: MRBS_URL },
+  { label: "Guest house on iitpkd.ac.in", href: "https://iitpkd.ac.in/guest-house-hamsanandi" },
+  { label: "How to reach the campus", href: HOW_TO_REACH_URL },
+  { label: "Telephone directory", href: "https://iitpkd.ac.in/TelephoneDirectory" },
 ] as const;
 
 /** The institute's own switchboard line and address, shown in the utility strip. */
@@ -74,19 +97,91 @@ export const GUEST_HOUSE_CONTACT = {
 } as const;
 
 /**
- * The map on the Contact page. The embed is the institute's own Google Maps
- * pin (from the design handoff); no separate pin for the guest houses is
- * published. TODO(site): replace with the guest house's own pin once the
- * office confirms it — `https://maps.google.com/maps?q=<lat>,<lng>&z=17&output=embed`
- * works without an API key.
+ * Where each guest house is, keyed by `guestHouseSlug(name)` like the photo
+ * registry below — guest houses are data, so a new one gets a pin by adding a
+ * line here, and one without a line is simply not on the map. `query` is the
+ * place's own name on Google Maps: searched together with its coordinates it
+ * resolves to the place itself (checked 26 Sep 2026), so the embed shows the
+ * guest house's name card rather than a bare pin. `openUrl` is the link the
+ * office shared. `name` is only a fallback label for when the store cannot be
+ * read; the store's name is used otherwise.
+ *
+ * Order is the order the Contact page offers them in.
  */
-export const GUEST_HOUSE_MAP = {
-  title: "IIT Palakkad guest house on the map",
+export type GuestHouseLocation = {
+  name: string;
+  lat: number;
+  lng: number;
+  query: string;
+  openUrl: string;
+};
+
+export const GUEST_HOUSE_LOCATIONS: Record<string, GuestHouseLocation> = {
+  hamsanandi: {
+    name: "Hamsanandi",
+    lat: 10.7984359,
+    lng: 76.7299972,
+    query: "Hamsanandi Guest house IIT pkd",
+    openUrl: "https://maps.app.goo.gl/GbKrfiao8TuKxgNA6",
+  },
+  bageshri: {
+    name: "Bageshri",
+    lat: 10.8063107,
+    lng: 76.726681,
+    query: "Bageshri guest house",
+    openUrl: "https://maps.app.goo.gl/AspNpPu7sTDLXxL2A",
+  },
+};
+
+/** One pin on the Contact page's map, with the links under it. */
+export type MapPin = {
+  slug: string;
+  name: string;
+  embedUrl: string;
+  openUrl: string;
+  directionsUrl: string;
+};
+
+/**
+ * The institute's own pin (from the design handoff), for the utility strip's
+ * address and as the map's last resort when no guest house has a location.
+ */
+export const INSTITUTE_MAP: MapPin = {
+  slug: "iit-palakkad",
+  name: "IIT Palakkad",
   embedUrl:
     "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.052565408499!2d76.72327250857225!3d10.807286089298902!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ba86eb5b2e20413%3A0x6ac0bc1d9e6a7141!2sIIT%20Palakkad!5e0!3m2!1sen!2sin!4v1687273934671!5m2!1sen!2sin",
   openUrl: "https://goo.gl/maps/LXzZJEUFw5QCTrEDA",
   directionsUrl: "https://www.google.com/maps/dir/?api=1&destination=IIT+Palakkad+Kanjikode",
-} as const;
+};
+
+function pinFor(slug: string, name: string, at: GuestHouseLocation): MapPin {
+  const coords = `${at.lat},${at.lng}`;
+  return {
+    slug,
+    name,
+    // No API key needed. The redirect lands on google.com/maps/embed, which
+    // the Content-Security-Policy's frame-src already allows (proxy.ts).
+    embedUrl: `https://maps.google.com/maps?q=${encodeURIComponent(at.query)}&ll=${coords}&z=17&output=embed`,
+    openUrl: at.openUrl,
+    directionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${coords}`,
+  };
+}
+
+/**
+ * The map pins to offer, one per guest house that has a location, in the
+ * registry's order and under the store's own name. When the store named none
+ * of them (it could not be read), every registered location is offered under
+ * its fallback name; with no locations at all, the institute's pin.
+ */
+export function guestHouseMapPins(houseNames: string[]): MapPin[] {
+  const bySlug = new Map(houseNames.map((name) => [guestHouseSlug(name), name]));
+  const entries = Object.entries(GUEST_HOUSE_LOCATIONS);
+  const known = entries.filter(([slug]) => bySlug.has(slug));
+  const chosen = known.length > 0 ? known : entries;
+  if (chosen.length === 0) return [INSTITUTE_MAP];
+  return chosen.map(([slug, at]) => pinFor(slug, bySlug.get(slug) ?? at.name, at));
+}
 
 /**
  * A photograph on the public site. `src` is under `public/`; `null` renders a
@@ -124,7 +219,8 @@ export const PHOTOS = {
 
 export const HOME_PHOTOS = {
   hero: PHOTOS.courtyard,
-  strip: [PHOTOS.bedroom, PHOTOS.livingDining, PHOTOS.livingRoom, PHOTOS.gazebo],
+  /** The home page's photo spread: one large, two beside it. */
+  spread: [PHOTOS.bedroom, PHOTOS.livingDining, PHOTOS.meetingHall],
 };
 
 /**

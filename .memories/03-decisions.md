@@ -296,7 +296,9 @@ mobile-friendly, and supports type-ahead.
 
 > Replaced by the guest house design handoff's navy/gold palette — see
 > "UI redesign from the design handoff" at the end of this file. Kept for the
-> history.
+> history. **Then replaced again (26 Sep 2026)** by iitpkd.ac.in's own
+> palette — ink, vermilion and the emblem's saffron; see "26 Sep 2026 — the
+> public site redesigned" at the end of this file.
 
 **Decision.** Take the palette and logo from https://dashboard.iitpkd.ac.in/
 verbatim, including white-on-amber buttons.
@@ -1168,6 +1170,11 @@ design and the office both expect it.
 the credential form (the persona picker still works).
 
 ### The portal restyle goes through the tokens, not the pages
+
+> **Superseded in part (26 Sep 2026):** the tokens now point at the
+> institute's own palette — `--primary` **ink** `#1A1A1A`, `--ring`
+> vermilion, `--radius` 4px — and the "now" marker is ink. The approach
+> (restyle through the tokens, not the pages) stands and was used again.
 
 **Decision.** Re-point the shadcn tokens (`--primary` navy, `--ring` gold,
 `--radius` 3px, fonts) and add one `PageHeader`; leave every feature component
@@ -2655,3 +2662,100 @@ none. **Why.** A guest arriving a day early could not be marked Occupied
 (refused before the booked check-in) and the only way round was cancelling
 and rebooking. The Manage dialog's date boxes also stopped using
 `datetime-local`, which the traps list forbids: a date box and `TimeSelect`.
+
+## 26 Sep 2026 — the public site redesigned
+
+The owner: the site "looks ass", "too dull and dead"; wanted a clean,
+professional site that impresses anyone who opens it **without looking
+AI-generated**, following the backend, keeping Mock Authentication, in **the
+colour palette used by IITPKD websites**; a map for each of Hamsanandi and
+Bageshri (two Google Maps links supplied); MRBS and the institute site in the
+footer; a Guidelines page with placeholder rules; and the New Booking / Meal
+Booking buttons in the portal made to stand out. Detail in
+[16-public-site-and-ui.md](16-public-site-and-ui.md).
+
+### The institute's palette, taken from its CSS, not from the handoff
+
+**Decision.** Ink `#1A1A1A`, vermilion `#E94C26`, the emblem's saffron
+`#F5A300`, a warm band `#F3F1EB` — read from iitpkd.ac.in's theme CSS
+(`typo-colors.css`, `menu.css`) and the logo's pixels, not guessed.
+
+**Why.** "The colour palette used by IITPKD websites" is a checkable fact: the
+institute's links, buttons and active menu are `#E94C26`, its top bar and
+footer menu `#1A1A1A`, its headings Source Serif. The handoff's navy/gold was a
+designer's choice that appears nowhere on the institute's site.
+**Contrast rules that follow:** white text only on `vermilion-deep`
+`#C43C1C` (5.2:1; bright vermilion is 3.8:1); saffron carries ink.
+**Rejected:** a vermilion `--primary` — a second red beside the portal's
+Reject buttons (the `ui` branch's finding, kept). Ink is primary; vermilion
+is `Button variant="brand"` for the one call to action.
+
+### Not AI-looking: specific content and hairlines, not effects
+
+**Decision.** No gradients, shadows, glass, pills or bento; 2–4px corners;
+hairline rules as structure (every section opens on a full-width rule with a
+label); serif display type with the optical-size axis; asymmetric 12-column
+layouts; captioned photographs; tables for tabular content; a numbered policy
+document for the guidelines; real numbers from the backend in the copy.
+
+**Why.** Research on "AI slop" design (Sep 2026) names the tells — default
+fonts, purple gradients, rounded-2xl + drop shadows, identical card grids,
+emoji icons, vague headlines — and the fixes: specificity, a real palette,
+one radius vocabulary, borders and contrast. The 21 Sep `ui` attempt had the
+right colours but exactly those effects. A guest house site's most
+impressive asset is its own facts and photographs, so the design puts them
+first: "23 rooms across Bageshri and Hamsanandi", "Everyone except students",
+the approval routes as a table, the meal timetable.
+**Rejected:** merging the `ui` branch's redesign — 30 conflicting files, and
+the look the owner is now steering away from.
+
+### One map pin per guest house, as config keyed by slug
+
+**Decision.** `GUEST_HOUSE_LOCATIONS` in `lib/site.ts`, keyed by
+`guestHouseSlug(name)` like `GUEST_HOUSE_PHOTOS`; the Contact page shows the
+store's guest houses that have a pin as tabs. The embed searches the place's
+own Google Maps name plus its coordinates (`q=<name>&ll=<lat,lng>`), with no
+API key.
+
+**Why.** Guest houses are data, so the map cannot hardcode two names in a
+component; a slug-keyed registry is the pattern the photos already use.
+Searching the name *with* the coordinates was checked to resolve to the place
+card itself; coordinates alone give an anonymous pin.
+**Rejected:** a `lat`/`lng` column on `guest_houses` — a migration and a
+console field for two values that change never; revisit if the office starts
+adding guest houses.
+
+### MRBS gets a sentence, not just a link
+
+**Decision.** The footer opens with "Booking a lecture hall or meeting room?
+Those are reserved on the institute's Meeting Room Booking System, not here"
+and an Open MRBS button; MRBS is also in the Institute links, on the Contact
+page and in the portal footer.
+
+**Why.** Someone who wanted a seminar room is the most likely visitor at the
+wrong door; a bare "MRBS" link in a list does not tell them so.
+
+### The guidelines: portal rules computed, house rules marked provisional
+
+**Decision.** Nine numbered sections from `guidelineSections()`. Sections 1–7
+are the portal's rules, rendered from `lib/` and Settings (who may book
+where, approval routes, the advance window, the stay cap, capacity, meals and
+the kitchen's notice rule, charges and GST, cancellation). Sections 8 (During
+your stay) and 9 (Safety and help) are placeholder house rules typical of
+institute guest houses, each marked "To be confirmed", with a "Provisional
+edition" note while `GUIDELINES_PROVISIONAL` is true.
+
+**Why.** The owner asked for dummy guidelines "for now"; publishing invented
+rules without saying so would put words in the office's mouth. The flag and
+the chips make the provisional part visible and one line to retire.
+
+### My Bookings leads with two large doors
+
+**Decision.** "New room booking" (vermilion tile) and "Meal booking" (ink
+tile), each naming its guest house(s), directly under the title; a Faculty
+Advisor's "Book for <club>" as tiles beside them. The booking form's Submit and
+the manager's "New booking for a guest" became `variant="brand"`.
+
+**Why.** Two small buttons at the far end of the title row were being missed;
+people come to this page to book. Two colours keep room and meals distinct.
+

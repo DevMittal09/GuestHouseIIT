@@ -80,6 +80,11 @@ console names them — change the name there and the queue or option moves.
 
 Everything a requester can do with a booking they own (or raised for a club):
 
+- **Start one** from the large tiles at the top of My Bookings (26 Sep 2026):
+  **New room booking** (vermilion) for every requester who books for
+  themselves, **Meal booking** (ink, `/book?service=meals_only`) for
+  `MEALS_ONLY_ROLES` where a guest house serves meals, and **Book for
+  <club>** for a Faculty Advisor. New Booking stays in the menu too.
 - **See it** on My Bookings (`/dashboard`) — status, rooms once allocated, the
   rejection reason, the full log, and the invoice once issued (download).
 - **Ask to cancel** — any booking not yet closed and not already Occupied, with

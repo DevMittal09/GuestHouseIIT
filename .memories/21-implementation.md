@@ -20,7 +20,7 @@ for it lives.
 | Where signed-out visitors go | `SIGN_IN_PATH` in `lib/routes.ts` (`/` is the public home page) |
 | Session read | `lib/auth.ts` (`getCurrentUser`, `requireUser`) |
 | Post-login landing per role | `lib/routes.ts` (`homeForRole`) |
-| Authenticated shell + nav | `app/(portal)/layout.tsx` (sticky navy `NavBar` from `components/site/site-nav.tsx`), page titles via `components/page-header.tsx` |
+| Authenticated shell + nav | `app/(portal)/layout.tsx` (sticky charcoal `NavBar tone="dark"` from `components/site/site-nav.tsx`), page titles via `components/page-header.tsx` |
 
 Nav links are role-aware — the exact menu per role is in
 [10-roles-and-features.md](10-roles-and-features.md). **Room Availability is
@@ -265,8 +265,8 @@ clamping 31 January to 28 February on a month step.
 `minmax(2.75rem, 1fr)` column per room, wrapped in `overflow-x-auto` with the
 hour column and the room-number header both sticky. Each cell is an hour × room,
 red when held and blank when free, with a `title` naming the booking. When the
-selected date is today the current hour is marked in the primary colour (navy
-since the 19 Sep 2026 restyle; it was amber before).
+selected date is today the current hour is marked in the primary colour (ink
+since the 26 Sep 2026 redesign; navy from 19 Sep, amber before).
 
 **An hour held by two bookings is violet, not red** (23 Sep 2026). An accepted
 changeover puts two stays in one room for up to two hours, and in red that was
@@ -286,7 +286,7 @@ every day row, and each booking is an absolutely positioned red bar whose top an
 height are fractions of the whole range (`bucketOccupancyByDay`). A three-night
 stay is therefore one bar that starts partway down its check-in day and ends
 partway down its check-out day. Beside each date is the number of rooms free all
-day; today's row is tinted and a primary-colour (navy) line marks the current time. Each bar's
+day; today's row is tinted and a primary-colour (ink) line marks the current time. Each bar's
 `title` names the booking and its period.
 
 **Legend, badges and counts.** Red is labelled **Booked** (it used to say
@@ -632,13 +632,22 @@ out on a second run inside 15 minutes.
 
 ## Branding
 
-**Since 19 Sep 2026 the palette comes from the guest house design handoff**
-(`design_handoff/README.md`): navy `#12284C` (primary, white text), gold
-`#E8A317` (accents, focus ring, the public CTA with navy text), body text
-`#41506A`, borders `#E1E5EC`, white background, 3px corners, no shadows;
-Source Serif 4 headings and Source Sans 3 body via `next/font`. Tokens and the
-brand utilities (`bg-navy`, `text-gold-dark`, `bg-band`, …) live in
-`app/globals.css`. Full table and rules in [16-public-site-and-ui.md](16-public-site-and-ui.md).
+**Since 26 Sep 2026 the palette is iitpkd.ac.in's own**: ink `#1A1A1A`
+(primary, white text), vermilion `#E94C26` (rules, icons, focus ring;
+`vermilion-deep` `#C43C1C` behind white text — the `brand` button), the
+emblem's saffron `#F5A300` (labels on ink), body text `#4A4541`, band
+`#F3F1EB`, 4px corners, no shadows, no gradients; Source Serif 4 (optical
+sizes) headings and Source Sans 3 body via `next/font`. Tokens and the brand
+utilities (`bg-ink`, `text-vermilion-deep`, `bg-band`, `text-on-ink`, …) live
+in `app/globals.css`. Full table, contrast rules and the history (the 19 Sep
+navy/gold from the design handoff) in [16-public-site-and-ui.md](16-public-site-and-ui.md).
+
+Public-site modules added 26 Sep: `components/site/guest-house-map.tsx` (map
+tabs), `PageMasthead` / `SectionHead` / `ArrowLink` in
+`components/site/site-ui.tsx`, `homeFacts` / `openTo` / `bookingSteps` /
+`guidelineSections` in `lib/site-content.ts`, `GUEST_HOUSE_LOCATIONS` /
+`guestHouseMapPins` / `MRBS_URL` in `lib/site.ts`; the My Bookings tiles are
+`BookingDoor` in `app/(portal)/dashboard/page.tsx`.
 
 Logos: `public/IITPKD_NEW_LOGO.png` (the stacked institute logo on a
 transparent background, in both headers since 21 Sep 2026; it replaced the
@@ -646,7 +655,7 @@ wide `iitpkd-web-logo.jpg`) and `public/iitpkd-logo.png` (the emblem; `app/icon.
 file serving as the favicon).
 
 The earlier amber-on-off-white palette copied from dashboard.iitpkd.ac.in, and
-its white-on-amber WCAG failure, are gone — white on navy is ≈13:1. Mail
+its white-on-amber WCAG failure, are gone. Mail
 templates (`lib/mail/render.ts`) still carry their own inline amber header.
 
 ## Demo data

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Container, PageTitle } from "@/components/site/site-ui";
+import { Container, PageMasthead } from "@/components/site/site-ui";
 import { GUEST_HOUSE_CONTACT } from "@/lib/site";
 import { PRIVACY_NOTICE_VERSION } from "@/lib/security";
 import { getRules } from "@/lib/settings-server";
@@ -36,7 +36,7 @@ export default async function PrivacyPage() {
         <>
           The Guest House Office, Indian Institute of Technology Palakkad, Kanjikode West, Palakkad,
           Kerala 678623. Questions about this notice go to{" "}
-          <a className="font-semibold text-navy underline underline-offset-2" href={`mailto:${GUEST_HOUSE_CONTACT.email}`}>
+          <a className="font-semibold text-ink underline decoration-vermilion decoration-2 underline-offset-[5px]" href={`mailto:${GUEST_HOUSE_CONTACT.email}`}>
             {GUEST_HOUSE_CONTACT.email}
           </a>
           .
@@ -84,7 +84,7 @@ export default async function PrivacyPage() {
       body: (
         <>
           You can download everything the portal holds about you from{" "}
-          <Link className="font-semibold text-navy underline underline-offset-2" href="/dashboard">
+          <Link className="font-semibold text-ink underline decoration-vermilion decoration-2 underline-offset-[5px]" href="/dashboard">
             My Bookings
           </Link>
           , and ask from the same page for it to be erased. The office answers each request; where a
@@ -107,19 +107,25 @@ export default async function PrivacyPage() {
   ];
 
   return (
-    <Container className="pt-11 pb-[88px]">
-      <PageTitle intro="How the guest house portal handles the personal details you enter, under the Digital Personal Data Protection Act 2023.">
-        Privacy notice
-      </PageTitle>
-      <p className="mt-4 text-[15px] text-muted-foreground">Version {PRIVACY_NOTICE_VERSION}</p>
-      <div className="mt-8 space-y-7">
-        {sections.map((section) => (
-          <section key={section.heading}>
-            <h2 className="mb-2 text-[21px] font-semibold text-navy">{section.heading}</h2>
-            <p className="text-[16px] leading-[1.6] text-body">{section.body}</p>
-          </section>
-        ))}
-      </div>
-    </Container>
+    <>
+      <PageMasthead
+        title="Privacy notice"
+        intro="How the guest house portal handles the personal details you enter, under the Digital Personal Data Protection Act 2023."
+      >
+        <p className="text-[14.5px] text-muted-foreground">Version {PRIVACY_NOTICE_VERSION}</p>
+      </PageMasthead>
+      <Container className="pt-12 pb-24">
+        <div className="max-w-[72ch]">
+          {sections.map((section, i) => (
+            <section key={section.heading} className={i > 0 ? "mt-10" : undefined}>
+              <h2 className="mb-3 border-t border-ink pt-4 text-[clamp(22px,2.4vw,26px)] font-semibold text-ink">
+                {section.heading}
+              </h2>
+              <p className="text-[16.5px] leading-[1.65] text-body">{section.body}</p>
+            </section>
+          ))}
+        </div>
+      </Container>
+    </>
   );
 }

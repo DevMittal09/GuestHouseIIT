@@ -117,7 +117,7 @@ export default async function ManagerPage({
           <div className="flex flex-wrap gap-2">
             {/* Taking a booking at the desk for someone who cannot use the
                 portal, and the kitchen's head count for a given day. */}
-            <Button asChild variant="outline">
+            <Button asChild variant="brand">
               <Link href="/book">New booking for a guest</Link>
             </Button>
             {current.serves_meals && (

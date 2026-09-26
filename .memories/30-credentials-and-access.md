@@ -115,7 +115,7 @@ it switches. `.env.example` documents most of them with placeholders.
 
 | What | Where |
 | --- | --- |
-| Code | `https://github.com/DevMittal09/GuestHouseIIT.git`, branch **`main`** (the `ui` branch holds only the 21 Sep vermilion redesign and has diverged). Pushes from this machine's identity (`Rizzwan285`) work since 10 Sep 2026 |
+| Code | `https://github.com/DevMittal09/GuestHouseIIT.git`, branch **`main`** (the `ui` branch holds only the 21 Sep vermilion redesign, superseded by the 26 Sep redesign on `main`, and has diverged). Pushes from this machine's identity (`Rizzwan285`) work since 10 Sep 2026 |
 | Database | One hosted Supabase project (development / demo data), reached through `.env.local`. **Migrations are applied by hand in its SQL editor** — which ones it has is not recorded ([23-running-and-testing.md](23-running-and-testing.md#hosted-supabase) has the check) |
 | Deployment | Vercel (Hobby plan: two daily crons, no `regions`) — not yet a production deployment |
 | Mail | A Gmail sender with an app password (in `.env.local`); the institute relay is the eventual target |

@@ -63,7 +63,7 @@ Authentication (configure Google or `MOCK_LOGIN=false`), production secrets,
 the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 
 **Numbers.** 26 migrations · 12 roles (10 active) · 18 demo personas · 6 demo
-bookings · 289 unit tests · 22 end-to-end journeys · 13 console sections.
+bookings · 307 unit tests · 26 end-to-end journeys · 13 console sections.
 
 ---
 
@@ -192,7 +192,8 @@ The full list is in `AGENTS.md` and [25-troubleshooting.md](25-troubleshooting.m
 
 ## Working with the owner
 
-- **Build on `main`.** The `ui` branch holds only a redesign experiment and has
+- **Build on `main`.** The `ui` branch holds only a redesign experiment (superseded
+  by the 26 Sep redesign on `main`) and has
   diverged.
 - **Verify cheaply.** Lint, typecheck, `npm test`, a build, the Playwright
   suite, `curl`, a throwaway Postgres for migrations — **not** ad-hoc

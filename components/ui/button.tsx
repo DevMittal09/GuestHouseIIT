@@ -10,6 +10,10 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        // The institute's vermilion, for the one call to action on a page
+        // (New booking, Submit). Deep vermilion, because white on the bright
+        // one is 3.8:1.
+        brand: "bg-vermilion-deep text-white hover:bg-vermilion-hover",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:

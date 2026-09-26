@@ -163,7 +163,7 @@ total, and issuing uses exactly those figures. **Preview PDF** prints the
 
 Meals without a room (`service_type: "meals_only"`) for faculty, staff and
 offices (`MEALS_ONLY_ROLES`) at guest houses that serve meals; `/book-meal`
-opens `/book?service=meals_only`. `/manager/meals` is the kitchen's day
+and the **Meal booking** tile on My Bookings open `/book?service=meals_only`. `/manager/meals` is the kitchen's day
 (manager and caretaker): plates per meal from `kitchenHeadCount`, confirmed and
 pending bookings, and **Dining to invoice** — approved dining bookings whose
 meals have begun and have no invoice. The daily desk report carries the same

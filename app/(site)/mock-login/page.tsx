@@ -48,32 +48,34 @@ export default async function MockLoginPage({
   const reviewers = profiles.filter(isStaff);
 
   return (
-    <Container className="pt-11 pb-[88px]">
-      <PageTitle
-        className="mb-8"
-        intro="Google sign-in is not connected yet, so this stands in for it: choose the account to continue as — no password needed."
-      >
-        Mock Authentication
-      </PageTitle>
+    <div className="border-b border-border bg-band">
+      <Container className="pt-12 pb-20 lg:pt-16">
+        <PageTitle
+          className="mb-10"
+          intro="Google sign-in is not connected yet, so this stands in for it: choose the account to continue as — no password needed."
+        >
+          Mock Authentication
+        </PageTitle>
 
-      <div className="grid gap-8 md:grid-cols-2">
-        <PersonaGroup title="Requesters" description="Submit and track booking requests" profiles={requesters} next={next} />
-        <PersonaGroup title="Reviewers & Admins" description="Approve, reject and allocate rooms" profiles={reviewers} next={next} />
-      </div>
+        <div className="grid gap-8 md:grid-cols-2">
+          <PersonaGroup title="Requesters" description="Submit and track booking requests" profiles={requesters} next={next} />
+          <PersonaGroup title="Reviewers & Admins" description="Approve, reject and allocate rooms" profiles={reviewers} next={next} />
+        </div>
 
-      {profiles.length === 0 && (
-        <p className="rounded-[2px] border border-dashed border-border-strong p-6 text-center text-[15px] text-muted-foreground">
-          No portal accounts exist in this database yet. Run <code>supabase/seed.sql</code>, or
-          delete <code>.local-db.json</code> to reseed the mock store.
-        </p>
-      )}
+        {profiles.length === 0 && (
+          <p className="rounded-[2px] border border-dashed border-border-strong p-6 text-center text-[15px] text-muted-foreground">
+            No portal accounts exist in this database yet. Run <code>supabase/seed.sql</code>, or
+            delete <code>.local-db.json</code> to reseed the mock store.
+          </p>
+        )}
 
-      <div className="mt-8 text-center">
-        <Button asChild variant="ghost" size="sm">
-          <Link href={SIGN_IN_PATH}>← Back to LDAP sign in</Link>
-        </Button>
-      </div>
-    </Container>
+        <div className="mt-8 text-center">
+          <Button asChild variant="ghost" size="sm">
+            <Link href={SIGN_IN_PATH}>← Back to LDAP sign in</Link>
+          </Button>
+        </div>
+      </Container>
+    </div>
   );
 }
 
