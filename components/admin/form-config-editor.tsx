@@ -26,6 +26,7 @@ import {
   type RoleFormConfig,
 } from "@/lib/form-config";
 import { cn } from "@/lib/utils";
+import { segment, segmentGroup } from "@/components/segmented";
 import { REQUESTER_ROLES, ROLE_LABELS, type GuestHouse, type Role } from "@/lib/types";
 
 const MODES: FieldMode[] = ["required", "optional", "hidden"];
@@ -101,16 +102,14 @@ export function FormConfigEditor({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1 w-fit">
+      <div className={segmentGroup} role="group" aria-label="Requester role">
         {REQUESTER_ROLES.map((r) => (
           <button
             key={r}
             type="button"
             onClick={() => setRole(r)}
-            className={cn(
-              "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
-              r === role ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )}
+            aria-pressed={r === role}
+            className={segment(r === role)}
           >
             {ROLE_LABELS[r]}
           </button>

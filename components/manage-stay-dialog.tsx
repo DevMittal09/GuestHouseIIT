@@ -123,7 +123,7 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
         </DialogHeader>
 
         {pendingExtension && (
-          <section className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950">
+          <section className="space-y-2 border-l-4 border-saffron bg-notice p-3 text-sm">
             <p className="font-medium">
               ⏳ Extension requested — until {formatDateTime(pendingExtension)}
             </p>

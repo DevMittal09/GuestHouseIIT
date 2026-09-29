@@ -9,59 +9,43 @@ and `AGENTS.md` (the rules).
 
 ---
 
-## Round of 26 September 2026 — the public site redesigned (three passes)
+## Round of 30 September 2026 — UI revamp (presentation layer only)
 
-**Left uncommitted in the working tree**, as usual. Status per request in
-[01-background.md](01-background.md) ("Public site redesign — 26 Sep 2026",
-three lists); reasoning in [03-decisions.md](03-decisions.md) (three 26 Sep
-entries, older ones marked *Superseded*); the design in
+**Left uncommitted in the working tree**, as usual. The owner's brief (pasted
+into the session, with `UI-REVAMP-CONTEXT.md` as the product inventory) asked
+for an authoritative, institutional look: TGH (IIT Madras) for the public
+site's structure, Aman / The Standard for editorial whitespace and ruled
+sections, GOV.UK for the portal's tables and status tags; 4px inputs, 6px
+buttons, 8px cards; no pills, shadows, gradients or frosted glass. Status in
+[01-background.md](01-background.md) ("UI revamp — 30 Sep 2026"); reasoning in
+[03-decisions.md](03-decisions.md); the design in
 [16-public-site-and-ui.md](16-public-site-and-ui.md).
 
-1. **Morning** — the institute's palette from iitpkd.ac.in's CSS (ink
-   `#1A1A1A`, vermilion `#E94C26`, saffron `#F5A300`); **a map tab per guest
-   house** from the owner's two links; **MRBS** and institute links in the
-   footer; a numbered **Guidelines** page with placeholder house rules;
-   **large New room booking / Meal booking tiles** on My Bookings; Mock
-   Authentication kept.
-2. **Afternoon** — the owner: header more aesthetic; **no figures, no map
-   link, no captions** on the landing page; "How booking works" into the
-   guidelines, vaguer; **no backend logic on the public site** (not who the
-   users are, not who approves whom); no instructions or meal times on the
-   landing page. Done — and a new **lockup** (the emblem + "Guest House" in
-   the serif + tracked "IIT PALAKKAD"; the stacked logo's own text was ~8px).
-3. **Evening (what the site is now)** — the owner found the full-screen photos
-   "so weird": make it **clean and professional**, researched online. Modelled
-   on IIT Madras's Taramani Guest House site and clean hotel/university sites:
+**Nothing in `lib/`, `app/actions/`, the schemas or the database changed.**
+Every accessible name, form `name` and heading the e2e suite uses is intact.
 
-| Page | Now |
+| Area | Now |
 | --- | --- |
-| Header | White bar with the lockup and six links, sticky from `lg`; a sideways-scrolling link row on phones |
-| Home | Split hero (label, "Guest houses of IIT Palakkad", one sentence, Book a room / Book meals, the front-office number, **one contained 4:3 photo**); a **card per guest house** (`houseSummary`, no counts); **eight amenity cards**; "A look inside" — four equal thumbnails; a boxed "Planning a visit?" |
-| Guidelines | Light masthead; **How booking works** as five numbered cards; contents list; eight numbered sections (meal times and the kitchen's notice in §4; §7–8 provisional) |
-| Gallery, Contact, Privacy | Light mastheads; gallery without captions; the map tabs in a rounded card |
-| Sign in / Book a room / Book meals | The form beside a contained photo |
-| Look | 8px corners on cards and photos, 6px on buttons; borders; no shadows; no gradients |
-
-The public copy names no role or approval stage — `tests/public-site.test.ts`
-fails if a role label reaches it. `getSitePolicies()` and the route tables
-were deleted.
+| Tokens (`app/globals.css`) | Fixed corner scale — `rounded` 4px, `rounded-md` 6px, `rounded-lg` 8px, everything above capped at 8px; `--occupy` / `--vacate`; GOV.UK tag utilities `tag-{grey,green,turquoise,blue,purple,pink,red,orange,yellow}`; toasts without shadow; `font-optical-sizing: auto` on headings |
+| Primitives (`components/ui/`) | Button 6px, h-9, vermilion focus outline, new `occupy` / `vacate` variants, outlined `destructive`; Badge square with a `tag` variant; Card = GOV.UK summary card (band header strip over a hairline, 8px border, no ring); Table = band header closed by a 2px ink rule, hairline rows, tabular numerals; Input / Textarea / NativeSelect 4px with ink-on-focus + vermilion outline; Dialog without blur, ink 45% overlay, 3px ink top rule, serif title; Select / Popover / Switch / Tabs without shadows or pills |
+| New shared components | `section-heading.tsx` (`SectionHeading` with a count tag, `EmptyState`), `link-tabs.tsx` (guest-house tabs on `/manager`, `/caretaker`, `aria-current`), `console-nav.tsx` (the console's section list, current one filled ink), `segmented.tsx` (`segmentGroup` / `segment()` for Day/Week/Month, the outbox filter, the Form Builder role picker) |
+| Portal | 3px vermilion rule over the header; `PageHeader` with a vermilion bar, larger serif `<h1>`, closing hairline; My Bookings doors now 148px tiles (vermilion room / ink meals); **Mark as Occupied** deep green with a log-in icon, **Mark as Vacated** deep indigo with a log-out icon; official and overdue rows marked by a left rule on a notice tint; notices as GOV.UK inset text (4px left rule); room grid seats pale green with a green edge (9:1), taken solid red and struck through, picked solid blue; history tiles with a coloured top rule; booking details as a ruled summary list |
+| Public site | Lockup with a hairline between emblem and words; 3px vermilion rule over the header; home hero 5 + 7 columns with one 4:3 photo; **sections open on a hairline ink rule with the label in the left quarter** (`SectionHead`); guest-house cards and a ruled amenity grid offset into the content column; a four-photo mosaic (one across two rows); a closing row of Guidelines / Contact links; Guidelines steps as a ruled strip with serif numerals; sign-in photo 4:3 in seven columns |
 
 ### Verified
 
 `npm run lint`, `npm run typecheck`, `npm test` (**305**), a production build
-on the mock store, `npm run test:e2e` (**26**, every public page at 320px,
-the map tabs and footer links, the My Bookings tiles) — all clean. Short
-rounds of Playwright screenshots after each pass judged the look.
+on the mock store, `npm run test:e2e` (**26**, including every public page at
+320px) — all clean. Four Playwright screenshots (home, manager console, the
+allocation grid, My Bookings) checked the look; the compiled CSS confirmed the
+corner scale (`rounded` 4px, `-md` 6px, `-lg` 8px).
 
 ### Still open
 
-- **The office to confirm the house rules** (Guidelines §7–8) and the
-  **amenities** list, then set `GUIDELINES_PROVISIONAL = false` —
-  [04-roadmap.md](04-roadmap.md).
-- Mail still has the old amber header (restyle to ink/vermilion if wanted).
 - The `.next/` on this machine is a mock-store build (from the e2e run);
   rebuild before `next start` against Supabase. `npm run dev` is unaffected.
-- From earlier rounds, unchanged: apply migration 26 (and 24, 25 if missing)
-  to the hosted project; the office to confirm GST-inclusive tariffs; the
-  alumni guest house matched by name; name each council's Faculty Advisor and
-  mailbox — [04-roadmap.md](04-roadmap.md).
+- Mail still has the old amber header (restyle to ink/vermilion if wanted).
+- From earlier rounds, unchanged: the office to confirm the house rules
+  (Guidelines §7–8) and amenities; apply migrations 24–26 to the hosted
+  project; GST-inclusive tariffs; each council's Faculty Advisor and mailbox —
+  [04-roadmap.md](04-roadmap.md).

@@ -166,7 +166,7 @@ export function SecurityManager({
           )}
 
           {recovery && (
-            <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950">
+            <div className="space-y-2 border-l-4 border-saffron bg-notice p-3">
               <p className="text-sm font-medium">Recovery codes — shown once</p>
               <p className="text-xs text-muted-foreground">
                 Keep these somewhere safe and offline. Each works once, if you lose your phone.

@@ -12,16 +12,16 @@ export function Switch({ className, ...props }: Omit<React.ComponentProps<"input
       <input
         type="checkbox"
         role="switch"
-        className="peer absolute inset-0 z-10 m-0 size-full cursor-pointer appearance-none rounded-full opacity-0 disabled:cursor-not-allowed"
+        className="peer absolute inset-0 z-10 m-0 size-full cursor-pointer appearance-none rounded opacity-0 disabled:cursor-not-allowed"
         {...props}
       />
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-full bg-input transition-colors peer-checked:bg-primary peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 peer-disabled:opacity-50"
+        className="pointer-events-none absolute inset-0 rounded bg-border-strong transition-colors peer-checked:bg-occupy peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-vermilion peer-disabled:opacity-50"
       />
       <span
         aria-hidden
-        className="pointer-events-none absolute left-0.5 size-4 rounded-full bg-background shadow-sm transition-transform peer-checked:translate-x-4"
+        className="pointer-events-none absolute left-0.5 size-4 rounded-xs bg-background transition-transform peer-checked:translate-x-4"
       />
     </span>
   );

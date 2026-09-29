@@ -68,11 +68,12 @@ interface Tile {
 
 /** Headline counts, which double as one-click status filters. */
 const TILES: Tile[] = [
-  { key: "all", label: "Total", statuses: [], tone: "text-foreground" },
-  { key: "approved", label: "Approved", statuses: ["APPROVED", "OCCUPIED", "VACATED"], tone: "text-emerald-600 dark:text-emerald-400" },
-  { key: "rejected", label: "Rejected", statuses: ["REJECTED"], tone: "text-red-600 dark:text-red-400" },
-  { key: "pending", label: "In progress", statuses: ACTIVE_STATUSES, tone: "text-amber-600 dark:text-amber-400" },
-  { key: "cancelled", label: "Cancelled", statuses: ["CANCELLED", "CANCELLATION_REQUESTED", "CANCELLATION_APPROVED"], tone: "text-muted-foreground" },
+  // `tone` is the tile's top rule, in the status tags' hues (GOV.UK palette).
+  { key: "all", label: "Total", statuses: [], tone: "border-t-ink" },
+  { key: "approved", label: "Approved", statuses: ["APPROVED", "OCCUPIED", "VACATED"], tone: "border-t-[#00703c]" },
+  { key: "rejected", label: "Rejected", statuses: ["REJECTED"], tone: "border-t-[#d4351c]" },
+  { key: "pending", label: "In progress", statuses: ACTIVE_STATUSES, tone: "border-t-saffron" },
+  { key: "cancelled", label: "Cancelled", statuses: ["CANCELLED", "CANCELLATION_REQUESTED", "CANCELLATION_APPROVED"], tone: "border-t-[#6b655f]" },
 ];
 
 function sameStatusSet(a: BookingStatus[], b: BookingStatus[]): boolean {
@@ -234,16 +235,15 @@ export function BookingHistory({
               aria-pressed={active}
               onClick={() => apply({ statuses: tile.statuses })}
               className={cn(
-                "rounded-xl border bg-card px-4 py-3 text-left transition-colors",
-                active
-                  ? "border-primary ring-2 ring-primary/30"
-                  : "hover:border-foreground/20 hover:bg-accent/40"
+                "cursor-pointer rounded-md border border-t-4 border-border-strong px-4 py-3 text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
+                tile.tone,
+                active ? "bg-band outline-2 -outline-offset-2 outline-ink" : "bg-card hover:bg-band/60"
               )}
             >
-              <span className="block text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              <span className="block text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
                 {tile.label}
               </span>
-              <span className={cn("mt-1 block text-2xl font-semibold tabular-nums", tile.tone)}>
+              <span className="mt-1 block font-heading text-[1.75rem] leading-tight font-semibold text-ink tabular-nums">
                 {count}
               </span>
             </button>
@@ -252,7 +252,7 @@ export function BookingHistory({
       </div>
 
       {/* Search + filters. */}
-      <div className="space-y-4 rounded-xl border bg-card p-4">
+      <div className="space-y-4 rounded-lg border border-border-strong bg-card p-5">
         <form onSubmit={onSearch} className="flex flex-col gap-2 sm:flex-row">
           <Input
             key={params.q}
@@ -335,7 +335,7 @@ export function BookingHistory({
           {/* Handled by me / Everything — only for approver roles. */}
           {!isOwnBookings && (
             <Filter label="Show">
-              <div className="flex h-9 rounded-md border p-0.5">
+              <div className="flex h-9 rounded-md border border-border-strong p-0.5">
                 {(["me", "all"] as HistoryActor[]).map((actor) => (
                   <button
                     key={actor}
@@ -343,10 +343,10 @@ export function BookingHistory({
                     aria-pressed={params.actor === actor}
                     onClick={() => apply({ actor })}
                     className={cn(
-                      "flex-1 rounded-[5px] px-2 text-xs font-medium transition-colors",
+                      "flex-1 cursor-pointer rounded px-2 text-xs font-semibold transition-colors",
                       params.actor === actor
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                        ? "bg-ink text-white"
+                        : "text-body hover:bg-band hover:text-ink"
                     )}
                   >
                     {actor === "me" ? "Handled by me" : "Everything in scope"}
@@ -429,10 +429,10 @@ export function BookingHistory({
                         )
                       }
                       className={cn(
-                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        "cursor-pointer rounded border px-2.5 py-1 text-xs font-semibold transition-colors",
                         active
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                          ? "border-ink bg-ink text-white"
+                          : "border-border-strong text-body hover:border-ink hover:bg-band hover:text-ink"
                       )}
                     >
                       {DATE_PRESET_LABELS[preset]}
@@ -478,7 +478,7 @@ export function BookingHistory({
       </div>
 
       {truncated && (
-        <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        <p className="border-l-4 border-saffron bg-notice p-3 text-sm text-ink">
           Only the most recent 1,000 bookings were scanned for this search. Add a date range or a
           guest house filter to be sure older records are included.
         </p>
@@ -518,7 +518,7 @@ export function BookingHistory({
       </div>
 
       {total === 0 ? (
-        <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
           {isOwnBookings
             ? "You have not submitted any booking requests yet."
             : params.actor === "me"
@@ -640,10 +640,10 @@ function Filter({ label, children }: { label: string; children: React.ReactNode 
 }
 
 const DECISION_CLASSES: Record<string, string> = {
-  approved: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
-  rejected: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200",
-  cancelled: "bg-muted text-muted-foreground",
-  other: "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200",
+  approved: "tag-green",
+  rejected: "tag-red",
+  cancelled: "tag-grey",
+  other: "tag-blue",
 };
 
 const DECISION_LABELS: Record<string, string> = {
@@ -699,7 +699,7 @@ function HistoryRow({
         <TableCell>
           {action ? (
             <>
-              <Badge className={cn("whitespace-nowrap border-transparent", DECISION_CLASSES[action.kind])}>
+              <Badge variant="tag" className={cn("whitespace-nowrap", DECISION_CLASSES[action.kind])}>
                 {DECISION_LABELS[action.kind]}
               </Badge>
               <span className="mt-1 block text-xs text-muted-foreground">

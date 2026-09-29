@@ -25,6 +25,7 @@ import {
 } from "@/lib/availability";
 import { instituteHour } from "@/lib/tz";
 import { cn } from "@/lib/utils";
+import { segment, segmentGroup } from "@/components/segmented";
 import type { Room, RoomOccupancySegment } from "@/lib/types";
 
 interface Loaded {
@@ -124,7 +125,7 @@ export function BookingAvailability({
 
   if (!guestHouseId || !date) {
     return (
-      <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
         Pick a guest house and a check-in date to see which rooms are free.
       </p>
     );
@@ -135,19 +136,14 @@ export function BookingAvailability({
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
           <Label className="block text-xs">View</Label>
-          <div className="flex gap-1 rounded-lg bg-muted p-1" role="group" aria-label="View">
+          <div className={segmentGroup} role="group" aria-label="View">
             {AVAILABILITY_VIEWS.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 aria-pressed={option.value === view}
                 onClick={() => setView(option.value)}
-                className={cn(
-                  "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                  option.value === view
-                    ? "bg-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
+                className={segment(option.value === view, "sm")}
               >
                 {option.label}
               </button>
@@ -229,7 +225,7 @@ export function BookingAvailability({
       </p>
 
       {browsing && (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-xs text-ink">
           You are looking at another date. This does not change your booking — the stay is still
           the check-in and check-out you entered above.
         </p>
@@ -281,7 +277,7 @@ export function BookingAvailability({
       )}
 
       {!loading && rooms.length === 0 && !loaded?.failed && (
-        <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
           This guest house has no active rooms.
         </p>
       )}

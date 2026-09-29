@@ -61,7 +61,7 @@ export function BookingsManager({ bookings }: { bookings: BookingWithDetails[] }
       </div>
 
       {visible.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
           No bookings match this filter.
         </p>
       ) : (
@@ -104,8 +104,8 @@ function FilterChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-        active ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent"
+        "cursor-pointer rounded border px-2.5 py-1 text-xs font-semibold transition-colors",
+        active ? "border-ink bg-ink text-white" : "border-border-strong text-body hover:border-ink hover:bg-band"
       )}
     >
       {children}

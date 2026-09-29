@@ -65,13 +65,13 @@ export default async function GuidelinesPage() {
       <section aria-labelledby="how-title">
         <Container className="pt-[clamp(56px,7vw,88px)]">
           <SectionHead id="how-title" label="In five steps" title="How booking works" />
-          <ol className="mt-8 grid grid-cols-[repeat(auto-fit,minmax(min(190px,100%),1fr))] gap-4">
+          <ol className="mt-10 grid grid-cols-1 gap-px lg:grid-cols-5 overflow-hidden rounded-lg border border-border-strong bg-border-strong">
             {BOOKING_STEPS.map((step, i) => (
-              <li key={step.title} className="rounded-[8px] border border-border bg-white p-6">
-                <span className="flex size-9 items-center justify-center rounded-full bg-vermilion-soft text-[15px] font-semibold text-vermilion-deep tabular-nums">
-                  {i + 1}
+              <li key={step.title} className="bg-white p-6">
+                <span className="block font-heading text-[34px] leading-none font-semibold text-vermilion tabular-nums">
+                  {String(i + 1).padStart(2, "0")}
                 </span>
-                <h3 className="mt-5 text-[19px] font-semibold text-ink">{step.title}</h3>
+                <h3 className="mt-5 text-[20px] font-semibold text-ink">{step.title}</h3>
                 <p className="mt-1.5 text-[14.5px] leading-[1.6] text-body">{step.body}</p>
               </li>
             ))}
@@ -145,7 +145,7 @@ function GuidelineBlock({ section, number }: { section: GuidelineSection; number
           {section.title}
         </h2>
         {section.provisional && (
-          <span className="rounded-full border border-notice-border bg-notice px-2.5 py-0.5 text-[12px] font-semibold text-ink">
+          <span className="tag-yellow rounded-xs px-2 py-0.5 text-[12px] font-semibold">
             To be confirmed
           </span>
         )}

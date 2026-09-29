@@ -170,7 +170,7 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
       </div>
 
       {units.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
           Nothing here yet. Add the departments first, then the councils, then the clubs under
           them.
         </p>

@@ -12,6 +12,7 @@ import type { CapacityRules } from "@/lib/settings";
 import { RoomGrid } from "@/components/room-grid";
 import { StaysTable } from "@/components/stays-table";
 import { Badge } from "@/components/ui/badge";
+import { SectionHeading } from "@/components/section-heading";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -91,13 +92,12 @@ export function ManagerQueue({
       {/* Cancellation Requests Section */}
       {cancellationRequests.length > 0 && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">
-            Cancellation requests{" "}
-            <Badge variant="destructive" className="align-middle">
-              {cancellationRequests.length}
-            </Badge>
-          </h2>
-          <div className="overflow-x-auto rounded-lg border border-orange-200 dark:border-orange-900">
+          <SectionHeading
+            title="Cancellation requests"
+            count={cancellationRequests.length}
+            tone="alert"
+          />
+          <div className="overflow-x-auto rounded-lg border border-border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -122,14 +122,12 @@ export function ManagerQueue({
 
       {/* Incoming requests */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold">
-          Incoming requests{" "}
-          <Badge variant="secondary" className="align-middle">
-            {pending.length}
-          </Badge>
-        </h2>
+        <SectionHeading
+          title="Incoming requests"
+          count={pending.length}
+        />
         {pending.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
             No requests waiting for allocation.
           </p>
         ) : (
@@ -171,18 +169,17 @@ export function ManagerQueue({
 
       {/* Current occupants — guests physically in the building now */}
       <section>
-        <h2 className="mb-1 text-lg font-semibold">
-          Current occupants{" "}
-          <Badge variant="secondary" className="align-middle">
-            {current.length}
-          </Badge>
-        </h2>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Stays that have started and not yet reached their check-out time. Mark a guest as
-          Occupied when they arrive at the desk, and Vacated when they leave.
-        </p>
+        <SectionHeading
+          title="Current occupants"
+          count={current.length}
+          description={
+            <>
+              Stays that have started and not yet reached their check-out time. Mark a guest as Occupied when they arrive at the desk, and Vacated when they leave.
+            </>
+          }
+        />
         {current.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
             Nobody is staying at this guest house right now.
           </p>
         ) : (
@@ -195,16 +192,16 @@ export function ManagerQueue({
           this split exists to remove. */}
       {overdue.length > 0 && (
         <section>
-          <h2 className="mb-1 text-lg font-semibold">
-            Awaiting check-out{" "}
-            <Badge variant="destructive" className="align-middle">
-              {overdue.length}
-            </Badge>
-          </h2>
-          <p className="mb-3 text-sm text-muted-foreground">
-            These stays are past their check-out time and were never marked Vacated, so they are
-            still holding their rooms. Close them off to release the rooms.
-          </p>
+          <SectionHeading
+            title="Awaiting check-out"
+            count={overdue.length}
+            tone="alert"
+            description={
+              <>
+                These stays are past their check-out time and were never marked Vacated, so they are still holding their rooms. Close them off to release the rooms.
+              </>
+            }
+          />
           <StaysTable bookings={overdue} showOverdue isManager />
         </section>
       )}
@@ -213,35 +210,32 @@ export function ManagerQueue({
           guest: a Vacated stay appeared on no screen the manager has. */}
       {toBill.length > 0 && (
         <section>
-          <h2 className="mb-1 text-lg font-semibold">
-            Checked out — to bill{" "}
-            <Badge variant="secondary" className="align-middle">
-              {toBill.length}
-            </Badge>
-          </h2>
-          <p className="mb-3 text-sm text-muted-foreground">
-            These guests have left and their invoice is not yet paid. Issue it, or record the
-            payment against one already issued — they leave this list once it is settled.
-          </p>
+          <SectionHeading
+            title="Checked out — to bill"
+            count={toBill.length}
+            description={
+              <>
+                These guests have left and their invoice is not yet paid. Issue it, or record the payment against one already issued — they leave this list once it is settled.
+              </>
+            }
+          />
           <StaysTable bookings={toBill} isManager />
         </section>
       )}
 
       {/* Upcoming — allocated, not started */}
       <section>
-        <h2 className="mb-1 text-lg font-semibold">
-          Upcoming stays{" "}
-          <Badge variant="secondary" className="align-middle">
-            {upcoming.length}
-          </Badge>
-        </h2>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Rooms are already held for these bookings. A guest who arrives ahead of their booked
-          time is checked in with <span className="font-medium">Early check-in</span>, which
-          says so in the log.
-        </p>
+        <SectionHeading
+          title="Upcoming stays"
+          count={upcoming.length}
+          description={
+            <>
+              Rooms are already held for these bookings. A guest who arrives ahead of their booked time is checked in with <span className="font-medium">Early check-in</span>, which says so in the log.
+            </>
+          }
+        />
         {upcoming.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
             No upcoming stays for this guest house.
           </p>
         ) : (
@@ -272,7 +266,13 @@ function ManagerRow({
   // for dates in the past; moving the dates or rejecting are the ways out.
   const lapsed = lapsedError(booking);
   return (
-    <TableRow className={booking.user_role === "official" ? "bg-amber-50/60 dark:bg-amber-950/20" : undefined}>
+    <TableRow
+      className={
+        booking.user_role === "official"
+          ? "bg-notice/70 hover:bg-notice [&>td:first-child]:border-l-4 [&>td:first-child]:border-l-saffron"
+          : undefined
+      }
+    >
       <TableCell className="font-mono text-xs">
         {booking.booking_reference_id}
         {lapsed && (
@@ -422,7 +422,7 @@ function CancellationRow({ booking }: { booking: BookingWithDetails }) {
     });
 
   return (
-    <TableRow className="bg-orange-50/40 dark:bg-orange-950/10">
+    <TableRow className="[&>td:first-child]:border-l-4 [&>td:first-child]:border-l-[#f47738]">
       <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
       <TableCell>
         <span className="font-medium">{booking.requester.full_name}</span>

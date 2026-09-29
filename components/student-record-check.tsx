@@ -26,9 +26,9 @@ const LOOKUP_NOTES: Partial<Record<StudentRecordPanel["status"], string>> = {
  */
 export function StudentRecordCheck({ panel }: { panel: StudentRecordPanel }) {
   return (
-    <section className="space-y-3 rounded-lg border p-3 text-sm">
-      <div>
-        <p className="font-medium">Student&apos;s record — academic database</p>
+    <section className="space-y-3 rounded-lg border border-border-strong p-4 text-sm">
+      <div className="border-b border-border pb-2.5">
+        <p className="font-heading text-[1.0625rem] font-semibold text-ink">Student&apos;s record — academic database</p>
         <p className="text-xs text-muted-foreground">
           Check the family on this request against the names the institute has on file before forwarding it.
         </p>
@@ -47,7 +47,7 @@ export function StudentRecordCheck({ panel }: { panel: StudentRecordPanel }) {
       {panel.family.length > 0 && (
         <div className="overflow-x-auto rounded-md border">
           <table className="w-full min-w-[26rem] text-sm">
-            <thead className="bg-muted/60">
+            <thead className="border-b-2 border-ink bg-band">
               <tr>
                 <th className="p-2 text-left font-medium">Relationship</th>
                 <th className="p-2 text-left font-medium">On record</th>
@@ -95,11 +95,11 @@ export function FamilyBadge({ panel }: { panel: StudentRecordPanel | undefined }
   const summary = familySummary(panel.family);
   if (summary === "none") return null;
   return summary === "match" ? (
-    <Badge variant="outline" className="ml-2 border-emerald-300 text-emerald-800 dark:text-emerald-200" title="Every parent or guardian on this request matches the academic record">
+    <Badge variant="tag" className="tag-green ml-2" title="Every parent or guardian on this request matches the academic record">
       ✓ Matches record
     </Badge>
   ) : (
-    <Badge variant="outline" className="ml-2 border-amber-300 text-amber-900 dark:text-amber-200" title="A parent or guardian on this request differs from the academic record — open Review">
+    <Badge variant="tag" className="tag-yellow ml-2" title="A parent or guardian on this request differs from the academic record — open Review">
       ⚠ Check names
     </Badge>
   );

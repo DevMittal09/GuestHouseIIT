@@ -18,6 +18,8 @@ export const SITE_NAV: NavItem[] = [
  * itself, so a phone gets one line of links rather than a block of them.
  * (For an afternoon on 26 Sep 2026 it lay transparent over a full-screen
  * photograph on `/`; the owner found that weird, and it is a plain bar again.)
+ * A 3px vermilion rule runs along its top edge (30 Sep 2026), the same rule
+ * the portal's header carries, so the two halves of the site share a mark.
  */
 export function SiteHeader({
   portal,
@@ -29,7 +31,7 @@ export function SiteHeader({
     "inline-flex items-center rounded-[6px] border border-ink px-4 py-2 text-[14px] font-semibold text-ink transition-colors duration-200 hover:bg-ink hover:text-white";
 
   return (
-    <header className="z-40 border-b border-border bg-white lg:sticky lg:top-0">
+    <header className="z-40 border-t-[3px] border-b border-t-vermilion border-b-border bg-white lg:sticky lg:top-0">
       <div className="mx-auto flex w-full max-w-[1240px] items-center gap-x-6 px-[clamp(16px,4vw,40px)] py-3.5">
         <div className="min-w-0 flex-1 lg:flex-none">
           <BrandBlock />

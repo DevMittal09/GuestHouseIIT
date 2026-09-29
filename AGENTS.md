@@ -1070,7 +1070,8 @@ null`).
 ## Public website and branding — read `.memories/16-public-site-and-ui.md` first
 
 Built 19 Sep 2026 from `design_handoff/`; **redesigned 26 Sep 2026** in the
-institute's own palette, over three passes that day. Where it landed: **clean
+institute's own palette, over three passes that day; **revamped 30 Sep 2026**
+(editorial public sections, GOV.UK-style portal primitives — see file 16). Where it landed: **clean
 and institutional**, modelled on peer guest-house sites (IIT Madras's
 Taramani Guest House) — photographs **contained** in the layout, never
 full-screen (the owner called a full-screen hero "so weird").
@@ -1097,13 +1098,23 @@ full-screen (the owner called a full-screen hero "so weird").
   `site-chrome.tsx` (`SiteFooter`: an MRBS line, then address, front office,
   both guest houses' directions, institute links). No utility strip. `NavBar` (`site-nav.tsx`) is shared:
   `tone="dark"` portal bar, `"light"` / `"overlay"` site header.
-- **Layout:** home = a split hero (headline, two buttons, the front-office
-  number; one 4:3 photo beside it), a card per guest house (`houseSummary`,
-  no counts), eight amenity cards, a row of four equal thumbnails, a boxed
-  closing call to action. Inner pages open on a plain light band
-  (`PageMasthead`); sign-in pages put the form beside a contained photo
-  (`SIGN_IN_PHOTOS`). Cards and photos 8px corners, buttons 6px, bordered,
-  no shadows, no gradients.
+- **Layout:** home = a 5 + 7 split hero (headline, two buttons, the
+  front-office number; one 4:3 photo beside it), a card per guest house
+  (`houseSummary`, no counts), a ruled grid of eight amenities, a four-photo
+  mosaic, a closing row of ruled links. Sections open on a hairline ink rule
+  with the label in the left quarter (`SectionHead`). Inner pages open on a
+  plain light band (`PageMasthead`); sign-in pages put the form beside a
+  contained 4:3 photo (`SIGN_IN_PHOTOS`).
+- **Corners are a fixed scale** (`@theme inline`): `rounded` 4px inputs,
+  `rounded-md` 6px buttons, `rounded-lg` 8px cards / dialogs / photos,
+  nothing rounder (`xl`–`4xl` are capped at 8px). No shadows, gradients,
+  frosted glass or pills anywhere — portal included.
+- **The portal is restyled through its primitives**: `Card` is a GOV.UK
+  summary card, `Table` a GOV.UK table (band header, 2px ink rule),
+  `StatusBadge` uses the `tag-*` utilities, desk lists use `SectionHeading`,
+  toggles use `segment()`. **Mark as Occupied / Mark as Vacated** are
+  `Button variant="occupy"` / `"vacate"` (green / indigo, each with its own
+  icon) — keep them distinct.
 - **Editable values** (contact, map pins, MRBS, footer links, photos, PDF URL,
   `GUIDELINES_PROVISIONAL`) live in `lib/site.ts`; `grep -rn "TODO(site)"`
   lists what the office still has to confirm — including the **placeholder

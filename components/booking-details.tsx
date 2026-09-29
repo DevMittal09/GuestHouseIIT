@@ -1,5 +1,6 @@
 import { maskIdNumber } from "@/lib/security";
 import { StatusBadge } from "@/components/status-badge";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -80,7 +81,7 @@ export function BookingDetails({
         {booking.has_foreign_national && <Badge variant="outline">Foreign national</Badge>}
       </div>
 
-      <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
         <Field label="Requester" value={`${booking.requester.full_name} (${booking.requester.email})`} />
         <Field label="Guest House" value={booking.guest_house.name} />
         {booking.requester.hostel_name && <Field label="Hostel" value={booking.requester.hostel_name} />}
@@ -155,7 +156,7 @@ export function BookingDetails({
 
       <Field label="Purpose of visit" value={booking.purpose_of_visit} block />
 
-      <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
         <Field label="Debitable head" value={describeDebit(booking)} />
         {/* Who else hears about it: every mail to the requester is copied. */}
         {(booking.copy_to_emails ?? []).length > 0 && (
@@ -180,7 +181,7 @@ export function BookingDetails({
 
       {booking.meals.length > 0 && (
         <div>
-          <h4 className="mb-1 font-medium">Meals by day</h4>
+          <h4 className="mb-1 font-heading text-[1.0625rem] font-semibold text-ink">Meals by day</h4>
           <p className="mb-2 text-xs text-muted-foreground">
             Each ticked meal is for {mealHeadCount} guest{mealHeadCount === 1 ? "" : "s"}
             {booking.meal_preference
@@ -224,7 +225,7 @@ export function BookingDetails({
       )}
 
       {booking.custom_fields && booking.custom_fields.length > 0 && (
-        <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+        <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
           {booking.custom_fields.map((f) => (
             <Field
               key={f.id}
@@ -249,7 +250,7 @@ export function BookingDetails({
       {!mealsOnly &&
         (booking.rooms.length > 0 ? (
           <div className="space-y-4">
-            <h4 className="font-medium">Guests by room ({booking.guests.length} in total)</h4>
+            <h4 className="font-heading text-[1.0625rem] font-semibold text-ink">Guests by room ({booking.guests.length} in total)</h4>
             {booking.rooms.map((room) => (
               <div key={room.id}>
                 <p className="mb-1 text-sm font-medium">
@@ -279,14 +280,14 @@ export function BookingDetails({
           </div>
         ) : (
           <div>
-            <h4 className="mb-2 font-medium">Guests ({booking.guests.length})</h4>
+            <h4 className="mb-2 font-heading text-[1.0625rem] font-semibold text-ink">Guests ({booking.guests.length})</h4>
             <GuestTable guests={booking.guests} />
           </div>
         ))}
 
       {showAlumniCard && booking.alumni_id_url && (
         <div>
-          <h4 className="mb-2 font-medium">Alumni ID Card</h4>
+          <h4 className="mb-2 font-heading text-[1.0625rem] font-semibold text-ink">Alumni ID Card</h4>
           <DocumentPreview url={booking.alumni_id_url} label="Alumni ID card" />
         </div>
       )}
@@ -294,11 +295,11 @@ export function BookingDetails({
       <Separator />
 
       <div>
-        <h4 className="mb-2 font-medium">Approval trail</h4>
+        <h4 className="mb-2 font-heading text-[1.0625rem] font-semibold text-ink">Approval trail</h4>
         <ol className="space-y-2">
           {booking.logs.map((log) => (
             <li key={log.id} className="flex gap-3">
-              <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />
+              <span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-xs bg-vermilion" />
               <div>
                 <p>
                   <span className="font-medium">{log.action_by_name}</span>{" "}
@@ -395,9 +396,9 @@ function GuestTable({ guests }: { guests: BookingGuest[] }) {
 
 function Field({ label, value, block }: { label: string; value: string; block?: boolean }) {
   return (
-    <div className={block ? "col-span-full" : undefined}>
-      <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className="font-medium">{value}</p>
+    <div className={cn("border-t border-border pt-2", block && "col-span-full")}>
+      <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
+      <p className="mt-0.5 font-medium text-ink">{value}</p>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { describeDebit } from "@/lib/debit-heads";
+import { LogOut } from "lucide-react";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -62,7 +63,7 @@ export function CheckoutsToday({
       </CardHeader>
       <CardContent>
         {bookings.length === 0 ? (
-          <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
             Nobody is due to check out today.
           </p>
         ) : (
@@ -115,7 +116,7 @@ function CheckoutRow({ booking, nowIso }: { booking: BookingWithDetails; nowIso:
     });
 
   return (
-    <TableRow className={overdue ? "bg-amber-50/60 dark:bg-amber-950/20" : undefined}>
+    <TableRow className={overdue ? "bg-notice/70 hover:bg-notice [&>td:first-child]:border-l-4 [&>td:first-child]:border-l-destructive" : undefined}>
       <TableCell className="whitespace-nowrap">
         {formatDateTime(booking.check_out)}
         {overdue && (
@@ -138,12 +139,8 @@ function CheckoutRow({ booking, nowIso }: { booking: BookingWithDetails; nowIso:
       <TableCell className="text-right">
         {canVacate ? (
           <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              size="sm"
-              className="bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500"
-              disabled={isPending}
-              onClick={vacate}
-            >
+            <Button size="sm" variant="vacate" disabled={isPending} onClick={vacate}>
+              <LogOut aria-hidden />
               {isPending ? "Updating…" : "Mark as Vacated"}
             </Button>
             {/* The bill, beside the check-out it goes with. After Vacated the

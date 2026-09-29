@@ -2865,3 +2865,55 @@ still the thing the owner called weird. **Kept from the afternoon:** the
 lockup, no figures, no routes or role names, no captions, instructions on
 the Guidelines.
 
+
+## 30 Sep 2026 — UI revamp: an editorial public site, a GOV.UK portal
+
+The owner's brief: authoritative and institutional, "anti AI slop" — 4px
+inputs, 6px buttons, 8px cards; no pills, drop shadows, gradients or frosted
+glass; photographs contained in asymmetric grid columns; IIT Madras's
+Taramani Guest House for structure, Aman / The Standard for editorial
+whitespace and dividing rules, GOV.UK for the portal's tables and tags.
+Presentation layer only.
+
+**Decisions.**
+
+- **The corner scale is fixed, not derived** (`--radius-*` in `@theme
+  inline`): `rounded` 4px, `rounded-md` 6px, `rounded-lg` 8px, and `xl`–`4xl`
+  capped at 8px. The shadcn default multiplied one `--radius`, so the names
+  meant nothing in particular and `rounded-4xl` made the badge a pill.
+  Capping the top of the scale means no class anywhere can produce a pill.
+- **Restyle through the primitives, not page by page** (as on 26 Sep): the
+  portal has 35 cards and dozens of tables; changing `Card`, `Table`,
+  `Button`, `Badge`, the inputs and `Dialog` restyles all of them
+  consistently and leaves the pages' logic untouched.
+- **Cards are GOV.UK summary cards**: the header is a band-tinted strip over
+  a hairline. A 12-card booking form now reads as titled sections rather
+  than floating boxes. **Rejected:** a coloured top border on each card —
+  with 8px corners a thick top edge curls at the ends.
+- **Status tags use the GOV.UK tag palette** (`tag-*` utilities; pale fill,
+  same-hue dark text, 7:1+, square): yellow at an approver, blue at the
+  manager, green approved, purple in house, turquoise vacated, red / grey /
+  orange / pink for the endings. Sentence case, not uppercase — the label is
+  matched by text in tests and read aloud.
+- **Occupied and Vacated are distinct by colour *and* shape**: `occupy`
+  (deep green `#00703C`) with a log-in icon, `vacate` (deep indigo
+  `#3730A3`) with a log-out icon, both white text above 6:1. The icons are
+  `aria-hidden`, so the buttons' names are unchanged.
+- **Room seats are tinted, not saturated**: white text on bright emerald was
+  about 2.5:1. Free is pale green with a green edge; taken stays solid red and
+  is struck through; picked is solid blue — so the states differ by more than
+  hue. The `title` texts (which e2e selects on) are untouched.
+- **Public sections open on a hairline ink rule with the label in the left
+  quarter** (`SectionHead`, 3 + 9 of 12 columns) and their content offset
+  into the same column — the editorial hotel-site habit, in place of stacked
+  floating boxes. The hero is 5 + 7 columns (asymmetric); the closing box
+  became a row of ruled links; amenities are one ruled grid (a 1px gap over
+  a border-coloured ground — safe because `amenities()` always returns
+  eight).
+- **Guest-house switchers are link tabs** (`LinkTabs`, `aria-current`) and
+  the console's sections a segmented list (`ConsoleNav`), replacing the
+  "pill in a well" with a shadow.
+
+**Kept:** every content rule from 26 Sep (no figures, captions, role names
+or routes on the public site; photos never placed as one particular guest
+house), the palette, the lockup's words, the map tabs, the MRBS strip.

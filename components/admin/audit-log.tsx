@@ -80,7 +80,7 @@ export function AuditLog({
       </form>
 
       {events.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
           Nothing recorded for this filter.
         </p>
       ) : (

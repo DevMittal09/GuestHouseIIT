@@ -48,7 +48,7 @@ export function MyBookings({
 }) {
   if (bookings.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
         No bookings yet — create your first request from the &ldquo;New Booking&rdquo; tab.
       </p>
     );
@@ -249,7 +249,7 @@ function ExtensionRequest({ booking }: { booking: BookingWithDetails }) {
   if (!eligible) return null;
   if (booking.extension_requested_until) {
     return (
-      <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+      <p className="border-l-4 border-saffron bg-notice p-3 text-sm text-ink">
         ⏳ You asked to stay until {formatDateTime(booking.extension_requested_until)}. The Guest House Manager
         will reply by email.
       </p>

@@ -3,7 +3,7 @@
 Read this before changing anything visual, adding a public page, or touching
 the sign-in pages.
 
-**Four passes so far:**
+**Five passes so far:**
 
 | Date | Where | What |
 | --- | --- | --- |
@@ -11,7 +11,37 @@ the sign-in pages.
 | 21 Sep 2026 | `ui` branch only | A "WOW" redesign in the institute's vermilion with pills, shadows, gradients, frosted glass and a bento grid. Never merged; superseded by the next row |
 | 26 Sep 2026, morning | `main` | The owner: the site "looks ass", "too dull and dead"; wanted clean and professional, impressive, **not AI-generated-looking**, in **the colour palette of the IITPKD websites**, following the backend. Plus: a map for each guest house, MRBS and the institute site in the footer, a proper Guidelines page with placeholder house rules, and more prominent booking buttons in the portal. Built as an editorial page full of computed facts |
 | 26 Sep 2026, afternoon | `main` | The owner on the morning's version: header "should look more aesthetic", site "too plain", "too mehh"; **no figures** ("23 rooms… 1 month… 14 nights…"), **no "see them on the map"**, **no photo captions**, **"How booking works" moved to the guidelines and vaguer**, **"do not display the backend logic like who are the users, who approves who"**, no instruction text or meal timings on the landing page. Rebuilt photo-led and quiet — full-screen hero, photo banners |
-| **26 Sep 2026, evening (current)** | `main` | The owner: "it looks so weird… the image filling the page this much looks so weird"; make it **clean and professional**, researched online. Rebuilt **institutional**: photos contained in the layout — see "The evening brief" below |
+| 26 Sep 2026, evening | `main` | The owner: "it looks so weird… the image filling the page this much looks so weird"; make it **clean and professional**, researched online. Rebuilt **institutional**: photos contained in the layout — see "The evening brief" below |
+| **30 Sep 2026 (current)** | `main` | A written revamp brief: TGH structure, Aman / Standard editorial rules, **GOV.UK** tables and tags; 4px inputs, 6px buttons, 8px cards, never a pill, shadow, gradient or glass. Primitives rebuilt (see "The 30 Sep revamp" below); the evening's content rules all kept |
+
+## The 30 Sep revamp
+
+- **Corner scale** fixed in `@theme inline`: `rounded` 4px (inputs),
+  `rounded-md` 6px (buttons), `rounded-lg` 8px (cards, dialogs, photos),
+  `xl`–`4xl` capped at 8px. Use `rounded-xs` (2px) for tags.
+- **Public site:** `SectionHead` opens every section on a hairline ink rule,
+  label in the left 3 of 12 columns and the serif `<h2>` in the other 9; the
+  section's content is offset to the same column with
+  `lg:ml-[calc(25%+10px)]` (the 12-column grid's fourth column with
+  `gap-x-10`). Hero 5 + 7 with one 4:3 photo; guest-house cards; amenities
+  as one ruled grid (1px gap over `bg-border-strong`, 1 / 2 / 4 columns for
+  its eight items — change those if the list length changes); a four-photo
+  mosaic (one photo over two rows at `lg`); a closing band with ruled
+  Guidelines / Contact links. Header and portal header carry a 3px vermilion
+  top rule; the lockup has a hairline between emblem and words.
+- **Portal:** `Card` is a GOV.UK summary card (band header strip over a
+  hairline); `Table` has a band header closed by a 2px ink rule and hairline
+  rows; `StatusBadge` uses the `tag-*` utilities; `SectionHeading` (+
+  `EmptyState`) heads every desk list; `LinkTabs` switches guest house;
+  `ConsoleNav` lists the console's sections; `segment()` / `segmentGroup`
+  style every in-page toggle. Notices are GOV.UK inset text: a 4px left rule
+  (saffron on `bg-notice` for warnings, `border-strong` on the band for
+  information).
+- **Desk lifecycle buttons:** `Button variant="occupy"` (deep green,
+  log-in icon) and `variant="vacate"` (deep indigo, log-out icon).
+- **Room grid seats:** free = pale green with a green edge, taken = solid red
+  struck through (disabled), picked = solid blue, changeover = amber,
+  turnaround = hatched (`SEAT` in `room-grid.tsx`, shared with the legend).
 
 ## The evening brief (26 Sep), and how it was interpreted
 
@@ -204,12 +234,15 @@ On `:root`, exposed to Tailwind through `@theme inline`:
 | `--body-text` | `#4A4541` | `text-body` | paragraphs (9.5:1) |
 | `--band` | `#F3F1EB` | `bg-band` | mastheads, the sign-in band, fills (close to the institute's `#EDEDED` / `#F0EFE7`) |
 | `--notice` / `--notice-border` | `#FFF7E6` / `#EFD7A3` | `bg-notice` / `border-notice-border` | notice box, "To be confirmed" chips |
-| `--border-strong` | `#CEC8BF` | `border-border-strong` | inputs |
+| `--border-strong` | `#CEC8BF` | `border-border-strong` | inputs, card and table edges |
+| `--occupy` / `--vacate` | `#00703C` / `#3730A3` | `bg-occupy` / `bg-vacate` | the desk's Mark as Occupied / Mark as Vacated buttons (white text, >6:1) |
+| `tag-*` utilities | GOV.UK tag pairs | `tag-green`, `tag-yellow`, … | status tags and other coloured labels (pale fill, same-hue dark text) |
 | `--on-ink` / `--on-ink-muted` | `#D6D1CA` / `#A39D95` | `text-on-ink` / `text-on-ink-muted` | text on the ink footer (≥6.4:1) |
 
 shadcn tokens: `--primary` **ink** with white text; `--ring` vermilion;
 `--muted-foreground` `#6B655F` (5.1:1 even on the band); `--secondary` /
-`--muted` / `--accent` the band; `--border` `#E5E1DA`; `--radius` **4px**.
+`--muted` / `--accent` the band; `--border` `#E5E1DA`; corners from the fixed
+scale above (4 / 6 / 8px).
 `Button` has a **`brand`** variant (`bg-vermilion-deep text-white`) for the one
 call to action on a page. `.dark` is kept coherent; nothing switches it on.
 
@@ -234,9 +267,13 @@ Mail templates (`lib/mail/render.ts`) still carry the old amber header.
 | `components/site/site-nav.tsx` | `NavBar` — `tone="dark"` (portal: charcoal bar, uppercase, vermilion bar under the current page) or `"light"` (the white site header, a short vermilion underline); `scroll` for the phone row |
 | `components/site/site-ui.tsx` | `Container` (1240px), `Label` (tracked capitals), `PageTitle` (the sign-in pages' `<h1>`, optional `kicker`), **`PageMasthead`** (a light band: breadcrumb, `<h1>`, lead, `note`, `aside`), `SectionHead` (label + `<h2>` + optional link), `ArrowLink`, `BulletList`, `siteButton.{brand,ink,outline,light,outlineLight}`, `SitePhotoFrame` (8px corners; `zoom` eases on hover) |
 | `components/site/guest-house-map.tsx` | **`GuestHouseMap`** (client): WAI-ARIA tabs, one per pin, the chosen embed, "Open in Google Maps" / "Get directions" |
-| `components/site/sign-in-panel.tsx` | `PageTitle` + the form (or "You are signed in") on the left, a contained 4:5 photograph on the right from `lg` |
+| `components/site/sign-in-panel.tsx` | `PageTitle` + the form (or "You are signed in") in five columns on the left, a contained 4:3 photograph in seven on the right from `lg` |
 | `components/login-form.tsx` | The form — no card, no second heading; submit is vermilion-deep; `domainNote` under it; the second door is **Mock Authentication** (→ `/mock-login?next=`) or **Sign in with Google** once configured. Labels "LDAP username" / "LDAP password" and the button name "Sign in" are what the e2e helpers use — keep them |
-| `components/page-header.tsx` | Portal page title: serif `h1`, a short vermilion rule, description, optional `actions` |
+| `components/page-header.tsx` | Portal page title: a short vermilion rule, serif `h1`, description, optional `actions`, a closing hairline |
+| `components/section-heading.tsx` | `SectionHeading` (serif `<h2>`, a count tag — red with `tone="alert"` — description, action) and `EmptyState` |
+| `components/link-tabs.tsx` | `LinkTabs` — page-level tabs that are links, vermilion bar under the current one, `aria-current` (the desk's guest-house switcher) |
+| `components/console-nav.tsx` | `ConsoleNav` (client) — the console's sections as a segmented list, current one ink |
+| `components/segmented.tsx` | `segmentGroup` / `segment(active, size)` — every in-page toggle (Day/Week/Month, outbox filter, Form Builder roles) |
 
 **The portal shell** (`app/(portal)/layout.tsx`): white header with the
 compact lockup ("IIT Palakkad · Booking portal"), the user and role, Switch
@@ -251,9 +288,10 @@ the role's form allows), **Meal booking** (ink, names the kitchen; only for
 
 ## The pages
 
-- **Home** — see "The evening brief" above: split hero with one contained
-  photo, guest-house cards, eight amenity cards, four thumbnails, a boxed
-  closing call to action. No figures, meal times, rules or captions.
+- **Home** — see "The 30 Sep revamp" above: a 5 + 7 split hero with one
+  contained 4:3 photo, guest-house cards, a ruled amenity grid, a four-photo
+  mosaic, a closing row of ruled links. No figures, meal times, rules or
+  captions.
 - **Guidelines** — light masthead with a **Provisional edition** note while
   `GUIDELINES_PROVISIONAL` is true; **How booking works** as five small
   numbered cards (`BOOKING_STEPS`); a sticky **Contents** list; eight numbered

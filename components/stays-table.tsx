@@ -1,6 +1,7 @@
 "use client";
 
 import { describeDebit } from "@/lib/debit-heads";
+import { LogIn, LogOut, type LucideIcon } from "lucide-react";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -32,26 +33,27 @@ import { STATUS_LABELS, type BookingStatus, type BookingWithDetails } from "@/li
 /**
  * The next lifecycle step for a stay.
  *
- * "Mark as Vacated" gets its own colour rather than reusing the neutral
- * secondary button: check-in and check-out are the two things the desk clicks
- * all day, and telling them apart at a glance matters more than matching the
- * rest of the palette.
+ * "Mark as Occupied" is deep green with an arrow into a door and "Mark as
+ * Vacated" deep indigo with an arrow out of one (the `occupy` / `vacate`
+ * button variants): check-in and check-out are the two things the desk clicks
+ * all day, and telling them apart at a glance — by colour *and* by shape —
+ * matters more than matching the rest of the palette.
  */
 const LIFECYCLE_ACTIONS: Record<
   string,
-  { label: string; nextStatus: BookingStatus; className: string }
+  { label: string; nextStatus: BookingStatus; variant: "occupy" | "vacate"; icon: LucideIcon }
 > = {
   APPROVED: {
     label: "Mark as Occupied",
     nextStatus: "OCCUPIED",
-    className:
-      "bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600",
+    variant: "occupy",
+    icon: LogIn,
   },
   OCCUPIED: {
     label: "Mark as Vacated",
     nextStatus: "VACATED",
-    className:
-      "bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500",
+    variant: "vacate",
+    icon: LogOut,
   },
 };
 
@@ -77,7 +79,7 @@ export function StaysTable({
   // which reads as a refusal rather than as a question never asked.
   const showMeals = bookings.some((b) => b.guest_house.serves_meals || b.meals.length > 0);
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-x-auto rounded-lg border border-border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -151,7 +153,7 @@ function StayRow({
     });
 
   return (
-    <TableRow className={overdue ? "bg-amber-50/60 dark:bg-amber-950/20" : undefined}>
+    <TableRow className={overdue ? "bg-notice/70 hover:bg-notice [&>td:first-child]:border-l-4 [&>td:first-child]:border-l-destructive" : undefined}>
       <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
       <TableCell>
         {booking.requester.full_name}
@@ -163,12 +165,12 @@ function StayRow({
       <TableCell>
         {formatDateTime(booking.check_out)}
         {booking.extension_requested_until && (
-          <Badge variant="outline" className="ml-2 border-amber-400 align-middle text-amber-800 dark:text-amber-200">
+          <Badge variant="tag" className="tag-yellow ml-2 align-middle">
             ⏳ Extension to {formatDateTime(booking.extension_requested_until)}
           </Badge>
         )}
         {overdue && (
-          <Badge variant="outline" className="ml-2 align-middle">
+          <Badge variant="destructive" className="ml-2 align-middle">
             Overdue
           </Badge>
         )}
@@ -196,10 +198,11 @@ function StayRow({
           {action && !tooEarly && (
             <Button
               size="sm"
-              className={action.className}
+              variant={action.variant}
               disabled={isPending}
               onClick={handleLifecycle}
             >
+              <action.icon aria-hidden />
               {isPending
                 ? "Updating…"
                 : arrivingEarly

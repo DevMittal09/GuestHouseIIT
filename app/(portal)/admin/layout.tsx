@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminLock } from "@/components/admin/admin-lock";
 import { isAdminUnlocked, isDefaultAdminPassword } from "@/lib/admin-lock";
@@ -10,6 +9,7 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { PageHeader } from "@/components/page-header";
+import { ConsoleNav } from "@/components/console-nav";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -39,18 +39,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="space-y-6">
       <PageHeader title={title}>{blurb}</PageHeader>
-      <nav className="flex flex-wrap gap-1 rounded-lg bg-muted p-1 w-fit">
-        {sections.map((section) => CONSOLE_SECTIONS[section]).map((t) => (
-          <Link
-            key={t.href}
-            href={t.href}
-            title={t.blurb}
-            className="rounded-md px-4 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-background hover:text-foreground hover:shadow-sm"
-          >
-            {t.label}
-          </Link>
-        ))}
-      </nav>
+      <ConsoleNav
+        sections={sections.map((section) => {
+          const { href, label, blurb } = CONSOLE_SECTIONS[section];
+          return { href, label, blurb };
+        })}
+      />
       {children}
     </div>
   );

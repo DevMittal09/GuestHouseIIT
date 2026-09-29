@@ -11,9 +11,9 @@ import { ROLE_LABELS, type Profile } from "@/lib/types";
 
 /**
  * The gated entry points of the public site (`/book-room`, `/book-meal`,
- * `/sign-in`): the title, one line of lead and the sign-in form on the left,
- * a contained photograph on the right on wide screens (it filled half the
- * screen for an afternoon; too much). Someone already signed in is offered a
+ * `/sign-in`): the title, one line of lead and the sign-in form in five
+ * columns on the left, a contained 4:3 photograph in the other seven on wide
+ * screens (it filled half the screen for an afternoon; too much). Someone already signed in is offered a
  * way through instead of a second form. Renders its own `Container`.
  */
 export function SignInPanel({
@@ -42,7 +42,7 @@ export function SignInPanel({
   notice?: string | null;
 }) {
   return (
-    <Container className="grid items-center gap-x-16 gap-y-10 py-[clamp(44px,6.5vw,88px)] lg:grid-cols-12">
+    <Container className="grid items-center gap-x-12 gap-y-10 py-[clamp(44px,6.5vw,96px)] lg:grid-cols-12">
       <div className="min-w-0 lg:col-span-5">
         <div className="w-full max-w-[460px]">
           <PageTitle kicker="Guest house portal" intro={intro}>
@@ -88,10 +88,10 @@ export function SignInPanel({
         </div>
       </div>
 
-      <div className="hidden lg:col-span-6 lg:col-start-7 lg:block">
+      <div className="hidden lg:col-span-7 lg:col-start-6 lg:block lg:pl-6">
         {photo.src && (
-          <div className="relative aspect-[4/5] max-h-[620px] w-full overflow-hidden rounded-[8px] bg-band">
-            <Image src={photo.src} alt="" fill sizes="560px" className="object-cover" />
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[8px] bg-band">
+            <Image src={photo.src} alt="" fill sizes="620px" className="object-cover" />
           </div>
         )}
       </div>

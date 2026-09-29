@@ -38,6 +38,7 @@ import {
 import { formatDateTime } from "@/lib/format";
 import { instituteHour } from "@/lib/tz";
 import { cn } from "@/lib/utils";
+import { segment, segmentGroup } from "@/components/segmented";
 import { type GuestHouse, type Room, type RoomOccupancySegment } from "@/lib/types";
 
 interface Loaded {
@@ -119,7 +120,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
 
   if (guestHouses.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
         No guest houses have been set up yet.
       </p>
     );
@@ -132,7 +133,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           {guestHouses.length > 1 && (
             <div className="space-y-1.5">
               <Label className="block">Guest house</Label>
-              <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1">
+              <div className={segmentGroup} role="group" aria-label="Guest house">
                 {guestHouses.map((gh) => (
                   <SegmentButton
                     key={gh.id}
@@ -147,7 +148,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           )}
           <div className="space-y-1.5">
             <Label className="block">View</Label>
-            <div className="flex gap-1 rounded-lg bg-muted p-1" role="group" aria-label="View">
+            <div className={segmentGroup} role="group" aria-label="View">
               {AVAILABILITY_VIEWS.map((option) => (
                 <SegmentButton
                   key={option.value}
@@ -252,11 +253,11 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           </div>
 
           {!range ? (
-            <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+            <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
               Pick a date to see room availability.
             </p>
           ) : rooms.length === 0 && !loading ? (
-            <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+            <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
               This guest house has no active rooms.
             </p>
           ) : (
@@ -368,10 +369,7 @@ function SegmentButton({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={cn(
-        "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
-        active ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
-      )}
+      className={segment(active)}
     >
       {children}
     </button>

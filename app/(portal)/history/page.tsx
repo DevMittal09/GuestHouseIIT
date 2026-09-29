@@ -30,7 +30,7 @@ export default async function HistoryPage({
     return (
       <div className="space-y-6">
         <Heading scopeLabel={null} isRequester={false} />
-        <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
           {scope.reason}
         </p>
       </div>

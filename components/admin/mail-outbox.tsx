@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
 import { MAIL_EVENT_LABELS, MAIL_STATUSES, type MailStatus } from "@/lib/mail/types";
-import { cn } from "@/lib/utils";
+import { segment, segmentGroup } from "@/components/segmented";
 
 /**
  * The mail log.
@@ -170,21 +170,17 @@ export function MailOutbox() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1 w-fit">
+          <div className={segmentGroup} role="group" aria-label="Filter by status">
             {(["all", ...MAIL_STATUSES] as const).map((status) => (
               <button
                 key={status}
                 type="button"
                 onClick={() => setFilter(status)}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  filter === status
-                    ? "bg-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
+                aria-pressed={filter === status}
+                className={segment(filter === status)}
               >
                 {status === "all" ? "All" : status.charAt(0) + status.slice(1).toLowerCase()}
-                <span className="ml-1.5 text-xs text-muted-foreground">
+                <span className="ml-1.5 text-xs opacity-75">
                   ({status === "all" ? total : (data?.counts[status] ?? 0)})
                 </span>
               </button>
@@ -198,7 +194,7 @@ export function MailOutbox() {
           )}
 
           {data && data.rows.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
               {total === 0
                 ? "No mail has been queued yet. Submit or approve a booking and it will appear here."
                 : "No messages with that status."}

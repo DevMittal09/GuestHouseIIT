@@ -1,8 +1,9 @@
 /**
- * The title block at the top of every portal page: a serif heading, the
- * vermilion rule from the guest house website, and a line on what the page is for.
- * `actions` sits to the right on wide screens and wraps underneath on narrow
- * ones.
+ * The title block at the top of every portal page (30 Sep 2026): a short
+ * vermilion rule, the page's one serif `<h1>`, a line on what the page is
+ * for, and `actions` at the far end on wide screens (wrapping underneath on
+ * narrow ones). A hairline closes the block, so the page's working content
+ * starts on a clean edge.
  */
 export function PageHeader({
   title,
@@ -15,13 +16,15 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-border pb-6">
       <div className="min-w-0">
-        <h1 className="text-[clamp(26px,3vw,32px)] leading-tight font-semibold text-foreground">
+        <div aria-hidden className="mb-4 h-[3px] w-9 bg-vermilion" />
+        <h1 className="text-[clamp(28px,3.4vw,38px)] leading-[1.08] font-semibold tracking-[-0.015em] text-ink">
           {title}
         </h1>
-        <div aria-hidden className="mt-2.5 mb-3 h-[3px] w-10 bg-vermilion" />
-        {children && <p className="max-w-[75ch] text-body">{children}</p>}
+        {children && (
+          <p className="mt-2.5 max-w-[75ch] text-[15px] leading-relaxed text-body">{children}</p>
+        )}
       </div>
       {actions}
     </div>

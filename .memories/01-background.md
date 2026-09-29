@@ -284,6 +284,23 @@ Asked by the owner. Reasoning in [03-decisions.md](03-decisions.md)
 | --- | --- | --- |
 | "It looks so weird" — make it clean and professional; the image filling the page is too much; look online for ideas | **Done** | Researched peer (IIT Madras Taramani Guest House) and clean hotel/university sites; photos now contained — a split hero with one photo, guest-house cards, amenity cards, a thumbnail row, a boxed call to action; plain mastheads; the header a white bar |
 
+## UI revamp — 30 Sep 2026
+
+Asked by the owner as a written brief (presentation layer only). Reasoning in
+[03-decisions.md](03-decisions.md) ("30 Sep 2026 — UI revamp").
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| Tokens: the IITPKD palette, the serif's optical sizes, radius rules | **Done** | `app/globals.css` — fixed corner scale, `occupy` / `vacate`, `tag-*` utilities |
+| Buttons and inputs 4–6px, cards and photos 8px; no pills, shadows, gradients, glass | **Done** | `components/ui/*`; no `rounded-full` / `shadow-*` / `backdrop-blur` left in the app |
+| Public home: asymmetric split hero with one contained 4:3 photo; guest-house and amenity cards; MRBS prominent in the footer | **Done** | `app/(site)/page.tsx` (5 + 7 columns), `SectionHead`; the footer's MRBS strip kept |
+| Lockup: emblem + "Guest House" in Source Serif 4 + tracked "IIT PALAKKAD"; white header sticky from `lg` | **Done** | `components/site/brand.tsx`, `site-header.tsx` |
+| Photos in 4:3 / 16:9 frames on the hero, sign-in panel and gallery; no captions | **Done** | Hero 4:3, sign-in 4:3 (was 4:5), home mosaic |
+| Contact map tabs with Google Maps embeds on each pin's coordinates | **Already so** | `components/site/guest-house-map.tsx`; unchanged |
+| Portal: large tiles for New room booking (vermilion) and Meal booking (ink) | **Done** | `app/(portal)/dashboard/page.tsx` |
+| GOV.UK-style tables, sharp borders, high-contrast status tags; Occupied / Vacated unmistakable | **Done** | `Table`, `StatusBadge`, `stays-table.tsx`, `checkouts-today.tsx`, `room-grid.tsx` |
+| Don't break the backend, the IST rules, the e2e selectors or the public-copy test | **Held** | No `lib/` / `app/actions/` change; lint, types, 305 unit tests, 26 journeys clean |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

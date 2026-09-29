@@ -52,7 +52,7 @@ export function PageTitle({
   return (
     <div className={className}>
       {kicker && <Label className="mb-4">{kicker}</Label>}
-      <h1 className="text-[clamp(36px,4.6vw,52px)] leading-[1.04] font-semibold tracking-[-0.02em] text-ink">
+      <h1 className="text-[clamp(36px,4.8vw,56px)] leading-[1.03] font-semibold tracking-[-0.022em] text-ink">
         {children}
       </h1>
       {intro && <p className="mt-5 max-w-[52ch] text-[17px] leading-[1.65] text-body">{intro}</p>}
@@ -62,9 +62,10 @@ export function PageTitle({
 
 /**
  * The top of a content page, as institute sites do it: a light band with a
- * breadcrumb back to Home, the page's `<h1>`, a lead and an optional note.
- * (It carried a photo banner for an afternoon on 26 Sep 2026; the owner found
- * full-width photographs overwhelming, so pages open on type again.)
+ * breadcrumb back to Home, a short vermilion rule, the page's `<h1>`, a lead
+ * and an optional note. (It carried a photo banner for an afternoon on 26 Sep
+ * 2026; the owner found full-width photographs overwhelming, so pages open on
+ * type again.)
  */
 export function PageMasthead({
   title,
@@ -80,8 +81,8 @@ export function PageMasthead({
 }) {
   return (
     <div className="border-b border-border bg-band">
-      <Container className="pt-9 pb-11 sm:pt-11 sm:pb-14">
-        <nav aria-label="Breadcrumb" className="mb-5 text-[13px] text-muted-foreground">
+      <Container className="pt-8 pb-12 sm:pt-10 sm:pb-16">
+        <nav aria-label="Breadcrumb" className="mb-8 text-[13px] text-muted-foreground">
           <ol className="flex flex-wrap items-center gap-x-2">
             <li>
               <Link href="/" className="text-muted-foreground hover:text-ink">
@@ -96,7 +97,8 @@ export function PageMasthead({
         </nav>
         <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
           <div className="min-w-0 max-w-[60ch]">
-            <h1 className="text-[clamp(34px,4.4vw,50px)] leading-[1.06] font-semibold tracking-[-0.02em] text-ink">
+            <div aria-hidden className="mb-5 h-[3px] w-10 bg-vermilion" />
+            <h1 className="text-[clamp(36px,4.8vw,56px)] leading-[1.04] font-semibold tracking-[-0.022em] text-ink">
               {title}
             </h1>
             {intro && <p className="mt-4 text-[17px] leading-[1.6] text-body">{intro}</p>}
@@ -109,7 +111,12 @@ export function PageMasthead({
   );
 }
 
-/** A section's heading, with small capitals over it and an optional link at the far end. */
+/**
+ * A section's heading, set the editorial way (30 Sep 2026): a hairline ink
+ * rule across the column, the small-capitals label in the left quarter and
+ * the serif heading beside it, with an optional link at the far end. On a
+ * phone the label simply sits above the heading.
+ */
 export function SectionHead({
   label,
   title,
@@ -127,24 +134,37 @@ export function SectionHead({
 }) {
   const dark = tone === "dark";
   return (
-    <div className={cn("flex flex-wrap items-end justify-between gap-x-8 gap-y-4", className)}>
-      <div className="min-w-0">
-        {label && <Label className={cn("mb-4", dark && "text-saffron")}>{label}</Label>}
+    <div
+      className={cn(
+        "grid gap-x-10 gap-y-3 border-t pt-5 lg:grid-cols-12",
+        dark ? "border-white/40" : "border-ink",
+        className
+      )}
+    >
+      {label && (
+        <Label className={cn("pt-[0.55em] lg:col-span-3", dark && "text-saffron")}>{label}</Label>
+      )}
+      <div
+        className={cn(
+          "flex min-w-0 flex-wrap items-end justify-between gap-x-8 gap-y-3",
+          label ? "lg:col-span-9" : "lg:col-span-12"
+        )}
+      >
         <h2
           id={id}
           className={cn(
-            "max-w-[24ch] text-[clamp(28px,3.2vw,40px)] leading-[1.1] font-semibold tracking-[-0.015em]",
+            "max-w-[24ch] text-[clamp(28px,3.4vw,44px)] leading-[1.08] font-semibold tracking-[-0.018em]",
             dark ? "text-white" : "text-ink"
           )}
         >
           {title}
         </h2>
+        {link && (
+          <ArrowLink href={link.href} className={dark ? "text-white hover:text-saffron" : undefined}>
+            {link.label}
+          </ArrowLink>
+        )}
       </div>
-      {link && (
-        <ArrowLink href={link.href} className={dark ? "text-white hover:text-saffron" : undefined}>
-          {link.label}
-        </ArrowLink>
-      )}
     </div>
   );
 }

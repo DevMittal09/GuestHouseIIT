@@ -64,7 +64,7 @@ export function AdminLock({ usingDefault }: { usingDefault: boolean }) {
             </div>
 
             {usingDefault && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
                 This console is still on its default password (<strong>0000</strong>). Change it
                 from Console Access once you are in.
               </p>

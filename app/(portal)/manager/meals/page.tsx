@@ -76,7 +76,7 @@ export default async function DailyMealsPage({
   const guestHouses = (await store.listGuestHouses()).filter((g) => g.serves_meals);
   if (guestHouses.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
         No guest house serves meals yet. A developer can turn meals on for one in Guest Houses &amp;
         Rooms.
       </p>
@@ -213,7 +213,7 @@ export default async function DailyMealsPage({
             the counts to what the kitchen served, then issue.
           </p>
           {toInvoice.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">Nothing waiting.</p>
+            <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">Nothing waiting.</p>
           ) : (
             <ul className="divide-y rounded-lg border">
               {toInvoice.map((b) => (
@@ -261,7 +261,7 @@ function MealBookingTable({
       </h2>
       <p className="mb-3 text-sm text-muted-foreground">{description}</p>
       {bookings.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
           Nothing to serve.
         </p>
       ) : (

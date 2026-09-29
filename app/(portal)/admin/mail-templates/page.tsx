@@ -19,7 +19,7 @@ export default async function MailTemplatesPage() {
       {result.ok ? (
         <MailTemplateEditor templates={result.templates} />
       ) : (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+        <div className="border-l-4 border-saffron bg-notice p-4 text-sm text-ink">
           <p className="font-medium">Email templates are not available yet</p>
           <p className="mt-1">{result.error}</p>
           <p className="mt-2 text-amber-800 dark:text-amber-200">

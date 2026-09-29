@@ -183,12 +183,12 @@ export function RoomGrid({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-band px-4 py-3 text-sm">
         <div>
-          <p className="text-xs tracking-wide text-muted-foreground uppercase">
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
             Occupancy for this stay
           </p>
-          <p className="font-medium">
+          <p className="mt-0.5 font-semibold text-ink tabular-nums">
             {formatDateTime(checkIn)} → {formatDateTime(checkOut)}
           </p>
         </div>
@@ -197,20 +197,20 @@ export function RoomGrid({
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 text-xs">
-        <LegendSwatch className="bg-emerald-500" label="Available" />
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-body">
+        <LegendSwatch className={SEAT.free} label="Available" />
         {bufferMinutes > 0 && (
           <LegendSwatch
-            className="bg-turnaround"
+            className={SEAT.turnaround}
             label={`Turnaround — within ${describeBuffer(bufferMinutes)} of another stay, yours to override`}
           />
         )}
         <LegendSwatch
-          className="bg-amber-400"
+          className={SEAT.soft}
           label={`Changeover — overlaps by up to ${TURNOVER_GRACE_HOURS}h, yours to override`}
         />
-        <LegendSwatch className="bg-red-500" label="Already allotted — cannot be picked" />
-        <LegendSwatch className="bg-blue-500" label="Selected for this booking" />
+        <LegendSwatch className={SEAT.hard} label="Already allotted — cannot be picked" />
+        <LegendSwatch className={SEAT.selected} label="Selected for this booking" />
         {loading && <span className="text-muted-foreground">Loading occupancy…</span>}
       </div>
 
@@ -252,8 +252,8 @@ export function RoomGrid({
         />
       )}
 
-      <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
-        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-4 rounded-lg border border-border bg-band/60 p-4">
+        <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4 [&>div]:border-l-2 [&>div]:border-border-strong [&>div]:pl-3">
           <SummaryItem
             label="Rooms selected"
             value={`${selected.length} of ${booking.rooms_requested} requested`}
@@ -291,7 +291,7 @@ export function RoomGrid({
             so an allocation that ignored the cards would put a three-guest
             party in a single room and leave the desk to discover it. */}
         {booking.rooms.length > 0 && (
-          <ul className="space-y-1 border-t pt-3 text-sm">
+          <ul className="space-y-1 border-t border-border pt-3 text-sm">
             {booking.rooms.map((card, i) => {
               const room = selectedRooms[i];
               const problem = room
@@ -329,7 +329,7 @@ export function RoomGrid({
             yellow tile — so it is spelled out, with the rooms named, before
             the button that records it against the booking. */}
         {overridden.length > 0 && (
-          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+          <div className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
             <p className="font-medium">
               Accepting a changeover on{" "}
               {overridden
@@ -378,11 +378,11 @@ function SummaryItem({
 }) {
   return (
     <div>
-      <dt className="text-xs tracking-wide text-muted-foreground uppercase">{label}</dt>
+      <dt className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{label}</dt>
       <dd
         className={cn(
-          "font-medium",
-          attention && "text-amber-700 dark:text-amber-400"
+          "mt-0.5 font-heading text-[1.0625rem] font-semibold text-ink tabular-nums",
+          attention && "text-[#8a4b00]"
         )}
       >
         {value}
@@ -415,11 +415,11 @@ function RoomSection({
   if (rooms.length === 0) return null;
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-        <p className="text-sm font-medium">{title}</p>
+      <div className="mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-border pb-2">
+        <p className="font-heading text-base font-semibold text-ink">{title}</p>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
-      <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 md:grid-cols-8">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2">
         {rooms.map((room) => {
           const conflict = conflicts[room.id] ?? "free";
           const isOccupied = conflict === "hard";
@@ -443,18 +443,16 @@ function RoomSection({
                       : `${room.room_number} — ${ROOM_TYPE_LABELS[room.room_type]}. ${describeCapacity(room.room_type, capacity)}`
               }
               className={cn(
-                "flex h-12 items-center justify-center rounded-md border text-xs font-semibold text-white transition-transform",
+                "flex h-14 cursor-pointer items-center justify-center rounded border text-sm font-semibold tabular-nums transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
                 isOccupied
-                  ? "cursor-not-allowed bg-red-500 opacity-90"
+                  ? cn(SEAT.hard, "cursor-not-allowed line-through decoration-white/60")
                   : isSelected
-                    ? isTurnover || isTurnaround
-                      ? "bg-blue-500 ring-2 ring-amber-400 hover:scale-105"
-                      : "bg-blue-500 ring-2 ring-blue-300 hover:scale-105"
+                    ? cn(SEAT.selected, (isTurnover || isTurnaround) && "outline-2 outline-offset-2 outline-amber-500")
                     : isTurnover
-                      ? "bg-amber-400 text-amber-950 hover:scale-105 hover:bg-amber-500"
+                      ? cn(SEAT.soft, "hover:bg-amber-400")
                       : isTurnaround
-                        ? "bg-turnaround text-slate-900 hover:scale-105"
-                        : "bg-emerald-500 hover:scale-105 hover:bg-emerald-600"
+                        ? cn(SEAT.turnaround, "hover:border-ink")
+                        : cn(SEAT.free, "hover:bg-occupy hover:text-white")
               )}
             >
               <span className="flex flex-col items-center leading-tight">
@@ -473,10 +471,25 @@ function RoomSection({
   );
 }
 
+/**
+ * The seat colours (30 Sep 2026), shared by the tiles and the legend: a free
+ * room is a pale green tile with a green edge (so its number reads at 9:1
+ * rather than white on bright green), a taken one solid red and struck
+ * through, the picked ones solid blue, a changeover amber and a turnaround
+ * hatched — so the states differ by more than colour.
+ */
+const SEAT = {
+  free: "border-occupy bg-[#e6f2ec] text-[#00391e]",
+  hard: "border-[#a4201a] bg-[#b42318] text-white",
+  selected: "border-[#123f7a] bg-[#1d4ed8] text-white",
+  soft: "border-amber-600 bg-amber-300 text-amber-950",
+  turnaround: "border-slate-400 bg-turnaround text-slate-900",
+} as const;
+
 function LegendSwatch({ className, label }: { className: string; label: string }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className={cn("size-3 rounded-sm", className)} />
+      <span className={cn("size-3.5 shrink-0 rounded-xs border", className)} />
       {label}
     </span>
   );

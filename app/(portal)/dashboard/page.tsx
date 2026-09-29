@@ -66,7 +66,7 @@ export default async function DashboardPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader title="My Bookings">
         Track your guest house requests through the approval pipeline.
       </PageHeader>
@@ -74,7 +74,7 @@ export default async function DashboardPage() {
           came to this page to book, and small outlined buttons at the far
           end of the title were being missed. */}
       {(booksForSelf || clubs.length > 0) && (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-3">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-4">
           {booksForSelf && (
             <BookingDoor
               href="/book"
@@ -112,7 +112,7 @@ export default async function DashboardPage() {
       )}
       {/* A club's account follows its bookings but does not raise them. */}
       {clubAccount && (
-        <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+        <p className="border-l-4 border-vermilion bg-band/60 px-4 py-3 text-[15px] text-ink">
           {clubBookingNotice(await facultyInChargeForClub(user))}
         </p>
       )}
@@ -122,7 +122,7 @@ export default async function DashboardPage() {
       {/* The way out when the form will not do what the requester needs — a
           stay over the 14-night cap, an exception, a booking taken at the
           desk. Values live in `lib/policy.ts`. */}
-      <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+      <p className="border-l-4 border-border-strong bg-band/60 px-4 py-3 text-sm text-body">
         {MANAGER_HELP_LINE}
       </p>
     </div>
@@ -132,10 +132,16 @@ export default async function DashboardPage() {
 const DOOR_TONES = {
   brand: "bg-vermilion-deep text-white hover:bg-vermilion-hover",
   ink: "bg-ink text-white hover:bg-ink-soft",
-  outline: "border border-ink bg-white text-ink hover:bg-ink hover:text-white",
+  outline: "border border-ink bg-white text-ink hover:bg-band",
 } as const;
 
-/** A large, unmissable way into the booking form. */
+/**
+ * A large, unmissable way into the booking form (30 Sep 2026): a solid
+ * tile — vermilion for a room, ink for meals — with the icon in a hairline
+ * square, the title in the serif at display size, one line on what it
+ * covers, and an arrow that moves on hover. Small outlined buttons at the
+ * end of the title were being missed; these are the page's first thing.
+ */
 function BookingDoor({
   href,
   icon: Icon,
@@ -149,31 +155,38 @@ function BookingDoor({
   title: string;
   detail: string;
 }) {
+  const solid = tone !== "outline";
   return (
     <Link
       href={href}
       className={cn(
-        "group flex items-center gap-4 rounded-[4px] px-5 py-[18px] no-underline transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
+        "group flex min-h-[148px] flex-col justify-between gap-6 rounded-lg p-6 no-underline transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
         DOOR_TONES[tone]
       )}
     >
-      <span
-        aria-hidden
-        className={cn(
-          "flex size-12 shrink-0 items-center justify-center rounded-[3px]",
-          tone === "outline" ? "bg-band text-ink group-hover:bg-white/10 group-hover:text-white" : "bg-white/15"
-        )}
-      >
-        <Icon className="size-6" strokeWidth={1.75} />
+      <span className="flex items-start justify-between gap-4">
+        <span
+          aria-hidden
+          className={cn(
+            "flex size-11 shrink-0 items-center justify-center rounded-md border",
+            solid ? "border-white/35" : "border-border-strong bg-band"
+          )}
+        >
+          <Icon className="size-[22px]" strokeWidth={1.6} />
+        </span>
+        <ArrowRight
+          aria-hidden
+          className="mt-1 size-5 shrink-0 transition-transform duration-200 motion-safe:group-hover:translate-x-1"
+        />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-heading text-[21px] leading-tight font-semibold">{title}</span>
-        <span className="mt-1 block text-[14px] leading-snug">{detail}</span>
+      <span className="min-w-0">
+        <span className="block font-heading text-[clamp(22px,2.4vw,26px)] leading-tight font-semibold">
+          {title}
+        </span>
+        <span className={cn("mt-1.5 block text-[14.5px] leading-snug", solid ? "text-white/85" : "text-body")}>
+          {detail}
+        </span>
       </span>
-      <ArrowRight
-        aria-hidden
-        className="size-5 shrink-0 transition-transform duration-200 motion-safe:group-hover:translate-x-1"
-      />
     </Link>
   );
 }

@@ -7,10 +7,11 @@ import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { getRules } from "@/lib/settings-server";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
-import { cn } from "@/lib/utils";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
 import { awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
 import { PageHeader } from "@/components/page-header";
+import { LinkTabs } from "@/components/link-tabs";
+import { EmptyState } from "@/components/section-heading";
 
 /** How far back the desk's "checked out, not yet settled" list reaches. */
 
@@ -28,9 +29,9 @@ export default async function ManagerPage({
   const guestHouses = await store.listGuestHouses();
   if (guestHouses.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+      <EmptyState>
         No guest houses configured yet — ask a developer to add one in the admin console.
-      </p>
+      </EmptyState>
     );
   }
   const { gh } = await searchParams;
@@ -139,23 +140,15 @@ export default async function ManagerPage({
       </PageHeader>
 
       {/* Separate queue per guest house */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
-        {guestHouses.map((g) => (
-          <Link
-            key={g.id}
-            href={`/manager?gh=${g.name.toLowerCase()}`}
-            className={cn(
-              "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
-              g.id === current.id
-                ? "bg-background shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {g.name}
-            <span className="ml-1.5 text-xs text-muted-foreground">({g.total_rooms} rooms)</span>
-          </Link>
-        ))}
-      </div>
+      <LinkTabs
+        label="Guest houses"
+        items={guestHouses.map((g) => ({
+          href: `/manager?gh=${g.name.toLowerCase()}`,
+          label: g.name,
+          detail: `${g.total_rooms} rooms`,
+          active: g.id === current.id,
+        }))}
+      />
 
       <ManagerQueue
         pending={pending}

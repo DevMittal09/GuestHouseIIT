@@ -41,6 +41,49 @@
   background-color: #7c3aed;
 }
 
+/*
+ * Status tags (30 Sep 2026 revamp), after the GOV.UK Design System's tag
+ * palette: a pale fill with a dark text of the same hue, every pair above
+ * 7:1, square-cornered and sentence case. One utility per hue so the status
+ * badge, the lapsed marker and the room list all speak the same colours.
+ */
+@utility tag-grey {
+  background-color: #e5e6e7;
+  color: #282d30;
+}
+@utility tag-green {
+  background-color: #cce2d8;
+  color: #005a30;
+}
+@utility tag-turquoise {
+  background-color: #bfe3e0;
+  color: #10403c;
+}
+@utility tag-blue {
+  background-color: #d2e2f1;
+  color: #0c2d4a;
+}
+@utility tag-purple {
+  background-color: #dbd5e9;
+  color: #3d2375;
+}
+@utility tag-pink {
+  background-color: #efcfe1;
+  color: #6b1c40;
+}
+@utility tag-red {
+  background-color: #f4cdc6;
+  color: #2a0b06;
+}
+@utility tag-orange {
+  background-color: #fcd6c3;
+  color: #6e3619;
+}
+@utility tag-yellow {
+  background-color: #fff7bf;
+  color: #594d00;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -90,13 +133,25 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /*
+   * The corner scale (30 Sep 2026 revamp), fixed rather than derived so the
+   * names mean what the brief says: `rounded` 4px for inputs, `rounded-md`
+   * 6px for buttons, `rounded-lg` 8px for cards, dialogs and photographs.
+   * Everything above `lg` is capped at 8px, so no class can turn a control
+   * into a pill.
+   */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+  --radius-2xl: 8px;
+  --radius-3xl: 8px;
+  --radius-4xl: 8px;
+  --color-occupy: var(--occupy);
+  --color-occupy-hover: var(--occupy-hover);
+  --color-vacate: var(--vacate);
+  --color-vacate-hover: var(--vacate-hover);
 }
 
 /*
@@ -118,9 +173,11 @@
  *   Reject, and a vermilion primary read as a second red. The vermilion call to
  *   action is the explicit `Button variant="brand"`.
  *
- * Corners stay near-square (4px) and nothing carries a shadow: structure comes
- * from hairline rules and contrast, which is what an institutional page
- * looks like and a template does not.
+ * Corners stay small — 4px on inputs, 6px on buttons, 8px on cards and
+ * photographs, never a pill — and nothing carries a shadow, a gradient or a
+ * frosted glass: structure comes from hairline rules (`--border`,
+ * `--border-strong`), the warm `--band` tint and contrast, which is what an
+ * institutional page looks like and a template does not (30 Sep 2026).
  */
 :root {
   /* Brand tokens, exposed as `bg-ink`, `text-vermilion`, `bg-band`, … */
@@ -138,6 +195,15 @@
   --border-strong: #cec8bf;
   --on-ink: #d6d1ca;
   --on-ink-muted: #a39d95;
+  /*
+   * The desk's two lifecycle buttons, clicked all day and never to be
+   * confused: check-in is a deep green, check-out a deep indigo. Both carry
+   * white text above 6:1, and each button also has its own icon.
+   */
+  --occupy: #00703c;
+  --occupy-hover: #005a30;
+  --vacate: #3730a3;
+  --vacate-hover: #28237a;
 
   --background: #ffffff;
   --foreground: #1a1a1a;
@@ -229,6 +295,10 @@
   h3,
   h4 {
     @apply font-heading;
+    /* Source Serif 4 is loaded with its optical-size axis: display sizes
+       get the high-contrast display cut, small headings the sturdier text
+       cut, automatically. */
+    font-optical-sizing: auto;
     text-wrap: pretty;
   }
   /*
@@ -241,4 +311,17 @@
     outline-offset: 2px;
     border-radius: 2px;
   }
+  ::selection {
+    background-color: var(--vermilion-soft);
+    color: var(--ink);
+  }
+}
+
+/*
+ * Toasts float over the page, but still carry no shadow: a hairline and the
+ * page's own corner instead, like every other surface.
+ */
+[data-sonner-toaster] [data-sonner-toast] {
+  box-shadow: none;
+  border-radius: 6px;
 }

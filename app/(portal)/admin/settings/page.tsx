@@ -16,7 +16,7 @@ export default async function AdminSettingsPage() {
   const result = await getSettingsConsoleData();
   if (!result.ok) {
     return (
-      <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+      <div className="border-l-4 border-saffron bg-notice p-4 text-sm text-ink">
         <p className="font-medium">Settings are not available yet</p>
         <p className="mt-1">{result.error}</p>
       </div>

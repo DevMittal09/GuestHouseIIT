@@ -41,7 +41,7 @@ export function MyData({ openRequest }: { openRequest: { created_at: string } | 
     });
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm text-muted-foreground">
       <span>
         Your details are held as set out in the{" "}
         <Link href="/privacy" className="underline underline-offset-4">

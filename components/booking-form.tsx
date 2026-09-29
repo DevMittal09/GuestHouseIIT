@@ -943,7 +943,7 @@ export function BookingForm({
               <CardDescription>{describeBookingType(config.role, bookingTypeOptions[0])}</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium">
+              <p className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm font-medium">
                 {BOOKING_TYPE_LABELS[bookingTypeOptions[0]]}
               </p>
             </CardContent>
@@ -1015,7 +1015,7 @@ export function BookingForm({
         </CardHeader>
         <CardContent className="space-y-4">
           {fixedHead ? (
-            <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+            <p className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm">
               <span className="font-medium">{DEBIT_HEAD_LABELS[fixedHead]}</span>
               {/* There is no checkout on a dining booking — nobody checks in —
                   so the line about settling an invoice at the desk was
@@ -1257,7 +1257,7 @@ export function BookingForm({
             )}
             {forAlumnus && <p className="text-xs text-muted-foreground">{ALUMNI_GUEST_HOUSE_NOTE}</p>}
             {overridingHouse && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-xs text-ink">
                 This is an exception to the alumni policy. It will be allowed, and recorded in the
                 booking&apos;s log as an override by you.
               </p>
@@ -1279,7 +1279,7 @@ export function BookingForm({
             <FieldError message={roomCountError ?? undefined} />
             <FieldError message={err("rooms")} />
             {config.banner_text && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
                 {config.banner_text}
               </p>
             )}
@@ -1365,7 +1365,7 @@ export function BookingForm({
           proves nothing a notice does not, and the office asked for it to go. */}
       <Card className="border-amber-300 dark:border-amber-900">
         <CardContent className="space-y-3 pt-6">
-          <div className="flex gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+          <div className="flex gap-3 border-l-4 border-saffron bg-notice p-4 text-ink">
             <TriangleAlertIcon className="mt-0.5 size-5 shrink-0" aria-hidden />
             <div>
               <p className="font-semibold">{PETS_POLICY_NOTICE}</p>
@@ -1506,7 +1506,7 @@ export function BookingForm({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            <div className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{totals}</span> on this request.
             </div>
 
@@ -1523,7 +1523,7 @@ export function BookingForm({
             )}
 
             {uniqueHint && (
-              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              <p className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm text-muted-foreground">
                 {uniqueHint}
               </p>
             )}
@@ -1697,20 +1697,20 @@ export function BookingForm({
         </CardContent>
       </Card>
 
-      <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+      <p className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm text-muted-foreground">
         {MANAGER_HELP_LINE}
       </p>
 
-      <label className="flex items-start gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+      <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border-strong bg-background px-4 py-3.5 text-sm leading-relaxed">
         <input
           type="checkbox"
-          className="mt-0.5 size-4 shrink-0 accent-primary"
+          className="mt-0.5 size-[18px] shrink-0 cursor-pointer accent-vermilion-deep"
           {...register("privacy_consent")}
         />
         <span>
           I have read how these details are used, who can see them and how long they are kept, and I
           agree to the guest house holding them.{" "}
-          <a href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4">
+          <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-ink underline decoration-vermilion decoration-2 underline-offset-4">
             Privacy notice
           </a>
           .
@@ -1718,8 +1718,8 @@ export function BookingForm({
         </span>
       </label>
 
-      <div className="flex justify-end gap-3">
-        <Button type="button" variant="outline" onClick={() => router.push("/dashboard")}>
+      <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-6">
+        <Button type="button" variant="outline" size="lg" onClick={() => router.push("/dashboard")}>
           Cancel
         </Button>
         <Button type="submit" variant="brand" size="lg" className="px-5" disabled={isPending}>
@@ -1843,10 +1843,10 @@ function RoomCard({
   const infantBlocked = addInfantBlockedReason(infants, guests, capacity);
 
   return (
-    <fieldset className="rounded-lg border p-4">
-      <legend className="px-1 text-sm font-semibold">Room {roomIndex + 1}</legend>
+    <fieldset className="rounded-lg border border-border-strong px-4 pt-2 pb-4 sm:px-5">
+      <legend className="px-1.5 font-heading text-[1.0625rem] font-semibold text-ink">Room {roomIndex + 1}</legend>
 
-      <p className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+      <p className="mb-3 border-l-4 border-border-strong bg-band/60 px-3 py-2 text-xs text-muted-foreground">
         {roomOccupancyNotice(capacity)}
       </p>
 
@@ -2073,12 +2073,12 @@ function GuestRow({
   const relationshipField = register(`${base}.relationship`);
 
   return (
-    <div className={cn("rounded-md border p-3", infantCard ? "border-primary/30 bg-primary/5" : "bg-muted/20")}>
+    <div className={cn("rounded-md border p-4", infantCard ? "border-saffron/60 bg-notice/60" : "border-border bg-band/40")}>
       <div className="mb-2 flex items-center justify-between">
         <p className="text-sm font-medium">
           {infantCard ? `Infant ${number}` : `Guest ${number}`}
           {isInfant && (
-            <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-normal text-primary">
+            <span className="tag-yellow ml-2 rounded-xs px-1.5 py-px text-xs font-semibold">
               {infantCard ? `Below ${INFANT_AGE_LIMIT} · shares a guardian's bed · no ID needed` : "Infant — shares a bed, no ID needed"}
             </span>
           )}
@@ -2393,7 +2393,7 @@ function FieldError({ message }: { message?: string }) {
 
 function EmptyNote({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+    <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
       {children}
     </p>
   );

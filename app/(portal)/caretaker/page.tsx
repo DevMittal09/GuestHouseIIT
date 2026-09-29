@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
-import { cn } from "@/lib/utils";
+import { LinkTabs } from "@/components/link-tabs";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
 import { awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
 import { PageHeader } from "@/components/page-header";
@@ -24,7 +24,7 @@ export default async function CaretakerPage({
   const guestHouses = await store.listGuestHouses();
   if (guestHouses.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
+      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
         No guest houses configured yet — ask a developer to add one in the admin console.
       </p>
     );
@@ -86,23 +86,15 @@ export default async function CaretakerPage({
       </PageHeader>
 
       {guestHouses.length > 1 && (
-        <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
-          {guestHouses.map((g) => (
-            <Link
-              key={g.id}
-              href={`/caretaker?gh=${g.name.toLowerCase()}`}
-              className={cn(
-                "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
-                g.id === current.id
-                  ? "bg-background shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {g.name}
-              <span className="ml-1.5 text-xs text-muted-foreground">({g.total_rooms} rooms)</span>
-            </Link>
-          ))}
-        </div>
+        <LinkTabs
+          label="Guest houses"
+          items={guestHouses.map((g) => ({
+            href: `/caretaker?gh=${g.name.toLowerCase()}`,
+            label: g.name,
+            detail: `${g.total_rooms} rooms`,
+            active: g.id === current.id,
+          }))}
+        />
       )}
 
       <CaretakerConsole

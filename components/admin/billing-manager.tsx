@@ -96,7 +96,7 @@ function TariffsSection({
       {!hasExtraBed && (
         <p
           role="alert"
-          className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100"
+          className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink"
         >
           ⚠ No extra-bed rate is set. The tariff sheet does not give one, so a stay with an extra bed
           cannot be invoiced until you add it below.

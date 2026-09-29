@@ -17,10 +17,12 @@ import { mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser } from "@/lib/club-booking-server";
 
 /**
- * The signed-in shell, in the guest house website's style: a white header with
- * the institute logo and who is signed in, then the charcoal nav bar (the
- * colour of iitpkd.ac.in's own menu) — sticky, so the console tabs stay in
- * reach on long queues — with a vermilion bar under the current section.
+ * The signed-in shell, in the guest house website's style: a vermilion rule
+ * across the top, a white header with the lockup and who is signed in, then
+ * the charcoal nav bar (the colour of iitpkd.ac.in's own menu) — sticky, so
+ * the console tabs stay in reach on long queues — with a vermilion bar under
+ * the current section. No shadows anywhere: hairlines and the ink bar do the
+ * separating (30 Sep 2026).
  */
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -66,15 +68,17 @@ export default async function PortalLayout({ children }: { children: React.React
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border bg-white">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center gap-x-5 gap-y-3 px-[clamp(14px,4vw,24px)] py-3">
+      <header className="border-t-[3px] border-b border-t-vermilion border-b-border bg-white">
+        <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center gap-x-6 gap-y-3 px-[clamp(14px,4vw,24px)] py-3.5">
           <BrandBlock tagline="IIT Palakkad · Booking portal" href={homeForRole(user.role)} compact />
-          <div className="ml-auto flex flex-wrap items-center gap-3">
-            <div className="hidden text-right sm:block">
-              <p className="text-sm leading-tight font-semibold text-foreground">{user.full_name}</p>
-              <p className="text-xs leading-tight text-muted-foreground">{user.email}</p>
+          <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="hidden border-r border-border pr-4 text-right sm:block">
+              <p className="text-sm leading-tight font-semibold text-ink">{user.full_name}</p>
+              <p className="mt-0.5 text-xs leading-tight text-muted-foreground">{user.email}</p>
             </div>
-            <Badge variant="secondary">{ROLE_LABELS[user.role]}</Badge>
+            <Badge variant="secondary" className="border border-border-strong">
+              {ROLE_LABELS[user.role]}
+            </Badge>
             <form action={logout}>
               <Button type="submit" variant="outline" size="sm">
                 Switch user
@@ -84,7 +88,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
       </header>
       <NavBar items={nav} label="Portal" exact={[]} className="sticky top-0 z-40" />
-      <main className="mx-auto w-full max-w-[1200px] flex-1 px-[clamp(14px,4vw,24px)] py-8">
+      <main className="mx-auto w-full max-w-[1200px] flex-1 px-[clamp(14px,4vw,24px)] pt-9 pb-16">
         {children}
       </main>
       <footer className="bg-ink text-[13.5px] text-on-ink-muted">

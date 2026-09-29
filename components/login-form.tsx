@@ -7,7 +7,7 @@ import { signInWithLdap } from "@/app/actions/auth";
 
 const LABEL = "mb-[7px] block text-[13.5px] font-semibold text-ink";
 const INPUT =
-  "block w-full rounded-[2px] border border-border-strong bg-white px-3.5 py-[13px] text-[15.5px] text-ink placeholder:text-[#8f8880] focus-visible:border-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-vermilion aria-invalid:border-destructive";
+  "block w-full rounded-[4px] border border-border-strong bg-white px-3.5 py-[13px] text-[15.5px] text-ink placeholder:text-[#8f8880] focus-visible:border-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-vermilion aria-invalid:border-destructive";
 
 /** The Google "G", as Google's sign-in button guidelines draw it. */
 function GoogleMark() {
