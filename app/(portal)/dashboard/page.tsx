@@ -4,6 +4,7 @@ import { ArrowRight, BedDouble, UsersRound, UtensilsCrossed, type LucideIcon } f
 import { MyBookings, type MyInvoice } from "@/components/my-bookings";
 import { MyData } from "@/components/my-data";
 import { PageHeader } from "@/components/page-header";
+import { SectionHeading } from "@/components/section-heading";
 import { getCurrentUser } from "@/lib/auth";
 import { serviceTypesFor } from "@/lib/booking-types";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
@@ -67,7 +68,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="My Bookings">
+      <PageHeader caption={user.full_name} title="My Bookings">
         Track your guest house requests through the approval pipeline.
       </PageHeader>
       {/* The two ways in, as large tiles rather than header buttons: people
@@ -116,7 +117,14 @@ export default async function DashboardPage() {
           {clubBookingNotice(await facultyInChargeForClub(user))}
         </p>
       )}
-      <MyBookings bookings={bookings} invoices={invoices} />
+      <section>
+        <SectionHeading
+          title="Your requests"
+          count={bookings.length}
+          description="Newest first. Open one for its full details, the approval trail, and to ask for a cancellation or a later check-out."
+        />
+        <MyBookings bookings={bookings} invoices={invoices} />
+      </section>
       {/* DPDP (Phase 8): take a copy, or ask the office to erase it. */}
       <MyData openRequest={openPrivacyRequest} />
       {/* The way out when the form will not do what the requester needs — a

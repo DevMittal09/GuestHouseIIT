@@ -169,6 +169,10 @@ export const STUDENT_RELATIONSHIPS = [
   "Grandmother",
   "Grandfather",
   "Siblings",
+  // The student as one of the guests on their own request (30 Sep 2026) —
+  // "Fill in from saved details" offers them as "Yourself". Neither a parent
+  // nor a dependent, so it neither needs a parent nor lets a sibling in.
+  "Self",
 ] as const;
 
 export type Profile = {

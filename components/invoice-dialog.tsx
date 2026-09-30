@@ -466,8 +466,10 @@ function ExtraChargesEditor({
 }) {
   const dining = panel.kind === "dining";
   const sectionLabels: [ExtraChargeSection, string][] = [
+    // The letters of the subtotals as the invoice prints them (version 3):
+    // A stay's dining subtotal is (C), after the rooms' (A) and their GST (B).
     ...(dining ? [] : ([["room", `Room charges (A) — GST ${panel.gstRoomPercent}%`]] as [ExtraChargeSection, string][])),
-    ["dining", `Dining charges${dining ? "" : " (B)"} — GST ${panel.gstMealPercent}%`],
+    ["dining", `Dining charges (${dining ? "A" : "C"}) — GST ${panel.gstMealPercent}%`],
     ["other", "Other — no GST (damage, loss)"],
   ];
   return (

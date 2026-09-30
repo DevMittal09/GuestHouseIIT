@@ -113,6 +113,7 @@ export default async function ManagerPage({
   return (
     <div className="space-y-6">
       <PageHeader
+        caption={`${current.name} · Guest house desk`}
         title="Guest House Manager Console"
         actions={
           <div className="flex flex-wrap gap-2">

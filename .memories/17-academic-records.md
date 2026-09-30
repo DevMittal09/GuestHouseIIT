@@ -80,7 +80,9 @@ Rules worth keeping:
   and trimmed before the lookup.
 - **The lookup never throws.** `academicRecordFor` returns a status:
   `found`, `not_found`, `unavailable` or `not_applicable`. On anything except
-  `found`, the card shows the portal profile's fields and says why. A
+  `found`, the card shows the portal profile's fields and says why; on
+  `found` it has **no caption at all** (the supervisor had "From the
+  institute's academic database (Student)." removed, 30 Sep 2026). A
   database outage must never stop anyone from booking. Failures are logged
   with the kind only, never the email.
 - **Answers are cached in-process.** Records and "no record" are kept for
@@ -135,6 +137,10 @@ Rules worth keeping:
   "Fill in from saved details" offers them. The names go only to the
   student's own browser, as the card above already does. The other kinds of
   record describe the requester, not a family, so they add nobody.
+- **The record's own name fills in "Yourself"** (30 Sep 2026). A student or
+  employee is offered themselves first in Fill in from saved details
+  (`knownGuestSelf`), relationship Self, with the name from a student or
+  employee record, else from the portal profile.
 - **A dashed "Demo build" note** appears under the card while a dummy record
   is shown (`isMockAcademicSource()`), as the sign-in page does for the dummy
   LDAP accounts.

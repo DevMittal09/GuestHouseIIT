@@ -47,7 +47,8 @@ from the units, not the role (`isHodForAny`, `approvesClubsFor`,
   fills known guests in (25 Sep 2026): `knownGuests` from `/book` —
   `knownGuestsFor()` in `lib/known-guests-server.ts` over the academic record
   and the requester's own bookings (`lib/known-guests.ts`) — on choosing a
-  one-of-each relationship, and from **Fill in from saved details**.
+  one-of-each relationship, and from **Fill in from saved details**, which
+  starts with the requester ("Yourself", `knownGuestSelf`, 30 Sep 2026).
 - **Validation:** `lib/booking-schema.ts` builds a zod schema *from the config*,
   used on both sides. Custom-field values are validated by
   `validateCustomValue()` in `lib/form-config.ts`.
@@ -248,8 +249,8 @@ everyone. `app/(portal)/availability/page.tsx` (server, lists guest houses) +
 | --- | --- |
 | Page shell + guest house list | `app/(portal)/availability/page.tsx` |
 | View switch, date navigation, summary, room list | `components/availability-grid.tsx` |
-| The charts — `OccupancyChart` (day), `RangeOccupancyChart` (week / month) | `components/occupancy-chart.tsx` |
-| Data fetch, window cap, identity stripping | `app/actions/availability.ts` (`getRoomAvailability`) |
+| The charts — `OccupancyChart` (day), `RangeOccupancyChart` (week / month), each with a `simple` mode, and the shared `AvailabilityLegend` | `components/occupancy-chart.tsx` |
+| Data fetch, window cap, identity stripping, who sees the detail (`detailed`) | `app/actions/availability.ts` (`getRoomAvailability`) |
 | Ranges, bucketing, badges, labels | `lib/availability.ts` |
 | Calendar-date arithmetic and labels | `lib/tz.ts` (`parseDateValue`, `addDaysToDateValue`, `formatDateValue`) |
 | Store query | `listRoomOccupancy` in `lib/store/mock.ts` + `lib/store/supabase.ts` |
@@ -565,7 +566,8 @@ Mail Outbox console.
 Moved to [15-billing-and-invoices.md](15-billing-and-invoices.md): tariffs,
 building and issuing an invoice, the PDF, payments, Accounts mail, dining
 bookings and the kitchen's day. Since 25 Sep 2026: `invoiceTable()` (the
-table the PDF and the preview both draw, version 1 and 2), `parseExtraCharges`
+table the PDF and the preview both draw, versions 1, 2 and 3 — the labels in
+`totalLabels`), `parseExtraCharges`
 and `extra_lines` (additional charges), `priceInvoiceDraft` /
 `saveInvoiceDraftAction` in `app/actions/invoices.ts` (live repricing and the
 draft), the `ExtraChargesEditor` in `components/invoice-dialog.tsx`.

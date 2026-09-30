@@ -1,14 +1,20 @@
 import "server-only";
 import { academicRecordFor } from "./academic";
 import { canBookOnBehalf } from "./access";
-import { knownGuestsFromBookings, knownGuestsFromRecord, mergeKnownGuests, type KnownGuest } from "./known-guests";
+import {
+  knownGuestSelf,
+  knownGuestsFromBookings,
+  knownGuestsFromRecord,
+  mergeKnownGuests,
+  type KnownGuest,
+} from "./known-guests";
 import { getStore } from "./store";
 import type { Profile } from "./types";
 
 /**
- * Who New Booking can fill in for this requester (`lib/known-guests.ts`): the
- * family on their academic record, then the people on their own earlier
- * bookings. Never throws — like the details card, a slow or failing lookup
+ * Who New Booking can fill in for this requester (`lib/known-guests.ts`):
+ * themselves, the family on their academic record, then the people on their
+ * own earlier bookings. Never throws — like the details card, a slow or failing lookup
  * leaves the form as it was, with every box to type.
  *
  * Nobody for the desk: the manager's "own" bookings are other people's
@@ -21,8 +27,10 @@ export async function knownGuestsFor(requester: Profile): Promise<KnownGuest[]> 
       academicRecordFor(requester),
       getStore().listBookingsForUser(requester.id),
     ]);
+    const record = lookup.status === "found" ? lookup.record : null;
+    const self = knownGuestSelf(requester, record);
     return mergeKnownGuests(
-      knownGuestsFromRecord(lookup.status === "found" ? lookup.record : null),
+      [...(self ? [self] : []), ...knownGuestsFromRecord(record)],
       knownGuestsFromBookings(bookings, requester.id)
     );
   } catch (e) {

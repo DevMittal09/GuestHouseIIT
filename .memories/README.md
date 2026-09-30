@@ -52,18 +52,19 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest ·
 Playwright. **Node 20** via nvm (the machine default is 18).
 
-**Status, 25 Sep 2026.** Feature-complete for every workflow specified; taken
+**Status, 30 Sep 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme (Settings, mail
 addressing, turnaround buffer, HOD approval and debitable heads, invoices,
-dining, operational states, security, performance and tests, documentation)
-and five rounds of the office's corrections. **Not deployed for real use.**
+dining, operational states, security, performance and tests, documentation),
+five rounds of the office's corrections, a UI revamp and the supervisor's
+review of the live site (30 Sep). **Not deployed for real use.**
 Runs locally on the mock store, and against one hosted Supabase project with
 demo data. Gates before real bookings: connect the institute LDAP, close Mock
 Authentication (configure Google or `MOCK_LOGIN=false`), production secrets,
 the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 
 **Numbers.** 26 migrations · 12 roles (10 active) · 18 demo personas · 6 demo
-bookings · 305 unit tests · 26 end-to-end journeys · 13 console sections.
+bookings · 312 unit tests · 26 end-to-end journeys · 13 console sections.
 
 ---
 
@@ -74,7 +75,7 @@ bookings · 305 unit tests · 26 end-to-end journeys · 13 console sections.
 | File | Holds |
 | --- | --- |
 | [01-background.md](01-background.md) | The problem, the people, and **every requirement list** the institute sent, with the status of each item |
-| [02-timeline.md](02-timeline.md) | **The whole build, session by session**, 19 Aug – 24 Sep 2026 |
+| [02-timeline.md](02-timeline.md) | **The whole build, session by session**, 19 Aug – 30 Sep 2026 |
 | [03-decisions.md](03-decisions.md) | The decision log — what was decided, why, what was rejected; reversed decisions carry a dated *Superseded* note |
 | [04-roadmap.md](04-roadmap.md) | **What is left**: deployment gates, loose ends, audit findings, asks of other people, next features |
 | [05-production-plan.md](05-production-plan.md) | The 2 Sep production plan — history now, mostly executed; kept for its reasoning |
@@ -143,8 +144,9 @@ people, at most 3 needing a bed, at most 3 infants** (under 5); meals only at a
 guest house that serves them, booked **before the previous meal finishes being
 served**. A **turnaround buffer** of 4 h separates stays. Guests the portal
 already knows (a student's parents on record, people from earlier bookings)
-are filled in; "Add infant" opens an infant card. Invoices charge **GST 18% on
-rooms, 5% on food**, each on its own subtotal. All times are
+are filled in, the requester too ("Yourself", 30 Sep); "Add infant" opens an
+infant card. Invoices charge **GST 18% on rooms, 5% on food**, each on its own
+subtotal, lettered up to **Grand Total (A+B+C+D)**. All times are
 **Asia/Kolkata**. Details: files 10–15.
 
 ## Where the rules live in code

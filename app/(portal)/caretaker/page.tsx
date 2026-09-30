@@ -70,6 +70,7 @@ export default async function CaretakerPage({
   return (
     <div className="space-y-6">
       <PageHeader
+        caption={`${current.name} · Front desk`}
         title="Guest House Reception"
         actions={
           // The kitchen's head count for the day, and the dining bookings to

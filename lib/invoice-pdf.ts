@@ -41,8 +41,9 @@ import { formatInstituteDate } from "./tz";
  * desk, downloaded from the dashboard and attached to the mail to Accounts.
  *
  * **The table is `invoiceTable()`**, the same description the desk's preview
- * draws, so version 1 snapshots reprint as issued and version 2 invoices carry
- * the revised template's per-section GST. A table the desk's additional
+ * draws, so every snapshot reprints with the labels of its version — version 1
+ * GST on the total, version 2 per-section GST, version 3 (30 Sep 2026) every
+ * figure lettered up to Grand Total (A+B+C+D). A table the desk's additional
  * charges make longer than the page continues on the next one; the bank
  * details are printed at the foot of every page.
  */

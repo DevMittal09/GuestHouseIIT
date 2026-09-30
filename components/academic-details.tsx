@@ -38,14 +38,18 @@ export function AcademicDetailsCard({
 
 async function Details({ user, title, raisedBy }: { user: Profile; title: string; raisedBy: Profile | null }) {
   const details = await academicDetailsFor(user, raisedBy);
+  const source = describeSource(user, details);
   return (
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardDescription>{describeSource(user, details)}</CardDescription>
+        {source && <CardDescription>{source}</CardDescription>}
       </CardHeader>
-      <CardContent className="space-y-4">
-        <dl className="grid gap-4 sm:grid-cols-2">
+      {/* A GOV.UK summary list: key and value on one ruled row where the
+          card is wide enough (a container query, so it works in the booking
+          page's side column and full width on /warden alike). */}
+      <CardContent className="@container space-y-4 pt-2">
+        <dl className="divide-y divide-border">
           {details.rows.map((row) => (
             <Field key={row.label} row={row} />
           ))}
@@ -62,11 +66,17 @@ async function Details({ user, title, raisedBy }: { user: Profile; title: string
   );
 }
 
-function describeSource(user: Profile, details: AcademicDetails): string {
+/**
+ * A line under the title only when the details are *not* the record: a
+ * record found needs no caption (the office asked for "From the institute's
+ * academic database (Student)" to go, 30 Sep 2026), but a fallback to the
+ * portal profile should still say so.
+ */
+function describeSource(user: Profile, details: AcademicDetails): string | null {
   const kind = details.kind ? ACADEMIC_KIND_LABELS[details.kind] : null;
   switch (details.status) {
     case "found":
-      return `From the institute's academic database (${kind}).`;
+      return null;
     case "not_found":
       return `The academic database has no ${kind} record for ${user.email}, so these are from your portal profile.`;
     case "unavailable":
@@ -78,10 +88,10 @@ function describeSource(user: Profile, details: AcademicDetails): string {
 
 function Field({ row }: { row: DetailRow }) {
   return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted-foreground uppercase tracking-wide">{row.label}</dt>
-      <dd className="font-medium break-words">
-        {row.value ?? <span className="font-normal text-muted-foreground">Not on record</span>}
+    <div className="grid min-w-0 gap-x-4 gap-y-0.5 py-2.5 @md:grid-cols-[minmax(8rem,34%)_1fr]">
+      <dt className="text-[13px] font-semibold text-muted-foreground">{row.label}</dt>
+      <dd className="break-words text-ink">
+        {row.value ?? <span className="text-muted-foreground">Not on record</span>}
       </dd>
     </div>
   );
@@ -89,9 +99,9 @@ function Field({ row }: { row: DetailRow }) {
 
 function CopyToField({ copyTo }: { copyTo: CopyTo }) {
   return (
-    <div className="min-w-0 border-t pt-4 sm:col-span-2">
-      <dt className="text-xs text-muted-foreground uppercase tracking-wide">Copy to</dt>
-      <dd className="font-medium break-words">
+    <div className="grid min-w-0 gap-x-4 gap-y-0.5 py-2.5 @md:grid-cols-[minmax(8rem,34%)_1fr]">
+      <dt className="text-[13px] font-semibold text-muted-foreground">Copy to</dt>
+      <dd className="break-words text-ink">
         {copyTo.entries.length === 0 ? (
           <span className="font-normal text-muted-foreground">{copyTo.emptyNote}</span>
         ) : (
@@ -118,7 +128,7 @@ function Pending({ title }: { title: string }) {
         <CardTitle>{title}</CardTitle>
         <CardDescription>Looking you up in the academic database…</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4 sm:grid-cols-2">
+      <CardContent className="grid gap-4">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="space-y-1.5">
             <div className="h-3 w-24 rounded-[2px] bg-muted motion-safe:animate-pulse" />

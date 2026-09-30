@@ -77,9 +77,13 @@ export function houseSummary(house: SiteGuestHouse): string {
 export type Amenity = { key: string; label: string };
 
 /**
- * The home page's amenities — short labels only, and always eight, so the
- * grid is two full rows of four: Dining where a guest house serves meals,
+ * The home page's amenities — short labels only, and always six, so the grid
+ * is two full rows of three: Dining where a guest house serves meals,
  * Reception otherwise.
+ *
+ * The meeting room and exercise room were taken off on 30 Sep 2026: they are
+ * shared facilities, not something each guest house or room has, and the
+ * office asked the site to promise less.
  * TODO(site): from the guest house page on iitpkd.ac.in; the office to
  * confirm they hold for every guest house.
  */
@@ -90,8 +94,6 @@ export function amenities(houses: SiteGuestHouse[]): Amenity[] {
     { key: "wifi", label: "Wi-Fi" },
     { key: "tv", label: "Television" },
     { key: "fridge", label: "Refrigerator" },
-    { key: "meeting", label: "Meeting room" },
-    { key: "gym", label: "Exercise room" },
     servingHouses(houses).length > 0
       ? { key: "dining", label: "Dining" }
       : { key: "reception", label: "Reception" },

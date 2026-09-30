@@ -53,6 +53,7 @@ export default async function ApprovalsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        caption="Approvals"
         title="Club Approvals"
         actions={
           clubs.length > 0 ? (

@@ -301,6 +301,26 @@ Asked by the owner as a written brief (presentation layer only). Reasoning in
 | GOV.UK-style tables, sharp borders, high-contrast status tags; Occupied / Vacated unmistakable | **Done** | `Table`, `StatusBadge`, `stays-table.tsx`, `checkouts-today.tsx`, `room-grid.tsx` |
 | Don't break the backend, the IST rules, the e2e selectors or the public-copy test | **Held** | No `lib/` / `app/actions/` change; lint, types, 305 unit tests, 26 journeys clean |
 
+## The supervisor's review — 30 Sep 2026
+
+Notes from the owner's supervisor on the live site
+(https://guest-house-iit.vercel.app/), relayed by the owner, who also said
+what three of them meant. Reasoning in [03-decisions.md](03-decisions.md)
+("30 Sep 2026 (afternoon)"); the working summary is
+[99-recent-changes.md](99-recent-changes.md).
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| Landing page: "First sentence ?" (the owner: promise less, keep it vague) | **Done** | "Bageshri and Hamsanandi provide accommodation on campus for guests of the institute." — no list of who stays — `app/(site)/page.tsx` |
+| "Meeting room and exercise room (common) ?" (the owner: remove both) | **Done** | Six amenities, a three-column grid — `lib/site-content.ts` |
+| "Take couple of photos — AM" | **Open — not code** | AM to photograph the guest houses; [04-roadmap.md](04-roadmap.md) |
+| Booking page: remove "From the institute's academic database (Student)." | **Done** | No caption when the record is found; the fallbacks keep theirs — `components/academic-details.tsx` |
+| Personal Funds note: "Invoice will be generated and can be settled at the time of checkout. Multiple payment options are available at the guest house." | **Done** | `PAY_AT_CHECKOUT_NOTE` (`lib/debit-heads.ts`) |
+| Availability: don't show requesters the whole legend; overlap need not be shown | **Done** | Requesters see Booked / Free / Today; the desk keeps turnaround, overlap and maintenance — `getRoomAvailability().detailed`, `simple` charts, `AvailabilityLegend` |
+| "Times are institute local time…" → "Times are IST…" | **Done** | Booking form's panel and `/availability` |
+| "Fill in from saved details — let the student write their name as well" (the owner: a student can book for themselves and fill in their own details) | **Done** | "Yourself — <name>" first in the list for students and employees; **Self** on the student relationship list, one per request — `lib/known-guests.ts` |
+| Invoice: Room Charges Subtotal (A), GST @ 18% on A (B), Dining Charges Subtotal (C), GST @ 5% on C (D), Grand total (A+B+C+D); the .docx already updated | **Done** | Invoice `version: 3` (`invoiceTable`, `lib/invoice.ts`), drawn by `lib/invoice-pdf.ts` and the preview; earlier invoices reprint as issued. The .docx's "on B (D)" is a typo for "on C (D)" |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

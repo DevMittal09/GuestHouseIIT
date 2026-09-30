@@ -90,6 +90,7 @@ const STUDENT_UNIQUE_RELATIONSHIPS = [
   "Guardian",
   "Grandmother",
   "Grandfather",
+  "Self",
 ];
 
 /** The spec's defaults, used until a developer saves a custom configuration. */

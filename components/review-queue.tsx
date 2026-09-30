@@ -28,6 +28,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
+import { StatusBadge } from "@/components/status-badge";
+import { SectionHeading } from "@/components/section-heading";
 import { lapsedError } from "@/lib/workflow";
 import type { StudentRecordPanel } from "@/lib/academic/family";
 import type { BookingWithDetails } from "@/lib/types";
@@ -47,15 +49,27 @@ export function ReviewQueue({
    */
   studentRecords?: Record<string, StudentRecordPanel>;
 }) {
+  const heading = (
+    <SectionHeading
+      title="Waiting for your review"
+      count={bookings.length}
+      description="Open a request to see everything on it. Forward sends it on its route; rejecting needs a reason, which the requester is sent."
+    />
+  );
   if (bookings.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-        {emptyMessage}
-      </p>
+      <section>
+        {heading}
+        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
+          {emptyMessage}
+        </p>
+      </section>
     );
   }
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <section>
+      {heading}
+    <div className="overflow-x-auto rounded-lg border border-border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -63,8 +77,10 @@ export function ReviewQueue({
             <TableHead>Requester</TableHead>
             <TableHead>Guest House</TableHead>
             <TableHead>Check-in</TableHead>
+            <TableHead>Check-out</TableHead>
             <TableHead>Guests</TableHead>
             <TableHead>Rooms</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -75,6 +91,7 @@ export function ReviewQueue({
         </TableBody>
       </Table>
     </div>
+    </section>
   );
 }
 
@@ -129,11 +146,15 @@ function ReviewRow({
       </TableCell>
       <TableCell>{booking.guest_house.name}</TableCell>
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
+      <TableCell>{formatDateTime(booking.check_out)}</TableCell>
       <TableCell>
         {booking.guests.length}
         <FamilyBadge panel={studentRecord} />
       </TableCell>
       <TableCell>{booking.rooms_requested}</TableCell>
+      <TableCell>
+        <StatusBadge status={booking.status} />
+      </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <Dialog open={detailOpen} onOpenChange={setDetailOpen}>

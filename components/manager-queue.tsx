@@ -8,6 +8,7 @@ import { approveCancellation, rejectCancellation, reviewBooking } from "@/app/ac
 import { RejectDialog } from "@/components/review-queue";
 import { BookingDetails } from "@/components/booking-details";
 import { CheckoutsToday } from "@/components/checkouts-today";
+import { DeskSummary } from "@/components/desk-summary";
 import type { CapacityRules } from "@/lib/settings";
 import { RoomGrid } from "@/components/room-grid";
 import { StaysTable } from "@/components/stays-table";
@@ -85,13 +86,27 @@ export function ManagerQueue({
   nowIso: string;
 }) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
+      <DeskSummary
+        figures={[
+          { label: "Checking out today", count: checkoutsToday.length, anchor: "checkouts" },
+          { label: "Cancellation requests", count: cancellationRequests.length, anchor: "cancellations", alert: true },
+          { label: "Incoming requests", count: pending.length, anchor: "incoming" },
+          { label: "In house now", count: current.length, anchor: "in-house" },
+          { label: "Awaiting check-out", count: overdue.length, anchor: "awaiting", alert: true },
+          { label: "To bill", count: toBill.length, anchor: "to-bill" },
+          { label: "Upcoming stays", count: upcoming.length, anchor: "upcoming" },
+        ]}
+      />
+
       {/* What the desk needs first thing: which rooms come back today. */}
-      <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} />
+      <div id="checkouts" className="scroll-mt-20">
+        <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} />
+      </div>
 
       {/* Cancellation Requests Section */}
       {cancellationRequests.length > 0 && (
-        <section>
+        <section id="cancellations" className="scroll-mt-20">
           <SectionHeading
             title="Cancellation requests"
             count={cancellationRequests.length}
@@ -121,7 +136,7 @@ export function ManagerQueue({
       )}
 
       {/* Incoming requests */}
-      <section>
+      <section id="incoming" className="scroll-mt-20">
         <SectionHeading
           title="Incoming requests"
           count={pending.length}
@@ -168,7 +183,7 @@ export function ManagerQueue({
       </section>
 
       {/* Current occupants — guests physically in the building now */}
-      <section>
+      <section id="in-house" className="scroll-mt-20">
         <SectionHeading
           title="Current occupants"
           count={current.length}
@@ -191,7 +206,7 @@ export function ManagerQueue({
           counting them as "current occupants" would be the same kind of lie
           this split exists to remove. */}
       {overdue.length > 0 && (
-        <section>
+        <section id="awaiting" className="scroll-mt-20">
           <SectionHeading
             title="Awaiting check-out"
             count={overdue.length}
@@ -209,7 +224,7 @@ export function ManagerQueue({
       {/* Checked out and still owing. Without this the bill vanished with the
           guest: a Vacated stay appeared on no screen the manager has. */}
       {toBill.length > 0 && (
-        <section>
+        <section id="to-bill" className="scroll-mt-20">
           <SectionHeading
             title="Checked out — to bill"
             count={toBill.length}
@@ -224,7 +239,7 @@ export function ManagerQueue({
       )}
 
       {/* Upcoming — allocated, not started */}
-      <section>
+      <section id="upcoming" className="scroll-mt-20">
         <SectionHeading
           title="Upcoming stays"
           count={upcoming.length}

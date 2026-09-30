@@ -19,6 +19,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { clubBookingNotice, defaultCopyToFor, mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser, facultyInChargeForClub } from "@/lib/club-booking-server";
 import { knownGuestsFor } from "@/lib/known-guests-server";
+import { BOOKING_STEPS } from "@/lib/site-content";
+import { GUEST_HOUSE_CONTACT } from "@/lib/site";
 
 export default async function BookPage({
   searchParams,
@@ -109,8 +111,9 @@ export default async function BookPage({
   const mealsOnly = initialServiceType === "meals_only";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="space-y-8">
       <PageHeader
+        caption={club ? "Faculty Advisor booking" : onBehalf ? "Guest house desk" : "New request"}
         title={
           club
             ? `New Booking for ${club.full_name}`
@@ -129,48 +132,99 @@ export default async function BookPage({
               ? "Take a booking for someone who cannot use the portal themselves. It is recorded against your account and names them as the guest."
               : "Fill in the stay and guest details — the request enters the approval pipeline for your role automatically."}
       </PageHeader>
-      {/* A professor who is a Faculty Advisor books as themselves or as the
-          advisor of a council, fest or club — the same page, a different
-          requester. */}
-      {clubs.length > 0 && (
-        <BookingAs
-          self={requestsForSelf ? user : null}
-          clubs={clubs}
-          current={club?.id ?? null}
-          service={initialServiceType}
-        />
-      )}
-      {/* Who is asking, from the academic database. Outside the form because
-          nothing in it is editable, and above it so the requester checks it
-          first. For a club's booking, that is the club. */}
-      <AcademicDetailsCard
-        user={requester}
-        title={club ? "Club details" : "Requester details"}
-        raisedBy={club ? user : null}
-      />
-      <BookingForm
-        // A fresh form for each "Booking as": switching is a client-side
-        // navigation within this page, and without a new key React keeps the
-        // mounted form — whose defaults (booking type, guest house, Copy to)
-        // were the previous requester's.
-        key={`${requester.id}:${initialServiceType ?? "room"}`}
-        forClub={club ? { id: club.id, name: club.full_name } : null}
-        user={requester}
-        guestHouses={guestHouses}
-        config={config}
-        initialServiceType={initialServiceType}
-        // Resolved here rather than in the form so the server-rendered page
-        // and its hydration cannot land on different days — they would, for a
-        // second either side of a meal's deadline.
-        initialMealDate={firstBookableMealDate(new Date(), context.rules.meals.windows)}
-        rules={context.rules}
-        debitHeads={context.debitHeads}
-        projects={context.projects}
-        hodApprovers={context.hodApprovers}
-        defaultCopyTo={defaultCopyTo}
-        knownGuests={knownGuests}
-      />
+      {/* Two columns from `lg` (30 Sep 2026): the form in eight, and in the
+          other four the requester's record and what happens after Submit.
+          On a phone the record comes first, as before — it is what the
+          requester checks before filling anything in. */}
+      <div className="grid gap-x-10 gap-y-6 lg:grid-cols-12 lg:items-stretch">
+        <aside className="min-w-0 space-y-6 lg:col-span-4 lg:col-start-9 lg:row-start-1">
+          {/* Who is asking, from the academic database. Outside the form
+              because nothing in it is editable. For a club's booking, that
+              is the club. */}
+          <AcademicDetailsCard
+            user={requester}
+            title={club ? "Club details" : "Requester details"}
+            raisedBy={club ? user : null}
+          />
+          <div className="lg:sticky lg:top-20">
+            <NextSteps mealsOnly={mealsOnly} />
+          </div>
+        </aside>
+        <div className="min-w-0 space-y-6 lg:col-span-8 lg:row-start-1">
+          {/* A professor who is a Faculty Advisor books as themselves or as
+              the advisor of a council, fest or club — the same page, a
+              different requester. */}
+          {clubs.length > 0 && (
+            <BookingAs
+              self={requestsForSelf ? user : null}
+              clubs={clubs}
+              current={club?.id ?? null}
+              service={initialServiceType}
+            />
+          )}
+          <BookingForm
+            // A fresh form for each "Booking as": switching is a client-side
+            // navigation within this page, and without a new key React keeps
+            // the mounted form — whose defaults (booking type, guest house,
+            // Copy to) were the previous requester's.
+            key={`${requester.id}:${initialServiceType ?? "room"}`}
+            forClub={club ? { id: club.id, name: club.full_name } : null}
+            user={requester}
+            guestHouses={guestHouses}
+            config={config}
+            initialServiceType={initialServiceType}
+            // Resolved here rather than in the form so the server-rendered
+            // page and its hydration cannot land on different days — they
+            // would, for a second either side of a meal's deadline.
+            initialMealDate={firstBookableMealDate(new Date(), context.rules.meals.windows)}
+            rules={context.rules}
+            debitHeads={context.debitHeads}
+            projects={context.projects}
+            hodApprovers={context.hodApprovers}
+            defaultCopyTo={defaultCopyTo}
+            knownGuests={knownGuests}
+          />
+        </div>
+      </div>
     </div>
+  );
+}
+
+/**
+ * What happens after Submit, beside the form. The steps are the Guidelines'
+ * own (`BOOKING_STEPS`, in general terms), less "Sign in"; a meals-only
+ * booking stops at approval — nobody arrives or checks out.
+ */
+function NextSteps({ mealsOnly }: { mealsOnly: boolean }) {
+  const steps = BOOKING_STEPS.slice(1, mealsOnly ? 3 : undefined);
+  return (
+    <section aria-labelledby="next-steps" className="rounded-lg border border-border-strong bg-card">
+      <h2
+        id="next-steps"
+        className="border-b border-border bg-band px-5 py-3.5 text-[1.1875rem] leading-snug font-semibold text-ink"
+      >
+        What happens next
+      </h2>
+      <ol className="px-5 py-4">
+        {steps.map((step, i) => (
+          <li key={step.title} className="grid grid-cols-[2rem_1fr] gap-x-2 border-b border-border py-3 last:border-b-0">
+            <span className="font-heading text-[1.375rem] leading-none font-semibold text-vermilion tabular-nums">
+              {i + 1}
+            </span>
+            <span>
+              <span className="block text-sm font-semibold text-ink">{step.title}</span>
+              <span className="mt-0.5 block text-sm leading-relaxed text-body">{step.body}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="border-t border-border px-5 py-3.5 text-sm text-body">
+        Guest House Office:{" "}
+        <a href={GUEST_HOUSE_CONTACT.phoneHref} className="font-semibold text-ink tabular-nums">
+          {GUEST_HOUSE_CONTACT.phone}
+        </a>
+      </p>
+    </section>
   );
 }
 

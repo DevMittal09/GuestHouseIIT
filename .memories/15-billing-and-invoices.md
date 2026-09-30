@@ -32,13 +32,35 @@ Rates and invoice settings with their defaults are in
 ## How it works — invoices and tariffs (Phase 5)
 
 The office's invoice template is `public/GHM_Invoice.docx` (revised by the
-owner on 25 Sep 2026); its header images are in `public/invoice/`. The flow,
+owner on 25 Sep and again on 30 Sep 2026); its header images are in
+`public/invoice/`. **Nothing fills the .docx** — `lib/invoice-pdf.ts` redraws
+it with jsPDF, so a change to the template is a change to `invoiceTable()`. The flow,
 in the manager's and caretaker's consoles (the **Invoice** button on an
 occupied or vacated stay, `components/invoice-dialog.tsx`): **preview →
 correct the meal counts and add any additional charges (the figures reprice
 as you type) → Save draft (optional) → Issue & print → Mark paid**.
 
+### The labels as printed now (30 Sep 2026) — `version: 3`
+
+The supervisor's list: every figure the grand total adds is lettered in
+turn. A stay: **Room Charges Subtotal (A)**, **GST @ 18% on A (B)**, **Dining
+Charges Subtotal (C)**, **GST @ 5% on C (D)**, **Other Charges Subtotal (E)**
+only when the desk added one, **Grand Total (A+B+C+D)** (or A+B+C+D+E). A
+dining invoice has no room section and starts at its own subtotal: (A),
+GST @ 5% on A (B), Grand Total (A+B). Where GST is added on top (the Setting
+off) and the rupee rounding makes the letters not sum to the grand total, a
+**Round off** row stands above it. `totalLabels()` in `lib/invoice.ts` picks
+the labels by the snapshot's version, so **a version 2 invoice (25–30 Sep)
+reprints with the labels below**, and a version 1 as before that. The
+dialog's Charged under reads Room charges (A) / Dining charges (C) (a dining
+invoice: (A)). The monthly CSV and the accounts mail are unlettered (Rooms
+(taxable), Dining (taxable), Taxable total), since a month holds both
+versions. The .docx says "GST @ 5% on B (D)" — a typo for "on C (D)".
+
 ### GST and the table as printed (25 Sep 2026)
+
+> **Superseded in part (30 Sep 2026):** the labels, for new invoices — see
+> above. What follows is still exactly how a `version: 2` invoice prints.
 
 - **18% on rooms and extra beds, 5% on food**, each charged on its own
   subtotal: Room Charges Subtotal (A), **GST @ 18% on Subtotal (A)**; Dining
@@ -64,7 +86,7 @@ as you type) → Save draft (optional) → Issue & print → Mark paid**.
 
 Extra beds arranged at the desk, a broken vase — anything the tariff does not
 cover. In the Invoice dialog, **Additional charges → Add a charge**: what it
-was, **Charged under** (Room charges (A) at the room GST, Dining charges (B)
+was, **Charged under** (Room charges (A) at the room GST, Dining charges (C) — (B) before 30 Sep —
 at the food GST, or Other — no GST, for damage or loss), quantity, **₹ each**
 (including GST when the tariffs are), and a **comment** printed under it on
 the invoice. At most 20; the amount has at most two decimals; a dining invoice

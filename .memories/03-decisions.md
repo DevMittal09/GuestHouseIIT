@@ -2546,6 +2546,10 @@ gets the panel: the other approvers see no students.
 
 ### Guests the portal already knows are filled in, not typed
 
+> **Extended (30 Sep 2026, afternoon):** the requester themselves comes first
+> — "Yourself", relationship **Self** — for a student or employee. See
+> "Yourself, on your own request" under that date.
+
 **Decision.** `KnownGuest` (`lib/known-guests.ts`) from two sources, in order:
 the academic record's father, mother and guardian (students only — the other
 record kinds describe the requester, not a family), then the adults on the
@@ -2570,6 +2574,10 @@ a club does not count:** those guests are the club's, not the professor's.
 "Mother-in-law" passes through "Mother" and would fill the wrong name.
 
 ### Additional charges: charged under a section, which decides the GST
+
+> **Superseded in part (30 Sep 2026, afternoon):** the letters — on a
+> `version: 3` invoice dining is (C) and Other charges (E). The sections and
+> their GST stand.
 
 **Decision.** The desk can add up to 20 charges while invoicing — what it was,
 a comment printed under it, a quantity and an amount — each **charged under**
@@ -2604,6 +2612,13 @@ tariffs and rules are server data, and the dialog's rule has always been
 "nothing is shown that the server did not price".
 
 ### GST 18% on rooms, 5% on food, per section — and old invoices print as issued
+
+> **Superseded in part (30 Sep 2026, afternoon):** the labels. New invoices
+> are `version: 3` — every figure lettered in turn: Room Charges Subtotal (A),
+> GST @ 18% on A (B), Dining Charges Subtotal (C), GST @ 5% on C (D), Other
+> Charges (E), Grand Total (A+B+C+D). The rates, the upgrade and "old
+> invoices print as issued" stand — a `version: 2` invoice still prints the
+> labels below.
 
 **Decision.** `gst_room_percent` 18 (every room line and extra bed),
 `gst_meal_percent` 5; the ₹7,500 slab and its two Settings are gone. A saved
@@ -2909,7 +2924,8 @@ Presentation layer only.
   floating boxes. The hero is 5 + 7 columns (asymmetric); the closing box
   became a row of ruled links; amenities are one ruled grid (a 1px gap over
   a border-coloured ground — safe because `amenities()` always returns
-  eight).
+  eight). *Six, in three columns, since the afternoon — the meeting room and
+  exercise room were removed.*
 - **Guest-house switchers are link tabs** (`LinkTabs`, `aria-current`) and
   the console's sections a segmented list (`ConsoleNav`), replacing the
   "pill in a well" with a shadow.
@@ -2917,3 +2933,125 @@ Presentation layer only.
 **Kept:** every content rule from 26 Sep (no figures, captions, role names
 or routes on the public site; photos never placed as one particular guest
 house), the palette, the lockup's words, the map tabs, the MRBS strip.
+
+**Second pass, same day.** The owner: "You didn't change much." The first
+pass had restyled tokens and primitives but kept every screen's layout, so
+it read as the 26 Sep site. The second pass changed layouts: the portal
+became a GOV.UK service (ink masthead, white service navigation, a tinted
+canvas), `/book` two columns with numbered sections, the desk consoles an
+"at a glance" strip, the home hero an ink panel joined to the photograph,
+sign-in a split-screen panel, inner mastheads asymmetric, the MRBS line a
+callout. Control edges were darkened to `#8C857D` because the `#CEC8BF`
+hairline (1.6:1) fails WCAG 1.4.11's 3:1 for form controls — hairlines stay
+for structure, not for things you must find and click. **Lesson:** when the
+owner asks for a "revamp", change what each screen looks like at a glance,
+not only its tokens.
+
+## 30 Sep 2026 (afternoon) — the supervisor's review of the live site
+
+The supervisor went through the Vercel deployment and sent nine short notes;
+the owner relayed them and, asked, said what three of them meant. The
+working summary is [99-recent-changes.md](99-recent-changes.md).
+
+### The public site promises less
+
+**Decision.** The hero's sentence is now "Bageshri and Hamsanandi provide
+accommodation on campus for guests of the institute." The meeting room and
+the exercise room are off the amenities, which are six (a 3-column grid).
+
+**Why.** Asked what "First sentence ?" meant, the owner: "Don't keep too many
+promises — make the messages vague and less promising." The old line listed
+who stays (visiting faculty, collaborators, examiners, families of students
+and staff) — close to the requester categories the site already keeps off
+(26 Sep) — and was a fragment. The two rooms are shared facilities rather
+than something each guest house or room has; the owner chose removing them
+over labelling them "(common)". **Rule for later copy:** state what exists,
+plainly; no adjectives about the rooms, no lists of who may stay, no services
+the office has not confirmed.
+
+### The academic record's card loses its caption
+
+**Decision.** When the record is found, the Requester details card has no
+line under its title; the fallbacks keep theirs.
+
+**Why.** The supervisor asked for "From the institute's academic database
+(Student)." to go — it told the requester nothing they could act on. A
+fallback is different: "no record… so these are from your portal profile"
+explains why a field reads "Not on record", so it stays.
+
+### Paying for a personal stay, in the office's words
+
+**Decision.** `PAY_AT_CHECKOUT_NOTE` is the supervisor's sentence ("An invoice
+will be generated and can be settled at the time of checkout. Multiple payment
+options are available at the guest house."), printed on its own line under
+the head, and only when that head is Personal Funds.
+
+**Why.** The old note promised a bank transfer "using the details on it" —
+exactly the kind of specific promise the office wants to avoid. The fixed-head
+box used to print the note under *any* single head, which was only harmless
+because the one fixed head in use is a student's Personal Funds.
+
+### Requesters see booked or free; the desk sees why
+
+**Decision.** `getRoomAvailability` returns `detailed` for `gh_manager`,
+`gh_caretaker` and `developer`. Everyone else gets `simple` charts — the
+turnaround and an accepted overlap are not drawn, maintenance is drawn as
+booked ("not available" on hover) — and a legend of Booked, Free and the
+"now" marker. One `AvailabilityLegend` serves both the booking form's panel
+and `/availability`, which had a copy each. The notes say "Times are IST."
+
+**Why.** "Let's not show all these to users — overlap need not be shown."
+The turnaround and the overlap are housekeeping the desk acts on; a requester
+does not pick rooms, only dates, and the manager decides a turnaround at
+allocation. **Why not draw the turnaround as booked:** the booked bar ends at
+check-out — the truthful stay, as on the desk's chart — and the "free all
+week" figures already count only booked time. **Why the caretaker gets the
+detail** although it does not see occupants' names: it runs the rooms.
+**Rejected:** deciding in the browser by role — the server already decides
+what each role may see here (`showsOccupant`), so it decides this too.
+
+### Yourself, on your own request
+
+**Decision.** "Fill in from saved details" starts with **Yourself — <name>**
+for a student or employee (`knownGuestSelf`): the academic record's name, else
+the profile's; relationship **Self**; no gender, age or ID (as for any known
+guest). **Self** is added to the student relationship list and to One of
+each; choosing it fills the name like Father or Mother does. It is neither a
+parent nor a dependent — a sibling still needs a parent on the request.
+
+**Why.** The note was "let the student write their name as well"; the name
+box was already editable, and the owner's reading was that a student may book
+for themselves and should be able to fill in their own details. **Why not
+offices, clubs, the Student Cell:** those accounts are not a person — there is
+no name to fill in. **Why employees too:** the same reasoning holds for a
+member of staff staying on their own request, and the list is only an
+offer. **Not backfilled into saved Form Builder rows:** an administrator may
+have removed an option on purpose, and a saved row cannot say whether it
+predates "Self". A saved student row needs Self added by hand (or Reset to
+spec defaults); until then "Yourself" fills the name and leaves the
+relationship. **Office to confirm** the policy.
+
+### The invoice letters every figure — as a new version
+
+**Decision.** New invoices are `version: 3`: Room Charges Subtotal (A),
+GST @ 18% on A (B), Dining Charges Subtotal (C), GST @ 5% on C (D), Other
+Charges Subtotal (E) when there are any, Grand Total (A+B+C+D[+E]). A dining
+invoice starts at its own subtotal: (A), GST on A (B), Grand Total (A+B[+C]).
+Where GST is added on top (not the default) and the rupee rounding makes the
+letters not sum to the grand total, a **Round off** row sits above it. The
+dialog's "Charged under" follows (Dining charges (C)); the collections CSV
+columns and the accounts mail went unlettered (Rooms (taxable), Room
+charges…).
+
+**Why a version and not a relabel.** The labels are computed from the
+snapshot at print time, so relabelling `version: 2` would have changed
+invoices already handed over — the rule since 25 Sep is that an issued
+invoice reprints exactly as issued. **Why a round-off row:** a grand total
+that says "(A+B+C+D)" must be their sum; a tax invoice shows rounding as its
+own line. **Why unletter the CSV and the mail:** one month's sheet holds
+invoices of both versions, whose letters disagree about dining. **Nothing
+fills the .docx** — the owner's "fix the code that fills it" is the jsPDF
+redraw of it (`lib/invoice-pdf.ts`), through `invoiceTable()`. The template
+itself says "GST @ 5% on B (D)", a typo for "on C (D)"; the code follows the
+supervisor's list.
+

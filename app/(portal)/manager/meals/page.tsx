@@ -117,6 +117,7 @@ export default async function DailyMealsPage({
   return (
     <div className="space-y-6">
       <PageHeader
+        caption={`${current.name} · Kitchen`}
         title={`Meals for ${formatDateValue(day, { year: true })}`}
         actions={
           <Button asChild variant="outline">

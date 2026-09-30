@@ -12,7 +12,23 @@ the sign-in pages.
 | 26 Sep 2026, morning | `main` | The owner: the site "looks ass", "too dull and dead"; wanted clean and professional, impressive, **not AI-generated-looking**, in **the colour palette of the IITPKD websites**, following the backend. Plus: a map for each guest house, MRBS and the institute site in the footer, a proper Guidelines page with placeholder house rules, and more prominent booking buttons in the portal. Built as an editorial page full of computed facts |
 | 26 Sep 2026, afternoon | `main` | The owner on the morning's version: header "should look more aesthetic", site "too plain", "too mehh"; **no figures** ("23 rooms… 1 month… 14 nights…"), **no "see them on the map"**, **no photo captions**, **"How booking works" moved to the guidelines and vaguer**, **"do not display the backend logic like who are the users, who approves who"**, no instruction text or meal timings on the landing page. Rebuilt photo-led and quiet — full-screen hero, photo banners |
 | 26 Sep 2026, evening | `main` | The owner: "it looks so weird… the image filling the page this much looks so weird"; make it **clean and professional**, researched online. Rebuilt **institutional**: photos contained in the layout — see "The evening brief" below |
-| **30 Sep 2026 (current)** | `main` | A written revamp brief: TGH structure, Aman / Standard editorial rules, **GOV.UK** tables and tags; 4px inputs, 6px buttons, 8px cards, never a pill, shadow, gradient or glass. Primitives rebuilt (see "The 30 Sep revamp" below); the evening's content rules all kept |
+| **30 Sep 2026 (current)** | `main` | A written revamp brief: TGH structure, Aman / Standard editorial rules, **GOV.UK** tables and tags; 4px inputs, 6px buttons, 8px cards, never a pill, shadow, gradient or glass. Primitives rebuilt (see "The 30 Sep revamp" below); the evening's content rules all kept. **Afternoon:** the supervisor's review — see "Promise less" below |
+
+## Promise less (30 Sep 2026, afternoon)
+
+The supervisor questioned the hero's first sentence and the "meeting room and
+exercise room (common)" tiles; asked, the owner said: **"Don't keep too many
+promises — make the messages vague and less promising."** So:
+
+- The hero line is "{names} provide accommodation on campus for guests of the
+  institute." (`lead` in `app/(site)/page.tsx`, names from the store; "Accommodation
+  on campus for guests of the institute." when there are none). It used to
+  list who stays — visiting faculty, collaborators, examiners, families — and
+  was a fragment.
+- The meeting room and exercise room are **off** the amenities (shared
+  facilities, not each guest house's): **six** tiles, 1 / 2 / **3** columns.
+- **For future copy:** state what exists, plainly — no adjectives about the
+  rooms, no lists of who may stay, no service the office has not confirmed.
 
 ## The 30 Sep revamp
 
@@ -24,8 +40,9 @@ the sign-in pages.
   section's content is offset to the same column with
   `lg:ml-[calc(25%+10px)]` (the 12-column grid's fourth column with
   `gap-x-10`). Hero 5 + 7 with one 4:3 photo; guest-house cards; amenities
-  as one ruled grid (1px gap over `bg-border-strong`, 1 / 2 / 4 columns for
-  its eight items — change those if the list length changes); a four-photo
+  as one ruled grid (1px gap over `bg-border-strong`, 1 / 2 / 3 columns for
+  its **six** items since 30 Sep afternoon — change those if the list length
+  changes); a four-photo
   mosaic (one photo over two rows at `lg`); a closing band with ruled
   Guidelines / Contact links. Header and portal header carry a 3px vermilion
   top rule; the lockup has a hairline between emblem and words.
@@ -37,6 +54,18 @@ the sign-in pages.
   style every in-page toggle. Notices are GOV.UK inset text: a 4px left rule
   (saffron on `bg-notice` for warnings, `border-strong` on the band for
   information).
+- **Second pass (same day):** portal chrome as a GOV.UK service — ink
+  masthead closed by a 5px vermilion rule, a white service nav
+  (`NavBar tone="service"`), a `--canvas` page background; `PageHeader`
+  takes a `caption` and closes on a 2px ink rule; controls 40px tall with a
+  `--input` edge of `#8C857D` (3:1+); `/book` in two columns with the
+  Requester details (a summary list, container-query rows) and a sticky
+  "What happens next"; the booking form's cards numbered by
+  `.numbered-sections` (the counter increments on the **card**, since values
+  pass between siblings); `DeskSummary` strip on `/manager` and
+  `/caretaker`; the home hero an ink panel joined to the 4:3 photo; inner
+  mastheads asymmetric (title 7 / lead 5 under a vermilion rule); sign-in a
+  split-screen panel; the footer's MRBS line a callout.
 - **Desk lifecycle buttons:** `Button variant="occupy"` (deep green,
   log-in icon) and `variant="vacate"` (deep indigo, log-out icon).
 - **Room grid seats:** free = pale green with a green edge, taken = solid red
@@ -318,7 +347,7 @@ houses: `getSiteGuestHouses()` — every guest house with active-room counts by
 type and `serves_meals`. **No guest house name is hardcoded** in a component.
 It swallows store errors and returns empty data.
 
-`lib/site-content.ts` (pure): `amenities` (always eight), `houseSummary`, `BOOKING_STEPS`,
+`lib/site-content.ts` (pure): `amenities` (always six), `houseSummary`, `BOOKING_STEPS`,
 `guidelineSections(houses, rules)`, `mealTimetable`, `MEAL_NOTICE_RULE` (the
 wording of `isMealBookable`), `servingHouses`, `joinNames`.
 

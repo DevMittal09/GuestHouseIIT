@@ -14,7 +14,7 @@ export default async function AvailabilityPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Room Availability">
+      <PageHeader caption="All guest houses" title="Room Availability">
         Check which rooms are free before you request a booking. Pick a guest house and a date to
         see every room&rsquo;s occupancy across the day.
       </PageHeader>

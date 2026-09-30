@@ -144,8 +144,8 @@ test("the invoice bills the meals and the charge the desk adds, as they are type
   await button.click();
   const invoice = page.getByRole("dialog");
   await expect(invoice.getByText("Not issued")).toBeVisible({ timeout: 30_000 });
-  // The revised template: GST per subtotal.
-  await expect(invoice.getByText("GST @ 18% on Subtotal (A)")).toBeVisible();
+  // The revised template (30 Sep 2026): every figure lettered.
+  await expect(invoice.getByText("GST @ 18% on A (B)")).toBeVisible();
   const start = await grandTotal(invoice);
 
   // Two breakfasts the kitchen served: ₹80 each, GST included — the total

@@ -84,7 +84,7 @@ export default async function HistoryPage({
 
 function Heading({ scopeLabel, isRequester }: { scopeLabel: string | null; isRequester: boolean }) {
   return (
-    <PageHeader title={isRequester ? "Booking History" : "Approval Log"}>
+    <PageHeader caption="Records" title={isRequester ? "Booking History" : "Approval Log"}>
       {isRequester
         ? "A complete record of all your guest house booking requests and their status."
         : "Every request you have approved or rejected, and a searchable archive of past bookings."}

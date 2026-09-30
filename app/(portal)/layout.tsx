@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LiveUpdates } from "@/components/live-updates";
 import { BrandBlock } from "@/components/site/brand";
@@ -17,12 +16,12 @@ import { mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser } from "@/lib/club-booking-server";
 
 /**
- * The signed-in shell, in the guest house website's style: a vermilion rule
- * across the top, a white header with the lockup and who is signed in, then
- * the charcoal nav bar (the colour of iitpkd.ac.in's own menu) — sticky, so
- * the console tabs stay in reach on long queues — with a vermilion bar under
- * the current section. No shadows anywhere: hairlines and the ink bar do the
- * separating (30 Sep 2026).
+ * The signed-in shell (30 Sep 2026), laid out the way GOV.UK services are: an
+ * ink masthead with the lockup and who is signed in, closed by a thick
+ * vermilion rule; a white service navigation bar under it — sticky, so the
+ * console tabs stay in reach on long queues — with a vermilion bar under the
+ * current section; then the page on a warm off-white canvas. No shadows
+ * anywhere: tint, hairlines and the ink bar do the separating.
  */
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -68,31 +67,44 @@ export default async function PortalLayout({ children }: { children: React.React
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-t-[3px] border-b border-t-vermilion border-b-border bg-white">
+      {/* The masthead, GOV.UK-fashion: the service's name on ink, closed by a
+          thick vermilion rule, so a signed-in page can never be mistaken for
+          the public website's white header. */}
+      <header className="border-b-[5px] border-vermilion bg-ink text-white">
         <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center gap-x-6 gap-y-3 px-[clamp(14px,4vw,24px)] py-3.5">
-          <BrandBlock tagline="IIT Palakkad · Booking portal" href={homeForRole(user.role)} compact />
+          <BrandBlock tagline="IIT Palakkad · Booking portal" href={homeForRole(user.role)} tone="light" compact />
           <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
-            <div className="hidden border-r border-border pr-4 text-right sm:block">
-              <p className="text-sm leading-tight font-semibold text-ink">{user.full_name}</p>
-              <p className="mt-0.5 text-xs leading-tight text-muted-foreground">{user.email}</p>
+            <div className="hidden border-r border-white/20 pr-4 text-right sm:block">
+              <p className="text-sm leading-tight font-semibold text-white">{user.full_name}</p>
+              <p className="mt-0.5 text-xs leading-tight text-on-ink-muted">{user.email}</p>
             </div>
-            <Badge variant="secondary" className="border border-border-strong">
+            <span className="rounded-xs border border-saffron/70 px-1.5 py-px text-xs leading-[1.35] font-semibold text-saffron">
               {ROLE_LABELS[user.role]}
-            </Badge>
+            </span>
             <form action={logout}>
-              <Button type="submit" variant="outline" size="sm">
+              <Button
+                type="submit"
+                variant="outline"
+                size="sm"
+                className="border-white/45 bg-transparent text-white hover:border-white hover:bg-white hover:text-ink"
+              >
                 Switch user
               </Button>
             </form>
           </div>
         </div>
       </header>
-      <NavBar items={nav} label="Portal" exact={[]} className="sticky top-0 z-40" />
-      <main className="mx-auto w-full max-w-[1200px] flex-1 px-[clamp(14px,4vw,24px)] pt-9 pb-16">
-        {children}
-      </main>
-      <footer className="bg-ink text-[13.5px] text-on-ink-muted">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center justify-between gap-x-6 gap-y-2 px-[clamp(14px,4vw,24px)] py-4">
+      <NavBar items={nav} label="Portal" exact={[]} tone="service" className="sticky top-0 z-40" />
+      {/* A warm off-white working canvas: cards, tables, inputs and dialogs
+          are white on it, so structure comes from tint and hairline, not
+          shadow. */}
+      <div className="flex-1 bg-canvas">
+        <main className="mx-auto w-full max-w-[1200px] px-[clamp(14px,4vw,24px)] pt-10 pb-20">
+          {children}
+        </main>
+      </div>
+      <footer className="border-t-[3px] border-vermilion bg-ink text-[13.5px] text-on-ink-muted">
+        <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-[clamp(14px,4vw,24px)] py-6">
           <span>&copy; Indian Institute of Technology Palakkad</span>
           <span className="flex flex-wrap gap-x-5 gap-y-1">
             <Link href="/" className="text-on-ink hover:text-white">

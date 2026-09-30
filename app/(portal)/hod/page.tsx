@@ -37,7 +37,7 @@ export default async function HodPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="HOD Queue">
+      <PageHeader caption="Approvals" title="HOD Queue">
         Official requests waiting on your approval as HOD for{" "}
         <span className="font-medium">{governed.join(", ")}</span>. Forwarding sends them to the
         Guest House Manager; a rejection needs a reason, which the requester sees.

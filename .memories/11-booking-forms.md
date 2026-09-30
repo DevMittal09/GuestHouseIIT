@@ -73,7 +73,10 @@ its form is not in the Form Builder and every guest field is required.
   the desk) fills name, gender, relationship, citizenship and nationality from
   the record's family or anyone on the requester's earlier bookings. Never an
   ID number, a passport number or an age. A line under the name says where it
-  came from.
+  came from. **Since 30 Sep 2026 the list starts with "Yourself — <name>"**
+  for a student or employee (relationship **Self**; the record's name, else
+  the profile's; no gender) — a requester may be a guest on their own
+  request. Choosing Self on a student's dropdown fills it in too.
 - **Aadhaar**, if typed, must be 12 digits even where optional. Shown as the
   last four everywhere afterwards; stored encrypted.
 - **Citizenship** per guest: Indian (default) or Other. **Other makes
@@ -83,10 +86,13 @@ its form is not in the Form Builder and every guest field is required.
 - **ID document**: JPG, PNG, WEBP or PDF, **5 MB**, typed by its bytes; EXIF
   stripped.
 - **Student relationship rules** (config, editable in the Form Builder):
-  options Mother, Father, Guardian, Grandmother, Grandfather, Siblings;
+  options Mother, Father, Guardian, Grandmother, Grandfather, Siblings,
+  **Self** (30 Sep 2026 — the student as a guest on their own request);
   **Grandmother / Grandfather / Siblings only when a Mother, Father or
-  Guardian is on the same request** (any room); **Mother, Father, Guardian,
-  Grandmother, Grandfather at most once per request** — Siblings may repeat.
+  Guardian is on the same request** (any room — Self does not count);
+  **Mother, Father, Guardian, Grandmother, Grandfather, Self at most once per
+  request** — Siblings may repeat. A student form saved in the Form Builder
+  before 30 Sep lacks Self until it is added there or reset.
 - A guest with no name is stored as "Guest".
 
 ---
@@ -96,11 +102,11 @@ its form is not in the Form Builder and every guest field is required.
 | # | Section | Who sees it | Mandatory? |
 | --- | --- | --- | --- |
 | 1 | **Booking as** — Yourself / Faculty Advisor — each council or club | Professors named Faculty Advisor | Choosing one switches whose form it is |
-| 2 | **Requester details** (academic record, read-only, with its Copy-to line) | Everyone | — (never stored) |
+| 2 | **Requester details** (academic record, read-only, with its Copy-to line; no caption when the record is found, a line saying so when it falls back to the profile) | Everyone | — (never stored) |
 | 3 | **Type of booking** — Official / Personal / On behalf of an alumnus | Only roles with more than one option: Employee (Official default, Personal), IAR Office (Official, Alumni), GH Manager (Official, Alumni) | Yes; others record their single type silently |
 | 4 | **What to book** — Room booking / Room + Meals / Meals only | When a guest house the role may book serves meals | Yes. Meals only: Employee, Official, IAR Office, GH Manager |
 | 5 | **Approval** — Direct / Requires HOD approval | Offices (`official`, `iar_cell`), room bookings | **Yes** for offices; refused for anyone else |
-| 6 | **Debitable head** | Everyone (shown, not asked, when there is only one) | **Yes** |
+| 6 | **Debitable head** | Everyone (shown, not asked, when there is only one). Personal Funds adds "An invoice will be generated and can be settled at the time of checkout. Multiple payment options are available at the guest house." (not on meals only) | **Yes** |
 | 6a | Project (from the Projects list) | Head = Project | **Yes** |
 | 6b | Project sub-head (text, ≤ 120) | Head = Project | Optional; refused with any other head |
 | 6c | Special fund's name / sanction reference (≤ 300) and sanction letter upload | Head = Special Funds | Both optional |

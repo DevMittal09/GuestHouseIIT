@@ -198,7 +198,7 @@ describe("the invoice, per-section GST and additional charges", () => {
   });
 
   it("taxes rooms at 18% and food at 5% on their own subtotals; other charges carry none", () => {
-    expect(doc.version).toBe(2);
+    expect(doc.version).toBe(3);
     // Inclusive: each section's subtotal and GST add back to its prices.
     expect(doc.subtotal_rooms + (doc.gst_rooms ?? 0)).toBe(2 * 200_000 + 50_000);
     expect(doc.subtotal_dining + (doc.gst_dining ?? 0)).toBe(2 * 8_000 + 2 * 10_000 + 30_000);
@@ -230,15 +230,18 @@ describe("the invoice, per-section GST and additional charges", () => {
     expect(ex.grand_total).toBe(450_000 + 81_000 + 66_000 + 3_300 + 150_000);
   });
 
-  it("prints the revised template: Rate, GST per subtotal, other charges, one grand total", () => {
+  it("prints the revised template: Rate, every figure lettered, one grand total that names them", () => {
     const table = invoiceTable(doc);
     expect(table.rateHeading).toBe("Rate");
     expect(table.sections.map((s) => s.key)).toEqual(["rooms", "dining", "other"]);
-    expect(table.sections[0].totals.map((x) => x.label)).toEqual(["Room Charges Subtotal (A):", "GST @ 18% on Subtotal (A):"]);
+    expect(table.sections[0].totals.map((x) => x.label)).toEqual(["Room Charges Subtotal (A):", "GST @ 18% on A (B):"]);
     expect(table.sections[1].heading).toBe("Dining Charges");
-    expect(table.sections[1].totals.map((x) => x.label)).toEqual(["Dining Charges Subtotal (B):", "GST @ 5% on Subtotal (B):"]);
-    expect(table.sections[2].totals.map((x) => x.label)).toEqual(["Other Charges Subtotal (C):"]);
-    expect(table.closing).toEqual([{ label: "Grand Total (Including GST):", amount: doc.grand_total }]);
+    expect(table.sections[1].totals.map((x) => x.label)).toEqual(["Dining Charges Subtotal (C):", "GST @ 5% on C (D):"]);
+    expect(table.sections[2].totals.map((x) => x.label)).toEqual(["Other Charges Subtotal (E):"]);
+    expect(table.closing).toEqual([{ label: "Grand Total (A+B+C+D+E):", amount: doc.grand_total }]);
+    // …and the letters add up to it.
+    const figures = table.sections.flatMap((s) => s.totals.map((t) => t.amount));
+    expect(figures.reduce((n, a) => n + a, 0)).toBe(doc.grand_total);
     // Additional charges sit in their section, the comment under the description.
     expect(table.sections[0].rows.at(-1)).toMatchObject({ label: "Extra bed at the desk", qty: 1 });
     expect(table.sections[1].rows.map((r) => r.label)).toEqual(["Breakfast", "Lunch", "Dinner", "Birthday cake"]);
@@ -246,6 +249,32 @@ describe("the invoice, per-section GST and additional charges", () => {
     // No other charges, no Other Charges table.
     const plain = buildInvoiceDocument(stay, { tariffs: TARIFFS, rules: RULES, capacity: CAP });
     expect(invoiceTable(plain).sections.map((s) => s.key)).toEqual(["rooms", "dining"]);
+    expect(invoiceTable(plain).closing.map((x) => x.label)).toEqual(["Grand Total (A+B+C+D):"]);
+  });
+
+  it("reprints an invoice issued 25–30 Sep with the labels it was issued with", () => {
+    const v2: InvoiceDocument = { ...doc, version: 2 };
+    const table = invoiceTable(v2);
+    expect(table.sections.map((s) => s.totals.map((x) => x.label))).toEqual([
+      ["Room Charges Subtotal (A):", "GST @ 18% on Subtotal (A):"],
+      ["Dining Charges Subtotal (B):", "GST @ 5% on Subtotal (B):"],
+      ["Other Charges Subtotal (C):"],
+    ]);
+    expect(table.closing).toEqual([{ label: "Grand Total (Including GST):", amount: doc.grand_total }]);
+  });
+
+  it("prints the rupee rounding as its own row when GST is added on top", () => {
+    const rules = { ...RULES, prices_include_gst: false };
+    // ₹333.33 at 18%: ₹393.33 before rounding, ₹393.00 after.
+    const odd: ExtraCharge[] = [{ section: "room", description: "Extra bed", comment: null, quantity: 1, unit_price: 33_333 }];
+    const ex = buildInvoiceDocument(stay, { tariffs: TARIFFS, rules, capacity: CAP, extraCharges: odd });
+    const table = invoiceTable(ex);
+    const off = ex.grand_total - (ex.total + ex.gst);
+    expect(off).not.toBe(0);
+    expect(table.closing.map((x) => x.label)).toEqual(["Round off:", "Grand Total (A+B+C+D):"]);
+    expect(table.closing[0].amount).toBe(off);
+    const figures = [...table.sections.flatMap((s) => s.totals), table.closing[0]].map((t) => t.amount);
+    expect(figures.reduce((n, a) => n + a, 0)).toBe(ex.grand_total);
   });
 
   it("reprints an invoice issued before 25 Sep exactly as it was", () => {
@@ -265,12 +294,19 @@ describe("the invoice, per-section GST and additional charges", () => {
     expect(invoiceBlocker(empty, withCharge)).toBeNull();
   });
 
-  it("a dining invoice goes unlettered and takes no room charges", () => {
+  it("a dining invoice letters from its own subtotal and takes no room charges", () => {
     const dining = booking({ service_type: "meals_only", status: "APPROVED", meal_guest_count: 10, meals: [{ date: "2026-10-01", breakfast: false, lunch: true, dinner: false }] }, []);
     const d = buildInvoiceDocument(dining, { tariffs: TARIFFS, rules: RULES, capacity: CAP, extraCharges: [CHARGES[2]] });
     const table = invoiceTable(d);
     expect(table.sections.map((s) => s.key)).toEqual(["dining", "other"]);
-    expect(table.sections[0].totals.map((x) => x.label)).toEqual(["Dining Charges Subtotal:", "GST @ 5% on Subtotal:"]);
+    expect(table.sections[0].totals.map((x) => x.label)).toEqual(["Dining Charges Subtotal (A):", "GST @ 5% on A (B):"]);
+    expect(table.sections[1].totals.map((x) => x.label)).toEqual(["Other Charges Subtotal (C):"]);
+    expect(table.closing.map((x) => x.label)).toEqual(["Grand Total (A+B+C):"]);
+    // A dining invoice issued as version 2 stays unlettered.
+    expect(invoiceTable({ ...d, version: 2 }).sections[0].totals.map((x) => x.label)).toEqual([
+      "Dining Charges Subtotal:",
+      "GST @ 5% on Subtotal:",
+    ]);
     expect(parseExtraCharges([{ section: "room", description: "Extra bed", quantity: 1, amount: "500" }], "dining")).toMatchObject({ ok: false });
   });
 

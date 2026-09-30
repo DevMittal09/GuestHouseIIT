@@ -87,11 +87,15 @@ describe("guest house cards", () => {
 });
 
 describe("amenities", () => {
-  it("lists dining only where a guest house serves meals, and always eight for an even grid", () => {
+  it("lists dining only where a guest house serves meals, and always six for an even grid", () => {
     expect(amenities([BAGESHRI, HAMSANANDI]).map((a) => a.key)).toContain("dining");
     expect(amenities([BAGESHRI]).map((a) => a.key)).not.toContain("dining");
-    expect(amenities([BAGESHRI, HAMSANANDI])).toHaveLength(8);
-    expect(amenities([BAGESHRI])).toHaveLength(8);
+    expect(amenities([BAGESHRI, HAMSANANDI])).toHaveLength(6);
+    expect(amenities([BAGESHRI])).toHaveLength(6);
+    // Shared facilities, not the guest houses' own (30 Sep 2026).
+    const keys = amenities([BAGESHRI, HAMSANANDI]).map((a) => a.key);
+    expect(keys).not.toContain("meeting");
+    expect(keys).not.toContain("gym");
   });
 });
 

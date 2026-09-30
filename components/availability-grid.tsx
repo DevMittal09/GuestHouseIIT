@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  LegendSwatch,
+  AvailabilityLegend,
   OccupancyChart,
   RangeOccupancyChart,
 } from "@/components/occupancy-chart";
@@ -47,6 +47,8 @@ interface Loaded {
   rooms: Room[];
   segments: RoomOccupancySegment[];
   showsOccupant: boolean;
+  /** The desk's view, with turnarounds and overlaps — see `getRoomAvailability`. */
+  detailed: boolean;
 }
 
 const todayValue = () => toDateInputValue(new Date());
@@ -87,7 +89,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
       .catch(() => {
         if (cancelled) return;
         toast.error("Could not load room availability");
-        setLoaded({ key: requestKey, rooms: [], segments: [], showsOccupant: false });
+        setLoaded({ key: requestKey, rooms: [], segments: [], showsOccupant: false, detailed: false });
       });
     return () => {
       cancelled = true;
@@ -97,6 +99,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
   const rooms = useMemo(() => loaded?.rooms ?? [], [loaded]);
   const segments = useMemo(() => loaded?.segments ?? [], [loaded]);
   const showsOccupant = loaded?.showsOccupant ?? false;
+  const detailed = loaded?.detailed ?? false;
 
   // The day chart draws hours. Every view also takes per-day totals, which
   // drive the badges and counts, so "booked" means the same thing in all three.
@@ -235,22 +238,12 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-4 text-xs">
-            <LegendSwatch className="bg-red-500" label="● Booked" />
-            <LegendSwatch className="bg-turnaround" label="Turnaround (housekeeping after a stay)" />
-            <LegendSwatch
-              className="bg-overlap"
-              label="Overlap — two bookings hold the room at once"
-            />
-            <LegendSwatch className="bg-maintenance" label="🔧 Out of service (maintenance)" />
-            <LegendSwatch className="border bg-background" label="Vacant" />
-            {showsToday && (
-              <LegendSwatch
-                className="bg-primary"
-                label={view === "day" ? "Current hour" : "Today and the current time"}
-              />
-            )}
-          </div>
+          <AvailabilityLegend
+            detailed={detailed}
+            showsToday={showsToday}
+            dayView={view === "day"}
+            freeLabel="Vacant"
+          />
 
           {!range ? (
             <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
@@ -267,6 +260,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
                   rooms={rooms}
                   occupancy={hourly}
                   currentHour={showsToday ? currentHour : null}
+                  simple={!detailed}
                 />
               ) : daily ? (
                 <RangeOccupancyChart
@@ -276,6 +270,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
                   freeByDay={freeRoomsByDay(rooms, daily, range)}
                   today={today}
                   nowAt={rangeProgress(range)}
+                  simple={!detailed}
                 />
               ) : null}
             </div>
@@ -346,9 +341,9 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
 
       {range && (
         <p className="text-xs text-muted-foreground">
-          Availability shown for {describeRange(range)}, in institute time. Rooms are held by
-          approved, occupied and pending-cancellation bookings; requests still awaiting approval
-          do not reserve a room.
+          Availability shown for {describeRange(range)}. Times are IST. Rooms are held by approved,
+          occupied and pending-cancellation bookings; requests still awaiting approval do not
+          reserve a room.
         </p>
       )}
     </div>

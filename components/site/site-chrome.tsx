@@ -40,25 +40,31 @@ const FOOTER_LINK = "text-on-ink transition-colors duration-200 hover:text-white
  */
 export function SiteFooter({ pins }: { pins: MapPin[] }) {
   return (
-    <footer className="bg-ink text-on-ink">
-      <div className="border-b border-white/10">
-        <Container className="flex flex-wrap items-center justify-between gap-x-10 gap-y-4 py-7">
-          <p className="max-w-[62ch] text-[15.5px] leading-[1.55]">
-            <span className="font-semibold text-white">Booking a lecture hall or meeting room?</span>{" "}
-            Those are reserved on the institute&rsquo;s Meeting Room Booking System.
-          </p>
-          <a
-            href={MRBS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(siteButton.outlineLight, "px-5 py-2.5 text-[14px]")}
-          >
-            Open MRBS
-            <ArrowUpRight aria-hidden className="size-4" />
-            <span className="sr-only">(opens in a new tab)</span>
-          </a>
-        </Container>
-      </div>
+    <footer className="border-t-[5px] border-vermilion bg-ink text-on-ink">
+      {/* The most common wrong door, answered before anything else: lecture
+          halls and meeting rooms are not booked here. */}
+      <Container className="pt-12">
+        <div className="grid items-center gap-x-10 gap-y-6 rounded-lg border border-white/15 bg-ink-soft px-[clamp(20px,3.5vw,40px)] py-[clamp(22px,3vw,32px)] lg:grid-cols-12">
+          <div className="min-w-0 border-l-4 border-saffron pl-5 lg:col-span-8">
+            <p className="text-[11px] font-semibold tracking-[0.22em] text-saffron uppercase">
+              Lecture halls and meeting rooms
+            </p>
+            <p className="mt-2 font-heading text-[clamp(20px,2.3vw,27px)] leading-snug font-semibold text-white">
+              Booking a lecture hall or meeting room?
+            </p>
+            <p className="mt-1.5 max-w-[60ch] text-[15px] leading-[1.55] text-on-ink">
+              Those are reserved on the institute&rsquo;s Meeting Room Booking System, not here.
+            </p>
+          </div>
+          <div className="lg:col-span-4 lg:text-right">
+            <a href={MRBS_URL} target="_blank" rel="noopener noreferrer" className={siteButton.light}>
+              Open MRBS
+              <ArrowUpRight aria-hidden className="size-4" />
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
+          </div>
+        </div>
+      </Container>
 
       <Container className="grid grid-cols-[repeat(auto-fit,minmax(min(210px,100%),1fr))] gap-x-10 gap-y-12 pt-16 pb-14">
         <div>

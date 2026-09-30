@@ -761,8 +761,8 @@ export function invoiceToAccounts(booking: BookingWithDetails, invoice: InvoiceD
               ] as [string, string][])
             : ([
                 ["Primary guest", invoice.primary_guest],
-                ["Rooms (A)", formatINR(invoice.subtotal_rooms)],
-                ["Dining (B)", formatINR(invoice.subtotal_dining)],
+                ["Room charges", formatINR(invoice.subtotal_rooms)],
+                ["Dining charges", formatINR(invoice.subtotal_dining)],
               ] as [string, string][])),
           // The desk's additional charges with no GST (25 Sep 2026); those
           // charged under rooms or dining are inside the figures above.

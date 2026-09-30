@@ -82,7 +82,7 @@ export function PageMasthead({
   return (
     <div className="border-b border-border bg-band">
       <Container className="pt-8 pb-12 sm:pt-10 sm:pb-16">
-        <nav aria-label="Breadcrumb" className="mb-8 text-[13px] text-muted-foreground">
+        <nav aria-label="Breadcrumb" className="mb-10 text-[13px] text-muted-foreground">
           <ol className="flex flex-wrap items-center gap-x-2">
             <li>
               <Link href="/" className="text-muted-foreground hover:text-ink">
@@ -95,16 +95,20 @@ export function PageMasthead({
             </li>
           </ol>
         </nav>
-        <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
-          <div className="min-w-0 max-w-[60ch]">
-            <div aria-hidden className="mb-5 h-[3px] w-10 bg-vermilion" />
-            <h1 className="text-[clamp(36px,4.8vw,56px)] leading-[1.04] font-semibold tracking-[-0.022em] text-ink">
-              {title}
-            </h1>
-            {intro && <p className="mt-4 text-[17px] leading-[1.6] text-body">{intro}</p>}
-            {note && <p className="mt-3 text-[14px] leading-[1.55] text-muted-foreground">{note}</p>}
-          </div>
-          {aside && <div className="min-w-0">{aside}</div>}
+        {/* Asymmetric, editorial: the title large in seven columns, the lead
+            set under a vermilion rule in the remaining five, both sitting on
+            one baseline. */}
+        <div className="grid items-end gap-x-10 gap-y-6 lg:grid-cols-12">
+          <h1 className="min-w-0 text-[clamp(40px,5.6vw,72px)] leading-[1] font-semibold tracking-[-0.028em] text-ink lg:col-span-7">
+            {title}
+          </h1>
+          {(intro || note || aside) && (
+            <div className="min-w-0 border-t-4 border-vermilion pt-5 lg:col-span-5">
+              {intro && <p className="text-[17px] leading-[1.6] text-body">{intro}</p>}
+              {note && <p className="mt-3 text-[14px] leading-[1.55] text-muted-foreground">{note}</p>}
+              {aside && <div className="mt-5">{aside}</div>}
+            </div>
+          )}
         </div>
       </Container>
     </div>

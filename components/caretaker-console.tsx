@@ -3,6 +3,7 @@
 import { CheckoutsToday } from "@/components/checkouts-today";
 import { StaysTable } from "@/components/stays-table";
 import { SectionHeading } from "@/components/section-heading";
+import { DeskSummary } from "@/components/desk-summary";
 import type { BookingWithDetails } from "@/lib/types";
 
 /**
@@ -36,10 +37,21 @@ export function CaretakerConsole({
   nowIso: string;
 }) {
   return (
-    <div className="space-y-8">
-      <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} />
+    <div className="space-y-10">
+      <DeskSummary
+        figures={[
+          { label: "Checking out today", count: checkoutsToday.length, anchor: "checkouts" },
+          { label: "In house now", count: current.length, anchor: "in-house" },
+          { label: "Awaiting check-out", count: overdue.length, anchor: "awaiting", alert: true },
+          { label: "To bill", count: toBill.length, anchor: "to-bill" },
+          { label: "Upcoming stays", count: upcoming.length, anchor: "upcoming" },
+        ]}
+      />
+      <div id="checkouts" className="scroll-mt-20">
+        <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} />
+      </div>
 
-      <section>
+      <section id="in-house" className="scroll-mt-20">
         <SectionHeading
           title="Current occupants"
           count={current.length}
@@ -59,7 +71,7 @@ export function CaretakerConsole({
       </section>
 
       {overdue.length > 0 && (
-        <section>
+        <section id="awaiting" className="scroll-mt-20">
           <SectionHeading
             title="Awaiting check-out"
             count={overdue.length}
@@ -79,7 +91,7 @@ export function CaretakerConsole({
           with its bill still open — the manager had this list, the desk that
           hands the invoice over did not. */}
       {toBill.length > 0 && (
-        <section>
+        <section id="to-bill" className="scroll-mt-20">
           <SectionHeading
             title="Checked out — to bill"
             count={toBill.length}
@@ -93,7 +105,7 @@ export function CaretakerConsole({
         </section>
       )}
 
-      <section>
+      <section id="upcoming" className="scroll-mt-20">
         <SectionHeading
           title="Upcoming stays"
           count={upcoming.length}

@@ -111,8 +111,8 @@ export type InvoiceRules = {
   prices_include_gst: boolean;
   /**
    * GST on accommodation, percent: **18%** on every room and extra bed, as
-   * the office's revised invoice prints it ("GST @ 18% on Subtotal (A)",
-   * 25 Sep 2026). It replaced a 5% / 18% slab split at ₹7,500 a day.
+   * the office's revised invoice prints it ("GST @ 18% on A (B)" since
+   * 30 Sep 2026; "on Subtotal (A)" from 25 Sep). It replaced a 5% / 18% slab split at ₹7,500 a day.
    */
   gst_room_percent: number;
   /** GST on food served (restaurant service), percent: 5%. */

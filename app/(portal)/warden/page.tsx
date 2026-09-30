@@ -22,7 +22,7 @@ export default async function WardenPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Assistant Warden Portal">
+      <PageHeader caption={`Approvals · ${user.hostel_name ?? "Hostel"}`} title="Assistant Warden Portal">
         Student booking requests from <span className="font-medium">{user.hostel_name}</span>{" "}
         hostel awaiting your review.
       </PageHeader>

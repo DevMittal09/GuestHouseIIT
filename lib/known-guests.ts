@@ -1,10 +1,12 @@
 import type { AcademicRecord } from "./academic/types";
-import type { BookingWithDetails, Citizenship, Gender } from "./types";
+import type { BookingWithDetails, Citizenship, Gender, Profile, Role } from "./types";
 
 /**
  * People the portal already knows the requester books for (25 Sep 2026), so
  * New Booking can fill a guest in instead of asking for it to be typed again.
- * Two sources, in this order:
+ * First **the requester themselves** (30 Sep 2026) — a student or member of
+ * staff may be one of the guests on their own request, and should not have to
+ * type their own name — then two sources, in this order:
  *
  * 1. **The academic record.** A student's record names their father, mother
  *    and guardian. Choosing Father / Mother / Guardian on a guest fills that
@@ -26,10 +28,19 @@ export type KnownGuest = {
   gender: Gender | null;
   citizenship: Citizenship;
   nationality: string | null;
-  source: "record" | "booking";
+  source: "self" | "record" | "booking";
   /** For a guest from an earlier booking, which one. */
   reference: string | null;
 };
+
+/** The relationship a requester has to themselves, on their own request. */
+export const SELF_RELATIONSHIP = "Self";
+
+/**
+ * Accounts that are one person, and so can be a guest on their own request.
+ * An office, a club or the Student Cell is not anybody's name to fill in.
+ */
+const SELF_ROLES: Role[] = ["student", "employee"];
 
 /** How many earlier guests are offered — the most recent first. */
 export const MAX_KNOWN_FROM_BOOKINGS = 15;
@@ -64,6 +75,31 @@ export function impliedGender(relationship: string | null | undefined): Gender |
 }
 
 const key = (s: string | null | undefined) => (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * The requester as a guest of their own request: the name the academic record
+ * gives them, else their portal profile's. Gender is left for them to choose —
+ * neither source holds it — and the rest follows the same rules as any known
+ * guest (no ID number, no age).
+ */
+export function knownGuestSelf(
+  requester: Pick<Profile, "full_name" | "role">,
+  record: AcademicRecord | null
+): KnownGuest | null {
+  if (!SELF_ROLES.includes(requester.role)) return null;
+  const fromRecord = record && (record.kind === "student" || record.kind === "employee") ? record.name?.trim() : null;
+  const name = fromRecord || requester.full_name.trim();
+  if (!name) return null;
+  return {
+    name,
+    relationship: SELF_RELATIONSHIP,
+    gender: null,
+    citizenship: "indian",
+    nationality: null,
+    source: "self",
+    reference: null,
+  };
+}
 
 /** Father, mother and guardian from a student's academic record; nobody from any other kind. */
 export function knownGuestsFromRecord(record: AcademicRecord | null): KnownGuest[] {
@@ -147,8 +183,9 @@ export function knownSourceOf(
   return known.find((k) => key(k.name) === n && (!r || !k.relationship || key(k.relationship) === r)) ?? null;
 }
 
-/** "Ramesh Menon — Father (academic record)" */
+/** "Ramesh Menon — Father (academic record)", or "Yourself — Anjali Nair". */
 export function describeKnownGuest(k: KnownGuest): string {
+  if (k.source === "self") return `Yourself — ${k.name}`;
   const who = k.relationship ? `${k.name} — ${k.relationship}` : k.name;
   return `${who} (${k.source === "record" ? "academic record" : `booked before, ${k.reference}`})`;
 }

@@ -99,6 +99,7 @@
   --color-saffron: var(--saffron);
   --color-body: var(--body-text);
   --color-band: var(--band);
+  --color-canvas: var(--canvas);
   --color-notice: var(--notice);
   --color-notice-border: var(--notice-border);
   --color-border-strong: var(--border-strong);
@@ -190,6 +191,9 @@
   --saffron: #f5a300;
   --body-text: #4a4541;
   --band: #f3f1eb;
+  /* The portal's working canvas, a shade lighter than the band, so white
+     cards and tables stand on it without a shadow. */
+  --canvas: #faf9f6;
   --notice: #fff7e6;
   --notice-border: #efd7a3;
   --border-strong: #cec8bf;
@@ -221,7 +225,10 @@
   --accent-foreground: #1a1a1a;
   --destructive: #dc2626;
   --border: #e5e1da;
-  --input: #cec8bf;
+  /* Form controls' edge: 3.6:1 on white, above the 3:1 WCAG asks of a
+     control's boundary (the #CEC8BF hairline is 1.6:1 — fine for structure,
+     not for something you have to find and click). */
+  --input: #8c857d;
   --ring: #e94c26;
   --chart-1: #1a1a1a;
   --chart-2: #e94c26;
@@ -315,6 +322,40 @@
     background-color: var(--vermilion-soft);
     color: var(--ink);
   }
+}
+
+/*
+ * A long form's sections, numbered (30 Sep 2026): every card title inside a
+ * `.numbered-sections` container gets the next number in a small ink square,
+ * GOV.UK "step by step" fashion. CSS counters, so the numbering follows
+ * whichever sections the role's form config renders and never needs keeping
+ * in step by hand.
+ */
+.numbered-sections {
+  counter-reset: form-section;
+}
+/* Incremented on the card, not inside its title: counter values pass
+   between siblings, so an increment nested in one card's title would never
+   reach the next card (every section read "1"). */
+.numbered-sections [data-slot="card"]:has([data-slot="card-title"]) {
+  counter-increment: form-section;
+}
+.numbered-sections [data-slot="card-title"]::before {
+  content: counter(form-section);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  margin-right: 0.7rem;
+  padding: 0 0.35rem;
+  border-radius: 3px;
+  background-color: var(--ink);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 /*

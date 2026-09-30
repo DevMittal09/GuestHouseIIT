@@ -27,6 +27,7 @@ the notes of each session. The reasoning behind each step is in
 
 | **26 Sep** | **Public site redesigned** in iitpkd.ac.in's own palette (ink, vermilion, saffron): **a map tab per guest house**, **MRBS** and institute links in the footer, a numbered Guidelines document with placeholder house rules, **large booking tiles** on My Bookings; the portal follows through the tokens. The morning's version (computed figures, route tables) was made **photo-led and quiet** in the afternoon (a new emblem-and-type lockup, no captions, **no requester categories, approvers or role names on the public site**), and in the evening **clean and institutional**, modelled on IIT Madras's Taramani Guest House: photos contained in a split hero and cards, never full-screen. |
 | **30 Sep** | **UI revamp**, presentation layer only: a fixed corner scale (4 / 6 / 8px, nothing rounder), GOV.UK-style cards, tables and status tags across the portal, distinct green / indigo check-in and check-out buttons, legible room-grid seats; on the public site an asymmetric hero, sections opening on a hairline rule with the label in the left quarter, a ruled amenity grid and a photo mosaic. No logic, action or schema touched. |
+| **30 Sep (afternoon)** | **The supervisor's review** of the live site: a plainer hero line and six amenities (no meeting or exercise room); no academic-database caption on the booking page; the office's wording for paying a personal stay; requesters see only Booked / Free on the availability charts (the desk keeps turnaround, overlap, maintenance); "Times are IST"; **"Yourself"** in Fill in from saved details with a **Self** relationship; invoices `version: 3`, lettered A–D up to Grand Total (A+B+C+D). |
 
 ## Branches
 
@@ -36,8 +37,8 @@ the notes of each session. The reasoning behind each step is in
   and **superseded** by the 26 Sep redesign on `main`.
 - Dependabot branches on the remote (actions and npm updates), not merged.
 
-## Numbers, 26 Sep 2026
+## Numbers, 30 Sep 2026
 
 26 migrations · 7 one-off repairs · 12 roles (10 active, 2 legacy) · 18 demo
 personas · 6 demo bookings · 23 real rooms (Bageshri 10, Hamsanandi 13) ·
-305 unit tests · 26 end-to-end journeys · 13 console sections.
+312 unit tests · 26 end-to-end journeys · 13 console sections.

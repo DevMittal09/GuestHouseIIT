@@ -13,6 +13,14 @@ import type { Role, Room, RoomOccupancySegment } from "@/lib/types";
  */
 const CAN_SEE_OCCUPANT: Role[] = ["gh_manager", "developer"];
 
+/**
+ * Roles that see the chart's housekeeping detail — the turnaround after each
+ * stay, an accepted overlap, maintenance by name. Everyone else gets two
+ * states, booked and free (30 Sep 2026: the office found the full legend too
+ * much for requesters, and the overlap no business of theirs).
+ */
+const SEES_DETAIL: Role[] = ["gh_manager", "gh_caretaker", "developer"];
+
 const DAY_MS = 86_400_000;
 
 export interface RoomAvailability {
@@ -20,6 +28,8 @@ export interface RoomAvailability {
   segments: RoomOccupancySegment[];
   /** Whether `requester_name` / `purpose_of_visit` were included. */
   showsOccupant: boolean;
+  /** Whether to draw turnarounds, overlaps and maintenance apart from bookings — the desk's view. */
+  detailed: boolean;
 }
 
 /**
@@ -71,5 +81,6 @@ export async function getRoomAvailability(
         showsOccupant || s.kind === "maintenance" ? s : { ...s, requester_name: null, purpose_of_visit: null }
       ),
     showsOccupant,
+    detailed: SEES_DETAIL.includes(user.role),
   };
 }

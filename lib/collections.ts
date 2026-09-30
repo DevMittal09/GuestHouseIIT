@@ -87,9 +87,11 @@ const COLUMNS = [
   "Department/Section/Institute",
   "Debitable head",
   "Project number",
-  "Rooms (A)",
-  "Dining (B)",
-  "Taxable (A+B)",
+  // Unlettered: the invoices' letters changed with their versions (30 Sep
+  // 2026 made dining (C)), and one month's sheet can hold both.
+  "Rooms (taxable)",
+  "Dining (taxable)",
+  "Taxable total",
   "CGST",
   "SGST",
   "GST",

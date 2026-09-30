@@ -398,7 +398,7 @@ function InvoiceRulesSection({ current }: { current: InvoiceRules }) {
         </div>
         <p className="text-xs text-muted-foreground">
           Defaults are the office&apos;s rates: accommodation 18%, food 5%, each charged on its own subtotal
-          (&ldquo;GST @ 18% on Subtotal (A)&rdquo;). The guest house is in Kerala, so each is printed as half
+          (&ldquo;GST @ 18% on A (B)&rdquo;). The guest house is in Kerala, so each is printed as half
           CGST, half SGST. Additional charges the desk adds take the rate of the section they are charged
           under; &ldquo;other&rdquo; charges carry none.
         </p>

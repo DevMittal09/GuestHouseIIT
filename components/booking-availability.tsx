@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { getRoomAvailability } from "@/app/actions/availability";
 import {
-  LegendSwatch,
+  AvailabilityLegend,
   OccupancyChart,
   RangeOccupancyChart,
 } from "@/components/occupancy-chart";
@@ -34,6 +34,8 @@ interface Loaded {
   rooms: Room[];
   segments: RoomOccupancySegment[];
   failed: boolean;
+  /** The desk's view, with turnarounds and overlaps — see `getRoomAvailability`. */
+  detailed: boolean;
 }
 
 /**
@@ -93,11 +95,17 @@ export function BookingAvailability({
     getRoomAvailability(guestHouseId, range.start.toISOString(), range.end.toISOString())
       .then((data) => {
         if (cancelled) return;
-        setLoaded({ key: requestKey, rooms: data.rooms, segments: data.segments, failed: false });
+        setLoaded({
+          key: requestKey,
+          rooms: data.rooms,
+          segments: data.segments,
+          failed: false,
+          detailed: data.detailed,
+        });
       })
       .catch(() => {
         if (cancelled) return;
-        setLoaded({ key: requestKey, rooms: [], segments: [], failed: true });
+        setLoaded({ key: requestKey, rooms: [], segments: [], failed: true, detailed: false });
       });
     return () => {
       cancelled = true;
@@ -108,6 +116,7 @@ export function BookingAvailability({
   // `?? []` alone makes a fresh array every render and re-runs the bucketing.
   const rooms = useMemo(() => loaded?.rooms ?? [], [loaded]);
   const segments = useMemo(() => loaded?.segments ?? [], [loaded]);
+  const detailed = loaded?.detailed ?? false;
 
   const hourly = useMemo(
     () => (range?.view === "day" ? bucketOccupancyByHour(rooms, segments, range.start) : null),
@@ -233,22 +242,7 @@ export function BookingAvailability({
 
       {rooms.length > 0 && range && (
         <>
-          <div className="flex flex-wrap items-center gap-4 text-xs">
-            <LegendSwatch className="bg-red-500" label="● Booked" />
-            <LegendSwatch className="bg-turnaround" label="Turnaround (housekeeping after a stay)" />
-            <LegendSwatch
-              className="bg-overlap"
-              label="Overlap — two bookings hold the room at once"
-            />
-            <LegendSwatch className="bg-maintenance" label="🔧 Out of service (maintenance)" />
-            <LegendSwatch className="border bg-background" label="Free" />
-            {showsToday && (
-              <LegendSwatch
-                className="bg-primary"
-                label={view === "day" ? "Current hour" : "Today and the current time"}
-              />
-            )}
-          </div>
+          <AvailabilityLegend detailed={detailed} showsToday={showsToday} dayView={view === "day"} />
           <div className={cn("transition-opacity", loading && "opacity-60")}>
             {hourly ? (
               <OccupancyChart
@@ -256,6 +250,7 @@ export function BookingAvailability({
                 occupancy={hourly}
                 currentHour={showsToday ? instituteHour() : null}
                 compact
+                simple={!detailed}
               />
             ) : daily ? (
               <RangeOccupancyChart
@@ -265,13 +260,14 @@ export function BookingAvailability({
                 freeByDay={freeRoomsByDay(rooms, daily, range)}
                 today={today}
                 nowAt={rangeProgress(range)}
+                simple={!detailed}
               />
             ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
-            Times are institute local time. Rooms are held by approved, occupied and
-            pending-cancellation bookings — a request still awaiting approval reserves nothing, so
-            availability can change before yours is approved.
+            Times are IST. Rooms are held by approved, occupied and pending-cancellation bookings —
+            a request still awaiting approval reserves nothing, so availability can change before
+            yours is approved.
           </p>
         </>
       )}

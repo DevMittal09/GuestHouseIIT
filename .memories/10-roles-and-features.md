@@ -70,7 +70,7 @@ console names them — change the name there and the queue or option moves.
 
 | Feature | Where | Notes |
 | --- | --- | --- |
-| **Room Availability** | `/availability` (nav, every role) | Day / Week / Month chart per guest house. Everyone sees booking periods, reference ids and statuses; **only the manager and developer** see who and why (`CAN_SEE_OCCUPANT`). Max 62 days per request. |
+| **Room Availability** | `/availability` (nav, every role) | Day / Week / Month chart per guest house. Everyone sees booking periods, reference ids and statuses; **only the manager and developer** see who and why (`CAN_SEE_OCCUPANT`). **Only the manager, caretaker and developer** see the turnaround, accepted overlaps and maintenance drawn apart (`SEES_DETAIL`, 30 Sep 2026); everyone else sees Booked / Free — the booking form's panel follows the same rule. Max 62 days per request. |
 | **Booking History / Approval Log** | `/history` (nav, every role) | Requesters: their own bookings ("Booking History"). Staff: their jurisdiction ("Approval Log"), with "Handled by me / Everything in scope". Keyword search with `ref:`, `guest:`, `room:`, `by:`, `purpose:`, `gh:`, `status:` prefixes; date presets; **CSV export for everyone**; **PDF export for the manager and developer only**. |
 | Public website | `/`, `/guidelines`, `/gallery`, `/contact`, `/privacy` | Open to anyone, signed in or not. |
 

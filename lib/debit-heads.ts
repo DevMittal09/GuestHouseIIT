@@ -379,9 +379,12 @@ export function describeDebit(booking: {
   return booking.debit_subhead ? `${withDetails} · Sub-head: ${booking.debit_subhead}` : withDetails;
 }
 
-/** What a personal booking tells the requester about paying. */
+/**
+ * What a personal booking tells the requester about paying — the office's
+ * wording (30 Sep 2026), which names no particular way to pay.
+ */
 export const PAY_AT_CHECKOUT_NOTE =
-  "Personal — you will be given an invoice at checkout and can settle it at the desk, or by bank transfer using the details on it.";
+  "An invoice will be generated and can be settled at the time of checkout. Multiple payment options are available at the guest house.";
 
 /** Why this head does not fit the booking, or null when it does. */
 export function debitHeadError(

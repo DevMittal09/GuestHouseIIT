@@ -233,10 +233,11 @@ export function BookingForm({
   knownGuests = [],
 }: {
   /**
-   * People the portal already knows this requester books for — the family on
-   * a student's academic record, then the guests of their own earlier
-   * bookings (`knownGuestsFor`). Choosing Father / Mother / Guardian fills
-   * the name in, and every guest card can be filled from the list.
+   * People the portal already knows this requester books for — the requester
+   * themselves, the family on a student's academic record, then the guests of
+   * their own earlier bookings (`knownGuestsFor`). Choosing Father / Mother /
+   * Guardian / Self fills the name in, and every guest card can be filled
+   * from the list.
    */
   knownGuests?: KnownGuest[];
   /**
@@ -895,7 +896,10 @@ export function BookingForm({
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <form onSubmit={onSubmit} className="numbered-sections space-y-6">
+      {/* `numbered-sections` (globals.css) numbers each card's title 1, 2, 3…
+          in the order they are shown, so the numbers follow whichever
+          sections this role's form actually has. */}
       {/* A club's booking, raised by its Faculty Advisor. Said at the top,
           because everything below is the club's form, not theirs. */}
       {forClub && (
@@ -1020,7 +1024,9 @@ export function BookingForm({
               {/* There is no checkout on a dining booking — nobody checks in —
                   so the line about settling an invoice at the desk was
                   describing something that does not happen. */}
-              {!mealsOnly && <> — {PAY_AT_CHECKOUT_NOTE.replace(/^Personal — /, "")}</>}
+              {!mealsOnly && fixedHead === "personal_funds" && (
+                <span className="mt-1 block text-muted-foreground">{PAY_AT_CHECKOUT_NOTE}</span>
+              )}
             </p>
           ) : (
             <>
@@ -2107,7 +2113,7 @@ function GuestRow({
               if (k) fillFrom(k);
             }}
           >
-            <option value="">Choose someone on your record or from an earlier booking…</option>
+            <option value="">Choose yourself, someone on your record, or someone from an earlier booking…</option>
             {offered.map((k, i) => (
               <option key={`${k.name}|${k.relationship ?? ""}`} value={i}>
                 {describeKnownGuest(k)}
@@ -2124,9 +2130,11 @@ function GuestRow({
             <Input placeholder={infantCard ? "Infant's full name" : "Full name"} {...register(`${base}.name`)} />
             {source && (
               <p className="text-xs text-muted-foreground">
-                {source.source === "record"
-                  ? `As on your academic record (${source.relationship}).`
-                  : `As on your booking ${source.reference}.`}
+                {source.source === "self"
+                  ? "Your own name, as on your record."
+                  : source.source === "record"
+                    ? `As on your academic record (${source.relationship}).`
+                    : `As on your booking ${source.reference}.`}
               </p>
             )}
             <FieldError message={err(`${base}.name`)} />
@@ -2388,7 +2396,7 @@ function CustomFieldInput({
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return <p className="text-sm text-destructive">{message}</p>;
+  return <p className="border-l-4 border-destructive pl-2.5 text-sm font-semibold text-destructive">{message}</p>;
 }
 
 function EmptyNote({ children }: { children: React.ReactNode }) {

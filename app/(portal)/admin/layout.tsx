@@ -30,7 +30,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!(await isAdminUnlocked())) {
     return (
       <div className="space-y-6">
-        <PageHeader title={title}>{blurb}</PageHeader>
+        <PageHeader caption="Settings and records" title={title}>{blurb}</PageHeader>
         <AdminLock usingDefault={await isDefaultAdminPassword()} />
       </div>
     );
@@ -38,7 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="space-y-6">
-      <PageHeader title={title}>{blurb}</PageHeader>
+      <PageHeader caption="Settings and records" title={title}>{blurb}</PageHeader>
       <ConsoleNav
         sections={sections.map((section) => {
           const { href, label, blurb } = CONSOLE_SECTIONS[section];

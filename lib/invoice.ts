@@ -28,15 +28,17 @@ import type { BookingWithDetails, DebitHead, MealKey, Room } from "./types";
  * reporting columns of the `invoices` table.
  *
  * The layout follows the office's template (`public/GHM_Invoice.docx`, as
- * revised on 25 Sep 2026): Booking Details | Invoice Details, a room table with
- * a row per room and per extra bed, then Room Charges Subtotal (A) and GST @ 18%
- * on it; a dining table of Breakfast, Lunch and Dinner, then Dining Charges
- * Subtotal (B) and GST @ 5% on it; and the Grand Total. The desk's
- * **additional charges** (25 Sep 2026) print inside the section they are
- * charged under — or, with no GST, in an Other Charges table of their own.
- * Snapshots issued before then (`version: 1`) keep the layout they were
- * printed with: Sub Total (A), Sub Total (B), Total (A+B), GST on Total.
- * `invoiceTable()` is the one description of both, for the PDF and the preview.
+ * revised on 30 Sep 2026): Booking Details | Invoice Details, a room table with
+ * a row per room and per extra bed, then Room Charges Subtotal (A) and
+ * GST @ 18% on A (B); a dining table of Breakfast, Lunch and Dinner, then
+ * Dining Charges Subtotal (C) and GST @ 5% on C (D); and Grand Total
+ * (A+B+C+D). The desk's **additional charges** (25 Sep 2026) print inside the
+ * section they are charged under — or, with no GST, in an Other Charges table
+ * of their own. Snapshots keep the layout they were issued with: `version: 2`
+ * (25–30 Sep) letters only the subtotals, `version: 1` (before 25 Sep) prints
+ * Sub Total (A), Sub Total (B), Total (A+B), GST on Total.
+ * `invoiceTable()` is the one description of all three, for the PDF and the
+ * preview.
  */
 
 export type InvoiceStatus = "draft" | "issued" | "paid" | "cancelled";
@@ -459,10 +461,14 @@ export function halves(tax: number): { cgst: number; sgst: number } {
 /** Everything printed on an invoice. Stored whole as the issued invoice's snapshot. */
 export type InvoiceDocument = {
   /**
-   * 2 since 25 Sep 2026: GST per section (18% on rooms, 5% on food) and the
-   * desk's additional charges. 1: the layout before — GST on the total.
+   * 3 since 30 Sep 2026: the same figures as 2, with every one the grand total
+   * adds lettered — GST @ 18% on A (B), Dining Charges Subtotal (C),
+   * GST @ 5% on C (D), Grand Total (A+B+C+D). 2 since 25 Sep 2026: GST per
+   * section (18% on rooms, 5% on food) and the desk's additional charges, only
+   * the subtotals lettered. 1: the layout before — GST on the total. An issued
+   * invoice prints as its version says, so a reprint never changes its labels.
    */
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   /**
    * A stay, or a dining (meals-only) booking, which has no rooms, no check-in
    * and no check-out — so its invoice prints none of them (24 Sep 2026).
@@ -500,14 +506,14 @@ export type InvoiceDocument = {
   meal_lines: InvoiceMealLine[];
   /** Taxable value of the dining section: the meals and its additional charges. */
   subtotal_dining: number;
-  /** The desk's additional charges, each printed in its section (version 2). */
+  /** The desk's additional charges, each printed in its section (version 2 and later). */
   extra_lines?: InvoiceExtraLine[];
-  /** Additional charges with no GST — the Other Charges table (version 2). */
+  /** Additional charges with no GST — the Other Charges table (version 2 and later). */
   subtotal_other?: number;
-  /** The rates applied to each section, as printed ("GST @ 18% on Subtotal (A)") — version 2. */
+  /** The rates applied to each section, as printed ("GST @ 18% on A (B)") — version 2 and later. */
   gst_room_percent?: number;
   gst_meal_percent?: number;
-  /** GST on each section, paise (version 2). */
+  /** GST on each section, paise (version 2 and later). */
   gst_rooms?: number;
   gst_dining?: number;
   /** Taxable value, A + B (+ other charges). */
@@ -689,7 +695,7 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
   const mealsOnly = booking.service_type === "meals_only";
 
   return {
-    version: 2,
+    version: 3,
     kind: mealsOnly ? "dining" : "stay",
     booking_id: booking.id,
     booking_reference: booking.booking_reference_id,
@@ -862,11 +868,12 @@ export type InvoiceTableSection = {
  * The tariff table as printed — the PDF and the desk's preview both draw
  * this, so they cannot disagree about what an invoice says.
  *
- * **Version 2** (25 Sep 2026, the office's revised template): the Rate
- * column; Room Charges Subtotal (A) and GST @ 18% on it; Dining Charges
- * Subtotal (B) and GST @ 5% on it; Other Charges (no GST) when the desk added
- * any; Grand Total (Including GST). Additional charges print in their
- * section, their comment under the description.
+ * **Versions 2 and 3** (25 and 30 Sep 2026, the office's revised template):
+ * the Rate column; the room section's subtotal and the GST on it; the dining
+ * section's subtotal and the GST on it; Other Charges (no GST) when the desk
+ * added any; one Grand Total. They differ only in the labels — see
+ * `totalLabels`. Additional charges print in their section, their comment
+ * under the description.
  *
  * **Version 1** snapshots print exactly as they were issued: the Tariff
  * column, Sub Total (A), Sub Total (B), Total (A+B), GST on Total.
@@ -908,7 +915,7 @@ export function invoiceTable(doc: InvoiceDocument): {
         unpriced: false,
       }));
 
-  if (doc.version !== 2) {
+  if (doc.version === 1) {
     const labels = invoiceTotalLabels(doc);
     const sections: InvoiceTableSection[] = [];
     if (!dining) {
@@ -940,9 +947,8 @@ export function invoiceTable(doc: InvoiceDocument): {
     };
   }
 
-  // A dining invoice has no (A), so its sections go unlettered.
-  const letter = (l: string) => (dining ? "" : ` (${l})`);
-  const pct = (n: number | undefined) => `${n ?? 0}%`;
+  const other = extraRows("other");
+  const labels = totalLabels(doc, dining, other.length > 0);
   const sections: InvoiceTableSection[] = [];
   if (!dining) {
     sections.push({
@@ -952,8 +958,8 @@ export function invoiceTable(doc: InvoiceDocument): {
       rows: [...roomRows, ...extraRows("room")],
       minRows: 2,
       totals: [
-        { label: `Room Charges Subtotal${letter("A")}:`, amount: doc.subtotal_rooms },
-        { label: `GST @ ${pct(doc.gst_room_percent)} on Subtotal${letter("A")}:`, amount: doc.gst_rooms ?? 0 },
+        { label: labels.roomSubtotal, amount: doc.subtotal_rooms },
+        { label: labels.roomGst, amount: doc.gst_rooms ?? 0 },
       ],
     });
   }
@@ -964,11 +970,10 @@ export function invoiceTable(doc: InvoiceDocument): {
     rows: [...mealRows, ...extraRows("dining")],
     minRows: 0,
     totals: [
-      { label: `Dining Charges Subtotal${letter("B")}:`, amount: doc.subtotal_dining },
-      { label: `GST @ ${pct(doc.gst_meal_percent)} on Subtotal${letter("B")}:`, amount: doc.gst_dining ?? 0 },
+      { label: labels.diningSubtotal, amount: doc.subtotal_dining },
+      { label: labels.diningGst, amount: doc.gst_dining ?? 0 },
     ],
   });
-  const other = extraRows("other");
   if (other.length > 0) {
     sections.push({
       key: "other",
@@ -976,13 +981,66 @@ export function invoiceTable(doc: InvoiceDocument): {
       qtyHeading: "No(s)",
       rows: other,
       minRows: 0,
-      totals: [{ label: `Other Charges Subtotal${letter("C")}:`, amount: doc.subtotal_other ?? 0 }],
+      totals: [{ label: labels.otherSubtotal, amount: doc.subtotal_other ?? 0 }],
     });
   }
+  // A grand total that names its letters has to be their sum. It is, except
+  // where GST is added on top (not the default) and the total is rounded to
+  // the rupee — then the rounding is a row of its own, as on a tax invoice.
+  const roundOff = doc.grand_total - (doc.total + doc.gst);
   return {
     rateHeading: "Rate",
     sections,
-    closing: [{ label: "Grand Total (Including GST):", amount: doc.grand_total }],
+    closing: [
+      ...(doc.version >= 3 && roundOff !== 0 ? [{ label: "Round off:", amount: roundOff }] : []),
+      { label: labels.grandTotal, amount: doc.grand_total },
+    ],
+  };
+}
+
+/**
+ * The labels under each section, by the snapshot's version.
+ *
+ * **Version 3** (30 Sep 2026, the office's template revised again) letters
+ * every figure the grand total adds, in turn: Room Charges Subtotal (A),
+ * GST @ 18% on A (B), Dining Charges Subtotal (C), GST @ 5% on C (D), Other
+ * Charges Subtotal (E) when the desk added any, Grand Total (A+B+C+D). A
+ * dining invoice has no room section, so its lettering starts at the dining
+ * subtotal: (A), GST on A (B), Grand Total (A+B).
+ *
+ * **Version 2** letters only the subtotals — (A), (B), (C) — with "GST @ 18%
+ * on Subtotal (A)" and "Grand Total (Including GST)", and a dining invoice
+ * unlettered.
+ */
+function totalLabels(doc: InvoiceDocument, dining: boolean, hasOther: boolean) {
+  const pct = (n: number | undefined) => `${n ?? 0}%`;
+  if (doc.version === 2) {
+    const letter = (l: string) => (dining ? "" : ` (${l})`);
+    return {
+      roomSubtotal: `Room Charges Subtotal${letter("A")}:`,
+      roomGst: `GST @ ${pct(doc.gst_room_percent)} on Subtotal${letter("A")}:`,
+      diningSubtotal: `Dining Charges Subtotal${letter("B")}:`,
+      diningGst: `GST @ ${pct(doc.gst_meal_percent)} on Subtotal${letter("B")}:`,
+      otherSubtotal: `Other Charges Subtotal${letter("C")}:`,
+      grandTotal: "Grand Total (Including GST):",
+    };
+  }
+  const used: string[] = [];
+  const next = () => {
+    const l = String.fromCharCode(65 + used.length);
+    used.push(l);
+    return l;
+  };
+  const [room, roomGst] = dining ? ["", ""] : [next(), next()];
+  const [meal, mealGst] = [next(), next()];
+  const other = hasOther ? next() : "";
+  return {
+    roomSubtotal: `Room Charges Subtotal (${room}):`,
+    roomGst: `GST @ ${pct(doc.gst_room_percent)} on ${room} (${roomGst}):`,
+    diningSubtotal: `Dining Charges Subtotal (${meal}):`,
+    diningGst: `GST @ ${pct(doc.gst_meal_percent)} on ${meal} (${mealGst}):`,
+    otherSubtotal: `Other Charges Subtotal (${other}):`,
+    grandTotal: `Grand Total (${used.join("+")}):`,
   };
 }
 

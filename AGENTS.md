@@ -219,12 +219,19 @@ are in **`.memories/17-academic-records.md`**. Keep that file and
   for the requests already in their queue only, with each Father / Mother /
   Guardian on the request checked against the record (`checkFamily`,
   `lib/academic/family.ts`).
-- **Known guests are filled in** (25 Sep 2026, `lib/known-guests.ts`): a
-  student's father / mother / guardian from the record, then the adults of the
+- **Known guests are filled in** (25 Sep 2026, `lib/known-guests.ts`):
+  **the requester themselves first** ("Yourself", relationship `Self` — a
+  student or employee only, `knownGuestSelf`, 30 Sep 2026), a student's
+  father / mother / guardian from the record, then the adults of the
   requester's own earlier bookings (`knownGuestsFor`, not for the desk). Name,
   gender, relationship, citizenship only — **never an ID or passport number
   or an age** back to the browser. Auto-fill on choosing a relationship only
-  for `unique_relationships`, and never over something typed.
+  for `unique_relationships`, and never over something typed. `Self` is on
+  the student relationship list and One of each; it is neither a parent nor a
+  dependent. A student row saved in the Form Builder before 30 Sep needs Self
+  added by hand.
+- **The card has no caption when the record is found** (30 Sep 2026); the
+  fallbacks to the profile still say why.
 
 ## Roles, pipelines, and where they are encoded
 
@@ -896,6 +903,14 @@ reservation, and `OCCUPIED` is a separate fact recorded at the desk. A
 room-by-room list underneath gives each booking period and a Vacant / Partly
 booked / Booked badge for the whole period shown.
 
+- **Requesters see booked or free; the desk sees why** (30 Sep 2026).
+  `getRoomAvailability` returns `detailed` for `gh_manager`, `gh_caretaker`
+  and `developer`; for everyone else both charts render `simple` — no
+  turnaround, no overlap, maintenance drawn as booked — under a Booked / Free /
+  now legend. One `AvailabilityLegend` (`components/occupancy-chart.tsx`) for
+  `/availability` and the booking form's panel. The notes say "Times are
+  IST." Don't hand requesters the housekeeping states again.
+
 - `listRoomOccupancy(guestHouseId, from, to)` (both stores) returns one segment
   per **(room, booking)** using the same `ROOM_HOLDING_STATUSES` + strict
   overlap as `getOccupiedRoomIds`. The two must agree — a throwaway parity
@@ -965,11 +980,16 @@ Issued invoices are **snapshots** (`InvoiceDocument`), drawn by
   an Invoice button on any checked-out stay or approved dining booking
   (`invoiceableFromArchive`). Don't let a vacated stay become unreachable.
 - **GST is per section** (25 Sep 2026, the office's revised template): 18% on
-  Room Charges Subtotal (A), 5% on Dining Charges Subtotal (B), Other Charges
-  (C) none, one Grand Total. **`invoiceTable(doc)` is the one layout** for the
-  PDF and the preview. New documents are `version: 2`; a `version: 1`
-  snapshot must keep printing as issued (Total (A+B), GST on Total) — never
-  "upgrade" an issued invoice's layout.
+  rooms, 5% on dining, Other Charges none, one Grand Total. **`invoiceTable(doc)`
+  is the one layout** for the PDF and the preview; **nothing fills the
+  .docx** — the PDF redraws it. New documents are **`version: 3`** (30 Sep
+  2026): Room Charges Subtotal (A), GST @ 18% on A (B), Dining Charges
+  Subtotal (C), GST @ 5% on C (D), Other (E), **Grand Total (A+B+C+D)**, a
+  Round off row only when rupee rounding needs one (`totalLabels`). A
+  `version: 2` snapshot keeps "on Subtotal (A)" / "Grand Total (Including
+  GST)", a `version: 1` Total (A+B) / GST on Total — labels are computed at
+  print time, so a label change is a new version, never an "upgrade" of an
+  issued invoice.
 - **Additional charges** (`parseExtraCharges`, ≤ 20): each is charged under
   `room` / `dining` / `other`, which decides its GST; typed on the draft
   (`invoices.extra_charges`, migration 26), priced into `extra_lines` on the
@@ -1082,7 +1102,9 @@ full-screen (the owner called a full-screen hero "so weird").
   photographs, the guest-house names, one sentence, amenities — **no figures,
   no meal times, no instructions, no photo captions**. Rules and "How booking
   works" (in general terms) live on `/guidelines`. `tests/public-site.test.ts`
-  fails if a role name reaches the public copy.
+  fails if a role name reaches the public copy. **Promise less** (30 Sep
+  2026): plain statements of what exists — no adjectives about the rooms, no
+  lists of who may stay, no unconfirmed services.
 - **Where a rule *is* stated** (advance window, stay cap, capacity, meal
   times, the kitchen's notice, charges) it is rendered from `lib/` and
   Settings by `lib/site-content.ts` (`guidelineSections`), never hardcoded,
@@ -1098,13 +1120,21 @@ full-screen (the owner called a full-screen hero "so weird").
   `site-chrome.tsx` (`SiteFooter`: an MRBS line, then address, front office,
   both guest houses' directions, institute links). No utility strip. `NavBar` (`site-nav.tsx`) is shared:
   `tone="dark"` portal bar, `"light"` / `"overlay"` site header.
-- **Layout:** home = a 5 + 7 split hero (headline, two buttons, the
-  front-office number; one 4:3 photo beside it), a card per guest house
-  (`houseSummary`, no counts), a ruled grid of eight amenities, a four-photo
+- **Layout:** home = a 5 + 7 split hero as one contained block (an ink
+  panel with the headline, two buttons and the front-office number, joined
+  to one 4:3 photo), a card per guest house
+  (`houseSummary`, no counts), a ruled grid of six amenities (no meeting or
+  exercise room, 30 Sep 2026), a four-photo
   mosaic, a closing row of ruled links. Sections open on a hairline ink rule
   with the label in the left quarter (`SectionHead`). Inner pages open on a
   plain light band (`PageMasthead`); sign-in pages put the form beside a
-  contained 4:3 photo (`SIGN_IN_PHOTOS`).
+  photo in one split-screen panel (`SIGN_IN_PHOTOS`); inner mastheads put
+  the title in seven columns and the lead under a vermilion rule in five.
+- **The portal is laid out as a GOV.UK service**: an ink masthead closed by
+  a vermilion rule, a white service nav (`NavBar tone="service"`, keep
+  `aria-current`), pages on `bg-canvas`. `/book` is two columns (form +
+  Requester details and "What happens next"); its cards are numbered by
+  `.numbered-sections` in `globals.css` — no numbers in the markup.
 - **Corners are a fixed scale** (`@theme inline`): `rounded` 4px inputs,
   `rounded-md` 6px buttons, `rounded-lg` 8px cards / dialogs / photos,
   nothing rounder (`xl`–`4xl` are capped at 8px). No shadows, gradients,

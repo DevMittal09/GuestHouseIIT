@@ -67,6 +67,22 @@ security becomes the boundary rather than a second line behind the server
 - A developer's old `.local-db.json` keeps the retired `fa-petrichor` account;
   delete the file for a clean demo.
 
+### From the supervisor's review (30 Sep 2026)
+
+- **Photographs — AM** ("Take couple of photos – AM"): new photos of the
+  guest houses, to go through the recipe in
+  [16-public-site-and-ui.md](16-public-site-and-ui.md#photographs). Ask
+  which guest house each shows, so they can finally be attributed.
+- **Fix the .docx typo**: `public/GHM_Invoice.docx` reads "GST @ 5% on B (D)";
+  the PDF prints "on C (D)", as the supervisor's list does.
+- **Add Self to a saved student form** on the hosted project, if
+  `form_configs` holds a `student` row (Form Builder → relationship options
+  and One of each, or Reset to spec defaults). Until then "Yourself" fills the
+  name but not the relationship.
+- **Office to confirm** that a student may be a guest on their own request —
+  the owner's reading of "let the student write their name as well" — and
+  that employees should be offered "Yourself" too.
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the
@@ -146,7 +162,9 @@ would catch the most next:
 
 Everything tagged `TODO(site)` in `lib/site.ts` and `lib/site-content.ts`:
 contact details, a guest-house map pin, the guidelines PDF URL, amenity lines
-and house rules, which guest house each photograph shows. Detail in
+(six since 30 Sep 2026 — the meeting room and exercise room came off) and
+house rules, which guest house each photograph shows, AM's new photographs.
+Copy stays plain and unpromising (the owner, 30 Sep 2026). Detail in
 [16-public-site-and-ui.md](16-public-site-and-ui.md).
 
 ---
