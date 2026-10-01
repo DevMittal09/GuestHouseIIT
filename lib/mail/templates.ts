@@ -6,13 +6,20 @@ import {
   type InvoiceDocument,
 } from "@/lib/invoice";
 import { formatDateTime, formatDate } from "@/lib/format";
-import { describeMealDays, describeMeals, MEAL_LABELS, mealsOn } from "@/lib/meals";
+import {
+  describeDietCounts,
+  describeMealDays,
+  describeMeals,
+  dinersFor,
+  MEAL_LABELS,
+  mealDietCounts,
+  mealsOn,
+} from "@/lib/meals";
 import { describeParty } from "@/lib/occupancy";
 import { PETS_POLICY_NOTICE } from "@/lib/policy";
 import { describeDebit } from "@/lib/debit-heads";
 import {
   BOOKING_TYPE_LABELS,
-  MEAL_PREFERENCE_LABELS,
   ROLE_LABELS,
   SERVICE_TYPE_LABELS,
   STATUS_LABELS,
@@ -60,7 +67,11 @@ export function bookingFacts(booking: BookingWithDetails): Block {
     rows.push(["Rooms requested", String(booking.rooms_requested)]);
     rows.push(["Party", describeParty(booking)]);
   }
-  rows.push(["Purpose", booking.purpose_of_visit]);
+  // "Remarks" and optional on a dining booking (1 Oct 2026), so the row is
+  // left out rather than printed empty.
+  if (booking.purpose_of_visit.trim() !== "") {
+    rows.push([mealsOnly ? "Remarks" : "Purpose", booking.purpose_of_visit]);
+  }
   rows.push(["Booking type", BOOKING_TYPE_LABELS[booking.booking_type]]);
   rows.push(["Debitable head", describeDebit(booking)]);
   if (booking.on_behalf_of_name) {
@@ -82,9 +93,10 @@ export function bookingFacts(booking: BookingWithDetails): Block {
   // Only where the guest house serves them — elsewhere the row is a puzzle.
   if (booking.guest_house.serves_meals) {
     rows.push(["Meals", describeMeals(booking.meals)]);
-    if (booking.meal_preference) {
-      rows.push(["Meal preference", MEAL_PREFERENCE_LABELS[booking.meal_preference]]);
-    }
+    // Each person's own preference (1 Oct 2026); a booking made before that
+    // reads as its one whole-party answer spread over the head count.
+    const split = mealDietCounts(booking, dinersFor(booking));
+    if (split) rows.push(["Meal preferences", describeDietCounts(split)]);
   }
   // Repeated on every booking mail rather than only the confirmation: it is
   // the one rule a guest can breach before anyone at the desk can stop them.
@@ -693,14 +705,19 @@ export function dailyDeskReport(
             {
               kind: "table" as const,
               caption: "Dining bookings today (meals without a room)",
-              head: ["Reference", "Booked by", "People", "Meals today", "Head"],
-              rows: sections.kitchen.dining.map((b) => [
-                b.booking_reference_id,
-                b.on_behalf_of_name ?? b.requester.full_name,
-                String(b.meal_guest_count ?? 0),
-                mealsOn(b.meals, day).map((m) => MEAL_LABELS[m]).join(", "),
-                describeDebit(b),
-              ]),
+              head: ["Reference", "Booked by", "People", "Preferences", "Meals today", "Head"],
+              rows: sections.kitchen.dining.map((b) => {
+                const people = b.meal_guest_count ?? 0;
+                const split = mealDietCounts(b, people);
+                return [
+                  b.booking_reference_id,
+                  b.on_behalf_of_name ?? b.requester.full_name,
+                  String(people),
+                  split ? describeDietCounts(split) : "—",
+                  mealsOn(b.meals, day).map((m) => MEAL_LABELS[m]).join(", "),
+                  describeDebit(b),
+                ];
+              }),
             },
           ]
         : []),

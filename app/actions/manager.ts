@@ -9,7 +9,7 @@ import {
 import { requireUser } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit-server";
 import { checkOutOrderError } from "@/lib/booking-schema";
-import { mealPlanError, normalizeMeals } from "@/lib/meals";
+import { dietCountsError, dinersFor, mealPlanError, normalizeMeals } from "@/lib/meals";
 import {
   allocationCapacityError,
   countBedGuests,
@@ -19,7 +19,7 @@ import { notifyCancelled } from "@/lib/mail/notify";
 import { getStore } from "@/lib/store";
 import { getRules } from "@/lib/settings-server";
 import { instituteDate, instituteIso, toInstituteDateTimeValue } from "@/lib/tz";
-import type { BookingStatus, MealPlan, MealPreference } from "@/lib/types";
+import type { BookingStatus, MealDietCounts, MealPlan } from "@/lib/types";
 import { includesMeals, RoomClashError } from "@/lib/types";
 import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
 import type { ActionResult } from "./bookings";
@@ -110,7 +110,7 @@ export async function updateBookingStay(
 /** Change the meals on an existing booking. */
 export async function updateBookingMeals(
   bookingId: string,
-  input: { meals: MealPlan; meal_preference: MealPreference | null; reason: string }
+  input: { meals: MealPlan; meal_diet_counts: MealDietCounts | null; reason: string }
 ): Promise<ActionResult> {
   try {
     const user = await requireUser();
@@ -135,8 +135,16 @@ export async function updateBookingMeals(
       (await getRules()).meals.windows
     );
     if (problem) return { ok: false, error: problem };
-    if (meals.length > 0 && !input.meal_preference) {
-      return { ok: false, error: "Choose a vegetarian or non-vegetarian preference" };
+    if (meals.length > 0) {
+      // Each person's own preference (1 Oct 2026): the split has to add up to
+      // whoever is eating — a dining booking's head count, else the guests
+      // needing a bed.
+      const diners = dinersFor(booking);
+      const split = input.meal_diet_counts;
+      const mismatch = split
+        ? dietCountsError(split, diners)
+        : "Say how many of the party are vegetarian and how many are not";
+      if (mismatch) return { ok: false, error: mismatch };
     }
     if (meals.length === 0 && includesMeals(booking.service_type)) {
       return {
@@ -150,7 +158,13 @@ export async function updateBookingMeals(
 
     await store.updateBookingDetails(
       bookingId,
-      { meals, meal_preference: meals.length === 0 ? null : input.meal_preference },
+      {
+        meals,
+        meal_diet_counts: meals.length === 0 ? null : input.meal_diet_counts,
+        // The legacy whole-party answer is cleared with it, so the two can
+        // never disagree about what the kitchen is cooking.
+        meal_preference: null,
+      },
       {
         action_by: user.id,
         action_by_name: user.full_name,

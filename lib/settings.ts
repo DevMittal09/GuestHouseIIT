@@ -82,6 +82,12 @@ export type MealWindow = { start: string; end: string };
 export type MealRules = {
   /** Institute wall-clock "HH:mm", end exclusive. */
   windows: Record<MealKey, MealWindow>;
+  /**
+   * The most people the kitchen will serve at one sitting, counting everyone
+   * already booked for it (1 Oct 2026). 0 turns the limit off. Checked per
+   * day **and** per meal — see `mealCapacityError`.
+   */
+  max_diners_per_meal: number;
 };
 
 /**
@@ -205,6 +211,8 @@ export const DEFAULT_RULES: Rules = {
       lunch: { start: "12:30", end: "14:00" },
       dinner: { start: "19:30", end: "21:00" },
     },
+    // The office's figure: one kitchen serving a guest house, not a canteen.
+    max_diners_per_meal: 30,
   },
   debit: DEFAULT_DEBIT_RULES,
   // From the office's invoice template (public/GHM_Invoice.docx). Nothing is
@@ -316,6 +324,7 @@ export const mealRulesSchema = z
       lunch: windowSchema("Lunch"),
       dinner: windowSchema("Dinner"),
     }),
+    max_diners_per_meal: whole("People per sitting", 0, 1000),
   })
   .refine(
     (m) =>

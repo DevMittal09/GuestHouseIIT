@@ -1,5 +1,6 @@
 "use server";
 
+import { describeDietCounts, dinersFor, mealDietCounts } from "@/lib/meals";
 import { maskIdNumber } from "@/lib/security";
 import { csvCell } from "@/lib/csv";
 import { requireUser } from "@/lib/auth";
@@ -14,7 +15,6 @@ import { describeDebit } from "@/lib/debit-heads";
 import { getStore } from "@/lib/store";
 import { toInstituteDateValue } from "@/lib/tz";
 import {
-  MEAL_PREFERENCE_LABELS,
   ROLE_LABELS,
   SERVICE_TYPE_LABELS,
   STATUS_LABELS,
@@ -83,7 +83,12 @@ function csvRow(booking: BookingWithDetails, userId: string): string {
       .filter((g) => g.is_infant)
       .map((g) => g.name)
       .join(" / "),
-    booking.meal_preference ? MEAL_PREFERENCE_LABELS[booking.meal_preference] : "",
+    // Each person's own preference (1 Oct 2026); a booking made before that
+    // reads as its one whole-party answer spread over the head count.
+    (() => {
+      const split = mealDietCounts(booking, dinersFor(booking));
+      return split ? describeDietCounts(split) : "";
+    })(),
     booking.guests
       .filter((g) => g.citizenship === "other")
       .map(

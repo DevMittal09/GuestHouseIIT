@@ -29,7 +29,7 @@ import {
   mergeKnownGuests,
   prefillFor,
 } from "@/lib/known-guests";
-import { earlierCheckInError } from "@/lib/operations";
+import { moveCheckInError } from "@/lib/operations";
 import { DEFAULT_RULES, parseRuleGroup, upgradeInvoiceRules } from "@/lib/settings";
 import type { DataStore } from "@/lib/store/types";
 import type { Tariff } from "@/lib/tariffs";
@@ -53,11 +53,34 @@ describe("Special Funds for everyone except students", () => {
   it("is in every category's defaults but the students'", () => {
     for (const kind of ["room", "dining"] as const) {
       for (const category of SPECIAL_FUNDS_CATEGORIES) {
+        // Personal *dining* is the one exception, added 1 Oct 2026: a meal
+        // booking for one's own family is one's own money.
+        if (kind === "dining" && category === "personal") continue;
         expect(DEFAULT_DEBIT_RULES[kind][category]).toContain("special_budget");
       }
       expect(DEFAULT_DEBIT_RULES[kind].student).not.toContain("special_budget");
     }
     expect(SPECIAL_FUNDS_CATEGORIES).not.toContain("student");
+  });
+
+  it("is not offered on a personal meal booking (1 Oct 2026)", () => {
+    expect(DEFAULT_DEBIT_RULES.dining.personal).toEqual(["personal_funds"]);
+    expect(
+      debitHeadsByType("employee", ["personal"], priya, [], DEFAULT_DEBIT_RULES, "dining").personal
+    ).toEqual(["personal_funds"]);
+    // A floor under Settings, like the students' one: a stored row that still
+    // lists it is ignored on read rather than breaking the form.
+    const forced = {
+      ...DEFAULT_DEBIT_RULES,
+      dining: { ...DEFAULT_DEBIT_RULES.dining, personal: ["personal_funds" as const, "special_budget" as const] },
+    };
+    expect(
+      debitHeadsByType("employee", ["personal"], priya, [], forced, "dining").personal
+    ).toEqual(["personal_funds"]);
+    // Room bookings keep it.
+    expect(
+      debitHeadsByType("employee", ["personal"], priya, [], DEFAULT_DEBIT_RULES, "room").personal
+    ).toContain("special_budget");
   });
 
   it("reaches personal and alumni bookings, and the IAR Student Cell", () => {
@@ -86,10 +109,11 @@ describe("Special Funds for everyone except students", () => {
       dining: { ...DEFAULT_DEBIT_RULES.dining, personal: ["personal_funds"] },
     };
     const upgraded = upgradeDebitRules(rev2) as typeof DEFAULT_DEBIT_RULES;
-    expect(upgraded.revision).toBe(3);
+    expect(upgraded.revision).toBe(4);
     expect(upgraded.room.personal).toEqual(["personal_funds", "special_budget"]);
     expect(upgraded.room.alumni).toEqual(["institute_grant", "special_budget"]);
-    expect(upgraded.dining.personal).toEqual(["personal_funds", "special_budget"]);
+    // Revision 4 withdraws it from personal dining, after revision 3 added it.
+    expect(upgraded.dining.personal).toEqual(["personal_funds"]);
     // Staff unticked it after revision 2: that choice stands.
     expect(upgraded.room.staff).toEqual(["department_budget"]);
     // A row with no revision gets both rounds.
@@ -357,19 +381,24 @@ function plainV1(): InvoiceDocument {
   return { ...(rest as InvoiceDocument), version: 1 };
 }
 
-// ------------------------------------------------------- earlier check-in
+// -------------------------------------------------------- moving a check-in
 
-describe("bringing a check-in forward", () => {
-  it("allows an earlier check-in on an approved or current stay only", () => {
+describe("moving a stay's check-in", () => {
+  it("allows it in either direction on an approved or current stay only", () => {
     const b = booking({ status: "APPROVED" });
     const earlier = new Date(Date.parse(b.check_in) - 6 * 3_600_000).toISOString();
-    expect(earlierCheckInError(b, earlier)).toBeNull();
-    expect(earlierCheckInError(b, b.check_in)).toMatch(/earlier/);
-    expect(earlierCheckInError(b, new Date(Date.parse(b.check_in) + 3_600_000).toISOString())).toMatch(/earlier/);
-    expect(earlierCheckInError(b, new Date(Date.parse(b.check_in) - 61 * 86_400_000).toISOString())).toMatch(/60 days/);
-    expect(earlierCheckInError({ ...b, status: "PENDING_GH_MANAGER" }, earlier)).toMatch(/approved or current/);
-    expect(earlierCheckInError({ ...b, service_type: "meals_only" }, earlier)).toMatch(/dining/);
-    expect(earlierCheckInError(b, "not a date")).toMatch(/Choose/);
+    // Later as well as earlier (1 Oct 2026): a guest who arrives after the
+    // booked time could not be checked in at all before this.
+    const later = new Date(Date.parse(b.check_in) + 6 * 3_600_000).toISOString();
+    expect(moveCheckInError(b, earlier)).toBeNull();
+    expect(moveCheckInError(b, later)).toBeNull();
+    expect(moveCheckInError(b, b.check_in)).toMatch(/already has/);
+    // Not past the check-out: that is an extension, not a move.
+    expect(moveCheckInError(b, b.check_out)).toMatch(/before the check-out/);
+    expect(moveCheckInError(b, new Date(Date.parse(b.check_in) - 61 * 86_400_000).toISOString())).toMatch(/60 days/);
+    expect(moveCheckInError({ ...b, status: "PENDING_GH_MANAGER" }, earlier)).toMatch(/approved or current/);
+    expect(moveCheckInError({ ...b, service_type: "meals_only" }, earlier)).toMatch(/dining/);
+    expect(moveCheckInError(b, "not a date")).toMatch(/Choose/);
   });
 });
 
@@ -546,7 +575,7 @@ const LOG = { action_by: "gh-manager", action_by_name: "Manager", new_status: "A
 const input = (checkIn: string, checkOut: string, patch: Partial<NewBookingInput> = {}): NewBookingInput => ({
   user_id: "employee-priya", guest_house_id: "gh-bageshri", user_role: "employee", status: "APPROVED",
   purpose_of_visit: "Visit", check_in: checkIn, check_out: checkOut, booking_type: "official", service_type: "room",
-  debit_head: "department_budget", debit_details: null, debit_document_url: null, meal_preference: null, meal_guest_count: null,
+  debit_head: "department_budget", debit_details: null, debit_document_url: null, meal_preference: null, meal_diet_counts: null, meal_guest_count: null,
   pets_policy_acknowledged: true, alumni_name: null, alumni_roll_number: null, alumni_id_url: null, custom_fields: null, meals: [],
   rooms: [{ room_type: null, guests: [{ name: "Guest One", age: 40, gender: "female", relationship: null, id_number: null, id_document_url: null, is_infant: false, citizenship: "indian", nationality: null, passport_number: null }] }],
   ...patch,

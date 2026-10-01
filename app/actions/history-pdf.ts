@@ -1,5 +1,6 @@
 "use server";
 
+import { describeDietCounts, dinersFor, mealDietCounts } from "@/lib/meals";
 import { maskIdNumber } from "@/lib/security";
 import { requireUser } from "@/lib/auth";
 import {
@@ -10,7 +11,6 @@ import {
 import { countryName } from "@/lib/countries";
 import { getStore } from "@/lib/store";
 import {
-  MEAL_PREFERENCE_LABELS,
   ROLE_LABELS,
   SERVICE_TYPE_LABELS,
   STATUS_LABELS,
@@ -120,7 +120,10 @@ function toReportRow(b: BookingWithDetails): ReportRow {
     submitted: formatDate(b.created_at),
     remarks: b.rejection_reason ?? "",
     service: SERVICE_TYPE_LABELS[b.service_type],
-    mealPreference: b.meal_preference ? MEAL_PREFERENCE_LABELS[b.meal_preference] : "",
+    mealPreference: (() => {
+      const split = mealDietCounts(b, dinersFor(b));
+      return split ? describeDietCounts(split) : "";
+    })(),
     foreignNationals: b.guests
       .filter((g) => g.citizenship === "other")
       .map(

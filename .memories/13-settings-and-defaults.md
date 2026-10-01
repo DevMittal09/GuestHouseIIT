@@ -63,6 +63,10 @@ aged under 5 (code constant). Both guest houses are all double sharing.
 | Lunch | 12:30–14:00 | …; dinner can be booked until it ends |
 | Dinner | 19:30–21:00 | …; tomorrow's breakfast can be booked until it ends |
 
+| Value | Default | Decides |
+| --- | --- | --- |
+| People per sitting (`max_diners_per_meal`) | **30** | The most people the kitchen will serve at one meal, **counting everyone already booked for it**; checked per day and per meal in `createBooking`, and one booking's head count is capped at it. 0 turns it off |
+
 Which guest houses serve meals at all is a guest-house switch (below), not a
 Setting.
 
@@ -81,14 +85,16 @@ and **dining** (meals only). Defaults:
 | Students | Personal Funds | Personal Funds |
 | IAR Student Cell (official — no longer used) | Institute Grant, Special Funds | Institute Grant, Special Funds |
 | On behalf of an alumnus | Institute Grant, Personal Funds, Special Funds | Personal Funds, Special Funds |
-| Any personal booking (not a student's) | Personal Funds, Special Funds | Personal Funds, Special Funds |
+| Any personal booking (not a student's) | Personal Funds, Special Funds | **Personal Funds only** (1 Oct 2026: a special fund does not pay for somebody's own family's lunch) |
 | GH Manager at the desk | Department, Institute Grant, PDF, Personal, Project, Special Funds | the same less Project |
 
 - **Dining can never be charged to a Project** (schema).
 - **Floors** (`FORBIDDEN_DEBIT_HEADS`, greyed in the grid, stripped on read,
   refused on save): **faculty never Institute Grant**; **students never
   Special Funds** (since 25 Sep 2026 Special Funds is for everyone else,
-  personal and alumni bookings included).
+  personal and alumni bookings included). A dining-only floor as well
+  (`FORBIDDEN_DINING_HEADS`, 1 Oct 2026): **no Special Funds on a personal
+  meal booking**.
 - The category: a **student** is always *student* (checked first, 25 Sep
   2026 — a student's booking is personal, and used to fall into *personal*);
   otherwise personal → *personal*, on behalf of an alumnus → *alumni*, else
@@ -97,7 +103,10 @@ and **dining** (meals only). Defaults:
 - Special Funds is stored as `special_budget`. A saved Settings row gains it
   once per revision (`upgradeDebitRules`): revision 2 (24 Sep) for the
   official categories, revision 3 (25 Sep) for personal, alumni and the IAR
-  Student Cell. After that an untick sticks.
+  Student Cell. **Revision 4 (1 Oct) takes it off personal dining** — the one
+  revision that removes rather than adds; it runs after the additions, so a
+  row still on revision 1 is brought all the way forward. After that an untick
+  sticks.
 - Legacy heads (Alumni Fund, Student Fund, Hostel Funds) stay valid for stored
   rows and can be ticked on here, but no default offers them.
 
@@ -169,7 +178,7 @@ edited or deleted — a new price is a new row. Seeded from the tariff sheet:
 | Value | Where | What it does |
 | --- | --- | --- |
 | Infant = age **< 5** | `INFANT_AGE_LIMIT`, `lib/occupancy.ts` (and the DB trigger) | No bed, no ID |
-| Rooms per request **10**; meals-only guests **1–100**; purpose ≥ **5** chars | `lib/booking-schema.ts` | |
+| Rooms per request **10**; meals-only people **1–30** (the Setting above); purpose ≥ **5** chars **on a stay** — Remarks are optional on a meal booking | `lib/booking-schema.ts` | |
 | Copy to ≤ **25** addresses | `MAX_COPY_TO_EMAILS` + migration 24 | |
 | Project sub-head ≤ **120** chars; Special fund name ≤ 300 | `lib/debit-heads.ts`, schema | |
 | Uploads ≤ **5 MB**, JPG/PNG/WEBP/PDF | `lib/uploads.ts` | Server action body limit 25 MB (`next.config.ts`) |

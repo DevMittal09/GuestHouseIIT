@@ -113,8 +113,11 @@ export type DebitRules = {
 /**
  * Revision 2 (24 Sep 2026): Special Funds on every official booking.
  * Revision 3 (25 Sep 2026): Special Funds for everyone except students.
+ * Revision 4 (1 Oct 2026): **not** on a personal dining booking — the office
+ * asked for it to go from a personal meal booking, where the only honest
+ * answer is the requester's own money.
  */
-export const DEBIT_RULES_REVISION = 3;
+export const DEBIT_RULES_REVISION = 4;
 
 /**
  * The categories Special Funds reached at each revision. A row is upgraded by
@@ -154,7 +157,10 @@ export const DEFAULT_DEBIT_RULES: DebitRules = {
     student: ["personal_funds"],
     iar_student_cell: ["institute_grant", "special_budget"],
     alumni: ["personal_funds", "special_budget"],
-    personal: ["personal_funds", "special_budget"],
+    // Personal dining: the requester's own money and nothing else (1 Oct
+    // 2026). A special fund pays for an institute occasion, not for somebody
+    // ordering lunch for their own family.
+    personal: ["personal_funds"],
     manager: ["department_budget", "institute_grant", "professional_development_fund", "personal_funds", "special_budget"],
   },
   revision: DEBIT_RULES_REVISION,
@@ -187,7 +193,26 @@ export function upgradeDebitRules(stored: Record<string, unknown>): Record<strin
     }
     return out;
   };
-  return { ...stored, room: add(stored.room), dining: add(stored.dining), revision: DEBIT_RULES_REVISION };
+  /**
+   * Revision 4 takes Special Funds *off* personal dining — the one thing in
+   * here that removes rather than adds. It runs after the additions above, so
+   * a row still on revision 1 is brought all the way forward: Special Funds
+   * is offered everywhere revisions 2 and 3 offered it, and then withdrawn
+   * from the one list revision 4 withdraws it from.
+   */
+  const withoutPersonalSpecialFunds = (lists: unknown) => {
+    if (!lists || typeof lists !== "object") return lists;
+    const out: Record<string, unknown> = { ...(lists as Record<string, unknown>) };
+    const list = out.personal;
+    if (Array.isArray(list)) out.personal = list.filter((h) => h !== "special_budget");
+    return out;
+  };
+  return {
+    ...stored,
+    room: add(stored.room),
+    dining: withoutPersonalSpecialFunds(add(stored.dining)),
+    revision: DEBIT_RULES_REVISION,
+  };
 }
 
 const DEBIT_HEAD_VALUES = [
@@ -226,18 +251,49 @@ export const FORBIDDEN_DEBIT_HEADS: Partial<Record<DebitCategory, DebitHead[]>> 
   student: ["special_budget"],
 };
 
-/** Whether this category may ever be offered that head. */
-export function isHeadAllowedFor(category: DebitCategory, head: DebitHead): boolean {
-  return !FORBIDDEN_DEBIT_HEADS[category]?.includes(head);
+/**
+ * Heads a category may never be charged to **for meals**, on top of the list
+ * above. One entry: **a personal meal booking cannot be charged to Special
+ * Funds** (1 Oct 2026). Like `FORBIDDEN_DEBIT_HEADS` this is a floor rather
+ * than only a default, so a Settings row that still lists it is ignored on
+ * read instead of breaking the page.
+ */
+export const FORBIDDEN_DINING_HEADS: Partial<Record<DebitCategory, DebitHead[]>> = {
+  personal: ["special_budget"],
+};
+
+function forbiddenFor(category: DebitCategory, kind: "room" | "dining"): DebitHead[] {
+  return [
+    ...(FORBIDDEN_DEBIT_HEADS[category] ?? []),
+    ...(kind === "dining" ? (FORBIDDEN_DINING_HEADS[category] ?? []) : []),
+  ];
+}
+
+/** Whether this category may ever be offered that head, for this kind of booking. */
+export function isHeadAllowedFor(
+  category: DebitCategory,
+  head: DebitHead,
+  kind: "room" | "dining" = "room"
+): boolean {
+  return !forbiddenFor(category, kind).includes(head);
 }
 
 /** A configured list with the forbidden heads removed. */
-export function allowedHeads(category: DebitCategory, heads: DebitHead[]): DebitHead[] {
-  const forbidden = FORBIDDEN_DEBIT_HEADS[category];
-  return forbidden ? heads.filter((h) => !forbidden.includes(h)) : heads;
+export function allowedHeads(
+  category: DebitCategory,
+  heads: DebitHead[],
+  kind: "room" | "dining" = "room"
+): DebitHead[] {
+  const forbidden = forbiddenFor(category, kind);
+  return forbidden.length > 0 ? heads.filter((h) => !forbidden.includes(h)) : heads;
 }
 
-const headList = (category: DebitCategory, label: string, allowProject: boolean) =>
+const headList = (
+  category: DebitCategory,
+  label: string,
+  allowProject: boolean,
+  kind: "room" | "dining" = "room"
+) =>
   z
     .array(debitHeadSchema)
     .min(1, `${label}: choose at least one head`)
@@ -247,8 +303,8 @@ const headList = (category: DebitCategory, label: string, allowProject: boolean)
       `${label}: dining cannot be charged to a project`
     )
     .refine(
-      (heads) => heads.every((h) => isHeadAllowedFor(category, h)),
-      `${label}: ${(FORBIDDEN_DEBIT_HEADS[category] ?? [])
+      (heads) => heads.every((h) => isHeadAllowedFor(category, h, kind)),
+      `${label}: ${forbiddenFor(category, kind)
         .map((h) => DEBIT_HEAD_LABELS[h])
         .join(" and ")} cannot be charged by this category`
     );
@@ -262,7 +318,10 @@ export const debitRulesSchema = z.object({
   ),
   dining: z.object(
     Object.fromEntries(
-      DEBIT_CATEGORIES.map((c) => [c, headList(c, `Dining — ${DEBIT_CATEGORY_LABELS[c]}`, false)])
+      DEBIT_CATEGORIES.map((c) => [
+        c,
+        headList(c, `Dining — ${DEBIT_CATEGORY_LABELS[c]}`, false, "dining"),
+      ])
     ) as Record<DebitCategory, ReturnType<typeof headList>>
   ),
 });
@@ -324,7 +383,7 @@ export function debitHeadsByType(
       // Stripped here rather than trusted from Settings: the form and
       // `createBooking` both read this, so a head a category may never use
       // cannot be offered or accepted even if a stored row still lists it.
-      return [type, allowedHeads(category, rules[kind][category])];
+      return [type, allowedHeads(category, rules[kind][category], kind)];
     })
   );
 }
@@ -336,18 +395,27 @@ export function fixedDebitHead(allowed: DebitHead[] | undefined): DebitHead | nu
 
 /**
  * What may be written down beside the head, or null when the head takes
- * nothing. Special Funds asks which fund; it is optional, like the sanction
- * letter, because the office asked for the head and nothing more — but the
- * accounts section is better off with it, so the box is offered.
+ * nothing.
+ *
+ * - **Special Funds** asks which fund; it is optional, like the sanction
+ *   letter, because the office asked for the head and nothing more — but the
+ *   accounts section is better off with it, so the box is offered.
+ * - **Project** asks for the project itself, and is mandatory (1 Oct 2026).
+ *   It used to be a dropdown of the projects in the console, which the office
+ *   asked to remove: the list was always behind the real one, and a requester
+ *   whose sanction landed last week had nothing to choose. What they type is
+ *   snapshotted onto the booking and printed on the invoice, which splits it
+ *   back into number and title on " — " (`projectFromDetails`).
  */
 export function debitDetailsPrompt(head: DebitHead | null | undefined): string | null {
-  return head === "special_budget" ? "Which special fund (name or sanction reference)" : null;
+  if (head === "special_budget") return "Which special fund (name or sanction reference)";
+  if (head === "project_grant") return "Project number and title";
+  return null;
 }
 
-/** Whether the details above are mandatory. None are, today. */
+/** Whether the details above are mandatory. Only the project is. */
 export function debitDetailsRequired(head: DebitHead | null | undefined): boolean {
-  void head;
-  return false;
+  return head === "project_grant";
 }
 
 /** Special Funds may carry its sanction letter. Optional since 24 Sep 2026. */

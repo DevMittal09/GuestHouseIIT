@@ -69,17 +69,30 @@ async function facultyStayStartingNow(page: Page): Promise<string> {
   return reference;
 }
 
-test("a student's father is filled in from the record, an infant gets an infant card, and the warden sees both checked", async ({ page }) => {
+test("a student's father is filled in on request, an infant gets an infant card, and the warden sees both checked", async ({ page }) => {
   await signIn(page, ACCOUNTS.student);
   await page.goto("/book");
   await page.locator('[name="check_in_date"]').fill(localDate(3));
   await page.locator('[name="check_out_date"]').fill(localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("Father and my niece visiting");
 
-  // Choosing Father fills in the name on Anjali's academic record, and the gender.
+  /**
+   * **Choosing a relationship fills in nothing** (1 Oct 2026, the office:
+   * "remove auto-fill even for parents"). A box that writes itself is a box
+   * nobody checks. What the portal knows is one click away instead — the
+   * compact "Fill in…" list on the guest's own card, which sets the name, the
+   * gender, the relationship and the citizenship together.
+   */
   await page.locator('[name="rooms.0.guests.0.relationship"]').selectOption("Father");
+  await expect(page.locator('[name="rooms.0.guests.0.name"]')).toHaveValue("");
+  await expect(page.locator('[name="rooms.0.guests.0.gender"]')).toHaveValue("");
+
+  await page
+    .getByLabel("Fill in guest 1 from saved details")
+    .selectOption({ label: "Ramesh Menon — Father (academic record)" });
   await expect(page.locator('[name="rooms.0.guests.0.name"]')).toHaveValue("Ramesh Menon");
   await expect(page.locator('[name="rooms.0.guests.0.gender"]')).toHaveValue("male");
+  await expect(page.locator('[name="rooms.0.guests.0.relationship"]')).toHaveValue("Father");
   await expect(page.getByText("As on your academic record (Father).")).toBeVisible();
   await page.locator('[name="rooms.0.guests.0.age"]').fill("55");
   await page.locator('[name="rooms.0.guests.0.id_number"]').fill("432112345678");
@@ -113,9 +126,11 @@ test("a student's father is filled in from the record, an infant gets an infant 
   await expect(review.getByText("1 guest + 1 infant").first()).toBeVisible();
 });
 
-test("reception brings a stay's check-in forward", async ({ page }) => {
+test("reception moves a stay's check-in, earlier and later", async ({ page }) => {
   // The seeded official stay (DM005): approved, Bageshri, six days out. The
-  // caretaker may do it — whoever may extend a stay may start it earlier.
+  // caretaker may do it — whoever may extend a stay may move its start. Both
+  // directions since 1 Oct 2026: a guest who arrives late could not be
+  // checked in at all before that.
   const reference = "IITPKD-GH-2026-DM005";
   await signIn(page, ACCOUNTS.caretaker);
   await page.goto("/caretaker?gh=bageshri");
@@ -124,13 +139,24 @@ test("reception brings a stay's check-in forward", async ({ page }) => {
   const before = await manage.getByText(/^Now /).first().innerText();
 
   await manage.getByLabel("Reason", { exact: true }).fill("The committee arrives a day early");
-  await manage.getByLabel("Earlier check-in").fill(localDate(5));
-  await manage.getByRole("button", { name: "Bring check-in forward" }).click();
-  await expect(page.getByText("Check-in brought forward")).toBeVisible({ timeout: 30_000 });
+  await manage.getByLabel("Move check-in").fill(localDate(5));
+  await manage.getByRole("button", { name: "Move check-in" }).click();
+  await expect(page.getByText("Check-in moved")).toBeVisible({ timeout: 30_000 });
   await expect(manage).toBeHidden();
 
   await rowFor(page, reference).getByRole("button", { name: /Manage/ }).click();
-  await expect(page.getByRole("dialog").getByText(/^Now /).first()).not.toHaveText(before);
+  const again = page.getByRole("dialog");
+  await expect(again.getByText(/^Now /).first()).not.toHaveText(before);
+
+  // And back the other way: the guest's flight slips, so the stay starts a
+  // day later than it was booked for.
+  const moved = await again.getByText(/^Now /).first().innerText();
+  await again.getByLabel("Reason", { exact: true }).fill("Their flight was delayed by a day");
+  await again.getByLabel("Move check-in").fill(localDate(7));
+  await again.getByRole("button", { name: "Move check-in" }).click();
+  await expect(page.getByText("Check-in moved")).toBeVisible({ timeout: 30_000 });
+  await rowFor(page, reference).getByRole("button", { name: /Manage/ }).click();
+  await expect(page.getByRole("dialog").getByText(/^Now /).first()).not.toHaveText(moved);
 });
 
 test("the invoice bills the meals and the charge the desk adds, as they are typed", async ({ page }) => {

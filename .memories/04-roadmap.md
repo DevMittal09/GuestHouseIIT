@@ -46,12 +46,20 @@ security becomes the boundary rather than a second line behind the server
 - **Office to confirm "Fill in from saved details"** is welcome for every
   role: it offers the people on a requester's own earlier bookings (names,
   gender, relationship, citizenship only).
-- **Apply migrations 24 and 25 to the hosted project** (and check what else it
-  is missing — its state is not recorded). Until 25, nobody can book for a club
-  there; until 24, a booking with a Copy-to address or a project sub-head is
-  refused, and a baby typed as age 0 still is. Migration 25's backfill will
-  name the old `fa.petrichor` account Petrichor's advisor — replace it with a
-  faculty member in Departments & Clubs → Faculty Advisors.
+- **Unset `MAIL_REDIRECT_ALL_TO` in the Vercel environment.** While it is set
+  every message goes to that one mailbox and **CC is dropped**, so no "Copy
+  to" address receives anything — the office's 1 Oct report. `/admin/mail`
+  shows a red warning naming the mailbox whenever it is set. Keep it on any
+  staging deployment.
+- **Apply migrations 24, 25, 26 and 27 to the hosted project** (and check what
+  else it is missing — its state is not recorded). Until 25, nobody can book
+  for a club there; until 24, a booking with a Copy-to address or a project
+  sub-head is refused, and a baby typed as age 0 still is; until 26, an
+  invoice with an additional charge is refused; until 27, a booking's meal
+  split is dropped and reads back as the one old whole-party preference.
+  Migration 25's backfill will name the old `fa.petrichor` account Petrichor's
+  advisor — replace it with a faculty member in Departments & Clubs → Faculty
+  Advisors.
 - **Name each council's Faculty Advisor and secretary's mailbox.** Only
   Cultural Affairs (`sec_arts@`) is seeded. The owner's other example was
   `sec_acad@`; the Technical Affairs mailbox and the rest of the councils are

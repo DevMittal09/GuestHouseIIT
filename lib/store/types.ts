@@ -5,6 +5,7 @@ import type {
   BookingStatus,
   BookingWithDetails,
   GuestHouse,
+  MealDietCounts,
   MealPlan,
   MealPreference,
   NewBookingInput,
@@ -87,6 +88,8 @@ export interface BookingDetailsPatch {
   purpose_of_visit?: string;
   meals?: MealPlan;
   meal_preference?: MealPreference | null;
+  /** Each person's own preference, as counts (migration 27). */
+  meal_diet_counts?: MealDietCounts | null;
   /** Set or clear (null) a requester's extension request (migration 20). */
   extension_request?: { until: string; reason: string } | null;
 }

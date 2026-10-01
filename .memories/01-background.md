@@ -321,6 +321,31 @@ what three of them meant. Reasoning in [03-decisions.md](03-decisions.md)
 | "Fill in from saved details — let the student write their name as well" (the owner: a student can book for themselves and fill in their own details) | **Done** | "Yourself — <name>" first in the list for students and employees; **Self** on the student relationship list, one per request — `lib/known-guests.ts` |
 | Invoice: Room Charges Subtotal (A), GST @ 18% on A (B), Dining Charges Subtotal (C), GST @ 5% on C (D), Grand total (A+B+C+D); the .docx already updated | **Done** | Invoice `version: 3` (`invoiceTable`, `lib/invoice.ts`), drawn by `lib/invoice-pdf.ts` and the preview; earlier invoices reprint as issued. The .docx's "on B (D)" is a typo for "on C (D)" |
 
+## The office's seventh list — 1 October 2026
+
+Relayed by the owner as one list, mostly about the **meal booking** and the
+desk. Reasoning in [03-decisions.md](03-decisions.md) ("1 Oct 2026"); what
+changed in [99-recent-changes.md](99-recent-changes.md).
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| Meal booking: **personal preferences for meal order**, not one for the whole group | **Done** | `bookings.meal_diet_counts` (migration 27) holds `{veg, non_veg}` adding up to the head count; the form asks for both, the kitchen console, mail and exports read them through `mealDietCounts()`, which spreads a pre-1-Oct booking's single `meal_preference` over its head count |
+| GHM / GHC console: keep a meal booking in its own card while it awaits approval | **Done** | `/manager` has **Incoming room requests** and **Incoming meal bookings**, the second with days, sittings, head count and the split instead of check-in / check-out / rooms. The caretaker has no approval queue at all |
+| Room availability console: keep only the grid — no details at the bottom. "This is just for users not for GHM and GHC" | **Done** | The room-by-room list is drawn only when `detailed` (manager, caretaker, developer) — the same flag that decides the chart's legend |
+| **Copy to mail is not working** — the mail is not copied to the addresses given | **Diagnosed and made visible; one env change is the owner's** | The addressing is correct and now tested on every requester mail (`tests/seventh-round.test.ts`). The cause is **`MAIL_REDIRECT_ALL_TO`**, set in the deployment: the redirect replaces To and **drops CC**, so nothing reaches a Copy-to address. `/admin/mail` now says so in red, and `.env.example` warns. **Unset it on Vercel** |
+| Remove "choose the project" from the Project head — make them type it | **Done** | The dropdown is gone; the project number and title are typed into the details box beside the head, required there (`debitDetailsPrompt` / `debitDetailsRequired`), and still split into number and title for the invoice |
+| Move "Fill in from saved details" somewhere less prominent — it is too big | **Done** | A compact "Fill in…" select on the guest card's own header line, label hidden |
+| Remove auto-fill **even for parents** | **Done** | Choosing a relationship fills in nothing; `onRelationshipChosen` / `autoFillFor` are gone. The explicit list still fills a whole card |
+| Date format **DD/MM/YYYY** everywhere | **Done** | `formatInstituteDate`, `formatInstituteDateTime`, `formatDateValue` (`lib/tz.ts`) — every rendered date goes through them |
+| Late entry check-in is not possible — a guest who comes late cannot check in | **Done** | The desk can move a check-in **later** as well as earlier (`moveCheckInError`, `moveCheckInAction`, "Move check-in"), and a new booking's check-in may be **any time today** rather than strictly in the future, so the desk can enter a stay that has already begun |
+| Special Funds: remove from a **personal** meal booking | **Done** | `DEFAULT_DEBIT_RULES.dining.personal` is Personal Funds alone; `FORBIDDEN_DINING_HEADS` is a floor under Settings; revision 4 withdraws it from a stored row once |
+| A limit for meal booking — **30**, counting the people already booked | **Done** | `rules.meals.max_diners_per_meal` (Settings, 30, 0 = off); checked per day **and per meal** in `createBooking` against every live booking for that sitting |
+| By default keep **lunch** checked instead of all | **Done** | `DEFAULT_MEALS_ON` — on a **meal booking**. A stay still starts with nothing ticked: defaulting meals on there would put dining charges on every stay at a kitchen guest house |
+| Remove the pet disclaimer from the meal booking | **Done** | The notice card is rendered only for a stay |
+| A confirmation message at the end of the meal booking — what was booked | **Done** | A live "Confirm your meal booking" card: kitchen, people, preferences, each day and sitting, who pays, remarks |
+| A scroll option for the number of people instead of + / − | **Done** | A `1…30` dropdown (`meal_guest_count`) |
+| Rename Purpose to **Remarks** on the meal booking, and make it optional | **Done** | Optional for `meals_only` only; a stay still has to say what it is for |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

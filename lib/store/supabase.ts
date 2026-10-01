@@ -194,6 +194,7 @@ export class SupabaseStore implements DataStore {
       on_behalf_of_phone,
       copy_to_emails,
       debit_subhead,
+      meal_diet_counts,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars -- discarded on purpose; see above
       submission_remarks: _submissionRemarks,
       ...bookingInput
@@ -221,6 +222,9 @@ export class SupabaseStore implements DataStore {
         // no sub-head — which is most of them.
         ...(copy_to_emails && copy_to_emails.length > 0 ? { copy_to_emails } : {}),
         ...(debit_subhead ? { debit_subhead } : {}),
+        // Named only on a booking that has meals, so a database without
+        // migration 27 still takes every booking that has none.
+        ...(meal_diet_counts ? { meal_diet_counts } : {}),
       })
       .select()
       .single();
@@ -377,6 +381,9 @@ export class SupabaseStore implements DataStore {
         // what the migration's backfill produces once it runs.
         service_type: r.service_type ?? ((r.meals?.length ?? 0) > 0 ? "room_meals" : "room"),
         meal_preference: r.meal_preference ?? null,
+        // Before migration 27 each person's own preference is not stored;
+        // `mealDietCounts` falls back to the whole-party answer above.
+        meal_diet_counts: r.meal_diet_counts ?? null,
         meal_guest_count: r.meal_guest_count ?? null,
         pets_policy_acknowledged: r.pets_policy_acknowledged ?? false,
         pets_policy_acknowledged_at: r.pets_policy_acknowledged_at ?? null,
@@ -644,6 +651,7 @@ export class SupabaseStore implements DataStore {
         }),
         ...(patch.meals !== undefined && { meals: patch.meals }),
         ...(patch.meal_preference !== undefined && { meal_preference: patch.meal_preference }),
+        ...(patch.meal_diet_counts !== undefined && { meal_diet_counts: patch.meal_diet_counts }),
         // Migration 20: a request is set or cleared explicitly, and one the new
         // check-out already satisfies is settled.
         ...(patch.extension_request !== undefined

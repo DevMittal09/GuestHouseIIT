@@ -1,5 +1,13 @@
 import { DEFAULT_RULES, type MealWindow } from "./settings";
-import type { MealDay, MealKey, MealPlan, MealPreferences } from "./types";
+import {
+  MEAL_PREFERENCE_LABELS,
+  type MealDay,
+  type MealDietCounts,
+  type MealKey,
+  type MealPlan,
+  type MealPreference,
+  type MealPreferences,
+} from "./types";
 import {
   addDaysToDateValue,
   formatDateValue,
@@ -65,6 +73,26 @@ export function mealTimes(windows: MealWindows = MEAL_SERVING_WINDOWS): Record<M
 export const MEAL_TIMES: Record<MealKey, string> = mealTimes();
 
 export const NO_MEALS: MealPreferences = { breakfast: false, lunch: false, dinner: false };
+
+/**
+ * Which meals a day of a **meal booking** arrives already ticked (1 Oct 2026).
+ *
+ * It used to be all three: most guests eat, so the form filled the days in
+ * and the requester cleared what they would miss. The office asked for
+ * **lunch only** — it is the meal the guest house actually serves most of,
+ * and offering breakfast and dinner by default was producing head counts for
+ * meals nobody turned up to. Breakfast and dinner are one tick away.
+ *
+ * It is **not** applied to a room booking: meals there are an extra the
+ * requester opts into, and defaulting them on would put dining charges on
+ * every stay at a guest house with a kitchen without anyone asking for them.
+ * A room booking passes `NO_MEALS`.
+ */
+export const DEFAULT_MEALS_ON: MealPreferences = {
+  breakfast: false,
+  lunch: true,
+  dinner: false,
+};
 
 /**
  * The most days a meal plan may cover. A guard against a runaway loop on a
@@ -340,51 +368,58 @@ export function mealPlanFromSlots(slots: ReadonlySet<string>, days: StayMealDay[
 }
 
 /**
- * The slots the grid shows as ticked: every meal the stay covers, minus the
- * ones the requester has turned off.
+ * What the form holds for the meal grid: the slots the requester has decided
+ * about, each mapped to their answer. A slot that is not in here has not been
+ * touched, so it takes the default for its meal (`DEFAULT_MEALS_ON`).
  *
- * **Meals default to on.** The form therefore holds the *opt-outs* rather than
- * the ticks, which is what makes the default survive a date change: a day that
- * comes into range has no opt-out against it, so it arrives ticked. Storing
- * ticks instead would have meant back-filling them whenever the stay grew, and
- * that cannot tell a slot the requester unticked from one that was never
- * offered.
+ * Holding the *decisions* rather than the ticks is what makes the default
+ * survive a change of dates: a day that comes into range is not in the map, so
+ * it arrives with lunch ticked and the rest clear. Holding ticks instead could
+ * not tell a meal the requester unticked from one that was never offered, and
+ * holding only the opt-outs (which is what this was until 1 Oct 2026) cannot
+ * express "breakfast on", now that breakfast is off by default.
  */
-export function mealSlotsFromDeclined(
+export type MealChoices = ReadonlyMap<string, boolean>;
+
+/**
+ * The slots the grid shows as ticked: each slot's own answer, else its meal's
+ * default — `DEFAULT_MEALS_ON` on a meal booking, `NO_MEALS` on a stay.
+ */
+export function mealSlotsFromChoices(
   days: StayMealDay[],
-  declined: ReadonlySet<string>,
+  choices: MealChoices,
+  defaults: MealPreferences = DEFAULT_MEALS_ON
 ): Set<string> {
   const ticked = new Set<string>();
   for (const { date, available } of days) {
     for (const meal of MEAL_KEYS) {
+      if (!available[meal]) continue;
       const slot = mealSlot(date, meal);
-      if (available[meal] && !declined.has(slot)) ticked.add(slot);
+      if (choices.get(slot) ?? defaults[meal]) ticked.add(slot);
     }
   }
   return ticked;
 }
 
 /**
- * The opt-outs after the grid hands back a new set of ticks. Only the slots
+ * The decisions after the grid hands back a new set of ticks. Only the slots
  * currently on screen are reconsidered, so a meal turned off for dates the stay
  * no longer covers stays off if those dates come back — the mirror of the rule
  * `mealPlanFromSlots` applies to ticks.
  */
-export function declinedFromMealSlots(
+export function choicesFromMealSlots(
   days: StayMealDay[],
   ticked: ReadonlySet<string>,
-  previous: ReadonlySet<string>,
-): Set<string> {
-  const declined = new Set(previous);
+  previous: MealChoices,
+): Map<string, boolean> {
+  const choices = new Map(previous);
   for (const { date, available } of days) {
     for (const meal of MEAL_KEYS) {
       if (!available[meal]) continue;
-      const slot = mealSlot(date, meal);
-      if (ticked.has(slot)) declined.delete(slot);
-      else declined.add(slot);
+      choices.set(mealSlot(date, meal), ticked.has(mealSlot(date, meal)));
     }
   }
-  return declined;
+  return choices;
 }
 
 /** On how many days each meal was asked for. */
@@ -444,6 +479,71 @@ function twelveHour(time: string): [string, "AM" | "PM"] {
   return [`${hour12}:${String(minute).padStart(2, "0")}`, hour < 12 ? "AM" : "PM"];
 }
 
+// ------------------------------------------------- each person's preference
+
+/** No meals asked for, so nobody to count. */
+export const NO_DIET_COUNTS: MealDietCounts = { veg: 0, non_veg: 0 };
+
+/** Everyone on the booking, however their preferences are split. */
+export function dietTotal(counts: MealDietCounts): number {
+  return counts.veg + counts.non_veg;
+}
+
+/**
+ * A stored or submitted split, cleaned: whole numbers, never negative, never
+ * anything else. Anything unreadable is "nobody", which `dietCountsError`
+ * then reports against the head count rather than silently accepting.
+ */
+export function normalizeDietCounts(value: unknown): MealDietCounts {
+  if (!value || typeof value !== "object") return { ...NO_DIET_COUNTS };
+  const raw = value as Record<string, unknown>;
+  const whole = (n: unknown) =>
+    typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  return { veg: whole(raw.veg), non_veg: whole(raw.non_veg) };
+}
+
+/**
+ * The split to act on for a booking: its own counts, or — for a booking made
+ * before each person had their own preference — the whole head count under
+ * the one preference it carries. A booking with meals and neither is
+ * "unknown", which `kitchenHeadCount` reports as such rather than guessing.
+ */
+export function mealDietCounts(booking: {
+  meal_diet_counts?: MealDietCounts | null;
+  meal_preference?: MealPreference | null;
+}, headCount: number): MealDietCounts | null {
+  if (booking.meal_diet_counts) {
+    const counts = normalizeDietCounts(booking.meal_diet_counts);
+    if (dietTotal(counts) > 0) return counts;
+  }
+  if (booking.meal_preference) {
+    return booking.meal_preference === "veg"
+      ? { veg: headCount, non_veg: 0 }
+      : { veg: 0, non_veg: headCount };
+  }
+  return null;
+}
+
+/** Why this split does not describe the party, or null when it adds up. */
+export function dietCountsError(counts: MealDietCounts, headCount: number): string | null {
+  const total = dietTotal(counts);
+  if (total === 0) return "Say how many of the party are vegetarian and how many are not";
+  if (total !== headCount) {
+    return `The vegetarian and non-vegetarian counts add up to ${total}, but the booking is for ${headCount} ${
+      headCount === 1 ? "person" : "people"
+    } — they have to match`;
+  }
+  return null;
+}
+
+/** "18 vegetarian, 12 non-vegetarian", or just the one kind when the other is nobody. */
+export function describeDietCounts(counts: MealDietCounts): string {
+  const parts = (["veg", "non_veg"] as const)
+    .filter((kind) => counts[kind] > 0)
+    .map((kind) => `${counts[kind]} ${MEAL_PREFERENCE_LABELS[kind].toLowerCase()}`);
+  return parts.length === 0 ? "No preference recorded" : parts.join(", ");
+}
+
 // ---------------------------------------------------------------- kitchen
 
 /**
@@ -460,7 +560,8 @@ type KitchenBooking = {
   meals: MealPlan;
   service_type: string;
   meal_guest_count: number | null;
-  meal_preference: "veg" | "non_veg" | null;
+  meal_preference: MealPreference | null;
+  meal_diet_counts?: MealDietCounts | null;
   guests: { is_infant?: boolean }[];
 };
 
@@ -472,9 +573,10 @@ export function dinersFor(booking: KitchenBooking): number {
 }
 
 /**
- * Plates for one meal on one day, split by preference. A booking made before
- * the preference existed is "unknown" — the kitchen would rather see that than
- * have it guessed.
+ * Plates for one meal on one day, split by preference. Each booking's own
+ * split is used (`mealDietCounts`, which spreads a legacy whole-party
+ * preference over the head count); a booking with meals and no preference at
+ * all is "unknown" — the kitchen would rather see that than have it guessed.
  */
 export function kitchenHeadCount(
   bookings: KitchenBooking[],
@@ -484,7 +586,81 @@ export function kitchenHeadCount(
   const counts = { veg: 0, non_veg: 0, unknown: 0 };
   for (const b of bookings) {
     if (!mealsOn(b.meals, day).includes(meal)) continue;
-    counts[b.meal_preference ?? "unknown"] += dinersFor(b);
+    const diners = dinersFor(b);
+    const split = mealDietCounts(b, diners);
+    if (!split) {
+      counts.unknown += diners;
+      continue;
+    }
+    counts.veg += split.veg;
+    counts.non_veg += split.non_veg;
+    // A split that no longer adds up (the head count was changed at the desk
+    // afterwards) must not lose plates: the remainder is still people to feed.
+    const missing = diners - dietTotal(split);
+    if (missing > 0) counts.unknown += missing;
   }
   return { ...counts, total: counts.veg + counts.non_veg + counts.unknown };
+}
+
+// ------------------------------------------------- how many the kitchen takes
+
+/**
+ * Bookings that count against a sitting's capacity: everything still alive,
+ * whether or not it has been approved yet.
+ *
+ * A request waiting for the manager is a request the manager is about to say
+ * yes to, so it has to hold its places — otherwise the limit could be
+ * oversubscribed by submissions that all pass the check and are then all
+ * approved. Rejected and cancelled requests release theirs.
+ */
+export function countsAgainstMealCapacity(status: string): boolean {
+  return !["REJECTED", "CANCELLED", "CANCELLATION_APPROVED", "VACATED"].includes(status);
+}
+
+/** Plates already booked for one meal on one day, across the bookings given. */
+export function mealPlatesBooked(
+  bookings: (KitchenBooking & { status: string; id?: string })[],
+  day: string,
+  meal: MealKey,
+  exceptBookingId?: string
+): number {
+  let plates = 0;
+  for (const b of bookings) {
+    if (exceptBookingId && b.id === exceptBookingId) continue;
+    if (!countsAgainstMealCapacity(b.status)) continue;
+    if (!mealsOn(b.meals, day).includes(meal)) continue;
+    plates += dinersFor(b);
+  }
+  return plates;
+}
+
+/**
+ * Why the kitchen cannot take this many more people for the meals chosen, or
+ * null when it can (1 Oct 2026).
+ *
+ * The office's limit is **30 people at a sitting**, counting everyone already
+ * booked for it — one kitchen cooking for a guest house, not a canteen. It is
+ * a Setting (`rules.meals.max_diners_per_meal`, 0 = no limit) and it is
+ * checked per day **and** per meal, because that is what the kitchen actually
+ * has to serve at once.
+ */
+export function mealCapacityError(
+  plan: MealPlan,
+  headCount: number,
+  booked: (day: string, meal: MealKey) => number,
+  limit: number = DEFAULT_RULES.meals.max_diners_per_meal
+): string | null {
+  if (limit <= 0 || headCount <= 0) return null;
+  for (const day of plan) {
+    for (const meal of MEAL_KEYS) {
+      if (!day[meal]) continue;
+      const already = booked(day.date, meal);
+      if (already + headCount <= limit) continue;
+      const left = Math.max(0, limit - already);
+      return `${MEAL_LABELS[meal]} on ${formatDateValue(day.date, { year: true })} is full: the kitchen serves at most ${limit} people at a sitting, ${already} are already booked, so ${
+        left === 0 ? "there are no places left" : `only ${left} ${left === 1 ? "place is" : "places are"} left`
+      }.`;
+    }
+  }
+  return null;
 }

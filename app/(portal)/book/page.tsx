@@ -179,7 +179,6 @@ export default async function BookPage({
             initialMealDate={firstBookableMealDate(new Date(), context.rules.meals.windows)}
             rules={context.rules}
             debitHeads={context.debitHeads}
-            projects={context.projects}
             hodApprovers={context.hodApprovers}
             defaultCopyTo={defaultCopyTo}
             knownGuests={knownGuests}

@@ -35,10 +35,9 @@ import {
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
 import { lapsedError } from "@/lib/workflow";
-import { describeMeals } from "@/lib/meals";
+import { describeDietCounts, describeMealDays, describeMeals, mealDietCounts } from "@/lib/meals";
 import {
   BOOKING_TYPE_LABELS,
-  MEAL_PREFERENCE_LABELS,
   ROLE_LABELS,
   SERVICE_TYPE_LABELS,
   type BookingWithDetails,
@@ -85,13 +84,21 @@ export function ManagerQueue({
   /** The server's "now", so every overdue flag on the page agrees. */
   nowIso: string;
 }) {
+  // Rooms and meals are two different jobs, so they are two sections (1 Oct
+  // 2026). A meal booking has no check-in, no check-out and nothing to
+  // allocate; it was reading as a stay with every cell dashed out.
+  const pendingRooms = pending.filter((b) => b.service_type !== "meals_only");
+  const pendingMeals = pending.filter((b) => b.service_type === "meals_only");
   return (
     <div className="space-y-10">
       <DeskSummary
         figures={[
           { label: "Checking out today", count: checkoutsToday.length, anchor: "checkouts" },
           { label: "Cancellation requests", count: cancellationRequests.length, anchor: "cancellations", alert: true },
-          { label: "Incoming requests", count: pending.length, anchor: "incoming" },
+          { label: "Incoming room requests", count: pendingRooms.length, anchor: "incoming" },
+          ...(pendingMeals.length > 0
+            ? [{ label: "Incoming meal bookings", count: pendingMeals.length, anchor: "incoming-meals" }]
+            : []),
           { label: "In house now", count: current.length, anchor: "in-house" },
           { label: "Awaiting check-out", count: overdue.length, anchor: "awaiting", alert: true },
           { label: "To bill", count: toBill.length, anchor: "to-bill" },
@@ -135,13 +142,15 @@ export function ManagerQueue({
         </section>
       )}
 
-      {/* Incoming requests */}
+      {/* Incoming room requests. A meal booking is not one of them — see
+          below. */}
       <section id="incoming" className="scroll-mt-20">
         <SectionHeading
-          title="Incoming requests"
-          count={pending.length}
+          title="Incoming room requests"
+          count={pendingRooms.length}
+          description={<>Pick rooms for the requested dates; allocating is what approves the booking.</>}
         />
-        {pending.length === 0 ? (
+        {pendingRooms.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
             No requests waiting for allocation.
           </p>
@@ -160,27 +169,65 @@ export function ManagerQueue({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[...pending]
-                  .sort(
-                    // Official/dignitary bookings float to the top of the queue.
-                    (a, b) =>
-                      Number(b.user_role === "official") - Number(a.user_role === "official")
-                  )
-                  .map((b) => (
-                    <ManagerRow
-                      key={b.id}
-                      booking={b}
-                      rooms={rooms}
-                      occupancyVersion={occupancyVersion}
-                      capacity={capacity}
-                      bufferMinutes={bufferMinutes}
-                    />
-                  ))}
+                {sortOfficialFirst(pendingRooms).map((b) => (
+                  <ManagerRow
+                    key={b.id}
+                    booking={b}
+                    rooms={rooms}
+                    occupancyVersion={occupancyVersion}
+                    capacity={capacity}
+                    bufferMinutes={bufferMinutes}
+                  />
+                ))}
               </TableBody>
             </Table>
           </div>
         )}
       </section>
+
+      {/* Meal bookings waiting for approval, in their own section (1 Oct
+          2026, the office's request).
+          
+          They were in the list above, under headings that are all about
+          rooms — check-in, check-out, rooms, "Review & Allocate" — with a
+          dash in most of the cells. Nobody arrives on a meal booking and
+          there is nothing to allocate: what the manager needs to see is the
+          day, the sitting, the head count and the split, which is what this
+          table shows. */}
+      {pendingMeals.length > 0 && (
+        <section id="incoming-meals" className="scroll-mt-20">
+          <SectionHeading
+            title="Incoming meal bookings"
+            count={pendingMeals.length}
+            description={
+              <>
+                No room is held for these and nobody checks in — confirm the kitchen can serve
+                them. Head counts for a given day are on <span className="font-medium">Meal counts</span>.
+              </>
+            }
+          />
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Requester</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Days and meals</TableHead>
+                  <TableHead>People</TableHead>
+                  <TableHead>Preferences</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortOfficialFirst(pendingMeals).map((b) => (
+                  <MealRequestRow key={b.id} booking={b} />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
+      )}
 
       {/* Current occupants — guests physically in the building now */}
       <section id="in-house" className="scroll-mt-20">
@@ -261,6 +308,83 @@ export function ManagerQueue({
   );
 }
 
+/** Official / dignitary bookings float to the top of a queue. */
+function sortOfficialFirst(bookings: BookingWithDetails[]): BookingWithDetails[] {
+  return [...bookings].sort(
+    (a, b) => Number(b.user_role === "official") - Number(a.user_role === "official")
+  );
+}
+
+/**
+ * One meal booking waiting for approval: the days and sittings, the head
+ * count and each person's own preference. No rooms, no dates to allocate
+ * against — approving is the whole decision.
+ */
+function MealRequestRow({ booking }: { booking: BookingWithDetails }) {
+  const [open, setOpen] = useState(false);
+  const headCount = booking.meal_guest_count ?? 0;
+  const split = mealDietCounts(booking, headCount);
+  const lapsed = lapsedError(booking);
+  return (
+    <TableRow
+      className={
+        booking.user_role === "official"
+          ? "bg-notice/70 hover:bg-notice [&>td:first-child]:border-l-4 [&>td:first-child]:border-l-saffron"
+          : undefined
+      }
+    >
+      <TableCell className="font-mono text-xs">
+        {booking.booking_reference_id}
+        {lapsed && (
+          <Badge variant="destructive" className="ml-2 align-middle" title={lapsed}>
+            Lapsed
+          </Badge>
+        )}
+      </TableCell>
+      <TableCell>
+        <span className="font-medium">{booking.on_behalf_of_name ?? booking.requester.full_name}</span>
+        <span className="block text-xs text-muted-foreground">Head: {describeDebit(booking)}</span>
+        <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>
+      </TableCell>
+      <TableCell>
+        <Badge variant={booking.user_role === "official" ? "default" : "outline"}>
+          {ROLE_LABELS[booking.user_role]}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-xs">
+        <ul>
+          {describeMealDays(booking.meals).map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </TableCell>
+      <TableCell>{headCount}</TableCell>
+      <TableCell className="text-xs">{split ? describeDietCounts(split) : "—"}</TableCell>
+      <TableCell className="text-right">
+        <div className="flex justify-end gap-2">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">Review &amp; Approve</Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Approve meals — {booking.booking_reference_id}</DialogTitle>
+                <DialogDescription>
+                  Confirm the kitchen can serve these meals. No room is held for a meal booking.
+                </DialogDescription>
+              </DialogHeader>
+              <BookingDetails booking={booking} />
+              <Separator />
+              <ApproveMeals booking={booking} onApproved={() => setOpen(false)} />
+            </DialogContent>
+          </Dialog>
+          <RejectDialog booking={booking} small />
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 /** Incoming request row — allocate or reject. */
 function ManagerRow({
   booking,
@@ -276,7 +400,6 @@ function ManagerRow({
   bufferMinutes?: number;
 }) {
   const [open, setOpen] = useState(false);
-  const mealsOnly = booking.service_type === "meals_only";
   // Its check-in has passed while it sat here. Allocating would hold rooms
   // for dates in the past; moving the dates or rejecting are the ways out.
   const lapsed = lapsedError(booking);
@@ -316,41 +439,33 @@ function ManagerRow({
       </TableCell>
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
       <TableCell>{formatDateTime(booking.check_out)}</TableCell>
-      <TableCell>{mealsOnly ? "—" : booking.rooms_requested}</TableCell>
+      <TableCell>{booking.rooms_requested}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              {/* A meals-only booking has no room to allocate, so for that one
-                  the manager's approval *is* the decision. */}
-              <Button size="sm">{mealsOnly ? "Review & Approve" : "Review & Allocate"}</Button>
+              {/* A meal booking has no room to allocate and is not in this
+                  table at all — it has its own section, where approving is
+                  the whole decision. */}
+              <Button size="sm">Review &amp; Allocate</Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
               <DialogHeader>
-                <DialogTitle>
-                  {mealsOnly ? "Approve meals" : "Allocate rooms"} —{" "}
-                  {booking.booking_reference_id}
-                </DialogTitle>
+                <DialogTitle>Allocate rooms — {booking.booking_reference_id}</DialogTitle>
                 <DialogDescription>
-                  {mealsOnly
-                    ? "Confirm the kitchen can serve these meals. No room is held for a meals-only booking."
-                    : "Pick available rooms for the requested dates, then confirm to approve the booking."}
+                  Pick available rooms for the requested dates, then confirm to approve the booking.
                 </DialogDescription>
               </DialogHeader>
               <BookingDetails booking={booking} showAlumniCard />
               <Separator />
-              {mealsOnly ? (
-                <ApproveMeals booking={booking} onApproved={() => setOpen(false)} />
-              ) : (
-                <RoomGrid
-                  booking={booking}
-                  rooms={rooms}
-                  occupancyVersion={occupancyVersion}
-                  onAllocated={() => setOpen(false)}
-                  capacity={capacity}
-                  bufferMinutes={bufferMinutes}
-                />
-              )}
+              <RoomGrid
+                booking={booking}
+                rooms={rooms}
+                occupancyVersion={occupancyVersion}
+                onAllocated={() => setOpen(false)}
+                capacity={capacity}
+                bufferMinutes={bufferMinutes}
+              />
             </DialogContent>
           </Dialog>
           <RejectDialog booking={booking} small />
@@ -371,15 +486,13 @@ function ApproveMeals({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const headCount = booking.meal_guest_count ?? 0;
+  const split = mealDietCounts(booking, headCount);
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
         {describeMeals(booking.meals)} for {headCount} guest{headCount === 1 ? "" : "s"}
-        {booking.meal_preference
-          ? ` (${MEAL_PREFERENCE_LABELS[booking.meal_preference].toLowerCase()})`
-          : ""}
-        .
+        {split ? ` — ${describeDietCounts(split)}` : ""}.
       </p>
       <div className="flex justify-end">
         <Button

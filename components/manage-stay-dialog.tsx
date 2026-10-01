@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { managerCancelBooking, reassignRooms } from "@/app/actions/manager";
 import {
-  advanceCheckInAction,
+  moveCheckInAction,
   decideExtensionAction,
   extendStayAction,
   getMoveOptions,
@@ -28,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { TimeSelect } from "@/components/ui/time-select";
 import { formatDateTime, toDatetimeLocal } from "@/lib/format";
 import { ROOM_TYPE_LABELS } from "@/lib/occupancy";
-import { earlierCheckInError, extensionError, noShowReleasable } from "@/lib/operations";
+import { extensionError, moveCheckInError, noShowReleasable } from "@/lib/operations";
 import { instituteIso } from "@/lib/tz";
 import type { BookingWithDetails, RoomType } from "@/lib/types";
 
@@ -79,7 +79,7 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
       return "";
     }
   };
-  const earlierProblem = earlierCheckInError(booking, instant(from));
+  const moveProblem = moveCheckInError(booking, instant(from));
   const laterProblem = extensionError(booking, instant(until));
   const canMove = isManager && booking.assigned_room_ids.length > 0;
   const noShow = isManager && noShowReleasable(booking, new Date());
@@ -178,25 +178,34 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2 rounded-md border bg-muted/20 p-2">
-              <Label htmlFor={`from-${booking.id}`}>Earlier check-in</Label>
+              {/* Either direction (1 Oct 2026): a guest who arrives early,
+                  and — the case the office reported as impossible — one who
+                  arrives late, whose stay should start when they actually
+                  turned up rather than when it was booked. The date box used
+                  to have a `max` of the current check-in, which is what made
+                  a later arrival unrecordable. */}
+              <Label htmlFor={`from-${booking.id}`}>Move check-in</Label>
               <Input
                 id={`from-${booking.id}`}
                 type="date"
                 value={fromDate}
-                max={splitLocal(booking.check_in)[0]}
+                max={splitLocal(booking.check_out)[0]}
                 onChange={(e) => setFrom([e.target.value, fromTime])}
               />
               <TimeSelect label="New check-in" value={fromTime} onChange={(t) => setFrom([fromDate, t])} />
-              <p className="text-xs text-muted-foreground">Now {formatDateTime(booking.check_in)}.</p>
+              <p className="text-xs text-muted-foreground">
+                Now {formatDateTime(booking.check_in)}. Earlier for a guest who arrives ahead of
+                time, later for one who arrives after it.
+              </p>
               <Button
                 size="sm"
                 variant="outline"
                 className="w-full"
-                disabled={isPending || !extendReason.trim() || !!earlierProblem}
-                title={earlierProblem ?? undefined}
-                onClick={() => run(() => advanceCheckInAction(booking.id, from, extendReason), "Check-in brought forward")}
+                disabled={isPending || !extendReason.trim() || !!moveProblem}
+                title={moveProblem ?? undefined}
+                onClick={() => run(() => moveCheckInAction(booking.id, from, extendReason), "Check-in moved")}
               >
-                Bring check-in forward
+                Move check-in
               </Button>
             </div>
             <div className="space-y-2 rounded-md border bg-muted/20 p-2">

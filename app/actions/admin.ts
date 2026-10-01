@@ -521,7 +521,21 @@ export async function adminSetBookingStatusAction(
 export async function listMailOutbox(
   status?: MailStatus
 ): Promise<
-  | { ok: true; rows: MailOutboxSummary[]; counts: Record<MailStatus, number>; transport: string }
+  | {
+      ok: true;
+      rows: MailOutboxSummary[];
+      counts: Record<MailStatus, number>;
+      transport: string;
+      /**
+       * `MAIL_REDIRECT_ALL_TO`, when it is set. Reported because it is
+       * invisible from everywhere else and changes who actually receives
+       * mail: the redirect replaces To and **drops CC entirely**, so a
+       * booking's Copy-to addresses get nothing. That is exactly what the
+       * office reported on 1 Oct 2026 as "copy to mail is not working", and
+       * it is a deployment setting, not a bug in the addressing.
+       */
+      redirectAllTo: string | null;
+    }
   | { ok: false; error: string }
 > {
   try {
@@ -535,6 +549,7 @@ export async function listMailOutbox(
       ok: true,
       counts,
       transport: mailConfig().transport,
+      redirectAllTo: mailConfig().redirectAllTo,
       rows: rows.map((row) => ({
         id: row.id,
         booking_id: row.booking_id,

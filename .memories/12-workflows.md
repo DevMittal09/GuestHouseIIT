@@ -179,12 +179,15 @@ outright: every cancel is a request the manager decides, pending bookings
 included. The manager cancels directly (`managerCancelBooking`), and the
 developer can force any status from the console.
 
-**Moving the dates at the desk** (manager or caretaker): a later check-out,
-or since 25 Sep 2026 an earlier check-in — an approved or current stay, at
-most 60 days either way, refused if another stay (or its turnaround) holds
-one of the rooms by then. Without the earlier check-in, a guest arriving a
-day early could not be marked Occupied, which is refused before the booked
-check-in.
+**Moving the dates at the desk** (manager or caretaker): a later check-out, or
+the check-in **in either direction** ("Move check-in") — an approved or current
+stay, at most 60 days either way, never past the check-out, refused if another
+stay (or its turnaround) holds one of the rooms by then. Earlier because a
+guest arriving a day early could not otherwise be marked Occupied, which is
+refused before the booked check-in; **later** (1 Oct 2026) because a guest
+arriving a day *late* had a stay that had already begun on paper, so the
+register disagreed with the building and the first night was billed to
+somebody who was not in it.
 
 A room is held exactly while the booking is in a room-holding status, so
 check-out, cancellation and the no-show release all free the room with no

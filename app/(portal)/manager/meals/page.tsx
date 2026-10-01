@@ -25,10 +25,12 @@ import { canIssueInvoices, canViewAllOccupancy } from "@/lib/access";
 import { InvoiceDialog } from "@/components/invoice-dialog";
 import { getCurrentUser } from "@/lib/auth";
 import {
+  describeDietCounts,
   isKitchenConfirmed,
   kitchenHeadCount,
   MEAL_KEYS,
   MEAL_LABELS,
+  mealDietCounts,
   mealTimes,
   mealsOn,
 } from "@/lib/meals";
@@ -38,11 +40,7 @@ import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { formatDateValue, parseDateValue, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
-import {
-  MEAL_PREFERENCE_LABELS,
-  SERVICE_TYPE_LABELS,
-  type BookingWithDetails,
-} from "@/lib/types";
+import { SERVICE_TYPE_LABELS, type BookingWithDetails } from "@/lib/types";
 
 /**
  * What the kitchen is cooking on one day.
@@ -299,8 +297,14 @@ function MealBookingTable({
                     </TableCell>
                     <TableCell className="text-xs">{SERVICE_TYPE_LABELS[b.service_type]}</TableCell>
                     <TableCell>{people}</TableCell>
-                    <TableCell>
-                      {b.meal_preference ? MEAL_PREFERENCE_LABELS[b.meal_preference] : "—"}
+                    <TableCell className="text-xs">
+                      {/* Each person's own preference (1 Oct 2026); a booking
+                          made before that reads as its whole-party answer
+                          spread over the head count. */}
+                      {(() => {
+                        const split = mealDietCounts(b, people);
+                        return split ? describeDietCounts(split) : "—";
+                      })()}
                     </TableCell>
                     <TableCell>
                       {mealsOn(b.meals, day)

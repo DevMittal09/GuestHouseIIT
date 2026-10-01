@@ -286,7 +286,8 @@ describe("the invoice document", () => {
       [1, 200_000],
       [1, 250_000],
     ]);
-    expect(b204[0].description).toContain("(1 Oct)");
+    // DD/MM since 1 Oct 2026 — the rate change's date, day first.
+    expect(b204[0].description).toContain("(01/10)");
   });
 
   it("adds GST on top when the rates exclude it, rounded half-up per SAC", () => {

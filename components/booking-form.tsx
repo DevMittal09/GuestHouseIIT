@@ -8,7 +8,6 @@ import {
   useWatch,
   type Control,
   type FieldPath,
-  type UseFormGetValues,
   type UseFormRegister,
   type UseFormRegisterReturn,
   type UseFormSetValue,
@@ -39,7 +38,6 @@ import {
   describeKnownGuest,
   impliedGender,
   knownSourceOf,
-  prefillFor,
   type KnownGuest,
 } from "@/lib/known-guests";
 import {
@@ -85,14 +83,21 @@ import {
 } from "@/lib/policy";
 import {
   bookableMealsOn,
-  declinedFromMealSlots,
+  choicesFromMealSlots,
+  DEFAULT_MEALS_ON,
+  describeDietCounts,
+  describeMealDays,
   describeMeals,
+  dietCountsError,
+  dietTotal,
   firstBookableMealDate,
   MEAL_KEYS,
   mealPlanFromSlots,
   mealSlot,
-  mealSlotsFromDeclined,
+  mealSlotsFromChoices,
+  NO_MEALS,
   stayMealDays,
+  totalMeals,
 } from "@/lib/meals";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
@@ -102,6 +107,7 @@ import {
   acceptsDebitDocument,
   debitDetailsPrompt,
   debitDetailsRequired,
+  describeDebit,
   fixedDebitHead,
   MAX_SUBHEAD_LENGTH,
   needsProject,
@@ -117,7 +123,6 @@ import {
   type DebitHead,
   type Citizenship,
   type GuestHouse,
-  type MealPreference,
   type Profile,
   type ServiceType,
 } from "@/lib/types";
@@ -188,7 +193,13 @@ interface FormValues {
   check_out_time: string;
   /** Head count for a meals-only booking, which has no guest rows. */
   meal_guest_count: string;
-  meal_preference: "" | MealPreference;
+  /**
+   * Each person's own preference, as counts (1 Oct 2026). Kept as raw
+   * strings, like every other number on this form, so a box can be cleared
+   * and retyped; they have to add up to the head count.
+   */
+  meal_veg_count: string;
+  meal_non_veg_count: string;
   rooms: RoomFields[];
   custom: Record<string, string | boolean>;
 }
@@ -226,7 +237,6 @@ export function BookingForm({
   initialMealDate,
   rules = DEFAULT_RULES,
   debitHeads = { room: {}, dining: {} },
-  projects = [],
   hodApprovers = [],
   forClub = null,
   defaultCopyTo = [],
@@ -259,8 +269,6 @@ export function BookingForm({
    * the form offers exactly what the server will accept.
    */
   debitHeads?: { room: DebitHeadsByType; dining: DebitHeadsByType };
-  /** Active projects, for the Project head. */
-  projects?: { id: string; label: string }[];
   /** Who would give HOD approval, by name — for an office's choice. */
   hodApprovers?: string[];
   user: Profile;
@@ -297,13 +305,12 @@ export function BookingForm({
   const [alumniCardError, setAlumniCardError] = useState<string | null>(null);
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   // Meal choices live outside react-hook-form as "date|meal" keys (`mealSlot`):
-  // the grid's rows follow the stay dates, which fixed field paths cannot. What
-  // is held is the meals turned *off*, because every meal the stay covers is
-  // ticked once a preference is chosen — see `mealSlotsFromDeclined`. Storing
-  // the ticks instead cannot tell a meal the requester unticked from one that
-  // was never offered, which is why a day added by a later date change would
-  // arrive blank instead of included.
-  const [declinedMealSlots, setDeclinedMealSlots] = useState<Set<string>>(() => new Set());
+  // the grid's rows follow the stay dates, which fixed field paths cannot.
+  // What is held is each slot the requester has *decided about* and their
+  // answer — see `mealSlotsFromChoices`. A slot that is not in here takes its
+  // meal's default (lunch on, breakfast and dinner off), which is what makes
+  // the default survive a change of dates.
+  const [mealChoices, setMealChoices] = useState<Map<string, boolean>>(() => new Map());
   const [mealsError, setMealsError] = useState<string | null>(null);
   const [roomsToDrop, setRoomsToDrop] = useState<number | null>(null);
   /** The room card whose "Remove room" was pressed, awaiting confirmation. */
@@ -397,12 +404,13 @@ export function BookingForm({
       check_out_date: "",
       check_out_time: "10:00",
       meal_guest_count: "1",
-      meal_preference: "",
+      meal_veg_count: "",
+      meal_non_veg_count: "",
       rooms: [newRoom()],
       custom: {},
     },
   });
-  const { register, handleSubmit, control, setError, clearErrors, formState, setValue, getValues } = form;
+  const { register, handleSubmit, control, setError, clearErrors, formState, setValue } = form;
   const { fields: roomFields, append: appendRoom, remove: removeRoom } =
     useFieldArray({ control, name: "rooms" });
   const {
@@ -418,10 +426,15 @@ export function BookingForm({
   // are picked, so the requester sees the day they are actually choosing.
   const selectedGuestHouseId = useWatch({ control, name: "guest_house_id" });
   const bookingType = useWatch({ control, name: "booking_type" });
-  const mealPreference = useWatch({ control, name: "meal_preference" });
   // Watched unconditionally — it is only *shown* on a meals-only booking, but
   // a hook cannot be called inside a branch.
   const mealGuestCount = useWatch({ control, name: "meal_guest_count" }) ?? "";
+  const vegCountRaw = useWatch({ control, name: "meal_veg_count" }) ?? "";
+  const nonVegCountRaw = useWatch({ control, name: "meal_non_veg_count" }) ?? "";
+  // Watched rather than read with `getValues`, so the summary at the end of a
+  // dining booking follows what is being typed instead of the last render.
+  const purposeText = useWatch({ control, name: "purpose_of_visit" }) ?? "";
+  const debitDetailsText = useWatch({ control, name: "debit_details" }) ?? "";
   // Which booking types this role may pick, and whether the question is worth
   // asking — a club only ever books officially.
   const [bookingTypeOptions] = useState(() => bookingTypesFor(config.role));
@@ -563,13 +576,21 @@ export function BookingForm({
     : stay && !stay.problem
       ? stayMealDays(stay.fromAt, stay.toAt, rules.meals.windows, now)
       : [];
-  // Derived, never stored. Picking Veg or Non-Veg means "we are eating here",
-  // so the whole stay is ticked and the requester clears what they will miss;
-  // before that, nothing is ticked, because no preference has been given. The
-  // opt-outs are what survive a change of dates.
-  const mealSlots = mealPreference
-    ? mealSlotsFromDeclined(mealDays, declinedMealSlots)
-    : new Set<string>();
+  /**
+   * Derived, never stored: each slot's own answer, else its meal's default.
+   *
+   * On a **meal booking**, lunch arrives ticked and the other two clear
+   * (1 Oct 2026 — until then nothing was ticked until a preference had been
+   * chosen, and then everything was). On a **stay**, nothing is ticked:
+   * meals there are an extra the requester opts into, and defaulting them on
+   * would put dining charges on every stay at a guest house with a kitchen
+   * without anyone asking for them.
+   */
+  const mealSlots = mealSlotsFromChoices(
+    mealDays,
+    mealChoices,
+    mealsOnly ? DEFAULT_MEALS_ON : NO_MEALS
+  );
   const mealPlan = servesMeals ? mealPlanFromSlots(mealSlots, mealDays) : [];
   /**
    * What is actually being booked, derived rather than asked. A room booking
@@ -584,20 +605,40 @@ export function BookingForm({
   const mealHeadCount = wantsRooms
     ? allGuests.filter((g) => !isInfantEntry(g)).length
     : Number(mealGuestCount) || 0;
+  /**
+   * Each person's own preference (1 Oct 2026). One answer per kind rather
+   * than per person: a dining booking has no guest list, only a head count,
+   * and the kitchen cooks to numbers. They have to add up to the head count —
+   * the same rule the schema applies on both sides (`dietCountsError`).
+   */
+  const dietCounts = {
+    veg: Number(vegCountRaw) || 0,
+    non_veg: Number(nonVegCountRaw) || 0,
+  };
+  const dietChosen = vegCountRaw !== "" || nonVegCountRaw !== "";
+  const dietProblem =
+    mealPlan.length === 0 || mealHeadCount === 0
+      ? null
+      : !dietChosen
+        ? "Say how many of the party are vegetarian and how many are not"
+        : dietCountsError(dietCounts, mealHeadCount);
   const mealSummary =
     mealPlan.length === 0
-      ? "No meals requested yet — pick a preference to fill in the whole stay."
+      ? "No meals requested — tick the ones your party would like."
       : `${describeMeals(mealPlan)}, for ${mealHeadCount} guest${mealHeadCount === 1 ? "" : "s"}${
-          mealPreference ? ` (${MEAL_PREFERENCE_LABELS[mealPreference].toLowerCase()})` : ""
+          dietChosen && !dietProblem ? ` (${describeDietCounts(dietCounts)})` : ""
         }.`;
 
-  /**
-   * The grid hands back the full set of ticks; what gets stored is the
-   * inverse — the meals turned off — so the default survives a date change.
-   */
+  /** The grid hands back the full set of ticks; what gets stored is the answers. */
   const onMealSlotsChange = (next: Set<string>) => {
-    setDeclinedMealSlots((prev) => declinedFromMealSlots(mealDays, next, prev));
+    setMealChoices((prev) => choicesFromMealSlots(mealDays, next, prev));
   };
+
+  // The kitchen's limit per sitting (Settings). One booking cannot be larger
+  // than it; how much of a sitting is already taken is checked on the server,
+  // which can read the other bookings.
+  const mealPartyLimit = rules.meals.max_diners_per_meal;
+  const mealPartyMax = mealPartyLimit > 0 ? mealPartyLimit : 100;
 
   // Advance-booking window: officials are exempt, so the cap can be absent.
   const [checkInLimits] = useState(() => {
@@ -713,7 +754,10 @@ export function BookingForm({
       // to Personal must not carry a department budget along with it.
       debit_head: paymentHead,
       debit_details: debitPrompt ? values.debit_details : undefined,
-      project_id: needsProject(paymentHead) ? values.project_id || null : null,
+      // No project is picked from a list any more (1 Oct 2026) — the number
+      // and title are typed into the details box above, which is what the
+      // invoice prints.
+      project_id: null,
       // The sub-head belongs to the project; a value typed before switching
       // to another head is not sent.
       debit_subhead: needsProject(paymentHead) ? values.debit_subhead : undefined,
@@ -732,11 +776,11 @@ export function BookingForm({
       check_in: checkIn,
       check_out: checkOut,
       meal_guest_count: wantsRooms ? "" : values.meal_guest_count,
-      // Both are sent only when meals were actually chosen, so a preference
-      // left over from a guest house that was swapped for one with no kitchen
-      // cannot ride along and fail validation on a card nobody can see.
-      meal_preference:
-        mealPlan.length > 0 && values.meal_preference !== "" ? values.meal_preference : null,
+      // Sent only when meals were actually chosen, so a split left over from
+      // a guest house that was swapped for one with no kitchen cannot ride
+      // along and fail validation on a card nobody can see.
+      meal_preference: null,
+      meal_diet_counts: mealPlan.length > 0 && dietChosen ? dietCounts : null,
       meals: mealPlan,
       // A meals-only booking has no rooms and no guest rows at all.
       rooms: wantsRooms
@@ -781,11 +825,19 @@ export function BookingForm({
       hasError = true;
       setMealsError("Add at least one date for the kitchen to cook on");
     }
+    if (dietProblem) {
+      hasError = true;
+      setMealsError(dietProblem);
+    }
     if (!parsed.success) {
       hasError = true;
       for (const issue of parsed.error.issues) {
         // Meals are not a react-hook-form field, so their message has its own slot.
-        if (issue.path[0] === "meals" || issue.path[0] === "service_type") {
+        if (
+          issue.path[0] === "meals" ||
+          issue.path[0] === "service_type" ||
+          issue.path[0] === "meal_diet_counts"
+        ) {
           setMealsError(issue.message);
           continue;
         }
@@ -1057,28 +1109,18 @@ export function BookingForm({
                 <p className="text-sm text-muted-foreground">{PAY_AT_CHECKOUT_NOTE}</p>
               )}
 
-              {needsProject(chosenHead) && (
-                <div className="space-y-2">
-                  <Label htmlFor="project_id">Project *</Label>
-                  <NativeSelect id="project_id" {...register("project_id")}>
-                    <option value="">Choose the project…</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                  {projects.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      No projects are on the list yet — ask the Guest House Manager to add yours.
-                    </p>
-                  )}
-                  <FieldError message={err("project_id")} />
-                </div>
-              )}
+              {/* The project is **typed**, not picked from a list (1 Oct 2026).
+                  The console's list was always behind the real one — a
+                  sanction that landed last week was not on it, and the
+                  requester had nothing to choose. What they type is
+                  snapshotted onto the booking and printed on the invoice
+                  (`projectFromDetails` splits "number — title"), so nothing
+                  downstream needed to change. The box itself is the
+                  debit-details field below, whose prompt and mandatory star
+                  follow the head. */}
 
-              {/* The project's sub-head, typed — the list of projects does not
-                  carry sub-heads, and they differ per project. Optional. */}
+              {/* The project's sub-head, typed — optional, and only with a
+                  Project head. */}
               {needsProject(chosenHead) && (
                 <div className="space-y-2">
                   <Label htmlFor="debit_subhead">Project sub-head (optional)</Label>
@@ -1105,9 +1147,19 @@ export function BookingForm({
                   <Input
                     id="debit_details"
                     maxLength={300}
-                    placeholder="e.g. Director's discretionary fund — sanction DO/2026/114"
+                    placeholder={
+                      needsProject(chosenHead)
+                        ? "e.g. SP/2025/017 — Grid-scale storage (Dr. A. Kumar)"
+                        : "e.g. Director's discretionary fund — sanction DO/2026/114"
+                    }
                     {...register("debit_details")}
                   />
+                  {needsProject(chosenHead) && (
+                    <p className="text-xs text-muted-foreground">
+                      The project number, then its title after a dash — both are printed on the
+                      invoice. The accounts section debits this project.
+                    </p>
+                  )}
                   <FieldError message={err("debit_details")} />
                 </div>
               )}
@@ -1188,24 +1240,37 @@ export function BookingForm({
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="meal_guest_count">Number of guests *</Label>
-              <QuantityInput
-                id="meal_guest_count"
-                aria-label="Number of guests"
-                min={1}
-                max={100}
-                value={mealGuestCount}
-                onChange={(raw) => setValue("meal_guest_count", raw, { shouldValidate: false })}
-              />
+              <Label htmlFor="meal_guest_count">Number of people *</Label>
+              {/* A list, not a plus/minus pair (1 Oct 2026, the office's
+                  request): a meal booking is usually for a round number of
+                  people, and reaching 24 by pressing + twenty-three times is
+                  not a way to answer a question. */}
+              <NativeSelect id="meal_guest_count" {...register("meal_guest_count")}>
+                {Array.from({ length: mealPartyMax }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </NativeSelect>
               <p className="text-xs text-muted-foreground">
                 How many people the kitchen is cooking for. A meals booking needs no guest list.
+                {mealPartyLimit > 0 &&
+                  ` The kitchen serves at most ${mealPartyLimit} people at a sitting, counting everyone already booked for it.`}
               </p>
               <FieldError message={err("meal_guest_count")} />
             </div>
 
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="purpose_of_visit">Purpose *</Label>
-              <Textarea id="purpose_of_visit" rows={3} {...register("purpose_of_visit")} />
+              {/* "Purpose" renamed and made optional (1 Oct 2026): a meal
+                  order needs no justification, and the box is for anything
+                  the kitchen should know. */}
+              <Label htmlFor="purpose_of_visit">Remarks (optional)</Label>
+              <Textarea
+                id="purpose_of_visit"
+                rows={3}
+                placeholder="Anything the kitchen should know — a guest who cannot eat wheat, a sitting time, where to serve"
+                {...register("purpose_of_visit")}
+              />
               <FieldError message={err("purpose_of_visit")} />
             </div>
             <FieldError message={err("check_in")} />
@@ -1368,7 +1433,11 @@ export function BookingForm({
       {/* Told, not signed for. A guest who arrives with an animal has to be
           turned away at the desk, so the notice is given prominence here and
           repeated in every booking mail — but there is no tick box: a tick
-          proves nothing a notice does not, and the office asked for it to go. */}
+          proves nothing a notice does not, and the office asked for it to go.
+          **Not on a dining booking** (1 Oct 2026): nobody stays, so there is
+          no animal to turn away, and the notice was the largest thing on a
+          form for ordering lunch. */}
+      {wantsRooms && (
       <Card className="border-amber-300 dark:border-amber-900">
         <CardContent className="space-y-3 pt-6">
           <div className="flex gap-3 border-l-4 border-saffron bg-notice p-4 text-ink">
@@ -1383,6 +1452,7 @@ export function BookingForm({
           </div>
         </CardContent>
       </Card>
+      )}
 
       {wantsRooms && (
         <Card>
@@ -1410,36 +1480,58 @@ export function BookingForm({
             <CardTitle>{mealsOnly ? "Days and meals" : "Meals (optional)"}</CardTitle>
             <CardDescription>
               {mealsOnly
-                ? `Choose a preference and the meals still open on each day are included for you — then untick the ones you will not need. "Add another date" books further days.`
-                : `${selectedGuestHouse?.name} serves meals. Choose a preference if your party would like them and every meal of the stay is included — then untick the ones they will not need, or leave this alone to book the room on its own.`}{" "}
+                ? `Lunch is included on each day you add; tick breakfast or dinner as well, or untick what you will not need. "Add another date" books further days.`
+                : `${selectedGuestHouse?.name} serves meals. Tick the ones your party would like — each is charged on the invoice — or leave the table empty to book the room on its own.`}{" "}
               The kitchen uses this for head counts, so tell the manager if plans change after
               booking.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Meal preference{mealsOnly ? " *" : ""}</Label>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {(["veg", "non_veg"] as const).map((option) => (
-                  <RadioCard
-                    key={option}
-                    value={option}
-                    title={MEAL_PREFERENCE_LABELS[option]}
-                    description={
-                      option === "veg"
-                        ? "Vegetarian meals for the whole party."
-                        : "Non-vegetarian meals for the whole party."
-                    }
-                    register={register("meal_preference")}
-                  />
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Changing the preference keeps the meals you have already ticked — it only changes
-                what is cooked.
-              </p>
-              <FieldError message={err("meal_preference")} />
-            </div>
+            {/* Each person's own preference (1 Oct 2026). It used to be one
+                radio for the whole party, so a group of thirty with two
+                vegetarians was booked as non-vegetarian and the kitchen
+                cooked thirty non-vegetarian plates. Counts rather than a row
+                per person: a dining booking has no guest list at all, only a
+                head count, and the kitchen cooks to numbers. */}
+            {mealPlan.length > 0 && (
+              <fieldset className="space-y-2 rounded-md border border-border-strong bg-band/40 p-3">
+                <legend className="px-1.5 text-sm font-medium">Meal preferences *</legend>
+                <p className="text-xs text-muted-foreground">
+                  How many of the {mealHeadCount}{" "}
+                  {mealHeadCount === 1 ? "person" : "people"} eating would like vegetarian meals,
+                  and how many would not. The two have to add up to {mealHeadCount}.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="meal_veg_count">{MEAL_PREFERENCE_LABELS.veg}</Label>
+                    <NativeSelect id="meal_veg_count" {...register("meal_veg_count")}>
+                      <option value="">Select…</option>
+                      {Array.from({ length: Math.max(mealHeadCount, 1) + 1 }, (_, n) => n).map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="meal_non_veg_count">{MEAL_PREFERENCE_LABELS.non_veg}</Label>
+                    <NativeSelect id="meal_non_veg_count" {...register("meal_non_veg_count")}>
+                      <option value="">Select…</option>
+                      {Array.from({ length: Math.max(mealHeadCount, 1) + 1 }, (_, n) => n).map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </div>
+                </div>
+                {dietChosen && (
+                  <p className={cn("text-xs", dietProblem ? "text-destructive" : "text-muted-foreground")}>
+                    {dietProblem ?? `${describeDietCounts(dietCounts)} — ${dietTotal(dietCounts)} of ${mealHeadCount}.`}
+                  </p>
+                )}
+              </fieldset>
+            )}
 
             {mealsOnly ? (
               <>
@@ -1550,7 +1642,6 @@ export function BookingForm({
                 knownGuests={knownGuests}
                 namesOnRequest={namesOnRequest}
                 setValue={setValue}
-                getValues={getValues}
                 onRemove={roomFields.length > 1 ? () => setRoomToRemove(roomIndex) : undefined}
               />
             ))}
@@ -1703,6 +1794,66 @@ export function BookingForm({
         </CardContent>
       </Card>
 
+      {/* What is about to be ordered, in words, at the end of the form
+          (1 Oct 2026 — "add a confirmation message at the end of the meal
+          booking, basically what all we booked"). A dining booking is a list
+          of numbers spread over three cards; this reads it back as one
+          sentence per fact so the requester can check it before submitting,
+          and it is live, so it is never the previous answer. */}
+      {mealsOnly && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Confirm your meal booking</CardTitle>
+            <CardDescription>
+              This is what will be sent to the Guest House Manager. Nothing is cooked until they
+              approve it, and you will get an email with a reference number either way.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {mealPlan.length === 0 ? (
+              <EmptyNote>
+                Nothing is ordered yet — add a date above and tick the meals you would like.
+              </EmptyNote>
+            ) : (
+              <dl className="divide-y divide-border border-y border-border text-sm">
+                <SummaryRow label="Kitchen">
+                  {guestHouses.find((g) => g.id === selectedGuestHouseId)?.name ?? "—"}
+                </SummaryRow>
+                <SummaryRow label="People">
+                  {mealHeadCount} {mealHeadCount === 1 ? "person" : "people"}
+                </SummaryRow>
+                <SummaryRow label="Preferences">
+                  {dietProblem ? (
+                    <span className="text-destructive">{dietProblem}</span>
+                  ) : (
+                    describeDietCounts(dietCounts)
+                  )}
+                </SummaryRow>
+                <SummaryRow label={`Days and meals (${totalMeals(mealPlan)} sittings)`}>
+                  <ul className="space-y-0.5">
+                    {describeMealDays(mealPlan).map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </SummaryRow>
+                <SummaryRow label="Charged to">
+                  {paymentHead
+                    ? describeDebit({
+                        debit_head: paymentHead,
+                        debit_details: debitPrompt ? debitDetailsText || null : null,
+                        debit_subhead: null,
+                      })
+                    : "Not chosen yet"}
+                </SummaryRow>
+                {purposeText.trim() !== "" && (
+                  <SummaryRow label="Remarks">{purposeText}</SummaryRow>
+                )}
+              </dl>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <p className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm text-muted-foreground">
         {MANAGER_HELP_LINE}
       </p>
@@ -1811,7 +1962,6 @@ function RoomCard({
   knownGuests,
   namesOnRequest,
   setValue,
-  getValues,
   onRemove,
 }: {
   roomIndex: number;
@@ -1828,7 +1978,6 @@ function RoomCard({
   knownGuests: KnownGuest[];
   namesOnRequest: string[];
   setValue: UseFormSetValue<FormValues>;
-  getValues: UseFormGetValues<FormValues>;
   /** Absent on the only room: a booking always has at least one. */
   onRemove?: () => void;
 }) {
@@ -1892,7 +2041,6 @@ function RoomCard({
             knownGuests={knownGuests}
             namesOnRequest={namesOnRequest}
             setValue={setValue}
-            getValues={getValues}
             canRemove={fields.length > 1}
             onRemove={() => {
               const key = watched[guestIndex]?.key;
@@ -1966,7 +2114,6 @@ function GuestRow({
   knownGuests,
   namesOnRequest,
   setValue,
-  getValues,
   canRemove,
   onRemove,
 }: {
@@ -1987,7 +2134,6 @@ function GuestRow({
   knownGuests: KnownGuest[];
   namesOnRequest: string[];
   setValue: UseFormSetValue<FormValues>;
-  getValues: UseFormGetValues<FormValues>;
   canRemove: boolean;
   onRemove: () => void;
 }) {
@@ -2028,33 +2174,17 @@ function GuestRow({
   const optionFor = (rel: string | null) =>
     rel ? (config.relationship_options.find((o) => o.toLowerCase() === rel.trim().toLowerCase()) ?? null) : null;
   /**
-   * Who choosing this relationship fills in: only a one-of-each relationship
-   * (Father, Mother, Guardian…), since there is one such person. A second
-   * sibling must not arrive with the first one's name.
+   * **Nothing is filled in by choosing a relationship** (1 Oct 2026).
+   *
+   * Picking "Mother" used to fill the name and gender in from the academic
+   * record, and picking a different relationship took them back out again.
+   * The office asked for it to stop — "remove auto-fill even for parents" —
+   * because a box that writes itself is a box nobody checks, and the one
+   * thing the desk needs from this form is a name that is actually the
+   * guest's. Everything the portal knows is still one click away, in the
+   * "Fill in" list on this card; that one is asked for, so it is read.
    */
-  const autoFillFor = (rel: string | null | undefined) =>
-    rel && config.unique_relationships.some((u) => u.toLowerCase() === rel.trim().toLowerCase())
-      ? prefillFor(knownGuests, rel)
-      : null;
-  /**
-   * The relationship dropdown changed from `prev` to `next`. The name (and the
-   * gender the word implies) is filled in when the box is empty, or still
-   * holds what the previous choice filled in — never over something typed.
-   */
-  const onRelationshipChosen = (prev: string, next: string) => {
-    const before = autoFillFor(prev);
-    const after = autoFillFor(next);
-    const currentName = (getValues(`${base}.name`) ?? "").trim();
-    if (gf.name !== "hidden" && (currentName === "" || currentName === before?.name)) {
-      setValue(`${base}.name`, after?.name ?? "", set);
-    }
-    const currentGender = getValues(`${base}.gender`);
-    const beforeGender = before?.gender ?? impliedGender(prev);
-    if (gf.gender !== "hidden" && (currentGender === "" || currentGender === beforeGender)) {
-      setValue(`${base}.gender`, after?.gender ?? impliedGender(next) ?? "", set);
-    }
-  };
-  /** "Fill in from saved details": everything the portal holds about that person. */
+  /** "Fill in": everything the portal holds about that person, on request. */
   const fillFrom = (k: KnownGuest) => {
     if (gf.name !== "hidden") setValue(`${base}.name`, k.name, set);
     const gender = k.gender ?? impliedGender(k.relationship);
@@ -2080,7 +2210,7 @@ function GuestRow({
 
   return (
     <div className={cn("rounded-md border p-4", infantCard ? "border-saffron/60 bg-notice/60" : "border-border bg-band/40")}>
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium">
           {infantCard ? `Infant ${number}` : `Guest ${number}`}
           {isInfant && (
@@ -2089,6 +2219,36 @@ function GuestRow({
             </span>
           )}
         </p>
+        {/* Filling a card in from what the portal already knows is a
+            shortcut, not a question, so it sits small on the card's own
+            header line rather than above every guest as a labelled
+            full-width dropdown — which is where it was until 1 Oct 2026, and
+            the office said it was taking up too much of the form. */}
+        <div className="ml-auto flex items-center gap-1">
+          {offered.length > 0 && (
+            <>
+              <Label htmlFor={`${base}.known`} className="sr-only">
+                Fill in guest {number} from saved details
+              </Label>
+              <NativeSelect
+                id={`${base}.known`}
+                value=""
+                aria-label={`Fill in guest ${number} from saved details`}
+                className="h-7 w-auto max-w-48 border-dashed py-0 text-xs text-muted-foreground"
+                onChange={(e) => {
+                  const k = offered[Number(e.target.value)];
+                  if (k) fillFrom(k);
+                }}
+              >
+                <option value="">Fill in…</option>
+                {offered.map((k, i) => (
+                  <option key={`${k.name}|${k.relationship ?? ""}`} value={i}>
+                    {describeKnownGuest(k)}
+                  </option>
+                ))}
+              </NativeSelect>
+            </>
+          )}
         {canRemove && (
           <Button
             type="button"
@@ -2100,28 +2260,8 @@ function GuestRow({
             <Trash2Icon />
           </Button>
         )}
-      </div>
-
-      {offered.length > 0 && (
-        <div className="mb-3 space-y-1">
-          <Label htmlFor={`${base}.known`}>Fill in from saved details</Label>
-          <NativeSelect
-            id={`${base}.known`}
-            value=""
-            onChange={(e) => {
-              const k = offered[Number(e.target.value)];
-              if (k) fillFrom(k);
-            }}
-          >
-            <option value="">Choose yourself, someone on your record, or someone from an earlier booking…</option>
-            {offered.map((k, i) => (
-              <option key={`${k.name}|${k.relationship ?? ""}`} value={i}>
-                {describeKnownGuest(k)}
-              </option>
-            ))}
-          </NativeSelect>
         </div>
-      )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {gf.name !== "hidden" && (
@@ -2192,14 +2332,7 @@ function GuestRow({
                 on it, and a child who has to be typed as "Siblings" to get
                 past the form tells the desk the wrong thing. */}
             {config.relationship_style === "dropdown" && !isInfant ? (
-              <NativeSelect
-                {...relationshipField}
-                onChange={(e) => {
-                  const prev = getValues(`${base}.relationship`) ?? "";
-                  void relationshipField.onChange(e);
-                  onRelationshipChosen(prev, e.target.value);
-                }}
-              >
+              <NativeSelect {...relationshipField}>
                 <option value="">Select…</option>
                 {config.relationship_options.map((r) => {
                   const locked = lockReason(r);
@@ -2390,6 +2523,16 @@ function CustomFieldInput({
         />
       )}
       <FieldError message={error} />
+    </div>
+  );
+}
+
+/** One fact of the meal-booking summary: its label, then what was chosen. */
+function SummaryRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-x-4 gap-y-0.5 py-2.5 sm:grid-cols-[11rem_1fr]">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium text-foreground">{children}</dd>
     </div>
   );
 }

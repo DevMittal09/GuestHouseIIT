@@ -70,7 +70,7 @@ console names them — change the name there and the queue or option moves.
 
 | Feature | Where | Notes |
 | --- | --- | --- |
-| **Room Availability** | `/availability` (nav, every role) | Day / Week / Month chart per guest house. Everyone sees booking periods, reference ids and statuses; **only the manager and developer** see who and why (`CAN_SEE_OCCUPANT`). **Only the manager, caretaker and developer** see the turnaround, accepted overlaps and maintenance drawn apart (`SEES_DETAIL`, 30 Sep 2026); everyone else sees Booked / Free — the booking form's panel follows the same rule. Max 62 days per request. |
+| **Room Availability** | `/availability` (nav, every role) | Day / Week / Month chart per guest house. Everyone sees booking periods, reference ids and statuses; **only the manager and developer** see who and why (`CAN_SEE_OCCUPANT`). **Only the manager, caretaker and developer** see the turnaround, accepted overlaps and maintenance drawn apart (`SEES_DETAIL`, 30 Sep 2026); everyone else sees Booked / Free — the booking form's panel follows the same rule. The **room-by-room list under the chart** is drawn for those three only (1 Oct 2026): the grid answers "is this room free", which is all a requester needs. Max 62 days per request. |
 | **Booking History / Approval Log** | `/history` (nav, every role) | Requesters: their own bookings ("Booking History"). Staff: their jurisdiction ("Approval Log"), with "Handled by me / Everything in scope". Keyword search with `ref:`, `guest:`, `room:`, `by:`, `purpose:`, `gh:`, `status:` prefixes; date presets; **CSV export for everyone**; **PDF export for the manager and developer only**. |
 | Public website | `/`, `/guidelines`, `/gallery`, `/contact`, `/privacy` | Open to anyone, signed in or not. |
 
@@ -270,20 +270,26 @@ Faculty Advisor raises.
 
 **Manager Console** (`/manager`), one tab per guest house:
 
-- **Pending queue** — Pending GH Manager, official (whitelisted) requests
-  first. **Review & Allocate** opens the room grid for the booking's own dates
-  only: green free, red taken (disabled), hatched turnaround (a gap shorter than
-  the buffer), amber soft overlap (≤ 2 h); the manager may accept the last two.
-  Capacity, extra beds needed and a formal occupancy line are shown.
-  **Confirm & Allocate** holds the rooms and approves in one step. **Reject**
-  needs a reason. A **meals-only** booking is approved without rooms.
+- **Incoming room requests** — Pending GH Manager, official (whitelisted)
+  requests first. **Review & Allocate** opens the room grid for the booking's
+  own dates only: green free, red taken (disabled), hatched turnaround (a gap
+  shorter than the buffer), amber soft overlap (≤ 2 h); the manager may accept
+  the last two. Capacity, extra beds needed and a formal occupancy line are
+  shown. **Confirm & Allocate** holds the rooms and approves in one step.
+  **Reject** needs a reason.
+- **Incoming meal bookings** — their own section since 1 Oct 2026, because a
+  meal booking has no check-in, no check-out and nothing to allocate: the days
+  and sittings, the head count and the vegetarian / non-vegetarian split, and
+  **Review & Approve**, which is the whole decision. **Reject** needs a reason
+  there too.
 - **Checking out today**, **Current occupants**, **Awaiting check-out**,
   **Checked out — to bill** (vacated in the last 30 days, unpaid),
   **Upcoming stays**.
 - **Mark Occupied** (from 2 hours before check-in, never earlier) / **Mark
   Vacated**.
-- **Manage** a stay: extend — a **later check-out** or, since 25 Sep 2026, an
-  **earlier check-in**; approve / decline a requester's extension; move
+- **Manage** a stay: a **later check-out**, or **Move check-in** either way
+  (earlier for an early arrival, later for a late one — 1 Oct 2026); approve /
+  decline a requester's extension; move
   rooms (reason, audited); release a no-show; change dates or meals; cancel;
   reinstate a cancelled or rejected booking.
 - **Cancellation requests:** approve (rooms freed) or decline (reason).
@@ -311,8 +317,8 @@ A deliberate **subset** of the manager's console — reception.
 
 - **Reception** (`/caretaker`): Checking out today, Current occupants,
   Awaiting check-out, **Checked out — to bill**, Upcoming stays.
-- **Mark Occupied / Vacated**; **extend a stay** — later check-out or
-  **earlier check-in** (25 Sep 2026).
+- **Mark Occupied / Vacated**; **extend a stay** — later check-out, or
+  **Move check-in** earlier or later (1 Oct 2026).
 - **Invoices:** preview, correct meal counts, **add additional charges**,
   issue & print, mark paid — **not cancel**.
 - **Kitchen** (`/manager/meals`): a **Meal counts** button on Reception for a

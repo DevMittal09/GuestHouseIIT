@@ -81,24 +81,43 @@ export function extensionError(
 }
 
 /**
- * Why this stay cannot start earlier, at `from`, or null when it can
- * (25 Sep 2026). The mirror of an extension: the desk brings the check-in
- * forward for a guest arriving before the booked time — without it an early
+ * Why this stay's check-in cannot be moved to `from`, or null when it can.
+ *
+ * **In either direction** (1 Oct 2026). It arrived on 25 Sep 2026 as
+ * `earlierCheckInError`, which only let the desk bring a check-in forward,
+ * for a guest arriving before the booked time — without that an early
  * arrival could not be marked Occupied, which is refused before the booked
  * check-in (`occupancyNotStartedError`).
+ *
+ * The office then reported the opposite case: "late entry check-in is not
+ * possible — when the user comes late to check in he is unable to do it". A
+ * guest whose flight slips to the following day has a booking whose stay has
+ * already begun on paper; the desk could extend the check-out but had no way
+ * to say the stay starts later, so the register disagreed with the building
+ * and the first night was billed to somebody who was not in it. Moving it
+ * later is the same operation with the comparison dropped: it still goes
+ * through `updateBookingDetails`, so the room holds move with it and a room
+ * somebody else has by then refuses the change.
+ *
+ * The new check-in must still leave a stay: moving it past the check-out is
+ * refused, with the extension as the way to make the stay longer.
  */
-export function earlierCheckInError(
-  booking: Pick<BookingWithDetails, "status" | "check_in" | "service_type">,
-  from: string
+export function moveCheckInError(
+  booking: Pick<BookingWithDetails, "status" | "check_in" | "check_out" | "service_type">,
+  to: string
 ): string | null {
   if (booking.service_type === "meals_only") return "A dining booking has no stay to move";
   if (!["APPROVED", "OCCUPIED"].includes(booking.status)) {
     return "Only an approved or current stay can be moved";
   }
-  const t = Date.parse(from);
+  const t = Date.parse(to);
   if (!Number.isFinite(t)) return "Choose the new check-in date and time";
-  if (t >= Date.parse(booking.check_in)) return "The new check-in must be earlier than the current one";
-  if (Date.parse(booking.check_in) - t > 60 * 86_400_000) return "Bring the check-in forward by at most 60 days at a time";
+  const current = Date.parse(booking.check_in);
+  if (t === current) return "That is the check-in the stay already has";
+  if (Math.abs(current - t) > 60 * 86_400_000) return "Move the check-in by at most 60 days at a time";
+  if (t >= Date.parse(booking.check_out)) {
+    return "The new check-in must be before the check-out — extend the stay first if the whole booking is moving";
+  }
   return null;
 }
 

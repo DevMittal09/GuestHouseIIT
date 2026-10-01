@@ -16,11 +16,6 @@
  */
 export const INSTITUTE_TIME_ZONE = "Asia/Kolkata";
 
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -121,13 +116,22 @@ export function toInstituteTimeValue(iso: string | Date): string {
   return `${pad(p.hour)}:${pad(p.minute)}`;
 }
 
-/** "10 Sep 2026" in institute time. */
+/**
+ * "10/09/2026" in institute time.
+ *
+ * **DD/MM/YYYY everywhere** (1 Oct 2026, the office's request). The portal is
+ * read by an Indian institute's staff, students and guests, for whom
+ * day-first is the only unambiguous reading of a date; "10 Sep 2026" was
+ * unambiguous too but mixed two conventions across the app, and the office
+ * asked for one. Every rendered date goes through here or
+ * `formatDateValue`, so there is one place to change it.
+ */
 export function formatInstituteDate(iso: string | Date): string {
   const p = instituteParts(iso instanceof Date ? iso : new Date(iso));
-  return `${p.day} ${MONTHS[p.month - 1]} ${p.year}`;
+  return `${pad(p.day)}/${pad(p.month)}/${p.year}`;
 }
 
-/** "10 Sep 2026, 12:00 PM" in institute time. */
+/** "10/09/2026, 12:00 PM" in institute time. */
 export function formatInstituteDateTime(iso: string | Date): string {
   const p = instituteParts(iso instanceof Date ? iso : new Date(iso));
   const hour12 = p.hour % 12 === 0 ? 12 : p.hour % 12;
@@ -204,9 +208,10 @@ export function weekdayOfDateValue(value: string): number {
 }
 
 /**
- * A calendar date for people: "Tue 15 Sep" by default. The options add the
- * year ("Tue 15 Sep 2026"), or drop the weekday ("15 Sep") or the month
- * ("Tue 15").
+ * A calendar date for people: "Tue 15/09" by default, day-first like
+ * `formatInstituteDate`. The options add the year ("Tue 15/09/2026"), or drop
+ * the weekday ("15/09") or the month, which leaves the bare day number for a
+ * calendar cell that already says which month it is in ("Tue 15").
  */
 export function formatDateValue(
   value: string,
@@ -218,14 +223,10 @@ export function formatDateValue(
 ): string {
   const parts = parseDateValue(value);
   if (!parts) return value;
-  return [
-    weekday ? WEEKDAYS[weekdayOfDateValue(value)] : null,
-    String(parts.day),
-    month ? MONTHS[parts.month - 1] : null,
-    year ? String(parts.year) : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const numeric = month
+    ? [pad(parts.day), pad(parts.month), ...(year ? [String(parts.year)] : [])].join("/")
+    : String(parts.day);
+  return [weekday ? WEEKDAYS[weekdayOfDateValue(value)] : null, numeric].filter(Boolean).join(" ");
 }
 
 /** "September 2026" for any date in that month. */

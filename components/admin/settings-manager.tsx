@@ -600,11 +600,15 @@ function BookingWindowSection({ current }: { current: Rules["booking"] }) {
 
 function MealWindowsSection({ current }: { current: Rules["meals"] }) {
   const [windows, setWindows] = useState(current.windows);
-  const draft = { windows };
+  // Kept as the raw string so the box can be cleared while typing, like every
+  // other number in this console.
+  const [diners, setDiners] = useState(String(current.max_diners_per_meal));
+  const dinersValid = /^\d+$/.test(diners.trim()) && Number(diners) <= 1000;
+  const draft = { windows, max_diners_per_meal: dinersValid ? Number(diners) : 0 };
 
   return (
     <SettingCard
-      title="Meal serving times"
+      title="Meal serving times and the kitchen's capacity"
       description="When each meal is served. A meal can be booked on a day only if the stay covers part of its serving time, so these decide which cells of the meal grid are offered. A change that would put meals already booked outside their stay is refused."
     >
       <div className="grid gap-4 sm:grid-cols-3">
@@ -624,12 +628,26 @@ function MealWindowsSection({ current }: { current: Rules["meals"] }) {
           </fieldset>
         ))}
       </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <NumberField
+          id="meals-per-sitting"
+          label="People per sitting"
+          value={diners}
+          min={0}
+          max={1000}
+          hint="The most people the kitchen will serve at one meal, counting everyone already booked for it. A request that would take a sitting past this is refused, naming the places left. 0 turns the limit off."
+          onChange={setDiners}
+        />
+      </div>
       <RuleGroupActions
         group="meals"
         current={current}
         draft={draft}
-        valid
-        onReset={() => setWindows(current.windows)}
+        valid={dinersValid}
+        onReset={() => {
+          setWindows(current.windows);
+          setDiners(String(current.max_diners_per_meal));
+        }}
       />
     </SettingCard>
   );

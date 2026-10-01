@@ -3055,3 +3055,157 @@ redraw of it (`lib/invoice-pdf.ts`), through `invoiceTable()`. The template
 itself says "GST @ 5% on B (D)", a typo for "on C (D)"; the code follows the
 supervisor's list.
 
+
+---
+
+## 1 Oct 2026 — the office's seventh list
+
+### Each person's own meal preference, as counts
+
+A booking carried one `meal_preference` for everybody, so a party of thirty
+with two vegetarians was booked as non-vegetarian and the kitchen cooked
+thirty non-vegetarian plates. The office asked for "personal preferences for
+meal order, not just one preference for the whole group".
+
+**Counts, not a row per person** (`bookings.meal_diet_counts`, migration 27:
+`{veg, non_veg}`). A **dining booking has no guest list at all** — only a head
+count — so there is nobody to attach a preference to, and the kitchen cooks to
+numbers: "30 people, 18 veg" is what it acts on, and it is the same number
+whether the names were collected or not. One mechanism covers both kinds of
+booking, and the split has to add up to the head count (`dietCountsError`,
+client and server).
+
+`meal_preference` is **kept and not dropped**: rows written before today carry
+only it. `mealDietCounts(booking, headCount)` is the one reader, and it spreads
+that single answer over the head count, so every console, mail and export shows
+a legacy booking the same way it shows a new one. Nothing was backfilled — a
+legacy row has no split of its own and should not be given an invented one.
+`kitchenHeadCount` keeps its `unknown` column for a booking with meals and no
+preference at all, and adds the remainder to it when a split no longer adds up
+(the desk changed the head count afterwards): the kitchen would rather see
+"unknown" than have plates lost.
+
+### The kitchen's limit is about the other bookings, so it is not in the schema
+
+30 people at a sitting (`rules.meals.max_diners_per_meal`, a Setting; 0 turns
+it off), **counting everyone already booked for it**. Two halves:
+
+- The schema caps **one booking's** head count at the limit, on both sides —
+  no booking can be larger than the most the kitchen will serve at once.
+- `createBooking` checks the **sitting**, per day *and* per meal, against every
+  live booking for it (`mealPlatesBooked`). It is deliberately not in the
+  schema: the browser cannot see the other bookings and must not be told about
+  them, and a limit checked only in the browser is not a limit.
+
+A request **still waiting for the manager holds its places**
+(`countsAgainstMealCapacity`) — otherwise several submissions could each pass
+the check and then all be approved. Rejected and cancelled requests release
+theirs.
+
+### Lunch by default — on a meal booking only
+
+The office asked for lunch instead of all three. Applied to the **dining**
+flow, where meals are the whole point. A **stay** still starts with nothing
+ticked: meals on a stay are an extra the requester opts into, and defaulting
+them on would put dining charges on every stay at a guest house with a
+kitchen, for guests who never asked and might not notice until the invoice.
+
+The form's state changed shape for this. It used to hold the meals turned
+*off* (every meal was on once a preference was chosen); with lunch on and the
+other two off, opt-outs cannot express "breakfast on". It now holds a
+`Map<slot, boolean>` of the slots the requester has **decided about**
+(`mealSlotsFromChoices` / `choicesFromMealSlots`), so an untouched day still
+takes its default when the dates change — the property the opt-out model
+existed for.
+
+### A typed project, not a dropdown
+
+The console's project list was always behind the real one: a sanction that
+landed last week was not on it and the requester had nothing to choose. The
+number and title are typed into the details box beside the head, **required**
+there, and snapshotted onto the booking as before — the invoice already splits
+"number — title" (`projectFromDetails`), so nothing downstream changed. A
+payload that still carries a `project_id` is checked against the console's
+list rather than silently kept, so the Projects console keeps working for
+anything that uses it.
+
+### No auto-fill, even for parents
+
+Choosing "Mother" filled in the name and gender from the academic record, and
+choosing something else took them back out. The office asked for it to stop. A
+box that writes itself is a box nobody checks, and the one thing the desk needs
+from this form is a name that is actually the guest's. Everything the portal
+knows is still one click away, in the **Fill in…** list on the guest's own
+card — asked for, therefore read. That control also moved onto the card's
+header line, small, because at full width above every guest it was the largest
+thing in the section.
+
+### DD/MM/YYYY
+
+One convention, day-first, for an Indian institute's staff, students and
+guests. Every rendered date already went through `lib/tz.ts`, so it is three
+functions. **Native date inputs are not included** — a browser renders
+`<input type="date">` in its own locale and no attribute changes that.
+
+### A late arrival
+
+Two separate blocks, both reported as "late entry check-in is not possible":
+
+1. **The desk could only move a check-in earlier.** A guest whose flight slips
+   to the next day has a booking whose stay has already begun on paper; the
+   desk could extend the check-out but could not say the stay starts later, so
+   the register disagreed with the building and the first night was billed to
+   somebody who was not in it. `moveCheckInError` now allows either direction
+   (not past the check-out — that is an extension), and the holds move through
+   `updateBookingDetails` as before, so a room somebody else has by then still
+   refuses the change.
+2. **A new booking's check-in had to be strictly in the future.** That refused
+   the entry the desk most often has to make — a guest standing at the counter
+   whose stay began an hour ago — and also refused a requester who picked
+   today's 12:00 and pressed Submit at 12:01. The floor is now **midnight this
+   morning**, institute time (`earliestBookableCheckIn`). Yesterday is still
+   refused; the stay cap and the advance window are untouched.
+
+`occupancyNotStartedError` was never the problem: it only refuses marking a
+stay Occupied *before* its check-in.
+
+### Copy to: the addressing was right, the deployment was not
+
+The office reported that Copy-to addresses receive nothing. Every mail to the
+requester does carry the list as CC (`requesterCopyTo`, now tested on
+submission, allocation, rejection and cancellation). The cause is
+**`MAIL_REDIRECT_ALL_TO`**: applied at send time, it replaces To with one
+mailbox and **clears CC entirely** — by design, so a staging server cannot mail
+a real parent. With it set, no Copy-to address can ever receive anything.
+
+It is config, not code, so the fix is to unset it on the deployment. What was
+added is the thing that stops it being diagnosed twice: `/admin/mail` now says
+in red that every message is being redirected and that Copy-to receives
+nothing, and `.env.example` says the same. The redirect itself was left alone —
+weakening it is how staging mails a real parent.
+
+### Meal bookings in their own section of the desk
+
+They sat in "Incoming requests" under headings that are all about rooms —
+check-in, check-out, rooms, "Review & Allocate" — with a dash in most cells.
+Nobody arrives on a meal booking and there is nothing to allocate. The manager
+now has **Incoming room requests** and **Incoming meal bookings**, the second
+showing the days and sittings, the head count and the split. The caretaker has
+no approval queue at all, so nothing changed there.
+
+### The availability console's room list is the desk's
+
+The grid answers "is this room free", which is all a requester needs. The list
+underneath adds every booking's exact period, reference id and housekeeping
+state — the guest house's own business, and it made the page read like an
+operations screen. It follows the same `detailed` flag as the chart's legend
+(30 Sep), so what is drawn and what the server sends cannot drift.
+
+### Special Funds off a personal meal booking
+
+A special fund pays for an institute occasion, not for somebody ordering lunch
+for their own family. Done as a **floor** (`FORBIDDEN_DINING_HEADS`), like the
+students' one, so a Settings row that still lists it is ignored on read rather
+than breaking the form — and `upgradeDebitRules` revision 4 withdraws it from a
+stored row once, after the earlier revisions have added everything they add, so
+the office can tick it back on and have that stick.

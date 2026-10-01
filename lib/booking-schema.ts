@@ -21,13 +21,51 @@ import {
   type FieldMode,
   type RoleFormConfig,
 } from "./form-config";
-import { MAX_MEAL_DAYS, mealLeadTimeError, mealPlanError, normalizeMeals } from "./meals";
+import {
+  dietCountsError,
+  MAX_MEAL_DAYS,
+  mealLeadTimeError,
+  mealPlanError,
+  normalizeDietCounts,
+  normalizeMeals,
+} from "./meals";
 import { describeRoomParties, INFANT_AGE_LIMIT, isInfantAge, roomPartyError } from "./occupancy";
 import { stayLengthError } from "./policy";
 import { DEFAULT_RULES, type CapacityRules, type Rules } from "./settings";
-import { formatInstituteDate, formatInstituteDateTime, instituteDate } from "./tz";
+import {
+  formatInstituteDate,
+  formatInstituteDateTime,
+  instituteDate,
+  instituteDayBounds,
+  toInstituteDateValue,
+} from "./tz";
 import { includesMeals, needsRooms } from "./types";
 import { latestCheckIn } from "./workflow";
+
+/** The most people one booking may ask the kitchen to cook for at a sitting. */
+function mealPartyLimit(rules: Rules): number {
+  const limit = rules.meals.max_diners_per_meal;
+  return limit > 0 ? limit : 1000;
+}
+
+/**
+ * The earliest check-in a new booking may name: **midnight this morning**,
+ * institute time.
+ *
+ * It used to be "later than now", to the second. That refused the one entry
+ * the desk most often has to make — a guest who turned up late and is
+ * standing at the counter, whose stay began an hour ago — and it also refused
+ * a requester who picked today's 12:00 and pressed Submit at 12:01. Neither
+ * is a booking for the past in any sense the rule was protecting against:
+ * yesterday is still refused, and the stay-length and advance-window rules
+ * are unchanged. (1 Oct 2026: "late entry check-in is not possible".)
+ */
+export function earliestBookableCheckIn(now: Date = new Date()): Date {
+  return instituteDayBounds(toInstituteDateValue(now)).start;
+}
+
+export const LATE_CHECK_IN_ERROR =
+  "Check-in cannot be before today — ask the guest house desk to record a stay that has already started";
 
 /**
  * An optional free-text field: trimmed, with blank becoming null.
@@ -317,7 +355,19 @@ export function bookingPayloadSchema(
       // them there and rejects them everywhere else.
       alumni_name: optionalTrimmed,
       alumni_roll_number: optionalTrimmed,
-      purpose_of_visit: z.string().trim().min(5, "Describe the purpose of the visit"),
+      /**
+       * Why the stay is booked — **Remarks**, and optional, on a dining
+       * booking (1 Oct 2026). A meal order needs no justification: the office
+       * asked for the box to be there for anything the kitchen should know
+       * ("one guest is coeliac") and not to stand between somebody and lunch.
+       * A stay still has to say what it is for.
+       */
+      purpose_of_visit: z
+        .string()
+        .trim()
+        .max(2000, "Keep the remarks under 2000 characters")
+        .optional()
+        .default(""),
       check_in: z.string().regex(DATETIME_LOCAL, "Check-in date & time is required"),
       check_out: z.string().regex(DATETIME_LOCAL, "Check-out date & time is required"),
       /**
@@ -326,17 +376,37 @@ export function bookingPayloadSchema(
        * kept beside them could disagree with them.
        */
       rooms: z.array(roomSchema(config)).max(10, "Maximum 10 rooms per request"),
-      /** Head count for a meals-only booking, which has no guest rows. */
+      /**
+       * Head count for a meals-only booking, which has no guest rows. Capped
+       * at the kitchen's own limit per sitting (Settings,
+       * `max_diners_per_meal`), since one booking cannot be larger than the
+       * most the kitchen will serve at once. How much of that sitting is
+       * already taken is checked in `createBooking`, which can read the other
+       * bookings.
+       */
       meal_guest_count: countField({
         required: "Number of guests is required",
         min: 1,
-        max: 100,
+        max: mealPartyLimit(rules),
         whole: "Enter a whole number of guests",
         tooFew: "At least 1 guest",
-        tooMany: "Maximum 100 guests for a meals booking",
+        tooMany: `The kitchen serves at most ${mealPartyLimit(rules)} people at a sitting`,
         emptyAs: 0,
       }),
+      /** Legacy: one preference for the whole party. Still accepted, never sent by the form. */
       meal_preference: z.enum(["veg", "non_veg"]).nullish().default(null),
+      /**
+       * Each person's own preference, as counts (1 Oct 2026). Round-trip
+       * safe: the cleaned object re-parses to itself, which the form relies
+       * on — it validates and then sends `parsed.data` over the wire.
+       */
+      meal_diet_counts: z
+        .object({
+          veg: z.number().int().min(0).max(1000).optional(),
+          non_veg: z.number().int().min(0).max(1000).optional(),
+        })
+        .nullish()
+        .transform((v) => (v ? normalizeDietCounts(v) : null)),
       // Meals are chosen per day of the stay. Normalised to a clean plan (days
       // with a meal, in date order); whether each day and meal fits the stay is
       // checked below, and whether the guest house serves meals is checked in
@@ -400,11 +470,16 @@ export function bookingPayloadSchema(
         ctx.addIssue({ code: "custom", message, path: ["debit_head"] });
         return;
       }
-      // Project: a project picked from the list, and only then.
+      /**
+       * Project: **typed, not picked** (1 Oct 2026). What the booking records
+       * is the number and title in `debit_details`, required just below by
+       * `debitDetailsRequired`. `project_id` is no longer asked for — the
+       * form does not send one — but a payload that still carries one is
+       * checked against the console's list rather than silently kept, so the
+       * Projects console keeps working for anything that uses it.
+       */
       if (needsProject(v.debit_head)) {
-        if (!v.project_id) {
-          ctx.addIssue({ code: "custom", message: "Choose the project this stay is charged to", path: ["project_id"] });
-        } else if (context.projectIds && !context.projectIds.includes(v.project_id)) {
+        if (v.project_id && context.projectIds && !context.projectIds.includes(v.project_id)) {
           ctx.addIssue({
             code: "custom",
             message: "That project is not on the list of active projects",
@@ -435,9 +510,10 @@ export function bookingPayloadSchema(
           });
         }
       }
-      // Special Funds may say which fund. Optional (24 Sep 2026); its
-      // sanction letter, if any, is checked in `createBooking`, which has the
-      // upload.
+      // What goes beside the head: which special fund (optional, 24 Sep
+      // 2026), or the project itself (mandatory, 1 Oct 2026 — it replaced the
+      // dropdown of the console's projects). A Special Funds sanction letter,
+      // if any, is checked in `createBooking`, which has the upload.
       const prompt = debitDetailsPrompt(v.debit_head);
       if (prompt && debitDetailsRequired(v.debit_head) && (v.debit_details ?? "").length < 3) {
         ctx.addIssue({ code: "custom", message: `${prompt} is required`, path: ["debit_details"] });
@@ -448,7 +524,7 @@ export function bookingPayloadSchema(
       if (!prompt && v.debit_details) {
         ctx.addIssue({
           code: "custom",
-          message: "Details apply only to Special Funds",
+          message: "Details apply only to Special Funds and Project bookings",
           path: ["debit_details"],
         });
       }
@@ -657,7 +733,7 @@ export function bookingPayloadSchema(
     // ------------------------------------------------------------- meals
     .superRefine((v, ctx) => {
       if (!includesMeals(v.service_type)) {
-        if (v.meals.length > 0 || v.meal_preference) {
+        if (v.meals.length > 0 || v.meal_preference || v.meal_diet_counts) {
           ctx.addIssue({
             code: "custom",
             message: "Choose “Room + Meals” to book meals with this stay",
@@ -666,12 +742,28 @@ export function bookingPayloadSchema(
         }
         return;
       }
-      if (!v.meal_preference) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Choose a vegetarian or non-vegetarian meal preference",
-          path: ["meal_preference"],
-        });
+      // Each person's own preference (1 Oct 2026). The head count is the
+      // dining booking's own figure, or the guests needing a bed on a stay —
+      // infants eat off a guardian's plate and are not counted by the kitchen.
+      const headCount = needsRooms(v.service_type)
+        ? v.rooms.flatMap((r) => r.guests).filter((g) => !g.infant && !isInfantAge(g.age)).length
+        : v.meal_guest_count;
+      const split = v.meal_diet_counts;
+      if (!split) {
+        // A payload from before the split existed is still accepted when it
+        // carries the old whole-party answer; anything else has to say.
+        if (!v.meal_preference) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Say how many of the party are vegetarian and how many are not",
+            path: ["meal_diet_counts"],
+          });
+        }
+      } else if (headCount > 0) {
+        const message = dietCountsError(split, headCount);
+        if (message) {
+          ctx.addIssue({ code: "custom", message, path: ["meal_diet_counts"] });
+        }
       }
       if (v.meals.length === 0) {
         ctx.addIssue({
@@ -686,6 +778,20 @@ export function bookingPayloadSchema(
     })
     // `check_in` / `check_out` are wall-clock strings, so they are resolved in
     // the institute's timezone — never the runtime's. See `lib/tz.ts`.
+    .superRefine((v, ctx) => {
+      // A **stay** still has to say what it is for: the desk and the
+      // approvers read it, and "Visit" is the one thing a reviewer cannot
+      // get from anywhere else. A **dining** booking does not — the box is
+      // Remarks there, for anything the kitchen should know (1 Oct 2026).
+      if (v.service_type === "meals_only") return;
+      if (v.purpose_of_visit.trim().length < 5) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Describe the purpose of the visit",
+          path: ["purpose_of_visit"],
+        });
+      }
+    })
     .superRefine((v, ctx) => {
       const message = checkOutOrderError(v.check_in, v.check_out);
       if (message) ctx.addIssue({ code: "custom", message, path: ["check_out"] });
@@ -729,9 +835,9 @@ export function bookingPayloadSchema(
         // first day the kitchen cooks, which is today whenever today still has
         // a meal open. What stops it being booked too late is the notice
         // period above, not a rule about arriving in the future.
-        v.service_type === "meals_only" || instituteDate(v.check_in) > new Date(),
+        v.service_type === "meals_only" || instituteDate(v.check_in) >= earliestBookableCheckIn(),
       {
-        message: "Check-in must be in the future",
+        message: LATE_CHECK_IN_ERROR,
         path: ["check_in"],
       }
     )

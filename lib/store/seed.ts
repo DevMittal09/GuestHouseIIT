@@ -209,6 +209,7 @@ type DemoBooking = Omit<
   Booking,
   | "service_type"
   | "meal_preference"
+  | "meal_diet_counts"
   | "meal_guest_count"
   | "pets_policy_acknowledged"
   | "pets_policy_acknowledged_at"
@@ -361,7 +362,11 @@ const demoBookings: DemoBooking[] = [
     status: "PENDING_GH_MANAGER",
     booking_type: "official",
     service_type: "meals_only",
-    meal_preference: "veg",
+    // Each person's own preference (migration 27): the committee is eight,
+    // five of them vegetarian. The other two demo bookings with meals keep
+    // only the old whole-party `meal_preference`, so the kitchen console and
+    // the invoice are seen reading a legacy row as well as a new one.
+    meal_diet_counts: { veg: 5, non_veg: 3 },
     meal_guest_count: 8,
     alumni_name: null,
     alumni_roll_number: null,
@@ -397,6 +402,7 @@ function withDefaults(b: DemoBooking): Booking {
   return {
     service_type: "room",
     meal_preference: null,
+    meal_diet_counts: null,
     meal_guest_count: null,
     pets_policy_acknowledged: true,
     pets_policy_acknowledged_at: b.created_at,

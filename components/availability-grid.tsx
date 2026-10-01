@@ -278,7 +278,16 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
         </CardContent>
       </Card>
 
-      {range && (
+      {/* The room-by-room list is the **desk's** (1 Oct 2026).
+          
+          A requester asking "is a room free" is answered by the grid above;
+          this list adds every booking's exact period, reference id and
+          housekeeping state, which is the guest house's own business and was
+          making the page read like an operations screen. The manager and the
+          caretaker keep it — `detailed` is the same flag that decides whether
+          the chart draws turnarounds and overlaps, and the server sets it
+          (`getRoomAvailability`), so what is shown and what is sent agree. */}
+      {range && detailed && (
         <Card>
           <CardHeader>
             <CardTitle>Room details</CardTitle>
@@ -341,9 +350,10 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
 
       {range && (
         <p className="text-xs text-muted-foreground">
-          Availability shown for {describeRange(range)}. Times are IST. Rooms are held by approved,
-          occupied and pending-cancellation bookings; requests still awaiting approval do not
-          reserve a room.
+          Availability shown for {describeRange(range)}. Times are IST.
+          {detailed
+            ? " Rooms are held by approved, occupied and pending-cancellation bookings; requests still awaiting approval do not reserve a room."
+            : " A room shown as booked is not available for those hours. Nothing is reserved for you until the Guest House Manager allocates a room."}
         </p>
       )}
     </div>

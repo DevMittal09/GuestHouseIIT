@@ -14,6 +14,7 @@ import { clubsBookableByUser } from "@/lib/club-booking-server";
 import { hodApproversFor } from "@/lib/units";
 import { bookingContextFor } from "@/lib/booking-context-server";
 import { describeProject } from "@/lib/projects";
+import { MEAL_KEYS, mealCapacityError, mealPlatesBooked } from "@/lib/meals";
 import { validateCustomValue } from "@/lib/form-config";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import {
@@ -200,6 +201,41 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       return { ok: false, error: `Meals are not served at ${guestHouse.name}` };
     }
 
+    /**
+     * The kitchen's limit per sitting (1 Oct 2026): at most
+     * `rules.meals.max_diners_per_meal` people at any one meal, **counting
+     * everyone already booked for it**.
+     *
+     * Only here, not in the schema: the limit is about the other bookings,
+     * which the browser cannot see and must not be told about. The booking's
+     * own head count is capped by the schema on both sides, so this is the
+     * check that needs the database. One query per day of meals — a dining
+     * booking has a handful, a stay at most the stay's length.
+     */
+    if (payload.meals.length > 0) {
+      const limit = bookingContext.rules.meals.max_diners_per_meal;
+      const diners = wantsRooms
+        ? payload.rooms.flatMap((r) => r.guests).filter((g) => !isInfantAge(g.age)).length
+        : payload.meal_guest_count;
+      if (limit > 0 && diners > 0) {
+        const booked = new Map<string, number>();
+        for (const day of payload.meals) {
+          const others = await store.listBookingsWithMealsOn(day.date, payload.guest_house_id);
+          for (const meal of MEAL_KEYS) {
+            if (!day[meal]) continue;
+            booked.set(`${day.date}|${meal}`, mealPlatesBooked(others, day.date, meal));
+          }
+        }
+        const full = mealCapacityError(
+          payload.meals,
+          diners,
+          (date, meal) => booked.get(`${date}|${meal}`) ?? 0,
+          limit
+        );
+        if (full) return { ok: false, error: full };
+      }
+    }
+
     const checkInIso = toIso(payload.check_in);
     const checkOutIso = toIso(payload.check_out);
 
@@ -356,6 +392,10 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       booking_type: payload.booking_type,
       service_type: payload.service_type,
       meal_preference: payload.meal_preference ?? null,
+      // Each person's own preference (migration 27). Only on a booking that
+      // has meals, so nothing rides along from a guest house swapped for one
+      // with no kitchen.
+      meal_diet_counts: payload.meals.length > 0 ? payload.meal_diet_counts : null,
       meal_guest_count: wantsRooms ? null : payload.meal_guest_count,
       pets_policy_acknowledged: payload.pets_policy_acknowledged,
       privacy_notice_version: PRIVACY_NOTICE_VERSION,

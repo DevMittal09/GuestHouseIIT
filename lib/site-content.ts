@@ -188,8 +188,13 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
         serving.length > 0
           ? [
               `Meals are served at ${joinNames(serving.map((h) => h.name))}, at the times below`,
-              "Meals are chosen day by day on the request, vegetarian or non-vegetarian; every meal the stay covers is ticked to begin with",
+              // Each person's own preference, and lunch only by default
+              // (1 Oct 2026) — the two things a requester notices on the form.
+              "Meals are chosen day by day on the request, with the number of vegetarian and non-vegetarian meals; lunch is included on each day to begin with",
               MEAL_NOTICE_RULE,
+              ...(rules.meals.max_diners_per_meal > 0
+                ? [`The kitchen serves up to ${rules.meals.max_diners_per_meal} people at one meal, counting everyone already booked for it`]
+                : []),
             ]
           : ["Meals are not being served at the guest houses at present"],
       timetable: serving.length > 0 ? mealTimetable(rules) : undefined,

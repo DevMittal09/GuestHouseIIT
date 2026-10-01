@@ -61,6 +61,8 @@ type Loaded = {
   rows: MailOutboxSummary[];
   counts: Record<MailStatus, number>;
   transport: string;
+  /** `MAIL_REDIRECT_ALL_TO`, when set — every message goes there instead. */
+  redirectAllTo: string | null;
 };
 
 export function MailOutbox() {
@@ -74,7 +76,12 @@ export function MailOutbox() {
     startLoading(async () => {
       const result = await listMailOutbox(status === "all" ? undefined : status);
       if (result.ok) {
-        setData({ rows: result.rows, counts: result.counts, transport: result.transport });
+        setData({
+          rows: result.rows,
+          counts: result.counts,
+          transport: result.transport,
+          redirectAllTo: result.redirectAllTo,
+        });
         setError(null);
       } else {
         setError(result.error);
@@ -146,6 +153,26 @@ export function MailOutbox() {
               {data ? (TRANSPORT_NOTES[data.transport] ?? "") : "Loading…"}
             </span>
           </div>
+          {/* The redirect is invisible from everywhere else, and it is the
+              one setting that silently changes who receives mail: To is
+              replaced and **CC is dropped**, so a booking's Copy-to
+              addresses get nothing at all. The office reported that as
+              "copy to mail is not working" (1 Oct 2026). Saying so here is
+              what stops it being diagnosed twice. */}
+          {data?.redirectAllTo && (
+            <div className="border-l-4 border-destructive bg-destructive/5 px-3 py-2 text-sm">
+              <p className="font-semibold">
+                Every message is being redirected to {data.redirectAllTo}.
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                Nothing reaches its real recipient, and <strong>Copy to addresses receive
+                nothing</strong> — the redirect drops CC. Unset{" "}
+                <code className="font-mono">MAIL_REDIRECT_ALL_TO</code> in the deployment&apos;s
+                environment to deliver for real. The outbox below still records who each message
+                was meant for.
+              </p>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             <Button onClick={test} disabled={isWorking} variant="default">
               Send a test message

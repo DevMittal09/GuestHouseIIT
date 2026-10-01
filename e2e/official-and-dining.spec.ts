@@ -73,8 +73,10 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   await page.goto("/book?service=meals_only");
   await expect(page.getByRole("heading", { name: /Meal|Dining/i }).first()).toBeVisible();
 
-  // No room, no guest list — a head count, the days and a preference.
+  // No room, no guest list — a head count, the days and each person's own
+  // preference. No pets notice either (1 Oct 2026): nobody stays.
   await expect(page.locator('[name="rooms.0.guests.0.name"]')).toHaveCount(0);
+  await expect(page.getByText(/pets are not/i)).toHaveCount(0);
 
   const head = page.locator('[name="debit_head"]');
   if (await head.count()) {
@@ -85,15 +87,18 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   // console opens on a tab per guest house, so the name is still needed here.
   await expect(page.locator('[name="guest_house_id"]')).toHaveCount(0);
   const kitchen = await kitchenName(page);
+  // Remarks, and optional, since 1 Oct 2026 — filled in anyway, because the
+  // kitchen reads it.
+  await expect(page.getByLabel(/Remarks/)).toBeVisible();
   await page.locator('[name="purpose_of_visit"]').fill("Workshop lunch for the visiting panel");
-  // The head count is a stepper, addressed by its label rather than a name.
-  await page.getByLabel("Number of guests").fill("6");
-  await page.locator('[name="meal_preference"][value="veg"]').check();
+  // The head count is a dropdown of people (1 Oct 2026), not a stepper.
+  await page.locator('[name="meal_guest_count"]').selectOption("6");
 
-  // It opens on the first day the kitchen can still cook for, with every meal
-  // of that day that is still open ticked. A second day is one click away, and
-  // that is all the notice period leaves room to assert — which meals of today
-  // are open depends on the hour the suite happens to run.
+  // It opens on the first day the kitchen can still cook for, with **lunch**
+  // ticked (1 Oct 2026: it used to be every meal of the day). A second day is
+  // one click away, and that is all the notice period leaves room to assert —
+  // which meals of today are open depends on the hour the suite happens to
+  // run.
   const day = page.locator("#meal-date-0");
   await expect(day).toBeVisible();
   const firstDay = await day.inputValue();
@@ -105,6 +110,17 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   await expect(lunch).toBeEnabled();
   await lunch.check();
 
+  // Each person's own preference (1 Oct 2026): the split has to add up to the
+  // head count, so the form refuses 6 people as 4 + 1 and takes 4 + 2.
+  await page.locator('[name="meal_veg_count"]').selectOption("4");
+  await page.locator('[name="meal_non_veg_count"]').selectOption("1");
+  await expect(page.getByText(/add up to 5, but the booking is for 6/).first()).toBeVisible();
+  await page.locator('[name="meal_non_veg_count"]').selectOption("2");
+
+  // The summary at the end reads back what is about to be ordered.
+  const summary = page.getByText(/4 vegetarian, 2 non-vegetarian/).first();
+  await expect(summary).toBeVisible();
+
   await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
@@ -115,8 +131,13 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   // Straight to the manager, who approves it without allocating anything.
   await signIn(page, ACCOUNTS.manager);
   await page.goto(`/manager?gh=${encodeURIComponent(kitchen.toLowerCase())}`);
+  // Its own section, apart from the room requests (1 Oct 2026).
+  await expect(
+    page.getByRole("heading", { name: /Incoming meal bookings/ })
+  ).toBeVisible();
   const row = rowFor(page, reference);
   await expect(row).toBeVisible();
+  await expect(row.getByText("4 vegetarian, 2 non-vegetarian")).toBeVisible();
   await row.getByRole("button", { name: /Review & Approve/ }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: /Approve meals/ })).toBeVisible();
@@ -130,4 +151,64 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   // The reference appears twice on the day sheet — once in the table of
   // bookings and once in the per-meal list — so either will do.
   await expect(page.getByText(reference).first()).toBeVisible();
+});
+
+/**
+ * The kitchen's limit per sitting (1 Oct 2026): 30 people at any one meal,
+ * **counting everyone already booked for it**. The limit is about the other
+ * bookings, which the browser cannot see, so it is enforced in `createBooking`
+ * — this is the only place that proves the wiring.
+ *
+ * A date nothing else in the suite books, so the two halves depend on each
+ * other and on nothing else.
+ */
+test("the kitchen refuses a sitting that is already full", async ({ page }) => {
+  const day = localDate(20);
+  await signIn(page, ACCOUNTS.faculty);
+
+  const bookLunch = async (people: string) => {
+    await page.goto("/book?service=meals_only");
+    const head = page.locator('[name="debit_head"]');
+    if (await head.count()) {
+      await page.locator(`[name="debit_head"][value="${await head.first().getAttribute("value")}"]`).check();
+    }
+    // One sitting, far enough out that every meal is open: lunch on `day`,
+    // which is ticked by default and the only meal that is.
+    await page.locator("#meal-date-0").fill(day);
+    await page.locator('[name="meal_guest_count"]').selectOption(people);
+    await page.locator('[name="meal_veg_count"]').selectOption(people);
+    await page.locator('[name="meal_non_veg_count"]').selectOption("0");
+    await page.locator('[name="privacy_consent"]').check();
+    await page.getByRole("button", { name: "Submit booking request" }).click();
+  };
+
+  // Exactly the limit goes through.
+  await bookLunch("30");
+  await expect(page.getByText(REFERENCE).first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForURL("**/dashboard", { timeout: 30_000 });
+
+  // One more person does not, and the message says how many places are left.
+  await bookLunch("1");
+  await expect(page.getByText(/no places left/)).toBeVisible({ timeout: 30_000 });
+});
+
+/**
+ * The availability console: **the grid for everyone, the room-by-room list for
+ * the desk only** (1 Oct 2026). Both are drawn client-side after the
+ * occupancy fetch, so this is the only place the split can be checked.
+ */
+test("the availability console shows requesters the grid and the desk the room list", async ({ page }) => {
+  await signIn(page, ACCOUNTS.student);
+  await page.goto("/availability");
+  // The chart arrives once the occupancy fetch lands; its title carries the
+  // range, so it is also a check that dates read DD/MM (1 Oct 2026).
+  await expect(page.getByText(/^Room availability — \d{2}\/\d{2}/)).toBeVisible();
+  // Booked / Vacant / now, and no housekeeping states (30 Sep 2026)…
+  await expect(page.getByText("Vacant", { exact: true }).first()).toBeVisible();
+  // …and no room-by-room list at all.
+  await expect(page.getByText("Room details", { exact: true })).toHaveCount(0);
+
+  await signIn(page, ACCOUNTS.manager);
+  await page.goto("/availability");
+  await expect(page.getByText("Room details", { exact: true })).toBeVisible();
 });

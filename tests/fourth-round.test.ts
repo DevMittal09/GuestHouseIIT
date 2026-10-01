@@ -162,13 +162,17 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
   const guest1 = [{ name: "Dr. A", gender: "male", citizenship: "indian" }];
 
   it("takes a typed sub-head with Project, and refuses it with any other head", () => {
-    const withProject = parse("employee", payload(guest1, { debit_head: "project_grant", project_id: "p1", debit_subhead: " Travel " }));
+    // The project itself is typed into `debit_details` since 1 Oct 2026, and
+    // required there, so every Project payload here carries it.
+    const asProject = (patch: Record<string, unknown> = {}) =>
+      payload(guest1, { debit_head: "project_grant", debit_details: "SP/2025/017 — Storage", ...patch });
+    const withProject = parse("employee", asProject({ debit_subhead: " Travel " }));
     expect(withProject.success && withProject.data.debit_subhead).toBe("Travel");
     expect(errors(parse("employee", payload(guest1, { debit_subhead: "Travel" })))).toEqual([
       "debit_subhead: A sub-head applies only when the head is Project",
     ]);
     // Optional with Project.
-    expect(parse("employee", payload(guest1, { debit_head: "project_grant", project_id: "p1" })).success).toBe(true);
+    expect(parse("employee", asProject()).success).toBe(true);
   });
 
   // Widened on 25 Sep 2026 to everyone except students — see fifth-round.test.ts.
@@ -201,11 +205,11 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
     const old = { room: { ...DEFAULT_DEBIT_RULES.room, staff: ["department_budget"] }, dining: DEFAULT_DEBIT_RULES.dining };
     const upgraded = parseRuleGroup("debit", old);
     expect(upgraded.room.staff).toEqual(["department_budget", "special_budget"]);
-    expect(upgraded.revision).toBe(3);
+    expect(upgraded.revision).toBe(4);
     // Saved since: the office's untick stands.
     const unticked = parseRuleGroup("debit", { ...upgraded, room: { ...upgraded.room, staff: ["department_budget"] } });
     expect(unticked.room.staff).toEqual(["department_budget"]);
-    expect(upgradeDebitRules({ revision: 3, room: { staff: [] } })).toEqual({ revision: 3, room: { staff: [] } });
+    expect(upgradeDebitRules({ revision: 4, room: { staff: [] } })).toEqual({ revision: 4, room: { staff: [] } });
   });
 
   it("describes the head with its sub-head, the same words everywhere", () => {
@@ -314,7 +318,8 @@ describe("invoices", () => {
       expect(labels.some((l) => l.startsWith(gone))).toBe(false);
     }
     expect(labels).toContain("Meal Date(s): ");
-    expect(describeMealDates(doc)).toBe("20 Sep 2026 – 21 Sep 2026");
+    // DD/MM/YYYY everywhere since 1 Oct 2026.
+    expect(describeMealDates(doc)).toBe("20/09/2026 – 21/09/2026");
     // Renders — the room table is left out rather than drawn empty.
     expect(renderInvoicePdf(doc).byteLength).toBeGreaterThan(1000);
   });
@@ -392,6 +397,7 @@ function input(patch: Partial<NewBookingInput> = {}): NewBookingInput {
     debit_details: "SP/2025/017 — Storage",
     debit_document_url: null,
     meal_preference: null,
+    meal_diet_counts: null,
     meal_guest_count: null,
     pets_policy_acknowledged: true,
     alumni_name: null,

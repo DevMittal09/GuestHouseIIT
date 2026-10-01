@@ -144,6 +144,7 @@ export interface Database {
           | "has_infant"
           | "service_type"
           | "meal_preference"
+          | "meal_diet_counts"
           | "meal_guest_count"
           | "pets_policy_acknowledged"
           | "pets_policy_acknowledged_at"

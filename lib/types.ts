@@ -78,13 +78,29 @@ export function includesMeals(service: ServiceType): boolean {
   return service !== "room";
 }
 
-/** Kitchen preference for the whole booking. */
+/**
+ * A kitchen preference. Until 1 Oct 2026 a booking carried exactly one of
+ * these for the whole party (`bookings.meal_preference`); the office asked for
+ * **each person's own preference**, so what a booking now carries is a count
+ * per preference (`meal_diet_counts`, migration 27) and this type is the key
+ * of that record. `meal_preference` is kept for rows written before.
+ */
 export type MealPreference = "veg" | "non_veg";
 
 export const MEAL_PREFERENCE_LABELS: Record<MealPreference, string> = {
   veg: "Vegetarian",
   non_veg: "Non-Vegetarian",
 };
+
+/**
+ * How many of the party eat vegetarian and how many do not — the booking's
+ * own split, which must add up to the head count (`dietCountsError`). One
+ * answer per booking rather than one per guest because a dining booking has
+ * no guest list at all, only a head count, and the kitchen cooks to numbers:
+ * "30 people, 18 veg" is what it acts on, and it is the same number whether
+ * the names were collected or not.
+ */
+export type MealDietCounts = Record<MealPreference, number>;
 
 /**
  * Why the stay is being booked, chosen at the top of the booking form.
@@ -289,11 +305,18 @@ export type Booking = {
    */
   service_type: ServiceType;
   /**
-   * The kitchen's veg / non-veg preference for the party, null when no meals
-   * were asked for. One answer for the booking: the kitchen cooks to a head
-   * count per type, not per person.
+   * The kitchen's veg / non-veg preference for the whole party — **legacy**.
+   * Bookings made before 1 Oct 2026 carry only this; read the split through
+   * `mealDietCounts(booking)` (`lib/meals.ts`), which falls back to spreading
+   * this one answer over the head count.
    */
   meal_preference: MealPreference | null;
+  /**
+   * Each person's own preference as a count per kind (migration 27), null on
+   * a booking with no meals and on rows written before it existed. It adds up
+   * to the booking's head count.
+   */
+  meal_diet_counts: MealDietCounts | null;
   /**
    * Head count for a meals-only booking, which has no rooms and no guest
    * rows — the kitchen wants a number, not a register. Null on every other
@@ -566,6 +589,8 @@ export interface NewBookingInput {
   project_id?: string | null;
   office_approval?: "direct" | "hod" | null;
   meal_preference: MealPreference | null;
+  /** Each person's own veg / non-veg preference, as counts (migration 27). */
+  meal_diet_counts?: MealDietCounts | null;
   /** Only on a meals-only booking, which has no guest rows to count. */
   meal_guest_count: number | null;
   pets_policy_acknowledged: boolean;

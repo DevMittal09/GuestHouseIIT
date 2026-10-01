@@ -225,8 +225,12 @@ are in **`.memories/17-academic-records.md`**. Keep that file and
   father / mother / guardian from the record, then the adults of the
   requester's own earlier bookings (`knownGuestsFor`, not for the desk). Name,
   gender, relationship, citizenship only — **never an ID or passport number
-  or an age** back to the browser. Auto-fill on choosing a relationship only
-  for `unique_relationships`, and never over something typed. `Self` is on
+  or an age** back to the browser. **Choosing a relationship fills in
+  nothing** (1 Oct 2026: "remove auto-fill even for parents" — a box that
+  writes itself is a box nobody checks, and the desk needs a name that is
+  actually the guest's). What the portal knows is one click away instead, in
+  the compact **Fill in…** select on the guest card's own header line, which
+  sets the name, gender, relationship and citizenship together. `Self` is on
   the student relationship list and One of each; it is neither a parent nor a
   dependent. A student row saved in the Form Builder before 30 Sep needs Self
   added by hand.
@@ -321,23 +325,32 @@ Scoping lives in `canReview()` (HODs: `hodApproversFor`), which also refuses
 **Debitable head** (`lib/debit-heads.ts`): required on every booking; allowed
 heads per requester category are the Setting `rules.debit` (room and dining).
 `FORBIDDEN_DEBIT_HEADS` is a **floor under that Setting** — **faculty may never
-debit the Institute Grant** (23 Sep 2026), which is the offices' money.
+debit the Institute Grant** (23 Sep 2026), which is the offices' money — and
+`FORBIDDEN_DINING_HEADS` is the same for dining only: **no Special Funds on a
+personal meal booking** (1 Oct 2026). `allowedHeads(category, heads, kind)`
+applies both.
 `allowedHeads()` strips a forbidden head on read (so a stored row that still
 lists one is ignored, not fatal), `debitRulesSchema` refuses to save it, and the
 console greys that cell. **Special Funds** (`special_budget`, relabelled
 24 Sep 2026) is in **every category's default but students'** (25 Sep 2026)
 and in `FORBIDDEN_DEBIT_HEADS` for `student` only; its fund name and
 sanction letter are optional. A Settings row is upgraded **once per
-revision** (`upgradeDebitRules`, `DebitRules.revision`, now 3,
+revision** (`upgradeDebitRules`, `DebitRules.revision`, now **4**,
 `SPECIAL_FUNDS_ADDED_AT`) — bump the revision if you change a default list
-again. **`debitCategoryFor` returns `student` for a student before looking at
+again. Revision 4 is the one that *removes* (Special Funds off personal
+dining), and it runs after the additions so a revision-1 row still comes all
+the way forward. **`debitCategoryFor` returns `student` for a student before looking at
 the booking type**: a student's only type is personal, and filing them under
 *personal* (as it did until 25 Sep) would hand them Special Funds.
 `bookingContextFor(user)` computes them once for the page and for
-`createBooking`. Project → a project from the Projects console
-(`projects` table, paste import); the number and title are snapshotted into
-`debit_details`, and an optional typed **sub-head** goes in `debit_subhead`
-(migration 24; the schema and the database refuse it with any other head).
+`createBooking`. Project → **the number and title typed** into the details box beside the head
+(1 Oct 2026; it was a dropdown of the Projects console's list, which was always
+behind the real one). They are stored in `debit_details`, required there
+(`debitDetailsRequired`), and split back into number and title for the invoice
+(`projectFromDetails`); an optional typed **sub-head** goes in `debit_subhead`
+(migration 24; the schema and the database refuse it with any other head). The
+Projects console stays, and a payload that still carries a `project_id` is
+checked against it.
 
 ### Booking type — `lib/booking-types.ts`
 
@@ -378,6 +391,10 @@ cannot drift.
   approval happens through `allocateRooms()`, which assigns rooms and sets
   `APPROVED` in one step. `reviewBooking` explicitly rejects manager approvals.
 - Rejection requires a non-empty reason everywhere (enforced server-side).
+- **Incoming meal bookings are their own section** of `/manager` (1 Oct 2026),
+  apart from Incoming room requests: a meal booking has no check-in, no
+  check-out and nothing to allocate, and it was sitting in a table of rooms
+  with a dash in most cells. The caretaker has no approval queue at all.
 - `official` bookings are restricted to the **official whitelist**, a Setting
   (`official_email_whitelist` table, migration 16; read with
   `getOfficialEmails()`, matched with `isWhitelistedOfficial`). It used to be a
@@ -399,6 +416,12 @@ user typed and rendering it back are zoned.
   `formatInstitute*` / `instituteHour` helpers.
 - This is also what makes server-rendered dates and their client hydration
   agree when the two machines are in different zones.
+- **Every date reads DD/MM/YYYY** (1 Oct 2026, the office's request):
+  `formatInstituteDate` → `10/09/2026`, `formatInstituteDateTime` →
+  `10/09/2026, 12:00 PM`, `formatDateValue` → `Tue 15/09` (`{ year: true }`
+  adds it, `{ month: false }` leaves the bare day for a calendar cell). Change
+  it in `lib/tz.ts` and nowhere else. A native `<input type="date">` still
+  renders in the browser's own locale — nothing can change that.
 
 > **This is a fixed bug, not a preference.** `toIso()` used to be
 > `new Date(datetimeLocal).toISOString()`. On a UTC host a booking for 12:00
@@ -422,6 +445,13 @@ starts inside the window may run past it.
 `bookingPayloadSchema` applies it on client *and* server, so the `max` on the
 date input is convenience, not enforcement. Use `addMonths` (date-fns), never
 `setMonth`, or 31 Jan + 1 month lands on 3 March.
+
+**The earliest check-in a booking may name is midnight this morning**
+(`earliestBookableCheckIn`), not "later than now". It was strict until 1 Oct
+2026, which refused the entry the desk most often has to make — a guest
+standing at the counter whose stay began an hour ago — and also refused a
+requester who picked today's 12:00 and pressed Submit at 12:01. Yesterday is
+still refused.
 
 ### Post-approval lifecycle
 
@@ -449,10 +479,14 @@ read as though it were occupied.
 
 **The desk moves a stay's dates** from Manage (manager and caretaker —
 `canUpdateLifecycle`): a later check-out (`extendStayAction`,
-`extensionError`) or, since 25 Sep 2026, an **earlier check-in**
-(`advanceCheckInAction`, `earlierCheckInError`) — approved or occupied, at
-most 60 days, the holds moved by `updateBookingDetails` so a clash is refused.
-The inputs are a date box and `TimeSelect`, not `datetime-local`.
+`extensionError`) or the check-in **in either direction** (`moveCheckInAction`,
+`moveCheckInError`) — approved or occupied, at most 60 days, never past the
+check-out, the holds moved by `updateBookingDetails` so a clash is refused.
+Both directions since 1 Oct 2026: it was earlier-only from 25 Sep, and the
+office reported that a guest who **arrives late** could not be checked in —
+the stay had begun on paper and nothing could say otherwise, so the first
+night was billed to somebody who was not in it. The inputs are a date box and
+`TimeSelect`, not `datetime-local`.
 
 Cancellation flow: a requester's **Cancel** (`cancelBooking`, reason required)
 **always** files `CANCELLATION_REQUESTED` — from any open status, pending or
@@ -737,6 +771,40 @@ Checked server-side via triggers on `booking_guests` (the per-card limits from S
 
 ## Meals — `lib/meals.ts`
 
+> **Each person has their own preference** (1 Oct 2026, migration 27).
+> `bookings.meal_diet_counts` is `{veg, non_veg}` and has to **add up to the
+> head count** (`dietCountsError`, client and server). Counts rather than a row
+> per guest because a dining booking has **no guest list at all**, only a head
+> count, and the kitchen cooks to numbers. `bookings.meal_preference` (one
+> answer for the party) is **legacy and kept** — rows written before carry only
+> it. **Read the split through `mealDietCounts(booking, headCount)`**, which
+> spreads that one answer over the head count, so a legacy booking and a new
+> one look the same in every console, mail and export. Nothing was backfilled.
+>
+> **The kitchen takes at most 30 people at a sitting** —
+> `rules.meals.max_diners_per_meal`, a Setting, 0 = off — **counting everyone
+> already booked for it**. Two halves, deliberately: the schema caps *one
+> booking's* head count at the limit on both sides, and `createBooking` checks
+> the *sitting* per day and per meal against every live booking
+> (`mealPlatesBooked`, `mealCapacityError`). It is not in the schema because
+> the browser cannot see the other bookings and must not be told about them. A
+> request **still waiting for the manager holds its places**
+> (`countsAgainstMealCapacity`), or several submissions could each pass and
+> then all be approved.
+>
+> **Lunch is ticked by default — on a meal booking only** (`DEFAULT_MEALS_ON`).
+> A stay passes `NO_MEALS`: meals on a stay are an extra the requester opts
+> into, and defaulting them on would put dining charges on every stay at a
+> guest house with a kitchen. The form holds a `Map<slot, boolean>` of the
+> slots the requester has **decided about** (`mealSlotsFromChoices` /
+> `choicesFromMealSlots`) — not the opt-outs it held until 1 Oct, which cannot
+> express "breakfast on" once breakfast is off by default.
+>
+> On a meal booking: the number of people is a **1…30 dropdown**, "Purpose" is
+> **Remarks** and **optional** (a stay still has to say what it is for), there
+> is **no pets notice** (nobody stays), and a live **Confirm your meal
+> booking** card at the end reads the order back.
+
 The requester chooses meals **per day of the stay** in a days × breakfast /
 lunch / dinner grid (`components/meal-plan-grid.tsx`), so the kitchen has head
 counts before guests arrive. Still one jsonb column, `bookings.meals`, but since
@@ -847,7 +915,11 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
   honest record of the real recipients. It swallows CC too (`X-Original-To` /
   `X-Original-Cc` headers and a banner name the originals). Set it on every non-production
   deployment: without it, one person pointing staging at real data mails a real
-  parent.
+  parent. **With it set, no "Copy to" address can ever receive anything** —
+  which is what the office reported on 1 Oct 2026 as "copy to mail is not
+  working". It is config, not a bug in the addressing: `/admin/mail` now says
+  so in red, and the fix is to unset the variable on a deployment that is
+  meant to deliver.
 - **Idempotency does the heavy lifting.** `idempotency_key` is unique and
   inserts are `on conflict do nothing`, keyed on the booking's `updated_at` for
   a transition and the institute date for a digest. So retries queue nothing,
@@ -910,6 +982,11 @@ booked / Booked badge for the whole period shown.
   now legend. One `AvailabilityLegend` (`components/occupancy-chart.tsx`) for
   `/availability` and the booking form's panel. The notes say "Times are
   IST." Don't hand requesters the housekeeping states again.
+- **The room-by-room list under the chart is the desk's too** (1 Oct 2026):
+  `/availability` draws it only when `detailed`. The grid answers "is this
+  room free", which is all a requester needs; the list adds every booking's
+  period, reference id and state, and made the page read like an operations
+  screen.
 
 - `listRoomOccupancy(guestHouseId, from, to)` (both stores) returns one segment
   per **(room, booking)** using the same `ROOM_HOLDING_STATUSES` + strict
@@ -1335,6 +1412,13 @@ Migration files, applied sequentially:
    (jsonb array, ≤ 20): the desk's additional charges on the draft. Additive,
    safe to re-run. Until it is applied the store leaves the column out when
    there are none, so only invoices with an additional charge are refused.
+27. `00000000000027_meal_diet_counts.sql` — `bookings.meal_diet_counts` jsonb
+   (`{veg, non_veg}`, whole and non-negative, nothing else in the object):
+   **each person's own meal preference**. `meal_preference` is kept for rows
+   written before and is **not** backfilled. Additive, nullable, safe to
+   re-run. Until it is applied the store omits the column, so a booking with
+   meals is stored without its split and reads back through the legacy
+   preference.
 
 Full notes per migration in `.memories/22-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine

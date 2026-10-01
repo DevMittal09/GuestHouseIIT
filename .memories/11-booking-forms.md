@@ -107,21 +107,22 @@ its form is not in the Form Builder and every guest field is required.
 | 4 | **What to book** — Room booking / Room + Meals / Meals only | When a guest house the role may book serves meals | Yes. Meals only: Employee, Official, IAR Office, GH Manager |
 | 5 | **Approval** — Direct / Requires HOD approval | Offices (`official`, `iar_cell`), room bookings | **Yes** for offices; refused for anyone else |
 | 6 | **Debitable head** | Everyone (shown, not asked, when there is only one). Personal Funds adds "An invoice will be generated and can be settled at the time of checkout. Multiple payment options are available at the guest house." (not on meals only) | **Yes** |
-| 6a | Project (from the Projects list) | Head = Project | **Yes** |
+| 6a | Project — **number and title, typed** into the details box beside the head (1 Oct 2026; it was a dropdown of the Projects list) | Head = Project | **Yes** |
 | 6b | Project sub-head (text, ≤ 120) | Head = Project | Optional; refused with any other head |
 | 6c | Special fund's name / sanction reference (≤ 300) and sanction letter upload | Head = Special Funds | Both optional |
 | 7 | **On behalf of** — guest's name, email, phone | GH Manager | Name **yes** |
 | 8 | **Alumnus** — full name, student / roll number, **Alumni ID card** | Booking type = alumni | All three **yes** |
 | 9 | **Guest house** | Stated as text when only one is possible; a dropdown otherwise; no question at all for meals only | **Yes** |
 | 10 | **Check-in** date + time, **check-out** date + time (hour / minute / AM-PM dropdowns, with a "Your stay" read-back) | Room bookings | **Yes** |
-| 11 | **Purpose of visit** | Everyone | **Yes**, at least 5 characters |
+| 11 | **Purpose of visit** — labelled **Remarks** on a meal booking | Everyone | **Yes**, ≥ 5 characters, on a stay; **optional** on a meal booking (1 Oct 2026) |
 | 12 | **Rooms** — room cards, each with its guests | Room bookings | **At least 1 room, at most 10** |
-| 13 | **Meals** — days × breakfast / lunch / dinner grid, every served meal ticked by default, plus Vegetarian / Non-vegetarian | Room + Meals | **At least one meal** and the **preference** |
-| 14 | **Meals only** — a list of dates, each with its meals ("Add another date"), guest count, preference | Meals only | Count **1–100**, at least one meal, preference |
+| 13 | **Meals** — days × breakfast / lunch / dinner grid, **nothing ticked by default on a stay** (they are charged), plus **how many vegetarian and how many not** | Room + Meals | **At least one meal**, and a split adding up to the guests needing a bed |
+| 14 | **Meals only** — a list of dates, each with its meals ("Add another date", **lunch ticked**), number of people as a **1…30 dropdown**, and the vegetarian / non-vegetarian split | Meals only | Count **1–30** (the kitchen's limit per sitting, a Setting), at least one meal, a split adding up to the count |
 | 15 | **Additional information** (custom fields) | Whatever the Form Builder added for the role | As configured |
 | 16 | **Copy to** — email rows, "Add another email" | Everyone | Optional, **at most 25**; pre-filled with the council secretary's mailbox when a Faculty Advisor books |
-| 17 | Pets notice ("Pets are not allowed…") | Everyone | Displayed only — the tick box was removed |
+| 17 | Pets notice ("Pets are not allowed…") | **Room bookings only** (1 Oct 2026 — nobody stays on a meal booking) | Displayed only — the tick box was removed |
 | 18 | **Privacy consent** tick | Everyone | **Yes** |
+| 18a | **Confirm your meal booking** — kitchen, people, preferences, each day and its sittings, who pays, remarks | Meals only | Read-only, live |
 | — | Room availability panel (day / week / month, browsable) | Room bookings | Read-only |
 
 ---

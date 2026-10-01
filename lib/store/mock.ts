@@ -249,6 +249,13 @@ function loadDb(): Db {
         b.project_id = null;
         dirty = true;
       }
+      // Migration 27's counterpart. A booking from before each person had
+      // their own preference has no split of its own; `mealDietCounts` reads
+      // it from `meal_preference` instead, so null is the honest value.
+      if (b.meal_diet_counts === undefined) {
+        b.meal_diet_counts = null;
+        dirty = true;
+      }
       // Migration 24's counterpart: nobody copied, no sub-head.
       if (b.copy_to_emails === undefined) {
         b.copy_to_emails = [];
@@ -588,6 +595,7 @@ export class MockStore implements DataStore {
       project_id: input.project_id ?? null,
       office_approval: input.office_approval ?? null,
       meal_preference: input.meal_preference,
+      meal_diet_counts: input.meal_diet_counts ?? null,
       meal_guest_count: derived.meal_guest_count,
       pets_policy_acknowledged: input.pets_policy_acknowledged,
       pets_policy_acknowledged_at: input.pets_policy_acknowledged ? nowIso : null,
@@ -679,6 +687,7 @@ export class MockStore implements DataStore {
       extension_reason: b.extension_reason ?? null,
       extension_requested_at: b.extension_requested_at ?? null,
       no_show_released_at: b.no_show_released_at ?? null,
+      meal_diet_counts: b.meal_diet_counts ?? null,
       meals: normalizeMeals(b.meals, b),
       assigned_room_ids: assignedRoomIds,
       requester: db.profiles.find((p) => p.id === b.user_id)!,
@@ -817,6 +826,7 @@ export class MockStore implements DataStore {
     if (patch.purpose_of_visit !== undefined) b.purpose_of_visit = patch.purpose_of_visit;
     if (patch.meals !== undefined) b.meals = normalizeMeals(patch.meals);
     if (patch.meal_preference !== undefined) b.meal_preference = patch.meal_preference;
+    if (patch.meal_diet_counts !== undefined) b.meal_diet_counts = patch.meal_diet_counts;
     if (patch.extension_request !== undefined) {
       b.extension_requested_until = patch.extension_request?.until ?? null;
       b.extension_reason = patch.extension_request?.reason ?? null;

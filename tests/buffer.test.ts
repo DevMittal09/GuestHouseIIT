@@ -195,6 +195,7 @@ async function newBooking(checkIn: string, checkOut: string) {
     debit_details: null,
     debit_document_url: null,
     meal_preference: null,
+    meal_diet_counts: null,
     meal_guest_count: null,
     pets_policy_acknowledged: true,
     alumni_name: null,

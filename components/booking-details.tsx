@@ -15,13 +15,18 @@ import { countryName } from "@/lib/countries";
 import { describeDebit } from "@/lib/debit-heads";
 import { raisedByFacultyInCharge } from "@/lib/club-booking";
 import { formatDateTime } from "@/lib/format";
-import { describeMeals, MEAL_KEYS, MEAL_LABELS } from "@/lib/meals";
+import {
+  describeDietCounts,
+  describeMeals,
+  MEAL_KEYS,
+  MEAL_LABELS,
+  mealDietCounts,
+} from "@/lib/meals";
 import { countBedGuests, describeParty, ROOM_TYPE_LABELS } from "@/lib/occupancy";
 import { formatDateValue } from "@/lib/tz";
 import {
   BOOKING_TYPE_LABELS,
   CITIZENSHIP_LABELS,
-  MEAL_PREFERENCE_LABELS,
   ROLE_LABELS,
   SERVICE_TYPE_LABELS,
   type BookingGuest,
@@ -65,6 +70,10 @@ export function BookingDetails({
   const mealHeadCount = mealsOnly
     ? (booking.meal_guest_count ?? 0)
     : countBedGuests(booking.guests);
+  // Each person's own preference (1 Oct 2026). `mealDietCounts` reads a
+  // booking made before that by spreading its one whole-party answer over the
+  // head count, so a reviewer sees the same thing either way.
+  const dietCounts = mealDietCounts(booking, mealHeadCount);
   return (
     <div className="space-y-5 text-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -73,9 +82,7 @@ export function BookingDetails({
         <Badge variant="outline">{ROLE_LABELS[booking.user_role]}</Badge>
         <Badge variant="secondary">{BOOKING_TYPE_LABELS[booking.booking_type]}</Badge>
         <Badge variant="outline">{SERVICE_TYPE_LABELS[booking.service_type]}</Badge>
-        {booking.meal_preference && (
-          <Badge variant="outline">{MEAL_PREFERENCE_LABELS[booking.meal_preference]}</Badge>
-        )}
+        {dietCounts && <Badge variant="outline">{describeDietCounts(dietCounts)}</Badge>}
         {/* The guest house has to report foreign nationals, so it is on the
             booking itself rather than only inside the guest list. */}
         {booking.has_foreign_national && <Badge variant="outline">Foreign national</Badge>}
@@ -137,8 +144,8 @@ export function BookingDetails({
         {(booking.guest_house.serves_meals || booking.meals.length > 0) && (
           <Field label="Meals requested" value={describeMeals(booking.meals)} />
         )}
-        {booking.meal_preference && (
-          <Field label="Meal preference" value={MEAL_PREFERENCE_LABELS[booking.meal_preference]} />
+        {dietCounts && (
+          <Field label="Meal preferences" value={describeDietCounts(dietCounts)} />
         )}
         {booking.assigned_rooms.length > 0 && (
           <Field
@@ -154,7 +161,14 @@ export function BookingDetails({
         )}
       </div>
 
-      <Field label="Purpose of visit" value={booking.purpose_of_visit} block />
+      {/* "Remarks", and optional, on a dining booking (1 Oct 2026). */}
+      {booking.purpose_of_visit.trim() !== "" && (
+        <Field
+          label={mealsOnly ? "Remarks" : "Purpose of visit"}
+          value={booking.purpose_of_visit}
+          block
+        />
+      )}
 
       <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
         <Field label="Debitable head" value={describeDebit(booking)} />
@@ -184,10 +198,7 @@ export function BookingDetails({
           <h4 className="mb-1 font-heading text-[1.0625rem] font-semibold text-ink">Meals by day</h4>
           <p className="mb-2 text-xs text-muted-foreground">
             Each ticked meal is for {mealHeadCount} guest{mealHeadCount === 1 ? "" : "s"}
-            {booking.meal_preference
-              ? ` (${MEAL_PREFERENCE_LABELS[booking.meal_preference].toLowerCase()})`
-              : ""}
-            .
+            {dietCounts ? ` — ${describeDietCounts(dietCounts)}` : ""}.
           </p>
           <div className="overflow-x-auto rounded-md border">
             <Table>

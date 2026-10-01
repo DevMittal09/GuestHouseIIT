@@ -291,14 +291,29 @@ describe("the schema accepts its own output for every requester role", () => {
     expect(r.error?.issues[0].message).toMatch(/cannot be used/);
   });
 
-  it("Project needs a project from the active list", () => {
+  it("Project is typed beside the head, and a project id is still checked if one is sent", () => {
     const faculty = {
       room: debitHeadsByType("employee", ["official"], P("employee-priya"), units, DEFAULT_DEBIT_RULES, "room"),
       dining: {},
     };
     const schema = bookingPayloadSchema(config, { mealsAvailable: true, debitHeads: faculty, projectIds: ["proj-storage"] });
-    expect(schema.safeParse({ ...base, debit_head: "project_grant" }).error?.issues[0].message).toMatch(/Choose the project/);
-    expect(schema.safeParse({ ...base, debit_head: "project_grant", project_id: "proj-old" }).error?.issues[0].message).toMatch(/not on the list/);
+    // Typed, not picked (1 Oct 2026): what is required is the number and
+    // title, not a row from the console's list.
+    expect(schema.safeParse({ ...base, debit_head: "project_grant" }).error?.issues[0].message).toMatch(
+      /Project number and title/
+    );
+    expect(
+      schema.safeParse({ ...base, debit_head: "project_grant", debit_details: "SP/2025/017 — Storage" }).success
+    ).toBe(true);
+    // A payload that still carries an id is checked against the list.
+    expect(
+      schema.safeParse({
+        ...base,
+        debit_head: "project_grant",
+        debit_details: "SP/2025/017 — Storage",
+        project_id: "proj-old",
+      }).error?.issues[0].message
+    ).toMatch(/not on the list/);
     expect(schema.safeParse({ ...base, debit_head: "department_budget", project_id: "proj-storage" }).success).toBe(false);
   });
 

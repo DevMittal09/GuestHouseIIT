@@ -33,7 +33,12 @@ every table in `.local-db.json` and self-heals old files.
   role changes do not rewrite history.
 - `status` — see enum below.
 - `service_type` (migration 11) — `room`, `room_meals`, or `meals_only`. Determines if rooms are requested.
-- `meal_preference` (migration 11) — `veg` or `non_veg`, or null if no meals requested.
+- `meal_preference` (migration 11) — `veg` or `non_veg` for the whole party, or
+  null. **Legacy since 1 Oct 2026**: kept because rows written before carry
+  only it, read through `mealDietCounts()`, never written by a new booking.
+- `meal_diet_counts` (migration 27) — each person's own preference as counts,
+  `{"veg": n, "non_veg": n}`, adding up to the booking's head count. Null on a
+  booking with no meals and on every row written before 1 Oct 2026.
 - `meal_guest_count` (migration 11) — number of guests for `meals_only` bookings.
 - `pets_policy_acknowledged` (migration 11) — true if the requester acknowledged the no pets policy.
 - `has_foreign_national` (migration 11) — derived from guests' citizenship, used for quick filtering.
@@ -124,7 +129,7 @@ room_type:      single, double_sharing
 booking_type:   official, personal, alumni
 citizenship:    indian, other
 service_type:   room, room_meals, meals_only
-meal_preference: veg, non_veg
+meal_preference: veg, non_veg   -- legacy; see meal_diet_counts (migration 27)
 email_status:   QUEUED, SENDING, SENT, FAILED
 ```
 
@@ -543,6 +548,34 @@ Current migrations:
    charges refused by the check; `issue_invoice()` promoted the draft keeping
    its charge; changing the charges of the issued invoice refused by
    `invoices_guard` (`INVOICE_IMMUTABLE`).
+
+27. `00000000000027_meal_diet_counts.sql` (1 Oct 2026) — `bookings.meal_diet_counts
+   jsonb`, nullable, with `bookings_meal_diet_counts_shape`: null, or an object
+   of exactly `veg` and `non_veg`, each a whole non-negative number. **Each
+   person's own meal preference**, replacing the single `meal_preference` for
+   the party, which is kept and **not** dropped — rows written before carry
+   only it, and `mealDietCounts()` reads them by spreading that one answer over
+   the head count. **Nothing is backfilled**: a legacy row has no split of its
+   own and should not be given an invented one.
+
+   The split adding up to the head count is checked in the app on both sides
+   (`dietCountsError`), not here: a stay's head count is its `booking_guests`
+   rows, which are inserted *after* the booking.
+
+   "Nothing else in the object" is `meal_diet_counts - 'veg' - 'non_veg' =
+   '{}'` rather than a count over `jsonb_object_keys`, because **a check
+   constraint may not contain a subquery** (the first draft did and Postgres
+   refused the migration).
+
+   Additive, defaulted to null, safe to re-run. **Until it is applied** the
+   store leaves the column out of the insert, so bookings still work and only
+   the split is lost — the booking then reads back through the legacy
+   preference, as it did before.
+
+   Verified in a throwaway `postgres:16-alpine` (1 Oct 2026): 1–27 applied,
+   27 applied again; `{"veg":7,"non_veg":5}` stored; a null accepted on a room
+   booking; a negative count, a stray key (`jain`) and an array each refused by
+   the check.
 
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.

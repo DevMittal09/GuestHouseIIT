@@ -94,6 +94,7 @@ export function booking(
     rejection_reason: null,
     service_type: "room",
     meal_preference: null,
+    meal_diet_counts: null,
     meal_guest_count: null,
     pets_policy_acknowledged: true,
     pets_policy_acknowledged_at: null,
