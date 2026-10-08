@@ -10,7 +10,7 @@ import { encryptionKeys, isProduction } from "./env";
  * AES-256-GCM with a random 12-byte IV per value, stored as
  * `enc:v<key version>:<iv>:<ciphertext>:<tag>` in base64url. The key version
  * is in the value, so a key can be rotated by adding the new one to
- * `ID_ENCRYPTION_KEY` and keeping the old in `ID_ENCRYPTION_KEYS_OLD` — values
+ * `ID_ENCRYPTION_KEY` and keeping the old in `ID_ENCRYPTION_KEYS_OLD` - values
  * written before the rotation still decrypt.
  *
  * **Without a key configured** (a developer's laptop) values are stored as
@@ -59,7 +59,7 @@ export function decryptValue(stored: string | null | undefined): string | null {
   } catch {
     // A value encrypted with a key this deployment no longer has. Better a
     // blank than a crash in the middle of a booking.
-    console.error("[crypto] could not decrypt a stored value — is a key missing from ID_ENCRYPTION_KEYS_OLD?");
+    console.error("[crypto] could not decrypt a stored value - is a key missing from ID_ENCRYPTION_KEYS_OLD?");
     return null;
   }
 }

@@ -32,7 +32,7 @@ export default async function WardenPage() {
         studentRecords={studentRecords}
       />
       {/* Wardens never open New Booking, so their academic record is shown
-          here — below the queue, which is what they came for. */}
+          here - below the queue, which is what they came for. */}
       <AcademicDetailsCard user={user} title="Your details" />
     </div>
   );

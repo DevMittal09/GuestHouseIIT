@@ -47,7 +47,7 @@ export function BillingManager({
         <h2 className="text-lg font-semibold">Tariffs &amp; Invoicing</h2>
         <p className="text-sm text-muted-foreground">
           What a stay costs and how its invoice is numbered and printed. Issued invoices keep the
-          rates and details they were issued with — nothing here changes an invoice already handed
+          rates and details they were issued with - nothing here changes an invoice already handed
           over.
         </p>
       </div>
@@ -74,6 +74,34 @@ function TariffsSection({
   const gstNote = inclusive ? "incl. GST" : "before GST";
   const { isPending, run } = useRunner();
   const [deleting, setDeleting] = useState<Tariff | null>(null);
+  /**
+   * The Add-a-rate draft, held here rather than inside the form, so
+   * **Change rate** on a row in force can fill it in (7 Oct 2026, the
+   * office's eighth list).
+   *
+   * A rate in force is never edited - stays have already been priced with
+   * it - so changing a price means adding a new row with the same scope from
+   * a later date. That is three or four dropdowns to repeat by hand, and
+   * repeating them by hand is how a new rate ends up applying to something
+   * slightly different from the old one. The button copies the scope and
+   * leaves the rate blank, dated **today**, which is what the office asked
+   * for: the new price applies from now on.
+   */
+  const [draft, setDraft] = useState(() => blankTariffDraft(today));
+  const [changing, setChanging] = useState<Tariff | null>(null);
+  const changeRate = (t: Tariff) => {
+    setChanging(t);
+    setDraft({
+      item: t.item,
+      guest_house_id: t.guest_house_id ?? "",
+      room_type: t.room_type ?? "",
+      booking_type: t.booking_type ?? "",
+      requester_role: t.requester_role ?? "",
+      rate: "",
+      effective_from: today,
+      note: t.note ?? "",
+    });
+  };
   const names = {
     guestHouse: (id: string) => guestHouses.find((g) => g.id === id)?.name ?? "A removed guest house",
     roomType: (t: RoomType) => ROOM_TYPE_LABELS[t],
@@ -91,7 +119,7 @@ function TariffsSection({
   return (
     <SettingCard
       title="Rates"
-      description="Each rate applies from its date until a later one replaces it. A blank qualifier means “any”; the most specific rate that fits a charge is used (guest house, then requester, then booking type, then room type). A rate in force cannot be edited or deleted — add the new price from a future date instead."
+      description="Each rate applies from its date until a later one replaces it. A blank qualifier means “any”; the most specific rate that fits a charge is used (guest house, then requester, then booking type, then room type). A rate in force cannot be edited or deleted, because stays have been priced with it - press Change rate to add the new price with the same scope, applying from today or any later date."
     >
       {!hasExtraBed && (
         <p
@@ -132,15 +160,21 @@ function TariffsSection({
                       </Badge>
                     )}
                   </td>
-                  <td className="p-2 text-right">
+                  <td className="p-2 text-right whitespace-nowrap">
                     {future ? (
                       <Button size="sm" variant="outline" disabled={isPending} onClick={() => setDeleting(t)}>
                         Remove
                       </Button>
                     ) : (
-                      <span className="text-xs text-muted-foreground" title="In force — add a new rate instead">
-                        🔒 In force
-                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isPending}
+                        onClick={() => changeRate(t)}
+                        title="In force, so it cannot be edited - this starts a new rate from today with the same scope"
+                      >
+                        Change rate
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -149,7 +183,15 @@ function TariffsSection({
           </tbody>
         </table>
       </div>
-      <NewTariffForm guestHouses={guestHouses} today={today} gstNote={gstNote} />
+      <NewTariffForm
+        guestHouses={guestHouses}
+        today={today}
+        gstNote={gstNote}
+        draft={draft}
+        setDraft={setDraft}
+        changing={changing}
+        onDone={() => setChanging(null)}
+      />
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
@@ -167,18 +209,10 @@ function TariffsSection({
   );
 }
 
-function NewTariffForm({
-  guestHouses,
-  today,
-  gstNote,
-}: {
-  guestHouses: { id: string; name: string }[];
-  today: string;
-  gstNote: string;
-}) {
-  const { isPending, run } = useRunner();
-  const blank = {
-    item: "room" as TariffItem,
+/** A blank Add-a-rate draft, dated today. */
+export function blankTariffDraft(today: string): TariffDraft {
+  return {
+    item: "room",
     guest_house_id: "",
     room_type: "",
     booking_type: "",
@@ -187,14 +221,53 @@ function NewTariffForm({
     effective_from: today,
     note: "",
   };
-  const [draft, setDraft] = useState(blank);
-  const set = (k: keyof typeof blank) => (e: { target: { value: string } }) =>
+}
+
+type TariffDraft = {
+  item: TariffItem;
+  guest_house_id: string;
+  room_type: string;
+  booking_type: string;
+  requester_role: string;
+  rate: string;
+  effective_from: string;
+  note: string;
+};
+
+function NewTariffForm({
+  guestHouses,
+  today,
+  gstNote,
+  draft,
+  setDraft,
+  changing,
+  onDone,
+}: {
+  guestHouses: { id: string; name: string }[];
+  today: string;
+  gstNote: string;
+  draft: TariffDraft;
+  setDraft: React.Dispatch<React.SetStateAction<TariffDraft>>;
+  /** The in-force rate **Change rate** was pressed on, when that is why the form is filled in. */
+  changing: Tariff | null;
+  onDone: () => void;
+}) {
+  const { isPending, run } = useRunner();
+  const set = (k: keyof TariffDraft) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, [k]: e.target.value }));
   const roomish = draft.item === "room" || draft.item === "extra_bed";
 
   return (
     <div className="space-y-3 rounded-md border border-dashed p-3">
-      <p className="text-sm font-medium">Add a rate</p>
+      <p className="text-sm font-medium">{changing ? "Change this rate" : "Add a rate"}</p>
+      {changing && (
+        <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
+          {TARIFF_ITEM_LABELS[changing.item]} is {formatINR(toPaise(changing.rate))} today. A rate
+          in force cannot be edited, because stays have already been priced with it - this adds a
+          new one with the same scope, applying from the date below. Invoices already issued keep
+          their rates.
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Charge" id="t-item">
           <NativeSelect id="t-item" value={draft.item} onChange={set("item")}>
@@ -261,7 +334,7 @@ function NewTariffForm({
           already issued keep their rates.
         </p>
       )}
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
         <Button
           size="sm"
           disabled={isPending || draft.rate.trim() === ""}
@@ -278,13 +351,29 @@ function NewTariffForm({
                   effective_from: draft.effective_from,
                   note: draft.note.trim() || null,
                 }),
-              "Rate added",
-              () => setDraft(blank)
+              changing ? "New rate added, applying from the date you set" : "Rate added",
+              () => {
+                setDraft(blankTariffDraft(today));
+                onDone();
+              }
             )
           }
         >
-          Add rate
+          {changing ? "Add the new rate" : "Add rate"}
         </Button>
+        {changing && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isPending}
+            onClick={() => {
+              setDraft(blankTariffDraft(today));
+              onDone();
+            }}
+          >
+            Cancel
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -389,16 +478,16 @@ function InvoiceRulesSection({ current }: { current: InvoiceRules }) {
           <Field label="GST on food (%)" id="i-gst-meal">
             <Input id="i-gst-meal" type="number" min={0} max={28} step="0.01" value={draft.gst_meal_percent} onChange={num("gst_meal_percent")} />
           </Field>
-          <Field label="SAC — accommodation" id="i-sac-room">
+          <Field label="SAC - accommodation" id="i-sac-room">
             <Input id="i-sac-room" value={draft.sac_room} onChange={top("sac_room")} className="font-mono" />
           </Field>
-          <Field label="SAC — food" id="i-sac-meal">
+          <Field label="SAC - food" id="i-sac-meal">
             <Input id="i-sac-meal" value={draft.sac_meal} onChange={top("sac_meal")} className="font-mono" />
           </Field>
         </div>
         <p className="text-xs text-muted-foreground">
           Defaults are the office&apos;s rates: accommodation 18%, food 5%, each charged on its own subtotal
-          (&ldquo;GST @ 18% on A (B)&rdquo;). The guest house is in Kerala, so each is printed as half
+          (&ldquo;GST @ 18% on A (B)&rdquo;). The guest house is in Keralam, so each is printed as half
           CGST, half SGST. Additional charges the desk adds take the rate of the section they are charged
           under; &ldquo;other&rdquo; charges carry none.
         </p>

@@ -11,7 +11,7 @@ import { actsAsRequester, canReview } from "@/lib/workflow";
 export const dynamic = "force-dynamic";
 
 /**
- * An uploaded document — an ID card, a passport page, an alumni card, a
+ * An uploaded document - an ID card, a passport page, an alumni card, a
  * sanction letter (Phase 8).
  *
  * Nothing is served by filename: the store keeps a path, this route decides
@@ -33,7 +33,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pat
   try {
     const gate = await store.hitRateLimit(`documents:${user.id}`, RATE_LIMITS.documents.limit, RATE_LIMITS.documents.windowSeconds);
     if (!gate.allowed) {
-      return new NextResponse("Too many document requests — slow down.", {
+      return new NextResponse("Too many document requests - slow down.", {
         status: 429,
         headers: { "Retry-After": String(gate.retryAfter) },
       });

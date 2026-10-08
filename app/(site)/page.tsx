@@ -18,8 +18,8 @@ import { amenities, houseSummary, joinNames } from "@/lib/site-content";
 import { getSiteGuestHouses } from "@/lib/site-data";
 
 /**
- * The page itself is rendered per request — the header greets whoever is
- * signed in — but what it *says* comes from `lib/site-data.ts`, which holds
+ * The page itself is rendered per request - the header greets whoever is
+ * signed in - but what it *says* comes from `lib/site-data.ts`, which holds
  * its answers for half an hour under the `site` cache tag (Phase 9).
  * `revalidateEverything()` drops that tag the moment a guest house changes.
  *
@@ -30,7 +30,7 @@ import { getSiteGuestHouses } from "@/lib/site-data";
  * of amenities, a mosaic of photographs, and a closing row of links.
  * Sections open on a hairline ink rule with the label in the left quarter,
  * the editorial habit of hotel sites, rather than on floating boxes.
- * Photographs stay inside the layout — a full-screen photo read as "weird"
+ * Photographs stay inside the layout - a full-screen photo read as "weird"
  * to the owner. No figures,
  * meal times, rules, approval routes or requester categories: rules live on
  * /guidelines, in general terms, and the portal's internals stay in the
@@ -176,7 +176,7 @@ export default async function HomePage() {
             link={{ href: "/gallery", label: "View all photographs" }}
           />
           {/* Contained in the grid: one photograph across half the width and
-              two rows, the rest beside it — no captions (the owner). */}
+              two rows, the rest beside it - no captions (the owner). */}
           <ul className="mt-10 grid grid-cols-2 gap-3 sm:gap-4 lg:h-[clamp(420px,40vw,540px)] lg:grid-cols-12 lg:grid-rows-2">
             {feature && (
               <li className="col-span-2 lg:col-span-6 lg:row-span-2">

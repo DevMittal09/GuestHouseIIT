@@ -21,7 +21,7 @@ export interface RoomDayOccupancy {
   /**
    * The turnaround after a stay (Phase 3), per hour: the booking whose
    * housekeeping buffer covers the hour, when no booking holds it. Drawn
-   * hatched, separately from the booked hours — the stay itself still ends at
+   * hatched, separately from the booked hours - the stay itself still ends at
    * check-out.
    */
   turnaround: (RoomOccupancySegment | null)[];
@@ -29,7 +29,7 @@ export interface RoomDayOccupancy {
    * Hours two or more bookings both hold, listed per hour (null = at most
    * one). A changeover the manager accepted (`isOverridable`, up to two
    * hours) really does put two stays in one room at the same time, and
-   * drawing it in the same red as an ordinary booking said nothing about it —
+   * drawing it in the same red as an ordinary booking said nothing about it -
    * the room reads as taken either way, which is why the office reported
    * overlaps as invisible. Drawn in its own colour instead.
    */
@@ -57,7 +57,7 @@ export function toDateInputValue(d: Date): string {
  *
  * A hold is a *reservation*; "Occupied" is a separate fact the desk records
  * when the guest walks in. So a stay that has not started is only ever
- * "Booked", never "Occupied", no matter what its row says — the office
+ * "Booked", never "Occupied", no matter what its row says - the office
  * reported future bookings reading as occupied, and this is the read side of
  * that fix (`displayStatus` in `lib/workflow.ts` is the other).
  */
@@ -81,7 +81,7 @@ export function hourLabel(hour: number): string {
 /**
  * Lay the day's occupancy out per room and per hour, for the availability
  * grid. An hour counts as held when a booking covers any part of it, using
- * the same strict overlap as room allocation — so a stay checking out at
+ * the same strict overlap as room allocation - so a stay checking out at
  * 11:00 releases the 11 AM hour rather than holding it.
  */
 export function bucketOccupancyByHour(
@@ -99,7 +99,7 @@ export function bucketOccupancyByHour(
     });
   }
 
-  // Who holds each hour, in full — the last writer wins for `hours`, but an
+  // Who holds each hour, in full - the last writer wins for `hours`, but an
   // hour held by two bookings has to be recognisable as such.
   const holdersOf = new Map<string, RoomOccupancySegment[][]>();
   for (const room of rooms) {
@@ -276,7 +276,7 @@ export interface RoomRangeOccupancy {
   turnarounds: { segment: RoomOccupancySegment; from: number; to: number }[];
   /**
    * Where two bookings hold the room at once, clipped to the range and drawn
-   * over both bars in its own colour — see `RoomDayOccupancy.overlaps`.
+   * over both bars in its own colour - see `RoomDayOccupancy.overlaps`.
    */
   overlaps: {
     segments: [RoomOccupancySegment, RoomOccupancySegment];
@@ -414,4 +414,90 @@ export function roomsBookedAt(
     if (held) count++;
   }
   return count;
+}
+
+// ------------------------------------------------------ counts, not rooms
+
+/**
+ * What a requester is told about availability (7 Oct 2026, the office's
+ * eighth list): **how many rooms are free, and nothing else**.
+ *
+ * Everyone but the manager, the caretaker and the developer sees these
+ * figures in place of the room-by-room chart, on `/availability` and in the
+ * booking form - and the server sends them these figures and *only* these,
+ * never a room number or a segment (`getRoomAvailability`). Which rooms are
+ * free is the guest house's own business: a requester cannot choose one, the
+ * manager allocates, and publishing the grid told anyone with a login which
+ * rooms a named stay occupied.
+ *
+ * Maintenance counts as booked here, as it did in the simplified chart: a
+ * room out of service is a room that cannot be had, and why is not the
+ * requester's business either.
+ */
+export interface AvailabilityCounts {
+  /** Active rooms at the guest house. */
+  total: number;
+  /** The institute dates the window covers - the index of `freeByDay`. */
+  days: string[];
+  /** Rooms free at every moment of each day. */
+  freeByDay: number[];
+  /** Rooms with nothing booked anywhere in the window. */
+  freeThroughout: number;
+  /** Rooms free in each hour of the day - only for a one-day window, else null. */
+  freeByHour: number[] | null;
+  /** Rooms held right now, or null when the window does not contain now. */
+  bookedNow: number | null;
+}
+
+/**
+ * The institute days a [from, to) window covers, as an {@link
+ * AvailabilityRange} - so the server can bucket a window it was handed as two
+ * instants with the same functions the charts use. `view` is derived from the
+ * number of days and matters only to the labelling.
+ */
+export function rangeBetween(from: Date, to: Date): AvailabilityRange | null {
+  if (!(from.getTime() < to.getTime())) return null;
+  const days: string[] = [];
+  let day = toInstituteDateValue(from);
+  // One more than the cap the action enforces, so a window that slipped
+  // through cannot spin here.
+  for (let i = 0; i <= MAX_AVAILABILITY_DAYS; i++) {
+    if (instituteDayBounds(day).start.getTime() >= to.getTime()) break;
+    days.push(day);
+    day = addDaysToDateValue(day, 1);
+  }
+  if (days.length === 0) return null;
+  return {
+    view: days.length === 1 ? "day" : days.length <= 7 ? "week" : "month",
+    days,
+    start: instituteDayBounds(days[0]).start,
+    end: instituteDayBounds(days[days.length - 1]).end,
+  };
+}
+
+export function availabilityCounts(
+  rooms: Room[],
+  segments: RoomOccupancySegment[],
+  range: AvailabilityRange,
+  now: Date = new Date()
+): AvailabilityCounts {
+  const daily = bucketOccupancyByDay(rooms, segments, range);
+  const at = now.getTime();
+  const withinRange = at >= range.start.getTime() && at < range.end.getTime();
+  let freeByHour: number[] | null = null;
+  if (range.days.length === 1) {
+    const hourly = bucketOccupancyByHour(rooms, segments, range.start);
+    freeByHour = Array.from(
+      { length: HOURS_IN_DAY },
+      (_, hour) => rooms.filter((room) => !hourly.get(room.id)?.hours[hour]).length
+    );
+  }
+  return {
+    total: rooms.length,
+    days: range.days,
+    freeByDay: freeRoomsByDay(rooms, daily, range),
+    freeThroughout: rooms.filter((room) => (daily.get(room.id)?.segments.length ?? 0) === 0).length,
+    freeByHour,
+    bookedNow: withinRange ? roomsBookedAt(daily, now) : null,
+  };
 }

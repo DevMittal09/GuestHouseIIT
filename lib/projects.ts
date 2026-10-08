@@ -2,7 +2,7 @@
  * Sponsored and consultancy projects a stay can be debited to (Phase 4).
  *
  * When a booking's debitable head is **Project**, the requester picks the
- * project from this list rather than typing a number — a typed number is how
+ * project from this list rather than typing a number - a typed number is how
  * the accounts section ends up debiting a project that does not exist. The
  * list is maintained in the console (Projects), loaded in bulk by pasting
  * from a spreadsheet, and a project is *deactivated* rather than deleted once
@@ -22,9 +22,9 @@ export type Project = {
 
 export type NewProjectInput = Omit<Project, "id">;
 
-/** "SP/2025/017 — Grid-scale storage (Dr. A. Kumar)" */
+/** "SP/2025/017 - Grid-scale storage (Dr. A. Kumar)" */
 export function describeProject(p: Pick<Project, "project_number" | "title" | "pi_name">): string {
-  return `${p.project_number} — ${p.title}${p.pi_name ? ` (${p.pi_name})` : ""}`;
+  return `${p.project_number} - ${p.title}${p.pi_name ? ` (${p.pi_name})` : ""}`;
 }
 
 const PROJECT_NUMBER = /^[A-Za-z0-9][A-Za-z0-9/._-]{1,39}$/;
@@ -46,7 +46,7 @@ export type ProjectImportPlan = {
 };
 
 /**
- * Plans a bulk project import from pasted text — a spreadsheet's columns
+ * Plans a bulk project import from pasted text - a spreadsheet's columns
  * pasted as-is (tab separated), or comma / semicolon separated:
  *
  *     project number, title, principal investigator (optional)
@@ -80,7 +80,7 @@ export function planProjectImport(text: string, existing: Project[]): ProjectImp
     }
     const numberProblem = projectNumberError(number);
     if (numberProblem) {
-      problems.push(`Line ${n}: "${number}" — ${numberProblem}`);
+      problems.push(`Line ${n}: "${number}" - ${numberProblem}`);
       return;
     }
     const key = number.toLowerCase();

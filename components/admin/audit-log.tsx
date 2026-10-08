@@ -11,7 +11,7 @@ import { formatDateTime } from "@/lib/format";
 
 /**
  * The audit log as a table: newest first, filtered by kind or free text. The
- * details column shows what changed — the same JSON the row stores, which is
+ * details column shows what changed - the same JSON the row stores, which is
  * what an incident review needs.
  */
 export function AuditLog({
@@ -106,13 +106,13 @@ export function AuditLog({
                         {e.actor_role}
                       </Badge>
                     )}
-                    <span className="block text-xs text-muted-foreground">{e.ip ?? "—"}</span>
+                    <span className="block text-xs text-muted-foreground">{e.ip ?? "-"}</span>
                   </td>
                   <td className="p-2">{AUDIT_EVENT_LABELS[e.event] ?? e.event}</td>
-                  <td className="p-2 break-all">{e.target ?? "—"}</td>
+                  <td className="p-2 break-all">{e.target ?? "-"}</td>
                   <td className="p-2">
                     <code className="text-xs break-all text-muted-foreground">
-                      {Object.keys(e.details ?? {}).length ? JSON.stringify(e.details) : "—"}
+                      {Object.keys(e.details ?? {}).length ? JSON.stringify(e.details) : "-"}
                     </code>
                   </td>
                 </tr>

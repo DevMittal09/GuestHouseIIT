@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
 
 /**
- * My Bookings leads with two large ways in — a room, and meals without a
- * room — because the header buttons they replaced were being missed
+ * My Bookings leads with two large ways in - a room, and meals without a
+ * room - because the header buttons they replaced were being missed
  * (26 Sep 2026). Each has to land on the right door of the booking form.
  */
 

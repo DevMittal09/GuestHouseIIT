@@ -46,7 +46,7 @@ export const getOfficialEmails = cache(async (): Promise<string[]> => {
   }
 });
 
-/** Hostels for dropdowns. Empty on failure — a free-text field is still usable. */
+/** Hostels for dropdowns. Empty on failure - a free-text field is still usable. */
 export const getHostels = cache(async (): Promise<string[]> => {
   try {
     return await getStore().listHostels();

@@ -5,7 +5,7 @@ import type { DirectoryEntry } from "./types";
 /**
  * Which portal account a verified directory entry belongs to.
  *
- * `profiles.ldap_uid` first — set from the developer console, one at a time or
+ * `profiles.ldap_uid` first - set from the developer console, one at a time or
  * by bulk import. Then, only when `LDAP_LINK_BY_EMAIL=true`, the profile whose
  * email is the entry's `mail` attribute, provided that profile has no LDAP
  * username yet; the uid is recorded on it, so from then on it is an ordinary
@@ -13,7 +13,7 @@ import type { DirectoryEntry } from "./types";
  * portal's existing users on first sign-in instead of being typed in.
  *
  * Off by default because it trusts the directory's `mail` to be set by the
- * institute, not by the user — confirm that with the LDAP administrators
+ * institute, not by the user - confirm that with the LDAP administrators
  * before enabling it.
  *
  * Matching in memory rather than adding a `getProfileByLdapUid` keeps this off

@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 /**
  * The Contact page's map: one tab per guest house (`guestHouseMapPins`), the
  * chosen one embedded, and its "Open in Google Maps" / "Get directions" links
- * underneath. A WAI-ARIA tab list — arrow keys, Home and End move between
- * guest houses — so it works from the keyboard as well as by pointer. With a
+ * underneath. A WAI-ARIA tab list - arrow keys, Home and End move between
+ * guest houses - so it works from the keyboard as well as by pointer. With a
  * single pin there is nothing to choose, and no tab list is drawn.
  */
 export function GuestHouseMap({ pins }: { pins: MapPin[] }) {

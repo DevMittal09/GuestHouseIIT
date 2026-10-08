@@ -34,7 +34,7 @@ export function CollectionsExport({ defaultMonth }: { defaultMonth: string }) {
       link.remove();
       URL.revokeObjectURL(url);
       toast.success(
-        result.rows === 0 ? "No invoices that month — the file has the empty summary" : `Exported ${result.rows} invoice${result.rows === 1 ? "" : "s"}`
+        result.rows === 0 ? "No invoices that month - the file has the empty summary" : `Exported ${result.rows} invoice${result.rows === 1 ? "" : "s"}`
       );
     });
 

@@ -13,8 +13,8 @@ import { instituteParts } from "@/lib/tz";
 /**
  * Keyword + filter search over the booking archive.
  *
- * The matching rules live here — as pure functions over already-hydrated
- * bookings — so that `MockStore` and `SupabaseStore` cannot drift apart.
+ * The matching rules live here - as pure functions over already-hydrated
+ * bookings - so that `MockStore` and `SupabaseStore` cannot drift apart.
  * Each store fetches candidate rows its own way and then hands them to
  * `runBookingSearch`.
  */
@@ -30,7 +30,7 @@ export const SORT_LABELS: Record<BookingSortKey, string> = {
 };
 
 export interface BookingSearchCriteria {
-  /** Free text. Supports `field:value` tokens — see `SEARCH_FIELD_ALIASES`. */
+  /** Free text. Supports `field:value` tokens - see `SEARCH_FIELD_ALIASES`. */
   query?: string;
   /** Match any one of these statuses. Empty or omitted means "any status". */
   statuses?: BookingStatus[];
@@ -39,14 +39,14 @@ export interface BookingSearchCriteria {
   /**
    * Keep only bookings that asked for at least one of these meals, on any day
    * of the stay. Empty or omitted means "any". Like `statuses`, applied in JS
-   * rather than SQL — the meals live in a jsonb column and the matcher
+   * rather than SQL - the meals live in a jsonb column and the matcher
    * already walks the booking.
    */
   meals?: MealKey[];
   /**
    * Match any one of these requester categories. Used by scopes that cover
-   * several — the IAR Office sees Student Cell, its own and legacy alumni
-   * requests — where the single `userRole` above can only name one.
+   * several - the IAR Office sees Student Cell, its own and legacy alumni
+   * requests - where the single `userRole` above can only name one.
    *
    * Like `statuses`, this is never pushed down to SQL: it comes from the
    * caller's scope, and `runBookingSearch` applies it alongside the rest.
@@ -60,7 +60,7 @@ export interface BookingSearchCriteria {
   /** Keep only bookings owned by this user id (requester's own log view). */
   userId?: string;
   /**
-   * An approver by appointment — an HOD, a council secretary — sees their
+   * An approver by appointment - an HOD, a council secretary - sees their
    * own bookings **or** those whose requester belongs to a unit they approve
    * for (`unitsGovernedBy`). Applied in JS, like the other scopes, and never
    * turned into a `userId` push-down, which would hide the unit's requests.
@@ -84,7 +84,7 @@ export interface BookingSearchResult {
    * the status filter can show live facet counts without disabling itself.
    */
   statusCounts: Record<BookingStatus, number>;
-  /** True when the backend could not scan the whole archive — see SupabaseStore. */
+  /** True when the backend could not scan the whole archive - see SupabaseStore. */
   truncated: boolean;
 }
 
@@ -135,7 +135,7 @@ export function tokenizeQuery(raw: string): SearchToken[] {
     const body = (match[2] ?? match[3] ?? "").trim();
     if (!body) continue;
     const field = prefix ? SEARCH_FIELD_ALIASES[prefix] : undefined;
-    // An unrecognised prefix is not a field — keep the chunk as literal text
+    // An unrecognised prefix is not a field - keep the chunk as literal text
     // so that pasting something like "http://x" still searches for it.
     const value = field ? body : prefix ? `${prefix}:${body}` : body;
     tokens.push({ field: field ?? "any", value: value.toLowerCase() });
@@ -197,7 +197,7 @@ export function bookingMatchesTokens(b: BookingWithDetails, tokens: SearchToken[
     status: haystacks.status.toLowerCase(),
     any: buildAnyHaystack(b, haystacks).toLowerCase(),
   };
-  // Every token must match — narrowing, not widening.
+  // Every token must match - narrowing, not widening.
   return tokens.every((t) => lowered[t.field].includes(t.value));
 }
 
@@ -284,6 +284,7 @@ export function emptyStatusCounts(): Record<BookingStatus, number> {
     VACATED: 0,
     CANCELLATION_REQUESTED: 0,
     CANCELLATION_APPROVED: 0,
+    MISSED: 0,
   };
 }
 
@@ -338,7 +339,7 @@ function actionKind(status: BookingStatus): ReviewerActionKind {
 
 /**
  * Log entries where `userId` changed this booking's status. The submission
- * entry (`previous_status === null`) is excluded — submitting is not reviewing.
+ * entry (`previous_status === null`) is excluded - submitting is not reviewing.
  */
 export function reviewerActionsOn(b: BookingWithDetails, userId: string): ReviewerAction[] {
   return b.logs
@@ -365,9 +366,9 @@ export const HISTORY_PAGE_SIZE = 20;
  * Two kinds, because they are genuinely different questions and conflating
  * them loses one of the answers:
  *
- * - **Rolling** — a window measured from today. "Last 30 days" on 15 September
+ * - **Rolling** - a window measured from today. "Last 30 days" on 15 September
  *   is 16 August to 15 September.
- * - **Calendar** — a whole named period. "Last month" on 15 September is the
+ * - **Calendar** - a whole named period. "Last month" on 15 September is the
  *   entirety of August, 1st to 31st, regardless of today's date.
  *
  * Calendar ranges cover the *whole* period including days still to come, so
@@ -439,11 +440,11 @@ const WEEK_STARTS_ON = 1;
 
 /**
  * Local-time yyyy-MM-dd, matching what `<input type="date">` expects.
- * Never `toISOString().slice(0, 10)` — that is UTC, and in IST (UTC+5:30) it
+ * Never `toISOString().slice(0, 10)` - that is UTC, and in IST (UTC+5:30) it
  * reports the previous day until 05:30.
  *
  * Safe to read runtime-local parts here because every Date the preset
- * arithmetic touches is a *civil* date built by `instituteToday()` — a
+ * arithmetic touches is a *civil* date built by `instituteToday()` - a
  * runtime-local midnight whose calendar day is the institute's.
  */
 function isoDay(d: Date): string {
@@ -549,8 +550,8 @@ export function resolveDatePreset(
 /**
  * Which preset, if any, the current from/to exactly matches.
  *
- * Two presets can resolve to the same range — on 31 January, "Last 30 days"
- * and "This month" are both 1–31 January — so this returns the first match in
+ * Two presets can resolve to the same range - on 31 January, "Last 30 days"
+ * and "This month" are both 1–31 January - so this returns the first match in
  * `DATE_PRESETS` order, which is the order the chips are displayed in.
  */
 export function matchDatePreset(
@@ -575,7 +576,7 @@ export interface HistoryParams {
   q: string;
   /**
    * Which stages to include. **Empty means every stage**, which is also what
-   * the filter draws as "all ticked" — a status list that started empty and
+   * the filter draws as "all ticked" - a status list that started empty and
    * looked unticked read as "nothing selected, so nothing shown", when in
    * fact everything was.
    */

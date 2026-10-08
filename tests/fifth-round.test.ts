@@ -3,6 +3,7 @@ import { checkFamily, compareNames, familySummary } from "@/lib/academic/family"
 import type { StudentRecord } from "@/lib/academic/types";
 import { bookingPayloadSchema } from "@/lib/booking-schema";
 import {
+  DEBIT_RULES_REVISION,
   DEFAULT_DEBIT_RULES,
   debitCategoryFor,
   debitHeadsByType,
@@ -21,16 +22,8 @@ import {
   type InvoiceDocument,
 } from "@/lib/invoice";
 import { renderInvoicePdf } from "@/lib/invoice-pdf";
-import {
-  impliedGender,
-  knownGuestsFromBookings,
-  knownGuestsFromRecord,
-  knownSourceOf,
-  mergeKnownGuests,
-  prefillFor,
-} from "@/lib/known-guests";
 import { moveCheckInError } from "@/lib/operations";
-import { DEFAULT_RULES, parseRuleGroup, upgradeInvoiceRules } from "@/lib/settings";
+import { DEFAULT_RULES, INVOICE_RULES_REVISION, parseRuleGroup, upgradeInvoiceRules } from "@/lib/settings";
 import type { DataStore } from "@/lib/store/types";
 import type { Tariff } from "@/lib/tariffs";
 import { addDaysToDateValue, toInstituteDateValue } from "@/lib/tz";
@@ -53,9 +46,11 @@ describe("Special Funds for everyone except students", () => {
   it("is in every category's defaults but the students'", () => {
     for (const kind of ["room", "dining"] as const) {
       for (const category of SPECIAL_FUNDS_CATEGORIES) {
-        // Personal *dining* is the one exception, added 1 Oct 2026: a meal
-        // booking for one's own family is one's own money.
-        if (kind === "dining" && category === "personal") continue;
+        // Personal is the one exception: off a personal meal booking from
+        // 1 Oct 2026, and off a personal booking of any kind from 7 Oct, when
+        // the office asked for a personal booking to stop being asked which
+        // budget pays at all.
+        if (category === "personal") continue;
         expect(DEFAULT_DEBIT_RULES[kind][category]).toContain("special_budget");
       }
       expect(DEFAULT_DEBIT_RULES[kind].student).not.toContain("special_budget");
@@ -63,30 +58,30 @@ describe("Special Funds for everyone except students", () => {
     expect(SPECIAL_FUNDS_CATEGORIES).not.toContain("student");
   });
 
-  it("is not offered on a personal meal booking (1 Oct 2026)", () => {
-    expect(DEFAULT_DEBIT_RULES.dining.personal).toEqual(["personal_funds"]);
-    expect(
-      debitHeadsByType("employee", ["personal"], priya, [], DEFAULT_DEBIT_RULES, "dining").personal
-    ).toEqual(["personal_funds"]);
-    // A floor under Settings, like the students' one: a stored row that still
-    // lists it is ignored on read rather than breaking the form.
-    const forced = {
-      ...DEFAULT_DEBIT_RULES,
-      dining: { ...DEFAULT_DEBIT_RULES.dining, personal: ["personal_funds" as const, "special_budget" as const] },
-    };
-    expect(
-      debitHeadsByType("employee", ["personal"], priya, [], forced, "dining").personal
-    ).toEqual(["personal_funds"]);
-    // Room bookings keep it.
-    expect(
-      debitHeadsByType("employee", ["personal"], priya, [], DEFAULT_DEBIT_RULES, "room").personal
-    ).toContain("special_budget");
+  it("is not offered on any personal booking (1 Oct, widened 7 Oct 2026)", () => {
+    for (const kind of ["room", "dining"] as const) {
+      expect(DEFAULT_DEBIT_RULES[kind].personal).toEqual(["personal_funds"]);
+      expect(
+        debitHeadsByType("employee", ["personal"], priya, [], DEFAULT_DEBIT_RULES, kind).personal
+      ).toEqual(["personal_funds"]);
+      // A floor under Settings, like the students' one: a stored row that
+      // still lists it is ignored on read rather than breaking the form.
+      const forced = {
+        ...DEFAULT_DEBIT_RULES,
+        [kind]: {
+          ...DEFAULT_DEBIT_RULES[kind],
+          personal: ["personal_funds" as const, "special_budget" as const],
+        },
+      };
+      expect(
+        debitHeadsByType("employee", ["personal"], priya, [], forced, kind).personal
+      ).toEqual(["personal_funds"]);
+    }
   });
 
-  it("reaches personal and alumni bookings, and the IAR Student Cell", () => {
+  it("reaches alumni bookings and the IAR Student Cell, but not a personal one", () => {
     expect(debitHeadsByType("employee", ["personal"], priya, [], DEFAULT_DEBIT_RULES).personal).toEqual([
       "personal_funds",
-      "special_budget",
     ]);
     expect(debitHeadsByType("iar_student_cell", ["alumni"], priya, [], DEFAULT_DEBIT_RULES).alumni).toContain("special_budget");
     expect(debitHeadsByType("iar_cell", ["alumni"], priya, [], DEFAULT_DEBIT_RULES, "dining").alumni).toContain("special_budget");
@@ -109,17 +104,18 @@ describe("Special Funds for everyone except students", () => {
       dining: { ...DEFAULT_DEBIT_RULES.dining, personal: ["personal_funds"] },
     };
     const upgraded = upgradeDebitRules(rev2) as typeof DEFAULT_DEBIT_RULES;
-    expect(upgraded.revision).toBe(4);
-    expect(upgraded.room.personal).toEqual(["personal_funds", "special_budget"]);
+    expect(upgraded.revision).toBe(DEBIT_RULES_REVISION);
     expect(upgraded.room.alumni).toEqual(["institute_grant", "special_budget"]);
-    // Revision 4 withdraws it from personal dining, after revision 3 added it.
+    // Revisions 4 and 5 withdraw it from personal dining and then from
+    // personal room bookings, after revision 3 had added it to both.
     expect(upgraded.dining.personal).toEqual(["personal_funds"]);
+    expect(upgraded.room.personal).toEqual(["personal_funds"]);
     // Staff unticked it after revision 2: that choice stands.
     expect(upgraded.room.staff).toEqual(["department_budget"]);
     // A row with no revision gets both rounds.
     const rev1 = upgradeDebitRules({ room: { staff: ["department_budget"], personal: ["personal_funds"] } }) as { room: Record<string, string[]> };
     expect(rev1.room.staff).toEqual(["department_budget", "special_budget"]);
-    expect(rev1.room.personal).toEqual(["personal_funds", "special_budget"]);
+    expect(rev1.room.personal).toEqual(["personal_funds"]);
   });
 });
 
@@ -138,11 +134,14 @@ describe("GST: 18% on rooms, 5% on food", () => {
     expect(read.gst_room_percent).toBe(18);
     expect(read.gst_meal_percent).toBe(5);
     expect(read.accounts_email).toBe("accounts@iitpkd.ac.in");
-    expect(read.revision).toBe(2);
+    expect(read.revision).toBe(INVOICE_RULES_REVISION);
     expect("gst_room_threshold" in read).toBe(false);
     // Saved from the console after the upgrade: the office's own rate.
     expect(parseRuleGroup("invoice", { ...read, gst_room_percent: 12 }).gst_room_percent).toBe(12);
-    expect(upgradeInvoiceRules({ revision: 2, gst_room_percent: 12 })).toEqual({ revision: 2, gst_room_percent: 12 });
+    expect(upgradeInvoiceRules({ revision: INVOICE_RULES_REVISION, gst_room_percent: 12 })).toEqual({
+      revision: INVOICE_RULES_REVISION,
+      gst_room_percent: 12,
+    });
   });
 });
 
@@ -222,7 +221,9 @@ describe("the invoice, per-section GST and additional charges", () => {
   });
 
   it("taxes rooms at 18% and food at 5% on their own subtotals; other charges carry none", () => {
-    expect(doc.version).toBe(3);
+    // Version 4 since 7 Oct 2026 - the lettering is unchanged, so the rest of
+    // this test is too; see eighth-round.test.ts for what version 4 added.
+    expect(doc.version).toBe(4);
     // Inclusive: each section's subtotal and GST add back to its prices.
     expect(doc.subtotal_rooms + (doc.gst_rooms ?? 0)).toBe(2 * 200_000 + 50_000);
     expect(doc.subtotal_dining + (doc.gst_dining ?? 0)).toBe(2 * 8_000 + 2 * 10_000 + 30_000);
@@ -258,9 +259,16 @@ describe("the invoice, per-section GST and additional charges", () => {
     const table = invoiceTable(doc);
     expect(table.rateHeading).toBe("Rate");
     expect(table.sections.map((s) => s.key)).toEqual(["rooms", "dining", "other"]);
-    expect(table.sections[0].totals.map((x) => x.label)).toEqual(["Room Charges Subtotal (A):", "GST @ 18% on A (B):"]);
+    expect(table.sections[0].totals.map((x) => x.label)).toEqual([
+      "Room Charges Subtotal (A):",
+      // The CGST / SGST split moved into the label on 7 Oct 2026.
+      "GST @ 18% on A (B) - CGST 9% + SGST 9%:",
+    ]);
     expect(table.sections[1].heading).toBe("Dining Charges");
-    expect(table.sections[1].totals.map((x) => x.label)).toEqual(["Dining Charges Subtotal (C):", "GST @ 5% on C (D):"]);
+    expect(table.sections[1].totals.map((x) => x.label)).toEqual([
+      "Dining Charges Subtotal (C):",
+      "GST @ 5% on C (D) - CGST 2.5% + SGST 2.5%:",
+    ]);
     expect(table.sections[2].totals.map((x) => x.label)).toEqual(["Other Charges Subtotal (E):"]);
     expect(table.closing).toEqual([{ label: "Grand Total (A+B+C+D+E):", amount: doc.grand_total }]);
     // …and the letters add up to it.
@@ -323,7 +331,10 @@ describe("the invoice, per-section GST and additional charges", () => {
     const d = buildInvoiceDocument(dining, { tariffs: TARIFFS, rules: RULES, capacity: CAP, extraCharges: [CHARGES[2]] });
     const table = invoiceTable(d);
     expect(table.sections.map((s) => s.key)).toEqual(["dining", "other"]);
-    expect(table.sections[0].totals.map((x) => x.label)).toEqual(["Dining Charges Subtotal (A):", "GST @ 5% on A (B):"]);
+    expect(table.sections[0].totals.map((x) => x.label)).toEqual([
+      "Dining Charges Subtotal (A):",
+      "GST @ 5% on A (B) - CGST 2.5% + SGST 2.5%:",
+    ]);
     expect(table.sections[1].totals.map((x) => x.label)).toEqual(["Other Charges Subtotal (C):"]);
     expect(table.closing.map((x) => x.label)).toEqual(["Grand Total (A+B+C):"]);
     // A dining invoice issued as version 2 stays unlettered.
@@ -418,57 +429,14 @@ const ANJALI: StudentRecord = {
   hostel: "Malhar",
 };
 
-describe("filling in guests the portal already knows", () => {
-  it("takes a student's father, mother and guardian from the record, nobody from other kinds", () => {
-    expect(knownGuestsFromRecord(ANJALI).map((k) => [k.name, k.relationship, k.gender])).toEqual([
-      ["Ramesh Menon", "Father", "male"],
-      ["Sreeja Menon", "Mother", "female"],
-    ]);
-    expect(knownGuestsFromRecord({ ...ANJALI, father_name: null, mother_name: null, guardian_name: "Gopinath Nair" }).map((k) => k.relationship)).toEqual(["Guardian"]);
-    expect(knownGuestsFromRecord({ kind: "employee", employee_id: "F1", name: "P", department: null, employee_type: null, phone: null, email: null, office_number: null })).toEqual([]);
-    expect(knownGuestsFromRecord(null)).toEqual([]);
-  });
-
-  it("takes the adults of the requester's own earlier bookings, newest first, once each", () => {
-    const own = (id: string, created: string, guests: ReturnType<typeof guest>[]) =>
-      booking({ id, user_id: "p-1", created_at: created, booking_reference_id: `REF-${id}` }, [{ guests }]);
-    const bookings = [
-      own("b-old", "2026-01-01T00:00:00.000Z", [guest({ name: "Asha Nair", relationship: "Spouse", gender: "female" })]),
-      own("b-new", "2026-06-01T00:00:00.000Z", [
-        guest({ name: "Asha Nair", relationship: "Spouse", gender: "female" }),
-        guest({ name: "Baby", is_infant: true, age: 2 }),
-        guest({ name: "Guest" }),
-        guest({ name: "Dr. K. Rao", relationship: "Collaborator", citizenship: "other", nationality: "DE" }),
-      ]),
-      // Raised for a club: the club's guests, not the requester's.
-      booking({ id: "b-club", user_id: "club-1", created_by: "p-1", created_at: "2026-07-01T00:00:00.000Z" }, [{ guests: [guest({ name: "Band member" })] }]),
-    ];
-    const known = knownGuestsFromBookings(bookings, "p-1");
-    expect(known.map((k) => [k.name, k.relationship, k.reference])).toEqual([
-      ["Asha Nair", "Spouse", "REF-b-new"],
-      ["Dr. K. Rao", "Collaborator", "REF-b-new"],
-    ]);
-    expect(known[1]).toMatchObject({ citizenship: "other", nationality: "DE" });
-    expect(knownGuestsFromBookings(bookings, "p-1", 1)).toHaveLength(1);
-  });
-
-  it("puts the record first and fills in by relationship, ignoring case", () => {
-    const fromBookings = knownGuestsFromBookings(
-      [booking({ user_id: "p-1" }, [{ guests: [guest({ name: "ramesh menon", relationship: "Father" }), guest({ name: "Priya", relationship: "Siblings" })] }])],
-      "p-1"
-    );
-    const known = mergeKnownGuests(knownGuestsFromRecord(ANJALI), fromBookings);
-    expect(known.map((k) => k.name)).toEqual(["Ramesh Menon", "Sreeja Menon", "Priya"]);
-    expect(prefillFor(known, "father")?.name).toBe("Ramesh Menon");
-    expect(prefillFor(known, "Siblings")?.source).toBe("booking");
-    expect(prefillFor(known, "Grandmother")).toBeNull();
-    expect(knownSourceOf(known, " ramesh  menon ", "Father")?.source).toBe("record");
-    expect(knownSourceOf(known, "Ramesh Menon", "Mother")).toBeNull();
-    expect(impliedGender("Mother")).toBe("female");
-    expect(impliedGender("grandfather")).toBe("male");
-    expect(impliedGender("Colleague")).toBeNull();
-  });
-});
+/**
+ * "Filling in guests the portal already knows" used to be tested here: the
+ * academic record and the requester's earlier bookings, offered through a
+ * "Fill in…" list on each guest card. The office asked for that list to go
+ * for every role on 7 Oct 2026, along with "Yourself", and `lib/known-guests.ts`
+ * went with it. What replaced it for a student's parents - their names taken
+ * from the record and locked - is tested in eighth-round.test.ts.
+ */
 
 // ---------------------------------------------------- the warden's check
 
@@ -545,7 +513,7 @@ describe("the infant card", () => {
 
   it("needs an age below 5, even on a form where ages are optional", () => {
     expect(messages(body({ age: "" }))).toEqual(["rooms.0.guests.1.age: Choose the infant's age"]);
-    expect(messages(body({ age: "7" }))).toEqual(["rooms.0.guests.1.age: An infant is below 5 — add a guest instead"]);
+    expect(messages(body({ age: "7" }))).toEqual(["rooms.0.guests.1.age: An infant is below 5 - add a guest instead"]);
   });
 
   it("is an infant, and the output parses again unchanged", () => {

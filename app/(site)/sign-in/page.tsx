@@ -8,7 +8,7 @@ import { SIGN_IN_PHOTOS } from "@/lib/site";
 export const metadata: Metadata = { title: "Sign in" };
 
 /**
- * The general sign-in page — where every portal guard sends a signed-out
+ * The general sign-in page - where every portal guard sends a signed-out
  * visitor (`SIGN_IN_PATH`), and the header's "Sign in" link. Unlike the two
  * booking entry points it lands each role on its own home.
  */

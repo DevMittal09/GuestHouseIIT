@@ -42,11 +42,11 @@ const splitLocal = (iso: string): [string, string] => {
 
 /**
  * What the desk can do to a stay besides check it in and out (Phase 7):
- * extend it — a later check-out, or since 25 Sep 2026 an earlier check-in —
+ * extend it - a later check-out, or since 25 Sep 2026 an earlier check-in -
  * answer the requester's extension request, move the party to another room,
  * release a no-show, or cancel it. The caretaker can change the dates; the
  * rest is the manager's. Every change asks for a reason, which goes in the
- * booking's log — and a move or a release in the security audit log too.
+ * booking's log - and a move or a release in the security audit log too.
  *
  * Dates are a date box and the three time dropdowns (`TimeSelect`), never
  * `datetime-local`, which Firefox makes type-only.
@@ -125,7 +125,7 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
         {pendingExtension && (
           <section className="space-y-2 border-l-4 border-saffron bg-notice p-3 text-sm">
             <p className="font-medium">
-              ⏳ Extension requested — until {formatDateTime(pendingExtension)}
+              ⏳ Extension requested - until {formatDateTime(pendingExtension)}
             </p>
             {booking.extension_reason && <p className="text-muted-foreground">“{booking.extension_reason}”</p>}
             {isManager ? (
@@ -179,7 +179,7 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2 rounded-md border bg-muted/20 p-2">
               {/* Either direction (1 Oct 2026): a guest who arrives early,
-                  and — the case the office reported as impossible — one who
+                  and - the case the office reported as impossible - one who
                   arrives late, whose stay should start when they actually
                   turned up rather than when it was booked. The date box used
                   to have a `max` of the current check-in, which is what made
@@ -242,7 +242,7 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
                 {booking.assigned_room_ids.map((current, i) => (
                   <div key={current} className="space-y-1">
                     <Label htmlFor={`move-${booking.id}-${i}`}>
-                      {booking.rooms[i] ? `Room ${booking.rooms[i].room_index}` : `Room ${i + 1}`} — now{" "}
+                      {booking.rooms[i] ? `Room ${booking.rooms[i].room_index}` : `Room ${i + 1}`} - now{" "}
                       {rooms.find((r) => r.id === current)?.room_number ?? "?"}
                     </Label>
                     <NativeSelect
@@ -254,7 +254,7 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
                         .filter((r) => r.free || r.current)
                         .map((r) => (
                           <option key={r.id} value={r.id}>
-                            {r.room_number} — {ROOM_TYPE_LABELS[r.room_type]}
+                            {r.room_number} - {ROOM_TYPE_LABELS[r.room_type]}
                             {r.current ? " (current)" : " (free)"}
                           </option>
                         ))}

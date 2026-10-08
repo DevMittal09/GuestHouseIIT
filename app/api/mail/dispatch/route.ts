@@ -6,7 +6,7 @@ import { drainOutbox } from "@/lib/mail/dispatch";
  *
  * Normal operation does not need this: `notify.ts` schedules a dispatch with
  * `after()` on the action that queued the message, so mail leaves within a
- * second. This route is the safety net — it clears messages queued while SMTP
+ * second. This route is the safety net - it clears messages queued while SMTP
  * was down, and retries whose backoff has expired.
  *
  * Run it every few minutes:
@@ -17,7 +17,7 @@ import { drainOutbox } from "@/lib/mail/dispatch";
  * (on Vercel, a `crons` entry in `vercel.json` pointing at this path).
  *
  * `GET` and `POST` both work, because cron runners disagree about which to
- * use. Authorization is `CRON_SECRET` — required in production, since this
+ * use. Authorization is `CRON_SECRET` - required in production, since this
  * route causes mail to real people.
  */
 

@@ -8,8 +8,8 @@ import { ACTIVE_STATUSES, ROOM_HOLDING_STATUSES } from "./workflow";
  * What a proposed Settings change would break, before it is saved.
  *
  * A setting applies to bookings still to be decided or still to happen. If a
- * change would make one of those invalid — a room that no longer holds the
- * party already allocated to it, a meal the kitchen will no longer serve — the
+ * change would make one of those invalid - a room that no longer holds the
+ * party already allocated to it, a meal the kitchen will no longer serve - the
  * change is refused and the bookings are named, so the office can fix them
  * first (or decide the setting was wrong). Nothing is ever changed silently to
  * fit.
@@ -101,7 +101,7 @@ export function whitelistRemovalBlockers(email: string, profiles: Profile[]): st
     .filter((p) => p.role === "official" && p.email.toLowerCase() === wanted)
     .map(
       (p) =>
-        `${p.full_name} (${p.email}) is an Official / Dignitary account — change its role in Users & Roles first, or it can no longer book`
+        `${p.full_name} (${p.email}) is an Official / Dignitary account - change its role in Users & Roles first, or it can no longer book`
     );
 }
 

@@ -204,7 +204,7 @@ function GuestHouseCard({
             consequences={[
               `All ${rooms.length} room${rooms.length === 1 ? "" : "s"} in ${gh.name} are deleted with it.`,
               "Requesters can no longer choose it, and it disappears from the availability grid.",
-              "Blocked if any booking still references this guest house — delete those first.",
+              "Blocked if any booking still references this guest house - delete those first.",
             ]}
             confirmPhrase={gh.name}
             confirmLabel="Delete guest house"
@@ -304,7 +304,7 @@ function GuestHouseCard({
             open={confirmRange}
             onOpenChange={setConfirmRange}
             title={`Add ${plan?.create.length ?? 0} rooms to ${gh.name}?`}
-            description={`${plan?.create.slice(0, 12).join(", ") ?? ""}${(plan?.create.length ?? 0) > 12 ? "…" : ""} — all as double sharing rooms.`}
+            description={`${plan?.create.slice(0, 12).join(", ") ?? ""}${(plan?.create.length ?? 0) > 12 ? "…" : ""} - all as double sharing rooms.`}
             confirmLabel="Add rooms"
             confirmVariant="default"
             pending={isPending}
@@ -412,7 +412,7 @@ function GuestHouseCard({
                   <p className="truncate font-medium">{room.room_number}</p>
                   <p className="text-xs text-muted-foreground">
                     {/* Printed only where this guest house has more than one
-                        type — otherwise it is the same word under every room. */}
+                        type - otherwise it is the same word under every room. */}
                     {mixedTypes ? `${room.room_type === "single" ? "Single" : "Double"}` : "Room"}
                     {!room.is_active && " · inactive"}
                   </p>
@@ -453,7 +453,7 @@ function GuestHouseCard({
           description="This permanently removes the room. Deactivating it instead keeps its booking history intact."
           consequences={[
             "The room disappears from the allocation grid and the availability chart.",
-            "Blocked if the room is assigned to any booking — deactivate it instead.",
+            "Blocked if the room is assigned to any booking - deactivate it instead.",
           ]}
           confirmLabel="Delete room"
           pending={isPending}

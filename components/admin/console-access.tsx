@@ -50,7 +50,7 @@ export function ConsoleAccess({ usingDefault }: { usingDefault: boolean }) {
       {usingDefault && (
         <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
           The console is still on its default password (<strong>0000</strong>). Anyone who reaches
-          this portal and picks the developer persona can guess it — set your own below.
+          this portal and picks the developer persona can guess it - set your own below.
         </p>
       )}
 
@@ -59,7 +59,7 @@ export function ConsoleAccess({ usingDefault }: { usingDefault: boolean }) {
           <CardTitle>Console password</CardTitle>
           <CardDescription>
             Guards the developer console only. Every admin action re-checks it, so it cannot be
-            bypassed by calling the API directly — but it is not a login, and the portal still
+            bypassed by calling the API directly - but it is not a login, and the portal still
             uses mock authentication.
           </CardDescription>
         </CardHeader>

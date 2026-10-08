@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Gallery" };
 /**
  * Grouped by subject, not by guest house: the office has not said which
  * guest house each photograph shows (see `GALLERY_SECTIONS`). No visible
- * captions (the owner, 26 Sep 2026) — each photo keeps its alt text for
+ * captions (the owner, 26 Sep 2026) - each photo keeps its alt text for
  * screen readers, and opens full size in a new tab.
  */
 

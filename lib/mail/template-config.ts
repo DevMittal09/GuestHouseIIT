@@ -6,8 +6,8 @@ import { MAIL_EVENT_LABELS, type MailEventKey } from "./types";
  * The part of an automatic email the guest house can change without a
  * developer.
  *
- * The bodies themselves are built from blocks in `templates.ts` — facts
- * tables, callouts, the approval trail — and those stay in code, because they
+ * The bodies themselves are built from blocks in `templates.ts` - facts
+ * tables, callouts, the approval trail - and those stay in code, because they
  * are *derived from the booking* and a free-text editor could only get them
  * wrong. What the office actually asks to change is the wording around them:
  * the subject line, a sentence of context at the top, a standing note at the
@@ -93,7 +93,7 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
     when: "When a requester asks to cancel a booking that is holding rooms.",
   },
   "booking.cancellation_requested.reviewer": {
-    audience: "Retired — reviewers are now CC on the manager's mail",
+    audience: "Retired - reviewers are now CC on the manager's mail",
     when: "No longer sent.",
   },
   "booking.cancellation_decided.requester": {
@@ -134,12 +134,16 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
   },
   "booking.no_show.requester": {
     audience: "The person who made the booking",
-    when: "When a stay is released because the guest did not arrive — by the manager or automatically.",
+    when: "When a stay is released because the guest did not arrive - by the manager or automatically.",
+  },
+  "booking.missed.requester": {
+    audience: "The person who made the booking",
+    when: "When the nightly job finds a request nobody decided before its check-in - or, for a meal booking, before its last day of meals.",
   },
   "invoice.issued.accounts": {
     audience:
       "To: the Accounts email (Tariffs & Invoicing). CC: the requester's HOD and the requester. The invoice PDF is attached.",
-    when: "When the desk issues the invoice for an official booking. Personal bookings are not mailed — the requester downloads theirs from the dashboard.",
+    when: "When the desk issues the invoice for an official booking. Personal bookings are not mailed - the requester downloads theirs from the dashboard.",
   },
 };
 
@@ -148,7 +152,7 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
  * booking always has, so a subject cannot render with a hole in it. A token
  * on a mail with no booking behind it (a digest, the daily report) is left
  * alone rather than blanked, which makes the mistake visible in the outbox
- * instead of silently producing "Booking  — ".
+ * instead of silently producing "Booking  - ".
  */
 export const SUBJECT_TOKENS: { token: string; describes: string }[] = [
   { token: "{reference}", describes: "The booking reference, e.g. IITPKD-GH-2026-DM001" },
@@ -170,7 +174,7 @@ export function fillTokens(text: string, booking: BookingWithDetails | null): st
   return text.replace(/\{[a-z_]+\}/g, (m) => values[m] ?? m);
 }
 
-/** Split a textarea of addresses — one per line, or comma separated. */
+/** Split a textarea of addresses - one per line, or comma separated. */
 export function parseAddressList(raw: string): string[] {
   return [
     ...new Set(
@@ -192,10 +196,10 @@ export function firstInvalidAddress(addresses: string[]): string | null {
 /**
  * Shown when `mail_templates` is not there yet. Lives here rather than in the
  * server action because a "use server" module may only export async
- * functions — exporting a string from one fails the build.
+ * functions - exporting a string from one fails the build.
  */
 export const MAIL_TEMPLATES_MIGRATION_HINT =
-  "The email templates table is not there yet — apply " +
+  "The email templates table is not there yet - apply " +
   "supabase/migrations/00000000000013_mail_templates.sql, then reload this page.";
 
 export function mailEventLabel(key: MailEventKey): string {

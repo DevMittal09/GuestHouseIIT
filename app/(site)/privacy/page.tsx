@@ -8,8 +8,8 @@ import { getRules } from "@/lib/settings-server";
 export const metadata: Metadata = { title: "Privacy notice" };
 
 /**
- * The page itself is rendered per request — the header greets whoever is
- * signed in — but everything it *says* comes from `lib/site-data.ts`, which
+ * The page itself is rendered per request - the header greets whoever is
+ * signed in - but everything it *says* comes from `lib/site-data.ts`, which
  * holds its answers for half an hour under the `site` cache tag, so a visitor
  * does not wait for a database round trip to read the guidelines (Phase 9).
  * `revalidateEverything()` drops that tag the moment a setting or a guest
@@ -22,7 +22,7 @@ export const metadata: Metadata = { title: "Privacy notice" };
  *
  * The retention period is read from Settings rather than written here, so the
  * notice cannot promise something the retention job does not do. Its version
- * is `PRIVACY_NOTICE_VERSION`, stored on every booking that consented to it —
+ * is `PRIVACY_NOTICE_VERSION`, stored on every booking that consented to it -
  * bump that when this page changes materially.
  */
 export default async function PrivacyPage() {
@@ -35,7 +35,7 @@ export default async function PrivacyPage() {
       body: (
         <>
           The Guest House Office, Indian Institute of Technology Palakkad, Kanjikode West, Palakkad,
-          Kerala 678623. Questions about this notice go to{" "}
+          Keralam 678623. Questions about this notice go to{" "}
           <a className="font-semibold text-ink underline decoration-vermilion decoration-2 underline-offset-[5px]" href={`mailto:${GUEST_HOUSE_CONTACT.email}`}>
             {GUEST_HOUSE_CONTACT.email}
           </a>
@@ -59,8 +59,8 @@ export default async function PrivacyPage() {
       heading: "Who can see it",
       body: (
         <>
-          The approvers in your booking&apos;s own chain — your warden, faculty advisor, HOD or the IAR
-          Office as the case may be — the Guest House Manager and the reception desk, and portal
+          The approvers in your booking&apos;s own chain - your warden, faculty advisor, HOD or the IAR
+          Office as the case may be - the Guest House Manager and the reception desk, and portal
           developers maintaining the system. Identity numbers are shown as their last four digits;
           the documents themselves open through a link that lasts five minutes and every view is
           recorded. Invoices for official bookings are sent to the accounts section.
@@ -73,8 +73,8 @@ export default async function PrivacyPage() {
         <>
           Identity numbers and uploaded identity documents are erased{" "}
           <strong>{privacy.id_retention_days} days</strong> ({years} years) after a stay ends, by an
-          automatic job. The booking record itself — who stayed, when, in which room and what it cost
-          — is kept as the guest house&apos;s own record and for audit. Security logs are kept for at
+          automatic job. The booking record itself - who stayed, when, in which room and what it cost
+          - is kept as the guest house&apos;s own record and for audit. Security logs are kept for at
           least 180 days, as required for incident reporting.
         </>
       ),

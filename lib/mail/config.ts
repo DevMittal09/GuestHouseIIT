@@ -14,7 +14,7 @@ export interface MailConfig {
   transport: MailTransportKind;
   /** Envelope/From address, e.g. `IIT Palakkad Guest House <guesthouse@iitpkd.ac.in>`. */
   from: string;
-  /** Where replies should land — a human, never a no-reply address. */
+  /** Where replies should land - a human, never a no-reply address. */
   replyTo: string;
   host: string;
   port: number;
@@ -33,7 +33,7 @@ export interface MailConfig {
    * inbox.
    */
   redirectAllTo: string | null;
-  /** Absolute origin for links in mail bodies — relative URLs are useless there. */
+  /** Absolute origin for links in mail bodies - relative URLs are useless there. */
   baseUrl: string;
   /** Right-hand side of generated Message-IDs; also what threads a booking's mail. */
   messageIdDomain: string;
@@ -65,7 +65,7 @@ export function mailConfig(): MailConfig {
   const user = env("MAIL_USER");
   // Google shows an app password as four groups of four ("abcd efgh ijkl
   // mnop") and people paste it that way. The spaces are presentation, not
-  // part of the secret, so strip them — but only for the app-password
+  // part of the secret, so strip them - but only for the app-password
   // variable: a generic SMTP password may legitimately contain a space.
   const appPassword = env("MAIL_APP_PASSWORD")?.replace(/\s+/g, "") ?? null;
   const pass = appPassword ?? env("MAIL_PASSWORD");
@@ -108,7 +108,7 @@ export function portalUrl(path: string): string {
 /**
  * Whether a caller may trigger the mail worker or the daily cron.
  *
- * `CRON_SECRET` is required in production — these routes send mail to real
+ * `CRON_SECRET` is required in production - these routes send mail to real
  * people, so they cannot be open. With no secret set they are allowed only
  * outside production, which keeps `npm run dev` usable without ceremony.
  */

@@ -52,19 +52,20 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest ·
 Playwright. **Node 20** via nvm (the machine default is 18).
 
-**Status, 1 Oct 2026.** Feature-complete for every workflow specified; taken
+**Status, 7 Oct 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme (Settings, mail
 addressing, turnaround buffer, HOD approval and debitable heads, invoices,
 dining, operational states, security, performance and tests, documentation),
-seven rounds of the office's corrections, a UI revamp and the supervisor's
+eight rounds of the office's corrections, a UI revamp and the supervisor's
 review of the live site (30 Sep). **Not deployed for real use.**
 Runs locally on the mock store, and against one hosted Supabase project with
 demo data. Gates before real bookings: connect the institute LDAP, close Mock
 Authentication (configure Google or `MOCK_LOGIN=false`), production secrets,
 the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 
-**Numbers.** 27 migrations · 12 roles (10 active) · 18 demo personas · 6 demo
-bookings · 338 unit tests · 28 end-to-end journeys · 13 console sections.
+**Numbers.** 29 migrations · 12 roles (10 active) · 13 booking statuses ·
+18 demo personas · 6 demo bookings · 405 unit tests · 33 end-to-end journeys ·
+14 console sections.
 
 ---
 
@@ -125,31 +126,36 @@ bookings · 338 unit tests · 28 end-to-end journeys · 13 console sections.
 
 | Role | Does |
 | --- | --- |
-| Student | Books family (personal), Bageshri only → **Assistant Warden** of their hostel → manager |
+| Student | Books family (personal), **Bageshri only and no meals**, parents taken from their academic record → **Assistant Warden** of their hostel → manager |
 | Faculty / staff (`employee`) | Official → **HOD** → manager; personal → manager; meals only; **as Faculty Advisor** of a council or club when named in the console → straight to the manager |
 | Official (whitelisted office) | Direct → manager, or **Requires HOD approval**; exempt from the booking window and stay cap |
 | Club / fest / council account | **Cannot book** — its Faculty Advisor books for it; it sees the bookings and gets the mail |
 | IAR Student Cell | Books **for an alumnus** only → **IAR Office** → manager |
 | IAR Office | Books (official / alumni) **and** approves the Student Cell |
 | Assistant Warden, HOD, council secretary | Approve by queue; an HOD or secretary is **an appointment in the console, not a role**. The warden sees each student's academic record and a check of the parents on the request against it |
-| **Guest House Manager** | Final approval by **allocating rooms**; the whole desk (incl. an earlier check-in or later check-out); books for guests; invoices with additional charges; 9 console sections |
+| **Guest House Manager** | Final approval by **allocating rooms**; the whole desk (incl. an earlier check-in or later check-out); books for guests; invoices with additional charges; reinstates a **Missed** request; 10 console sections |
 | Guest House Caretaker | Reception: check-in/out, extend (earlier check-in or later check-out), invoices with additional charges |
-| Developer | The whole console (13 sections), behind a password and TOTP |
+| Developer | The whole console (14 sections), behind a password and TOTP |
 
-Every booking: a **debitable head** is mandatory (Special Funds for everyone
-but students, and never on a personal *meal* booking); **Copy to** is optional
-(≤ 25, CC on every mail to the requester); **privacy consent** is mandatory;
-check-in within **1 month**, at most **14 nights**; a room card holds **4
-people, at most 3 needing a bed, at most 3 infants** (under 5); meals only at a
-guest house that serves them, booked **before the previous meal finishes being
-served**, with **each person's own veg / non-veg preference** and at most
-**30 people at one sitting** counting who is already booked (lunch is ticked
-for you on a meal booking). A **turnaround buffer** of 4 h separates stays. Guests the portal
-already knows (a student's parents on record, people from earlier bookings)
-are filled in, the requester too ("Yourself", 30 Sep); "Add infant" opens an
-infant card. Invoices charge **GST 18% on rooms, 5% on food**, each on its own
-subtotal, lettered up to **Grand Total (A+B+C+D)**. All times are
-**Asia/Kolkata** and every date reads **DD/MM/YYYY**. Details: files 10–15.
+Every booking: a **debitable head** is mandatory **except on a personal
+booking, which is never asked** (the server records Personal Funds); **Copy
+to** is optional (≤ 25, CC on every mail to the requester); **privacy consent**
+is mandatory; check-in within **1 month**, at most **14 nights**; a room card
+holds **4 people, at most 3 needing a bed, at most 3 infants** (under 5);
+meals only at a guest house that serves them and **never for a student or an
+alumni booking**, booked **before the previous meal finishes being served**,
+with **each person's own veg / non-veg preference** and at most **30 people at
+one sitting** counting who is already booked (lunch is ticked for you on a
+meal booking). A **turnaround buffer** of 4 h separates stays. A student's
+**father and mother come from their academic record and are locked**, and need
+no ID; "Add infant" opens an infant card. The form shows **the rates** and
+**how many rooms are free** - the room-by-room chart is the desk's. Invoices
+charge **GST 18% on rooms, 5% on food**, each on its own subtotal, lettered up
+to **Grand Total (A+B+C+D)**, settled by **UPI or account transfer**; a
+**personal stay is paid before the guest leaves**. A request nobody decides
+before its check-in is marked **Missed** overnight and the requester told. All
+times are **Asia/Kolkata** and every date reads **DD/MM/YYYY**. Details:
+files 10–15.
 
 ## Where the rules live in code
 
@@ -163,9 +169,12 @@ subtotal, lettered up to **Grand Total (A+B+C+D)**. All times are
 | Everything a submission is checked against | `lib/booking-schema.ts` (client and server) + `createBooking` |
 | Debitable heads | `lib/debit-heads.ts` |
 | Settings and their defaults | `lib/settings.ts` |
-| Stay cap, alumni guest house, contact line | `lib/policy.ts` |
+| Stay cap, the one guest house students and alumni use, who may be offered meals, contact line | `lib/policy.ts` |
 | Capacity and infants | `lib/occupancy.ts` |
-| Guests filled in from the record and earlier bookings | `lib/known-guests.ts` (+ `known-guests-server.ts`) |
+| What a student's academic record **fixes** about their guests (locked parents, withheld relationships, the ID waiver) | `lib/academic/guest-names.ts` |
+| The institute's records the office pasted in, and the CSV import | `lib/academic/store-source.ts`, `lib/academic/stored.ts` (console: `/admin/academic`) |
+| Requests nobody decided in time (the nightly sweep, reinstating) | `lib/missed-server.ts`, `missedSweepable` / `statusBeforeMissed` in `lib/workflow.ts` |
+| Who sees rooms on availability, and the counts everyone else gets | `app/actions/availability.ts`, `availabilityCounts` in `lib/availability.ts` |
 | The warden's check of a student's family | `lib/academic/family.ts` (+ `family-server.ts`) |
 | Meals, serving windows, notice period, each person's preference, the kitchen's limit | `lib/meals.ts` |
 | Invoices and tariffs (GST per section, additional charges, `invoiceTable`) | `lib/invoice.ts`, `lib/tariffs.ts`, `lib/invoice-pdf.ts` |
@@ -244,10 +253,12 @@ After every working round:
 | **Faculty Advisor** | The professor named on a council or club (`units.faculty_advisor_id`); books for it. Not a role — the `faculty_advisor` role is a legacy account type |
 | **Council secretary** | The student heading a council; approved club requests at the old club stage. Their **mailbox** (`sec_arts@…`) is copied on the advisor's bookings |
 | **Copy to (booking)** | Addresses typed on New Booking, CC on every mail to the requester |
+| **Academic record** | What the institute holds about a person. Since 7 Oct 2026 the office keeps these itself (Console → Academic records, migration 28); a student's father and mother on the booking form come from theirs |
 | **Copy to (card)** | The approval chain shown on the Requester details card, CC on staff mail. Different list |
 | **Hold** | A `room_holds` row: a booking holds a room exactly while one exists. The database refuses overlapping holds |
 | **Guard / turnaround** | The hold range the constraint compares — the stay plus the turnaround buffer (4 h); an accepted changeover may overlap ≤ 2 h |
 | **The desk** | The manager and caretaker together |
 | **Mock store / mock auth** | The JSON database (`.local-db.json`) used when Supabase is not configured; the one-click persona picker used when Google is not configured |
-| **Lapsed** | A request whose check-in passed while it waited; it can only be rejected |
+| **Lapsed** | A request whose check-in passed while it waited (a meal booking: its last day of meals). It cannot be forwarded - and since 7 Oct 2026 the nightly job marks it **Missed** |
+| **Missed** | The status a lapsed request is given overnight (migration 29): the requester is told, it leaves every queue, and only the manager can **reinstate** it - back to the stage it was waiting at |
 | **Whitelist** | The official email whitelist — accounts allowed to book as the `official` role |

@@ -9,7 +9,7 @@
  * append-only in the database (updates and early deletes are refused by a
  * trigger) and kept for at least 180 days, as CERT-In requires.
  *
- * Pure types and labels only — `lib/audit-server.ts` writes the rows.
+ * Pure types and labels only - `lib/audit-server.ts` writes the rows.
  */
 
 export type AuditEventKind =
@@ -34,6 +34,8 @@ export type AuditEventKind =
   | "booking.deleted"
   | "booking.room_moved"
   | "booking.no_show_released"
+  /** A Missed request put back in its queue by the manager (migration 29). */
+  | "booking.reinstated"
   | "room.maintenance"
   | "retention.purged"
   | "privacy.data_export"
@@ -68,6 +70,7 @@ export const AUDIT_EVENT_LABELS: Record<AuditEventKind, string> = {
   "booking.deleted": "Booking deleted",
   "booking.room_moved": "Guest moved to another room",
   "booking.no_show_released": "No-show released",
+  "booking.reinstated": "Missed request reinstated",
   "room.maintenance": "Maintenance block",
   "retention.purged": "ID data purged (retention)",
   "privacy.data_export": "Personal data downloaded",

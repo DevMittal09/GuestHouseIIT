@@ -9,16 +9,20 @@ import { getOfficialEmails } from "@/lib/settings-server";
 import { bookingContextFor } from "@/lib/booking-context-server";
 import { getStore } from "@/lib/store";
 import { canBookOnBehalf } from "@/lib/access";
-import { serviceTypesFor } from "@/lib/booking-types";
+
 import { REQUESTER_ROLES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/types";
 import { firstBookableMealDate } from "@/lib/meals";
+import { bookingTypesFor, serviceTypesFor } from "@/lib/booking-types";
+import { tariffPreviews } from "@/lib/tariffs";
+import { academicRecordFor } from "@/lib/academic";
+import { guestNameRule } from "@/lib/academic/guest-names";
+import { toInstituteDateValue } from "@/lib/tz";
 import { PageHeader } from "@/components/page-header";
 import { AcademicDetailsCard } from "@/components/academic-details";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { clubBookingNotice, defaultCopyToFor, mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser, facultyInChargeForClub } from "@/lib/club-booking-server";
-import { knownGuestsFor } from "@/lib/known-guests-server";
 import { BOOKING_STEPS } from "@/lib/site-content";
 import { GUEST_HOUSE_CONTACT } from "@/lib/site";
 
@@ -56,14 +60,14 @@ export default async function BookPage({
     );
   }
 
-  // The councils, fests and clubs this person is Faculty Advisor of —
+  // The councils, fests and clubs this person is Faculty Advisor of -
   // usually none. Any professor named in Departments & Clubs gets them.
   const clubs = await clubsBookableByUser(user);
   const club = forParam ? (clubs.find((c) => c.id === forParam) ?? null) : null;
   if (forParam && !club) redirect("/book");
 
   // The Guest House Manager is not a requester, but they take bookings at the
-  // desk for people who never open the portal — the form asks them who the
+  // desk for people who never open the portal - the form asks them who the
   // stay is for and records both parties.
   const onBehalf = canBookOnBehalf(user.role) && !club;
   const requestsForSelf = REQUESTER_ROLES.includes(user.role) || canBookOnBehalf(user.role);
@@ -78,24 +82,43 @@ export default async function BookPage({
     redirect("/dashboard");
   }
   // Whose form this is: the club's, when its faculty in-charge is booking for
-  // it — `createBooking` builds the same from `for_club`.
+  // it - `createBooking` builds the same from `for_club`.
   const requester = club ?? user;
 
   // The same context `createBooking` builds, so the form offers exactly what
   // the server accepts: Settings, debitable heads, projects, the HOD.
-  // …and who the form can fill in: the family on the requester's academic
-  // record and the guests of their earlier bookings (25 Sep 2026).
-  const [config, context, knownGuests] = await Promise.all([
+  // …and the requester's academic record, which fixes a student's parents'
+  // names (7 Oct 2026) - the form shows them read-only and does not offer a
+  // relationship the record rules out.
+  const [config, context, lookup] = await Promise.all([
     getEffectiveFormConfig(requester.role),
     bookingContextFor(requester),
-    knownGuestsFor(requester),
+    academicRecordFor(requester),
   ]);
+  const guestNames = guestNameRule(
+    lookup.status === "found" ? lookup.record : null,
+    config.relationship_options
+  );
   const guestHouses = (await getStore().listGuestHouses()).filter((g) =>
     config.allowed_guest_house_ids.includes(g.id)
   );
   // Booking as Faculty Advisor, Copy to starts with the council secretary's
   // mailbox; the advisor may remove it or add more.
   const defaultCopyTo = club ? defaultCopyToFor(club, context.units) : [];
+
+  /**
+   * The rates to show on the form, one set per guest house and booking type
+   * this requester may pick. Resolved here, on the server, with the same
+   * function the invoice prices from - so the form quotes what the desk
+   * charges, and the browser never has to ask.
+   */
+  const rates = tariffPreviews(
+    context.tariffs,
+    guestHouses,
+    bookingTypesFor(requester.role),
+    requester.role,
+    toInstituteDateValue(new Date())
+  );
 
   // Meals and rooms are two doors onto the same form. `?service=meals_only`
   // is what the portal home's "Meal / Dining booking" button links to; an
@@ -125,16 +148,16 @@ export default async function BookPage({
         }
       >
         {club
-          ? "You are booking as its Faculty Advisor. The request is theirs — it follows their form and debitable heads, and every mail about it reaches their account with you copied — and it goes straight to the Guest House Manager: nobody has to forward it."
+          ? "You are booking as its Faculty Advisor. The request is theirs - it follows their form and debitable heads, and every mail about it reaches their account with you copied - and it goes straight to the Guest House Manager: nobody has to forward it."
           : mealsOnly
-            ? "Meals at the guest house with no room booked. Tell the kitchen how many people, which days and whether it is vegetarian — it goes straight to the Guest House Manager. Each meal has to be booked before the previous one finishes being served."
+            ? "Meals at the guest house with no room booked. Tell the kitchen how many people, which days and whether it is vegetarian - it goes straight to the Guest House Manager. Each meal has to be booked before the previous one finishes being served."
             : onBehalf
               ? "Take a booking for someone who cannot use the portal themselves. It is recorded against your account and names them as the guest."
-              : "Fill in the stay and guest details — the request enters the approval pipeline for your role automatically."}
+              : "Fill in the stay and guest details - the request enters the approval pipeline for your role automatically."}
       </PageHeader>
       {/* Two columns from `lg` (30 Sep 2026): the form in eight, and in the
           other four the requester's record and what happens after Submit.
-          On a phone the record comes first, as before — it is what the
+          On a phone the record comes first, as before - it is what the
           requester checks before filling anything in. */}
       <div className="grid gap-x-10 gap-y-6 lg:grid-cols-12 lg:items-stretch">
         <aside className="min-w-0 space-y-6 lg:col-span-4 lg:col-start-9 lg:row-start-1">
@@ -152,7 +175,7 @@ export default async function BookPage({
         </aside>
         <div className="min-w-0 space-y-6 lg:col-span-8 lg:row-start-1">
           {/* A professor who is a Faculty Advisor books as themselves or as
-              the advisor of a council, fest or club — the same page, a
+              the advisor of a council, fest or club - the same page, a
               different requester. */}
           {clubs.length > 0 && (
             <BookingAs
@@ -165,7 +188,7 @@ export default async function BookPage({
           <BookingForm
             // A fresh form for each "Booking as": switching is a client-side
             // navigation within this page, and without a new key React keeps
-            // the mounted form — whose defaults (booking type, guest house,
+            // the mounted form - whose defaults (booking type, guest house,
             // Copy to) were the previous requester's.
             key={`${requester.id}:${initialServiceType ?? "room"}`}
             forClub={club ? { id: club.id, name: club.full_name } : null}
@@ -174,14 +197,15 @@ export default async function BookPage({
             config={config}
             initialServiceType={initialServiceType}
             // Resolved here rather than in the form so the server-rendered
-            // page and its hydration cannot land on different days — they
+            // page and its hydration cannot land on different days - they
             // would, for a second either side of a meal's deadline.
             initialMealDate={firstBookableMealDate(new Date(), context.rules.meals.windows)}
             rules={context.rules}
             debitHeads={context.debitHeads}
             hodApprovers={context.hodApprovers}
             defaultCopyTo={defaultCopyTo}
-            knownGuests={knownGuests}
+            tariffPreviews={rates}
+            guestNames={guestNames}
           />
         </div>
       </div>
@@ -192,7 +216,7 @@ export default async function BookPage({
 /**
  * What happens after Submit, beside the form. The steps are the Guidelines'
  * own (`BOOKING_STEPS`, in general terms), less "Sign in"; a meals-only
- * booking stops at approval — nobody arrives or checks out.
+ * booking stops at approval - nobody arrives or checks out.
  */
 function NextSteps({ mealsOnly }: { mealsOnly: boolean }) {
   const steps = BOOKING_STEPS.slice(1, mealsOnly ? 3 : undefined);
@@ -230,7 +254,7 @@ function NextSteps({ mealsOnly }: { mealsOnly: boolean }) {
 /**
  * "Booking as": yourself, or Faculty Advisor of each council, fest or club
  * the console names you for (24 Sep 2026). Links rather than a toggle inside
- * the form, because the choice changes whose form it is — the requester's
+ * the form, because the choice changes whose form it is - the requester's
  * details, booking types and debitable heads all follow.
  */
 function BookingAs({
@@ -252,8 +276,8 @@ function BookingAs({
     return query ? `/book?${query}` : "/book";
   };
   const options = [
-    ...(self ? [{ id: null, label: `Yourself — ${self.full_name}` }] : []),
-    ...clubs.map((c) => ({ id: c.id, label: `Faculty Advisor — ${c.full_name}` })),
+    ...(self ? [{ id: null, label: `Yourself - ${self.full_name}` }] : []),
+    ...clubs.map((c) => ({ id: c.id, label: `Faculty Advisor - ${c.full_name}` })),
   ];
   return (
     <Card>

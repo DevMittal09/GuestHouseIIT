@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
  * `window.confirm` was doing this job, and it is the wrong tool twice over: it
  * says nothing about what is actually about to be lost, and one stray Enter
  * accepts it. Deleting a guest house takes its rooms with it, so this spells
- * out the consequences and — when `confirmPhrase` is given — asks the operator
+ * out the consequences and - when `confirmPhrase` is given - asks the operator
  * to type the name of the thing being destroyed. Typing "Bageshri" is hard to
  * do by accident; clicking OK is not.
  */
@@ -43,7 +43,7 @@ export function ConfirmDialog({
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
-  /** What this will take with it — one line each, shown as a list. */
+  /** What this will take with it - one line each, shown as a list. */
   consequences?: string[];
   /** When set, the operator must type it exactly before confirming. */
   confirmPhrase?: string;

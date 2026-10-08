@@ -358,6 +358,18 @@ had no way to ask the prior question — "is anything free that week?" — so
 `/availability` is a read-only view of the same occupancy data, open to **every
 signed-in role**. It is the only route with no role gate.
 
+> **Two different answers since 7 Oct 2026.** The chart below is the **desk's**
+> — manager, caretaker, developer (`SEES_ROOMS`). Everyone else is sent **how
+> many rooms are free and nothing else**: `getRoomAvailability` returns
+> `AvailabilityCounts` with `rooms` and `segments` **empty**, and
+> `components/availability-counts.tsx` draws "N rooms available" per day, with
+> the hours underneath when a single day is shown. Which room is free is of no
+> use to a requester — they cannot choose one, the manager allocates — and
+> publishing the grid told anyone with a login which rooms a named stay
+> occupied. A component that has no room numbers cannot leak one. The
+> simplified chart requesters had from 30 Sep, and the `simple` / `detailed`
+> flags behind it, are retired.
+
 The chart is a time × room matrix: room numbers across the X axis, time down
 the Y axis, red where a room is held and blank where it is free, with a per-room
 list of booking periods underneath. **Day, Week and Month views** share those
@@ -394,10 +406,12 @@ Three things are worth knowing:
   half-open semantics as allocation — and the turnaround buffer after it is
   bucketed separately (`turnaround`) and drawn hatched, never as booked. Day arithmetic on `"yyyy-MM-dd"` strings runs in UTC
   (`addDaysToDateValue` in `lib/tz.ts`) because a calendar date has no zone.
-- **Identity is stripped per viewer, in the action.** `getRoomAvailability`
-  returns `requester_name` and `purpose_of_visit` only to `gh_manager` and
-  `developer`; everyone else sees periods, reference ids and statuses. A student
-  checking availability has no business seeing who is in room B-204. The store
+- **Identity is stripped per viewer, in the action** — and since 7 Oct 2026 so
+  are the rooms. `getRoomAvailability` returns `requester_name` and
+  `purpose_of_visit` only to `gh_manager` and `developer`
+  (`CAN_SEE_OCCUPANT`), the rooms and segments only to the desk
+  (`SEES_ROOMS`), and counts to everybody. A student checking availability has
+  no business seeing who is in room 204, or which room it is. The store
   populates the fields and the action removes them, so the filtering happens in
   exactly one place. The action also refuses a window longer than
   `MAX_AVAILABILITY_DAYS` (62 days): a month view needs 31, and without a cap

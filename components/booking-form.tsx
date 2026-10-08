@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { createBooking } from "@/app/actions/bookings";
 import { BookingAvailability } from "@/components/booking-availability";
 import { MealDatesPicker } from "@/components/meal-dates-picker";
+import { TariffTable } from "@/components/tariff-table";
 import { MealPlanGrid } from "@/components/meal-plan-grid";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,11 +36,12 @@ import { TimeSelect } from "@/components/ui/time-select";
 import { Textarea } from "@/components/ui/textarea";
 import { COUNTRIES } from "@/lib/countries";
 import {
-  describeKnownGuest,
-  impliedGender,
-  knownSourceOf,
-  type KnownGuest,
-} from "@/lib/known-guests";
+  isRelationshipWithheld,
+  LOCKED_NAME_HINT,
+  lockedNameFor,
+  NO_GUEST_NAME_RULE,
+  type GuestNameRule,
+} from "@/lib/academic/guest-names";
 import {
   addGuestBlockedReason,
   addInfantBlockedReason,
@@ -77,8 +79,10 @@ import {
   guestHousesForBookingType,
   latestCheckOutDate,
   MANAGER_HELP_LINE,
+  mealsAllowedFor,
   PETS_POLICY_NOTICE,
   stayLengthHint,
+  STUDENT_GUEST_HOUSE_NOTE,
   ALUMNI_GUEST_HOUSE_NOTE,
 } from "@/lib/policy";
 import {
@@ -99,18 +103,21 @@ import {
   stayMealDays,
   totalMeals,
 } from "@/lib/meals";
+import type { TariffPreview } from "@/lib/tariffs";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { isOfficeRole, latestCheckIn } from "@/lib/workflow";
 import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import {
   acceptsDebitDocument,
+  asksForDebitHead,
   debitDetailsPrompt,
   debitDetailsRequired,
   describeDebit,
   fixedDebitHead,
   MAX_SUBHEAD_LENGTH,
   needsProject,
+  PERSONAL_DEBIT_HEAD,
   type DebitHeadsByType,
   PAY_AT_CHECKOUT_NOTE,
 } from "@/lib/debit-heads";
@@ -130,14 +137,14 @@ import {
 interface GuestFields {
   /**
    * A stable id for this row, used to key its uploaded file. Field-array
-   * indices shift when a row above is removed, so they cannot be the key —
+   * indices shift when a row above is removed, so they cannot be the key -
    * removing Room 1's first guest would otherwise hand their ID document to
    * the person below them.
    */
   key: string;
   /**
    * Which button made the card (25 Sep 2026): "Add infant" makes an infant
-   * card — age below 5 chosen from a list, no ID — rather than a guest card
+   * card - age below 5 chosen from a list, no ID - rather than a guest card
    * that turns into an infant only once a small age is typed.
    */
   kind: "guest" | "infant";
@@ -240,16 +247,24 @@ export function BookingForm({
   hodApprovers = [],
   forClub = null,
   defaultCopyTo = [],
-  knownGuests = [],
+  tariffPreviews = [],
+  guestNames = NO_GUEST_NAME_RULE,
 }: {
   /**
-   * People the portal already knows this requester books for — the requester
-   * themselves, the family on a student's academic record, then the guests of
-   * their own earlier bookings (`knownGuestsFor`). Choosing Father / Mother /
-   * Guardian / Self fills the name in, and every guest card can be filled
-   * from the list.
+   * What the requester's academic record fixes about their guests (7 Oct
+   * 2026): a student's father's and mother's names, which the form shows
+   * read-only, and the relationships the record rules out, which it does not
+   * offer. Built on the server (`guestNameRule`) and handed to the schema as
+   * well, so the form and `createBooking` apply one rule.
    */
-  knownGuests?: KnownGuest[];
+  guestNames?: GuestNameRule;
+  /**
+   * The rates for each guest house and booking type the requester may pick,
+   * resolved on the server with the same function the invoice uses
+   * (`tariffPreviews`). Shown as a small table beside the stay, so what the
+   * requester is quoted and what the desk charges cannot drift.
+   */
+  tariffPreviews?: TariffPreview[];
   /**
    * Set when a club's Faculty Advisor is booking for the club (24 Sep 2026).
    * `user` and `config` are then the club's, so the form is exactly the
@@ -258,18 +273,18 @@ export function BookingForm({
    */
   forClub?: { id: string; name: string } | null;
   /**
-   * What Copy to starts with — the council secretary's mailbox when a
+   * What Copy to starts with - the council secretary's mailbox when a
    * Faculty Advisor books (`defaultCopyToFor`). A default, not a rule: the
    * requester may clear it or add more.
    */
   defaultCopyTo?: string[];
   /**
    * The debitable heads this requester may use per booking type, for rooms and
-   * for dining — computed on the server (`bookingContextFor`) from Settings, so
+   * for dining - computed on the server (`bookingContextFor`) from Settings, so
    * the form offers exactly what the server will accept.
    */
   debitHeads?: { room: DebitHeadsByType; dining: DebitHeadsByType };
-  /** Who would give HOD approval, by name — for an office's choice. */
+  /** Who would give HOD approval, by name - for an office's choice. */
   hodApprovers?: string[];
   user: Profile;
   guestHouses: GuestHouse[];
@@ -291,7 +306,7 @@ export function BookingForm({
    * The first date a meals-only booking can be cooked for, resolved on the
    * server (`firstBookableMealDate`). Passed in rather than computed here so
    * the server-rendered form and its hydration cannot disagree about which
-   * day it is — they would, for one second either side of a meal's deadline.
+   * day it is - they would, for one second either side of a meal's deadline.
    */
   initialMealDate?: string;
 }) {
@@ -307,7 +322,7 @@ export function BookingForm({
   // Meal choices live outside react-hook-form as "date|meal" keys (`mealSlot`):
   // the grid's rows follow the stay dates, which fixed field paths cannot.
   // What is held is each slot the requester has *decided about* and their
-  // answer — see `mealSlotsFromChoices`. A slot that is not in here takes its
+  // answer - see `mealSlotsFromChoices`. A slot that is not in here takes its
   // meal's default (lunch on, breakfast and dinner off), which is what makes
   // the default survive a change of dates.
   const [mealChoices, setMealChoices] = useState<Map<string, boolean>>(() => new Map());
@@ -329,15 +344,21 @@ export function BookingForm({
 
   // Whether meals can be booked at all on this account. It decides which
   // service types exist, so it is computed before the form's defaults.
-  const [mealsAvailable] = useState(() =>
-    guestHouses.some((g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id))
+  const [mealsAvailable] = useState(
+    () =>
+      // Students and bookings for alumni are never offered meals (7 Oct
+      // 2026, `mealsAllowedFor`). The manager keeps them: the desk can make
+      // an exception, and the server records it.
+      (canOverrideGuestHousePolicy(user.role) ||
+        mealsAllowedFor(defaultBookingTypeFor(config.role) ?? "official", config.role)) &&
+      guestHouses.some((g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id))
   );
   /**
    * Which kind of booking this is. It is **not** a question on the form any
    * more: the portal offers two doors, and the door settles it. A meals-only
    * booking arrives here as `initialServiceType`; anything else is a room
    * booking, and whether meals come with it is decided further down by whether
-   * the requester actually picks any — see `serviceType` below.
+   * the requester actually picks any - see `serviceType` below.
    *
    * The door is still checked against the role, so a hand-edited URL cannot
    * put an ineligible account into the meals-only flow.
@@ -366,7 +387,7 @@ export function BookingForm({
    * Computed here, before `useForm`, rather than left to the effect below:
    * a role with one guest house renders it as a statement rather than a
    * dropdown, and a hidden field that starts empty would be empty in the
-   * server-rendered HTML too — which is exactly the "select a guest house"
+   * server-rendered HTML too - which is exactly the "select a guest house"
    * the IAR Student Cell hit on a form that was never going to ask.
    * `offeredGuestHouses` below recomputes the same list once the requester
    * can change the booking type.
@@ -375,7 +396,11 @@ export function BookingForm({
     const offered = (
       canOverrideGuestHousePolicy(user.role)
         ? guestHouses
-        : guestHousesForBookingType(guestHouses, defaultBookingTypeFor(config.role) ?? "official")
+        : guestHousesForBookingType(
+            guestHouses,
+            defaultBookingTypeFor(config.role) ?? "official",
+            config.role
+          )
     ).filter((g) => !mealsOnly || g.serves_meals);
     return offered.length === 1 ? offered[0].id : "";
   });
@@ -426,7 +451,7 @@ export function BookingForm({
   // are picked, so the requester sees the day they are actually choosing.
   const selectedGuestHouseId = useWatch({ control, name: "guest_house_id" });
   const bookingType = useWatch({ control, name: "booking_type" });
-  // Watched unconditionally — it is only *shown* on a meals-only booking, but
+  // Watched unconditionally - it is only *shown* on a meals-only booking, but
   // a hook cannot be called inside a branch.
   const mealGuestCount = useWatch({ control, name: "meal_guest_count" }) ?? "";
   const vegCountRaw = useWatch({ control, name: "meal_veg_count" }) ?? "";
@@ -436,7 +461,7 @@ export function BookingForm({
   const purposeText = useWatch({ control, name: "purpose_of_visit" }) ?? "";
   const debitDetailsText = useWatch({ control, name: "debit_details" }) ?? "";
   // Which booking types this role may pick, and whether the question is worth
-  // asking — a club only ever books officially.
+  // asking - a club only ever books officially.
   const [bookingTypeOptions] = useState(() => bookingTypesFor(config.role));
   const forAlumnus = needsAlumniDetails(bookingType);
   // Payment follows the kind of booking: one fixed head for a student or a
@@ -445,7 +470,18 @@ export function BookingForm({
   const headOptions = (mealsOnly ? debitHeads.dining : debitHeads.room)[bookingType] ?? [];
   const fixedHead = fixedDebitHead(headOptions);
   const chosenHeadRaw = useWatch({ control, name: "debit_head" });
-  const chosenHead: DebitHead | null = fixedHead ?? (chosenHeadRaw || null);
+  /**
+   * A **personal** booking is not asked which budget pays (7 Oct 2026, the
+   * office's eighth list): the money is the requester's own, so the card is
+   * not rendered at all and the server records Personal Funds itself
+   * (`debitHeadFor`, applied by the schema). What stays on screen is the line
+   * about settling the invoice at check-out, which is the part of that card a
+   * requester actually needed.
+   */
+  const asksHead = asksForDebitHead(bookingType);
+  const chosenHead: DebitHead | null = !asksHead
+    ? PERSONAL_DEBIT_HEAD
+    : (fixedHead ?? (chosenHeadRaw || null));
   const paymentHead = chosenHead;
   const debitPrompt = debitDetailsPrompt(chosenHead);
   const debitDetailsMandatory = debitDetailsRequired(chosenHead);
@@ -463,13 +499,13 @@ export function BookingForm({
   // the server records it in the booking's log when they do.
   const canOverrideHouse = canOverrideGuestHousePolicy(user.role);
   const offeredGuestHouses = (
-    canOverrideHouse ? guestHouses : guestHousesForBookingType(guestHouses, bookingType)
+    canOverrideHouse ? guestHouses : guestHousesForBookingType(guestHouses, bookingType, config.role)
   )
     // A meals-only booking can only go to a kitchen. Offering a guest house
     // that serves no meals would be offering a booking nobody can fulfil.
     .filter((g) => !mealsOnly || g.serves_meals);
   const guestHouseLocked = offeredGuestHouses.length === 1;
-  // One guest house is not a choice, so the select is locked — and a locked
+  // One guest house is not a choice, so the select is locked - and a locked
   // select never fires a change, which left the field empty and the form
   // unsubmittable. It happens on every meals-only booking: only the kitchens
   // are offered, and there is one. Set it here instead of asking.
@@ -483,7 +519,7 @@ export function BookingForm({
     canOverrideHouse &&
     forAlumnus &&
     selectedGuestHouseId !== "" &&
-    !guestHousesForBookingType(guestHouses, bookingType).some(
+    !guestHousesForBookingType(guestHouses, bookingType, config.role).some(
       (g) => g.id === selectedGuestHouseId
     );
 
@@ -504,9 +540,6 @@ export function BookingForm({
     allGuests.map((g) => g?.relationship)
   );
   const uniqueHint = uniqueRelationshipHint(config);
-  // Who is already on the request, so "Fill from saved details" does not
-  // offer the same person twice.
-  const namesOnRequest = allGuests.map((g) => g?.name?.trim().toLowerCase()).filter((n): n is string => !!n);
 
   const totals = describeTotals({
     rooms: (watchedRooms ?? []).length,
@@ -520,7 +553,7 @@ export function BookingForm({
   const effectiveCheckInTime = wantsRooms ? checkInTime : MEALS_ONLY_DAY.start;
   const effectiveCheckOutTime = wantsRooms ? checkOutTime : MEALS_ONLY_DAY.end;
   // A dining booking's first and last day come from the dates picked below,
-  // not from two date boxes — it has no check-in and no check-out.
+  // not from two date boxes - it has no check-in and no check-out.
   const effectiveCheckInDate = mealsOnly ? (mealDates[0] ?? "") : checkInDate;
   const effectiveCheckOutDate = mealsOnly
     ? (mealDates[mealDates.length - 1] ?? "")
@@ -555,11 +588,17 @@ export function BookingForm({
   const servesMeals = selectedGuestHouse?.serves_meals ?? false;
   /**
    * Meals are offered only once a guest house has been chosen *and* that guest
-   * house serves them. Asking first and explaining afterwards — "meals are not
-   * served at Bageshri" — is offering something and then taking it away; this
+   * house serves them. Asking first and explaining afterwards - "meals are not
+   * served at Bageshri" - is offering something and then taking it away; this
    * way the question never appears where the answer would be no.
+   *
+   * The policy is checked beside the guest house (7 Oct 2026), not left to
+   * follow from it: a student and a booking for an alumnus get no meals
+   * whatever the guest house's "Serves meals" tick says. The manager may
+   * still do it, and the server logs the exception.
    */
-  const offerMeals = Boolean(selectedGuestHouse) && servesMeals;
+  const mealsAllowedHere = canOverrideHouse || mealsAllowedFor(bookingType, config.role);
+  const offerMeals = Boolean(selectedGuestHouse) && servesMeals && mealsAllowedHere;
   const mealCheckIn = stay && !stay.problem ? stay.fromAt : null;
   /**
    * The rows of the meal grid. For a stay they are the days it touches; for a
@@ -580,7 +619,7 @@ export function BookingForm({
    * Derived, never stored: each slot's own answer, else its meal's default.
    *
    * On a **meal booking**, lunch arrives ticked and the other two clear
-   * (1 Oct 2026 — until then nothing was ticked until a preference had been
+   * (1 Oct 2026 - until then nothing was ticked until a preference had been
    * chosen, and then everything was). On a **stay**, nothing is ticked:
    * meals there are an extra the requester opts into, and defaulting them on
    * would put dining charges on every stay at a guest house with a kitchen
@@ -608,7 +647,7 @@ export function BookingForm({
   /**
    * Each person's own preference (1 Oct 2026). One answer per kind rather
    * than per person: a dining booking has no guest list, only a head count,
-   * and the kitchen cooks to numbers. They have to add up to the head count —
+   * and the kitchen cooks to numbers. They have to add up to the head count -
    * the same rule the schema applies on both sides (`dietCountsError`).
    */
   const dietCounts = {
@@ -616,6 +655,27 @@ export function BookingForm({
     non_veg: Number(nonVegCountRaw) || 0,
   };
   const dietChosen = vegCountRaw !== "" || nonVegCountRaw !== "";
+  /**
+   * The two boxes are registered by hand so each can fill the other in
+   * (7 Oct 2026): the counts must add up to the head count, so answering one
+   * settles the other, and making the requester do the subtraction was the
+   * commonest way to end up with a split that did not add up.
+   *
+   * Only ever written from a change event, never from an effect: the
+   * requester can still correct either box afterwards, and the one they are
+   * not touching is the one that moves.
+   */
+  const vegCountField = register("meal_veg_count");
+  const nonVegCountField = register("meal_non_veg_count");
+  const fillOtherDietCount = (
+    other: "meal_veg_count" | "meal_non_veg_count",
+    chosen: string
+  ) => {
+    if (chosen === "" || mealHeadCount <= 0) return;
+    const rest = mealHeadCount - Number(chosen);
+    if (!Number.isFinite(rest) || rest < 0) return;
+    setValue(other, String(rest), { shouldValidate: false });
+  };
   const dietProblem =
     mealPlan.length === 0 || mealHeadCount === 0
       ? null
@@ -624,7 +684,7 @@ export function BookingForm({
         : dietCountsError(dietCounts, mealHeadCount);
   const mealSummary =
     mealPlan.length === 0
-      ? "No meals requested — tick the ones your party would like."
+      ? "No meals requested - tick the ones your party would like."
       : `${describeMeals(mealPlan)}, for ${mealHeadCount} guest${mealHeadCount === 1 ? "" : "s"}${
           dietChosen && !dietProblem ? ` (${describeDietCounts(dietCounts)})` : ""
         }.`;
@@ -719,7 +779,7 @@ export function BookingForm({
 
   /**
    * Remove one particular room (not just the last), with its guests. The rooms
-   * after it move up — Room 3 becomes Room 2 — which is fine: the numbers are
+   * after it move up - Room 3 becomes Room 2 - which is fine: the numbers are
    * only the order the requester filled them in.
    */
   const confirmRemoveRoom = () => {
@@ -750,11 +810,11 @@ export function BookingForm({
       service_type: serviceType,
       booking_type: values.booking_type,
       // A student or personal booking can only be paid one way, so the fixed
-      // head is sent whatever the radio last held — switching from Official
+      // head is sent whatever the radio last held - switching from Official
       // to Personal must not carry a department budget along with it.
       debit_head: paymentHead,
       debit_details: debitPrompt ? values.debit_details : undefined,
-      // No project is picked from a list any more (1 Oct 2026) — the number
+      // No project is picked from a list any more (1 Oct 2026) - the number
       // and title are typed into the details box above, which is what the
       // invoice prints.
       project_id: null,
@@ -815,6 +875,10 @@ export function BookingForm({
       mealsAvailable,
       requesterEmail: user.email,
       rules,
+      // The names the academic record fixes, so the form applies the same
+      // rule it renders: a locked parent needs no Aadhaar, and a withheld
+      // relationship is refused here as well as on the server.
+      guestNames,
     }).safeParse(payload);
     let hasError = false;
     if (wantsRooms && roomCountRaw.trim() === "") {
@@ -857,6 +921,10 @@ export function BookingForm({
         room.guests.forEach((g, j) => {
           // An infant needs no ID, so none is demanded for one.
           if (isInfantEntry(g)) return;
+          // Nor does a guest the academic record named (7 Oct 2026): the
+          // institute has already identified them. `createBooking` applies
+          // the same exemption, from the record rather than from this form.
+          if (lockedNameFor(guestNames, g.relationship)) return;
           if (!guestFiles.get(g.key)) {
             hasError = true;
             setError(`rooms.${i}.guests.${j}.name` as FieldPath<FormValues>, {
@@ -911,7 +979,7 @@ export function BookingForm({
     startTransition(async () => {
       const result = await createBooking(formData);
       if (result.ok) {
-        toast.success(`Booking submitted — reference ${result.reference}`);
+        toast.success(`Booking submitted - reference ${result.reference}`);
         router.push("/dashboard");
       } else {
         toast.error(result.error);
@@ -923,13 +991,13 @@ export function BookingForm({
    * Wipe the previous attempt's errors *before* react-hook-form decides
    * whether to run the callback above.
    *
-   * The zod pass reports on paths that are not registered fields —
-   * `check_in`, `check_out`, `rooms` — and react-hook-form only clears the
+   * The zod pass reports on paths that are not registered fields -
+   * `check_in`, `check_out`, `rooms` - and react-hook-form only clears the
    * errors of fields it knows about. A stale error on one of those paths
    * therefore kept `formState.errors` non-empty for ever, `handleSubmit` went
    * on treating the form as invalid, and the callback that clears errors
    * never ran again: fix the date, press Submit, nothing happens. Clearing
-   * here rather than inside the callback is the point — whatever is still
+   * here rather than inside the callback is the point - whatever is still
    * wrong is re-reported by the zod pass a moment later.
    */
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -957,13 +1025,13 @@ export function BookingForm({
       {forClub && (
         <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
           You are booking for <span className="font-medium">{forClub.name}</span> as its Faculty
-          Advisor. The booking is theirs — it appears under their account and yours — and it goes
+          Advisor. The booking is theirs - it appears under their account and yours - and it goes
           straight to the Guest House Manager for approval, with nobody to forward it.
         </p>
       )}
 
       {/* Why the stay is booked. It decides the approval route and how the
-          stay is settled. Roles with a single option are not asked — the value
+          stay is settled. Roles with a single option are not asked - the value
           is still recorded on the booking. */}
       {bookingTypeOptions.length > 1 ? (
         <Card>
@@ -971,7 +1039,7 @@ export function BookingForm({
             <CardTitle>Type of booking</CardTitle>
             <CardDescription>
               Who the stay is for decides who approves it and how it is settled, so this comes
-              first — the rest of the form follows from it.
+              first - the rest of the form follows from it.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -1027,7 +1095,7 @@ export function BookingForm({
                     "Requires HOD approval",
                     hodApprovers.length > 0
                       ? `${hodApprovers.join(" or ")} approves it first.`
-                      : "Nobody is set as HOD for your office yet — it would go straight to the manager.",
+                      : "Nobody is set as HOD for your office yet - it would go straight to the manager.",
                   ],
                 ] as const
               ).map(([value, label, hint]) => (
@@ -1056,8 +1124,25 @@ export function BookingForm({
         </Card>
       )}
 
-      {/* Who pays. A student pays at checkout and has nothing to choose — so
-          it is stated, not asked. */}
+      {/* Who pays.
+
+          A **personal** booking is not asked (7 Oct 2026): the requester's
+          own money is the only answer, so instead of a card headed
+          "Debitable head" with one option in it, the form says how the stay
+          is settled and nothing more. A personal *meal* booking has no
+          check-out to settle anything at, so it gets no card at all. */}
+      {!asksHead ? (
+        !mealsOnly && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">{PAY_AT_CHECKOUT_NOTE}</p>
+            </CardContent>
+          </Card>
+        )
+      ) : (
       <Card>
         <CardHeader>
           <CardTitle>Debitable head</CardTitle>
@@ -1073,7 +1158,7 @@ export function BookingForm({
           {fixedHead ? (
             <p className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm">
               <span className="font-medium">{DEBIT_HEAD_LABELS[fixedHead]}</span>
-              {/* There is no checkout on a dining booking — nobody checks in —
+              {/* There is no checkout on a dining booking - nobody checks in -
                   so the line about settling an invoice at the desk was
                   describing something that does not happen. */}
               {!mealsOnly && fixedHead === "personal_funds" && (
@@ -1110,16 +1195,16 @@ export function BookingForm({
               )}
 
               {/* The project is **typed**, not picked from a list (1 Oct 2026).
-                  The console's list was always behind the real one — a
+                  The console's list was always behind the real one - a
                   sanction that landed last week was not on it, and the
                   requester had nothing to choose. What they type is
                   snapshotted onto the booking and printed on the invoice
-                  (`projectFromDetails` splits "number — title"), so nothing
+                  (`projectFromDetails` splits "number - title"), so nothing
                   downstream needed to change. The box itself is the
                   debit-details field below, whose prompt and mandatory star
                   follow the head. */}
 
-              {/* The project's sub-head, typed — optional, and only with a
+              {/* The project's sub-head, typed - optional, and only with a
                   Project head. */}
               {needsProject(chosenHead) && (
                 <div className="space-y-2">
@@ -1149,14 +1234,14 @@ export function BookingForm({
                     maxLength={300}
                     placeholder={
                       needsProject(chosenHead)
-                        ? "e.g. SP/2025/017 — Grid-scale storage (Dr. A. Kumar)"
-                        : "e.g. Director's discretionary fund — sanction DO/2026/114"
+                        ? "e.g. SP/2025/017 - Grid-scale storage (Dr. A. Kumar)"
+                        : "e.g. Director's discretionary fund - sanction DO/2026/114"
                     }
                     {...register("debit_details")}
                   />
                   {needsProject(chosenHead) && (
                     <p className="text-xs text-muted-foreground">
-                      The project number, then its title after a dash — both are printed on the
+                      The project number, then its title after a dash - both are printed on the
                       invoice. The accounts section debits this project.
                     </p>
                   )}
@@ -1182,6 +1267,7 @@ export function BookingForm({
           )}
         </CardContent>
       </Card>
+      )}
 
       {onBehalf && (
         <Card>
@@ -1211,7 +1297,7 @@ export function BookingForm({
 
       {/* A dining booking is not a stay: no guest house to choose (only a
           kitchen can take it, and there is one), no check-in, no check-out.
-          What it needs is a head count, a reason, and the days — which are
+          What it needs is a head count, a reason, and the days - which are
           picked in the Meals card below, beside the meals themselves. */}
       {mealsOnly ? (
         <Card>
@@ -1219,7 +1305,7 @@ export function BookingForm({
             <CardTitle>Meal booking</CardTitle>
             <CardDescription>
               {offeredGuestHouses.length === 1
-                ? `Meals from the ${offeredGuestHouses[0].name} kitchen — the guest house that serves them. Choose the days and the meals below.`
+                ? `Meals from the ${offeredGuestHouses[0].name} kitchen - the guest house that serves them. Choose the days and the meals below.`
                 : "Choose the kitchen, then the days and the meals below."}
             </CardDescription>
           </CardHeader>
@@ -1268,7 +1354,7 @@ export function BookingForm({
               <Textarea
                 id="purpose_of_visit"
                 rows={3}
-                placeholder="Anything the kitchen should know — a guest who cannot eat wheat, a sitting time, where to serve"
+                placeholder="Anything the kitchen should know - a guest who cannot eat wheat, a sitting time, where to serve"
                 {...register("purpose_of_visit")}
               />
               <FieldError message={err("purpose_of_visit")} />
@@ -1285,7 +1371,9 @@ export function BookingForm({
             <CardDescription>
               {forAlumnus
                 ? ALUMNI_GUEST_HOUSE_NOTE
-                : `Your role can book the ${offeredGuestHouses[0].name} guest house only.`}
+                : config.role === "student"
+                  ? STUDENT_GUEST_HOUSE_NOTE
+                  : `Your role can book the ${offeredGuestHouses[0].name} guest house only.`}
             </CardDescription>
           )}
         </CardHeader>
@@ -1294,7 +1382,7 @@ export function BookingForm({
             <Label htmlFor="guest_house_id">Guest house *</Label>
             {/* One guest house is not a choice, so it is not a dropdown.
                 A disabled <select> looked like a question that had somehow
-                been answered wrongly — the IAR Student Cell, whose alumni
+                been answered wrongly - the IAR Student Cell, whose alumni
                 bookings are always Bageshri, reported being told to select a
                 guest house it was never offered. The name is stated and the
                 id travels in a hidden input, which is a real registered field
@@ -1432,7 +1520,7 @@ export function BookingForm({
 
       {/* Told, not signed for. A guest who arrives with an animal has to be
           turned away at the desk, so the notice is given prominence here and
-          repeated in every booking mail — but there is no tick box: a tick
+          repeated in every booking mail - but there is no tick box: a tick
           proves nothing a notice does not, and the office asked for it to go.
           **Not on a dining booking** (1 Oct 2026): nobody stays, so there is
           no animal to turn away, and the notice was the largest thing on a
@@ -1454,13 +1542,38 @@ export function BookingForm({
       </Card>
       )}
 
+      {/* What it costs, from the office's own rate sheet (7 Oct 2026). Beside
+          the stay rather than at the end: the requester is choosing a guest
+          house and a number of rooms a few lines above, and the rates are
+          part of that choice. The same resolution the invoice uses, so the
+          figure quoted here is the figure charged. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{mealsOnly ? "Meal rates" : "Rates"}</CardTitle>
+          <CardDescription>
+            {mealsOnly
+              ? "What the kitchen charges per head. Your invoice is priced from these rates."
+              : "What this guest house charges. Your invoice is priced from these rates."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TariffTable
+            previews={tariffPreviews}
+            guestHouseId={selectedGuestHouseId}
+            bookingType={bookingType}
+            guestHouseName={selectedGuestHouse?.name}
+            pricesIncludeGst={rules.invoice.prices_include_gst}
+          />
+        </CardContent>
+      </Card>
+
       {wantsRooms && (
         <Card>
           <CardHeader>
             <CardTitle>Room availability</CardTitle>
             <CardDescription>
               What is already booked at your chosen guest house in the week of your check-in
-              date — switch to Day or Month, or move to other dates, to find room to spare.
+              date - switch to Day or Month, or move to other dates, to find room to spare.
               Nothing here is reserved for you until the Guest House Manager allocates a room.
             </CardDescription>
           </CardHeader>
@@ -1481,7 +1594,7 @@ export function BookingForm({
             <CardDescription>
               {mealsOnly
                 ? `Lunch is included on each day you add; tick breakfast or dinner as well, or untick what you will not need. "Add another date" books further days.`
-                : `${selectedGuestHouse?.name} serves meals. Tick the ones your party would like — each is charged on the invoice — or leave the table empty to book the room on its own.`}{" "}
+                : `${selectedGuestHouse?.name} serves meals. Tick the ones your party would like - each is charged on the invoice - or leave the table empty to book the room on its own.`}{" "}
               The kitchen uses this for head counts, so tell the manager if plans change after
               booking.
             </CardDescription>
@@ -1501,10 +1614,25 @@ export function BookingForm({
                   {mealHeadCount === 1 ? "person" : "people"} eating would like vegetarian meals,
                   and how many would not. The two have to add up to {mealHeadCount}.
                 </p>
+                {/* Answering one box fills the other with the rest (7 Oct
+                    2026, the office's eighth list). The two always have to
+                    add up to the head count, so the second question only
+                    ever has one right answer - asking it twice was asking
+                    the requester to do the subtraction, and the commonest
+                    way to get "the two have to add up to N" was to answer
+                    one box and stop. Either box fills the other, so a
+                    correction to the first still works. */}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="meal_veg_count">{MEAL_PREFERENCE_LABELS.veg}</Label>
-                    <NativeSelect id="meal_veg_count" {...register("meal_veg_count")}>
+                    <NativeSelect
+                      id="meal_veg_count"
+                      {...vegCountField}
+                      onChange={(e) => {
+                        vegCountField.onChange(e);
+                        fillOtherDietCount("meal_non_veg_count", e.target.value);
+                      }}
+                    >
                       <option value="">Select…</option>
                       {Array.from({ length: Math.max(mealHeadCount, 1) + 1 }, (_, n) => n).map((n) => (
                         <option key={n} value={n}>
@@ -1515,7 +1643,14 @@ export function BookingForm({
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="meal_non_veg_count">{MEAL_PREFERENCE_LABELS.non_veg}</Label>
-                    <NativeSelect id="meal_non_veg_count" {...register("meal_non_veg_count")}>
+                    <NativeSelect
+                      id="meal_non_veg_count"
+                      {...nonVegCountField}
+                      onChange={(e) => {
+                        nonVegCountField.onChange(e);
+                        fillOtherDietCount("meal_veg_count", e.target.value);
+                      }}
+                    >
                       <option value="">Select…</option>
                       {Array.from({ length: Math.max(mealHeadCount, 1) + 1 }, (_, n) => n).map((n) => (
                         <option key={n} value={n}>
@@ -1527,7 +1662,7 @@ export function BookingForm({
                 </div>
                 {dietChosen && (
                   <p className={cn("text-xs", dietProblem ? "text-destructive" : "text-muted-foreground")}>
-                    {dietProblem ?? `${describeDietCounts(dietCounts)} — ${dietTotal(dietCounts)} of ${mealHeadCount}.`}
+                    {dietProblem ?? `${describeDietCounts(dietCounts)} - ${dietTotal(dietCounts)} of ${mealHeadCount}.`}
                   </p>
                 )}
               </fieldset>
@@ -1639,8 +1774,7 @@ export function BookingForm({
                 guestFiles={guestFiles}
                 err={err}
                 capacity={rules.capacity}
-                knownGuests={knownGuests}
-                namesOnRequest={namesOnRequest}
+                guestNames={guestNames}
                 setValue={setValue}
                 onRemove={roomFields.length > 1 ? () => setRoomToRemove(roomIndex) : undefined}
               />
@@ -1732,14 +1866,14 @@ export function BookingForm({
       )}
 
       {/* Copy to (24 Sep 2026): anyone else who should hear about this
-          booking — a secretary, the guest, a colleague. Every mail the
+          booking - a secretary, the guest, a colleague. Every mail the
           requester gets about it is copied to them. As many as are needed,
           up to a ceiling a crafted request cannot run past. */}
       <Card>
         <CardHeader>
           <CardTitle>Copy to (optional)</CardTitle>
           <CardDescription>
-            Email addresses that should get a copy of every mail sent to you about this booking —
+            Email addresses that should get a copy of every mail sent to you about this booking -
             received, approved, rooms allocated, cancelled. Add as many as you need.
             {defaultCopyTo.length > 0 &&
               " The secretary's mailbox is filled in for you; clear it if they should not be copied."}
@@ -1795,7 +1929,7 @@ export function BookingForm({
       </Card>
 
       {/* What is about to be ordered, in words, at the end of the form
-          (1 Oct 2026 — "add a confirmation message at the end of the meal
+          (1 Oct 2026 - "add a confirmation message at the end of the meal
           booking, basically what all we booked"). A dining booking is a list
           of numbers spread over three cards; this reads it back as one
           sentence per fact so the requester can check it before submitting,
@@ -1812,12 +1946,12 @@ export function BookingForm({
           <CardContent>
             {mealPlan.length === 0 ? (
               <EmptyNote>
-                Nothing is ordered yet — add a date above and tick the meals you would like.
+                Nothing is ordered yet - add a date above and tick the meals you would like.
               </EmptyNote>
             ) : (
               <dl className="divide-y divide-border border-y border-border text-sm">
                 <SummaryRow label="Kitchen">
-                  {guestHouses.find((g) => g.id === selectedGuestHouseId)?.name ?? "—"}
+                  {guestHouses.find((g) => g.id === selectedGuestHouseId)?.name ?? "-"}
                 </SummaryRow>
                 <SummaryRow label="People">
                   {mealHeadCount} {mealHeadCount === 1 ? "person" : "people"}
@@ -1930,7 +2064,7 @@ export function BookingForm({
                   ? [`${peopleIn(roomToRemove)} guest${peopleIn(roomToRemove) === 1 ? "" : "s"} entered in this room`]
                   : []),
                 ...(roomToRemove < roomFields.length - 1
-                  ? [`The rooms after it move up — Room ${roomToRemove + 2} becomes Room ${roomToRemove + 1}`]
+                  ? [`The rooms after it move up - Room ${roomToRemove + 2} becomes Room ${roomToRemove + 1}`]
                   : []),
               ]
         }
@@ -1959,8 +2093,7 @@ function RoomCard({
   guestFiles,
   err,
   capacity,
-  knownGuests,
-  namesOnRequest,
+  guestNames,
   setValue,
   onRemove,
 }: {
@@ -1975,8 +2108,7 @@ function RoomCard({
   guestFiles: Map<string, File>;
   err: (path: string) => string | undefined;
   capacity: CapacityRules;
-  knownGuests: KnownGuest[];
-  namesOnRequest: string[];
+  guestNames: GuestNameRule;
   setValue: UseFormSetValue<FormValues>;
   /** Absent on the only room: a booking always has at least one. */
   onRemove?: () => void;
@@ -2038,8 +2170,7 @@ function RoomCard({
             guestFiles={guestFiles}
             err={err}
             number={numberOf(guestIndex)}
-            knownGuests={knownGuests}
-            namesOnRequest={namesOnRequest}
+            guestNames={guestNames}
             setValue={setValue}
             canRemove={fields.length > 1}
             onRemove={() => {
@@ -2111,8 +2242,7 @@ function GuestRow({
   guestFiles,
   err,
   number,
-  knownGuests,
-  namesOnRequest,
+  guestNames,
   setValue,
   canRemove,
   onRemove,
@@ -2131,8 +2261,7 @@ function GuestRow({
   err: (path: string) => string | undefined;
   /** This card's number among its own kind: Guest 2, Infant 1. */
   number: number;
-  knownGuests: KnownGuest[];
-  namesOnRequest: string[];
+  guestNames: GuestNameRule;
   setValue: UseFormSetValue<FormValues>;
   canRemove: boolean;
   onRemove: () => void;
@@ -2143,7 +2272,6 @@ function GuestRow({
   const citizenship = useWatch({ control, name: `${base}.citizenship` });
   const age = useWatch({ control, name: `${base}.age` });
   const relationship = useWatch({ control, name: `${base}.relationship` });
-  const name = useWatch({ control, name: `${base}.name` });
   const infantCard = kind === "infant";
   const isInfant = isInfantEntry({ age, kind });
   const star = (mode: "required" | "optional" | "hidden") => (mode === "required" ? " *" : "");
@@ -2155,7 +2283,7 @@ function GuestRow({
    *
    *  - a dependent (sibling, grandparent) with no parent on the request yet;
    *  - a one-of-each relationship another guest already holds. Never this
-   *    guest's own answer — taking away the value in the box would silently
+   *    guest's own answer - taking away the value in the box would silently
    *    clear it.
    */
   const lockReason = (option: string): string | null => {
@@ -2168,45 +2296,29 @@ function GuestRow({
     return null;
   };
 
-  // ---- filling in what the portal already knows (25 Sep 2026)
+  // ---- names the academic record fixes (7 Oct 2026)
 
-  /** The dropdown's own spelling of a relationship, or null if it has none. */
-  const optionFor = (rel: string | null) =>
-    rel ? (config.relationship_options.find((o) => o.toLowerCase() === rel.trim().toLowerCase()) ?? null) : null;
   /**
-   * **Nothing is filled in by choosing a relationship** (1 Oct 2026).
+   * **Nothing is filled in from a list any more.** Choosing a relationship
+   * stopped filling the name in on 1 Oct 2026, and the "Fill in…" shortcut
+   * that replaced it went on 7 Oct, at the office's request - along with
+   * "Yourself", for every role.
    *
-   * Picking "Mother" used to fill the name and gender in from the academic
-   * record, and picking a different relationship took them back out again.
-   * The office asked for it to stop — "remove auto-fill even for parents" —
-   * because a box that writes itself is a box nobody checks, and the one
-   * thing the desk needs from this form is a name that is actually the
-   * guest's. Everything the portal knows is still one click away, in the
-   * "Fill in" list on this card; that one is asked for, so it is read.
+   * What is left is narrower and firmer: where the requester's academic
+   * record names a parent, that name is **not a question**. The box carries
+   * it, read-only, and the server writes the record's name whatever arrives
+   * (`guestNameRule`, `lockedNameFor`). A sibling or a grandparent is typed
+   * by hand exactly as before.
    */
-  /** "Fill in": everything the portal holds about that person, on request. */
-  const fillFrom = (k: KnownGuest) => {
-    if (gf.name !== "hidden") setValue(`${base}.name`, k.name, set);
-    const gender = k.gender ?? impliedGender(k.relationship);
-    if (gf.gender !== "hidden" && gender) setValue(`${base}.gender`, gender, set);
-    if (gf.relationship !== "hidden" && k.relationship) {
-      // A dropdown takes only its own options, and not one another guest holds.
-      const option = config.relationship_style === "dropdown" ? optionFor(k.relationship) : k.relationship;
-      if (option && !lockReason(option)) setValue(`${base}.relationship`, option, set);
-    }
-    setValue(`${base}.citizenship`, k.citizenship, set);
-    setValue(`${base}.nationality`, k.nationality ?? "", set);
-  };
-  const ownName = name?.trim().toLowerCase() ?? "";
-  // Not someone already on the request — except this card's own person.
-  const offered = infantCard
-    ? []
-    : knownGuests.filter((k) => {
-        const n = k.name.toLowerCase();
-        return n === ownName || !namesOnRequest.includes(n);
-      });
-  const source = knownSourceOf(knownGuests, name, relationship);
+  const lockedName = lockedNameFor(guestNames, relationship);
   const relationshipField = register(`${base}.relationship`);
+  // Keep the box and the payload holding the record's name: the field is
+  // read-only, so nothing else would ever set it. Written from the change
+  // event on the relationship, never from an effect.
+  const onRelationshipChange = (value: string) => {
+    const fixed = lockedNameFor(guestNames, value);
+    if (fixed && gf.name !== "hidden") setValue(`${base}.name`, fixed, set);
+  };
 
   return (
     <div className={cn("rounded-md border p-4", infantCard ? "border-saffron/60 bg-notice/60" : "border-border bg-band/40")}>
@@ -2215,40 +2327,15 @@ function GuestRow({
           {infantCard ? `Infant ${number}` : `Guest ${number}`}
           {isInfant && (
             <span className="tag-yellow ml-2 rounded-xs px-1.5 py-px text-xs font-semibold">
-              {infantCard ? `Below ${INFANT_AGE_LIMIT} · shares a guardian's bed · no ID needed` : "Infant — shares a bed, no ID needed"}
+              {infantCard ? `Below ${INFANT_AGE_LIMIT} · shares a guardian's bed · no ID needed` : "Infant - shares a bed, no ID needed"}
             </span>
           )}
         </p>
-        {/* Filling a card in from what the portal already knows is a
-            shortcut, not a question, so it sits small on the card's own
-            header line rather than above every guest as a labelled
-            full-width dropdown — which is where it was until 1 Oct 2026, and
-            the office said it was taking up too much of the form. */}
+        {/* The "Fill in…" shortcut that stood here until 7 Oct 2026 is gone,
+            for every role, at the office's request - "Yourself" with it. A
+            parent's name is no longer something to fill in: where the record
+            has it, the box below carries it and cannot be edited. */}
         <div className="ml-auto flex items-center gap-1">
-          {offered.length > 0 && (
-            <>
-              <Label htmlFor={`${base}.known`} className="sr-only">
-                Fill in guest {number} from saved details
-              </Label>
-              <NativeSelect
-                id={`${base}.known`}
-                value=""
-                aria-label={`Fill in guest ${number} from saved details`}
-                className="h-7 w-auto max-w-48 border-dashed py-0 text-xs text-muted-foreground"
-                onChange={(e) => {
-                  const k = offered[Number(e.target.value)];
-                  if (k) fillFrom(k);
-                }}
-              >
-                <option value="">Fill in…</option>
-                {offered.map((k, i) => (
-                  <option key={`${k.name}|${k.relationship ?? ""}`} value={i}>
-                    {describeKnownGuest(k)}
-                  </option>
-                ))}
-              </NativeSelect>
-            </>
-          )}
         {canRemove && (
           <Button
             type="button"
@@ -2267,15 +2354,21 @@ function GuestRow({
         {gf.name !== "hidden" && (
           <div className="space-y-2">
             <Label>Name{star(gf.name)}</Label>
-            <Input placeholder={infantCard ? "Infant's full name" : "Full name"} {...register(`${base}.name`)} />
-            {source && (
-              <p className="text-xs text-muted-foreground">
-                {source.source === "self"
-                  ? "Your own name, as on your record."
-                  : source.source === "record"
-                    ? `As on your academic record (${source.relationship}).`
-                    : `As on your booking ${source.reference}.`}
-              </p>
+            {/* Where the academic record names this relationship, the name is
+                the institute's and not the requester's to change - so the box
+                shows it and is read-only rather than being left open and
+                checked afterwards. It stays a registered field, so the value
+                travels with the submission; the server writes the record's
+                name regardless. */}
+            <Input
+              placeholder={infantCard ? "Infant's full name" : "Full name"}
+              readOnly={lockedName !== null}
+              aria-readonly={lockedName !== null || undefined}
+              className={lockedName !== null ? "bg-muted/50" : undefined}
+              {...register(`${base}.name`)}
+            />
+            {lockedName !== null && (
+              <p className="text-xs text-muted-foreground">{LOCKED_NAME_HINT}</p>
             )}
             <FieldError message={err(`${base}.name`)} />
           </div>
@@ -2297,15 +2390,15 @@ function GuestRow({
           </div>
         ) : (
           <div className="space-y-2">
-            {/* Always shown — the age is what decides whether this person is an
-                infant, and the per-room limit counts the two separately — but
+            {/* Always shown - the age is what decides whether this person is an
+                infant, and the per-room limit counts the two separately - but
                 mandatory only where the role's form says so. Left blank on a
                 form where it is optional, the guest is an adult. */}
             <Label>Age{star(gf.age)}</Label>
             <Input type="number" min={0} max={120} {...register(`${base}.age`)} />
             {gf.age !== "required" && !age?.trim() && (
               <p className="text-xs text-muted-foreground">
-                Needed only for a child below {INFANT_AGE_LIMIT} — or use Add infant.
+                Needed only for a child below {INFANT_AGE_LIMIT} - or use Add infant.
               </p>
             )}
             <FieldError message={err(`${base}.age`)} />
@@ -2332,21 +2425,34 @@ function GuestRow({
                 on it, and a child who has to be typed as "Siblings" to get
                 past the form tells the desk the wrong thing. */}
             {config.relationship_style === "dropdown" && !isInfant ? (
-              <NativeSelect {...relationshipField}>
+              <NativeSelect
+                {...relationshipField}
+                onChange={(e) => {
+                  relationshipField.onChange(e);
+                  onRelationshipChange(e.target.value);
+                }}
+              >
                 <option value="">Select…</option>
-                {config.relationship_options.map((r) => {
-                  const locked = lockReason(r);
-                  return (
-                    <option
-                      key={r}
-                      value={r}
-                      disabled={Boolean(locked)}
-                      className={locked ? "text-muted-foreground opacity-50" : undefined}
-                    >
-                      {locked ? `${r} — ${locked}` : r}
-                    </option>
-                  );
-                })}
+                {/* A relationship the record rules out is not offered at all
+                    (7 Oct 2026): there would be no name to lock it to, and
+                    offering it would let a typed parent back in through the
+                    one door this closes. Guardian is the mirror - it appears
+                    only where the record names neither parent. */}
+                {config.relationship_options
+                  .filter((r) => !isRelationshipWithheld(guestNames, r))
+                  .map((r) => {
+                    const locked = lockReason(r);
+                    return (
+                      <option
+                        key={r}
+                        value={r}
+                        disabled={Boolean(locked)}
+                        className={locked ? "text-muted-foreground opacity-50" : undefined}
+                      >
+                        {locked ? `${r} - ${locked}` : r}
+                      </option>
+                    );
+                  })}
               </NativeSelect>
             ) : (
               <Input
@@ -2355,6 +2461,11 @@ function GuestRow({
                 }
                 {...relationshipField}
               />
+            )}
+            {lockedName !== null && (
+              <p className="text-xs text-muted-foreground">
+                On your academic record, so the name above is filled in for you.
+              </p>
             )}
             <FieldError message={err(`${base}.relationship`)} />
           </div>
@@ -2398,11 +2509,19 @@ function GuestRow({
         )}
 
         {/* A foreign national's passport is their identity document, so the
-            Aadhaar field is not shown for one — asking for both would make a
+            Aadhaar field is not shown for one - asking for both would make a
             foreign guest unbookable on every form that requires an ID. */}
         {gf.id_number !== "hidden" && !isInfant && citizenship !== "other" && (
           <div className="space-y-2">
-            <Label>Aadhaar number{star(gf.id_number)}</Label>
+            {/* Optional for a guest the record named (7 Oct 2026) - the
+                institute has already identified them, so asking for a
+                document as well is asking the requester to prove what the
+                record says. Still asked of a sibling or a grandparent, who
+                were typed by hand. */}
+            <Label>
+              Aadhaar number
+              {lockedName !== null ? " (optional)" : star(gf.id_number)}
+            </Label>
             <Input
               inputMode="numeric"
               placeholder="1234 5678 9012"
@@ -2416,7 +2535,9 @@ function GuestRow({
         )}
         {gf.id_document !== "hidden" && !isInfant && (
           <div className="space-y-2">
-            <Label>ID document{idDocRequired ? " *" : " (optional)"}</Label>
+            <Label>
+              ID document{idDocRequired && lockedName === null ? " *" : " (optional)"}
+            </Label>
             <Input
               type="file"
               accept="image/jpeg,image/png,image/webp,application/pdf"
@@ -2435,7 +2556,7 @@ function GuestRow({
 
 /**
  * Whether a form row is an infant: a card made by "Add infant", or a guest
- * card whose typed age is below the limit (the server's rule — the age
+ * card whose typed age is below the limit (the server's rule - the age
  * decides).
  */
 function isInfantEntry(guest: { age?: string; kind?: GuestFields["kind"] } | undefined): boolean {

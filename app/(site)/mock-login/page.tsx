@@ -23,7 +23,7 @@ import { REVIEWER_ROLES, ROLE_LABELS, type Profile } from "@/lib/types";
  * **Mock Authentication**: one click per portal account, no password. It is the
  * placeholder for Google sign-in, which is not built yet, and it is also how a
  * developer jumps between the roles. Real Google OAuth replaces this page and
- * `loginAs` together — `mockLoginEnabled()` closes the door as soon as
+ * `loginAs` together - `mockLoginEnabled()` closes the door as soon as
  * `GOOGLE_CLIENT_ID` and friends are set. `next` arrives from the sign-in
  * card, so "Book a room" still lands on `/book` through this door.
  */
@@ -33,7 +33,7 @@ export default async function MockLoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   // Once Google sign-in is configured this page is not there at all, rather
-  // than refusing politely — there is nothing here anyone should reach.
+  // than refusing politely - there is nothing here anyone should reach.
   if (!mockLoginEnabled()) notFound();
   const { next: rawNext } = await searchParams;
   const next = safeNextPath(rawNext);
@@ -52,7 +52,7 @@ export default async function MockLoginPage({
       <Container className="pt-12 pb-20 lg:pt-16">
         <PageTitle
           className="mb-10"
-          intro="Google sign-in is not connected yet, so this stands in for it: choose the account to continue as — no password needed."
+          intro="Google sign-in is not connected yet, so this stands in for it: choose the account to continue as - no password needed."
         >
           Mock Authentication
         </PageTitle>

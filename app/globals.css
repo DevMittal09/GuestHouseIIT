@@ -30,7 +30,7 @@
 /*
  * Two bookings holding one room at the same time (23 Sep 2026): a changeover
  * the Guest House Manager accepted, which really is an overlap and not just a
- * busy room. A flat violet fills the overlapping stretch itself — asked for
+ * busy room. A flat violet fills the overlapping stretch itself - asked for
  * on 23 Sep 2026 in place of the vertical stripe it used to carry, because a
  * pattern over two red bars read as a rendering artefact rather than as a
  * state of its own. It is still unmistakably not red, and the turnaround's
@@ -165,7 +165,7 @@
  * This replaced the design handoff's navy #12284C and gold #E8A317 (19 Sep
  * 2026), which appear nowhere on the institute's own site.
  *
- * Contrast rules — keep them:
+ * Contrast rules - keep them:
  * - White text only on `vermilion-deep` (5.2:1), never on the bright
  *   `vermilion` (3.8:1). Bright vermilion is for rules, icons and display-size
  *   type.
@@ -174,8 +174,8 @@
  *   Reject, and a vermilion primary read as a second red. The vermilion call to
  *   action is the explicit `Button variant="brand"`.
  *
- * Corners stay small — 4px on inputs, 6px on buttons, 8px on cards and
- * photographs, never a pill — and nothing carries a shadow, a gradient or a
+ * Corners stay small - 4px on inputs, 6px on buttons, 8px on cards and
+ * photographs, never a pill - and nothing carries a shadow, a gradient or a
  * frosted glass: structure comes from hairline rules (`--border`,
  * `--border-strong`), the warm `--band` tint and contrast, which is what an
  * institutional page looks like and a template does not (30 Sep 2026).
@@ -226,7 +226,7 @@
   --destructive: #dc2626;
   --border: #e5e1da;
   /* Form controls' edge: 3.6:1 on white, above the 3:1 WCAG asks of a
-     control's boundary (the #CEC8BF hairline is 1.6:1 — fine for structure,
+     control's boundary (the #CEC8BF hairline is 1.6:1 - fine for structure,
      not for something you have to find and click). */
   --input: #8c857d;
   --ring: #e94c26;

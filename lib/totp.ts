@@ -2,7 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 
 /**
  * Time-based one-time passwords (RFC 6238), for the developer's second factor
- * (Phase 8). Six digits, 30-second steps, SHA-1 — what Google Authenticator,
+ * (Phase 8). Six digits, 30-second steps, SHA-1 - what Google Authenticator,
  * Aegis and the rest implement.
  *
  * Written out rather than added as a dependency: it is thirty lines of HMAC,
@@ -74,7 +74,7 @@ export function totpCode(secret: string, step: number): string {
 
 /**
  * The step a code is valid for, or null. `lastStep` refuses a code that has
- * already been used — otherwise a code shoulder-surfed inside its 30 seconds
+ * already been used - otherwise a code shoulder-surfed inside its 30 seconds
  * could be replayed.
  */
 export function verifyTotp(

@@ -70,7 +70,7 @@ export function MyData({ openRequest }: { openRequest: { created_at: string } | 
           if (!open) setNote("");
         }}
         title="Ask for your data to be erased?"
-        description="The guest house office answers each request. Records it must keep for audit — that a stay happened, when, and what it cost — cannot be erased, and the office will tell you what it kept and why."
+        description="The guest house office answers each request. Records it must keep for audit - that a stay happened, when, and what it cost - cannot be erased, and the office will tell you what it kept and why."
         confirmLabel="Send the request"
         confirmVariant="default"
         pending={isPending}

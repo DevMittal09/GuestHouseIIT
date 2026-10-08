@@ -4,15 +4,22 @@ import { revalidateBookings } from "@/lib/revalidate";
 import { blockOverlaps } from "@/lib/operations";
 import { prepareUpload } from "@/lib/uploads";
 import { PRIVACY_NOTICE_VERSION } from "@/lib/security";
-import { canAssignRooms, canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
+import {
+  canAssignRooms,
+  canBookOnBehalf,
+  canOverrideGuestHousePolicy,
+  canOverrideVacatePayment,
+} from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { aadhaarDigits, bookingPayloadSchema } from "@/lib/booking-schema";
-import { needsAlumniDetails } from "@/lib/booking-types";
+import { defaultBookingTypeFor, needsAlumniDetails } from "@/lib/booking-types";
 import { acceptsDebitDocument, needsProject } from "@/lib/debit-heads";
 import { mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser } from "@/lib/club-booking-server";
 import { hodApproversFor } from "@/lib/units";
 import { bookingContextFor } from "@/lib/booking-context-server";
+import { academicRecordFor } from "@/lib/academic";
+import { guestNameRule, lockedNameFor } from "@/lib/academic/guest-names";
 import { describeProject } from "@/lib/projects";
 import { MEAL_KEYS, mealCapacityError, mealPlatesBooked } from "@/lib/meals";
 import { validateCustomValue } from "@/lib/form-config";
@@ -25,7 +32,8 @@ import {
   notifyRoomsAllocated,
   notifyTierApproved,
 } from "@/lib/mail/notify";
-import { guestHousePolicyError } from "@/lib/policy";
+import { vacateBlocker } from "@/lib/invoice";
+import { guestHousePolicyError, mealsPolicyError } from "@/lib/policy";
 import { isWhitelistedOfficial } from "@/lib/settings";
 import { getOfficialEmails, getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
@@ -80,7 +88,7 @@ function readText(formData: FormData, key: string): string | null {
 
 /**
  * The form sends a wall-clock string ("2026-09-15T12:00"). Resolve it in the
- * institute's timezone rather than the server's — `new Date()` on a naked
+ * institute's timezone rather than the server's - `new Date()` on a naked
  * datetime string uses the *process* zone, so a booking for 12:00 was stored
  * as 12:00 UTC on a UTC host and read back as 5:30 PM.
  */
@@ -93,7 +101,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     const user = await requireUser();
     // The Guest House Manager is not a requester, but they take bookings at
     // the desk for people who never open the portal. Those are recorded as
-    // theirs with the actual guest named on the booking — see `onBehalfOf`.
+    // theirs with the actual guest named on the booking - see `onBehalfOf`.
     const onBehalf = canBookOnBehalf(user.role);
 
     // A club's booking is raised by its faculty in-charge, never by the
@@ -112,7 +120,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       if (mustBookThroughFacultyInCharge(user.role)) {
         return {
           ok: false,
-          error: "Club bookings are raised by the club's Faculty Advisor — ask them to book for the club.",
+          error: "Club bookings are raised by the club's Faculty Advisor - ask them to book for the club.",
         };
       }
       if (!REQUESTER_ROLES.includes(user.role) && !onBehalf) {
@@ -122,14 +130,14 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         return { ok: false, error: "This account is not whitelisted for official bookings" };
       }
     }
-    // Whose booking it is: the club's, when its faculty in-charge raises it —
-    // so it is routed, debited, scoped and reported as a club booking — and
+    // Whose booking it is: the club's, when its faculty in-charge raises it -
+    // so it is routed, debited, scoped and reported as a club booking - and
     // otherwise the signed-in person's.
     const requester = club ?? user;
 
     // Who the stay is actually for. Required when the manager is booking for
     // someone else, because otherwise the booking says only that the manager
-    // is staying — and the desk has no way to find out who is arriving.
+    // is staying - and the desk has no way to find out who is arriving.
     const onBehalfOf = onBehalf && !club
       ? {
           name: readText(formData, "on_behalf_of_name"),
@@ -148,21 +156,39 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     // whether "Room + Meals" and "Meals only" are options. Computed from the
     // guest houses the role may book, exactly as the form does.
     const allGuestHouses = await store.listGuestHouses();
-    const mealsAvailable = allGuestHouses.some(
-      (g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id)
-    );
+    const mealsAvailable =
+      (canOverrideGuestHousePolicy(user.role) ||
+        mealsPolicyError(defaultBookingTypeFor(requester.role) ?? "official", requester.role) ===
+          null) &&
+      allGuestHouses.some((g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id));
 
     const rawPayload = formData.get("payload");
     if (typeof rawPayload !== "string") return { ok: false, error: "Malformed submission" };
     // The same Settings, debitable heads and projects the page handed the
     // form, from the same computation, so the two validate alike.
     const bookingContext = await bookingContextFor(requester);
+    /**
+     * What the requester's academic record fixes about their guests (7 Oct
+     * 2026): a student's father's and mother's names, and the relationships
+     * the record rules out. The same rule the form was built with, rebuilt
+     * here from the record rather than taken from the submission - the whole
+     * point is that the names are the institute's, not the requester's.
+     *
+     * `academicRecordFor` never throws and caches, so a database that cannot
+     * be reached simply leaves the names editable, as it does on the form.
+     */
+    const lookup = await academicRecordFor(requester);
+    const guestNames = guestNameRule(
+      lookup.status === "found" ? lookup.record : null,
+      config.relationship_options
+    );
     const parsed = bookingPayloadSchema(config, {
       mealsAvailable,
       requesterEmail: requester.email,
       rules: bookingContext.rules,
       debitHeads: bookingContext.debitHeads,
       projectIds: bookingContext.projects.map((p) => p.id),
+      guestNames,
     }).safeParse(JSON.parse(rawPayload));
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid form data" };
@@ -178,14 +204,15 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     // Alumni are put up at Bageshri. The form locks the selector; this is the
     // check a crafted request meets.
     //
-    // The Guest House Manager can set it aside — Bageshri does fill up, and a
+    // The Guest House Manager can set it aside - Bageshri does fill up, and a
     // rule the manager cannot lift just moves the booking off the portal. The
     // override goes into the booking's first log entry, so the exception is
     // visible for as long as the booking is.
     const policyProblem = guestHousePolicyError(
       payload.booking_type,
       guestHouse,
-      allGuestHouses
+      allGuestHouses,
+      requester.role
     );
     let overrideNote: string | null = null;
     if (policyProblem) {
@@ -193,6 +220,28 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         return { ok: false, error: policyProblem };
       }
       overrideNote = `Booking submitted. Guest house policy overridden by ${user.full_name}: ${policyProblem}`;
+    }
+    /**
+     * And no meals for a student or for a booking made for an alumnus (7 Oct
+     * 2026). Both are accommodated at the guest house with no kitchen, so
+     * this used to follow from `serves_meals` alone; it is a rule of its own
+     * now, so a tick in the developer console cannot start selling them meals
+     * the office does not sell. Overridable by the desk, and recorded in the
+     * booking's log when it is.
+     */
+    if (payload.meals.length > 0 || payload.service_type !== "room") {
+      const mealProblem = mealsPolicyError(payload.booking_type, requester.role);
+      if (mealProblem) {
+        if (!canOverrideGuestHousePolicy(user.role)) {
+          return { ok: false, error: mealProblem };
+        }
+        overrideNote = [
+          overrideNote,
+          `Meals policy overridden by ${user.full_name}: ${mealProblem}`,
+        ]
+          .filter(Boolean)
+          .join(" ");
+      }
     }
     // Meals only where the guest house serves them (Hamsanandi by default,
     // set in the developer console). The form hides the grid elsewhere; this
@@ -209,7 +258,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
      * Only here, not in the schema: the limit is about the other bookings,
      * which the browser cannot see and must not be told about. The booking's
      * own head count is capped by the schema on both sides, so this is the
-     * check that needs the database. One query per day of meals — a dining
+     * check that needs the database. One query per day of meals - a dining
      * booking has a handful, a stay at most the stay's length.
      */
     if (payload.meals.length > 0) {
@@ -275,27 +324,36 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
 
     // Per-guest ID documents, uploaded per room card. An infant shares a
     // guardian's bed and is not asked for an ID, so no document is demanded
-    // for one — `isInfantAge` decides that from the age, the same rule the
+    // for one - `isInfantAge` decides that from the age, the same rule the
     // schema and the database apply.
     const rooms: NewBookingRoomInput[] = [];
     for (const [roomIndex, room] of payload.rooms.entries()) {
       const guests: NewBookingGuestInput[] = [];
       for (const [guestIndex, g] of room.guests.entries()) {
         const infant = isInfantAge(g.age);
+        /**
+         * A guest the academic record named (7 Oct 2026). Two things follow,
+         * both the office's words: the name stored is **the record's**, not
+         * whatever the form sent, and neither an Aadhaar number nor an ID
+         * document is demanded - the institute has already identified them.
+         * A sibling or a grandparent is typed by hand and still asked.
+         */
+        const recordedName = infant ? null : lockedNameFor(guestNames, g.relationship);
+        const recorded = recordedName !== null;
         const file = formData.get(`guest_doc_${roomIndex}_${guestIndex}`);
         let documentUrl: string | null = null;
         if (file instanceof File && file.size > 0) {
           const prepared = await prepareUpload(file);
           if (!prepared.ok) return { ok: false, error: `Guest ${guestIndex + 1} in Room ${roomIndex + 1}: ${prepared.error}` };
           documentUrl = await store.saveDocument(prepared.file, "guest-ids");
-        } else if (config.guest_fields.id_document === "required" && !infant) {
+        } else if (config.guest_fields.id_document === "required" && !infant && !recorded) {
           return {
             ok: false,
             error: `ID document upload is required for guest ${guestIndex + 1} in Room ${roomIndex + 1}`,
           };
         }
         guests.push({
-          name: g.name || "Guest",
+          name: recordedName ?? (g.name || "Guest"),
           age: g.age,
           gender: (g.gender as Gender | undefined) ?? "other",
           relationship: g.relationship ?? null,
@@ -311,7 +369,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     }
 
     // Alumni ID card. Two things can ask for it: the role's form config, and
-    // the booking itself being raised on behalf of an alumnus — the IAR
+    // the booking itself being raised on behalf of an alumnus - the IAR
     // accounts book both ways from one form, so the requirement follows the
     // request rather than the account.
     const forAlumnus = needsAlumniDetails(payload.booking_type);
@@ -327,7 +385,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     }
 
     // The sanction letter behind Special Funds, when the requester has one.
-    // Optional since 24 Sep 2026 — the office asked for the head, not for a
+    // Optional since 24 Sep 2026 - the office asked for the head, not for a
     // document. Checked here rather than in the schema because this is where
     // the upload is.
     let debitDocumentUrl: string | null = null;
@@ -340,7 +398,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
 
     // Who approves, if anyone: the route for this role and kind of booking
     // (`routeFor`), with the HOD whoever heads the requester's department or
-    // office right now — read from the console, never the requester. The
+    // office right now - read from the console, never the requester. The
     // person raising a club's booking is never its HOD stage either: they
     // cannot approve what they raised.
     const officeApproval = isOfficeRole(requester.role) && wantsRooms ? payload.office_approval : null;
@@ -354,13 +412,13 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     };
     const status = initialStatusFor(requester.role, payload.service_type, routing);
     // A request that should have waited for an HOD, but could not because
-    // nobody other than the requester is set to give it, says so in its log —
+    // nobody other than the requester is set to give it, says so in its log -
     // otherwise it looks as if the approval was skipped on purpose.
     const hodMissing = hodStageMissing(requester.role, payload.service_type, routing);
     const submissionRemarks =
       [
         club
-          ? `Booking raised by ${user.full_name}, Faculty Advisor of ${club.full_name}, on its behalf — so it goes straight to the Guest House Manager.`
+          ? `Booking raised by ${user.full_name}, Faculty Advisor of ${club.full_name}, on its behalf - so it goes straight to the Guest House Manager.`
           : null,
         overrideNote,
         hodMissing
@@ -417,7 +475,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       rooms,
       submission_remarks: submissionRemarks,
       // Both parties are recorded: the booking hangs off the manager's
-      // account for referential integrity, and names the guest it is for —
+      // account for referential integrity, and names the guest it is for -
       // or off the club's account, naming the faculty in-charge who raised it.
       created_by: onBehalfOf || club ? user.id : null,
       on_behalf_of_name: onBehalfOf?.name ?? null,
@@ -452,7 +510,7 @@ export async function reviewBooking(
     // Unit approvals (an HOD, a club's advisor or council secretary) are
     // decided by who heads the requester's unit now, so the units come too.
     const units = await store.listUnits();
-    // Also refuses whoever raised it — a club's faculty in-charge who is the
+    // Also refuses whoever raised it - a club's faculty in-charge who is the
     // club's HOD too cannot sign off their own request.
     if (!canReviewBooking(user, booking, units)) {
       return { ok: false, error: "You are not authorised to review this booking" };
@@ -460,7 +518,7 @@ export async function reviewBooking(
     if (action === "reject" && !reason?.trim()) {
       return { ok: false, error: "A rejection reason is mandatory" };
     }
-    // Rejecting a request whose dates have passed is still useful — it closes
+    // Rejecting a request whose dates have passed is still useful - it closes
     // it off and tells the requester. Forwarding one is not: it would move a
     // stay that can no longer happen one step closer to holding a room.
     if (action === "approve") {
@@ -486,7 +544,7 @@ export async function reviewBooking(
           remarks: reason!.trim(),
         }
       );
-      // The reason reaches the requester verbatim — a paraphrase would be a
+      // The reason reaches the requester verbatim - a paraphrase would be a
       // different decision, and the reason is the entire point of the mail.
       await notifyRejected(bookingId, user, reason!.trim());
     } else {
@@ -524,9 +582,9 @@ export async function reviewBooking(
   }
 }
 
-/** GH Manager: confirm allocation — assigns rooms and marks APPROVED. */
+/** GH Manager: confirm allocation - assigns rooms and marks APPROVED. */
 /**
- * Each room's worst conflict with a booking's dates — free, a turnover
+ * Each room's worst conflict with a booking's dates - free, a turnover
  * overlap the manager may accept, or a real clash. Manager only: a requester
  * seeing "soft" would read a held room as available.
  */
@@ -540,7 +598,7 @@ export async function getRoomConflicts(
   if (!booking) return {};
 
   // Widened by the grace and the turnaround buffer at each end, so a stay
-  // that ends just before this one begins — or begins just after it ends — is
+  // that ends just before this one begins - or begins just after it ends - is
   // still returned and can be classified.
   const buffer = bufferMs((await getRules()).booking.buffer_minutes);
   const widen = TURNOVER_GRACE_HOURS * 3_600_000 + buffer;
@@ -581,7 +639,7 @@ export async function allocateRooms(
     const lapsed = lapsedError(booking);
     if (lapsed) return { ok: false, error: lapsed };
     // The manager is the last stage of the approval chain, so they can also be
-    // the only stage when the request has already been settled off-portal —
+    // the only stage when the request has already been settled off-portal -
     // an override, recorded as one in the log below.
     const overriding = booking.status !== "PENDING_GH_MANAGER";
     if (overriding && !ACTIVE_STATUSES.includes(booking.status)) {
@@ -613,7 +671,7 @@ export async function allocateRooms(
     if (capacityProblem) return { ok: false, error: capacityProblem };
 
     // The aggregate check above can pass while one room card still does not
-    // fit — three guests given a single room, say. Rooms are allocated in card
+    // fit - three guests given a single room, say. Rooms are allocated in card
     // order, so card N gets `roomIds[N]`.
     for (const [i, card] of booking.rooms.entries()) {
       const room = selectedRooms[i];
@@ -639,7 +697,7 @@ export async function allocateRooms(
         const room = roomsById.get(hard);
         return {
           ok: false,
-          error: `${room?.room_number ?? "That room"} is booked for more than ${TURNOVER_GRACE_HOURS} hours of this stay — that is a clash, not a changeover, and cannot be overridden.`,
+          error: `${room?.room_number ?? "That room"} is booked for more than ${TURNOVER_GRACE_HOURS} hours of this stay - that is a clash, not a changeover, and cannot be overridden.`,
         };
       }
     }
@@ -708,6 +766,10 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
 
     const TERMINAL_STATUSES: BookingStatus[] = [
       "REJECTED", "CANCELLED", "VACATED", "CANCELLATION_REQUESTED", "CANCELLATION_APPROVED",
+      // Nobody decided it in time (migration 29), so there is nothing left to
+      // cancel - and asking for a cancellation would put a request nobody
+      // can act on back in front of the manager.
+      "MISSED",
     ];
     if (TERMINAL_STATUSES.includes(booking.status)) {
       return { ok: false, error: "This booking is already closed or has a pending cancellation" };
@@ -719,7 +781,7 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
       return {
         ok: false,
         error:
-          "This stay has already started — speak to the Guest House Manager to end it early.",
+          "This stay has already started - speak to the Guest House Manager to end it early.",
       };
     }
 
@@ -728,7 +790,7 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
     // warden had not yet seen was simply cancelled, an approved one was
     // requested. That made "can I cancel?" answerable only by knowing where
     // in the chain your booking sat. Now the answer is the same at every
-    // stage before the guest walks in — ask, and the manager decides.
+    // stage before the guest walks in - ask, and the manager decides.
     const stageWhenAsked = booking.status;
     await store.updateBookingStatus(
       bookingId,
@@ -741,7 +803,7 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
       }
     );
     // The manager decides; whoever was reviewing it is told at the same
-    // moment, for information only — see `notifyCancellationRequested`.
+    // moment, for information only - see `notifyCancellationRequested`.
     await notifyCancellationRequested(bookingId, reason.trim());
     revalidateBookings();
     return { ok: true };
@@ -760,11 +822,16 @@ const LIFECYCLE_TRANSITIONS: Partial<Record<BookingStatus, BookingStatus>> = {
 /** GH Manager or Caretaker: advance a booking (Approved → Occupied → Vacated). */
 export async function updateBookingLifecycle(
   bookingId: string,
-  targetStatus: BookingStatus
+  targetStatus: BookingStatus,
+  /**
+   * The manager's reason for closing a personal stay off although its
+   * invoice is not paid (7 Oct 2026). Ignored on every other transition.
+   */
+  overrideReason?: string
 ): Promise<ActionResult> {
   try {
     const user = await requireUser();
-    // The caretaker on reception records arrivals and departures as well —
+    // The caretaker on reception records arrivals and departures as well -
     // that is the whole of their console. Allocation and approvals are not.
     if (!canUpdateLifecycle(user.role)) {
       return { ok: false, error: "Your role cannot update booking status" };
@@ -790,6 +857,35 @@ export async function updateBookingLifecycle(
       if (tooEarly) return { ok: false, error: tooEarly };
     }
 
+    /**
+     * A personal stay is paid for before the guest leaves (7 Oct 2026): the
+     * office asked for check-out to mean issue, pay, then vacate. Nobody
+     * chases a private guest for a guest-house bill once they have driven
+     * home, and the desk was finding the unpaid invoice weeks later in
+     * "Checked out - to bill".
+     *
+     * The manager may set it aside with a reason - an invoice that cannot be
+     * issued at all must not leave a guest in the building on paper - and
+     * the reason goes into the log, so the exception is visible for as long
+     * as the booking is.
+     */
+    let paymentOverride: string | null = null;
+    if (targetStatus === "VACATED") {
+      const invoices = await store.listInvoices({ bookingId }).catch(() => []);
+      const unpaid = vacateBlocker(booking, invoices);
+      if (unpaid) {
+        const reason = overrideReason?.trim();
+        if (!reason) return { ok: false, error: unpaid };
+        if (!canOverrideVacatePayment(user.role)) {
+          return {
+            ok: false,
+            error: `${unpaid} Only the Guest House Manager can close a stay off without payment.`,
+          };
+        }
+        paymentOverride = reason;
+      }
+    }
+
     // Was it early? Read from the booking rather than trusted from the
     // caller, so the log says what happened and not what was clicked.
     const now = new Date().toISOString();
@@ -800,12 +896,20 @@ export async function updateBookingLifecycle(
 
     const remarkMap: Record<string, string> = {
       OCCUPIED: actuallyEarly
-        ? `Guest checked in early — arrived before the booked ${formatDateTime(booking.check_in)}`
-        : "Guest checked in — marked as Occupied",
+        ? `Guest checked in early - arrived before the booked ${formatDateTime(booking.check_in)}`
+        : "Guest checked in - marked as Occupied",
       VACATED: actuallyEarly
-        ? `Guest checked out early — left before the booked ${formatDateTime(booking.check_out)}. The room is free from now.`
-        : "Guest checked out — marked as Vacated",
+        ? `Guest checked out early - left before the booked ${formatDateTime(booking.check_out)}. The room is free from now.`
+        : "Guest checked out - marked as Vacated",
     };
+    const remarks = [
+      remarkMap[targetStatus] ?? `Status updated to ${targetStatus}`,
+      paymentOverride
+        ? `Closed off unpaid by ${user.full_name}, who gave the reason: ${paymentOverride}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     await store.updateBookingStatus(
       bookingId,
@@ -814,7 +918,7 @@ export async function updateBookingLifecycle(
         action_by: user.id,
         action_by_name: user.full_name,
         new_status: targetStatus,
-        remarks: remarkMap[targetStatus] ?? `Status updated to ${targetStatus}`,
+        remarks,
       }
     );
     revalidateBookings();
@@ -825,7 +929,7 @@ export async function updateBookingLifecycle(
   }
 }
 
-/** GH Manager: approve a cancellation request — releases rooms and finalises cancellation. */
+/** GH Manager: approve a cancellation request - releases rooms and finalises cancellation. */
 export async function approveCancellation(bookingId: string): Promise<ActionResult> {
   try {
     const user = await requireUser();
@@ -844,7 +948,7 @@ export async function approveCancellation(bookingId: string): Promise<ActionResu
         action_by: user.id,
         action_by_name: user.full_name,
         new_status: "CANCELLATION_APPROVED",
-        remarks: "Cancellation approved — rooms released",
+        remarks: "Cancellation approved - rooms released",
       }
     );
     await notifyCancellationDecided(bookingId, "approved", user, booking.rejection_reason);
@@ -857,7 +961,7 @@ export async function approveCancellation(bookingId: string): Promise<ActionResu
   }
 }
 
-/** GH Manager: reject a cancellation request — booking returns to its previous state. */
+/** GH Manager: reject a cancellation request - booking returns to its previous state. */
 export async function rejectCancellation(bookingId: string, reason: string): Promise<ActionResult> {
   try {
     const user = await requireUser();
@@ -887,7 +991,7 @@ export async function rejectCancellation(bookingId: string, reason: string): Pro
       }
     );
     // The booking stands and the rooms stay held, which the requester has no
-    // way of knowing otherwise — they asked to cancel and nothing changed.
+    // way of knowing otherwise - they asked to cancel and nothing changed.
     await notifyCancellationDecided(bookingId, "rejected", user, reason.trim());
 
     revalidateBookings();

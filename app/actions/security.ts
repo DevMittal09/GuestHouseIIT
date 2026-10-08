@@ -20,7 +20,7 @@ import type { ActionResult } from "./bookings";
  * The second factor (Phase 8): enrolment, verification, recovery codes, and
  * the list of a person's own sessions.
  *
- * Developers must enrol — theirs is the account that can change roles and
+ * Developers must enrol - theirs is the account that can change roles and
  * delete bookings. Verifying rotates the session's token, so a token captured
  * before the second factor was proved cannot be used after it.
  */
@@ -28,7 +28,7 @@ import type { ActionResult } from "./bookings";
 async function requireSession(): Promise<{ user: Awaited<ReturnType<typeof getSessionUser>> extends null ? never : NonNullable<Awaited<ReturnType<typeof getSessionUser>>>["user"]; session: Session }> {
   const current = await getSessionUser();
   if (!current) throw new Error("Sign in again");
-  if (!current.session) throw new Error("Two-factor authentication needs a real session — sign in again");
+  if (!current.session) throw new Error("Two-factor authentication needs a real session - sign in again");
   return { user: current.user, session: current.session };
 }
 
@@ -74,12 +74,12 @@ export async function confirmMfaEnrolment(code: string): Promise<
 > {
   try {
     const { user, session } = await requireSession();
-    if (!(await throttleFactor(session.id))) return { ok: false, error: "Too many attempts — wait a few minutes" };
+    if (!(await throttleFactor(session.id))) return { ok: false, error: "Too many attempts - wait a few minutes" };
     const record = await getStore().getUserMfa(user.id);
     const secret = record ? decryptValue(record.secret_enc) : null;
     if (!record || !secret) return { ok: false, error: "Start the setup again" };
     const step = verifyTotp(secret, code, { lastStep: record.last_step });
-    if (step === null) return { ok: false, error: "That code did not match — check the time on your phone and try again" };
+    if (step === null) return { ok: false, error: "That code did not match - check the time on your phone and try again" };
     const plain = generateRecoveryCodes();
     await getStore().saveUserMfa({
       ...record,
@@ -106,7 +106,7 @@ export async function verifyMfa(code: string): Promise<ActionResult> {
     const { user, session } = await requireSession();
     if (!(await throttleFactor(session.id))) {
       await recordAudit(user, "twofa.failed", user.email, { reason: "throttled" });
-      return { ok: false, error: "Too many attempts — wait a few minutes" };
+      return { ok: false, error: "Too many attempts - wait a few minutes" };
     }
     const record = await getStore().getUserMfa(user.id);
     if (!record?.confirmed_at) return { ok: false, error: "Two-factor authentication is not set up" };
@@ -139,13 +139,13 @@ export async function verifyMfa(code: string): Promise<ActionResult> {
   }
 }
 
-/** Turn the second factor off — only with a fresh code, and only for oneself. */
+/** Turn the second factor off - only with a fresh code, and only for oneself. */
 export async function disableMfa(code: string): Promise<ActionResult> {
   try {
     const { user, session } = await requireSession();
     const record = await getStore().getUserMfa(user.id);
     if (!record?.confirmed_at) return { ok: false, error: "Two-factor authentication is not set up" };
-    if (!(await throttleFactor(session.id))) return { ok: false, error: "Too many attempts — wait a few minutes" };
+    if (!(await throttleFactor(session.id))) return { ok: false, error: "Too many attempts - wait a few minutes" };
     const secret = decryptValue(record.secret_enc);
     if (!secret || verifyTotp(secret, code, { lastStep: record.last_step }) === null) {
       return { ok: false, error: "That code did not match" };

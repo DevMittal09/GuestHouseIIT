@@ -7,8 +7,8 @@ import type { MealKey, RoomType } from "./types";
  * The rules the office can change from the developer console (Settings).
  *
  * Every value here used to be a constant in the module that enforces it. They
- * are still enforced there — `lib/occupancy.ts`, `lib/meals.ts`,
- * `lib/policy.ts`, `lib/workflow.ts` — but the *value* now comes from the
+ * are still enforced there - `lib/occupancy.ts`, `lib/meals.ts`,
+ * `lib/policy.ts`, `lib/workflow.ts` - but the *value* now comes from the
  * store, so changing the advance window or a meal time is a console edit, not
  * a deploy.
  *
@@ -19,14 +19,14 @@ import type { MealKey, RoomType } from "./types";
  *    is the single place those values live.
  * 2. **Rule functions take the rules as a parameter** (defaulting to
  *    `DEFAULT_RULES`), so they stay pure and testable, and the booking form and
- *    the server action validate against the *same* values — the page reads the
+ *    the server action validate against the *same* values - the page reads the
  *    settings once and hands them to the form.
  * 3. **A change that would break data already stored is refused**, with the
- *    bookings or accounts it would break named — see `lib/settings-impact.ts`.
+ *    bookings or accounts it would break named - see `lib/settings-impact.ts`.
  *
  * Scalar groups are stored as one jsonb row each in `app_settings`
- * (`rules.<group>`); lists that grow — hostels, the official whitelist,
- * departments and clubs — have tables of their own.
+ * (`rules.<group>`); lists that grow - hostels, the official whitelist,
+ * departments and clubs - have tables of their own.
  */
 
 // ------------------------------------------------------------------ shapes
@@ -50,7 +50,7 @@ export type CapacityRules = {
    * The office's rule is a combination, not two independent caps: three
    * adults and one infant fit, and so do two adults and two infants, but
    * three adults and two infants do not. Neither `max_guests_per_room` nor
-   * `max_infants_per_room` can express that on its own — a room holds four
+   * `max_infants_per_room` can express that on its own - a room holds four
    * people however they are made up, of whom at most
    * `max_guests_per_room` may need a bed.
    */
@@ -85,14 +85,14 @@ export type MealRules = {
   /**
    * The most people the kitchen will serve at one sitting, counting everyone
    * already booked for it (1 Oct 2026). 0 turns the limit off. Checked per
-   * day **and** per meal — see `mealCapacityError`.
+   * day **and** per meal - see `mealCapacityError`.
    */
   max_diners_per_meal: number;
 };
 
 /**
  * How invoices are numbered, charged and printed (Phase 5). Edited from the
- * Tariffs & Invoicing console, which the Guest House Manager can use too —
+ * Tariffs & Invoicing console, which the Guest House Manager can use too -
  * pricing is the office's to run. The rates themselves are the `tariffs`
  * table (`lib/tariffs.ts`), because they are effective-dated rows.
  */
@@ -142,19 +142,26 @@ export type InvoiceRules = {
   /** The address line at the foot of the invoice (the Hindi half is fixed artwork). */
   contact: { address: string; phone: string; email: string };
   /**
-   * Which shape of the defaults a saved row was made from — see
+   * Which shape of the defaults a saved row was made from - see
    * `upgradeInvoiceRules`. Absent on rows saved before 25 Sep 2026.
    */
   revision?: number;
 };
 
-/** Revision 2 (25 Sep 2026): a flat 18% on rooms and 5% on food, no slab. */
-export const INVOICE_RULES_REVISION = 2;
+/**
+ * Revision 2 (25 Sep 2026): a flat 18% on rooms and 5% on food, no slab.
+ * Revision 3 (7 Oct 2026): the state is spelled **Keralam** on the invoice.
+ */
+export const INVOICE_RULES_REVISION = 3;
+
+/** The old and new spellings of the state, for the one-time rename below. */
+export const STATE_NAME = "Keralam";
+const FORMER_STATE_NAME = "Kerala";
 
 /**
  * How long personal data is kept (Phase 8, DPDP). The daily job clears ID
  * numbers and their documents from stays that ended more than
- * `id_retention_days` ago, and trims the security audit log — never below the
+ * `id_retention_days` ago, and trims the security audit log - never below the
  * 180 days the log's own purge function insists on.
  */
 export type PrivacyRules = {
@@ -223,7 +230,7 @@ export const DEFAULT_RULES: Rules = {
     day_basis: "night",
     grace_hours: 4,
     // The office's rates include GST. Accommodation 18%, food 5%, as the
-    // revised template prints them (25 Sep 2026). Intra-state (Kerala), so
+    // revised template prints them (25 Sep 2026). Intra-state (Keralam), so
     // each is half CGST, half SGST.
     prices_include_gst: true,
     gst_room_percent: 18,
@@ -243,7 +250,7 @@ export const DEFAULT_RULES: Rules = {
     // them (`lib/site.ts`), so the three start out the same; the office can
     // still change the invoice's copy here.
     contact: {
-      address: "Kanjikode West, Palakkad, Kerala",
+      address: "Kanjikode West, Palakkad, Keralam",
       phone: GUEST_HOUSE_CONTACT.phone,
       email: GUEST_HOUSE_CONTACT.email,
     },
@@ -294,12 +301,12 @@ export const capacityRulesSchema = z
       Math.max(c.room_types.single.withExtraBed, c.room_types.double_sharing.withExtraBed),
     {
       message:
-        "Guests per room cannot exceed what the largest room type holds with an extra bed — the manager could never allocate such a request",
+        "Guests per room cannot exceed what the largest room type holds with an extra bed - the manager could never allocate such a request",
     }
   )
   .refine((c) => c.max_occupants_per_room >= c.max_guests_per_room, {
     message:
-      "People per room cannot be fewer than guests per room — the combined limit has to leave room for the guests needing a bed",
+      "People per room cannot be fewer than guests per room - the combined limit has to leave room for the guests needing a bed",
   });
 
 export const bookingRulesSchema = z.object({
@@ -403,7 +410,7 @@ export const RULE_SCHEMAS = {
 /**
  * Read one stored group, falling back to the default for anything missing or
  * malformed. A saved row from before a field existed gains the default for
- * that field, so adding a setting never needs a data migration — the same
+ * that field, so adding a setting never needs a data migration - the same
  * self-healing the mock store does for bookings.
  */
 export function parseRuleGroup<G extends RuleGroup>(group: G, stored: unknown): Rules[G] {
@@ -423,7 +430,7 @@ export function parseRuleGroup<G extends RuleGroup>(group: G, stored: unknown): 
  * **Capacity, 23 Sep 2026.** The per-room rule became a combination: a room
  * holds `max_occupants_per_room` people of whom at most `max_guests_per_room`
  * need a bed. A row with no `max_occupants_per_room` was therefore saved
- * before that, and its `max_infants_per_room` is the old default of **1** — a
+ * before that, and its `max_infants_per_room` is the old default of **1** - a
  * number nobody chose, and one that refuses two of the three combinations the
  * office actually allows (2 guests + 2 infants, 1 guest + 3 infants). So the
  * infant cap is dropped and taken from the defaults. `max_guests_per_room` is
@@ -454,7 +461,7 @@ function upgradeStoredGroup(
 }
 
 /**
- * A saved invoice group from before 25 Sep 2026 held the room GST as a slab —
+ * A saved invoice group from before 25 Sep 2026 held the room GST as a slab -
  * 5% up to `gst_room_threshold` (₹7,500) a day, `gst_room_above_percent`
  * above it. The office's revised invoice has one rate per section, 18% on
  * rooms and 5% on food, and the owner gave both. The slab's fields are
@@ -465,11 +472,37 @@ export function upgradeInvoiceRules(stored: Record<string, unknown>): Record<str
   const revision = typeof stored.revision === "number" ? stored.revision : 1;
   if (revision >= INVOICE_RULES_REVISION) return stored;
   const rest = { ...stored };
-  delete rest.gst_room_threshold;
-  delete rest.gst_room_above_percent;
-  delete rest.gst_room_percent;
-  delete rest.gst_meal_percent;
+  if (revision < 2) {
+    delete rest.gst_room_threshold;
+    delete rest.gst_room_above_percent;
+    delete rest.gst_room_percent;
+    delete rest.gst_meal_percent;
+  }
+  // Only when the row carries a contact of its own: writing `contact:
+  // undefined` would override the default and fail the schema, which reads
+  // back as "no invoice settings at all".
+  if (rest.contact) rest.contact = renameState(rest.contact);
   return { ...rest, revision: INVOICE_RULES_REVISION };
+}
+
+/**
+ * Revision 3: the state is **Keralam**, not Kerala (7 Oct 2026, the office's
+ * eighth list). The spelling is the office's own copy on a saved row, so it is
+ * corrected **once** - the revision gate above means a row the office has
+ * since edited is never touched again, and a row whose address does not
+ * mention the state at all is left exactly as it is. Invoices already issued
+ * keep the words they were printed with; they are snapshots, and the Hindi
+ * half of the footer is fixed artwork.
+ */
+function renameState(contact: unknown): unknown {
+  if (!contact || typeof contact !== "object") return contact;
+  const row = contact as Record<string, unknown>;
+  const address = row.address;
+  if (typeof address !== "string") return contact;
+  // The whole word only: "Keralam" contains "Kerala", so a plain replace on a
+  // row that already reads Keralam would make it "Keralamm".
+  const renamed = address.replace(new RegExp(`\\b${FORMER_STATE_NAME}\\b`, "g"), STATE_NAME);
+  return renamed === address ? contact : { ...row, address: renamed };
 }
 
 /** First validation message for a proposed group, or null when it is acceptable. */

@@ -41,8 +41,8 @@ form, all approval tiers, the room grid, invoices, the desk and the console.
 | --- | --- | --- |
 | `npm run lint` | ESLint incl. the strict React Compiler rules | must stay clean |
 | `npm run typecheck` | `next typegen && tsc --noEmit` | `npm run build` also typechecks |
-| `npm test` | Vitest, `tests/` — 17 files, 305 checks (26 Sep 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
-| `npm run test:e2e` | Playwright, `e2e/` — 26 journeys (about 70 s) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
+| `npm test` | Vitest, `tests/` — 23 files, 405 checks (7 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
+| `npm run test:e2e` | Playwright, `e2e/` — 33 journeys (about 70 s) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
 
 Playwright journeys: `booking-journey` (student → warden → manager → desk →
 invoice → paid), `official-and-dining` (faculty through the HOD; a meals-only
@@ -54,10 +54,24 @@ moves who can book), `room-party` (2 guests + 2 infants in a room),
 `sign-in` (Mock Authentication on a production build), `desk-links`
 (Reception → kitchen → back; the developer turned away from New Booking; the
 help line's number), `public-site` (320 px, desktop and phone), and
-`fifth-round` (25 Sep 2026: a student's Father filled in from the record, the
-infant card, the warden's "✓ Matches record"; reception bringing the seeded
-DM005 stay's check-in forward; an invoice whose grand total follows typed
-breakfasts and a "Broken vase" additional charge, then issued).
+`fifth-round` (25 Sep 2026, rewritten 7 Oct: a student's Father **taken from
+the record and locked**, the infant card, the warden's "✓ Matches record";
+reception moving a check-in both ways; an invoice whose grand total follows
+typed breakfasts and a "Broken vase" additional charge, then issued, then the
+manager closing the stay off unpaid with a reason and finding it under
+Awaiting payment), and `eighth-round` (7 Oct 2026: a student's form — one
+guest house, no meals, no debitable head, the rates; the faculty rates and the
+head question; **Change rate**; a record pasted into the console locking that
+student's parents; and the whole **Missed** journey — a stay booked from
+midnight this morning, the cron route POSTed as the runner does, the requester
+told, the manager reinstating it, and the next two runs marking nothing).
+
+> **The Missed journey books a stay from midnight today**, which is the
+> earliest check-in the form accepts and is by definition already past. That
+> is what makes a genuinely lapsed request reachable through the UI rather
+> than forced with the developer's repair tool — which would not work anyway,
+> since forcing a status needs a developer's TOTP step-up and the e2e
+> developer has none enrolled.
 
 **Each account signs in through the form once per run** (25 Sep 2026).
 `signIn()` in `e2e/helpers.ts` keeps each account's session cookies for the
@@ -185,7 +199,12 @@ particular would shift already-correct rows a second time if re-run.
 **`npm test`** runs the Vitest suite in `tests/` (installed 21 Sep 2026). It
 uses the mock store on a throwaway file (`MOCK_DB_PATH`) and `TZ=UTC`, so it
 never touches `.local-db.json`. The techniques below are still how UI, HTTP
-and migrations are checked:
+and migrations are checked.
+
+> **The unit suite does not typecheck.** `npm test` passed with a fixture that
+> named a column that does not exist; `npm run build` caught it. Run the build
+> (or `npm run typecheck`) before calling a change done — twice in the 7 Oct
+> round a test file was the only thing failing the build.
 
 > **`npm run test:e2e` has a re-run trap** — a reused `next start` serving the
 > previous build, which looks like an application bug. (The other one, a

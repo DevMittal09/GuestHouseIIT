@@ -26,8 +26,8 @@ import type { Project, ProjectImportPlan } from "@/lib/projects";
 
 /**
  * The projects a stay can be debited to (Phase 4). Loaded in bulk by pasting
- * from a spreadsheet — the same all-or-nothing approach as the LDAP username
- * import — and deactivated rather than deleted once a booking has used one.
+ * from a spreadsheet - the same all-or-nothing approach as the LDAP username
+ * import - and deactivated rather than deleted once a booking has used one.
  */
 export function ProjectsManager({ projects }: { projects: (Project & { bookings: number })[] }) {
   const router = useRouter();
@@ -75,7 +75,7 @@ export function ProjectsManager({ projects }: { projects: (Project & { bookings:
         <p className="text-sm text-muted-foreground">
           The projects a booking can be debited to when its head is <strong>Project</strong>. Only
           active projects are offered on the booking form. A project a booking has used cannot be
-          deleted — deactivate it when it closes, and its bookings and invoices still name it.
+          deleted - deactivate it when it closes, and its bookings and invoices still name it.
         </p>
       </div>
 
@@ -83,7 +83,7 @@ export function ProjectsManager({ projects }: { projects: (Project & { bookings:
         <Label htmlFor="project-import">Import from a spreadsheet</Label>
         <p className="text-xs text-muted-foreground">
           Paste rows of <span className="font-mono">project number, title, principal investigator</span>{" "}
-          — copied straight from Excel (tab separated) or comma separated. A number already on the
+          - copied straight from Excel (tab separated) or comma separated. A number already on the
           list updates its title and PI. Any bad line and nothing is imported.
         </p>
         <Textarea
@@ -154,7 +154,7 @@ export function ProjectsManager({ projects }: { projects: (Project & { bookings:
                     )}
                   </TableCell>
                   <TableCell>{p.title}</TableCell>
-                  <TableCell>{p.pi_name ?? "—"}</TableCell>
+                  <TableCell>{p.pi_name ?? "-"}</TableCell>
                   <TableCell className="text-right">{p.bookings}</TableCell>
                   <TableCell className="text-right whitespace-nowrap">
                     <Button
@@ -174,7 +174,7 @@ export function ProjectsManager({ projects }: { projects: (Project & { bookings:
                       size="sm"
                       variant="destructive"
                       disabled={isPending || p.bookings > 0}
-                      title={p.bookings > 0 ? "Bookings are debited to it — deactivate it instead" : undefined}
+                      title={p.bookings > 0 ? "Bookings are debited to it - deactivate it instead" : undefined}
                       onClick={() => setDeleting(p)}
                     >
                       Delete

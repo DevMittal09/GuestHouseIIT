@@ -4,8 +4,8 @@ import { getStore } from "./store";
 import type { GuestHouse, RoomType } from "./types";
 
 /**
- * Read-side data for the public website: the guest houses — their names, room
- * counts and which serve meals — from the store, so the site cannot name a
+ * Read-side data for the public website: the guest houses - their names, room
+ * counts and which serve meals - from the store, so the site cannot name a
  * guest house the portal does not have. (Until 26 Sep 2026 this also computed
  * each requester category's approval route for the site; the owner asked for
  * the portal's internals to stay off the public pages, so it went.)
@@ -14,8 +14,8 @@ import type { GuestHouse, RoomType } from "./types";
  * are the front door, and a misconfigured backend must not take down the page
  * that carries the office's phone number.
  *
- * **Caching (Phase 9).** The public pages themselves cannot be static — the
- * header greets whoever is signed in, so every render reads the session — but
+ * **Caching (Phase 9).** The public pages themselves cannot be static - the
+ * header greets whoever is signed in, so every render reads the session - but
  * what they *say* changes only when a guest house, a room or a Setting does.
  * So the data is cached across requests under the `site` tag and rebuilt at
  * most every half hour; `revalidateEverything()` drops the tag the moment any

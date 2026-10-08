@@ -57,7 +57,7 @@ export async function extendStayAction(bookingId: string, untilLocal: string, re
   try {
     const user = await requireUser();
     if (!canUpdateLifecycle(user.role)) return { ok: false, error: "Only the guest house desk can extend a stay" };
-    if (!reason?.trim()) return { ok: false, error: "Say why the stay is being extended — it goes in the log" };
+    if (!reason?.trim()) return { ok: false, error: "Say why the stay is being extended - it goes in the log" };
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
@@ -80,7 +80,7 @@ export async function extendStayAction(bookingId: string, untilLocal: string, re
 }
 
 /**
- * The desk moves a stay's check-in (manager or caretaker) — **earlier for a
+ * The desk moves a stay's check-in (manager or caretaker) - **earlier for a
  * guest who arrives before the booked time, later for one who arrives after
  * it** (1 Oct 2026; it was earlier-only from 25 Sep). The holds move through
  * the same path as any date change, so a room someone else still has by then
@@ -90,7 +90,7 @@ export async function moveCheckInAction(bookingId: string, toLocal: string, reas
   try {
     const user = await requireUser();
     if (!canUpdateLifecycle(user.role)) return { ok: false, error: "Only the guest house desk can move a stay's check-in" };
-    if (!reason?.trim()) return { ok: false, error: "Say why the check-in is being moved — it goes in the log" };
+    if (!reason?.trim()) return { ok: false, error: "Say why the check-in is being moved - it goes in the log" };
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
@@ -159,7 +159,7 @@ export async function decideExtensionAction(bookingId: string, approve: boolean,
         remarks: `Extension to ${formatDateTime(until)} approved by ${user.full_name}${note.trim() ? `: ${note.trim()}` : ""}`,
       });
     } else {
-      if (!note?.trim()) return { ok: false, error: "Say why the extension is declined — the requester is told" };
+      if (!note?.trim()) return { ok: false, error: "Say why the extension is declined - the requester is told" };
       await store.updateBookingDetails(bookingId, { extension_request: null }, {
         ...log,
         remarks: `Extension to ${formatDateTime(until)} declined by ${user.full_name}: ${note.trim()}`,
@@ -230,7 +230,7 @@ export async function getMoveOptions(
 async function requireRoomsConsole(): Promise<Profile> {
   const user = await requireUser();
   if (!canUseConsoleSection(user.role, "guest_houses")) throw new Error("Only the Guest House Manager or a developer can manage rooms");
-  if (!(await isAdminUnlocked())) throw new Error("The console is locked — enter the console password again");
+  if (!(await isAdminUnlocked())) throw new Error("The console is locked - enter the console password again");
   return user;
 }
 
@@ -289,7 +289,7 @@ export async function previewRoomRangeAction(
   }
 }
 
-/** Add the rooms the preview listed — all or nothing. */
+/** Add the rooms the preview listed - all or nothing. */
 export async function createRoomRangeAction(guestHouseId: string, text: string, roomType: RoomType): Promise<ActionResult & { created?: number }> {
   try {
     const user = await requireRoomsConsole();

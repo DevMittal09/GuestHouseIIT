@@ -21,8 +21,8 @@ export type LdapUidImportPlan = {
  * comments and an `email,…` header row are skipped.
  *
  * All or nothing: an identity mapping half-applied is worse than none, so any
- * problem — an unknown email, a malformed uid, a uid given twice, or a uid that
- * would end up on two accounts — is reported and the plan carries no changes to
+ * problem - an unknown email, a malformed uid, a uid given twice, or a uid that
+ * would end up on two accounts - is reported and the plan carries no changes to
  * apply. Uniqueness is judged on the *final* state, so swapping two accounts'
  * uids in one paste is allowed.
  */

@@ -20,14 +20,14 @@ import { addDaysToDateValue, formatDateValue } from "@/lib/tz";
  *
  * A dining booking is not a stay, so it has no check-in and no check-out: it
  * is a set of dates, each with its own breakfast / lunch / dinner. The form
- * therefore asks for the dates one at a time — it opens on the first day that
- * still has a meal to offer, and "Add another date" adds the next — rather
+ * therefore asks for the dates one at a time - it opens on the first day that
+ * still has a meal to offer, and "Add another date" adds the next - rather
  * than for a range with two date boxes, which made someone booking a single
  * lunch fill in a first and a last day that were the same.
  *
  * A meal that has passed its notice period (`isMealBookable`: it has to be
  * booked before the previous meal finishes being served) is shown disabled
- * with the deadline that was missed, rather than hidden — otherwise a row can
+ * with the deadline that was missed, rather than hidden - otherwise a row can
  * appear with nothing in it and no reason given.
  */
 export function MealDatesPicker({
@@ -132,7 +132,7 @@ export function MealDatesPicker({
                 return (
                   <label
                     key={meal}
-                    title={open ? undefined : `${mealDeadlineNote(date, meal, windows)} — that has passed.`}
+                    title={open ? undefined : `${mealDeadlineNote(date, meal, windows)} - that has passed.`}
                     className={
                       open
                         ? "flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 text-sm transition-colors has-checked:border-primary has-checked:bg-primary/5"
@@ -150,7 +150,7 @@ export function MealDatesPicker({
                     <span className="min-w-0">
                       <span className="block font-medium">{MEAL_LABELS[meal]}</span>
                       <span className="block text-xs text-muted-foreground">
-                        {open ? times[meal] : "Too late — the kitchen has already ordered for it"}
+                        {open ? times[meal] : "Too late - the kitchen has already ordered for it"}
                       </span>
                     </span>
                   </label>
@@ -167,7 +167,7 @@ export function MealDatesPicker({
           Add another date
         </Button>
         <p className="text-xs text-muted-foreground">
-          Each meal has to be booked before the previous one finishes being served — lunch before
+          Each meal has to be booked before the previous one finishes being served - lunch before
           breakfast ends, dinner before lunch ends, and a morning&apos;s breakfast before the
           evening before it ends.
         </p>

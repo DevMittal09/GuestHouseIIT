@@ -11,10 +11,10 @@ import { ROLE_LABELS, type Profile } from "@/lib/types";
 
 /**
  * The gated entry points of the public site (`/book-room`, `/book-meal`,
- * `/sign-in`): one bordered split-screen panel on the band — the title, one
+ * `/sign-in`): one bordered split-screen panel on the band - the title, one
  * line of lead and the sign-in form in five columns, a photograph filling
  * the other seven on wide screens (30 Sep 2026; it filled half the *screen*
- * for an afternoon on 26 Sep, which was too much — now it fills half the
+ * for an afternoon on 26 Sep, which was too much - now it fills half the
  * panel, inside the page's width). Someone already signed in is offered a
  * way through instead of a second form. Renders its own `Container`.
  */

@@ -15,7 +15,7 @@ for it lives.
 | **Mock Authentication** persona picker — open while Google is unconfigured (`mockLoginEnabled()`), 404 otherwise or with `MOCK_LOGIN=false` | `app/(site)/mock-login/page.tsx`, `loginAs` |
 | Sessions (rows, opaque token, idle/absolute expiry, rotation, revoke) | `lib/sessions.ts` |
 | Login / logout actions | `app/actions/auth.ts` (`signInWithLdap` — directory check, `ldap:<uid>` throttle, profile by `ldap_uid`, safe `next`; `loginAs(id, next)`; `logout` → `/sign-in`) |
-| Academic records (the Requester details card) | `lib/academic/` — `index.ts` (`getAcademicSource()` from env; `academicRecordFor()`, cached and never throwing), `http-source.ts` (real; `recordFromJson` is the field mapping), `mock-source.ts` (dummy records), `fields.ts` (role → kind, display order, guardian and Copy-to rules), `details.ts` (rows + Copy to for the card). See [17-academic-records.md](17-academic-records.md) |
+| Academic records (the Requester details card, the warden's check, the **locked parent names**) | `lib/academic/` — `index.ts` (`getAcademicSource()` from env; `academicRecordFor()`, cached and never throwing; `forgetAcademicRecords()`), `store-source.ts` (**the office's own imported records**, migration 28, with the dummies behind them), `http-source.ts` (the institute's database; `recordFromJson` is the field mapping), `mock-source.ts` (dummy records), `stored.ts` (the CSV import), `guest-names.ts` (what the record fixes on the booking form), `fields.ts` (role → kind, display order, guardian and Copy-to rules), `details.ts` (rows + Copy to for the card), `family.ts` / `family-server.ts` (the warden's check). Console: `/admin/academic`. See [17-academic-records.md](17-academic-records.md) |
 | LDAP directory | `lib/ldap/` — `index.ts` (`getDirectory()` from env), `ldap-directory.ts` (real), `mock-directory.ts` (dummy accounts), `link.ts` (entry → profile, opt-in link by email), `import.ts` (bulk import planner), `uid.ts` (client-safe rules). See [31-ldap-sign-in.md](31-ldap-sign-in.md) |
 | Where signed-out visitors go | `SIGN_IN_PATH` in `lib/routes.ts` (`/` is the public home page) |
 | Session read | `lib/auth.ts` (`getCurrentUser`, `requireUser`) |
@@ -44,11 +44,13 @@ from the units, not the role (`isHodForAny`, `approvesClubsFor`,
   card; the alumni upload card appears only when not hidden. Each guest row
   has a `kind`: "Add infant" appends an **infant card** (age list 0–4, no ID;
   the payload's `infant: true` makes the schema require the age). `GuestRow`
-  fills known guests in (25 Sep 2026): `knownGuests` from `/book` —
-  `knownGuestsFor()` in `lib/known-guests-server.ts` over the academic record
-  and the requester's own bookings (`lib/known-guests.ts`) — on choosing a
-  one-of-each relationship, and from **Fill in from saved details**, which
-  starts with the requester ("Yourself", `knownGuestSelf`, 30 Sep 2026).
+  takes a student's **parents from the academic record and locks them**
+  (7 Oct 2026): `guestNames` from `/book` — `guestNameRule()` in
+  `lib/academic/guest-names.ts` — puts the record's name in the box read-only
+  when its relationship is chosen, hides a relationship the record rules out,
+  and waives the Aadhaar and the ID upload for that guest. (`lib/known-guests.ts`
+  and "Fill in from saved details" were **withdrawn for every role** on
+  7 Oct 2026, "Yourself" with them.)
 - **Validation:** `lib/booking-schema.ts` builds a zod schema *from the config*,
   used on both sides. Custom-field values are validated by
   `validateCustomValue()` in `lib/form-config.ts`.
@@ -60,11 +62,16 @@ from the units, not the role (`isHodForAny`, `approvesClubsFor`,
 Two panels sit between the stay details and the guest list:
 
 - **Room availability** (`components/booking-availability.tsx`) — the same
-  hour-by-hour chart as `/availability`, for the guest house and check-in date
-  currently chosen, so a requester is not picking dates blind. It calls the same
-  `getRoomAvailability` action, which strips guest identity for non-staff, so it
-  answers *when* rooms are taken and never by whom. The chart itself lives in
-  `components/occupancy-chart.tsx`, shared with `/availability`.
+  answer as `/availability`, for the guest house and check-in date currently
+  chosen, so a requester is not picking dates blind. Since 7 Oct 2026 that
+  answer is **a count** for everyone but the desk: `getRoomAvailability` sends
+  a requester `AvailabilityCounts` with no rooms and no segments at all, drawn
+  by `components/availability-counts.tsx`. The desk gets the chart
+  (`components/occupancy-chart.tsx`, shared with `/availability`).
+- **Rates** (`components/tariff-table.tsx`, 7 Oct 2026) — what this guest
+  house charges, resolved on the server by `tariffPreviews()`
+  (`lib/tariffs.ts`) through the **same `resolveTariff` the invoice prices
+  from**, so the figure quoted and the figure charged cannot drift.
 - **Meals** — shown only when a guest house the role may book serves meals
   (`serves_meals`). A days × breakfast / lunch / dinner table
   (`components/meal-plan-grid.tsx`) for the stay being entered: one row per IST
@@ -250,7 +257,8 @@ everyone. `app/(portal)/availability/page.tsx` (server, lists guest houses) +
 | Page shell + guest house list | `app/(portal)/availability/page.tsx` |
 | View switch, date navigation, summary, room list | `components/availability-grid.tsx` |
 | The charts — `OccupancyChart` (day), `RangeOccupancyChart` (week / month), each with a `simple` mode, and the shared `AvailabilityLegend` | `components/occupancy-chart.tsx` |
-| Data fetch, window cap, identity stripping, who sees the detail (`detailed`) | `app/actions/availability.ts` (`getRoomAvailability`) |
+| Data fetch, window cap, identity stripping, and **who gets rooms at all** (`SEES_ROOMS`, 7 Oct 2026) | `app/actions/availability.ts` (`getRoomAvailability`) |
+| "N rooms available" for everyone else | `availabilityCounts` / `rangeBetween` (`lib/availability.ts`), `components/availability-counts.tsx` |
 | Ranges, bucketing, badges, labels | `lib/availability.ts` |
 | Calendar-date arithmetic and labels | `lib/tz.ts` (`parseDateValue`, `addDaysToDateValue`, `formatDateValue`) |
 | Store query | `listRoomOccupancy` in `lib/store/mock.ts` + `lib/store/supabase.ts` |
@@ -467,7 +475,11 @@ Guest Houses & Rooms.
 | `lib/settings.ts` (+ `-server.ts`, `-impact.ts`) | `DEFAULT_RULES`, the Settings schemas, `getRules` / `getOfficialEmails` / `getHostels`, and what a change would break. |
 | `lib/occupancy.ts` | Capacity per room type, `INFANT_AGE_LIMIT`, `roomPartyError` and the Add-button reasons, `extraBedsFor`, `allocationCapacityError`, `describeCapacity`. |
 | `lib/turnover.ts` | The turnaround buffer and accepted-overlap guard (`holdGuard`), conflict kinds, `TURNOVER_GRACE_HOURS`. |
-| `lib/availability.ts` | Availability grid maths: `bucketOccupancyByHour`, `bucketOccupancyByDay`, `overlapSpans`, `availabilityRange`, `shiftAnchor`, `roomRangeStatus`, `freeRoomsByDay`; `MAX_AVAILABILITY_DAYS`. |
+| `lib/availability.ts` | Availability grid maths: `bucketOccupancyByHour`, `bucketOccupancyByDay`, `overlapSpans`, `availabilityRange`, `shiftAnchor`, `roomRangeStatus`, `freeRoomsByDay`; `MAX_AVAILABILITY_DAYS`; and `availabilityCounts` / `rangeBetween` — the counts a requester is sent instead of the rooms (7 Oct 2026). |
+| `lib/academic/guest-names.ts` | What a student's academic record **fixes** about their guests: the locked parent names, the relationships it rules out, and the Aadhaar / ID waiver (7 Oct 2026). |
+| `lib/academic/stored.ts` | The CSV import: columns per kind, spreadsheet-quoting-aware splitting, `planAcademicImport` (all or nothing), `describeImport`. |
+| `lib/academic/store-source.ts` | `StoreAcademicSource` — the office's own imported records, with the published dummies behind them. |
+| `lib/missed-server.ts` | `runMissedSweep` — the nightly job that marks a request nobody decided in time as MISSED, logs it and mails the requester (migration 29). |
 | `lib/meals.ts` | Meal keys and windows, `stayMealDays`, the notice period (`isMealBookable`, `mealLeadTimeError`, `firstBookableMealDate`), `normalizeMeals` (the only reader), the form's slot helpers, `kitchenHeadCount`. |
 | `lib/invoice.ts`, `lib/tariffs.ts`, `lib/invoice-pdf.ts` | Invoices (see [15-billing-and-invoices.md](15-billing-and-invoices.md)). |
 | `lib/operations.ts` | Extensions, no-shows, room ranges ("B-101 to B-120"), maintenance blocks. |
@@ -650,7 +662,7 @@ sticky from `lg`), `site-chrome.tsx` (`SiteFooter`), `guest-house-map.tsx`
 (map tabs), `PageMasthead` / `SectionHead` / `ArrowLink` in
 `site-ui.tsx`; `amenities` / `houseSummary` / `BOOKING_STEPS` / `guidelineSections` /
 `mealTimetable` in `lib/site-content.ts`; `GUEST_HOUSE_LOCATIONS` /
-`guestHouseMapPins` / `MRBS_URL` / `HOME_PHOTOS` / `SIGN_IN_PHOTOS` in
+`guestHouseMapPins` / `HOME_PHOTOS` / `SIGN_IN_PHOTOS` in
 `lib/site.ts`. The My Bookings tiles are `BookingDoor` in
 `app/(portal)/dashboard/page.tsx`.
 

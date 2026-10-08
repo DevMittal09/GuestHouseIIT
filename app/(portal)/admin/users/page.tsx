@@ -19,7 +19,7 @@ export default async function AdminUsersPage() {
     store.listUnits().catch(() => []),
   ]);
   // The manager may appoint another manager but not a developer, so the
-  // dropdown matches what `createUserAction` will actually accept — an option
+  // dropdown matches what `createUserAction` will actually accept - an option
   // that always fails is worse than no option.
   const roles = assignableRoles(user.role, Object.keys(ROLE_LABELS) as Role[]);
   return (

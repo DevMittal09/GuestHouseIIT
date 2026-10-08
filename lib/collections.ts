@@ -12,7 +12,7 @@ import { dateValueOf, formatInstituteDate, formatInstituteDateTime, instituteDay
 /**
  * The monthly collections report (Phase 5), exported from /history: every
  * invoice issued in the month and every payment received in it, with totals
- * by payment mode and by debitable head. Pure — the action reads the store and
+ * by payment mode and by debitable head. Pure - the action reads the store and
  * hands the rows here.
  */
 
@@ -143,10 +143,10 @@ export function collectionsCsv(invoices: InvoiceRecord[], month: string, bounds:
     csvLine([`Summary for ${month}`]),
     csvLine(["Invoices issued (not cancelled)", s.issuedCount, formatINR(s.issuedTotal)]),
     csvLine(["Invoices cancelled", s.cancelledCount]),
-    ...PAYMENT_MODES.map((m) => csvLine([`Collected — ${PAYMENT_MODE_LABELS[m]}`, "", formatINR(s.collectedByMode[m])])),
-    csvLine(["Collected — total", "", formatINR(s.collectedTotal)]),
+    ...PAYMENT_MODES.map((m) => csvLine([`Collected - ${PAYMENT_MODE_LABELS[m]}`, "", formatINR(s.collectedByMode[m])])),
+    csvLine(["Collected - total", "", formatINR(s.collectedTotal)]),
     csvLine(["Issued this month, still unpaid", "", formatINR(s.outstanding)]),
-    ...Object.entries(s.byHead).map(([head, paise]) => csvLine([`Issued — ${head}`, "", formatINR(paise)])),
+    ...Object.entries(s.byHead).map(([head, paise]) => csvLine([`Issued - ${head}`, "", formatINR(paise)])),
   ];
   return lines.join("\r\n");
 }

@@ -6,7 +6,7 @@ import type { HistoryReport, ReportRow } from "@/app/actions/history-pdf";
  * The previous version handed the browser a styled HTML document, opened it in
  * a popup and called print(), which meant popup blockers, an .html file named
  * like a report, and a "now choose Save as PDF" instruction. jsPDF is imported
- * dynamically so none of it lands in the main bundle — only a manager or
+ * dynamically so none of it lands in the main bundle - only a manager or
  * developer clicking Export ever downloads it.
  */
 
@@ -34,7 +34,7 @@ function pdfSafe(text: string): string {
   return text
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
-    .replace(/[–—]/g, "-")
+    .replace(/[–-]/g, "-")
     .replace(/…/g, "...")
     .replace(/·/g, "-")
     .replace(/[^\x00-\xFF]/g, "");
@@ -42,7 +42,7 @@ function pdfSafe(text: string): string {
 
 /**
  * The table's columns and their millimetre widths, which must add up to the
- * content width of an A4 landscape page (273 mm) — autoTable will not shrink
+ * content width of an A4 landscape page (273 mm) - autoTable will not shrink
  * them for you, it overflows the margin instead.
  *
  * "Svc" and "Meals" were added when meals became bookable without a room; the
@@ -159,7 +159,7 @@ export async function downloadHistoryPdf(report: HistoryReport, filename: string
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...MUTED);
-  const filterText = `Filters — ${report.filters.map(pdfSafe).join("  |  ")}`;
+  const filterText = `Filters - ${report.filters.map(pdfSafe).join("  |  ")}`;
   const filterLines = doc.splitTextToSize(filterText, contentWidth);
   doc.text(filterLines, margin, y);
   y += filterLines.length * 3.2 + 2;
@@ -167,7 +167,7 @@ export async function downloadHistoryPdf(report: HistoryReport, filename: string
   if (report.truncated) {
     doc.setTextColor(185, 28, 28);
     doc.text(
-      "This report hit the export limit and is incomplete — narrow the filters and export again.",
+      "This report hit the export limit and is incomplete - narrow the filters and export again.",
       margin,
       y
     );

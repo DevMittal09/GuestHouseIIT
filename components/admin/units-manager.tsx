@@ -91,7 +91,7 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
         <p className="text-sm text-muted-foreground">
           Who approves for each department, club, council and office, and who is Faculty Advisor
           of each council and club. When an HOD, a secretary or an advisor changes, change it here
-          — requests already waiting move to the new person on their own. A club with no head of
+          - requests already waiting move to the new person on their own. A club with no head of
           its own is approved by the head of the council above it.
         </p>
       </div>
@@ -225,7 +225,7 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                           ))}
                         </NativeSelect>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -285,7 +285,7 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                         // Nobody anywhere up the chain: requests from here go
                         // straight to the manager, and it is worth knowing.
                         <span className="text-amber-700 dark:text-amber-400">
-                          Nobody — requests go straight to the manager
+                          Nobody - requests go straight to the manager
                         </span>
                       )}
                     </TableCell>
@@ -335,7 +335,7 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
         open={deleting !== null}
         onOpenChange={(open) => !open && setDeleting(null)}
         title="Delete this unit?"
-        description={`${deleting?.name ?? ""} will be removed. Its requests will no longer be routed to its head. A unit that still has members or sub-units cannot be deleted — move them first.`}
+        description={`${deleting?.name ?? ""} will be removed. Its requests will no longer be routed to its head. A unit that still has members or sub-units cannot be deleted - move them first.`}
         confirmPhrase={deleting?.name}
         pending={isPending}
         onConfirm={() => {
@@ -358,8 +358,8 @@ type Run = (work: () => Promise<{ ok: boolean; error?: string }>, success: strin
  * The Faculty Advisor of each council, fest and club, and the secretary's
  * mailbox copied on their bookings (migration 25). Its own table because it
  * is the appointment that changes every year or two, and because the person
- * named here is who books for the unit — straight to the Guest House
- * Manager — which is a different thing from who heads it.
+ * named here is who books for the unit - straight to the Guest House
+ * Manager - which is a different thing from who heads it.
  */
 function FacultyAdvisors({
   units,
@@ -382,8 +382,8 @@ function FacultyAdvisors({
       <div>
         <h3 className="text-base font-semibold">Faculty Advisors</h3>
         <p className="text-sm text-muted-foreground">
-          The professor named here books for the council, fest or club from their own login —
-          &ldquo;Book as Faculty Advisor&rdquo; on New Booking — and those bookings go straight to
+          The professor named here books for the council, fest or club from their own login -
+          &ldquo;Book as Faculty Advisor&rdquo; on New Booking - and those bookings go straight to
           the Guest House Manager. A club with no advisor of its own takes its council&apos;s. The
           secretary&apos;s mailbox (e.g. sec_arts@iitpkd.ac.in) is filled into Copy to on every
           booking the advisor raises. When the appointment changes, change it here.
@@ -550,7 +550,7 @@ function PersonSelect({
       <option value="">{noneLabel}</option>
       {people.map((p) => (
         <option key={p.id} value={p.id}>
-          {p.full_name} — {p.email}
+          {p.full_name} - {p.email}
         </option>
       ))}
     </NativeSelect>
@@ -564,10 +564,10 @@ function PersonSelect({
 function defaultHodLabel(unit: Unit, units: Unit[], byId: Map<string, Profile>): string {
   const withDefault = units.map((x) => (x.id === unit.id ? { ...x, hod_unit_id: null } : x));
   const target = hodUnitIdFor(unit.id, withDefault);
-  if (!target) return "Default — no HOD stage";
+  if (!target) return "Default - no HOD stage";
   const names = hodApproversFor({ id: "", unit_id: unit.id }, withDefault).map(
     (id) => byId.get(id)?.full_name ?? id
   );
   const where = units.find((x) => x.id === target)?.name ?? "?";
-  return `Default — ${where}${names.length > 0 ? ` (${names.join(", ")})` : ", nobody set"}`;
+  return `Default - ${where}${names.length > 0 ? ` (${names.join(", ")})` : ", nobody set"}`;
 }

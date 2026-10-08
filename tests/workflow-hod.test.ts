@@ -29,7 +29,7 @@ import { booking, GH } from "./helpers";
 const P = (id: string) => seedProfiles.find((p) => p.id === id)!;
 const units: Unit[] = seedUnits.map((u) => ({ ...u, hod_unit_id: u.hod_unit_id ?? null }));
 
-describe("routeFor — every pipeline", () => {
+describe("routeFor - every pipeline", () => {
   const hod = { hasHodApprover: true };
   it.each<[Role, string, object, string[]]>([
     ["student", "personal", {}, ["PENDING_WARDEN"]],
@@ -103,7 +103,7 @@ describe("the HOD, scoped to their department", () => {
     ).toEqual([]);
   });
 
-  it("an officer office's HOD approval is its own head — none set, so the stage is skipped", () => {
+  it("an officer office's HOD approval is its own head - none set, so the stage is skipped", () => {
     const director = P("official-admin");
     expect(hodUnitIdFor(director.unit_id, units)).toBe("unit-director-office");
     expect(
@@ -151,8 +151,10 @@ describe("debitable heads from the brief, per category", () => {
     ["staff", "staff-ravi" as Role, "official", ["department_budget", "special_budget"]],
     ["officer office", "official-admin" as Role, "official", ["institute_grant", "special_budget"]],
     ["department office", "office-cse" as Role, "official", ["department_budget", "special_budget"]],
-    // Special Funds for everyone except students since 25 Sep 2026.
-    ["personal", "employee-priya" as Role, "personal", ["personal_funds", "special_budget"]],
+    // Special Funds for everyone except students since 25 Sep 2026, and off
+    // every personal booking since 7 Oct, when a personal booking stopped
+    // being asked which budget pays at all.
+    ["personal", "employee-priya" as Role, "personal", ["personal_funds"]],
     ["student", "student-anjali" as Role, "personal", ["personal_funds"]],
   ])("%s", (_label, id, type, heads) => {
     const p = P(id as string);
@@ -170,7 +172,7 @@ describe("debitable heads from the brief, per category", () => {
   /**
    * 23 Sep 2026: the Institute Grant is the offices' money, not a fourth
    * budget a faculty member can reach. It is a floor under Settings, not just
-   * a default — a stored row that still lists it is ignored on read, and the
+   * a default - a stored row that still lists it is ignored on read, and the
    * console cannot save it.
    */
   it("never offers faculty the Institute Grant, whatever Settings says", () => {
@@ -303,14 +305,14 @@ describe("the schema accepts its own output for every requester role", () => {
       /Project number and title/
     );
     expect(
-      schema.safeParse({ ...base, debit_head: "project_grant", debit_details: "SP/2025/017 — Storage" }).success
+      schema.safeParse({ ...base, debit_head: "project_grant", debit_details: "SP/2025/017 - Storage" }).success
     ).toBe(true);
     // A payload that still carries an id is checked against the list.
     expect(
       schema.safeParse({
         ...base,
         debit_head: "project_grant",
-        debit_details: "SP/2025/017 — Storage",
+        debit_details: "SP/2025/017 - Storage",
         project_id: "proj-old",
       }).error?.issues[0].message
     ).toMatch(/not on the list/);

@@ -11,11 +11,11 @@ export type NavItem = { href: string; label: string };
  * up on their own path (`/`); the rest also cover their sub-pages
  * (`/admin/users` lights Developer Console).
  *
- * - `tone="dark"` — the portal's charcoal bar (iitpkd.ac.in's own menu
+ * - `tone="dark"` - the portal's charcoal bar (iitpkd.ac.in's own menu
  *   colour), uppercase items, a 3px vermilion bar under the current page.
- * - `tone="light"` — the public site's white header: sentence-case links,
+ * - `tone="light"` - the public site's white header: sentence-case links,
  *   a short vermilion underline under the current page.
- * - `tone="service"` — the portal's service navigation under its ink
+ * - `tone="service"` - the portal's service navigation under its ink
  *   masthead (30 Sep 2026, after GOV.UK's): a white bar, bold sentence-case
  *   items, a 4px vermilion bar under the current one.
  *

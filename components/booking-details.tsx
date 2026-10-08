@@ -116,7 +116,7 @@ export function BookingDetails({
             value={
               [...booking.logs]
                 .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-                .find((l) => l.previous_status === null)?.action_by_name ?? "—"
+                .find((l) => l.previous_status === null)?.action_by_name ?? "-"
             }
           />
         )}
@@ -198,7 +198,7 @@ export function BookingDetails({
           <h4 className="mb-1 font-heading text-[1.0625rem] font-semibold text-ink">Meals by day</h4>
           <p className="mb-2 text-xs text-muted-foreground">
             Each ticked meal is for {mealHeadCount} guest{mealHeadCount === 1 ? "" : "s"}
-            {dietCounts ? ` — ${describeDietCounts(dietCounts)}` : ""}.
+            {dietCounts ? ` - ${describeDietCounts(dietCounts)}` : ""}.
           </p>
           <div className="overflow-x-auto rounded-md border">
             <Table>
@@ -222,7 +222,7 @@ export function BookingDetails({
                           <span aria-label="Requested">✓</span>
                         ) : (
                           <span className="text-muted-foreground" aria-label="Not requested">
-                            —
+                            -
                           </span>
                         )}
                       </TableCell>
@@ -364,21 +364,21 @@ function GuestTable({ guests }: { guests: BookingGuest[] }) {
                   </Badge>
                 )}
               </TableCell>
-              <TableCell>{g.age ?? "—"}</TableCell>
+              <TableCell>{g.age ?? "-"}</TableCell>
               <TableCell className="capitalize">{g.gender}</TableCell>
-              <TableCell>{g.relationship ?? "—"}</TableCell>
+              <TableCell>{g.relationship ?? "-"}</TableCell>
               <TableCell>{CITIZENSHIP_LABELS[g.citizenship ?? "indian"]}</TableCell>
               {anyForeign && (
-                <TableCell>{g.nationality ? countryName(g.nationality) : "—"}</TableCell>
+                <TableCell>{g.nationality ? countryName(g.nationality) : "-"}</TableCell>
               )}
               {anyForeign && (
-                <TableCell className="font-mono text-xs">{maskIdNumber(g.passport_number) ?? "—"}</TableCell>
+                <TableCell className="font-mono text-xs">{maskIdNumber(g.passport_number) ?? "-"}</TableCell>
               )}
               <TableCell className="font-mono text-xs">
                 {g.is_infant ? (
                   <span className="font-sans text-muted-foreground">Not required</span>
                 ) : (
-                  (maskIdNumber(g.id_number) ?? "—")
+                  (maskIdNumber(g.id_number) ?? "-")
                 )}
               </TableCell>
               <TableCell>
@@ -394,7 +394,7 @@ function GuestTable({ guests }: { guests: BookingGuest[] }) {
                 ) : g.is_infant ? (
                   <span className="text-muted-foreground">Not required</span>
                 ) : (
-                  "—"
+                  "-"
                 )}
               </TableCell>
             </TableRow>

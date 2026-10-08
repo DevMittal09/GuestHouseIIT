@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
  * The obvious `value={count} onChange={e => setCount(Number(e.target.value) || 1)}`
  * makes the box impossible to edit: clearing it yields "", `Number("")` is 0,
  * `|| 1` snaps it straight back to 1, and the only way left to change the
- * number is the spinner arrows. So this keeps the **raw string** — including
- * the empty one — and leaves it to the caller's validation to complain about a
+ * number is the spinner arrows. So this keeps the **raw string** - including
+ * the empty one - and leaves it to the caller's validation to complain about a
  * blank box. Explicit −/+ buttons sit either side for the people who liked the
  * arrows.
  */

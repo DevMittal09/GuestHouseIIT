@@ -22,17 +22,17 @@ const HOURS = Array.from({ length: HOURS_IN_DAY }, (_, h) => h);
  * the same day are reading one chart with one set of rules, not two that can
  * drift.
  *
- * `simple` is the requester's picture (30 Sep 2026): booked or free, nothing
- * else. The turnaround after a stay and an accepted overlap are the desk's
- * business, so they are not drawn — the booked bar ends at check-out either
- * way — and a room out of service is simply not available.
+ * **The desk's chart.** It had a `simple` mode for requesters from 30 Sep
+ * 2026 - booked or free, no turnaround, no overlap, maintenance drawn as
+ * booked. That is gone: since 7 Oct a requester is not sent the rooms at all,
+ * only how many are free (`AvailabilityCountsPanel`), so there is nothing for
+ * a simplified chart to draw and nothing in here that has to be hidden.
  */
 export function OccupancyChart({
   rooms,
   occupancy,
   currentHour,
   compact = false,
-  simple = false,
 }: {
   rooms: Room[];
   occupancy: Map<string, RoomDayOccupancy>;
@@ -40,8 +40,6 @@ export function OccupancyChart({
   currentHour: number | null;
   /** Half-height rows, for embedding in a form. */
   compact?: boolean;
-  /** Booked and free only — see above. */
-  simple?: boolean;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -59,7 +57,7 @@ export function OccupancyChart({
         {rooms.map((room) => (
           <div
             key={room.id}
-            title={`${room.room_number} — ${
+            title={`${room.room_number} - ${
               room.room_type === "double_sharing" ? "Double sharing" : "Single"
             }`}
             className="border-b pb-2 text-center font-semibold"
@@ -76,7 +74,6 @@ export function OccupancyChart({
             occupancy={occupancy}
             isCurrent={h === currentHour}
             compact={compact}
-            simple={simple}
           />
         ))}
       </div>
@@ -90,14 +87,12 @@ function HourRow({
   occupancy,
   isCurrent,
   compact,
-  simple,
 }: {
   hour: number;
   rooms: Room[];
   occupancy: Map<string, RoomDayOccupancy>;
   isCurrent: boolean;
   compact: boolean;
-  simple: boolean;
 }) {
   const rowHeight = compact ? "h-4" : "h-6";
   return (
@@ -113,31 +108,29 @@ function HourRow({
       </div>
       {rooms.map((room) => {
         const segment = occupancy.get(room.id)?.hours[hour] ?? null;
-        const turnaround = segment || simple ? null : (occupancy.get(room.id)?.turnaround[hour] ?? null);
-        // Two bookings on one room at this hour — an accepted changeover.
+        const turnaround = segment ? null : (occupancy.get(room.id)?.turnaround[hour] ?? null);
+        // Two bookings on one room at this hour - an accepted changeover.
         // Its own colour: plain red said only "taken", which is what the
         // hour would look like with a single stay in it.
-        const overlap = simple ? null : (occupancy.get(room.id)?.overlaps[hour] ?? null);
-        const maintenance = segment?.kind === "maintenance" && !simple;
+        const overlap = occupancy.get(room.id)?.overlaps[hour] ?? null;
+        const maintenance = segment?.kind === "maintenance";
         return (
           <div
             key={room.id}
             title={
-              simple && segment?.kind === "maintenance"
-                ? `${room.room_number} — not available at ${hourLabel(hour)}`
-                : overlap
-                ? `${room.room_number} — ${overlap.length} bookings overlap at ${hourLabel(hour)}: ${overlap
+              overlap
+                ? `${room.room_number} - ${overlap.length} bookings overlap at ${hourLabel(hour)}: ${overlap
                     .map((s) => s.booking_reference_id)
                     .join(", ")}`
                 : maintenance
-                ? `${room.room_number} — out of service at ${hourLabel(hour)} (maintenance: ${segment?.purpose_of_visit ?? ""})`
+                ? `${room.room_number} - out of service at ${hourLabel(hour)} (maintenance: ${segment?.purpose_of_visit ?? ""})`
                 : segment
-                ? `${room.room_number} — booked at ${hourLabel(hour)} · ${
+                ? `${room.room_number} - booked at ${hourLabel(hour)} · ${
                     segment.booking_reference_id
                   }${segment.requester_name ? ` · ${segment.requester_name}` : ""}`
                 : turnaround
-                  ? `${room.room_number} — turnaround at ${hourLabel(hour)} (housekeeping after ${turnaround.booking_reference_id})`
-                  : `${room.room_number} — free at ${hourLabel(hour)}`
+                  ? `${room.room_number} - turnaround at ${hourLabel(hour)} (housekeeping after ${turnaround.booking_reference_id})`
+                  : `${room.room_number} - free at ${hourLabel(hour)}`
             }
             className={cn(
               "border-r border-b",
@@ -163,12 +156,13 @@ function HourRow({
 /**
  * The days-down / rooms-across chart for the week and month views.
  *
- * Same axes as the day chart — time runs down, rooms run across — so switching
+ * Same axes as the day chart - time runs down, rooms run across - so switching
  * from Day to Week zooms out rather than turning the picture on its side. Time
  * also runs downward *inside* each day's row, from midnight at its top edge to
  * midnight at its bottom, which is what lets a stay be one continuous bar that
  * starts partway down its check-in day and ends partway down its check-out day.
- * `simple` as on the day chart: bookings and free time only.
+ * The desk's chart, like the day one above - see its note on the retired
+ * `simple` mode.
  */
 export function RangeOccupancyChart({
   rooms,
@@ -177,7 +171,6 @@ export function RangeOccupancyChart({
   freeByDay,
   today,
   nowAt,
-  simple = false,
 }: {
   rooms: Room[];
   range: AvailabilityRange;
@@ -188,8 +181,6 @@ export function RangeOccupancyChart({
   today: string;
   /** Where "now" falls in the range (0–1), or null when it is outside it. */
   nowAt: number | null;
-  /** Booked and free only — no turnarounds, overlaps or maintenance of their own. */
-  simple?: boolean;
 }) {
   const isWeek = range.view === "week";
   const rowHeight = isWeek ? "3rem" : "1.75rem";
@@ -213,7 +204,7 @@ export function RangeOccupancyChart({
         {rooms.map((room, column) => (
           <div
             key={room.id}
-            title={`${room.room_number} — ${
+            title={`${room.room_number} - ${
               room.room_type === "double_sharing" ? "Double sharing" : "Single"
             }`}
             className="border-b pb-2 text-center font-semibold"
@@ -228,7 +219,7 @@ export function RangeOccupancyChart({
           return (
             <div
               key={day}
-              title={`${formatDateValue(day, { year: true })} — ${free} of ${rooms.length} rooms free all day`}
+              title={`${formatDateValue(day, { year: true })} - ${free} of ${rooms.length} rooms free all day`}
               className={cn(
                 "sticky left-0 z-10 flex border-b bg-background pr-2 tabular-nums",
                 isWeek ? "flex-col items-end justify-center" : "items-center justify-end gap-2",
@@ -257,10 +248,10 @@ export function RangeOccupancyChart({
             ))}
             {/* The turnaround first, so a stay that begins inside another's
                 buffer (an accepted changeover) is drawn over it. */}
-            {!simple && occupancy.get(room.id)?.turnarounds.map(({ segment, from, to }) => (
+            {occupancy.get(room.id)?.turnarounds.map(({ segment, from, to }) => (
               <div
                 key={`t-${segment.booking_id}`}
-                title={`${room.room_number} — turnaround after ${segment.booking_reference_id}, until ${formatDateTime(
+                title={`${room.room_number} - turnaround after ${segment.booking_reference_id}, until ${formatDateTime(
                   segment.turnaround_until ?? segment.check_out
                 )}`}
                 className="bg-turnaround absolute inset-x-1 rounded-sm"
@@ -268,7 +259,7 @@ export function RangeOccupancyChart({
               />
             ))}
             {occupancy.get(room.id)?.bars.map(({ segment, from, to }) => {
-              const maintenance = segment.kind === "maintenance" && !simple;
+              const maintenance = segment.kind === "maintenance";
               // Not colour alone: a symbol inside the bar says what it is
               // (● a stay, 🔧 out of service), for print and colour-blind eyes.
               return (
@@ -276,22 +267,16 @@ export function RangeOccupancyChart({
                   key={segment.booking_id}
                   role="img"
                   aria-label={
-                    simple && segment.kind === "maintenance"
-                      ? `${room.room_number} not available`
-                      : maintenance
+                    maintenance
                       ? `${room.room_number} out of service: ${segment.purpose_of_visit ?? "maintenance"}`
                       : `${room.room_number} booked, ${segment.booking_reference_id}`
                   }
                   title={
-                    simple && segment.kind === "maintenance"
-                      ? `${room.room_number} — not available ${formatDateTime(segment.check_in)} → ${formatDateTime(
-                          segment.check_out
-                        )}`
-                      : maintenance
-                      ? `${room.room_number} — out of service ${formatDateTime(segment.check_in)} → ${formatDateTime(
+                    maintenance
+                      ? `${room.room_number} - out of service ${formatDateTime(segment.check_in)} → ${formatDateTime(
                           segment.check_out
                         )} · maintenance: ${segment.purpose_of_visit ?? ""}`
-                      : `${room.room_number} — booked ${formatDateTime(segment.check_in)} → ${formatDateTime(
+                      : `${room.room_number} - booked ${formatDateTime(segment.check_in)} → ${formatDateTime(
                           segment.check_out
                         )} · ${segment.booking_reference_id}${segment.requester_name ? ` · ${segment.requester_name}` : ""}`
                   }
@@ -309,12 +294,12 @@ export function RangeOccupancyChart({
                 once, filled solid in its own colour. Drawn last so neither
                 booking's red hides it; the stays' ● sits above and below it,
                 which is how you can still tell there are two of them. */}
-            {!simple && occupancy.get(room.id)?.overlaps.map(({ segments, from, to }) => (
+            {occupancy.get(room.id)?.overlaps.map(({ segments, from, to }) => (
               <div
                 key={`o-${segments[0].booking_id}-${segments[1].booking_id}`}
                 role="img"
                 aria-label={`${room.room_number}: ${segments[0].booking_reference_id} and ${segments[1].booking_reference_id} overlap`}
-                title={`${room.room_number} — ${segments[0].booking_reference_id} and ${segments[1].booking_reference_id} hold this room at the same time, ${formatDateTime(
+                title={`${room.room_number} - ${segments[0].booking_reference_id} and ${segments[1].booking_reference_id} hold this room at the same time, ${formatDateTime(
                   new Date(
                     Math.max(
                       new Date(segments[0].check_in).getTime(),
@@ -348,17 +333,16 @@ export function RangeOccupancyChart({
 }
 
 /**
- * The key under both availability charts. A requester sees two states and
- * the "now" marker; the desk (`detailed`) also sees the turnaround, an
- * accepted overlap and maintenance — the states only it acts on.
+ * The key under both availability charts - every state the desk acts on. It
+ * carried a `detailed` flag that hid the turnaround, an accepted overlap and
+ * maintenance from requesters (30 Sep 2026); since 7 Oct the charts
+ * themselves are the desk's, so there is nobody left to hide them from.
  */
 export function AvailabilityLegend({
-  detailed,
   showsToday,
   dayView,
   freeLabel = "Free",
 }: {
-  detailed: boolean;
   showsToday: boolean;
   dayView: boolean;
   freeLabel?: string;
@@ -366,13 +350,9 @@ export function AvailabilityLegend({
   return (
     <div className="flex flex-wrap items-center gap-4 text-xs">
       <LegendSwatch className="bg-red-500" label="● Booked" />
-      {detailed && (
-        <>
-          <LegendSwatch className="bg-turnaround" label="Turnaround (housekeeping after a stay)" />
-          <LegendSwatch className="bg-overlap" label="Overlap — two bookings hold the room at once" />
-          <LegendSwatch className="bg-maintenance" label="🔧 Out of service (maintenance)" />
-        </>
-      )}
+      <LegendSwatch className="bg-turnaround" label="Turnaround (housekeeping after a stay)" />
+      <LegendSwatch className="bg-overlap" label="Overlap - two bookings hold the room at once" />
+      <LegendSwatch className="bg-maintenance" label="🔧 Out of service (maintenance)" />
       <LegendSwatch className="border bg-background" label={freeLabel} />
       {showsToday && (
         <LegendSwatch className="bg-primary" label={dayView ? "Current hour" : "Today and the current time"} />

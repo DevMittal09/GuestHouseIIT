@@ -15,6 +15,7 @@ import type { EmailMessage } from "@/lib/mail/types";
 import type { Unit } from "@/lib/units";
 import type { AuditEvent } from "@/lib/audit";
 import type { Project } from "@/lib/projects";
+import type { AcademicRecordKind } from "@/lib/academic/types";
 import type { Tariff } from "@/lib/tariffs";
 import type { InvoiceRecord } from "@/lib/invoice";
 import type { Session } from "@/lib/sessions";
@@ -40,7 +41,7 @@ type BookingRoomRow = BookingRoom & { is_legacy: boolean };
 
 /**
  * The `booking_meals` view (migration 11): one row per booking, date and meal
- * actually asked for. Read-only — `bookings.meals` is the source of truth.
+ * actually asked for. Read-only - `bookings.meals` is the source of truth.
  */
 type BookingMealRow = {
   booking_id: string;
@@ -87,7 +88,7 @@ type SecurityAuditRow = Omit<AuditEvent, "event" | "details"> & {
 
 /**
  * `email_outbox` (migration 10). `event_key` is a plain text column rather
- * than an enum, so a new notification kind needs no migration — the union in
+ * than an enum, so a new notification kind needs no migration - the union in
  * `lib/mail/types.ts` is where it is constrained.
  */
 type EmailOutboxRow = Omit<EmailMessage, "event_key"> & { event_key: string };
@@ -103,6 +104,39 @@ type MailTemplateRow = {
   intro: string | null;
   outro: string | null;
   cc_emails: string[];
+  updated_at: string;
+};
+
+/**
+ * `academic_records` (migration 28). Flat, with every kind's fields as
+ * nullable columns - the kinds share most of them, and six tables would mean
+ * six importers for the same six CSV pastes. `kind` says which columns mean
+ * anything; the app folds a row into an `AcademicRecord` through
+ * `ACADEMIC_RECORD_FIELDS`, so a column here that no record type names (or
+ * the other way round) is a compile error rather than a field nothing fills.
+ */
+type AcademicRecordRow = {
+  id: string;
+  kind: AcademicRecordKind;
+  email: string;
+  name: string | null;
+  department: string | null;
+  phone: string | null;
+  roll_number: string | null;
+  program: string | null;
+  father_name: string | null;
+  mother_name: string | null;
+  guardian_name: string | null;
+  hostel: string | null;
+  employee_id: string | null;
+  employee_type: string | null;
+  office_number: string | null;
+  head_name: string | null;
+  head_email: string | null;
+  representative_type: string | null;
+  faculty_in_charge_email: string | null;
+  imported_by: string | null;
+  created_at: string;
   updated_at: string;
 };
 
@@ -128,7 +162,7 @@ export interface Database {
         Relationships: [];
       };
       bookings: {
-        // `assigned_room_ids` is NOT a column — it is derived from room_holds
+        // `assigned_room_ids` is NOT a column - it is derived from room_holds
         // on read (migration 3). Omitted here so a stray write cannot compile.
         Row: BookingRow;
         Insert: Insertable<
@@ -266,6 +300,18 @@ export interface Database {
         Row: Project & { created_at: string; updated_at: string };
         Insert: Insertable<Project & { created_at: string; updated_at: string }, "id" | "pi_name" | "active" | "created_at" | "updated_at">;
         Update: Partial<Project>;
+        Relationships: [];
+      };
+      /**
+       * Migration 28: the institute's records as the office pasted them in.
+       * One flat row per (kind, email), with every kind's fields as nullable
+       * columns - the app folds a row into an `AcademicRecord` and back
+       * through `ACADEMIC_RECORD_FIELDS`.
+       */
+      academic_records: {
+        Row: AcademicRecordRow;
+        Insert: Insertable<AcademicRecordRow, "id" | "created_at" | "updated_at">;
+        Update: Partial<AcademicRecordRow>;
         Relationships: [];
       };
       hostels: {

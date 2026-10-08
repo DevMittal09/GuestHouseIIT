@@ -15,7 +15,7 @@ import type { Role } from "@/lib/types";
  */
 
 describe("who books on someone's behalf", () => {
-  it("is the manager's desk only — not the developer, who has no booking types", () => {
+  it("is the manager's desk only - not the developer, who has no booking types", () => {
     expect(canBookOnBehalf("gh_manager")).toBe(true);
     expect(canBookOnBehalf("developer")).toBe(false);
     expect(bookingTypesFor("developer")).toEqual([]);

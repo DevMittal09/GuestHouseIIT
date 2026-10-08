@@ -52,7 +52,7 @@ export type OfficeRecord = {
   department: string | null;
   email: string | null;
   phone: string | null;
-  /** The Head of Department or head of the office — the office's "Copy to". */
+  /** The Head of Department or head of the office - the office's "Copy to". */
   head_name: string | null;
   head_email: string | null;
 };
@@ -60,7 +60,7 @@ export type OfficeRecord = {
 /** A student representative: a club, a fest council. */
 export type StudentRepRecord = {
   kind: "student_rep";
-  /** e.g. "Fest Council — Petrichor", as the database words it. */
+  /** e.g. "Fest Council - Petrichor", as the database words it. */
   representative_type: string | null;
   email: string | null;
   phone: string | null;
@@ -122,7 +122,28 @@ export const ACADEMIC_RECORD_FIELDS: { [K in AcademicRecordKind]: readonly Field
 };
 
 /**
- * The academic database, reduced to the one question the portal asks. Two
+ * Where a record came from. It decides the one caption the card carries: a
+ * dummy record says so, and a record the office pasted in or the institute's
+ * database returned says nothing, because it is simply the record.
+ *
+ * Per lookup, not per deployment (7 Oct 2026). It used to be the single
+ * question "is `ACADEMIC_DB_URL` set", which stopped being a fair answer the
+ * moment the office could import real records alongside the published
+ * dummies: on the same install, one person's card is their own record and
+ * the next is a sample.
+ */
+export type AcademicRecordOrigin =
+  /** The institute's academic database, over HTTP (`ACADEMIC_DB_URL`). */
+  | "database"
+  /** Pasted in by the guest house office (migration 28). */
+  | "imported"
+  /** One of the published dummy records in `lib/academic/mock-source.ts`. */
+  | "sample";
+
+export type AcademicFind = { record: AcademicRecord; origin: AcademicRecordOrigin };
+
+/**
+ * The academic database, reduced to the one question the portal asks. Three
  * implementations, picked from the environment by `getAcademicSource()` the
  * way `lib/store/index.ts` picks a data store and `lib/ldap/` a directory.
  */
@@ -131,13 +152,13 @@ export interface AcademicSource {
   readonly description: string;
   /**
    * The record of this kind for this institute email (already lowercased and
-   * trimmed), or `null` when the database has none. Throws
-   * `AcademicSourceUnavailableError` when the database cannot answer.
+   * trimmed), with where it came from, or `null` when nothing has one.
+   * Throws `AcademicSourceUnavailableError` when the database cannot answer.
    */
-  find(kind: AcademicRecordKind, email: string): Promise<AcademicRecord | null>;
+  find(kind: AcademicRecordKind, email: string): Promise<AcademicFind | null>;
 }
 
-/** The academic database could not be asked — down, misconfigured, timed out, or answered nonsense. */
+/** The academic database could not be asked - down, misconfigured, timed out, or answered nonsense. */
 export class AcademicSourceUnavailableError extends Error {
   constructor(cause: unknown) {
     super(`Academic database unavailable: ${cause instanceof Error ? cause.message : String(cause)}`);

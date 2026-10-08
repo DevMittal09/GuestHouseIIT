@@ -16,7 +16,7 @@ import {
  *
  *   the club's own account is told who books for it and gets no form → a
  *   professor named Faculty Advisor in the console books from their own
- *   faculty login, choosing "Faculty Advisor — Petrichor" under Booking as →
+ *   faculty login, choosing "Faculty Advisor - Petrichor" under Booking as →
  *   Copy to starts with the council secretary's mailbox, and they add another
  *   → it needs no forwarding and is with the Guest House Manager → it is on
  *   the professor's list, marked as the club's.
@@ -38,8 +38,8 @@ test("a club's Faculty Advisor books for it from their faculty login; the club's
   await page.goto("/book");
   const bookingAs = page.getByRole("navigation", { name: "Booking as" });
   await expect(bookingAs.getByRole("link", { name: /Yourself/ })).toHaveAttribute("aria-current", "page");
-  await expect(bookingAs.getByRole("link", { name: "Faculty Advisor — Cultural Affairs Council" })).toBeVisible();
-  await bookingAs.getByRole("link", { name: "Faculty Advisor — Petrichor Fest Council" }).click();
+  await expect(bookingAs.getByRole("link", { name: "Faculty Advisor - Cultural Affairs Council" })).toBeVisible();
+  await bookingAs.getByRole("link", { name: "Faculty Advisor - Petrichor Fest Council" }).click();
   await expect(page.getByRole("heading", { name: /New Booking for Petrichor/ })).toBeVisible();
 
   // The council secretary is copied by default; more can be added.

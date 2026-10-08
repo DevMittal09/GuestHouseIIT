@@ -5,7 +5,7 @@ import type { Profile } from "./types";
 import type { Unit } from "./units";
 
 /**
- * The clubs a signed-in person may book for — read once per request, for the
+ * The clubs a signed-in person may book for - read once per request, for the
  * nav, `/book`, the dashboard and `createBooking` alike. Never throws: with
  * the profiles or units unreadable, nobody is anybody's faculty in-charge,
  * which fails closed.

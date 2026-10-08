@@ -1,13 +1,14 @@
 import type { Profile } from "@/lib/types";
 import { academicRecordKindFor } from "./fields";
 import { HttpAcademicSource, type AcademicDbConfig } from "./http-source";
-import { MockAcademicSource } from "./mock-source";
-import type { AcademicRecord, AcademicSource } from "./types";
+import { StoreAcademicSource } from "./store-source";
+import type { AcademicRecord, AcademicRecordOrigin, AcademicSource } from "./types";
 
 export {
   AcademicSourceUnavailableError,
   type AcademicRecord,
   type AcademicRecordKind,
+  type AcademicRecordOrigin,
   type AcademicSource,
 } from "./types";
 
@@ -15,21 +16,22 @@ export {
  * Picks the academic database from the environment, like `getStore()`,
  * `getMailer()` and `getDirectory()`:
  *
- * | Condition             | Source                | Records come from               |
- * | --------------------- | --------------------- | ------------------------------- |
- * | `ACADEMIC_DB_URL` set | `HttpAcademicSource`  | the institute's academic database |
- * | otherwise             | `MockAcademicSource`  | `lib/academic/mock-source.ts`   |
+ * | Condition             | Source                 | Records come from                 |
+ * | --------------------- | ---------------------- | --------------------------------- |
+ * | `ACADEMIC_DB_URL` set | `HttpAcademicSource`   | the institute's academic database  |
+ * | otherwise             | `StoreAcademicSource`  | the portal's own `academic_records`, then the dummy records |
+ *
+ * The middle row is new (7 Oct 2026, migration 28): the office asked to keep
+ * the records themselves, because the institute's database does not exist yet
+ * and the booking form needs a student's parents now. The dummy records stay
+ * behind the imported ones, so a fresh install and the demo personas work
+ * with nothing imported.
  *
  * `.env.example` documents the variables.
  */
 export function getAcademicSource(): AcademicSource {
   const config = academicDbConfig();
-  return config ? new HttpAcademicSource(config) : new MockAcademicSource();
-}
-
-/** True while the records shown are the dummy ones — the card says so. */
-export function isMockAcademicSource(): boolean {
-  return !process.env.ACADEMIC_DB_URL?.trim();
+  return config ? new HttpAcademicSource(config) : new StoreAcademicSource();
 }
 
 function academicDbConfig(): AcademicDbConfig | null {
@@ -39,7 +41,7 @@ function academicDbConfig(): AcademicDbConfig | null {
 }
 
 export type AcademicLookup =
-  | { status: "found"; record: AcademicRecord }
+  | { status: "found"; record: AcademicRecord; origin: AcademicRecordOrigin }
   /** The database answered and has no record for this email. */
   | { status: "not_found" }
   /** The database could not be asked. Logged; the page falls back to the portal profile. */
@@ -53,13 +55,31 @@ export type AcademicLookup =
  * would otherwise ask the academic database twelve times a minute. An outage
  * is kept for less, so the card recovers soon after the database does.
  *
- * In-process: each server instance keeps its own, which is fine for a cache —
+ * In-process: each server instance keeps its own, which is fine for a cache -
  * nothing depends on two instances agreeing.
  */
 const ANSWER_TTL_MS = 10 * 60_000;
 const OUTAGE_TTL_MS = 60_000;
 const MAX_CACHED = 5000;
 const cache = new Map<string, { expires: number; lookup: AcademicLookup }>();
+
+/**
+ * Forget every cached answer.
+ *
+ * Called whenever the office imports, edits or clears a record (7 Oct 2026):
+ * without it, a record pasted in reads back as the *old* one for up to ten
+ * minutes - and since 7 Oct that is not merely a stale card but a booking
+ * form locking a student's father to a name the office has just corrected.
+ *
+ * It clears the lot rather than one key, because an import is hundreds of
+ * rows at once and the cache is small. On a deployment running more than one
+ * server instance, each has its own cache: the one that served the import
+ * forgets immediately, and the others within `ANSWER_TTL_MS`. That is the
+ * same bound as before and is why the TTL is ten minutes rather than hours.
+ */
+export function forgetAcademicRecords(): void {
+  cache.clear();
+}
 
 /**
  * This person's academic record. Never throws: a missing or unreachable
@@ -77,8 +97,10 @@ export async function academicRecordFor(profile: Profile): Promise<AcademicLooku
 
   let lookup: AcademicLookup;
   try {
-    const record = await getAcademicSource().find(kind, email);
-    lookup = record ? { status: "found", record } : { status: "not_found" };
+    const found = await getAcademicSource().find(kind, email);
+    lookup = found
+      ? { status: "found", record: found.record, origin: found.origin }
+      : { status: "not_found" };
   } catch (e) {
     // The kind, not the email: the log should not become a list of who booked.
     console.error(`[academic] ${kind} lookup failed:`, e instanceof Error ? e.message : e);

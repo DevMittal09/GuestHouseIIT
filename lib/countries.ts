@@ -6,7 +6,7 @@
  * visiting academics from anywhere, and a partial list turns "my country is
  * missing" into a booking nobody can submit. Codes are ISO 3166-1 alpha-2 and
  * names are the English short names, stored as one block so the file stays
- * readable — the alternative, `Intl.DisplayNames`, depends on the runtime's
+ * readable - the alternative, `Intl.DisplayNames`, depends on the runtime's
  * ICU data and would let the server and the browser disagree about a name the
  * server then validates.
  *

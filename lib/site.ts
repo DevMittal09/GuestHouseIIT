@@ -4,7 +4,7 @@
  * Everything the office may need to change without touching a component lives
  * here: the login domain, the guidelines PDF, contact details, the map and the
  * photographs. Anything marked TODO is a placeholder still to be confirmed with
- * the guest house office — grep for "TODO(site)" to find them all.
+ * the guest house office - grep for "TODO(site)" to find them all.
  */
 
 /**
@@ -23,7 +23,7 @@ export function isInstituteEmail(email: string): boolean {
   return host === LOGIN_DOMAIN || host.endsWith(`.${LOGIN_DOMAIN}`);
 }
 
-export const INSTITUTE_EMAIL_ERROR = `Use your @${LOGIN_DOMAIN} email address — personal email accounts cannot be used to book.`;
+export const INSTITUTE_EMAIL_ERROR = `Use your @${LOGIN_DOMAIN} email address - personal email accounts cannot be used to book.`;
 
 /**
  * Where to go after a successful sign-in, if the page asked for somewhere
@@ -48,13 +48,6 @@ export const GUIDELINES_PROVISIONAL = true;
 
 export const INSTITUTE_WEBSITE = "https://iitpkd.ac.in";
 
-/**
- * The institute's Meeting Room Booking System — lecture halls and meeting
- * rooms, which this portal does not book. Linked from the footer so someone
- * who came here for a seminar room finds the right door.
- */
-export const MRBS_URL = "https://mrbs.iitpkd.ac.in";
-
 /** "How to reach" on the institute's site: trains, buses and the airport. */
 export const HOW_TO_REACH_URL = "https://iitpkd.ac.in/how-reach";
 
@@ -65,7 +58,6 @@ export const HOW_TO_REACH_URL = "https://iitpkd.ac.in/how-reach";
  */
 export const SITE_LINKS = [
   { label: "IIT Palakkad website", href: INSTITUTE_WEBSITE },
-  { label: "Room Booking System (MRBS)", href: MRBS_URL },
   { label: "Guest house on iitpkd.ac.in", href: "https://iitpkd.ac.in/guest-house-hamsanandi" },
   { label: "How to reach the campus", href: HOW_TO_REACH_URL },
   { label: "Telephone directory", href: "https://iitpkd.ac.in/TelephoneDirectory" },
@@ -73,7 +65,7 @@ export const SITE_LINKS = [
 
 /**
  * The guest house office, as printed at the foot of the office's own invoice
- * template (public/GHM_Invoice.docx, Sep 2026) — the phone, email and address
+ * template (public/GHM_Invoice.docx, Sep 2026) - the phone, email and address
  * the office itself hands to guests. (The number on the iitpkd.ac.in guest
  * house page, +91 88483 94440, was used before.) **The one source in code**: the
  * portal's "Facing trouble booking?" line (`lib/policy.ts`) and the invoice's
@@ -86,11 +78,11 @@ export const GUEST_HOUSE_CONTACT = {
   phone: "+91 491 209 2016",
   phoneHref: "tel:+914912092016",
   email: "ghm@iitpkd.ac.in",
-  address: ["Guest House, Indian Institute of Technology Palakkad", "Kanjikode West | Palakkad", "Kerala | Pin: 678623"],
+  address: ["Guest House, Indian Institute of Technology Palakkad", "Kanjikode West | Palakkad", "Keralam | Pin: 678623"],
 } as const;
 
 /**
- * Where each guest house is, keyed by `guestHouseSlug(name)` — guest houses
+ * Where each guest house is, keyed by `guestHouseSlug(name)` - guest houses
  * are data, so a new one gets a pin by adding a line here, and one without a
  * line is simply not on the map. `query` is the
  * place's own name on Google Maps: searched together with its coordinates it
@@ -186,7 +178,7 @@ export type SitePhoto = { src: string | null; alt: string };
  * The photographs supplied by the guest house office (`Images/` in the repo
  * root, 6000×4000 camera originals, not committed). The site serves 2000px
  * copies from `public/site/photos/`, made with EXIF orientation applied and
- * metadata stripped — see .memories/16-public-site-and-ui.md for the recipe when adding
+ * metadata stripped - see .memories/16-public-site-and-ui.md for the recipe when adding
  * more.
  */
 function photo(file: string, alt: string): SitePhoto {
@@ -211,7 +203,7 @@ export const PHOTOS = {
 } as const;
 
 export const HOME_PHOTOS = {
-  /** Beside the headline — contained in the layout, never full-width. */
+  /** Beside the headline - contained in the layout, never full-width. */
   hero: PHOTOS.courtyard,
   /** The row of thumbnails above "View all photographs". */
   preview: [PHOTOS.bedroom, PHOTOS.livingDining, PHOTOS.bathroom, PHOTOS.meetingHall],

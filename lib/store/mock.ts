@@ -25,6 +25,8 @@ import { deriveFromRooms } from "./derive";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
+import type { NewAcademicRecordInput, StoredAcademicRecord } from "@/lib/academic/stored";
+import type { AcademicRecord, AcademicRecordKind } from "@/lib/academic/types";
 import type {
   EmailMessage,
   EmailOutboxFilter,
@@ -122,6 +124,8 @@ interface Db {
   mail_templates?: MailTemplateOverride[];
   /** Departments, clubs, councils and offices, and who heads each (migration 15). */
   units?: Unit[];
+  /** Migration 28: the institute's records as the office pasted them in. */
+  academic_records?: StoredAcademicRecord[];
 }
 
 // `MOCK_DB_PATH` lets the test suite run against a throwaway file instead of
@@ -221,7 +225,7 @@ function loadDb(): Db {
         dirty = true;
       }
       if (b.pets_policy_acknowledged === undefined) {
-        // False means "never asked", not "refused" — the question did not
+        // False means "never asked", not "refused" - the question did not
         // exist when these were submitted.
         b.pets_policy_acknowledged = false;
         b.pets_policy_acknowledged_at = null;
@@ -275,7 +279,7 @@ function loadDb(): Db {
     }
     // Migration 11's backfill: one synthetic room per booking, holding every
     // guest it already had. Those rooms can hold more than the per-room limit
-    // allows — the limit is enforced when a booking is submitted, so a stay
+    // allows - the limit is enforced when a booking is submitted, so a stay
     // the office already honoured is never retroactively invalid.
     if (!db.booking_rooms) {
       const bookingRooms: BookingRoom[] = [];
@@ -473,15 +477,15 @@ function currentBuffer(db: Db): number {
   return bufferMs(parseRuleGroup("booking", db.app_settings?.["rules.booking"]).buffer_minutes);
 }
 
-/** A stored hold's guard — `room_hold_guard()` from migration 17, in JS. */
+/** A stored hold's guard - `room_hold_guard()` from migration 17, in JS. */
 function guardOf(hold: RoomHold, buffer: number) {
   return holdGuard({ from: hold.check_in, to: hold.check_out }, Boolean(hold.override_by), buffer);
 }
 
 /**
  * The mock's stand-in for the `room_holds_no_overlap_guard` exclusion
- * constraint: every hold is compared on its *guard* — the stay padded by the
- * turnaround buffer, or shrunk for a turnover the manager accepted — exactly
+ * constraint: every hold is compared on its *guard* - the stay padded by the
+ * turnaround buffer, or shrunk for a turnover the manager accepted - exactly
  * as Postgres does (`lib/turnover.ts` `holdGuard`). Node is single-threaded
  * and `saveDb` writes synchronously, so a check immediately before the write
  * is genuinely atomic here.
@@ -503,7 +507,7 @@ function assertNoClash(
   if (clash) {
     const room = db.rooms.find((r) => r.id === clash.room_id);
     throw new RoomClashError(
-      `Room ${room?.room_number ?? clash.room_id} was just taken for these dates — refresh the grid`
+      `Room ${room?.room_number ?? clash.room_id} was just taken for these dates - refresh the grid`
     );
   }
   // `room_holds_respect_blocks`: no stay in a room out of service.
@@ -667,7 +671,7 @@ export class MockStore implements DataStore {
       .sort((a, c) => a.room_index - c.room_index);
     const held = db.room_holds.filter((h) => h.booking_id === b.id).map((h) => h.room_id);
     // Once the guest has left, the hold is gone but the stay still has to be
-    // invoiced — so a finished stay reads its rooms off the cards it was
+    // invoiced - so a finished stay reads its rooms off the cards it was
     // allocated. Nothing is held either way, which is what occupancy asks.
     const assignedRoomIds =
       held.length > 0 || b.status !== "VACATED"
@@ -692,7 +696,7 @@ export class MockStore implements DataStore {
       assigned_room_ids: assignedRoomIds,
       requester: db.profiles.find((p) => p.id === b.user_id)!,
       guest_house: db.guest_houses.find((g) => g.id === b.guest_house_id)!,
-      // Room order first, then any guest whose room card is missing — a
+      // Room order first, then any guest whose room card is missing - a
       // hand-edited mock database should still show its guests.
       guests: [...rooms.flatMap((r) => r.guests), ...guests.filter((g) => !g.booking_room_id)],
       rooms,
@@ -715,6 +719,7 @@ export class MockStore implements DataStore {
     const db = loadDb();
     return db.bookings
       .filter((b) => {
+        if (filter.ids && !filter.ids.includes(b.id)) return false;
         if (filter.status && b.status !== filter.status) return false;
         if (filter.guestHouseId && b.guest_house_id !== filter.guestHouseId) return false;
         if (filter.userRole && b.user_role !== filter.userRole) return false;
@@ -738,7 +743,7 @@ export class MockStore implements DataStore {
 
   async searchBookings(criteria: BookingSearchCriteria): Promise<BookingSearchResult> {
     const db = loadDb();
-    // The whole file is in memory already, so there is nothing to push down —
+    // The whole file is in memory already, so there is nothing to push down -
     // hydrate everything and let the shared matcher do the work.
     const candidates = db.bookings.map((b) => this.hydrate(db, b));
     return runBookingSearch(candidates, criteria);
@@ -805,7 +810,7 @@ export class MockStore implements DataStore {
     const checkOut = patch.check_out ?? b.check_out;
     const movingDates = checkIn !== b.check_in || checkOut !== b.check_out;
     if (movingDates) {
-      // The holds carry the period, so moving the stay moves them — and the
+      // The holds carry the period, so moving the stay moves them - and the
       // move has to be refused if the rooms are not free over the new dates.
       // Checked before anything is written, so a clash leaves the booking as
       // it was.
@@ -868,13 +873,13 @@ export class MockStore implements DataStore {
     excludeBookingId?: string
   ): Promise<string[]> {
     const db = loadDb();
-    // Straight off the holds — no status filtering needed, because a hold row
+    // Straight off the holds - no status filtering needed, because a hold row
     // only exists while the booking is actually holding the room.
     const roomsHere = new Set(
       db.rooms.filter((r) => r.guest_house_id === guestHouseId).map((r) => r.id)
     );
-    // A room is taken when its guard meets the requested stay's guard — the
-    // stay plus the turnaround buffer — which is what the constraint would
+    // A room is taken when its guard meets the requested stay's guard - the
+    // stay plus the turnaround buffer - which is what the constraint would
     // compare if the room were allocated.
     const buffer = currentBuffer(db);
     const wanted = holdGuard({ from: checkIn, to: checkOut }, false, buffer);
@@ -1032,7 +1037,7 @@ export class MockStore implements DataStore {
   async deleteProfile(id: string): Promise<void> {
     const db = loadDb();
     if (db.bookings.some((b) => b.user_id === id)) {
-      throw new Error("This user has bookings — delete or reassign those first");
+      throw new Error("This user has bookings - delete or reassign those first");
     }
     db.profiles = db.profiles.filter((p) => p.id !== id);
     saveDb(db);
@@ -1100,7 +1105,7 @@ export class MockStore implements DataStore {
   async deleteGuestHouse(id: string): Promise<void> {
     const db = loadDb();
     if (db.bookings.some((b) => b.guest_house_id === id)) {
-      throw new Error("Bookings reference this guest house — delete those first");
+      throw new Error("Bookings reference this guest house - delete those first");
     }
     db.guest_houses = db.guest_houses.filter((g) => g.id !== id);
     db.rooms = db.rooms.filter((r) => r.guest_house_id !== id);
@@ -1154,7 +1159,7 @@ export class MockStore implements DataStore {
     const room = db.rooms.find((r) => r.id === id);
     if (!room) return;
     if (db.room_holds.some((h) => h.room_id === id)) {
-      throw new Error(`Room ${room.room_number} is assigned to a booking — deactivate it instead`);
+      throw new Error(`Room ${room.room_number} is assigned to a booking - deactivate it instead`);
     }
     db.rooms = db.rooms.filter((r) => r.id !== id);
     MockStore.recountRooms(db, room.guest_house_id);
@@ -1227,7 +1232,7 @@ export class MockStore implements DataStore {
     const inUse = db.profiles.filter((p) => p.hostel_name === name);
     if (inUse.length > 0) {
       throw new Error(
-        `${inUse.length} account${inUse.length === 1 ? "" : "s"} still name ${name} — move ${inUse.length === 1 ? "it" : "them"} first`
+        `${inUse.length} account${inUse.length === 1 ? "" : "s"} still name ${name} - move ${inUse.length === 1 ? "it" : "them"} first`
       );
     }
     db.hostels = (db.hostels ?? []).filter((h) => h !== name);
@@ -1272,6 +1277,67 @@ export class MockStore implements DataStore {
     saveDb(db);
   }
 
+  // ---- academic records (migration 28) --------------------------------
+
+  async findAcademicRecord(
+    kind: AcademicRecordKind,
+    email: string
+  ): Promise<AcademicRecord | null> {
+    const key = email.trim().toLowerCase();
+    // The unique index on (kind, lower(email)), emulated.
+    const row = (loadDb().academic_records ?? []).find(
+      (r) => r.record.kind === kind && r.email.trim().toLowerCase() === key
+    );
+    return row ? row.record : null;
+  }
+
+  async listAcademicRecords(kind?: AcademicRecordKind): Promise<StoredAcademicRecord[]> {
+    return (loadDb().academic_records ?? [])
+      .filter((r) => !kind || r.record.kind === kind)
+      .sort((a, b) => a.email.localeCompare(b.email));
+  }
+
+  async saveAcademicRecords(
+    added: NewAcademicRecordInput[],
+    updated: { id: string; input: NewAcademicRecordInput }[]
+  ): Promise<void> {
+    const db = loadDb();
+    const rows = (db.academic_records ??= []);
+    const now = new Date().toISOString();
+    const taken = new Set(rows.map((r) => `${r.record.kind}|${r.email.trim().toLowerCase()}`));
+    for (const input of added) {
+      const key = `${input.record.kind}|${input.email.trim().toLowerCase()}`;
+      if (taken.has(key)) throw new Error(`A ${input.record.kind} record for ${input.email} is already stored`);
+      taken.add(key);
+      rows.push({ ...input, id: randomUUID(), created_at: now, updated_at: now });
+    }
+    for (const { id, input } of updated) {
+      const row = rows.find((r) => r.id === id);
+      if (!row) throw new Error("That record is no longer stored");
+      Object.assign(row, input, { updated_at: now });
+    }
+    saveDb(db);
+  }
+
+  async deleteAcademicRecord(id: string): Promise<void> {
+    const db = loadDb();
+    const rows = db.academic_records ?? [];
+    const at = rows.findIndex((r) => r.id === id);
+    if (at < 0) throw new Error("That record is already gone");
+    rows.splice(at, 1);
+    db.academic_records = rows;
+    saveDb(db);
+  }
+
+  async deleteAcademicRecords(kind?: AcademicRecordKind): Promise<number> {
+    const db = loadDb();
+    const rows = db.academic_records ?? [];
+    const keep = rows.filter((r) => kind && r.record.kind !== kind);
+    db.academic_records = keep;
+    saveDb(db);
+    return rows.length - keep.length;
+  }
+
   async updateProject(id: string, patch: Partial<NewProjectInput>): Promise<void> {
     const db = loadDb();
     const project = (db.projects ?? []).find((p) => p.id === id);
@@ -1292,7 +1358,7 @@ export class MockStore implements DataStore {
     const db = loadDb();
     // `on delete restrict`, as the foreign key does.
     if (db.bookings.some((b) => b.project_id === id)) {
-      throw new Error("A booking is debited to this project — deactivate it instead");
+      throw new Error("A booking is debited to this project - deactivate it instead");
     }
     db.projects = (db.projects ?? []).filter((p) => p.id !== id);
     saveDb(db);
@@ -1527,7 +1593,7 @@ export class MockStore implements DataStore {
     if (clash) {
       const ref = db.bookings.find((b) => b.id === clash.booking_id)?.booking_reference_id ?? "a booking";
       throw new RoomClashError(
-        `Room ${room.room_number} is held for ${ref} during that time — move that stay first, or block a different period.`
+        `Room ${room.room_number} is held for ${ref} during that time - move that stay first, or block a different period.`
       );
     }
     const block: RoomBlock = { ...input, id: randomUUID(), created_at: new Date().toISOString() };
@@ -1601,6 +1667,7 @@ export class MockStore implements DataStore {
         (i) =>
           (!filter.bookingId || i.booking_id === filter.bookingId) &&
           (!filter.bookingIds || filter.bookingIds.includes(i.booking_id)) &&
+          (!filter.statuses || filter.statuses.includes(i.status)) &&
           (!(filter.issuedFrom || filter.issuedTo) || within(i.issued_at, filter.issuedFrom, filter.issuedTo)) &&
           (!(filter.paidFrom || filter.paidTo) || within(i.paid_at, filter.paidFrom, filter.paidTo))
       )
@@ -1621,7 +1688,7 @@ export class MockStore implements DataStore {
     const invoices = (db.invoices ??= []);
     const live = invoices.find((i) => i.booking_id === bookingId && i.status !== "cancelled");
     if (live && live.status !== "draft") {
-      throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} — cancel it first to issue a corrected one.`);
+      throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} - cancel it first to issue a corrected one.`);
     }
     const now = new Date().toISOString();
     const draft = live ?? blankInvoice(bookingId, userId, now);
@@ -1642,7 +1709,7 @@ export class MockStore implements DataStore {
     const counters = (db.invoice_counters ??= {});
     const live = invoices.find((i) => i.booking_id === input.bookingId && i.status !== "cancelled");
     if (live && live.status !== "draft") {
-      throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} — cancel it first to issue a corrected one.`);
+      throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} - cancel it first to issue a corrected one.`);
     }
     const seq = (counters[input.fy] ?? 0) + 1;
     counters[input.fy] = seq;
@@ -1718,7 +1785,7 @@ export class MockStore implements DataStore {
     const issued = (db.invoices ?? []).find((i) => i.booking_id === id && i.status !== "draft");
     if (issued) {
       throw new InvoiceStateError(
-        `Invoice ${issued.invoice_number} was issued for this booking, so it cannot be deleted — cancel the booking instead.`
+        `Invoice ${issued.invoice_number} was issued for this booking, so it cannot be deleted - cancel the booking instead.`
       );
     }
     db.invoices = (db.invoices ?? []).filter((i) => i.booking_id !== id);
@@ -1771,7 +1838,7 @@ export class MockStore implements DataStore {
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
     // Single-threaded and `saveDb` is synchronous, so selecting and marking
-    // here is genuinely atomic — the same reason `assertNoClash` is safe.
+    // here is genuinely atomic - the same reason `assertNoClash` is safe.
     const claimed = outbox
       .filter((m) => {
         if (new Date(m.scheduled_for).getTime() > now) return false;
@@ -1878,7 +1945,7 @@ function makeReference(): string {
 function assertHostelExists(db: Db, hostel: string | null | undefined): void {
   if (!hostel) return;
   if (!(db.hostels ?? []).includes(hostel)) {
-    throw new Error(`${hostel} is not a hostel on the list — add it in Settings first`);
+    throw new Error(`${hostel} is not a hostel on the list - add it in Settings first`);
   }
 }
 

@@ -8,6 +8,7 @@ import {
   raisedByFacultyInCharge,
 } from "@/lib/club-booking";
 import {
+  DEBIT_RULES_REVISION,
   DEFAULT_DEBIT_RULES,
   debitHeadsByType,
   describeDebit,
@@ -74,7 +75,7 @@ const errors = (result: ReturnType<typeof parse>) =>
 // ------------------------------------------------------------- guest fields
 
 describe("guest details: faculty/staff need name and gender, official needs gender", () => {
-  it("faculty and staff: name and gender are enough — age, relationship and ID are optional", () => {
+  it("faculty and staff: name and gender are enough - age, relationship and ID are optional", () => {
     const result = parse("employee", payload([{ name: "Dr. A. Visitor", gender: "male", citizenship: "indian" }]));
     expect(errors(result)).toEqual([]);
     // No age is an adult, not an infant.
@@ -95,7 +96,7 @@ describe("guest details: faculty/staff need name and gender, official needs gend
     expect(messages).toEqual(["rooms.0.guests.0.gender: Gender is required"]);
   });
 
-  it("a blank age is no longer silently 0 — an infant — where age is required", () => {
+  it("a blank age is no longer silently 0 - an infant - where age is required", () => {
     const studentGuest = { name: "Mother", age: "", gender: "female", relationship: "Mother", id_number: "1234 5678 9012", citizenship: "indian" };
     const result = bookingPayloadSchema(config("student"), { mealsAvailable: false }).safeParse(
       payload([studentGuest], { booking_type: "personal", debit_head: "personal_funds" })
@@ -165,7 +166,7 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
     // The project itself is typed into `debit_details` since 1 Oct 2026, and
     // required there, so every Project payload here carries it.
     const asProject = (patch: Record<string, unknown> = {}) =>
-      payload(guest1, { debit_head: "project_grant", debit_details: "SP/2025/017 — Storage", ...patch });
+      payload(guest1, { debit_head: "project_grant", debit_details: "SP/2025/017 - Storage", ...patch });
     const withProject = parse("employee", asProject({ debit_subhead: " Travel " }));
     expect(withProject.success && withProject.data.debit_subhead).toBe("Travel");
     expect(errors(parse("employee", payload(guest1, { debit_subhead: "Travel" })))).toEqual([
@@ -175,13 +176,14 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
     expect(parse("employee", asProject()).success).toBe(true);
   });
 
-  // Widened on 25 Sep 2026 to everyone except students — see fifth-round.test.ts.
-  it("offers Special Funds to everyone except students", () => {
+  // Widened on 25 Sep 2026 to everyone except students - see fifth-round.test.ts
+  // - and narrowed again on 7 Oct, when personal bookings stopped being asked.
+  it("offers Special Funds to everyone except students and personal bookings", () => {
     const priya = { staff_category: "faculty" as const, unit_id: null };
     const room = debitHeadsByType("employee", ["official", "personal"], priya, [], DEFAULT_DEBIT_RULES, "room");
     expect(room.official).toContain("special_budget");
-    expect(room.personal).toEqual(["personal_funds", "special_budget"]);
-    for (const category of ["faculty", "staff", "officer_office", "department_office", "club", "manager", "personal", "alumni", "iar_student_cell"] as const) {
+    expect(room.personal).toEqual(["personal_funds"]);
+    for (const category of ["faculty", "staff", "officer_office", "department_office", "club", "manager", "alumni", "iar_student_cell"] as const) {
       expect(DEFAULT_DEBIT_RULES.room[category]).toContain("special_budget");
     }
     expect(DEFAULT_DEBIT_RULES.room.student).not.toContain("special_budget");
@@ -205,17 +207,20 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
     const old = { room: { ...DEFAULT_DEBIT_RULES.room, staff: ["department_budget"] }, dining: DEFAULT_DEBIT_RULES.dining };
     const upgraded = parseRuleGroup("debit", old);
     expect(upgraded.room.staff).toEqual(["department_budget", "special_budget"]);
-    expect(upgraded.revision).toBe(4);
+    expect(upgraded.revision).toBe(DEBIT_RULES_REVISION);
     // Saved since: the office's untick stands.
     const unticked = parseRuleGroup("debit", { ...upgraded, room: { ...upgraded.room, staff: ["department_budget"] } });
     expect(unticked.room.staff).toEqual(["department_budget"]);
-    expect(upgradeDebitRules({ revision: 4, room: { staff: [] } })).toEqual({ revision: 4, room: { staff: [] } });
+    expect(upgradeDebitRules({ revision: DEBIT_RULES_REVISION, room: { staff: [] } })).toEqual({
+      revision: DEBIT_RULES_REVISION,
+      room: { staff: [] },
+    });
   });
 
   it("describes the head with its sub-head, the same words everywhere", () => {
     expect(
-      describeDebit({ debit_head: "project_grant", debit_details: "SP/2025/017 — Storage", debit_subhead: "Travel" })
-    ).toBe("Project Grant — SP/2025/017 — Storage · Sub-head: Travel");
+      describeDebit({ debit_head: "project_grant", debit_details: "SP/2025/017 - Storage", debit_subhead: "Travel" })
+    ).toBe("Project Grant - SP/2025/017 - Storage · Sub-head: Travel");
     expect(describeDebit({ debit_head: "special_budget", debit_details: null })).toBe("Special Funds");
   });
 });
@@ -237,7 +242,7 @@ describe("clubs are booked by their Faculty Advisor", () => {
   const hodMusic = profile({ id: "hod-music", role: "employee" });
   const everyone: Profile[] = [dance, music, fa, drMusic, secretary, hodMusic];
 
-  it("finds the Faculty Advisor named in the console — the club's own, else its council's; never the student secretary", () => {
+  it("finds the Faculty Advisor named in the console - the club's own, else its council's; never the student secretary", () => {
     expect(facultyInChargeOf(dance, everyone, units).map((p) => p.id)).toEqual(["fa-dance"]);
     expect(facultyInChargeOf(music, everyone, units).map((p) => p.id)).toEqual(["dr-music"]);
     expect(clubsBookableBy(secretary, everyone, units)).toEqual([]);
@@ -254,7 +259,7 @@ describe("clubs are booked by their Faculty Advisor", () => {
     expect(mustBookThroughFacultyInCharge("employee")).toBe(false);
   });
 
-  it("goes straight to the Guest House Manager when the advisor raised it — even where the club has an HOD", () => {
+  it("goes straight to the Guest House Manager when the advisor raised it - even where the club has an HOD", () => {
     expect(initialStatusFor("club", "room", { bookingType: "official", raisedByFacultyInCharge: true })).toBe("PENDING_GH_MANAGER");
     expect(
       initialStatusFor("club", "room", { bookingType: "official", hasHodApprover: true, raisedByFacultyInCharge: true })
@@ -320,7 +325,7 @@ describe("invoices", () => {
     expect(labels).toContain("Meal Date(s): ");
     // DD/MM/YYYY everywhere since 1 Oct 2026.
     expect(describeMealDates(doc)).toBe("20/09/2026 – 21/09/2026");
-    // Renders — the room table is left out rather than drawn empty.
+    // Renders - the room table is left out rather than drawn empty.
     expect(renderInvoicePdf(doc).byteLength).toBeGreaterThan(1000);
   });
 
@@ -337,7 +342,7 @@ describe("invoices", () => {
     expect(plain.some((l) => l.startsWith("Project"))).toBe(false);
     const project = invoiceFacts(
       buildInvoiceDocument(
-        stay({ debit_head: "project_grant", debit_details: "SP/2025/017 — Storage (Dr. A)", debit_subhead: "Travel" }),
+        stay({ debit_head: "project_grant", debit_details: "SP/2025/017 - Storage (Dr. A)", debit_subhead: "Travel" }),
         CTX
       )
     ).left;
@@ -394,7 +399,7 @@ function input(patch: Partial<NewBookingInput> = {}): NewBookingInput {
     booking_type: "official",
     service_type: "room",
     debit_head: "project_grant",
-    debit_details: "SP/2025/017 — Storage",
+    debit_details: "SP/2025/017 - Storage",
     debit_document_url: null,
     meal_preference: null,
     meal_diet_counts: null,

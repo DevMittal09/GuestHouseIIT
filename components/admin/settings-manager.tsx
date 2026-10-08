@@ -44,7 +44,7 @@ type Result = { ok: boolean; error?: string };
  * a deploy.
  *
  * Every save goes through a confirmation that lists exactly what will change,
- * and the server refuses — naming the bookings — any change that would break
+ * and the server refuses - naming the bookings - any change that would break
  * one already made. Each save is recorded in the security audit log.
  */
 export function SettingsManager({
@@ -70,7 +70,7 @@ export function SettingsManager({
 
       <SettingCard
         title="Departments, clubs and offices"
-        description="Departments, clubs, councils and offices, the HOD or head of each, and whether an office is an officer office (Director, Registrar, Deans — booked against the Institute Grant) or a department office (booked against its Department)."
+        description="Departments, clubs, councils and offices, the HOD or head of each, and whether an office is an officer office (Director, Registrar, Deans - booked against the Institute Grant) or a department office (booked against its Department)."
       >
         <p className="text-sm">
           {unitCount} unit{unitCount === 1 ? "" : "s"} on record.{" "}
@@ -240,7 +240,7 @@ function WhitelistSection({ emails }: { emails: SettingsConsoleData["officialEma
       <ul className="divide-y rounded-md border">
         {emails.length === 0 && (
           <li className="p-3 text-sm text-muted-foreground">
-            Nobody — no account can submit an official booking.
+            Nobody - no account can submit an official booking.
           </li>
         )}
         {emails.map((e) => (
@@ -248,7 +248,7 @@ function WhitelistSection({ emails }: { emails: SettingsConsoleData["officialEma
             <span className="min-w-0 break-all">
               <span className="font-medium">{e.email}</span>
               <span className="text-muted-foreground">
-                {e.account ? ` — ${e.account}` : " — no account yet"}
+                {e.account ? ` - ${e.account}` : " - no account yet"}
               </span>
             </span>
             <Button size="sm" variant="outline" disabled={isPending} onClick={() => setRemoving(e.email)}>
@@ -345,7 +345,7 @@ function HostelsSection({ hostels }: { hostels: SettingsConsoleData["hostels"] }
                   <span className="font-medium">{h.name}</span>
                   <span className="text-muted-foreground">
                     {" "}
-                    — {h.accounts} account{h.accounts === 1 ? "" : "s"}
+                    - {h.accounts} account{h.accounts === 1 ? "" : "s"}
                   </span>
                 </span>
                 <span className="flex gap-2">
@@ -451,7 +451,7 @@ function CapacitySection({ current }: { current: Rules["capacity"] }) {
   return (
     <SettingCard
       title="Room capacity"
-      description="Two rules, checked at different times. Per room type: how many beds a room has, and the most it holds once an extra bed is rolled in — checked when the manager allocates rooms. Per room on the form: how many guests, how many infants and how many people in all one room card may hold — checked when the request is submitted, before the room's type is known, and again by the database. The three together are what make the rule a combination: 3 guests + 1 infant and 2 guests + 2 infants both fit, 3 guests + 2 infants does not."
+      description="Two rules, checked at different times. Per room type: how many beds a room has, and the most it holds once an extra bed is rolled in - checked when the manager allocates rooms. Per room on the form: how many guests, how many infants and how many people in all one room card may hold - checked when the request is submitted, before the room's type is known, and again by the database. The three together are what make the rule a combination: 3 guests + 1 infant and 2 guests + 2 infants both fit, 3 guests + 2 infants does not."
     >
       <div className="grid gap-4 sm:grid-cols-2">
         {ROOM_TYPES.map((t) => (
@@ -546,7 +546,7 @@ function BookingWindowSection({ current }: { current: Rules["booking"] }) {
   return (
     <SettingCard
       title="Booking window, stay length and turnaround"
-      description="How far ahead a check-in may be requested, and the longest ordinary stay — Official / Dignitary bookings, the Guest House Manager and the developer are exempt from both, and only new requests are checked. The turnaround buffer is the least time between one guest checking out and the next checking in to the same room, for housekeeping; changing it re-checks every allocated stay and is refused, naming them, if any two would clash."
+      description="How far ahead a check-in may be requested, and the longest ordinary stay - Official / Dignitary bookings, the Guest House Manager and the developer are exempt from both, and only new requests are checked. The turnaround buffer is the least time between one guest checking out and the next checking in to the same room, for housekeeping; changing it re-checks every allocated stay and is refused, naming them, if any two would clash."
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <NumberField
@@ -698,7 +698,7 @@ function DebitHeadsSection({ current }: { current: Rules["debit"] }) {
                 {heads.map((h) => {
                   // Dining is never charged to a project, and a few
                   // category/head pairs are refused outright by the rules
-                  // themselves (faculty cannot debit the Institute Grant) —
+                  // themselves (faculty cannot debit the Institute Grant) -
                   // shown greyed rather than hidden, so the table still reads
                   // as one grid and the reason is in the tooltip.
                   const forbidden = !isHeadAllowedFor(category, h);
@@ -732,7 +732,7 @@ function DebitHeadsSection({ current }: { current: Rules["debit"] }) {
   return (
     <SettingCard
       title="Debitable heads"
-      description="Which budget each kind of requester may charge a booking to. Every official booking must name one; Project also asks for a project from the Projects list. A requester with only one head is not asked — the form states it. Bookings already made keep the head they were made with."
+      description="Which budget each kind of requester may charge a booking to. Every official booking must name one; Project also asks for a project from the Projects list. A requester with only one head is not asked - the form states it. Bookings already made keep the head they were made with."
     >
       {grid("room", "Room bookings")}
       {grid("dining", "Dining (meals only)")}

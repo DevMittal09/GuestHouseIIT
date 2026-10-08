@@ -203,7 +203,7 @@ describe("what the stay used", () => {
   });
 
   it("splits a project snapshot into number and title", () => {
-    expect(projectFromDetails("SP/2025/017 — Grid-scale storage (Dr. A)")).toEqual({
+    expect(projectFromDetails("SP/2025/017 - Grid-scale storage (Dr. A)")).toEqual({
       number: "SP/2025/017",
       title: "Grid-scale storage (Dr. A)",
     });
@@ -217,7 +217,7 @@ describe("the invoice document", () => {
     {
       status: "VACATED",
       debit_head: "project_grant",
-      debit_details: "SP/2025/017 — Grid-scale energy storage (Dr. Priya Sharma)",
+      debit_details: "SP/2025/017 - Grid-scale energy storage (Dr. Priya Sharma)",
       requester: profile({ full_name: "Dr. Priya Sharma", department_or_club: "Electrical Engineering" }),
       // 14:00 IST 1 Oct → 10:00 IST 3 Oct: two nights.
       logs: [log("OCCUPIED", "2026-10-01T08:30:00.000Z"), log("VACATED", "2026-10-03T04:30:00.000Z")],
@@ -240,13 +240,13 @@ describe("the invoice document", () => {
     expect([doc.rooms, doc.guests, doc.infants]).toEqual([2, 4, 1]);
     expect(doc.debit_head_label).toBe("Project");
     expect(doc.project_number).toBe("SP/2025/017");
-    // The tariffs include GST — 18% on rooms since 25 Sep 2026: the Rate
+    // The tariffs include GST - 18% on rooms since 25 Sep 2026: the Rate
     // column is the rate before GST (₹2,000 / 1.18 = ₹1,694.92), the Amount
     // that rate × days.
     expect(doc.room_lines.map((l) => [l.description, l.days, l.rate, l.amount, l.amount_incl])).toEqual([
-      ["B-204 — Double sharing", 2, 169_492, 338_984, 400_000],
-      ["Extra bed — B-204", 2, 42_373, 84_746, 100_000],
-      ["B-110 — Single", 2, 169_492, 338_984, 400_000],
+      ["B-204 - Double sharing", 2, 169_492, 338_984, 400_000],
+      ["Extra bed - B-204", 2, 42_373, 84_746, 100_000],
+      ["B-110 - Single", 2, 169_492, 338_984, 400_000],
     ]);
     // 4 diners: dinner ×2 days, breakfast ×2, lunch ×1.
     expect(doc.meal_lines.map((l) => [l.meal, l.count, l.rate, l.amount_incl])).toEqual([
@@ -281,12 +281,12 @@ describe("the invoice document", () => {
   it("splits a room row on a mid-stay rate change", () => {
     const rows = [...TARIFFS, t({ guest_house_id: GH.id, item: "room", rate: 2500, effective_from: "2026-10-02" })];
     const doc = buildInvoiceDocument(stay, { tariffs: rows, rules: RULES, capacity: CAP });
-    const b204 = doc.room_lines.filter((l) => l.description.startsWith("B-204 —"));
+    const b204 = doc.room_lines.filter((l) => l.description.startsWith("B-204 -"));
     expect(b204.map((l) => [l.days, l.rate_incl])).toEqual([
       [1, 200_000],
       [1, 250_000],
     ]);
-    // DD/MM since 1 Oct 2026 — the rate change's date, day first.
+    // DD/MM since 1 Oct 2026 - the rate change's date, day first.
     expect(b204[0].description).toContain("(01/10)");
   });
 
@@ -301,7 +301,7 @@ describe("the invoice document", () => {
   });
 
   // The ₹7,500 slab (5% below, 18% above) was replaced by a flat 18% on
-  // rooms on 25 Sep 2026 — see fifth-round.test.ts.
+  // rooms on 25 Sep 2026 - see fifth-round.test.ts.
   it("taxes every room line at the one accommodation rate, however dear", () => {
     const rows = [...TARIFFS, t({ guest_house_id: GH.id, item: "room", requester_role: "employee", rate: 9000 })];
     const doc = buildInvoiceDocument(stay, { tariffs: rows, rules: RULES, capacity: CAP });

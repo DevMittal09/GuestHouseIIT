@@ -19,8 +19,8 @@ import {
   InvoiceStateError,
   mealCovers,
   parseExtraCharges,
+  paymentModeError,
   paymentReferenceError,
-  PAYMENT_MODES,
   type ExtraCharge,
   type InvoiceDocument,
   type InvoiceRecord,
@@ -48,9 +48,9 @@ import type { ActionResult } from "./bookings";
  */
 
 const MIGRATION_HINT =
-  "Invoices are not set up yet — apply supabase/migrations/00000000000019_tariffs_and_invoices.sql.";
+  "Invoices are not set up yet - apply supabase/migrations/00000000000019_tariffs_and_invoices.sql.";
 const EXTRA_CHARGES_HINT =
-  "Additional charges are not set up yet — apply supabase/migrations/00000000000026_invoice_additional_charges.sql.";
+  "Additional charges are not set up yet - apply supabase/migrations/00000000000026_invoice_additional_charges.sql.";
 
 function fail(e: unknown): { ok: false; error: string } {
   if (e instanceof InvoiceStateError) return { ok: false, error: e.message };
@@ -81,7 +81,7 @@ function cleanCounts(counts: MealCounts | null | undefined): MealCounts | null {
   return { breakfast: n(counts.breakfast), lunch: n(counts.lunch), dinner: n(counts.dinner) };
 }
 
-/** The desk's additional charges, checked for this booking — or why they cannot be used. */
+/** The desk's additional charges, checked for this booking - or why they cannot be used. */
 function cleanCharges(booking: BookingWithDetails, input: unknown): ExtraCharge[] {
   const parsed = parseExtraCharges(input, booking.service_type === "meals_only" ? "dining" : "stay");
   if (!parsed.ok) throw new InvoiceStateError(parsed.error);
@@ -167,7 +167,7 @@ export async function getInvoicePanel(
 
 /**
  * What the invoice would say with the counts and charges the desk has typed,
- * saved or not — so the figures on screen, and the total the Issue dialog
+ * saved or not - so the figures on screen, and the total the Issue dialog
  * quotes, follow every change as it is made. Nothing is written.
  *
  * Before 25 Sep 2026 the preview repriced only after "Save counts": meals
@@ -210,7 +210,7 @@ export async function saveInvoiceDraftAction(
 
 /**
  * Issue the invoice: number it (next in the financial year), freeze the
- * snapshot, and — for an official booking — mail it to Accounts. After a
+ * snapshot, and - for an official booking - mail it to Accounts. After a
  * cancellation the new invoice records the one it replaces.
  */
 export async function issueInvoiceAction(
@@ -271,14 +271,17 @@ export async function markInvoicePaidAction(
 ): Promise<ActionResult> {
   try {
     const user = await requireDesk();
-    if (!PAYMENT_MODES.includes(mode)) return { ok: false, error: "Choose how it was paid" };
+    // Cash is retired (7 Oct 2026), and says so rather than reading as an
+    // unanswered question - a stored cash payment still displays.
+    const modeError = paymentModeError(mode);
+    if (modeError) return { ok: false, error: modeError };
     const refError = paymentReferenceError(mode, reference);
     if (refError) return { ok: false, error: refError };
     const now = new Date();
     let paidAt = now.toISOString();
     if (paidOn) {
       // A date typed at the desk: payments are recorded the day they come in,
-      // or later — never in the future.
+      // or later - never in the future.
       if (!/^\d{4}-\d{2}-\d{2}$/.test(paidOn) || paidOn > toInstituteDateValue(now)) {
         return { ok: false, error: "The payment date cannot be in the future" };
       }
@@ -329,7 +332,7 @@ async function requireBillingConsole(): Promise<Profile> {
     throw new InvoiceStateError("Only the Guest House Manager or a developer can change tariffs");
   }
   if (!(await isAdminUnlocked())) {
-    throw new InvoiceStateError("The console is locked — enter the console password again");
+    throw new InvoiceStateError("The console is locked - enter the console password again");
   }
   return user;
 }
@@ -343,7 +346,7 @@ export async function listTariffsForConsole(): Promise<{ ok: true; tariffs: Tari
   }
 }
 
-/** A new rate. Rates already in force are never edited — this is how a price changes. */
+/** A new rate. Rates already in force are never edited - this is how a price changes. */
 export async function createTariffAction(input: unknown): Promise<ActionResult> {
   try {
     const user = await requireBillingConsole();

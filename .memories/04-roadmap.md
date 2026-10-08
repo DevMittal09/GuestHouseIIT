@@ -43,20 +43,29 @@ security becomes the boundary rather than a second line behind the server
   carries no GST.
 - **The hosted invoice Settings row** is upgraded to 18% / 5% on read the
   first time; saving Tariffs & Invoicing once writes it (revision 2).
-- **Office to confirm "Fill in from saved details"** is welcome for every
-  role: it offers the people on a requester's own earlier bookings (names,
-  gender, relationship, citizenship only).
+- ~~Office to confirm "Fill in from saved details"~~ — **answered 7 Oct 2026**:
+  withdrawn for every role, with "Yourself". A student's parents come from the
+  academic record and are locked instead.
 - **Unset `MAIL_REDIRECT_ALL_TO` in the Vercel environment.** While it is set
   every message goes to that one mailbox and **CC is dropped**, so no "Copy
   to" address receives anything — the office's 1 Oct report. `/admin/mail`
   shows a red warning naming the mailbox whenever it is set. Keep it on any
   staging deployment.
-- **Apply migrations 24, 25, 26 and 27 to the hosted project** (and check what
-  else it is missing — its state is not recorded). Until 25, nobody can book
-  for a club there; until 24, a booking with a Copy-to address or a project
-  sub-head is refused, and a baby typed as age 0 still is; until 26, an
-  invoice with an additional charge is refused; until 27, a booking's meal
-  split is dropped and reads back as the one old whole-party preference.
+- **Apply migrations 24 – 29 to the hosted project** (and check what else it
+  is missing — its state is not recorded). Until 25, nobody can book for a
+  club there; until 24, a booking with a Copy-to address or a project sub-head
+  is refused, and a baby typed as age 0 still is; until 26, an invoice with an
+  additional charge is refused; until 27, a booking's meal split is dropped
+  and reads back as the one old whole-party preference; **until 28** every
+  academic lookup falls through to the published dummy records and the
+  Academic records console reports the missing table by name; **until 29** the
+  nightly job cannot mark a request Missed there (it logs the enum error per
+  booking and the rest of the run carries on).
+- **Then import the real records** (7 Oct 2026): Console → **Academic
+  records** → Students first, since that is the list the booking form locks
+  parents' names against. A student who is not in the import simply types
+  their parents' names, as before — nothing breaks, the rule just does not
+  apply to them.
   Migration 25's backfill will name the old `fa.petrichor` account Petrichor's
   advisor — replace it with a faculty member in Departments & Clubs → Faculty
   Advisors.
@@ -75,6 +84,25 @@ security becomes the boundary rather than a second line behind the server
 - A developer's old `.local-db.json` keeps the retired `fa-petrichor` account;
   delete the file for a clean demo.
 
+### From the eighth list (7 Oct 2026)
+
+- **Migrations 28 and 29 on the hosted project, then the real records** — see
+  §2 above. These are the only two things in the round that are not already
+  live in the code.
+- **Confirm the lines under the GSTIN.** The office asked for "lines under the
+  GSTIN removed", so **all** of them went on version 4 — the per-SAC
+  taxable / CGST / SGST breakdown *and* the note that the tariff rates include
+  GST. The breakdown is still computed and kept in every snapshot, so
+  restoring either is a one-line change to `printsTaxLines` in
+  `lib/invoice.ts`. Worth asking whether they meant the GST-inclusive note
+  too.
+- **The academic lookup cache is per server instance.** An import clears the
+  cache on the instance that served it; another instance catches up within ten
+  minutes (`ANSWER_TTL_MS`). Fine for a card, and worth knowing now that the
+  booking form locks names from it — if the office ever reports a corrected
+  parent name "not taking", that is the ten minutes.
+- **The .docx template is two revisions behind the PDF** (see below).
+
 ### From the supervisor's review (30 Sep 2026)
 
 - **Photographs — AM** ("Take couple of photos – AM"): new photos of the
@@ -82,14 +110,16 @@ security becomes the boundary rather than a second line behind the server
   [16-public-site-and-ui.md](16-public-site-and-ui.md#photographs). Ask
   which guest house each shows, so they can finally be attributed.
 - **Fix the .docx typo**: `public/GHM_Invoice.docx` reads "GST @ 5% on B (D)";
-  the PDF prints "on C (D)", as the supervisor's list does.
+  the PDF prints "on C (D)", as the supervisor's list does. (The PDF has moved
+  on again — version 4, 7 Oct 2026 — so the .docx is further behind: it still
+  shows the blank room row and the tax lines under the GSTIN.)
 - **Add Self to a saved student form** on the hosted project, if
   `form_configs` holds a `student` row (Form Builder → relationship options
-  and One of each, or Reset to spec defaults). Until then "Yourself" fills the
-  name but not the relationship.
+  and One of each, or Reset to spec defaults). Since "Yourself" went on 7 Oct
+  2026 this only affects whether a student can *choose* Self; the name is
+  typed either way.
 - **Office to confirm** that a student may be a guest on their own request —
-  the owner's reading of "let the student write their name as well" — and
-  that employees should be offered "Yourself" too.
+  the owner's reading of "let the student write their name as well".
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 
@@ -99,9 +129,11 @@ behalf is the manager's alone), the help line shows the guest house's own
 number from the one source in `lib/site.ts`, and Reception has a Meal counts
 link to the kitchen page. Still open:
 
-- **The alumni guest house is matched by name** (`ALUMNI_GUEST_HOUSE_NAME =
-  "Bageshri"`, `lib/policy.ts`) — the one rule that breaks "never check a guest
-  house's name". A flag like `serves_meals` would remove it.
+- **The one guest house students and alumni use is matched by name**
+  (`RESTRICTED_GUEST_HOUSE_NAME` = `ALUMNI_GUEST_HOUSE_NAME` = "Bageshri",
+  `lib/policy.ts`) — the one rule that breaks "never check a guest house's
+  name", and since 7 Oct 2026 it carries students too. A flag like
+  `serves_meals` would remove it.
 - **The `iar_student_cell` debit category** (official bookings by the Student
   Cell) is unused since its Official option was withdrawn.
 - **Mail still uses the pre-redesign amber header**; restyle to ink/vermilion if
@@ -133,7 +165,7 @@ From the original plan's "Phase 0", still open:
 
 ## 5. Tests that are still thin
 
-`npm test` (305 checks) and `npm run test:e2e` (26 journeys) run in CI. What
+`npm test` (405 checks) and `npm run test:e2e` (33 journeys) run in CI. What
 would catch the most next:
 
 1. the mail layer end to end — rendering, outbox claim and retry, recipients
@@ -198,4 +230,5 @@ is written up (all in [03-decisions.md](03-decisions.md) unless noted):
 | Keyword search in Postgres, narrow revalidation, realtime instead of polling | Phase 9, 22–23 Sep |
 | Workflow documentation and the production runbook | Phase 10, 23 Sep |
 | The office's correction rounds (23 Sep ×2, 24 Sep) and Faculty Advisors by appointment (24 Sep) | [01-background.md](01-background.md), [99-recent-changes.md](99-recent-changes.md) |
+| The eighth list, in four phases (7 Oct): the text cleanup, a personal booking never asked which budget pays, students and alumni held to one guest house and no meals, the rates on the form, availability as a count, **the institute's records kept in the portal** (migration 28) with a student's parents locked, invoice version 4, cash retired, a personal stay settled at check-out, **Awaiting payment**, and **Missed** (migration 29) | [01-background.md](01-background.md), [99-recent-changes.md](99-recent-changes.md) |
 | White-on-amber contrast | The 19 Sep redesign |

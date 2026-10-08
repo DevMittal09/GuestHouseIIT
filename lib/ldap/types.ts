@@ -1,6 +1,6 @@
 /** What the directory says about a person once their password has checked out. */
 export type DirectoryEntry = {
-  /** Normalized — see `normalizeLdapUid`. This is what `profiles.ldap_uid` is matched against. */
+  /** Normalized - see `normalizeLdapUid`. This is what `profiles.ldap_uid` is matched against. */
   uid: string;
   mail: string | null;
   name: string | null;
@@ -22,7 +22,7 @@ export interface Directory {
   authenticate(uid: string, password: string): Promise<DirectoryEntry | null>;
 }
 
-/** The directory could not be asked — down, misconfigured, or timed out. */
+/** The directory could not be asked - down, misconfigured, or timed out. */
 export class DirectoryUnavailableError extends Error {
   constructor(cause: unknown) {
     super(`LDAP directory unavailable: ${cause instanceof Error ? cause.message : String(cause)}`);

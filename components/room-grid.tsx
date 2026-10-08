@@ -32,7 +32,7 @@ import type { BookingWithDetails, Room } from "@/lib/types";
  * Green = free for this stay · Red = already held · Blue = selected.
  *
  * Red rooms are rendered `disabled`, so a room held by another booking for any
- * part of this stay cannot be picked at all — the exclusion constraint on
+ * part of this stay cannot be picked at all - the exclusion constraint on
  * `room_holds` is still the authority, but the manager never gets far enough
  * to hit it.
  */
@@ -48,12 +48,12 @@ export function RoomGrid({
   bufferMinutes?: number;
   booking: BookingWithDetails;
   rooms: Room[];
-  /** Room capacity from Settings — the same values `allocateRooms` checks. */
+  /** Room capacity from Settings - the same values `allocateRooms` checks. */
   capacity?: CapacityRules;
   /**
    * Changes whenever any booking's room holds change, server-side. The grid
    * loads occupancy once when the dialog opens, so without this it never
-   * learnt that someone else had taken a room underneath it — the office
+   * learnt that someone else had taken a room underneath it - the office
    * reported allocations "not being reflected in the grid". Folding it into
    * the fetch key means a change upstream re-fetches on the next render, and
    * an unchanged fingerprint costs nothing.
@@ -65,7 +65,7 @@ export function RoomGrid({
   // Occupancy is read for the booking's *own* dates and nothing else.
   //
   // This used to have its own date/time pickers, which meant the manager could
-  // shift the window, see a room go green, pick it — and allocate a room that
+  // shift the window, see a room go green, pick it - and allocate a room that
   // was in fact taken for the actual stay. The write was still safe (the
   // room_holds exclusion constraint refused it), but the grid was offering
   // rooms it should never have shown. The rule now is: a room that is held for
@@ -75,7 +75,7 @@ export function RoomGrid({
   /**
    * Each room's worst conflict with this stay. A `hard` room is unpickable;
    * a `soft` one overlaps by no more than the turnover grace and can be taken
-   * if the manager accepts it. Requesters never see this — their grid marks
+   * if the manager accepts it. Requesters never see this - their grid marks
    * any held room as taken.
    */
   const [conflicts, setConflicts] = useState<Record<string, ConflictKind>>({});
@@ -83,7 +83,7 @@ export function RoomGrid({
    * The picked rooms **in order**, because the order is meaningful: the first
    * is Room 1's, the second Room 2's. A Set would have carried that meaning
    * only by accident of insertion order, and nothing on screen would have said
-   * so — the manager needs to see which party ends up where.
+   * so - the manager needs to see which party ends up where.
    */
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,7 +121,7 @@ export function RoomGrid({
     setSelected((prev) => {
       if (prev.includes(room.id)) return prev.filter((id) => id !== room.id);
       if (prev.length >= booking.rooms_requested) {
-        toast.info(`This request is for ${booking.rooms_requested} room(s) — deselect one first`);
+        toast.info(`This request is for ${booking.rooms_requested} room(s) - deselect one first`);
         return prev;
       }
       return [...prev, room.id];
@@ -132,7 +132,7 @@ export function RoomGrid({
     startTransition(async () => {
       const result = await allocateRooms(booking.id, selected, overridden);
       if (result.ok) {
-        toast.success(`${booking.booking_reference_id} approved — rooms allocated`);
+        toast.success(`${booking.booking_reference_id} approved - rooms allocated`);
         onAllocated?.();
         router.refresh();
       } else {
@@ -146,7 +146,7 @@ export function RoomGrid({
   /**
    * The grid splits by room type only where there is more than one to split.
    * Both guest houses are all double sharing, so a lone "Double sharing rooms"
-   * heading over every room was a distinction that carried no information —
+   * heading over every room was a distinction that carried no information -
    * and a "Single rooms" heading over nothing. A leftover single brings both
    * headings back on its own.
    */
@@ -158,7 +158,7 @@ export function RoomGrid({
   // disagree about what is being overridden.
   const overridden = selected.filter((id) => isOverridable(conflicts[id]));
   const bedGuests = countBedGuests(booking.guests);
-  // In pick order, so index 0 is Room 1's — the same order the server maps
+  // In pick order, so index 0 is Room 1's - the same order the server maps
   // onto the booking's room cards.
   const selectedRooms = selected
     .map((id) => rooms.find((r) => r.id === id))
@@ -167,7 +167,7 @@ export function RoomGrid({
   // Two different failures, both of which the server also checks: the party as
   // a whole not fitting the rooms picked, and one room card's party not
   // fitting the particular room it landed on. The second can happen while the
-  // first passes — three guests and a spare single room add up, but nobody can
+  // first passes - three guests and a spare single room add up, but nobody can
   // sleep three in the single.
   const capacityProblem =
     selected.length > 0 ? allocationCapacityError(bedGuests, selectedRooms, capacity) : null;
@@ -202,14 +202,14 @@ export function RoomGrid({
         {bufferMinutes > 0 && (
           <LegendSwatch
             className={SEAT.turnaround}
-            label={`Turnaround — within ${describeBuffer(bufferMinutes)} of another stay, yours to override`}
+            label={`Turnaround - within ${describeBuffer(bufferMinutes)} of another stay, yours to override`}
           />
         )}
         <LegendSwatch
           className={SEAT.soft}
-          label={`Changeover — overlaps by up to ${TURNOVER_GRACE_HOURS}h, yours to override`}
+          label={`Changeover - overlaps by up to ${TURNOVER_GRACE_HOURS}h, yours to override`}
         />
-        <LegendSwatch className={SEAT.hard} label="Already allotted — cannot be picked" />
+        <LegendSwatch className={SEAT.hard} label="Already allotted - cannot be picked" />
         <LegendSwatch className={SEAT.selected} label="Selected for this booking" />
         {loading && <span className="text-muted-foreground">Loading occupancy…</span>}
       </div>
@@ -267,7 +267,7 @@ export function RoomGrid({
             value={
               selected.length > 0
                 ? `${selectedCapacity.standard} guest${selectedCapacity.standard === 1 ? "" : "s"}`
-                : "—"
+                : "-"
             }
             detail={
               selected.length > 0 && selectedCapacity.withExtraBed > selectedCapacity.standard
@@ -277,7 +277,7 @@ export function RoomGrid({
           />
           <SummaryItem
             label="Extra beds required"
-            value={selected.length > 0 && !capacityProblem ? String(extraBeds) : "—"}
+            value={selected.length > 0 && !capacityProblem ? String(extraBeds) : "-"}
             detail={
               selected.length > 0 && !capacityProblem && extraBeds > 0
                 ? "To be arranged before check-in"
@@ -326,7 +326,7 @@ export function RoomGrid({
         )}
 
         {/* Overriding must be a decision, not a side effect of clicking a
-            yellow tile — so it is spelled out, with the rooms named, before
+            yellow tile - so it is spelled out, with the rooms named, before
             the button that records it against the booking. */}
         {overridden.length > 0 && (
           <div className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
@@ -435,12 +435,12 @@ function RoomSection({
               disabled={isOccupied}
               title={
                 isOccupied
-                  ? `${room.room_number} — already allotted for these dates`
+                  ? `${room.room_number} - already allotted for these dates`
                   : isTurnover
-                    ? `${room.room_number} — another stay overlaps by up to ${TURNOVER_GRACE_HOURS} hours. Pick it to accept the changeover.`
+                    ? `${room.room_number} - another stay overlaps by up to ${TURNOVER_GRACE_HOURS} hours. Pick it to accept the changeover.`
                     : isTurnaround
-                      ? `${room.room_number} — free, but within the ${describeBuffer(bufferMinutes)} turnaround of another stay. Pick it to accept the tighter changeover.`
-                      : `${room.room_number} — ${ROOM_TYPE_LABELS[room.room_type]}. ${describeCapacity(room.room_type, capacity)}`
+                      ? `${room.room_number} - free, but within the ${describeBuffer(bufferMinutes)} turnaround of another stay. Pick it to accept the tighter changeover.`
+                      : `${room.room_number} - ${ROOM_TYPE_LABELS[room.room_type]}. ${describeCapacity(room.room_type, capacity)}`
               }
               className={cn(
                 "flex h-14 cursor-pointer items-center justify-center rounded border text-sm font-semibold tabular-nums transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
@@ -476,7 +476,7 @@ function RoomSection({
  * room is a pale green tile with a green edge (so its number reads at 9:1
  * rather than white on bright green), a taken one solid red and struck
  * through, the picked ones solid blue, a changeover amber and a turnaround
- * hatched — so the states differ by more than colour.
+ * hatched - so the states differ by more than colour.
  */
 const SEAT = {
   free: "border-occupy bg-[#e6f2ec] text-[#00391e]",

@@ -1,16 +1,19 @@
 import { cronAuthorized, mailConfig } from "@/lib/mail/config";
 import { runDailyMailJobs } from "@/lib/mail/digest";
 import { drainOutbox } from "@/lib/mail/dispatch";
+import { runMissedSweep } from "@/lib/missed-server";
 import { runNoShowRelease } from "@/lib/no-show-server";
 import { runRetention } from "@/lib/retention-server";
 import { getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
 
 /**
- * The daily mail jobs: approval digests, check-in reminders, the day-wise
- * guest house log, and the pending-too-long escalation.
+ * The daily jobs: marking requests nobody decided in time as Missed,
+ * releasing no-shows, housekeeping and retention, then the mail - approval
+ * digests, check-in reminders, the day-wise guest house log and the
+ * pending-too-long escalation.
  *
- * Intended for 8am institute time — the digest is only useful before people
+ * Intended for 8am institute time - the digest is only useful before people
  * start their day:
  *
  *     30 2 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
@@ -39,6 +42,13 @@ async function handle(request: Request): Promise<Response> {
     // Release no-shows first (Phase 7, off unless the Setting is above 0), so
     // the day's desk report already shows the rooms as free.
     const noShowsReleased = await runNoShowRelease(new Date(), (await getRules()).booking.no_show_release_hours);
+    /**
+     * Requests nobody decided in time (migration 29, 7 Oct 2026). Before the
+     * digest, so a request whose check-in has gone is out of the queues
+     * before the day's digest is built and nobody is asked to approve a stay
+     * that can no longer happen.
+     */
+    const missed = await runMissedSweep(new Date());
     // Housekeeping: sessions and throttle windows long dead (migration 21).
     const sessionsPurged = await getStore().purgeExpiredSessions().catch(() => 0);
     // Retention (Phase 8): identity fields and audit rows past their keep-days.
@@ -51,6 +61,7 @@ async function handle(request: Request): Promise<Response> {
       transport: mailConfig().transport,
       queued,
       noShowsReleased,
+      missed,
       sessionsPurged,
       retention,
       dispatched,

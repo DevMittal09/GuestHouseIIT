@@ -223,7 +223,7 @@ export function FormConfigEditor({
                   <Label>Restricted relationships</Label>
                   <p className="text-sm text-muted-foreground">
                     Options that stay locked on the booking form until one of the unlocking
-                    relationships below is chosen for another guest — the rule that siblings and
+                    relationships below is chosen for another guest - the rule that siblings and
                     grandparents are accommodated only when a parent is also staying. Leave both
                     empty to allow every option freely.
                   </p>
@@ -270,7 +270,7 @@ export function FormConfigEditor({
                   <p className="text-sm text-muted-foreground">
                     Relationships a requester has only one of. Each may be entered once per
                     request; the booking form greys it out on every other guest once it is used.
-                    Leave empty to allow an option to repeat — “Siblings” usually should.
+                    Leave empty to allow an option to repeat - “Siblings” usually should.
                   </p>
                 </div>
                 <RelationshipPicker

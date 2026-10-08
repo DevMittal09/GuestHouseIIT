@@ -8,12 +8,17 @@ import { getStore } from "@/lib/store";
 import { getRules } from "@/lib/settings-server";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
-import { awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
+import { awaitingPayment, awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
 import { PageHeader } from "@/components/page-header";
 import { LinkTabs } from "@/components/link-tabs";
 import { EmptyState } from "@/components/section-heading";
 
-/** How far back the desk's "checked out, not yet settled" list reaches. */
+/**
+ * How far back the manager's list of **Missed** requests reaches. A request
+ * the sweep marked last night is one the desk may still want to put back; one
+ * from two months ago is history, and is in the Approval Log under Missed.
+ */
+const MISSED_WINDOW_DAYS = 21;
 
 export default async function ManagerPage({
   searchParams,
@@ -30,7 +35,7 @@ export default async function ManagerPage({
   if (guestHouses.length === 0) {
     return (
       <EmptyState>
-        No guest houses configured yet — ask a developer to add one in the admin console.
+        No guest houses configured yet - ask a developer to add one in the admin console.
       </EmptyState>
     );
   }
@@ -38,13 +43,17 @@ export default async function ManagerPage({
   const current =
     guestHouses.find((g) => g.name.toLowerCase() === (gh ?? "").toLowerCase()) ?? guestHouses[0];
 
-  const [pending, allApproved, allOccupied, allVacated, cancellationRequests, rooms] =
+  const [pending, allApproved, allOccupied, allVacated, cancellationRequests, allMissed, rooms] =
     await Promise.all([
       store.listBookings({ status: "PENDING_GH_MANAGER", guestHouseId: current.id }),
       store.listBookings({ status: "APPROVED", guestHouseId: current.id }),
       store.listBookings({ status: "OCCUPIED", guestHouseId: current.id }),
       store.listBookings({ status: "VACATED", guestHouseId: current.id }),
       store.listBookings({ status: "CANCELLATION_REQUESTED", guestHouseId: current.id }),
+      // Requests nobody decided in time (migration 29). Empty where the
+      // migration has not been applied, which the store reports as an unknown
+      // enum value rather than an error.
+      store.listBookings({ status: "MISSED", guestHouseId: current.id }).catch(() => []),
       store.listRooms(current.id),
     ]);
   const now = new Date();
@@ -55,7 +64,7 @@ export default async function ManagerPage({
   // as "this future booking is occupied".
   // A meals-only booking is not a stay: nobody arrives, nobody is checked in
   // or out, and no room comes back. Listing one under "Upcoming stays" would
-  // put a room-less row in a table whose whole job is rooms — those belong on
+  // put a room-less row in a table whose whole job is rooms - those belong on
   // the kitchen's day view instead (`/manager/meals`).
   const stays = [...allApproved, ...allOccupied]
     .filter((b) => b.service_type !== "meals_only")
@@ -70,7 +79,7 @@ export default async function ManagerPage({
    * Checked out, not yet settled.
    *
    * Marking a guest Vacated took their stay off every screen the manager has,
-   * while `invoiceBlocker` says an invoice is issued "at check-out" — so a
+   * while `invoiceBlocker` says an invoice is issued "at check-out" - so a
    * desk that closed a stay off first had no way back to its bill. These stay
    * in front of the manager until the invoice is paid (or cancelled, which
    * only reopens the question). Bounded to the last few weeks: older ones are
@@ -88,7 +97,39 @@ export default async function ManagerPage({
     now
   );
 
-  // "Today" is the guest house's day, not the server's — see lib/tz.ts.
+  /**
+   * **Awaiting payment** (7 Oct 2026, the office's eighth list): every
+   * booking at this guest house whose invoice has gone out and not come
+   * back, however long ago.
+   *
+   * Built from the invoices rather than from the bookings, and with no date
+   * window: "Checked out - to bill" is the daily list and is bounded to a
+   * few weeks, but an official stay's bill can sit with a department for
+   * months, and a list of debts that forgets them after thirty days is not a
+   * list of debts. Dining bookings are here too - they never check out, so
+   * the to-bill list could never hold one.
+   */
+  const outstanding = await store.listInvoices({ statuses: ["issued"] }).catch(() => []);
+  const awaitingPaymentBookings = outstanding.length > 0
+    ? awaitingPayment(
+        (await store.listBookings({ ids: outstanding.map((i) => i.booking_id) })).filter(
+          (b) => b.guest_house_id === current.id
+        ),
+        outstanding
+      )
+    : [];
+
+  /**
+   * Requests nobody decided in time, most recently missed first (migration
+   * 29, 7 Oct 2026). Bounded to the last few weeks like the to-bill list:
+   * this is a thing the manager might still recover, and one from two months
+   * ago is history. Older ones are in the Approval Log under Missed.
+   */
+  const missed = [...allMissed]
+    .filter((b) => Date.parse(b.updated_at) >= now.getTime() - MISSED_WINDOW_DAYS * 86_400_000)
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+
+  // "Today" is the guest house's day, not the server's - see lib/tz.ts.
   const { start: dayStart, end: dayEnd } = instituteDayBounds(toInstituteDateValue(now));
   const checkoutsToday = stays
     .filter((b) => checksOutOn(b, dayStart, dayEnd))
@@ -99,7 +140,7 @@ export default async function ManagerPage({
    *
    * The allocation grid loads occupancy once, when its dialog opens. If another
    * manager allocated a room in the meantime the grid went on showing it green
-   * until someone pressed Refresh — the write was still refused by the
+   * until someone pressed Refresh - the write was still refused by the
    * exclusion constraint, but the grid was offering rooms that were already
    * gone. This page re-renders every few seconds, so any change to the holds
    * changes this string and the open grid re-fetches; when nothing has changed
@@ -130,7 +171,7 @@ export default async function ManagerPage({
               </Button>
             )}
             {/* Rooms, accounts, booking forms and the wording of the automatic
-                emails — all of it the manager's to change. */}
+                emails - all of it the manager's to change. */}
             <Button asChild variant="outline">
               <Link href="/admin/users">Settings</Link>
             </Button>
@@ -157,6 +198,8 @@ export default async function ManagerPage({
         upcoming={upcomingStays}
         overdue={overdueStays}
         toBill={toBill}
+        missed={missed}
+        awaitingPayment={awaitingPaymentBookings}
         checkoutsToday={checkoutsToday}
         cancellationRequests={cancellationRequests}
         rooms={rooms}

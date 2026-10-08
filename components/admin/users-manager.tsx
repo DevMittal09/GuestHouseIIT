@@ -38,7 +38,7 @@ import { UNIT_KIND_LABELS, type Unit } from "@/lib/units";
 
 const ALL_ROLES = Object.keys(ROLE_LABELS) as Role[];
 
-/** Accounts this console user may not touch — see `userEditError`. */
+/** Accounts this console user may not touch - see `userEditError`. */
 function isLocked(actorRole: Role, target: Profile): boolean {
   return actorRole !== "developer" && target.role === "developer";
 }
@@ -63,11 +63,11 @@ export function UsersManager({
   actorRole = "developer",
 }: {
   profiles: Profile[];
-  /** Hostels on the Settings list — the only values `hostel_name` may take. */
+  /** Hostels on the Settings list - the only values `hostel_name` may take. */
   hostels?: string[];
   /** Departments, clubs and offices a person can be placed in. */
   units?: Unit[];
-  /** The roles this console user may hand out — see `assignableRoles`. */
+  /** The roles this console user may hand out - see `assignableRoles`. */
   roles?: Role[];
   actorRole?: Role;
 }) {
@@ -157,7 +157,7 @@ export function UsersManager({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {profiles.length} accounts — assign any role to any email, including additional wardens,
+          {profiles.length} accounts - assign any role to any email, including additional wardens,
           advisors and developers.
         </p>
         <div className="flex flex-wrap justify-end gap-2">
@@ -192,13 +192,13 @@ export function UsersManager({
                     {ROLE_LABELS[p.role]}
                   </Badge>
                 </TableCell>
-                <TableCell>{p.hostel_name ?? "—"}</TableCell>
-                <TableCell>{p.department_or_club ?? "—"}</TableCell>
-                <TableCell className="font-mono text-xs">{p.roll_number ?? "—"}</TableCell>
-                <TableCell className="font-mono text-xs">{p.ldap_uid ?? "—"}</TableCell>
+                <TableCell>{p.hostel_name ?? "-"}</TableCell>
+                <TableCell>{p.department_or_club ?? "-"}</TableCell>
+                <TableCell className="font-mono text-xs">{p.roll_number ?? "-"}</TableCell>
+                <TableCell className="font-mono text-xs">{p.ldap_uid ?? "-"}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
-                    {/* A manager cannot edit or remove a developer account —
+                    {/* A manager cannot edit or remove a developer account -
                         the server refuses it, and offering the button anyway
                         would only produce an error. */}
                     <Button
@@ -241,7 +241,7 @@ export function UsersManager({
         }
         consequences={[
           "The person can no longer sign in to the portal.",
-          "Blocked if they have any bookings — those must be deleted or reassigned first.",
+          "Blocked if they have any bookings - those must be deleted or reassigned first.",
           "Past approvals stay in the audit trail, which records the name separately.",
         ]}
         confirmPhrase={toDelete?.email}
@@ -260,7 +260,7 @@ export function UsersManager({
             <DialogTitle>Import LDAP usernames</DialogTitle>
             <DialogDescription>
               Links institute LDAP logins to existing accounts, matched by email. One{" "}
-              <code className="font-mono">email, LDAP username</code> pair per line — a two-column
+              <code className="font-mono">email, LDAP username</code> pair per line - a two-column
               spreadsheet paste works. If any line is wrong, nothing is changed.
             </DialogDescription>
           </DialogHeader>
@@ -361,7 +361,7 @@ export function UsersManager({
               />
             </div>
             {/* The unit is what their approver is found through, so it is a
-                pick from the list rather than free text — a typo here used
+                pick from the list rather than free text - a typo here used
                 to mean nobody could approve their bookings. */}
             <div className="space-y-2">
               <Label htmlFor="user-unit">Belongs to</Label>

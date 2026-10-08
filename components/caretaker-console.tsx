@@ -2,18 +2,20 @@
 
 import { CheckoutsToday } from "@/components/checkouts-today";
 import { StaysTable } from "@/components/stays-table";
+import { AwaitingPaymentTable } from "@/components/awaiting-payment";
+import type { AwaitingPaymentRow } from "@/lib/invoice";
 import { SectionHeading } from "@/components/section-heading";
 import { DeskSummary } from "@/components/desk-summary";
 import type { BookingWithDetails } from "@/lib/types";
 
 /**
- * The reception desk's console — a deliberate subset of the manager's.
+ * The reception desk's console - a deliberate subset of the manager's.
  *
  * The office was explicit that whoever sits at the guest house reception
  * should not be handed the full manager screen: they need to see who is in the
  * building, who is arriving, who is leaving today, and to record people in and
  * out. Allocation, approvals, rejections and cancellations stay with the
- * manager, so none of that is drawn here — the caretaker cannot reach those
+ * manager, so none of that is drawn here - the caretaker cannot reach those
  * actions by any route, because the server checks the role again on every one
  * of them.
  *
@@ -26,14 +28,21 @@ export function CaretakerConsole({
   overdue,
   checkoutsToday,
   toBill = [],
+  awaitingPayment = [],
   nowIso,
 }: {
   current: BookingWithDetails[];
   upcoming: BookingWithDetails[];
   overdue: BookingWithDetails[];
   checkoutsToday: BookingWithDetails[];
-  /** Checked out, invoice not yet paid — the same list as the manager's. */
+  /** Checked out, invoice not yet paid - the same list as the manager's. */
   toBill?: BookingWithDetails[];
+  /**
+   * Invoice issued and still unpaid, however long ago (7 Oct 2026). The same
+   * list the manager has: reception records a payment when it arrives, and a
+   * personal meal booking is settled here at the guest house.
+   */
+  awaitingPayment?: AwaitingPaymentRow[];
   nowIso: string;
 }) {
   return (
@@ -45,6 +54,9 @@ export function CaretakerConsole({
           { label: "Awaiting check-out", count: overdue.length, anchor: "awaiting", alert: true },
           { label: "To bill", count: toBill.length, anchor: "to-bill" },
           { label: "Upcoming stays", count: upcoming.length, anchor: "upcoming" },
+          ...(awaitingPayment.length > 0
+            ? [{ label: "Awaiting payment", count: awaitingPayment.length, anchor: "awaiting-payment" }]
+            : []),
         ]}
       />
       <div id="checkouts" className="scroll-mt-20">
@@ -88,16 +100,16 @@ export function CaretakerConsole({
 
       {/* Checked out and still owing (24 Sep 2026). Reception issues the
           invoice, and a stay marked Vacated used to vanish from this console
-          with its bill still open — the manager had this list, the desk that
+          with its bill still open - the manager had this list, the desk that
           hands the invoice over did not. */}
       {toBill.length > 0 && (
         <section id="to-bill" className="scroll-mt-20">
           <SectionHeading
-            title="Checked out — to bill"
+            title="Checked out - to bill"
             count={toBill.length}
             description={
               <>
-                These guests have left and their invoice is not yet paid. Issue it, print it again, or record the payment — they leave this list once it is settled. Older stays are invoiced from the Approval Log.
+                These guests have left and their invoice is not yet paid. Issue it, print it again, or record the payment - they leave this list once it is settled. Older stays are invoiced from the Approval Log.
               </>
             }
           />
@@ -111,7 +123,7 @@ export function CaretakerConsole({
           count={upcoming.length}
           description={
             <>
-              Rooms are already held for these bookings. If a guest turns up before their booked time, use <span className="font-medium">Early check-in</span> — the arrival is recorded as early rather than pretending it was on time.
+              Rooms are already held for these bookings. If a guest turns up before their booked time, use <span className="font-medium">Early check-in</span> - the arrival is recorded as early rather than pretending it was on time.
             </>
           }
         />
@@ -123,6 +135,27 @@ export function CaretakerConsole({
           <StaysTable bookings={upcoming} />
         )}
       </section>
+
+      {/* **Awaiting payment** - the last section, and the only one with no
+          date window (7 Oct 2026). "Checked out - to bill" above is the
+          stays nobody has invoiced yet; this is the bills that have gone out
+          and not come back. A personal meal booking is settled here at the
+          guest house, which is why reception has the list and not only the
+          manager. */}
+      {awaitingPayment.length > 0 && (
+        <section id="awaiting-payment" className="scroll-mt-20">
+          <SectionHeading
+            title="Awaiting payment"
+            count={awaitingPayment.length}
+            description={
+              <>
+                An invoice has been issued for each of these and is not yet paid - most recent first, with no cut-off. Open the invoice to record the payment when it arrives.
+              </>
+            }
+          />
+          <AwaitingPaymentTable rows={awaitingPayment} />
+        </section>
+      )}
     </div>
   );
 }

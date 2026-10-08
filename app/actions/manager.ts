@@ -20,8 +20,8 @@ import { getStore } from "@/lib/store";
 import { getRules } from "@/lib/settings-server";
 import { instituteDate, instituteIso, toInstituteDateTimeValue } from "@/lib/tz";
 import type { BookingStatus, MealDietCounts, MealPlan } from "@/lib/types";
-import { includesMeals, RoomClashError } from "@/lib/types";
-import { ROOM_HOLDING_STATUSES } from "@/lib/workflow";
+import { includesMeals, RoomClashError, STATUS_LABELS } from "@/lib/types";
+import { reinstateMissedError, ROOM_HOLDING_STATUSES, statusBeforeMissed } from "@/lib/workflow";
 import type { ActionResult } from "./bookings";
 
 /**
@@ -45,7 +45,7 @@ export async function updateBookingStay(
       return { ok: false, error: "Only the Guest House Manager can change a booking" };
     }
     if (!input.reason?.trim()) {
-      return { ok: false, error: "Say why the booking is being changed — it goes in the log" };
+      return { ok: false, error: "Say why the booking is being changed - it goes in the log" };
     }
     const store = getStore();
     const booking = await store.getBooking(bookingId);
@@ -118,7 +118,7 @@ export async function updateBookingMeals(
       return { ok: false, error: "Only the Guest House Manager can change meals" };
     }
     if (!input.reason?.trim()) {
-      return { ok: false, error: "Say why the meals are being changed — it goes in the log" };
+      return { ok: false, error: "Say why the meals are being changed - it goes in the log" };
     }
     const store = getStore();
     const booking = await store.getBooking(bookingId);
@@ -137,7 +137,7 @@ export async function updateBookingMeals(
     if (problem) return { ok: false, error: problem };
     if (meals.length > 0) {
       // Each person's own preference (1 Oct 2026): the split has to add up to
-      // whoever is eating — a dining booking's head count, else the guests
+      // whoever is eating - a dining booking's head count, else the guests
       // needing a bed.
       const diners = dinersFor(booking);
       const split = input.meal_diet_counts;
@@ -151,7 +151,7 @@ export async function updateBookingMeals(
         ok: false,
         error:
           booking.service_type === "meals_only"
-            ? "A meals-only booking needs at least one meal — cancel it instead"
+            ? "A meals-only booking needs at least one meal - cancel it instead"
             : "Leave at least one meal, or there is nothing for the kitchen to do",
       };
     }
@@ -184,8 +184,8 @@ export async function updateBookingMeals(
  * Move an already-approved booking into different rooms.
  *
  * `allocateRooms` covers the first allocation, which also approves the
- * booking. This is the later change — a guest asks to move, or a room is
- * taken out of service — and leaves the status alone.
+ * booking. This is the later change - a guest asks to move, or a room is
+ * taken out of service - and leaves the status alone.
  */
 export async function reassignRooms(
   bookingId: string,
@@ -198,7 +198,7 @@ export async function reassignRooms(
       return { ok: false, error: "Only the Guest House Manager can reassign rooms" };
     }
     if (!reason?.trim()) {
-      return { ok: false, error: "Say why the rooms are changing — it goes in the log" };
+      return { ok: false, error: "Say why the rooms are changing - it goes in the log" };
     }
     const store = getStore();
     const booking = await store.getBooking(bookingId);
@@ -260,7 +260,7 @@ export async function reassignRooms(
   }
 }
 
-/** Cancel any booking outright — a stay called off at the desk or by telephone. */
+/** Cancel any booking outright - a stay called off at the desk or by telephone. */
 export async function managerCancelBooking(
   bookingId: string,
   reason: string
@@ -284,7 +284,7 @@ export async function managerCancelBooking(
     // is read before the status change releases them.
     const heldRooms = ROOM_HOLDING_STATUSES.includes(booking.status);
 
-    // Leaving ROOM_HOLDING_STATUSES releases the rooms on its own — see
+    // Leaving ROOM_HOLDING_STATUSES releases the rooms on its own - see
     // `updateBookingStatus`, where the rule lives.
     await store.updateBookingStatus(
       bookingId,
@@ -297,13 +297,73 @@ export async function managerCancelBooking(
       }
     );
     // The requester did not ask for this one, so they certainly need to hear
-    // about it — and the desk needs to know if a room just came back.
+    // about it - and the desk needs to know if a room just came back.
     await notifyCancelled(bookingId, user, reason.trim(), { heldRooms });
     revalidateBookings();
     return { ok: true };
   } catch (e) {
     console.error("managerCancelBooking failed", e);
     return { ok: false, error: "Something went wrong while cancelling" };
+  }
+}
+
+/**
+ * Put a **Missed** request back in the queue it was waiting in (migration 29,
+ * 7 Oct 2026).
+ *
+ * Separate from `reinstateBooking` below, because the two are not the same
+ * thing. A cancelled or rejected booking was *decided*: its rooms were
+ * released and may have gone to somebody else, so it comes back to the
+ * manager to be allocated afresh. A missed request was never decided at all -
+ * so it goes back to whoever owed the decision (`statusBeforeMissed`), which
+ * is usually the manager but may be a warden or an HOD.
+ *
+ * And there is no "this stay has already ended" guard here, deliberately: a
+ * missed request's check-in is in the past by definition, so that guard would
+ * refuse nearly every one of them. What the manager does next is move the
+ * dates (`updateBookingStay`) and allocate - which is exactly what they did
+ * with a lapsed request before this status existed. The nightly sweep will
+ * not mark it again (`missedSweepable` reads the reinstatement off the log).
+ */
+export async function reinstateMissedBooking(
+  bookingId: string,
+  reason: string
+): Promise<ActionResult> {
+  try {
+    const user = await requireUser();
+    if (!canManageAnyBooking(user.role)) {
+      return { ok: false, error: "Only the Guest House Manager can reinstate a request" };
+    }
+    if (!reason?.trim()) {
+      return { ok: false, error: "Say why the request is being reinstated - it goes in the log" };
+    }
+    const store = getStore();
+    const booking = await store.getBooking(bookingId);
+    if (!booking) return { ok: false, error: "Booking not found" };
+    const problem = reinstateMissedError(booking);
+    if (problem) return { ok: false, error: problem };
+
+    const back = statusBeforeMissed(booking.logs);
+    await store.updateBookingStatus(
+      bookingId,
+      { status: back },
+      {
+        action_by: user.id,
+        action_by_name: user.full_name,
+        new_status: back,
+        remarks: `Reinstated by the Guest House Manager after being marked Missed, and returned to ${STATUS_LABELS[back]}: ${reason.trim()}`,
+      }
+    );
+    await recordAudit(user, "booking.reinstated", bookingId, {
+      from: "MISSED",
+      to: back,
+      reason: reason.trim(),
+    });
+    revalidateBookings();
+    return { ok: true };
+  } catch (e) {
+    console.error("reinstateMissedBooking failed", e);
+    return { ok: false, error: "Something went wrong while reinstating the request" };
   }
 }
 
@@ -324,7 +384,7 @@ export async function reinstateBooking(
       return { ok: false, error: "Only the Guest House Manager can reinstate a booking" };
     }
     if (!reason?.trim()) {
-      return { ok: false, error: "Say why the booking is being reinstated — it goes in the log" };
+      return { ok: false, error: "Say why the booking is being reinstated - it goes in the log" };
     }
     const store = getStore();
     const booking = await store.getBooking(bookingId);
@@ -335,7 +395,7 @@ export async function reinstateBooking(
       return { ok: false, error: "Only a cancelled or rejected booking can be reinstated" };
     }
     if (instituteDate(toInstituteDateTimeValue(booking.check_out)) <= new Date()) {
-      return { ok: false, error: "This stay has already ended — raise a new booking instead" };
+      return { ok: false, error: "This stay has already ended - raise a new booking instead" };
     }
 
     await store.updateBookingStatus(

@@ -32,8 +32,8 @@ export const ID_DOCUMENT = path.join(process.cwd(), "e2e", "fixtures", "id-docum
 /**
  * Each account's session cookies, kept for the rest of the run.
  *
- * The sign-in throttle counts every attempt — 8 per username per 15 minutes
- * (`RATE_LIMITS.signIn`) — and by 25 Sep 2026 the suite needed the manager
+ * The sign-in throttle counts every attempt - 8 per username per 15 minutes
+ * (`RATE_LIMITS.signIn`) - and by 25 Sep 2026 the suite needed the manager
  * more often than that, so the journeys that came last were locked out with
  * "Too many attempts". A person at the desk stays signed in, and so does the
  * suite now: the **first** sign-in of each account goes through the form, and
@@ -60,7 +60,7 @@ export async function signIn(page: Page, account: { uid: string; password: strin
   sessions.set(account.uid, await page.context().cookies());
 }
 
-/** The institute's own clock — the one every date on the form is read in. */
+/** The institute's own clock - the one every date on the form is read in. */
 const INSTITUTE_TIME_ZONE = "Asia/Kolkata";
 
 function institutePartsAt(at: Date): { date: string; hour: number; minute: number } {
@@ -125,8 +125,8 @@ export async function setTime(
 /**
  * Pick a guest house, unless the form already settled on the only one offered.
  *
- * A role with one guest house is not shown a dropdown at all — the name is
- * stated and the id travels in a hidden field — so a filled value is the
+ * A role with one guest house is not shown a dropdown at all - the name is
+ * stated and the id travels in a hidden field - so a filled value is the
  * answer, whatever element is holding it.
  */
 export async function chooseGuestHouse(page: Page): Promise<void> {
@@ -141,8 +141,8 @@ export async function chooseGuestHouse(page: Page): Promise<void> {
 /**
  * The kitchen a dining booking is going to.
  *
- * A meals-only booking has no guest house question — only a kitchen can take
- * one and there is one — so the name is read from the card that states it. The
+ * A meals-only booking has no guest house question - only a kitchen can take
+ * one and there is one - so the name is read from the card that states it. The
  * manager's console opens on a tab per guest house, so the journey still needs
  * to know which.
  */
@@ -159,7 +159,7 @@ export function nextDay(date: string): string {
 }
 
 /**
- * The name of the guest house the form is currently set to — from the
+ * The name of the guest house the form is currently set to - from the
  * dropdown's selected option, or from the statement that replaces it when the
  * role has only one.
  */
@@ -182,12 +182,15 @@ export async function fillGuest(
   const base = `rooms.${room}.guests.${guest}`;
   const field = (leaf: string) => page.locator(`[name="${base}.${leaf}"]`);
 
-  await field("name").fill(person.name);
-  // An infant card ("Add infant") offers its ages as a list; a guest card is a number box.
-  const age = field("age");
-  if (await age.evaluate((el) => el.tagName === "SELECT")) await age.selectOption(person.age);
-  else await age.fill(person.age);
-  if (await field("gender").count()) await field("gender").selectOption(person.gender ?? "female");
+  /**
+   * The relationship first, then the name (7 Oct 2026). Where the requester's
+   * academic record names a parent, choosing that relationship fills the name
+   * in and makes the box read-only - so a name typed before the relationship
+   * would be overwritten, and one typed after would be refused by the
+   * browser. Filling only an editable box means a caller can go on asking for
+   * "Asha Menon" as the mother of a student whose record says otherwise, and
+   * get the record's answer.
+   */
   const relationship = field("relationship");
   if (await relationship.count()) {
     // The dropdown form takes an option; the free-text form takes a word.
@@ -195,10 +198,18 @@ export async function fillGuest(
     if (isSelect) await relationship.selectOption(person.relationship ?? "Mother");
     else await relationship.fill(person.relationship ?? "Colleague");
   }
+  const name = field("name");
+  if ((await name.getAttribute("readonly")) === null) await name.fill(person.name);
+
+  // An infant card ("Add infant") offers its ages as a list; a guest card is a number box.
+  const age = field("age");
+  if (await age.evaluate((el) => el.tagName === "SELECT")) await age.selectOption(person.age);
+  else await age.fill(person.age);
+  if (await field("gender").count()) await field("gender").selectOption(person.gender ?? "female");
   const aadhaar = field("id_number");
   if (await aadhaar.count()) await aadhaar.fill(person.aadhaar ?? "432112345678");
 
-  // The ID document has no `name` — it is held outside the form, by guest key.
+  // The ID document has no `name` - it is held outside the form, by guest key.
   const upload = page.locator('input[type="file"]');
   const index = await upload.count();
   if (index > 0) {

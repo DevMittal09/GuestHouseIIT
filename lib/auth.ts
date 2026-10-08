@@ -13,7 +13,7 @@ import type { Profile } from "@/lib/types";
  * page and action asks the same question in the same way. Nothing else in the
  * codebase touches the cookie.
  *
- * `gh_mock_user` — the old "cookie holding a profile id" — is honoured only
+ * `gh_mock_user` - the old "cookie holding a profile id" - is honoured only
  * when the developer sign-in doors are switched on (`DEV_LOGIN=true`, never in
  * production). That is what lets a developer switch persona in one click; in
  * production the branch does not exist.
@@ -95,8 +95,8 @@ export const mfaState = cache(async (): Promise<MfaState> => {
 });
 
 /**
- * Why this request may not perform a dangerous action — changing roles or
- * settings, deleting things — or null when it may.
+ * Why this request may not perform a dangerous action - changing roles or
+ * settings, deleting things - or null when it may.
  *
  * A developer must have proved their second factor in the last ten minutes.
  * Everyone else is already behind the console password; this is the seam where
@@ -108,7 +108,7 @@ export async function stepUpProblem(): Promise<string | null> {
   if (!mfaRequiredFor(current.user.role)) return null;
   if (!current.session) return null; // developer sign-in (dev only) has no session to step up
   const state = await mfaState();
-  if (!state.enrolled) return "Set up two-factor authentication first — Console → Security.";
+  if (!state.enrolled) return "Set up two-factor authentication first - Console → Security.";
   if (!state.recent) return "Enter your authenticator code to confirm this change (Console → Security).";
   return null;
 }

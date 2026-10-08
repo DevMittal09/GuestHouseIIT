@@ -19,7 +19,7 @@ import {
 /**
  * Meals a booking asks the guest house to lay on, day by day.
  *
- * Stored as one jsonb array on the booking (`bookings.meals`, migration 8) —
+ * Stored as one jsonb array on the booking (`bookings.meals`, migration 8) -
  * one entry per institute calendar day that has at least one meal, in date
  * order: `[{ date: "2026-09-15", breakfast: false, lunch: true, dinner: true }]`.
  * It is still one answer to one question, read as a whole, which is why it is
@@ -79,7 +79,7 @@ export const NO_MEALS: MealPreferences = { breakfast: false, lunch: false, dinne
  *
  * It used to be all three: most guests eat, so the form filled the days in
  * and the requester cleared what they would miss. The office asked for
- * **lunch only** — it is the meal the guest house actually serves most of,
+ * **lunch only** - it is the meal the guest house actually serves most of,
  * and offering breakfast and dinner by default was producing head counts for
  * meals nobody turned up to. Breakfast and dinner are one tick away.
  *
@@ -96,7 +96,7 @@ export const DEFAULT_MEALS_ON: MealPreferences = {
 
 /**
  * The most days a meal plan may cover. A guard against a runaway loop on a
- * nonsense check-out date, not a policy — no real stay comes close.
+ * nonsense check-out date, not a policy - no real stay comes close.
  */
 export const MAX_MEAL_DAYS = 366;
 
@@ -214,7 +214,7 @@ export function bookableMealsOn(
 }
 
 /**
- * The first institute date that still has a meal to offer — today while any
+ * The first institute date that still has a meal to offer - today while any
  * of today's meals is open, otherwise tomorrow. So a dining form opened in the
  * afternoon starts on tomorrow rather than on a day of greyed-out boxes.
  *
@@ -240,7 +240,7 @@ export function mealLeadTimeError(
   for (const day of plan) {
     for (const meal of MEAL_KEYS) {
       if (day[meal] && !isMealBookable(day.date, meal, now, windows)) {
-        return `${mealDeadlineNote(day.date, meal, windows)} — that has passed, so the kitchen can no longer take it.`;
+        return `${mealDeadlineNote(day.date, meal, windows)} - that has passed, so the kitchen can no longer take it.`;
       }
     }
   }
@@ -275,7 +275,7 @@ function hasAnyMeal(day: MealPreferences): boolean {
  *   merged, days with no meal are removed, and the rest are sorted.
  * - The pre-migration-8 shape, `{breakfast, lunch, dinner}` meaning "these
  *   meals for the whole stay", is expanded over the days of `stay`, keeping
- *   each meal only where it is served during the stay — the same conversion
+ *   each meal only where it is served during the stay - the same conversion
  *   migration 8 applies to stored rows.
  * - Anything else (missing, or a hand-edited mock database) is "no meals".
  */
@@ -314,8 +314,8 @@ export function normalizeMeals(
 }
 
 /**
- * Why a meal plan does not fit a stay — a day outside it, or a meal served
- * before check-in or after check-out — or null when it fits. The booking
+ * Why a meal plan does not fit a stay - a day outside it, or a meal served
+ * before check-in or after check-out - or null when it fits. The booking
  * schema runs it on the client and again on the server.
  */
 export function mealPlanError(
@@ -383,7 +383,7 @@ export type MealChoices = ReadonlyMap<string, boolean>;
 
 /**
  * The slots the grid shows as ticked: each slot's own answer, else its meal's
- * default — `DEFAULT_MEALS_ON` on a meal booking, `NO_MEALS` on a stay.
+ * default - `DEFAULT_MEALS_ON` on a meal booking, `NO_MEALS` on a stay.
  */
 export function mealSlotsFromChoices(
   days: StayMealDay[],
@@ -404,7 +404,7 @@ export function mealSlotsFromChoices(
 /**
  * The decisions after the grid hands back a new set of ticks. Only the slots
  * currently on screen are reconsidered, so a meal turned off for dates the stay
- * no longer covers stays off if those dates come back — the mirror of the rule
+ * no longer covers stays off if those dates come back - the mirror of the rule
  * `mealPlanFromSlots` applies to ticks.
  */
 export function choicesFromMealSlots(
@@ -503,8 +503,8 @@ export function normalizeDietCounts(value: unknown): MealDietCounts {
 }
 
 /**
- * The split to act on for a booking: its own counts, or — for a booking made
- * before each person had their own preference — the whole head count under
+ * The split to act on for a booking: its own counts, or - for a booking made
+ * before each person had their own preference - the whole head count under
  * the one preference it carries. A booking with meals and neither is
  * "unknown", which `kitchenHeadCount` reports as such rather than guessing.
  */
@@ -531,7 +531,7 @@ export function dietCountsError(counts: MealDietCounts, headCount: number): stri
   if (total !== headCount) {
     return `The vegetarian and non-vegetarian counts add up to ${total}, but the booking is for ${headCount} ${
       headCount === 1 ? "person" : "people"
-    } — they have to match`;
+    } - they have to match`;
   }
   return null;
 }
@@ -576,7 +576,7 @@ export function dinersFor(booking: KitchenBooking): number {
  * Plates for one meal on one day, split by preference. Each booking's own
  * split is used (`mealDietCounts`, which spreads a legacy whole-party
  * preference over the head count); a booking with meals and no preference at
- * all is "unknown" — the kitchen would rather see that than have it guessed.
+ * all is "unknown" - the kitchen would rather see that than have it guessed.
  */
 export function kitchenHeadCount(
   bookings: KitchenBooking[],
@@ -609,12 +609,14 @@ export function kitchenHeadCount(
  * whether or not it has been approved yet.
  *
  * A request waiting for the manager is a request the manager is about to say
- * yes to, so it has to hold its places — otherwise the limit could be
+ * yes to, so it has to hold its places - otherwise the limit could be
  * oversubscribed by submissions that all pass the check and are then all
- * approved. Rejected and cancelled requests release theirs.
+ * approved. Rejected, cancelled and missed requests release theirs.
  */
 export function countsAgainstMealCapacity(status: string): boolean {
-  return !["REJECTED", "CANCELLED", "CANCELLATION_APPROVED", "VACATED"].includes(status);
+  // MISSED joins the list (migration 29): nobody decided it before its last
+  // day of meals, so the kitchen is not cooking it and its places are free.
+  return !["REJECTED", "CANCELLED", "CANCELLATION_APPROVED", "VACATED", "MISSED"].includes(status);
 }
 
 /** Plates already booked for one meal on one day, across the bookings given. */
@@ -639,7 +641,7 @@ export function mealPlatesBooked(
  * null when it can (1 Oct 2026).
  *
  * The office's limit is **30 people at a sitting**, counting everyone already
- * booked for it — one kitchen cooking for a guest house, not a canteen. It is
+ * booked for it - one kitchen cooking for a guest house, not a canteen. It is
  * a Setting (`rules.meals.max_diners_per_meal`, 0 = no limit) and it is
  * checked per day **and** per meal, because that is what the kitchen actually
  * has to serve at once.

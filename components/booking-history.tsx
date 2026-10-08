@@ -74,6 +74,11 @@ const TILES: Tile[] = [
   { key: "rejected", label: "Rejected", statuses: ["REJECTED"], tone: "border-t-[#d4351c]" },
   { key: "pending", label: "In progress", statuses: ACTIVE_STATUSES, tone: "border-t-saffron" },
   { key: "cancelled", label: "Cancelled", statuses: ["CANCELLED", "CANCELLATION_REQUESTED", "CANCELLATION_APPROVED"], tone: "border-t-[#6b655f]" },
+  // Nobody decided it in time (migration 29). Not filed under Cancelled:
+  // a cancellation is something somebody asked for, and this is the opposite
+  // - the question asked and never answered. The office needs to be able to
+  // count them.
+  { key: "missed", label: "Missed", statuses: ["MISSED"], tone: "border-t-[#6b655f]" },
 ];
 
 function sameStatusSet(a: BookingStatus[], b: BookingStatus[]): boolean {
@@ -125,14 +130,14 @@ export function BookingHistory({
   currentUserName: string;
   showAlumniCard: boolean;
   pageSize: number;
-  /** True for requester roles — hides the "Handled by me / Everything" toggle. */
+  /** True for requester roles - hides the "Handled by me / Everything" toggle. */
   isOwnBookings?: boolean;
-  /** True for gh_manager / developer — shows PDF export controls. */
+  /** True for gh_manager / developer - shows PDF export controls. */
   canExportPdf?: boolean;
   /**
    * True for the desk (manager, caretaker, developer): an Invoice button on
    * every stay that has checked out, however long ago, and on a dining
-   * booking once approved — to issue, reprint or record payment (24 Sep 2026).
+   * booking once approved - to issue, reprint or record payment (24 Sep 2026).
    */
   canInvoice?: boolean;
 }) {
@@ -291,7 +296,7 @@ export function BookingHistory({
         </form>
 
         <p className="text-xs text-muted-foreground">
-          Narrow a search with prefixes —{" "}
+          Narrow a search with prefixes -{" "}
           <code className="rounded bg-muted px-1 py-0.5 font-mono">ref:</code> booking id,{" "}
           <code className="rounded bg-muted px-1 py-0.5 font-mono">guest:</code> guest name,{" "}
           <code className="rounded bg-muted px-1 py-0.5 font-mono">room:</code> allotted room,{" "}
@@ -332,7 +337,7 @@ export function BookingHistory({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Handled by me / Everything — only for approver roles. */}
+          {/* Handled by me / Everything - only for approver roles. */}
           {!isOwnBookings && (
             <Filter label="Show">
               <div className="flex h-9 rounded-md border border-border-strong p-0.5">
@@ -403,7 +408,7 @@ export function BookingHistory({
             </div>
 
             {/* Rolling windows and whole calendar periods are different
-                questions — "last 30 days" is not "last month" — so they are
+                questions - "last 30 days" is not "last month" - so they are
                 grouped rather than mixed into one undifferentiated row. */}
             {DATE_PRESET_GROUPS.map((group) => (
               <div key={group.label} className="flex flex-wrap items-center gap-1.5">
@@ -418,7 +423,7 @@ export function BookingHistory({
                       key={preset}
                       type="button"
                       aria-pressed={active}
-                      title={`${formatDate(range.from)} — ${formatDate(range.to)}`}
+                      title={`${formatDate(range.from)} - ${formatDate(range.to)}`}
                       onClick={() =>
                         // Clicking the lit chip clears it, so the row is also
                         // the way back to "any date".
@@ -591,7 +596,7 @@ export function BookingHistory({
  * A row of tick boxes where **everything ticked is the default**.
  *
  * `selected` empty means "no filter", which is the same set of results as
- * every box ticked — so that is how it is drawn. Unticking one sends the
+ * every box ticked - so that is how it is drawn. Unticking one sends the
  * remaining boxes as an explicit list; ticking the last one back returns to
  * empty, and the URL loses the parameter again.
  */
@@ -674,7 +679,7 @@ function HistoryRow({
       <TableCell className="font-mono text-xs">{booking.booking_reference_id}</TableCell>
       {!isOwnBookings && (
         <TableCell>
-          <span className="font-medium">{booking.requester?.full_name ?? "—"}</span>
+          <span className="font-medium">{booking.requester?.full_name ?? "-"}</span>
           <span className="block text-xs text-muted-foreground">
           Head: {describeDebit(booking)}
         </span>
@@ -685,7 +690,7 @@ function HistoryRow({
           </span>
         </TableCell>
       )}
-      <TableCell>{booking.guest_house?.name ?? "—"}</TableCell>
+      <TableCell>{booking.guest_house?.name ?? "-"}</TableCell>
       <TableCell className="whitespace-nowrap">
         {formatDate(booking.check_in)}
         <span className="block text-xs text-muted-foreground">
@@ -707,7 +712,7 @@ function HistoryRow({
               </span>
             </>
           ) : (
-            <span className="text-muted-foreground">—</span>
+            <span className="text-muted-foreground">-</span>
           )}
         </TableCell>
       )}

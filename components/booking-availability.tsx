@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { getRoomAvailability } from "@/app/actions/availability";
+import { AvailabilityCountsPanel } from "@/components/availability-counts";
 import {
   AvailabilityLegend,
   OccupancyChart,
@@ -14,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import {
   AVAILABILITY_VIEWS,
   availabilityRange,
+  type AvailabilityCounts,
   bucketOccupancyByDay,
   bucketOccupancyByHour,
   describeRange,
@@ -29,20 +31,33 @@ import { segment, segmentGroup } from "@/components/segmented";
 import type { Room, RoomOccupancySegment } from "@/lib/types";
 
 interface Loaded {
-  /** Which request this data answers — see `requestKey` below. */
+  /** Which request this data answers - see `requestKey` below. */
   key: string;
   rooms: Room[];
   segments: RoomOccupancySegment[];
   failed: boolean;
-  /** The desk's view, with turnarounds and overlaps — see `getRoomAvailability`. */
+  /**
+   * Whether this answer carries the rooms at all. A requester is sent counts
+   * and nothing else (7 Oct 2026) - see `getRoomAvailability`.
+   */
   detailed: boolean;
+  counts: AvailabilityCounts;
 }
+
+const NO_COUNTS: AvailabilityCounts = {
+  total: 0,
+  days: [],
+  freeByDay: [],
+  freeThroughout: 0,
+  freeByHour: null,
+  bookedNow: null,
+};
 
 /**
  * Room availability for the stay being booked, inside the booking form.
  *
  * It opens on the check-in date, but the requester can move around freely from
- * there — a day either side, the whole week, the month. That was the point of
+ * there - a day either side, the whole week, the month. That was the point of
  * the office's request: someone who finds their date full needs to see what
  * *is* free before they can pick again, and sending them to `/availability` in
  * another tab meant losing a half-filled form.
@@ -59,7 +74,7 @@ export function BookingAvailability({
   guestHouseName,
 }: {
   guestHouseId: string;
-  /** The check-in date chosen on the form — where the chart starts. */
+  /** The check-in date chosen on the form - where the chart starts. */
   date: string;
   guestHouseName?: string;
 }) {
@@ -69,7 +84,7 @@ export function BookingAvailability({
   /**
    * Where the requester has browsed to, tagged with the check-in date it was
    * chosen against. Picking a new check-in date makes `from` stale, so the
-   * chart snaps back to the new date on its own — no effect, and no setState
+   * chart snaps back to the new date on its own - no effect, and no setState
    * during render for the React Compiler to reject.
    */
   const [browsed, setBrowsed] = useState<{ from: string; value: string } | null>(null);
@@ -101,22 +116,31 @@ export function BookingAvailability({
           segments: data.segments,
           failed: false,
           detailed: data.detailed,
+          counts: data.counts,
         });
       })
       .catch(() => {
         if (cancelled) return;
-        setLoaded({ key: requestKey, rooms: [], segments: [], failed: true, detailed: false });
+        setLoaded({
+          key: requestKey,
+          rooms: [],
+          segments: [],
+          failed: true,
+          detailed: false,
+          counts: NO_COUNTS,
+        });
       });
     return () => {
       cancelled = true;
     };
   }, [guestHouseId, range, requestKey]);
 
-  // Both memoised off `loaded` so the identity is stable between renders —
+  // Both memoised off `loaded` so the identity is stable between renders -
   // `?? []` alone makes a fresh array every render and re-runs the bucketing.
   const rooms = useMemo(() => loaded?.rooms ?? [], [loaded]);
   const segments = useMemo(() => loaded?.segments ?? [], [loaded]);
   const detailed = loaded?.detailed ?? false;
+  const counts = loaded?.counts ?? NO_COUNTS;
 
   const hourly = useMemo(
     () => (range?.view === "day" ? bucketOccupancyByHour(rooms, segments, range.start) : null),
@@ -129,8 +153,11 @@ export function BookingAvailability({
 
   const today = toDateInputValue(new Date());
   const showsToday = range?.days.includes(today) ?? false;
-  const freeAllRange = rooms.filter((r) => (daily?.get(r.id)?.segments.length ?? 0) === 0);
+  // From the counts, which the server computes for everybody - so the line
+  // above the panel reads the same arithmetic whether the rooms came with it.
+  const roomCount = detailed ? rooms.length : counts.total;
   const period = view === "day" ? "day" : view;
+  const hasRooms = roomCount > 0;
 
   if (!guestHouseId || !date) {
     return (
@@ -195,7 +222,7 @@ export function BookingAvailability({
           </div>
         </div>
 
-        {/* Only offered once it would do something — and it is how the
+        {/* Only offered once it would do something - and it is how the
             requester gets back after wandering off. */}
         {browsing && (
           <Button type="button" variant="outline" size="sm" onClick={() => setBrowsed(null)}>
@@ -218,14 +245,14 @@ export function BookingAvailability({
           "Loading availability…"
         ) : loaded?.failed ? (
           <span className="text-destructive">
-            Could not load availability — you can still submit; the manager checks again at
+            Could not load availability - you can still submit; the manager checks again at
             allocation.
           </span>
         ) : range ? (
           <>
-            <span className="font-medium text-foreground">{freeAllRange.length}</span> of{" "}
-            <span className="font-medium text-foreground">{rooms.length}</span> rooms
-            {guestHouseName ? ` at ${guestHouseName}` : ""} are free all {period} —{" "}
+            <span className="font-medium text-foreground">{counts.freeThroughout}</span> of{" "}
+            <span className="font-medium text-foreground">{roomCount}</span> rooms
+            {guestHouseName ? ` at ${guestHouseName}` : ""} are free all {period} -{" "}
             <span className="font-medium text-foreground">{describeRange(range)}</span>
           </>
         ) : (
@@ -235,22 +262,32 @@ export function BookingAvailability({
 
       {browsing && (
         <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-xs text-ink">
-          You are looking at another date. This does not change your booking — the stay is still
+          You are looking at another date. This does not change your booking - the stay is still
           the check-in and check-out you entered above.
         </p>
       )}
 
-      {rooms.length > 0 && range && (
+      {hasRooms && range && (
         <>
-          <AvailabilityLegend detailed={detailed} showsToday={showsToday} dayView={view === "day"} />
+          {detailed && (
+            <AvailabilityLegend showsToday={showsToday} dayView={view === "day"} />
+          )}
           <div className={cn("transition-opacity", loading && "opacity-60")}>
-            {hourly ? (
+            {/* A requester is sent counts and no rooms (7 Oct 2026), so there
+                is nothing here to draw a chart from. */}
+            {!detailed ? (
+              <AvailabilityCountsPanel
+                counts={counts}
+                today={today}
+                currentHour={showsToday ? instituteHour() : null}
+                compact
+              />
+            ) : hourly ? (
               <OccupancyChart
                 rooms={rooms}
                 occupancy={hourly}
                 currentHour={showsToday ? instituteHour() : null}
                 compact
-                simple={!detailed}
               />
             ) : daily ? (
               <RangeOccupancyChart
@@ -260,19 +297,18 @@ export function BookingAvailability({
                 freeByDay={freeRoomsByDay(rooms, daily, range)}
                 today={today}
                 nowAt={rangeProgress(range)}
-                simple={!detailed}
               />
             ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
-            Times are IST. Rooms are held by approved, occupied and pending-cancellation bookings —
+            Times are IST. Rooms are held by approved, occupied and pending-cancellation bookings -
             a request still awaiting approval reserves nothing, so availability can change before
             yours is approved.
           </p>
         </>
       )}
 
-      {!loading && rooms.length === 0 && !loaded?.failed && (
+      {!loading && !hasRooms && !loaded?.failed && (
         <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
           This guest house has no active rooms.
         </p>

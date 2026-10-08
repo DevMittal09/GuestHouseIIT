@@ -34,7 +34,7 @@ import { segment, segmentGroup } from "@/components/segmented";
  * The mail log.
  *
  * This is the screen you want at 11pm during the pilot, when the question is
- * "did the warden actually get told?" — and the answer has to be better than
+ * "did the warden actually get told?" - and the answer has to be better than
  * reading the server's stdout. It shows the queue, what failed and why, and
  * lets a developer retry one message or flush the queue without a shell.
  *
@@ -61,7 +61,7 @@ type Loaded = {
   rows: MailOutboxSummary[];
   counts: Record<MailStatus, number>;
   transport: string;
-  /** `MAIL_REDIRECT_ALL_TO`, when set — every message goes there instead. */
+  /** `MAIL_REDIRECT_ALL_TO`, when set - every message goes there instead. */
   redirectAllTo: string | null;
 };
 
@@ -125,7 +125,7 @@ export function MailOutbox() {
     startWorking(async () => {
       const result = await sendTestEmail();
       if (result.ok) {
-        toast.success("Test message sent — check the inbox it was addressed to");
+        toast.success("Test message sent - check the inbox it was addressed to");
         load(filter);
       } else {
         toast.error(result.error);
@@ -166,7 +166,7 @@ export function MailOutbox() {
               </p>
               <p className="mt-1 text-muted-foreground">
                 Nothing reaches its real recipient, and <strong>Copy to addresses receive
-                nothing</strong> — the redirect drops CC. Unset{" "}
+                nothing</strong> - the redirect drops CC. Unset{" "}
                 <code className="font-mono">MAIL_REDIRECT_ALL_TO</code> in the deployment&apos;s
                 environment to deliver for real. The outbox below still records who each message
                 was meant for.
@@ -191,7 +191,7 @@ export function MailOutbox() {
         <CardHeader>
           <CardTitle>Outbox</CardTitle>
           <CardDescription>
-            Every message the portal has queued, newest first. Recipients are the real ones — a
+            Every message the portal has queued, newest first. Recipients are the real ones - a
             redirect set by MAIL_REDIRECT_ALL_TO is applied when the message is sent, not when it
             is queued, so this stays an honest record of who was meant to be told.
           </CardDescription>

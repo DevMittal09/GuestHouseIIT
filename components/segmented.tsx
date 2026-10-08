@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * A segmented control's styles (30 Sep 2026): a hairline box of options
- * with the chosen one filled ink — crisp, high-contrast and shadowless, in
+ * with the chosen one filled ink - crisp, high-contrast and shadowless, in
  * place of the pale "pill in a well" the registry ships. Used by the view
  * switchers (Day / Week / Month), the mail outbox filter, the Form Builder's
  * role picker and the console's section list.

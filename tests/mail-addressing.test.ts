@@ -28,7 +28,7 @@ describe("MAIL_REDIRECT_ALL_TO", () => {
   const message = {
     to: ["manager@iitpkd.ac.in"],
     cc: ["warden@iitpkd.ac.in", "hod@iitpkd.ac.in"],
-    subject: "Guest house approvals — Mon 21 Sep 2026",
+    subject: "Guest house approvals - Mon 21 Sep 2026",
     html: "<html><body><p>Hello</p></body></html>",
     text: "Hello",
     references: ["<root@x>"],
@@ -211,7 +211,7 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
     expect(desk.flatMap((m) => m.cc)).toEqual(["warden.malhar@iitpkd.ac.in"]);
   });
 
-  it("cancellation: To the manager, the reviewers in CC — no separate for-information mail", async () => {
+  it("cancellation: To the manager, the reviewers in CC - no separate for-information mail", async () => {
     const id = await route("employee-priya", "employee", "PENDING_HOD");
     await notify.notifyCancellationRequested(id, "Plans changed");
     expect(await mails(id, "booking.cancellation_requested.manager")).toEqual([
@@ -257,7 +257,7 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
       expect(row.thread_root).toContain(`<gh-booking-${await reference(first)}-`);
     }
     // The root is per mailbox as well, so one address's messages about one
-    // booking are one conversation — that is what a mail client groups.
+    // booking are one conversation - that is what a mail client groups.
     const byAddress = new Map<string, Set<string>>();
     for (const row of await threaded(first)) {
       const key = row.to_emails[0];
@@ -265,7 +265,7 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
     }
     expect([...byAddress.values()].every((roots) => roots.size === 1)).toBe(true);
 
-    // Different bookings — different threads, even queued the same minute.
+    // Different bookings - different threads, even queued the same minute.
     const rootsOfSecond = new Set((await threaded(second)).map((r) => r.thread_root));
     for (const row of await threaded(first)) {
       expect(rootsOfSecond.has(row.thread_root)).toBe(false);

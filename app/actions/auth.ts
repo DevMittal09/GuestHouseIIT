@@ -15,8 +15,8 @@ import { getStore } from "@/lib/store";
 import type { ActionResult } from "./bookings";
 
 /**
- * The sign-in doors. Each one ends in `startSession()` — a row in `sessions`
- * and an opaque cookie (`lib/sessions.ts`) — so there is a single definition
+ * The sign-in doors. Each one ends in `startSession()` - a row in `sessions`
+ * and an opaque cookie (`lib/sessions.ts`) - so there is a single definition
  * of what being signed in means, and a single place to revoke it.
  */
 
@@ -53,7 +53,7 @@ export async function signInWithLdap(
   const gate = await throttle(`signin:ldap:${uid}`);
   if (!gate.allowed) {
     await recordAudit(null, "signin.failure", uid, { reason: "throttled" });
-    return { ok: false, error: `Too many attempts — try again in ${gate.retryAfter}s` };
+    return { ok: false, error: `Too many attempts - try again in ${gate.retryAfter}s` };
   }
 
   let entry: DirectoryEntry | null;
@@ -85,7 +85,7 @@ export async function signInWithLdap(
 
   await startSession(profile.id);
   await recordAudit(profile, "signin.success", profile.email, { method: "ldap" });
-  // Outside any try/catch — `redirect()` signals by throwing.
+  // Outside any try/catch - `redirect()` signals by throwing.
   redirect(safeNextPath(next) ?? homeForRole(profile.role));
 }
 
@@ -111,7 +111,7 @@ export async function logout(): Promise<void> {
   redirect(SIGN_IN_PATH);
 }
 
-/** Sign out of every browser — the answer to a laptop left in a lab. */
+/** Sign out of every browser - the answer to a laptop left in a lab. */
 export async function logoutEverywhere(): Promise<ActionResult & { sessions?: number }> {
   const current = await getSessionUser();
   if (!current) return { ok: false, error: "You are not signed in" };

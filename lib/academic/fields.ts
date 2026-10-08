@@ -16,7 +16,7 @@ const KIND_FOR_ROLE: Record<Role, AcademicRecordKind | null> = {
   iar_cell: "office",
   // Clubs and fest councils are represented by their student representatives.
   club: "student_rep",
-  // The IAR Student Cell account (alumnicell@) — "Alumni" in the office's
+  // The IAR Student Cell account (alumnicell@) - "Alumni" in the office's
   // "two roles, Office and Alumni" for IAR.
   iar_student_cell: "alumni_office",
   warden: "warden",
@@ -47,11 +47,11 @@ export const ACADEMIC_KIND_LABELS: Record<AcademicRecordKind, string> = {
  * `lib/mail/addressing.ts`), not just a line on the form.
  *
  * - `approver`: everyone who approves any stage of the request's chain on the
- *   portal — found through `canReview()` on the requester's profile, the same
+ *   portal - found through `canReview()` on the requester's profile, the same
  *   rule that routes the request. A student's warden, a club's advisor or
  *   council secretary, a faculty member's HOD on an official booking, the IAR
  *   Office for the Student Cell.
- * - `head_of_department`: the head of an office — the Departments & Clubs
+ * - `head_of_department`: the head of an office - the Departments & Clubs
  *   console first (the office's unit, or the unit above it), else the head
  *   named on the office's academic record.
  */
@@ -139,7 +139,7 @@ function parentRows(record: StudentRecord): DetailRow[] {
 
 /**
  * What the portal itself knows, for when the academic database has no record
- * or cannot be reached — and for accounts it never describes, like the Guest
+ * or cannot be reached - and for accounts it never describes, like the Guest
  * House Manager booking at the desk. Only the fields that are set.
  */
 export function profileRows(profile: Profile): DetailRow[] {

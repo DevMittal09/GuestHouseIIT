@@ -1,12 +1,12 @@
 /**
  * Guard against the npm bug that keeps breaking CI (npm/cli#4828).
  *
- * Packages with native binaries — rolldown (under Vitest), and anything else
- * that ships one `.node` per platform — declare one optional dependency per
+ * Packages with native binaries - rolldown (under Vitest), and anything else
+ * that ships one `.node` per platform - declare one optional dependency per
  * platform. When `npm install` runs on Windows, npm records **only** the
  * binding it actually installed and drops the other fourteen from
- * `package-lock.json`. Nothing looks wrong locally. Then `npm ci` on Linux —
- * GitHub Actions, Vercel — builds its ideal tree, finds those entries absent
+ * `package-lock.json`. Nothing looks wrong locally. Then `npm ci` on Linux -
+ * GitHub Actions, Vercel - builds its ideal tree, finds those entries absent
  * and refuses to install anything at all:
  *
  *     npm error `npm ci` can only install packages when your package.json and
@@ -16,13 +16,13 @@
  * It costs a push, a CI run and a failed deployment to find that out. This
  * says the same thing in one second, before anything is installed: for every
  * package in the lock, every optional dependency it declares must have an
- * entry the lock can resolve, the way npm looks it up — beside the package,
+ * entry the lock can resolve, the way npm looks it up - beside the package,
  * then up towards the root.
  *
  * If it fails, the fix is not to delete the lockfile and reinstall (that is
  * what causes it). Take the missing entries from a lockfile resolved with no
- * `node_modules` present — `npm install --package-lock-only` in an empty
- * directory holding only `package.json` — and put them back.
+ * `node_modules` present - `npm install --package-lock-only` in an empty
+ * directory holding only `package.json` - and put them back.
  *
  * Runs on plain Node with no dependencies, so CI can call it before `npm ci`.
  */

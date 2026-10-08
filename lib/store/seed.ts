@@ -25,11 +25,11 @@ export const seedGuestHouses: GuestHouse[] = [
 ];
 
 /**
- * The rooms the office actually has (23 Sep 2026) — these replaced the dummy
+ * The rooms the office actually has (23 Sep 2026) - these replaced the dummy
  * B-101…/H-101… blocks. Bageshri numbers its rooms by floor and skips 205,
  * 301 and 304; Hamsanandi is four blocks, A to D, and only A4 exists in A.
  *
- * Both guest houses are **all double sharing** — the office confirmed there is
+ * Both guest houses are **all double sharing** - the office confirmed there is
  * no single room, which is why the booking form and the developer console no
  * longer ask for a type. `room_type` stays on the row because the tariffs and
  * the invoice are priced per type, and a stored booking may still point at a
@@ -62,7 +62,7 @@ export const seedRooms: Room[] = [
   ...makeRooms(GH_HAMSANANDI, HAMSANANDI_ROOM_NUMBERS),
 ];
 
-// `ldap_uid` is each persona's dummy LDAP username — the local part of the
+// `ldap_uid` is each persona's dummy LDAP username - the local part of the
 // address, as in the institute directory. Passwords are in
 // lib/ldap/mock-directory.ts and .memories/30-credentials-and-access.md.
 export const seedProfiles: Profile[] = [
@@ -88,7 +88,7 @@ export const seedProfiles: Profile[] = [
   // council secretary a student. Change who heads a unit in the console and
   // their queue moves with it.
   // Faculty in CSE, and Faculty Advisor of the Cultural Affairs Council and
-  // of Petrichor — an appointment in Departments & Clubs, not an account of
+  // of Petrichor - an appointment in Departments & Clubs, not an account of
   // its own, so New Booking offers him "Book as Faculty Advisor" beside his
   // own bookings, and naming someone else there moves it to them.
   { id: "faculty-arun", email: "arun.prasad@iitpkd.ac.in", full_name: "Dr. Arun Prasad", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "arun.prasad", unit_id: "unit-cse", staff_category: "faculty" },
@@ -111,7 +111,7 @@ export const seedProfiles: Profile[] = [
 
 /**
  * The demo units. A department with an HOD, and a council with its Faculty
- * Advisor, its secretary and a fest under it — the student bodies' hierarchy
+ * Advisor, its secretary and a fest under it - the student bodies' hierarchy
  * (migration 25).
  */
 export const seedUnits: Unit[] = [
@@ -201,7 +201,7 @@ const iso = (daysFromNow: number, hour: number) => {
 };
 
 /**
- * The demo bookings, written without the fields migration 11 added — they are
+ * The demo bookings, written without the fields migration 11 added - they are
  * the same on almost every row, so `withDefaults` below fills them in rather
  * than repeating them nine times. A row that differs says so explicitly.
  */
@@ -351,7 +351,7 @@ const demoBookings: DemoBooking[] = [
     updated_at: iso(-4, 16),
   },
   // Meals without a room: a department hosting an examiner for the day. It
-  // holds no rooms and no guest rows — the kitchen needs a head count — and
+  // holds no rooms and no guest rows - the kitchen needs a head count - and
   // goes straight to the manager rather than through an approval chain.
   {
     id: "bk-demo-6",
@@ -440,7 +440,7 @@ function demoMeals(b: Booking, pick: (meal: MealKey, dayIndex: number) => boolea
   );
 }
 
-/** Only the Hamsanandi bookings have meals — Bageshri serves none. */
+/** Only the Hamsanandi bookings have meals - Bageshri serves none. */
 const DEMO_MEALS: Record<string, (b: Booking) => MealPlan> = {
   // Visiting artists: every meal served during the stay.
   "bk-demo-2": (b) => demoMeals(b, () => true),
@@ -451,7 +451,7 @@ const DEMO_MEALS: Record<string, (b: Booking) => MealPlan> = {
   "bk-demo-6": (b) => demoMeals(b, (meal) => meal === "lunch"),
 };
 
-/** Veg unless the stay says otherwise — the kitchen's usual default. */
+/** Veg unless the stay says otherwise - the kitchen's usual default. */
 const DEMO_MEAL_PREFERENCE: Record<string, "veg" | "non_veg"> = {
   "bk-demo-2": "non_veg",
   "bk-demo-4": "veg",
@@ -502,7 +502,7 @@ export const seedGuests: BookingGuest[] = [
 
 /**
  * Occupancy for the seeded bookings. Only bk-demo-5 is approved, so it is the
- * only one holding rooms — the others are still awaiting approval and reserve
+ * only one holding rooms - the others are still awaiting approval and reserve
  * nothing. Derived from the bookings above so the two cannot disagree.
  */
 export const seedRoomHolds: RoomHold[] = seedBookings.flatMap((b) =>

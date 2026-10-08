@@ -11,8 +11,8 @@ import type {
 } from "@/lib/types";
 
 /**
- * Fixtures for the test suite. Everything here is plain data — no store, no
- * clock — so a test says exactly what state it starts from.
+ * Fixtures for the test suite. Everything here is plain data - no store, no
+ * clock - so a test says exactly what state it starts from.
  */
 
 export const GH: GuestHouse = { id: "gh-1", name: "Test House", total_rooms: 4, serves_meals: true };

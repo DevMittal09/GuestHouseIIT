@@ -5,7 +5,7 @@ import { facultyAdvisorOf, secretaryEmailOf, type Unit } from "./units";
  * Councils, fests and clubs do not book for themselves (24 Sep 2026).
  *
  * The office's rule: **a club's bookings are raised by its Faculty Advisor.**
- * The student bodies sit in a hierarchy — a Faculty Advisor for each council
+ * The student bodies sit in a hierarchy - a Faculty Advisor for each council
  * (Technical Affairs, Cultural Affairs), a student secretary for it, and the
  * clubs under it; a fest such as Petrichor has an advisor of its own. The
  * club's own account (a shared mailbox such as petrichor@ or sec_arts@) can
@@ -21,7 +21,7 @@ import { facultyAdvisorOf, secretaryEmailOf, type Unit } from "./units";
  * Such a booking is still the club's: it hangs off the club's account
  * (`user_id`, `user_role: "club"`), so it is debited, scoped and reported
  * exactly as a club booking always was. `created_by` names the advisor. It
- * needs nobody to forward it — the advisor is who would have — so it goes
+ * needs nobody to forward it - the advisor is who would have - so it goes
  * **straight to the Guest House Manager** (`routeFor`,
  * `raisedByFacultyInCharge`), and its Copy to starts with the council
  * secretary's mailbox (`defaultCopyToFor`).
@@ -29,7 +29,7 @@ import { facultyAdvisorOf, secretaryEmailOf, type Unit } from "./units";
  * Pure: everything is worked out from profiles and units already loaded.
  */
 
-/** Roles whose own account may not raise a booking — their Faculty Advisor does. */
+/** Roles whose own account may not raise a booking - their Faculty Advisor does. */
 export const BOOKED_BY_FACULTY_IN_CHARGE: Role[] = ["club"];
 
 export function mustBookThroughFacultyInCharge(role: Role): boolean {
@@ -37,8 +37,8 @@ export function mustBookThroughFacultyInCharge(role: Role): boolean {
 }
 
 /**
- * Whether this account may be named a Faculty Advisor: a faculty member —
- * an employee who is not non-teaching staff — or one of the old Faculty
+ * Whether this account may be named a Faculty Advisor: a faculty member -
+ * an employee who is not non-teaching staff - or one of the old Faculty
  * Advisor accounts. Never a student, a club or a desk. The console refuses
  * anyone else, and the rules below ignore anyone else a stored row names.
  */
@@ -79,8 +79,8 @@ export function clubsBookableBy(user: Profile, profiles: Profile[], units: Unit[
 /**
  * What Copy to starts with when the Faculty Advisor books for a club: the
  * secretary's mailbox of the club's council (or the club's own, where it has
- * one). Left out when that mailbox *is* the club's account — booking for the
- * council itself — because the account is mailed anyway. The advisor can
+ * one). Left out when that mailbox *is* the club's account - booking for the
+ * council itself - because the account is mailed anyway. The advisor can
  * remove it or add more; it is a default, not a rule.
  */
 export function defaultCopyToFor(club: Pick<Profile, "email" | "unit_id">, units: Unit[]): string[] {
@@ -111,5 +111,5 @@ export function clubBookingNotice(inCharge: Pick<Profile, "full_name" | "email">
     return "Club bookings are raised by the club's Faculty Advisor, and nobody is set as yours yet. Ask the Guest House Manager to name your Faculty Advisor in Departments & Clubs.";
   }
   const names = inCharge.map((p) => `${p.full_name} (${p.email})`).join(" or ");
-  return `Club bookings are raised by the club's Faculty Advisor — ${names}. Ask them to book; the request will appear here under My Bookings, and every mail about it reaches this account too.`;
+  return `Club bookings are raised by the club's Faculty Advisor - ${names}. Ask them to book; the request will appear here under My Bookings, and every mail about it reaches this account too.`;
 }

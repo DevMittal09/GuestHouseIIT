@@ -26,7 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ? "Full control over users, guest houses, rooms, booking forms and every booking."
     : "Accounts, guest houses and rooms, booking forms, and what the automatic emails say.";
 
-  // The real gate is in `requireDeveloper()` — this only decides what to draw.
+  // The real gate is in `requireDeveloper()` - this only decides what to draw.
   if (!(await isAdminUnlocked())) {
     return (
       <div className="space-y-6">

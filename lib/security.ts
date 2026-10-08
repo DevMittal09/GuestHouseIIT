@@ -1,7 +1,7 @@
 /**
  * Shapes the security layer stores (Phase 8): the second factor, throttles
  * and DPDP requests. Kept out of `lib/sessions.ts` and `lib/crypto.ts` so the
- * stores — and the browser bundle of a page that only shows a status — do not
+ * stores - and the browser bundle of a page that only shows a status - do not
  * pull in `server-only` code.
  */
 
@@ -22,7 +22,7 @@ export type UserMfa = {
 export type RateLimitResult = {
   allowed: boolean;
   attempts: number;
-  /** Seconds until the window resets — the `Retry-After` of a 429. */
+  /** Seconds until the window resets - the `Retry-After` of a 429. */
   retryAfter: number;
 };
 
@@ -56,7 +56,7 @@ export const RATE_LIMITS = {
   twoFactor: { limit: 10, windowSeconds: 10 * 60 },
   /** Per user, for anything that renders a PDF. */
   documents: { limit: 60, windowSeconds: 5 * 60 },
-  /** Per IP, for the OAuth start — it costs a round trip to Google. */
+  /** Per IP, for the OAuth start - it costs a round trip to Google. */
   oauth: { limit: 20, windowSeconds: 10 * 60 },
 } as const;
 

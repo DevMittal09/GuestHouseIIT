@@ -13,7 +13,7 @@ export type LinkTab = {
  * A row of page-level tabs that are links (30 Sep 2026): the desk's guest
  * house switcher on `/manager`, `/caretaker` and the kitchen view. A hairline
  * under the row and a 3px vermilion bar under the current one, as on the
- * public site's map — the same mark the portal's own nav uses — with
+ * public site's map - the same mark the portal's own nav uses - with
  * `aria-current="page"` so it is announced, not only drawn. Each is a real
  * link (`?gh=`), so the choice survives a reload and can be bookmarked.
  */

@@ -27,7 +27,7 @@ import { MAIL_THREAD_OF, type MailEventKey } from "@/lib/mail/types";
  * house can change without a developer.
  *
  * The bodies are assembled from the booking in `lib/mail/templates.ts` and
- * are **not** editable here — a free-text editor over "check-in, check-out,
+ * are **not** editable here - a free-text editor over "check-in, check-out,
  * rooms allocated" could only produce a mail that contradicts the database.
  * What is editable is the wording around those facts.
  */
@@ -38,7 +38,7 @@ export function MailTemplateEditor({ templates }: { templates: MailTemplateOverr
         <p className="font-medium">How these work</p>
         <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
           <li>
-            The body of each mail — dates, rooms, the party, the approval trail — is built from
+            The body of each mail - dates, rooms, the party, the approval trail - is built from
             the booking itself and cannot be edited here. It would only ever disagree with the
             booking.
           </li>
@@ -47,7 +47,7 @@ export function MailTemplateEditor({ templates }: { templates: MailTemplateOverr
             edit away and goes back to it.
           </li>
           <li>
-            Turning one off stops that mail going out at all. Nothing else changes — the booking
+            Turning one off stops that mail going out at all. Nothing else changes - the booking
             still moves through the same stages.
           </li>
           <li>
@@ -164,7 +164,7 @@ function TemplateRow({ template }: { template: MailTemplateOverride }) {
                   {" "}
                   This email joins the recipient&rsquo;s thread for the booking it is about, so
                   every message about one request stays in one conversation. The thread&rsquo;s
-                  subject is the same on every message so mail clients keep it together — a custom
+                  subject is the same on every message so mail clients keep it together - a custom
                   subject is shown as the message&rsquo;s preview line instead.
                 </>
               )}
@@ -172,7 +172,7 @@ function TemplateRow({ template }: { template: MailTemplateOverride }) {
                 <>
                   {" "}
                   This email joins the recipient&rsquo;s daily log thread, whose subject stays the
-                  same all day so mail clients keep it together — a custom subject is shown as the
+                  same all day so mail clients keep it together - a custom subject is shown as the
                   message&rsquo;s preview line instead.
                 </>
               )}
@@ -198,7 +198,7 @@ function TemplateRow({ template }: { template: MailTemplateOverride }) {
               rows={2}
               value={outro}
               onChange={(e) => setOutro(e.target.value)}
-              placeholder="Small print at the foot — e.g. bring a photo ID to reception."
+              placeholder="Small print at the foot - e.g. bring a photo ID to reception."
               disabled={!enabled}
             />
           </div>

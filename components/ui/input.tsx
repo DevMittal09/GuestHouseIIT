@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils"
 
 /**
  * A text box (30 Sep 2026): 4px corners, a firm `--border-strong` edge that
- * turns ink on focus with a vermilion ring outside it — the GOV.UK habit of a
- * focus state nobody can miss — and red when invalid.
+ * turns ink on focus with a vermilion ring outside it - the GOV.UK habit of a
+ * focus state nobody can miss - and red when invalid.
  */
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (

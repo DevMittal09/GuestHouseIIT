@@ -8,9 +8,9 @@ import { approversOf, hodUnitIdFor, isHodForAny } from "@/lib/units";
 import { canReviewBooking } from "@/lib/workflow";
 
 /**
- * The HOD's queue (Phase 4): official bookings from their department — its
+ * The HOD's queue (Phase 4): official bookings from their department - its
  * faculty and staff, its office when the office asked for HOD approval, and
- * any club whose HOD it is — waiting on their approval.
+ * any club whose HOD it is - waiting on their approval.
  *
  * Worked out on every visit from `canReview`, the same predicate the Forward
  * button checks, so an HOD sees exactly what they may act on: their own

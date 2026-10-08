@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
  * are unset the button reads **Mock Authentication** and opens the persona
  * picker at `/mock-login`. This runs against a **production** build with no
  * Google configuration and no `DEV_LOGIN`, which is exactly the deployment the
- * office is demonstrating from — the door used to 404 there, which is how the
+ * office is demonstrating from - the door used to 404 there, which is how the
  * personas went missing.
  *
  * When Google is configured the button becomes the real OAuth flow and this

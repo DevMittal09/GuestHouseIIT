@@ -8,7 +8,7 @@ import type { Profile } from "@/lib/types";
 /**
  * Releasing a no-show (Phase 7): the booking is cancelled, its rooms freed,
  * `no_show_released_at` set, the audit log written and the requester told.
- * Server-only — never a server action, so the automatic run cannot be called
+ * Server-only - never a server action, so the automatic run cannot be called
  * from a browser.
  */
 export async function releaseNoShow(
@@ -25,7 +25,7 @@ export async function releaseNoShow(
       action_by: actor?.id ?? null,
       action_by_name: actor?.full_name ?? "System (automatic no-show release)",
       new_status: "CANCELLED",
-      remarks: `Released as a no-show — the guest did not arrive${reason ? `: ${reason}` : ""}`,
+      remarks: `Released as a no-show - the guest did not arrive${reason ? `: ${reason}` : ""}`,
     }
   );
   await recordAudit(actor, "booking.no_show_released", bookingId, { automatic: actor === null, reason });
@@ -35,7 +35,7 @@ export async function releaseNoShow(
 /**
  * The automatic no-show release, run by the daily cron: every approved stay
  * whose guest has not checked in `hours` after the booked check-in. Idempotent
- * — a released booking is no longer APPROVED, and its mail is keyed on the
+ * - a released booking is no longer APPROVED, and its mail is keyed on the
  * release time. Returns how many were released.
  */
 export async function runNoShowRelease(now: Date, hours: number): Promise<number> {

@@ -26,14 +26,14 @@ export function devLoginEnabled(): boolean {
  * Google sign-in is not built yet, so the button on the sign-in card has to
  * lead somewhere: while `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` /
  * `APP_URL` are not all set, it opens the persona picker instead. Configure
- * Google and the door closes on its own — there is no flag to remember to
+ * Google and the door closes on its own - there is no flag to remember to
  * unset, which is the failure mode a `DEV_LOGIN`-style switch has.
  *
  * `MOCK_LOGIN=false` closes it early, for a deployment that wants LDAP only.
  *
  * > This is a placeholder, not authentication: anyone who can reach the page
  * > can become any account on it. It must not be open on a deployment holding
- * > real bookings — see `.memories/04-roadmap.md` item 1.
+ * > real bookings - see `.memories/04-roadmap.md` item 1.
  */
 export function mockLoginEnabled(): boolean {
   if (process.env.MOCK_LOGIN === "false") return false;
@@ -93,14 +93,14 @@ export function envProblems(env: NodeJS.ProcessEnv = process.env): EnvProblem[] 
   if (production && env.DEV_LOGIN === "true") {
     problems.push({
       variable: "DEV_LOGIN",
-      problem: "the developer sign-in doors must never be enabled in production — unset it",
+      problem: "the developer sign-in doors must never be enabled in production - unset it",
     });
   }
   if (production) {
     const allowMock = env.ALLOW_MOCK_STORE === "true";
     for (const [name, why] of REQUIRED_IN_PRODUCTION) {
       if (allowMock && (name === "NEXT_PUBLIC_SUPABASE_URL" || name === "SUPABASE_SERVICE_ROLE_KEY")) continue;
-      if (!env[name]) problems.push({ variable: name, problem: `is required in production — ${why}` });
+      if (!env[name]) problems.push({ variable: name, problem: `is required in production - ${why}` });
     }
     if (env.APP_URL && !url.safeParse(env.APP_URL).success) {
       problems.push({ variable: "APP_URL", problem: "is not a URL (e.g. https://guesthouse.iitpkd.ac.in)" });
@@ -109,7 +109,7 @@ export function envProblems(env: NodeJS.ProcessEnv = process.env): EnvProblem[] 
       problems.push({ variable: "ID_ENCRYPTION_KEY", problem: "must be 32 bytes, base64 encoded (openssl rand -base64 32)" });
     }
     if (env.CRON_SECRET && env.CRON_SECRET.length < 16) {
-      problems.push({ variable: "CRON_SECRET", problem: "is too short to be a secret — use at least 16 characters" });
+      problems.push({ variable: "CRON_SECRET", problem: "is too short to be a secret - use at least 16 characters" });
     }
   }
   if (env.GOOGLE_CLIENT_ID && !env.GOOGLE_CLIENT_SECRET) {

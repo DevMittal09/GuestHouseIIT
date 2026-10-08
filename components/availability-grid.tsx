@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AvailabilityCountsPanel } from "@/components/availability-counts";
 import {
   AvailabilityLegend,
   OccupancyChart,
@@ -23,6 +24,7 @@ import {
 import {
   AVAILABILITY_VIEWS,
   availabilityRange,
+  type AvailabilityCounts,
   bucketOccupancyByDay,
   bucketOccupancyByHour,
   describeRange,
@@ -30,7 +32,6 @@ import {
   freeRoomsByDay,
   rangeProgress,
   roomRangeStatus,
-  roomsBookedAt,
   shiftAnchor,
   toDateInputValue,
   type AvailabilityView,
@@ -42,14 +43,28 @@ import { segment, segmentGroup } from "@/components/segmented";
 import { type GuestHouse, type Room, type RoomOccupancySegment } from "@/lib/types";
 
 interface Loaded {
-  /** Which request this data answers — see `requestKey` below. */
+  /** Which request this data answers - see `requestKey` below. */
   key: string;
   rooms: Room[];
   segments: RoomOccupancySegment[];
   showsOccupant: boolean;
-  /** The desk's view, with turnarounds and overlaps — see `getRoomAvailability`. */
+  /**
+   * Whether this answer carries the rooms at all. The desk draws the chart
+   * from `rooms` and `segments`; everyone else is sent `counts` and nothing
+   * else (7 Oct 2026) - see `getRoomAvailability`.
+   */
   detailed: boolean;
+  counts: AvailabilityCounts;
 }
+
+const NO_COUNTS: AvailabilityCounts = {
+  total: 0,
+  days: [],
+  freeByDay: [],
+  freeThroughout: 0,
+  freeByHour: null,
+  bookedNow: null,
+};
 
 const todayValue = () => toDateInputValue(new Date());
 
@@ -89,7 +104,14 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
       .catch(() => {
         if (cancelled) return;
         toast.error("Could not load room availability");
-        setLoaded({ key: requestKey, rooms: [], segments: [], showsOccupant: false, detailed: false });
+        setLoaded({
+          key: requestKey,
+          rooms: [],
+          segments: [],
+          showsOccupant: false,
+          detailed: false,
+          counts: NO_COUNTS,
+        });
       });
     return () => {
       cancelled = true;
@@ -100,6 +122,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
   const segments = useMemo(() => loaded?.segments ?? [], [loaded]);
   const showsOccupant = loaded?.showsOccupant ?? false;
   const detailed = loaded?.detailed ?? false;
+  const counts = loaded?.counts ?? NO_COUNTS;
 
   // The day chart draws hours. Every view also takes per-day totals, which
   // drive the badges and counts, so "booked" means the same thing in all three.
@@ -117,8 +140,14 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
   // Institute time, not the reader's: the markers have to line up with the
   // rows, which are the guest house's hours and days.
   const currentHour = instituteHour();
-  const bookedNow = showsToday && daily ? roomsBookedAt(daily) : 0;
-  const bookedInRange = rooms.filter((r) => (daily?.get(r.id)?.segments.length ?? 0) > 0).length;
+  /**
+   * The header's figures come from `counts`, which the server computes for
+   * everybody - so a requester, who is sent no rooms at all (7 Oct 2026),
+   * still gets the same totals the desk reads, from the same arithmetic.
+   */
+  const roomCount = detailed ? rooms.length : counts.total;
+  const bookedNow = counts.bookedNow ?? 0;
+  const bookedInRange = Math.max(0, counts.total - counts.freeThroughout);
   const period = PERIOD[view];
 
   if (guestHouses.length === 0) {
@@ -208,15 +237,15 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
               "Loading availability…"
             ) : (
               <>
-                <Figure>{rooms.length}</Figure> rooms · <Figure>{bookedInRange}</Figure> booked{" "}
+                <Figure>{roomCount}</Figure> rooms · <Figure>{bookedInRange}</Figure> booked{" "}
                 {view === "day" ? "on this date" : `during this ${period}`}
                 {view !== "day" && (
                   <>
                     {" "}
-                    · <Figure>{rooms.length - bookedInRange}</Figure> free all {period}
+                    · <Figure>{counts.freeThroughout}</Figure> free all {period}
                   </>
                 )}
-                {showsToday && (
+                {counts.bookedNow !== null && (
                   <>
                     {" "}
                     · <Figure>{bookedNow}</Figure> booked right now
@@ -230,37 +259,50 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
 
       <Card>
         <CardHeader>
-          <CardTitle>Room availability{range ? ` — ${describeRange(range)}` : ""}</CardTitle>
+          <CardTitle>Room availability{range ? ` - ${describeRange(range)}` : ""}</CardTitle>
           <CardDescription>
-            {view === "day"
-              ? "Hours of the day down the side, room numbers across the top. Red means the room is booked for that hour; blank means it is free."
-              : "Days down the side, room numbers across the top. Each day's row runs from midnight at its top edge to midnight at its bottom, so a stay is one red bar from check-in to check-out. The figure beside each date is the number of rooms free all day."}
+            {!detailed
+              ? view === "day"
+                ? "How many rooms are free, for the day and hour by hour. The guest house allocates the actual room when your request is approved."
+                : "How many rooms are free on each day. The guest house allocates the actual room when your request is approved."
+              : view === "day"
+                ? "Hours of the day down the side, room numbers across the top. Red means the room is booked for that hour; blank means it is free."
+                : "Days down the side, room numbers across the top. Each day's row runs from midnight at its top edge to midnight at its bottom, so a stay is one red bar from check-in to check-out. The figure beside each date is the number of rooms free all day."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <AvailabilityLegend
-            detailed={detailed}
-            showsToday={showsToday}
-            dayView={view === "day"}
-            freeLabel="Vacant"
-          />
+          {detailed && (
+            <AvailabilityLegend
+              showsToday={showsToday}
+              dayView={view === "day"}
+              freeLabel="Vacant"
+            />
+          )}
 
           {!range ? (
             <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
               Pick a date to see room availability.
             </p>
-          ) : rooms.length === 0 && !loading ? (
+          ) : roomCount === 0 && !loading ? (
             <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
               This guest house has no active rooms.
             </p>
           ) : (
             <div className={cn("transition-opacity", loading && "opacity-60")}>
-              {hourly ? (
+              {/* A requester is sent counts and no rooms at all (7 Oct 2026),
+                  so there is nothing here to draw a chart from - and nothing
+                  that could leak a room number. */}
+              {!detailed ? (
+                <AvailabilityCountsPanel
+                  counts={counts}
+                  today={today}
+                  currentHour={showsToday ? currentHour : null}
+                />
+              ) : hourly ? (
                 <OccupancyChart
                   rooms={rooms}
                   occupancy={hourly}
                   currentHour={showsToday ? currentHour : null}
-                  simple={!detailed}
                 />
               ) : daily ? (
                 <RangeOccupancyChart
@@ -270,7 +312,6 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
                   freeByDay={freeRoomsByDay(rooms, daily, range)}
                   today={today}
                   nowAt={rangeProgress(range)}
-                  simple={!detailed}
                 />
               ) : null}
             </div>
@@ -284,7 +325,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           this list adds every booking's exact period, reference id and
           housekeeping state, which is the guest house's own business and was
           making the page read like an operations screen. The manager and the
-          caretaker keep it — `detailed` is the same flag that decides whether
+          caretaker keep it - `detailed` is the same flag that decides whether
           the chart draws turnarounds and overlaps, and the server sets it
           (`getRoomAvailability`), so what is shown and what is sent agree. */}
       {range && detailed && (
@@ -324,7 +365,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
                   <div className="min-w-48 flex-1 space-y-1">
                     {roomSegments.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
-                        Free all {period} — available to book.
+                        Free all {period} - available to book.
                       </p>
                     ) : (
                       roomSegments.map((s) => (
@@ -353,7 +394,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           Availability shown for {describeRange(range)}. Times are IST.
           {detailed
             ? " Rooms are held by approved, occupied and pending-cancellation bookings; requests still awaiting approval do not reserve a room."
-            : " A room shown as booked is not available for those hours. Nothing is reserved for you until the Guest House Manager allocates a room."}
+            : " The figures count rooms that are free for the whole period shown. Nothing is reserved for you until the Guest House Manager allocates a room, and a request still awaiting approval holds none."}
         </p>
       )}
     </div>

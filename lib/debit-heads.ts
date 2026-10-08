@@ -3,7 +3,7 @@ import { DEBIT_HEAD_LABELS, type BookingType, type DebitHead, type Profile, type
 import type { Unit } from "./units";
 
 /**
- * Which budget a stay is charged to — the "debitable head" (Phase 4).
+ * Which budget a stay is charged to - the "debitable head" (Phase 4).
  *
  * Required on every booking. **Which heads a requester may choose is
  * configuration** (Settings → Debitable heads, `rules.debit`), keyed by the
@@ -15,7 +15,7 @@ import type { Unit } from "./units";
  * | Non-teaching staff | Department / Special Funds | Department / Special Funds |
  * | Officer office (Director, Registrar…) | Institute / Special Funds | Institute / Special Funds |
  * | Department office | Department / Special Funds | Department / Special Funds |
- * | Club | Department / Special Funds | — |
+ * | Club | Department / Special Funds | - |
  * | Personal booking (anyone) | Personal / Special Funds | Personal / Special Funds |
  *
  * **Special Funds** is offered to **everyone except students** (25 Sep 2026;
@@ -24,7 +24,7 @@ import type { Unit } from "./units";
  *
  * The allowed list is computed on the server (`debitHeadsByType`) and handed
  * to the booking form, and the schema checks the choice against the same list
- * on both sides — so a crafted request cannot charge a project from a staff
+ * on both sides - so a crafted request cannot charge a project from a staff
  * account. Choosing **Project** requires picking a project from the list the
  * console maintains (`lib/projects.ts`).
  *
@@ -60,7 +60,7 @@ export const DEBIT_CATEGORIES: DebitCategory[] = [
 export const DEBIT_CATEGORY_LABELS: Record<DebitCategory, string> = {
   faculty: "Faculty (official)",
   staff: "Non-teaching staff (official)",
-  officer_office: "Officer offices — Director, Registrar, Deans",
+  officer_office: "Officer offices - Director, Registrar, Deans",
   department_office: "Department offices",
   club: "Student clubs",
   student: "Students",
@@ -113,11 +113,15 @@ export type DebitRules = {
 /**
  * Revision 2 (24 Sep 2026): Special Funds on every official booking.
  * Revision 3 (25 Sep 2026): Special Funds for everyone except students.
- * Revision 4 (1 Oct 2026): **not** on a personal dining booking — the office
+ * Revision 4 (1 Oct 2026): **not** on a personal dining booking - the office
  * asked for it to go from a personal meal booking, where the only honest
  * answer is the requester's own money.
+ * Revision 5 (7 Oct 2026): **not** on a personal booking of any kind. The
+ * office asked for a personal booking to stop asking the question at all, so
+ * the one answer it can have is the requester's own money - a stay as well as
+ * a meal (see {@link asksForDebitHead}).
  */
-export const DEBIT_RULES_REVISION = 4;
+export const DEBIT_RULES_REVISION = 5;
 
 /**
  * The categories Special Funds reached at each revision. A row is upgraded by
@@ -145,7 +149,10 @@ export const DEFAULT_DEBIT_RULES: DebitRules = {
     student: ["personal_funds"],
     iar_student_cell: ["institute_grant", "special_budget"],
     alumni: ["institute_grant", "personal_funds", "special_budget"],
-    personal: ["personal_funds", "special_budget"],
+    // A personal booking is the requester's own money, and since 7 Oct 2026
+    // it is not even asked about - the form states nothing and the server
+    // writes Personal Funds itself.
+    personal: ["personal_funds"],
     manager: [...STANDARD_DEBIT_HEADS],
   },
   dining: {
@@ -170,7 +177,7 @@ export const DEFAULT_DEBIT_RULES: DebitRules = {
  * Bring a saved Settings row up to the current defaults' shape, once.
  *
  * Settings rows replace the default lists wholesale, so a row saved before
- * Special Funds reached a category would never offer it there — and the
+ * Special Funds reached a category would never offer it there - and the
  * console could not show it either, because the grid only lists heads in use.
  * A row's `revision` says which categories it has already been offered it
  * for (none without one): Special Funds is added to the categories each later
@@ -194,11 +201,12 @@ export function upgradeDebitRules(stored: Record<string, unknown>): Record<strin
     return out;
   };
   /**
-   * Revision 4 takes Special Funds *off* personal dining — the one thing in
-   * here that removes rather than adds. It runs after the additions above, so
-   * a row still on revision 1 is brought all the way forward: Special Funds
-   * is offered everywhere revisions 2 and 3 offered it, and then withdrawn
-   * from the one list revision 4 withdraws it from.
+   * Revisions 4 and 5 take Special Funds *off* the personal lists - the only
+   * thing in here that removes rather than adds. They run after the additions
+   * above, so a row still on revision 1 is brought all the way forward:
+   * Special Funds is offered everywhere revisions 2 and 3 offered it, and
+   * then withdrawn from personal dining (revision 4) and from personal room
+   * bookings too (revision 5).
    */
   const withoutPersonalSpecialFunds = (lists: unknown) => {
     if (!lists || typeof lists !== "object") return lists;
@@ -209,7 +217,7 @@ export function upgradeDebitRules(stored: Record<string, unknown>): Record<strin
   };
   return {
     ...stored,
-    room: add(stored.room),
+    room: withoutPersonalSpecialFunds(add(stored.room)),
     dining: withoutPersonalSpecialFunds(add(stored.dining)),
     revision: DEBIT_RULES_REVISION,
   };
@@ -233,7 +241,7 @@ export const debitHeadSchema = z.enum(DEBIT_HEAD_VALUES);
  * Heads a category may never be charged to, whatever Settings says.
  *
  * **Faculty cannot debit the Institute Grant** (23 Sep 2026). The grant is the
- * institute's own money, spent by the offices that hold it — the Director, the
+ * institute's own money, spent by the offices that hold it - the Director, the
  * Registrar, the Deans and the IAR Office, which is why they still have it
  * below. A faculty member hosting a visitor charges the department, the
  * project or their PDF; letting the grant appear on their form made it look
@@ -249,18 +257,25 @@ export const FORBIDDEN_DEBIT_HEADS: Partial<Record<DebitCategory, DebitHead[]>> 
   // Special Funds are for everyone except students (25 Sep 2026): a
   // student's stay is always their own money.
   student: ["special_budget"],
+  /**
+   * And off **every** personal booking (7 Oct 2026), not only a personal meal
+   * booking as it was from 1 Oct. A special fund pays for an institute
+   * occasion; a private visit by somebody's family is not one, whether they
+   * sleep here or only eat here. With this the personal lists hold one head,
+   * which is what lets the form stop asking - see {@link asksForDebitHead}.
+   */
+  personal: ["special_budget"],
 };
 
 /**
  * Heads a category may never be charged to **for meals**, on top of the list
- * above. One entry: **a personal meal booking cannot be charged to Special
- * Funds** (1 Oct 2026). Like `FORBIDDEN_DEBIT_HEADS` this is a floor rather
- * than only a default, so a Settings row that still lists it is ignored on
- * read instead of breaking the page.
+ * above. Empty since 7 Oct 2026: its one entry - no Special Funds on a
+ * personal meal booking (1 Oct 2026) - was widened to every personal booking
+ * and moved into `FORBIDDEN_DEBIT_HEADS`, which covers both kinds. The seam
+ * is kept because dining is the kind of charge the office narrows first, and
+ * `allowedHeads` already reads it.
  */
-export const FORBIDDEN_DINING_HEADS: Partial<Record<DebitCategory, DebitHead[]>> = {
-  personal: ["special_budget"],
-};
+export const FORBIDDEN_DINING_HEADS: Partial<Record<DebitCategory, DebitHead[]>> = {};
 
 function forbiddenFor(category: DebitCategory, kind: "room" | "dining"): DebitHead[] {
   return [
@@ -313,14 +328,14 @@ export const debitRulesSchema = z.object({
   revision: z.number().int().optional(),
   room: z.object(
     Object.fromEntries(
-      DEBIT_CATEGORIES.map((c) => [c, headList(c, `Room — ${DEBIT_CATEGORY_LABELS[c]}`, true)])
+      DEBIT_CATEGORIES.map((c) => [c, headList(c, `Room - ${DEBIT_CATEGORY_LABELS[c]}`, true)])
     ) as Record<DebitCategory, ReturnType<typeof headList>>
   ),
   dining: z.object(
     Object.fromEntries(
       DEBIT_CATEGORIES.map((c) => [
         c,
-        headList(c, `Dining — ${DEBIT_CATEGORY_LABELS[c]}`, false, "dining"),
+        headList(c, `Dining - ${DEBIT_CATEGORY_LABELS[c]}`, false, "dining"),
       ])
     ) as Record<DebitCategory, ReturnType<typeof headList>>
   ),
@@ -329,14 +344,14 @@ export const debitRulesSchema = z.object({
 /**
  * The requester's category for this kind of booking. A student is always
  * "student"; otherwise a personal booking is "personal" and one for an
- * alumnus "alumni", whoever makes it, and the account decides the rest —
+ * alumnus "alumni", whoever makes it, and the account decides the rest -
  * faculty or staff for an employee (uncategorised counts as faculty, the
  * wider set), and the office's class for an office (unclassified counts as a
  * department office, the narrower).
  *
  * **The student check comes first** (25 Sep 2026). A student's only booking
  * type is personal, so before this their bookings fell into "personal" and
- * the Students row in Settings was never read — harmless while the two lists
+ * the Students row in Settings was never read - harmless while the two lists
  * were the same, and a leak the moment Special Funds was offered on personal
  * bookings but not to students.
  */
@@ -366,7 +381,7 @@ export function debitCategoryFor(
   }
 }
 
-/** The heads offered, per booking type, for this requester — what the form and schema use. */
+/** The heads offered, per booking type, for this requester - what the form and schema use. */
 export type DebitHeadsByType = Partial<Record<BookingType, DebitHead[]>>;
 
 export function debitHeadsByType(
@@ -394,18 +409,56 @@ export function fixedDebitHead(allowed: DebitHead[] | undefined): DebitHead | nu
 }
 
 /**
+ * The head a **personal** booking is charged to. There is only one it can be.
+ */
+export const PERSONAL_DEBIT_HEAD: DebitHead = "personal_funds";
+
+/**
+ * Whether the form asks at all (7 Oct 2026, the office's eighth list).
+ *
+ * **A personal booking is not asked.** The office's words were that personal
+ * bookings - students' included - should show no debitable head: the money is
+ * the requester's own, the budget question has one possible answer, and a
+ * card headed "Debitable head" on a family visit read as though a department
+ * might be about to pay for it. So the question is not put, and the server
+ * records {@link PERSONAL_DEBIT_HEAD} itself.
+ *
+ * It is a rule rather than a consequence of the list having one entry
+ * (`fixedDebitHead`), because the two say different things: a list of one is
+ * a question with one answer, which the form still *states*; this is a
+ * question that is not asked. The schema reads it on both sides, so a crafted
+ * payload naming a department on a personal booking is overwritten rather
+ * than believed.
+ */
+export function asksForDebitHead(bookingType: BookingType): boolean {
+  return bookingType !== "personal";
+}
+
+/**
+ * The head to store for this booking: what the requester chose, or Personal
+ * Funds when nobody was asked. One function for the schema, the form and
+ * `createBooking`, so the three cannot record different budgets.
+ */
+export function debitHeadFor(
+  bookingType: BookingType,
+  chosen: DebitHead | null | undefined
+): DebitHead | null {
+  return asksForDebitHead(bookingType) ? (chosen ?? null) : PERSONAL_DEBIT_HEAD;
+}
+
+/**
  * What may be written down beside the head, or null when the head takes
  * nothing.
  *
  * - **Special Funds** asks which fund; it is optional, like the sanction
- *   letter, because the office asked for the head and nothing more — but the
+ *   letter, because the office asked for the head and nothing more - but the
  *   accounts section is better off with it, so the box is offered.
  * - **Project** asks for the project itself, and is mandatory (1 Oct 2026).
  *   It used to be a dropdown of the projects in the console, which the office
  *   asked to remove: the list was always behind the real one, and a requester
  *   whose sanction landed last week had nothing to choose. What they type is
  *   snapshotted onto the booking and printed on the invoice, which splits it
- *   back into number and title on " — " (`projectFromDetails`).
+ *   back into number and title on " - " (`projectFromDetails`).
  */
 export function debitDetailsPrompt(head: DebitHead | null | undefined): string | null {
   if (head === "special_budget") return "Which special fund (name or sanction reference)";
@@ -432,7 +485,7 @@ export function needsProject(head: DebitHead | null | undefined): boolean {
 export const MAX_SUBHEAD_LENGTH = 120;
 
 /**
- * "Project Grant — SP/2025/017 — Storage (Dr. A) · Sub-head: Travel", or
+ * "Project Grant - SP/2025/017 - Storage (Dr. A) · Sub-head: Travel", or
  * "Not recorded" for a booking made before the question existed. The same
  * words on screen, in mail and in exports.
  */
@@ -443,12 +496,12 @@ export function describeDebit(booking: {
 }): string {
   if (!booking.debit_head) return "Not recorded";
   const label = DEBIT_HEAD_LABELS[booking.debit_head];
-  const withDetails = booking.debit_details ? `${label} — ${booking.debit_details}` : label;
+  const withDetails = booking.debit_details ? `${label} - ${booking.debit_details}` : label;
   return booking.debit_subhead ? `${withDetails} · Sub-head: ${booking.debit_subhead}` : withDetails;
 }
 
 /**
- * What a personal booking tells the requester about paying — the office's
+ * What a personal booking tells the requester about paying - the office's
  * wording (30 Sep 2026), which names no particular way to pay.
  */
 export const PAY_AT_CHECKOUT_NOTE =
@@ -462,7 +515,7 @@ export function debitHeadError(
   if (!head) return "Choose the debitable head this stay is charged to";
   if (!allowed || allowed.length === 0) return "No debitable head is set up for this kind of booking";
   if (allowed.includes(head)) return null;
-  return `${DEBIT_HEAD_LABELS[head]} cannot be used for this booking — choose ${allowed
+  return `${DEBIT_HEAD_LABELS[head]} cannot be used for this booking - choose ${allowed
     .map((h) => DEBIT_HEAD_LABELS[h])
     .join(" or ")}`;
 }

@@ -29,6 +29,8 @@ import type { Role } from "@/lib/types";
 import type { Unit } from "@/lib/units";
 import type { AuditEvent, AuditFilter, NewAuditEvent } from "@/lib/audit";
 import type { NewProjectInput, Project } from "@/lib/projects";
+import type { NewAcademicRecordInput, StoredAcademicRecord } from "@/lib/academic/stored";
+import type { AcademicRecord, AcademicRecordKind } from "@/lib/academic/types";
 import type { NewTariffInput, Tariff } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import type { NewSessionInput, Session } from "@/lib/sessions";
@@ -66,7 +68,7 @@ export interface StatusUpdate {
   /**
    * Rooms among `assigned_room_ids` where the manager accepted a turnover
    * overlap. The database relaxes its no-overlap rule for these by at most
-   * two hours and records who accepted it — see migration 14.
+   * two hours and records who accepted it - see migration 14.
    */
   override_room_ids?: string[];
   /** Who accepted those overrides. Required when `override_room_ids` is set. */
@@ -79,7 +81,7 @@ export interface StatusUpdate {
  * Fields the Guest House Manager can change on a booking that already exists.
  *
  * Moving the dates moves the room holds with them, and the exclusion
- * constraint decides whether that is allowed — so a stay cannot be extended
+ * constraint decides whether that is allowed - so a stay cannot be extended
  * over a room someone else already has.
  */
 export interface BookingDetailsPatch {
@@ -112,7 +114,7 @@ export interface DataStore {
   getBooking(id: string): Promise<BookingWithDetails | null>;
   listBookings(filter: BookingFilter): Promise<BookingWithDetails[]>;
   /**
-   * A person's own bookings, and any they raised for someone else — a club's
+   * A person's own bookings, and any they raised for someone else - a club's
    * faculty in-charge sees the club bookings they made (`created_by`).
    */
   listBookingsForUser(userId: string): Promise<BookingWithDetails[]>;
@@ -126,7 +128,7 @@ export interface DataStore {
   updateBookingStatus(id: string, update: StatusUpdate, log: NewLogInput): Promise<void>;
 
   /**
-   * Change a stored booking's dates, purpose or meals — the Guest House
+   * Change a stored booking's dates, purpose or meals - the Guest House
    * Manager fixing a booking rather than deciding on it. Room holds follow
    * the dates, so this throws `RoomClashError` if the new dates collide with
    * a room someone else holds.
@@ -168,7 +170,7 @@ export interface DataStore {
    * Change the turnaround buffer (Phase 3, migration 17): save
    * `rules.booking.buffer_minutes` and rebuild every hold's guard with it, in
    * one transaction. Throws `BufferClashError`, naming the stays, when the new
-   * buffer would make allocated stays clash — and then changes nothing.
+   * buffer would make allocated stays clash - and then changes nothing.
    */
   applyBookingBuffer(minutes: number): Promise<void>;
 
@@ -188,8 +190,8 @@ export interface DataStore {
   /**
    * Retention (Phase 8): clear the identity fields of stays that ended before
    * `before`, returning the document paths that went with them so the caller
-   * can delete the files. The booking itself — who stayed, when, what it cost
-   * — is kept: it is the guest house's own record.
+   * can delete the files. The booking itself - who stayed, when, what it cost
+   * - is kept: it is the guest house's own record.
    */
   purgeGuestIdentities(before: string): Promise<{ bookings: number; documents: string[] }>;
   /** Trim the security audit log, never below 180 days. Returns rows removed. */
@@ -226,7 +228,7 @@ export interface DataStore {
 
   /**
    * Runtime key/value settings (`app_settings`). Holds the developer console
-   * password hash, so values must never be sent to the client — read them
+   * password hash, so values must never be sent to the client - read them
    * inside a server action and return a verdict, not the value.
    */
   getSetting(key: string): Promise<string | null>;
@@ -236,8 +238,8 @@ export interface DataStore {
   //
   // The rules the console can change. Scalar groups are jsonb rows in
   // `app_settings` (`rules.<group>`), read through `lib/settings-server.ts`;
-  // lists have tables of their own. Validation — including refusing a change
-  // that would break stored data — is the action's job, not the store's.
+  // lists have tables of their own. Validation - including refusing a change
+  // that would break stored data - is the action's job, not the store's.
 
   /** A jsonb setting as stored, or null when no row exists. */
   getJsonSetting(key: string): Promise<unknown | null>;
@@ -259,11 +261,35 @@ export interface DataStore {
 
   /** Every project, active or not, by number. */
   listProjects(): Promise<Project[]>;
-  /** Add several at once — the paste import. Throws on a duplicate number. */
+  /** Add several at once - the paste import. Throws on a duplicate number. */
   createProjects(inputs: NewProjectInput[]): Promise<void>;
   updateProject(id: string, patch: Partial<NewProjectInput>): Promise<void>;
-  /** Throws while any booking is debited to it — deactivate it instead. */
+  /** Throws while any booking is debited to it - deactivate it instead. */
   deleteProject(id: string): Promise<void>;
+
+  // ---- academic records (migration 28) --------------------------------
+
+  /**
+   * The institute's records as the office pasted them in (7 Oct 2026). Read
+   * by `StoreAcademicSource`, which is what the Requester details card, the
+   * Assistant Warden's family check and the booking form's locked parent
+   * names go through.
+   */
+  findAcademicRecord(kind: AcademicRecordKind, email: string): Promise<AcademicRecord | null>;
+  /** Every stored record, or one kind's. For the Academic records console. */
+  listAcademicRecords(kind?: AcademicRecordKind): Promise<StoredAcademicRecord[]>;
+  /**
+   * Apply an import: add the new rows and replace the changed ones, in one
+   * go. The plan is built first (`planAcademicImport`) and is all-or-nothing,
+   * so this is handed only rows it has already accepted.
+   */
+  saveAcademicRecords(
+    added: NewAcademicRecordInput[],
+    updated: { id: string; input: NewAcademicRecordInput }[]
+  ): Promise<void>;
+  deleteAcademicRecord(id: string): Promise<void>;
+  /** Every record of one kind, or all of them. Returns how many went. */
+  deleteAcademicRecords(kind?: AcademicRecordKind): Promise<number>;
 
   // ---- security audit log (migration 16) ------------------------------
 
@@ -283,7 +309,7 @@ export interface DataStore {
   revokeUserSessions(userId: string): Promise<number>;
   /** Record that this session has just proved a second factor. */
   markSessionVerified(id: string, at: string): Promise<void>;
-  /** Live sessions of a user, newest first — for the security page. */
+  /** Live sessions of a user, newest first - for the security page. */
   listUserSessions(userId: string): Promise<Session[]>;
   /** Delete sessions long dead. Returns how many. */
   purgeExpiredSessions(): Promise<number>;
@@ -327,8 +353,8 @@ export interface DataStore {
   listInvoices(filter: InvoiceFilter): Promise<InvoiceRecord[]>;
   getInvoice(id: string): Promise<InvoiceRecord | null>;
   /**
-   * Save the desk's meal-count correction — and, when given, its additional
-   * charges (migration 26; left as they are when omitted) — on the booking's
+   * Save the desk's meal-count correction - and, when given, its additional
+   * charges (migration 26; left as they are when omitted) - on the booking's
    * draft, creating the draft if there is none. Throws `InvoiceStateError`
    * once the booking has a live issued invoice.
    */
@@ -368,7 +394,7 @@ export interface DataStore {
 
   /**
    * Queue messages, skipping any whose `idempotency_key` is already stored.
-   * Returns how many rows were actually new — a retried action or two racing
+   * Returns how many rows were actually new - a retried action or two racing
    * dispatchers must not mail the same parent twice.
    */
   enqueueEmails(inputs: NewEmailInput[]): Promise<number>;
@@ -377,7 +403,7 @@ export interface DataStore {
    * Atomically take up to `limit` messages that are due, marking them
    * `SENDING` and counting the attempt. Only the caller that wins the claim
    * gets the row, so two workers never send the same message. Messages stuck
-   * in `SENDING` past `staleAfterMs` are reclaimed — a process that died
+   * in `SENDING` past `staleAfterMs` are reclaimed - a process that died
    * mid-send must not strand them forever.
    */
   claimQueuedEmails(limit: number, staleAfterMs: number): Promise<EmailMessage[]>;
@@ -385,7 +411,7 @@ export interface DataStore {
   /** Record the outcome of a send: `SENT`, or `FAILED`/re-`QUEUED` with a reason. */
   settleEmail(id: string, result: EmailSettlement): Promise<void>;
 
-  /** Outbox rows, newest first — the developer console's mail log. */
+  /** Outbox rows, newest first - the developer console's mail log. */
   listEmails(filter: EmailOutboxFilter): Promise<EmailMessage[]>;
 
   countEmailsByStatus(): Promise<Record<MailStatus, number>>;

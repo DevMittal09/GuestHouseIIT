@@ -5,7 +5,7 @@ import { getStore } from "@/lib/store";
 import { PageHeader } from "@/components/page-header";
 import { SIGN_IN_PATH } from "@/lib/routes";
 
-/** Open to every signed-in role — see `app/actions/availability.ts` for what each may see. */
+/** Open to every signed-in role - see `app/actions/availability.ts` for what each may see. */
 export default async function AvailabilityPage() {
   const user = await getCurrentUser();
   if (!user) redirect(SIGN_IN_PATH);

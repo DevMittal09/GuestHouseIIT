@@ -45,7 +45,7 @@ import { SERVICE_TYPE_LABELS, type BookingWithDetails } from "@/lib/types";
 /**
  * What the kitchen is cooking on one day.
  *
- * The booking form asks for meals per day, but nobody cooks per booking — the
+ * The booking form asks for meals per day, but nobody cooks per booking - the
  * kitchen needs "how many vegetarian lunches on the 18th", which means
  * crossing every booking that touches that date. This is that view.
  *
@@ -192,7 +192,7 @@ export default async function DailyMealsPage({
       {provisional.length > 0 && (
         <MealBookingTable
           title="Not yet approved"
-          description="Still in the approval chain. Not counted in the totals above — they may not happen."
+          description="Still in the approval chain. Not counted in the totals above - they may not happen."
           bookings={provisional}
           day={day}
           muted
@@ -303,7 +303,7 @@ function MealBookingTable({
                           spread over the head count. */}
                       {(() => {
                         const split = mealDietCounts(b, people);
-                        return split ? describeDietCounts(split) : "—";
+                        return split ? describeDietCounts(split) : "-";
                       })()}
                     </TableCell>
                     <TableCell>

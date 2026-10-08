@@ -7,14 +7,14 @@ import { useEffect, useRef } from "react";
  * Keeping a desk's screen current (Phase 9).
  *
  * With Supabase configured the browser subscribes to `postgres_changes` on the
- * tables a queue actually depends on — bookings, room holds and blocks — and
+ * tables a queue actually depends on - bookings, room holds and blocks - and
  * re-fetches when one of them changes. That is a websocket held open, instead
  * of a full server render every five seconds whether or not anything happened:
  * a reception screen left open all day made ~17,000 requests, and now makes
  * one subscription.
  *
  * Without Supabase (the mock store, a developer's machine) there is nothing to
- * subscribe to, so it falls back to polling — but every 30 seconds, not every
+ * subscribe to, so it falls back to polling - but every 30 seconds, not every
  * five. A refresh is also triggered whenever the tab is brought back to the
  * front, which is when it matters most.
  */

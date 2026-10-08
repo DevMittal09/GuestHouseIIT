@@ -11,7 +11,7 @@ import { ACADEMIC_KIND_LABELS, type DetailRow } from "@/lib/academic/fields";
 import { ROLE_LABELS, type Profile } from "@/lib/types";
 
 /**
- * The signed-in person as the institute's academic database knows them — at
+ * The signed-in person as the institute's academic database knows them - at
  * the top of New Booking, and on the warden's portal. Read-only: the academic
  * database is the place to correct them, not this page.
  *
@@ -57,7 +57,7 @@ async function Details({ user, title, raisedBy }: { user: Profile; title: string
         </dl>
         {details.sample && (
           <p className="border border-dashed border-border-strong bg-band px-4 py-3 text-[13px] leading-normal text-muted-foreground">
-            Demo build — these are sample records until the institute&apos;s academic database is
+            Demo build - these are sample records until the institute&apos;s academic database is
             connected.
           </p>
         )}
@@ -110,7 +110,7 @@ function CopyToField({ copyTo }: { copyTo: CopyTo }) {
               <li key={entry.email ?? i}>
                 {entry.name ?? entry.email}
                 {entry.name && entry.email && (
-                  <span className="font-normal text-muted-foreground"> — {entry.email}</span>
+                  <span className="font-normal text-muted-foreground"> - {entry.email}</span>
                 )}
               </li>
             ))}

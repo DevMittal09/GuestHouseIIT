@@ -123,7 +123,7 @@ describe("each person's own meal preference", () => {
       total: 14,
     });
     // A split that no longer adds up (the desk changed the head count after)
-    // must not lose plates — the remainder is still people to feed.
+    // must not lose plates - the remainder is still people to feed.
     const stale = booking({
       service_type: "meals_only",
       status: "APPROVED",
@@ -248,7 +248,7 @@ describe("lunch is ticked by default", () => {
       "2030-05-01|breakfast",
       "2030-05-02|lunch",
     ]);
-    // A meal the stay does not cover is never ticked, whatever was decided —
+    // A meal the stay does not cover is never ticked, whatever was decided -
     // and a decision about lunch does not leak into dinner, which is off by
     // default. A day whose lunch is closed therefore arrives with nothing.
     const closed = [{ date: "2030-05-03", available: { breakfast: false, lunch: false, dinner: true } }];
@@ -370,9 +370,9 @@ describe("a project is typed, not picked", () => {
     const bare = schema.safeParse(payload({}));
     expect(bare.success).toBe(false);
     expect(!bare.success && JSON.stringify(bare.error.issues)).toContain("Project number and title");
-    const typed = schema.safeParse(payload({ debit_details: "SP/2025/017 — Grid-scale storage" }));
+    const typed = schema.safeParse(payload({ debit_details: "SP/2025/017 - Grid-scale storage" }));
     if (!typed.success) throw new Error(JSON.stringify(typed.error.issues));
-    expect(typed.data.debit_details).toBe("SP/2025/017 — Grid-scale storage");
+    expect(typed.data.debit_details).toBe("SP/2025/017 - Grid-scale storage");
   });
 });
 
@@ -380,7 +380,9 @@ describe("a project is typed, not picked", () => {
 
 describe("Special Funds on a personal meal booking", () => {
   it("is gone, and the revision says so", () => {
-    expect(DEBIT_RULES_REVISION).toBe(4);
+    // Revision 4 took it off personal *dining* (1 Oct 2026); revision 5 took
+    // it off every personal booking (7 Oct) - see eighth-round.test.ts.
+    expect(DEBIT_RULES_REVISION).toBe(5);
     expect(DEFAULT_DEBIT_RULES.dining.personal).toEqual(["personal_funds"]);
     const heads = debitHeadsByType(
       "employee",
@@ -398,7 +400,7 @@ describe("Special Funds on a personal meal booking", () => {
 
 /**
  * Copy to (the addresses typed on New Booking) is CC on **every** mail the
- * requester gets about that booking — not only the acknowledgement. The
+ * requester gets about that booking - not only the acknowledgement. The
  * office reported it as not working; what the outbox holds is what the
  * transport sends, so this is where the rule is checked.
  */
@@ -411,7 +413,7 @@ describe("Copy to reaches every mail the requester gets", () => {
   beforeAll(async () => {
     process.env.MAIL_DRY_RUN = "true";
     // The redirect swallows CC by design, so a test of CC has to run without
-    // it — which is also the fix for the office's report: a deployment with
+    // it - which is also the fix for the office's report: a deployment with
     // MAIL_REDIRECT_ALL_TO set delivers nothing to a Copy-to address.
     delete process.env.MAIL_REDIRECT_ALL_TO;
     db = useThrowawayMockDb();

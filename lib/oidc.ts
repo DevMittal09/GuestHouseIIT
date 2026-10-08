@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, randomBytes, createPublicKey, verify as verifySignature } from "crypto";
 
 /**
- * Google sign-in (OpenID Connect) — Phase 8.
+ * Google sign-in (OpenID Connect) - Phase 8.
  *
  * Authorization code flow with **PKCE** and a **state** value, both kept in a
  * short-lived httpOnly cookie, so a code intercepted on its way back is
@@ -54,7 +54,7 @@ export function startGoogleSignIn(
     code_challenge: challenge,
     code_challenge_method: "S256",
     // Ask Google to offer only institute accounts. It is a hint, not a
-    // guarantee — the `hd` claim is checked again on the way back.
+    // guarantee - the `hd` claim is checked again on the way back.
     ...(hostedDomain ? { hd: hostedDomain } : {}),
     ...(loginHint ? { login_hint: loginHint } : {}),
     prompt: "select_account",
@@ -91,7 +91,7 @@ function decodeSegment<T>(segment: string): T {
 
 /**
  * Exchange the code and verify the identity token. Throws with a plain
- * message on anything that does not add up — the caller turns that into "sign
+ * message on anything that does not add up - the caller turns that into "sign
  * in again", never into a stack trace.
  */
 export async function completeGoogleSignIn(

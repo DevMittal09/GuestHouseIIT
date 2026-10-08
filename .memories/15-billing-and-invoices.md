@@ -1,9 +1,11 @@
 # Billing — tariffs, invoices, payments and dining
 
-Phases 5 and 6 (22 Sep 2026), the 24 Sep corrections and the 25 Sep ones
-(GST per section, additional charges, live repricing). **Checked against the
-code on 25 Sep 2026** — `lib/invoice.ts`, `lib/tariffs.ts`,
-`lib/invoice-pdf.ts`, `app/actions/invoices.ts`, `components/invoice-dialog.tsx`,
+Phases 5 and 6 (22 Sep 2026), the 24 Sep corrections, the 25 Sep ones (GST per
+section, additional charges, live repricing) and the **7 Oct** ones (version 4,
+cash retired, a personal stay settled at check-out, Awaiting payment).
+**Checked against the code on 7 Oct 2026** — `lib/invoice.ts`,
+`lib/tariffs.ts`, `lib/invoice-pdf.ts`, `app/actions/invoices.ts`,
+`components/invoice-dialog.tsx`, `components/awaiting-payment.tsx`,
 `lib/access.ts`.
 
 ## Who does what
@@ -11,7 +13,9 @@ code on 25 Sep 2026** — `lib/invoice.ts`, `lib/tariffs.ts`,
 | Action | Manager | Caretaker | Developer | Requester |
 | --- | --- | --- | --- | --- |
 | Preview, correct meal counts, **add additional charges**, issue & print | ✓ | ✓ | ✓ | — |
-| **Mark paid** (cash / UPI + transaction id / transfer + UTR) | ✓ | ✓ | ✓ | — |
+| **Mark paid** — **UPI + transaction id, or transfer + UTR** (cash withdrawn 7 Oct 2026; both now require a reference) | ✓ | ✓ | ✓ | — |
+| **Check out a personal stay** — issue, pay, then Mark as Vacated, in one dialog (7 Oct 2026) | ✓ | ✓ | ✓ | — |
+| **Close a personal stay off unpaid**, with a reason that goes in the log | ✓ | — | ✓ | — |
 | **Cancel** an issued invoice (reason; a correction is cancel + reissue) | ✓ | — | ✓ | — |
 | Tariffs & invoice settings (console) | ✓ | — | ✓ | — |
 | Monthly collections CSV (`/history`) | ✓ | ✓ | ✓ | — |
@@ -21,7 +25,14 @@ code on 25 Sep 2026** — `lib/invoice.ts`, `lib/tariffs.ts`,
 
 - The **Invoice** button on an occupied stay, and in **Checking out today**.
 - **Checked out — to bill** on `/manager` and `/caretaker`: vacated in the
-  last 30 days and not paid (`awaitingSettlement`).
+  last 30 days and not paid (`awaitingSettlement`) — the desk's **daily** list
+  of stays nobody has invoiced yet.
+- **Awaiting payment**, the last section of both consoles (7 Oct 2026,
+  `awaitingPayment`): every booking whose invoice has been **issued and not
+  paid**, newest first, **with no date window** — an official stay's bill can
+  sit with a department for months, and a dining booking never checks out at
+  all, so neither would ever reach the to-bill list. Its own table, since a
+  meal booking has no check-in, check-out or rooms.
 - The **Approval Log** (`/history`): an Invoice button on every checked-out
   stay and approved dining booking, however old (`invoiceableFromArchive`).
 - Dining: "Dining to invoice" on the kitchen page (`/manager/meals`).
@@ -40,7 +51,26 @@ occupied or vacated stay, `components/invoice-dialog.tsx`): **preview →
 correct the meal counts and add any additional charges (the figures reprice
 as you type) → Save draft (optional) → Issue & print → Mark paid**.
 
-### The labels as printed now (30 Sep 2026) — `version: 3`
+### The layout as printed now (7 Oct 2026) — `version: 4`
+
+Three changes on top of version 3's lettering, which is unchanged:
+
+- **No blank ruled rows**, the room section included (`minRows` 0). The
+  template kept two room rows, so a one-room stay printed an empty second one
+  that read as a charge nobody had filled in.
+- **No lines under the GSTIN** (`printsTaxLines` false): the per-SAC
+  taxable / CGST / SGST breakdown, and the "the tariff rates include GST"
+  note, are not printed. The breakdown is **still computed and kept in every
+  snapshot**, so restoring it is one line.
+- **The CGST / SGST split is in each GST row's own label**:
+  "GST @ 18% on A (B) - CGST 9% + SGST 9%", next to the figure it describes
+  rather than in a footnote under it. That is where the removed information
+  went.
+
+Labels are computed at print time, so a `version: 3` snapshot reprints
+**exactly** as it was issued — blank rows, tax lines and all.
+
+### The labels as printed from 30 Sep 2026 — `version: 3`
 
 The supervisor's list: every figure the grand total adds is lettered in
 turn. A stay: **Room Charges Subtotal (A)**, **GST @ 18% on A (B)**, **Dining
@@ -105,6 +135,33 @@ counts and charges a moment after typing stops; the Issue dialog quotes that
 total, and issuing uses exactly those figures. **Preview PDF** prints the
 *saved* draft, so it asks for **Save draft** first.
 
+### Paying, and how a stay is closed off (7 Oct 2026)
+
+- **Cash is retired.** `PAYMENT_MODES` is **UPI** and **account transfer**,
+  each of which leaves a reference the accounts section can match the invoice
+  against, and the reference is now required for both. `cash` stays in the
+  `PaymentMode` union and in `PAYMENT_MODE_LABELS`, because invoices paid in
+  cash before 7 Oct say so and an invoice is a snapshot; what is gone is the
+  *offer*, and `paymentModeError` refuses it on a new payment on both sides.
+- **A personal stay is settled before the guest leaves.** Nobody chases a
+  private guest for a guest-house bill once they have driven home. So its
+  check-out **is** the invoice: the row shows one button, **Check out &
+  settle**, and the dialog runs issue → record the payment → **Mark as
+  Vacated**. Enforced on the server (`vacateBlocker`,
+  `updateBookingLifecycle(…, "VACATED", reason?)`), not merely arranged in the
+  UI — `settlesAtCheckOut()` is the test.
+- **The manager may close one off unpaid, with a reason**
+  (`canOverrideVacatePayment`), behind a typed confirmation; the reason goes
+  into the booking's log and the stay stays in Awaiting payment. Reception
+  cannot: an invoice that cannot be issued at all must not trap a guest in the
+  building on paper, but setting a payment rule aside is a decision about
+  money.
+- **An official stay is unchanged**: the invoice is issued at check-out and
+  marked paid later, by the manager or the caretaker, from Awaiting payment.
+- **A dining booking** is invoiced from the day of its first meal and keeps
+  **one** invoice. A personal one is settled at the guest house through
+  reception; an official one waits in Awaiting payment like any other bill.
+
 - **Pure rules — `lib/invoice.ts`, `lib/tariffs.ts`.** Money is integer paise.
   `chargeableDays()` (calendar nights by default, or 24-hour blocks with a
   grace — Setting `day_basis` / `grace_hours`), `splitByRate()` (a mid-stay
@@ -130,9 +187,10 @@ total, and issuing uses exactly those figures. **Preview PDF** prints the
   `issue_invoice()`) takes the financial year's next serial
   (`GH/2026-27/0001`, prefix and width are Settings) and stores the whole
   document as the snapshot in one transaction. Issued invoices are immutable
-  (trigger `invoices_guard`): only the payment can be recorded (cash, UPI with
-  its id, account transfer with its UTR) and the invoice cancelled with a
-  reason. A correction is a cancellation plus a new invoice that records
+  (trigger `invoices_guard`): only the payment can be recorded (**UPI with its
+  transaction id, or an account transfer with its UTR** — cash was withdrawn
+  on 7 Oct 2026 and both remaining modes require a reference) and the invoice
+  cancelled with a reason. A correction is a cancellation plus a new invoice that records
   `replaces_invoice_id`. A draft row only carries the desk's meal-count
   correction and additional charges; it has no number and is priced afresh
   when shown.

@@ -28,12 +28,12 @@ function GoogleMark() {
  * `signInWithLdap` redirects on success, so the only state this holds is the
  * error from a failed attempt.
  *
- * The second door is **"Sign in with Google"** — the real OpenID Connect flow
- * (`/api/auth/google/start`, Phase 8) — once Google is configured. Until then
+ * The second door is **"Sign in with Google"** - the real OpenID Connect flow
+ * (`/api/auth/google/start`, Phase 8) - once Google is configured. Until then
  * it is **"Mock Authentication"**, the persona picker at `/mock-login`, and it
  * says so rather than promising Google and delivering something else.
  * "Keep me signed in" and "Forgot password" from the design are deliberately
- * absent — passwords belong to the directory, and a control that does nothing
+ * absent - passwords belong to the directory, and a control that does nothing
  * is worse than none.
  */
 export function LoginForm({
@@ -73,7 +73,7 @@ export function LoginForm({
     setError(null);
     startTransition(async () => {
       const result = await signInWithLdap(username, password, next);
-      // Only a failure returns — success leaves through `redirect()`.
+      // Only a failure returns - success leaves through `redirect()`.
       if (!result.ok) {
         setError(result.error);
         setPassword("");
@@ -156,7 +156,7 @@ export function LoginForm({
               prefetch={false}
               className="flex w-full items-center justify-center gap-3 rounded-[6px] border border-ink bg-white p-3 text-[15.5px] font-semibold text-ink transition-colors duration-150 hover:bg-ink hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion"
             >
-              {/* The Google mark belongs only on the real Google flow — on the
+              {/* The Google mark belongs only on the real Google flow - on the
                   placeholder it would claim something the button does not do. */}
               {googleSignIn === "google" ? <GoogleMark /> : <KeyRoundIcon className="size-5 shrink-0" aria-hidden />}
               {googleSignIn === "google" ? "Sign in with Google" : "Mock Authentication"}
@@ -171,10 +171,10 @@ export function LoginForm({
 
       {/*
         Everything below is for development and demos, and goes when real
-        authentication lands — see .memories/04-roadmap.md item 1.
+        authentication lands - see .memories/04-roadmap.md item 1.
       */}
       <div className="mt-8 rounded-[6px] border border-dashed border-border-strong px-4 py-3 text-center text-[13px] leading-normal text-muted-foreground">
-        Demo build —{" "}
+        Demo build -{" "}
         {sampleAccount ? (
           <>
             LDAP accounts are dummy ones, e.g.{" "}

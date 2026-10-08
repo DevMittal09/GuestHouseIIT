@@ -5,13 +5,22 @@ import {
   serviceTypeError,
 } from "./booking-types";
 import {
+  asksForDebitHead,
   debitDetailsPrompt,
   debitDetailsRequired,
   debitHeadError,
+  debitHeadFor,
   MAX_SUBHEAD_LENGTH,
   needsProject,
   type DebitHeadsByType,
 } from "./debit-heads";
+import {
+  isRecordedGuest,
+  lockedNameError,
+  NO_GUEST_NAME_RULE,
+  withheldRelationshipError,
+  type GuestNameRule,
+} from "./academic/guest-names";
 import { isOfficeRole } from "./workflow";
 import { isCountryCode } from "./countries";
 import {
@@ -53,8 +62,8 @@ function mealPartyLimit(rules: Rules): number {
  * institute time.
  *
  * It used to be "later than now", to the second. That refused the one entry
- * the desk most often has to make — a guest who turned up late and is
- * standing at the counter, whose stay began an hour ago — and it also refused
+ * the desk most often has to make - a guest who turned up late and is
+ * standing at the counter, whose stay began an hour ago - and it also refused
  * a requester who picked today's 12:00 and pressed Submit at 12:01. Neither
  * is a booking for the past in any sense the rule was protecting against:
  * yesterday is still refused, and the stay-length and advance-window rules
@@ -65,7 +74,7 @@ export function earliestBookableCheckIn(now: Date = new Date()): Date {
 }
 
 export const LATE_CHECK_IN_ERROR =
-  "Check-in cannot be before today — ask the guest house desk to record a stay that has already started";
+  "Check-in cannot be before today - ask the guest house desk to record a stay that has already started";
 
 /**
  * An optional free-text field: trimmed, with blank becoming null.
@@ -79,8 +88,8 @@ export const LATE_CHECK_IN_ERROR =
  * With `.optional()` it did not, and **no booking could be submitted by any
  * role**: the server rejected every one with zod's default
  * "Invalid input: expected string, received null". It was invisible from the
- * form, because the failing paths were `alumni_name` / `alumni_roll_number` —
- * fields a student's form never shows — so the requester got an error naming
+ * form, because the failing paths were `alumni_name` / `alumni_roll_number` -
+ * fields a student's form never shows - so the requester got an error naming
  * nothing they could see or change.
  *
  * Accepting null does not weaken anything: the refinements below test these
@@ -110,10 +119,10 @@ const passportField = z
 
 /**
  * A guest's age: required or optional by the role's form, never hidden
- * (`sanitizeFormConfig`) — an infant is defined by their age.
+ * (`sanitizeFormConfig`) - an infant is defined by their age.
  *
  * **A blank box is null, not 0.** This was `z.coerce.number()`, which turns
- * "" into 0 — an infant — so a guest whose age nobody typed was booked as a
+ * "" into 0 - an infant - so a guest whose age nobody typed was booked as a
  * baby, and "required" never actually fired. Where the age is optional
  * (faculty, staff and official forms), a guest without one is an adult.
  * Round-trip safe: the null it produces is accepted on the server's second
@@ -232,7 +241,7 @@ const DATETIME_LOCAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
  *
  * Accepts a string (from the form) or a number (the server re-parses the
  * schema's own output, which is already numeric). An empty box reports
- * `requiredMessage` rather than silently coercing to 0 — `z.coerce.number()`
+ * `requiredMessage` rather than silently coercing to 0 - `z.coerce.number()`
  * turns "" into 0, which surfaced as "At least 1 room" when the real problem
  * was that the field was blank.
  */
@@ -246,7 +255,7 @@ function countField(opts: {
   emptyAs?: number;
 }) {
   // `.optional()` so an absent key reaches the transform as `undefined` and is
-  // treated as a blank box — `emptyAs` when given, otherwise the "required"
+  // treated as a blank box - `emptyAs` when given, otherwise the "required"
   // message, rather than zod's "expected nonoptional".
   return z
     .union([z.string(), z.number()])
@@ -263,7 +272,7 @@ function countField(opts: {
         ctx.addIssue({ code: "custom", message: opts.whole });
         return z.NEVER;
       }
-      // The schema has to accept its own output — the form parses, sends
+      // The schema has to accept its own output - the form parses, sends
       // `parsed.data`, and the server parses that again. A blank box becomes
       // `emptyAs`, which comes back as a *number* on the second pass and would
       // otherwise fail the range check below. That is not hypothetical: it
@@ -299,11 +308,20 @@ export interface BookingSchemaContext {
    * room booking and for dining (`debitHeadsByType`, from Settings and the
    * requester's category). Computed on the server and handed to the form, so
    * both sides check against one list. Without it only "a head is chosen" is
-   * checked — never the case for a real submission.
+   * checked - never the case for a real submission.
    */
   debitHeads?: { room: DebitHeadsByType; dining: DebitHeadsByType };
   /** Ids of the projects that may be picked (active ones). */
   projectIds?: string[];
+  /**
+   * What the requester's academic record fixes about their guests (7 Oct
+   * 2026): a student's father's and mother's names, locked, and the
+   * relationships the record rules out. Built on the server by
+   * `guestNameRule` and handed to the form, so the two check the same thing -
+   * and so a crafted payload cannot name somebody else's parent as its own.
+   * Absent means no record, which locks and withholds nothing.
+   */
+  guestNames?: GuestNameRule;
 }
 
 export function bookingPayloadSchema(
@@ -344,7 +362,7 @@ export function bookingPayloadSchema(
       debit_details: optionalTrimmed,
       // The project for a Project head, picked from the console's list.
       project_id: z.string().nullish().default(null),
-      // The project's sub-head, typed — only with a Project head.
+      // The project's sub-head, typed - only with a Project head.
       debit_subhead: optionalTrimmed,
       // Extra addresses copied on every mail the requester gets about this
       // booking. Checked here on both sides; stored on the booking.
@@ -356,7 +374,7 @@ export function bookingPayloadSchema(
       alumni_name: optionalTrimmed,
       alumni_roll_number: optionalTrimmed,
       /**
-       * Why the stay is booked — **Remarks**, and optional, on a dining
+       * Why the stay is booked - **Remarks**, and optional, on a dining
        * booking (1 Oct 2026). A meal order needs no justification: the office
        * asked for the box to be there for anything the kitchen should know
        * ("one guest is coeliac") and not to stand between somebody and lunch.
@@ -398,7 +416,7 @@ export function bookingPayloadSchema(
       /**
        * Each person's own preference, as counts (1 Oct 2026). Round-trip
        * safe: the cleaned object re-parses to itself, which the form relies
-       * on — it validates and then sends `parsed.data` over the wire.
+       * on - it validates and then sends `parsed.data` over the wire.
        */
       meal_diet_counts: z
         .object({
@@ -425,8 +443,8 @@ export function bookingPayloadSchema(
         .transform((v) => normalizeMeals(v ?? [])),
       /**
         * Kept so a stored payload still parses, but nothing is required of it.
-        * The no-pets rule is *told* to the requester — a prominent notice on
-        * the form and a line in every booking mail — rather than signed for.
+        * The no-pets rule is *told* to the requester - a prominent notice on
+        * the form and a line in every booking mail - rather than signed for.
         * The office asked for the tick box to go: it was one more thing to
         * click on a form that already refuses submission for eight other
         * reasons, and a tick proves nothing a notice does not.
@@ -455,8 +473,33 @@ export function bookingPayloadSchema(
       if (message) ctx.addIssue({ code: "custom", message, path: ["booking_type"] });
     })
     .superRefine((v, ctx) => {
-      // Which heads this requester may use, for this kind of booking — the
-      // Settings, resolved on the server for their category.
+      /**
+       * Which heads this requester may use, for this kind of booking - the
+       * Settings, resolved on the server for their category.
+       *
+       * **A personal booking is not asked** (7 Oct 2026): nothing is
+       * required of `debit_head`, and the transform at the end of this chain
+       * writes Personal Funds whatever arrived. So a crafted payload naming a
+       * department on a private stay is neither believed nor rejected with a
+       * message about a field the requester never saw - it is overwritten.
+       */
+      if (!asksForDebitHead(v.booking_type)) {
+        if (v.debit_details) {
+          ctx.addIssue({
+            code: "custom",
+            message: "A personal booking is settled from personal funds and takes no details",
+            path: ["debit_details"],
+          });
+        }
+        if (v.debit_subhead || v.project_id) {
+          ctx.addIssue({
+            code: "custom",
+            message: "A project applies only when the head is Project",
+            path: v.project_id ? ["project_id"] : ["debit_subhead"],
+          });
+        }
+        return;
+      }
       const lists = context.debitHeads;
       const allowed = lists
         ? (v.service_type === "meals_only" ? lists.dining : lists.room)[v.booking_type]
@@ -473,8 +516,8 @@ export function bookingPayloadSchema(
       /**
        * Project: **typed, not picked** (1 Oct 2026). What the booking records
        * is the number and title in `debit_details`, required just below by
-       * `debitDetailsRequired`. `project_id` is no longer asked for — the
-       * form does not send one — but a payload that still carries one is
+       * `debitDetailsRequired`. `project_id` is no longer asked for - the
+       * form does not send one - but a payload that still carries one is
        * checked against the console's list rather than silently kept, so the
        * Projects console keeps working for anything that uses it.
        */
@@ -493,7 +536,7 @@ export function bookingPayloadSchema(
           path: ["project_id"],
         });
       }
-      // The sub-head is the project's, so it travels only with one — a value
+      // The sub-head is the project's, so it travels only with one - a value
       // typed before switching to another head must not ride along.
       if (v.debit_subhead) {
         if (!needsProject(v.debit_head)) {
@@ -511,7 +554,7 @@ export function bookingPayloadSchema(
         }
       }
       // What goes beside the head: which special fund (optional, 24 Sep
-      // 2026), or the project itself (mandatory, 1 Oct 2026 — it replaced the
+      // 2026), or the project itself (mandatory, 1 Oct 2026 - it replaced the
       // dropdown of the console's projects). A Special Funds sanction letter,
       // if any, is checked in `createBooking`, which has the upload.
       const prompt = debitDetailsPrompt(v.debit_head);
@@ -576,7 +619,7 @@ export function bookingPayloadSchema(
     // ------------------------------------------------------------- rooms
     .superRefine((v, ctx) => {
       if (!needsRooms(v.service_type)) {
-        // A meals-only booking has no rooms and no guest rows — the kitchen
+        // A meals-only booking has no rooms and no guest rows - the kitchen
         // needs a head count, not a register.
         if (v.rooms.length > 0) {
           ctx.addIssue({
@@ -616,7 +659,7 @@ export function bookingPayloadSchema(
             message:
               g.age === null
                 ? "Choose the infant's age"
-                : `An infant is below ${INFANT_AGE_LIMIT} — add a guest instead`,
+                : `An infant is below ${INFANT_AGE_LIMIT} - add a guest instead`,
             path: ["rooms", i, "guests", j, "age"],
           });
         });
@@ -703,17 +746,60 @@ export function bookingPayloadSchema(
       });
     })
     .superRefine((v, ctx) => {
+      /**
+       * The names the academic record fixes (7 Oct 2026): a student's father
+       * and mother, locked to what the institute has on file, and the
+       * relationships the record rules out. The form fills the boxes in and
+       * makes them read-only, so for a person these never fire; they are what
+       * a crafted payload meets.
+       */
+      const rule = context.guestNames ?? NO_GUEST_NAME_RULE;
+      if (!rule.fromRecord) return;
+      v.rooms.forEach((room, i) => {
+        room.guests.forEach((g, j) => {
+          if (isInfantAge(g.age) || g.infant) return;
+          const withheld = withheldRelationshipError(rule, g);
+          if (withheld) {
+            ctx.addIssue({
+              code: "custom",
+              message: withheld,
+              path: ["rooms", i, "guests", j, "relationship"],
+            });
+            return;
+          }
+          const wrongName = lockedNameError(rule, g);
+          if (wrongName) {
+            ctx.addIssue({
+              code: "custom",
+              message: wrongName,
+              path: ["rooms", i, "guests", j, "name"],
+            });
+          }
+        });
+      });
+    })
+    .superRefine((v, ctx) => {
       // Runs whatever the role's configuration says, because the two questions
       // are different: whether an Aadhaar number is *demanded* is per role,
       // but a number that has been typed must be a real one either way.
       const required = config.guest_fields.id_number === "required";
+      const rule = context.guestNames ?? NO_GUEST_NAME_RULE;
       v.rooms.forEach((room, i) => {
         room.guests.forEach((g, j) => {
           const path = ["rooms", i, "guests", j, "id_number"];
           // An infant shares a guardian's bed and is not asked for an ID.
           if (isInfantAge(g.age)) return;
+          /**
+           * Nor is a guest the academic record named (7 Oct 2026). The
+           * institute has already identified this person; asking the student
+           * for a document as well is asking them to prove what the record
+           * says. A sibling or a grandparent, typed by hand, is still asked -
+           * which is why this is keyed on the relationship being locked
+           * rather than on the role.
+           */
+          if (isRecordedGuest(rule, g)) return;
           // A foreign national has no Aadhaar. Their passport is the identity
-          // document, and it is already mandatory above — demanding an Indian
+          // document, and it is already mandatory above - demanding an Indian
           // ID number as well would make them impossible to book at all for
           // every role whose form requires one, which is most of them.
           if (g.citizenship === "other") return;
@@ -743,7 +829,7 @@ export function bookingPayloadSchema(
         return;
       }
       // Each person's own preference (1 Oct 2026). The head count is the
-      // dining booking's own figure, or the guests needing a bed on a stay —
+      // dining booking's own figure, or the guests needing a bed on a stay -
       // infants eat off a guardian's plate and are not counted by the kitchen.
       const headCount = needsRooms(v.service_type)
         ? v.rooms.flatMap((r) => r.guests).filter((g) => !g.infant && !isInfantAge(g.age)).length
@@ -770,18 +856,18 @@ export function bookingPayloadSchema(
           code: "custom",
           message:
             v.service_type === "meals_only"
-              ? "Pick at least one meal — a meals-only booking has nothing else in it"
+              ? "Pick at least one meal - a meals-only booking has nothing else in it"
               : "Pick at least one meal, or change this to a room-only booking",
           path: ["meals"],
         });
       }
     })
     // `check_in` / `check_out` are wall-clock strings, so they are resolved in
-    // the institute's timezone — never the runtime's. See `lib/tz.ts`.
+    // the institute's timezone - never the runtime's. See `lib/tz.ts`.
     .superRefine((v, ctx) => {
       // A **stay** still has to say what it is for: the desk and the
       // approvers read it, and "Visit" is the one thing a reviewer cannot
-      // get from anywhere else. A **dining** booking does not — the box is
+      // get from anywhere else. A **dining** booking does not - the box is
       // Remarks there, for anything the kitchen should know (1 Oct 2026).
       if (v.service_type === "meals_only") return;
       if (v.purpose_of_visit.trim().length < 5) {
@@ -812,7 +898,7 @@ export function bookingPayloadSchema(
       // The kitchen's notice period: a meal has to be asked for before the
       // previous one finishes being served. Checked separately from the stay
       // so a meal that is inside the stay but closed is not described as
-      // outside it — and checked on the server too, because a form left open
+      // outside it - and checked on the server too, because a form left open
       // past a deadline would otherwise submit an order nobody can cook.
       if (v.meals.length === 0) return;
       const message = mealLeadTimeError(v.meals, new Date(), rules.meals.windows);
@@ -907,11 +993,25 @@ export function bookingPayloadSchema(
           });
         });
       });
-    });
+    })
+    /**
+     * Last of all, the head a personal booking is charged to.
+     *
+     * The form does not ask (7 Oct 2026), so the value has to be filled in
+     * somewhere, and it is filled in **here** rather than in `createBooking`
+     * for the usual reason: the form validates with this schema and sends
+     * `parsed.data`, which the server re-parses with it. Doing it here means
+     * the browser's copy of the payload and the stored booking name the same
+     * budget, and the invoice and the reports have one answer to read.
+     *
+     * Round-trip safe: `"personal_funds"` is a valid input for `debit_head`,
+     * so the output of one pass parses as the input of the next.
+     */
+    .transform((v) => ({ ...v, debit_head: debitHeadFor(v.booking_type, v.debit_head) }));
 }
 
 /**
- * Why check-out is not after check-in, spelled out — or null when it is fine.
+ * Why check-out is not after check-in, spelled out - or null when it is fine.
  *
  * The bare "Check-out must be after check-in" was a tautology to anyone who had
  * just entered what they believed were valid times, and it hid a real trap: the
@@ -935,12 +1035,12 @@ export function checkOutOrderError(checkIn: string, checkOut: string): string | 
   )} and check out on ${formatInstituteDateTime(outAt)}`;
 
   if (outAt.getTime() === inAt.getTime()) {
-    return `${reading} — the same moment. A stay needs to end after it starts.`;
+    return `${reading} - the same moment. A stay needs to end after it starts.`;
   }
   // Same calendar day: the periods are the usual culprit, because only the
   // times can be out of order.
   if (checkIn.slice(0, 10) === checkOut.slice(0, 10)) {
-    return `${reading}, which is earlier the same day. Check the AM/PM dropdown on each time — they do not change on their own when you pick a new hour.`;
+    return `${reading}, which is earlier the same day. Check the AM/PM dropdown on each time - they do not change on their own when you pick a new hour.`;
   }
   return `${reading}. Check-out has to be after check-in.`;
 }
@@ -953,7 +1053,7 @@ export function advanceWindowMessage(
   const limit = latestCheckIn(role, new Date(), months);
   if (!limit) return "";
   const window = months === 1 ? "one month" : `${months} months`;
-  return `Bookings open ${window} in advance — the latest check-in you can request is ${formatInstituteDate(
+  return `Bookings open ${window} in advance - the latest check-in you can request is ${formatInstituteDate(
     limit
   )}`;
 }
@@ -966,7 +1066,7 @@ export const AADHAAR_DIGITS = 12;
 
 export const AADHAAR_FORMAT_ERROR = `Aadhaar number must be ${AADHAAR_DIGITS} digits`;
 
-/** Just the digits of what was typed — "1234 5678 9012" is twelve. */
+/** Just the digits of what was typed - "1234 5678 9012" is twelve. */
 export function aadhaarDigits(value: string): string {
   return value.replace(/\D/g, "");
 }
@@ -981,7 +1081,7 @@ export function infantHelpText(capacity: CapacityRules = DEFAULT_RULES.capacity)
   if (capacity.max_infants_per_room === 0) {
     return `${opening} A room takes up to ${capacity.max_guests_per_room} guests.`;
   }
-  return `${opening} A room takes ${capacity.max_occupants_per_room} people in all, of whom at most ${capacity.max_guests_per_room} may need a bed — so a full room is ${describeRoomParties(capacity)}.`;
+  return `${opening} A room takes ${capacity.max_occupants_per_room} people in all, of whom at most ${capacity.max_guests_per_room} may need a bed - so a full room is ${describeRoomParties(capacity)}.`;
 }
 
 export const INFANT_HELP_TEXT = infantHelpText();

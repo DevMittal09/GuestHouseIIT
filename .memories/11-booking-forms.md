@@ -63,20 +63,34 @@ its form is not in the Form Builder and every guest field is required.
   upload. The payload marks it `infant: true` and the schema refuses one
   without an age below 5. The age still decides: a guest card given an age
   below 5 is an infant too.
-- **Filled in from what the portal knows** (25 Sep 2026, `lib/known-guests.ts`):
-  on a guest card, choosing **Father / Mother / Guardian / Grandmother /
-  Grandfather** (the one-of-each relationships) fills the name — from the
-  student's **academic record** first (father, mother, guardian), then from
-  the requester's **own earlier bookings** — and the gender the word implies,
-  but only into an empty box or one the previous choice filled. **Fill in
-  from saved details** (a list at the top of every guest card, every role but
-  the desk) fills name, gender, relationship, citizenship and nationality from
-  the record's family or anyone on the requester's earlier bookings. Never an
-  ID number, a passport number or an age. A line under the name says where it
-  came from. **Since 30 Sep 2026 the list starts with "Yourself — <name>"**
-  for a student or employee (relationship **Self**; the record's name, else
-  the profile's; no gender) — a requester may be a guest on their own
-  request. Choosing Self on a student's dropdown fills it in too.
+- **A student's parents come from the academic record, locked** (7 Oct 2026,
+  `lib/academic/guest-names.ts`). Where the record names them:
+  - **Father** and **Mother** are on the dropdown, and choosing one puts the
+    record's name in the box **read-only**, with "From your academic record -
+    ask the guest house office if it is wrong" under it;
+  - a parent the record does **not** name is **not offered at all** — there
+    would be no name to lock it to;
+  - **Guardian** appears only where the record names **neither** parent (and
+    where it names neither parent and no guardian either, Guardian is left
+    open with the name typed, because the record has nothing to say);
+  - **Siblings and grandparents are typed by hand**, as before;
+  - **no record → nothing is locked or withheld**, and the form is exactly
+    what it was.
+
+  The server does not take the form's word for it: `createBooking` rebuilds
+  the rule from the record and **writes the record's name whatever arrived**.
+  And a guest the record named is asked for **neither an Aadhaar number nor
+  an ID document** — the institute has already identified them — while a
+  sibling typed by hand still is.
+
+  Matched against the Form Builder's own option list ignoring case, so
+  renaming "Father" to "Dad" simply stops it being locked.
+
+  > **"Fill in from saved details" and "Yourself" are gone** (7 Oct 2026,
+  > for every role; `lib/known-guests.ts` deleted). Nothing is offered from
+  > the requester's earlier bookings any more. The **Self relationship**
+  > remains on the student form — a student may still be a guest on their own
+  > request, typing their own name.
 - **Aadhaar**, if typed, must be 12 digits even where optional. Shown as the
   last four everywhere afterwards; stored encrypted.
 - **Citizenship** per guest: Indian (default) or Other. **Other makes
@@ -106,13 +120,13 @@ its form is not in the Form Builder and every guest field is required.
 | 3 | **Type of booking** — Official / Personal / On behalf of an alumnus | Only roles with more than one option: Employee (Official default, Personal), IAR Office (Official, Alumni), GH Manager (Official, Alumni) | Yes; others record their single type silently |
 | 4 | **What to book** — Room booking / Room + Meals / Meals only | When a guest house the role may book serves meals | Yes. Meals only: Employee, Official, IAR Office, GH Manager |
 | 5 | **Approval** — Direct / Requires HOD approval | Offices (`official`, `iar_cell`), room bookings | **Yes** for offices; refused for anyone else |
-| 6 | **Debitable head** | Everyone (shown, not asked, when there is only one). Personal Funds adds "An invoice will be generated and can be settled at the time of checkout. Multiple payment options are available at the guest house." (not on meals only) | **Yes** |
+| 6 | **Debitable head** | **Not a personal booking at all** (7 Oct 2026 — the money is the requester's own, so the question is not put and the server records Personal Funds). Shown, not asked, when a role has only one. A personal **stay** gets a **Payment** card instead: "An invoice will be generated and can be settled at the time of checkout. Multiple payment options are available at the guest house." A personal **meal** booking gets no card - nobody checks out | **Yes**, where it is asked |
 | 6a | Project — **number and title, typed** into the details box beside the head (1 Oct 2026; it was a dropdown of the Projects list) | Head = Project | **Yes** |
 | 6b | Project sub-head (text, ≤ 120) | Head = Project | Optional; refused with any other head |
 | 6c | Special fund's name / sanction reference (≤ 300) and sanction letter upload | Head = Special Funds | Both optional |
 | 7 | **On behalf of** — guest's name, email, phone | GH Manager | Name **yes** |
 | 8 | **Alumnus** — full name, student / roll number, **Alumni ID card** | Booking type = alumni | All three **yes** |
-| 9 | **Guest house** | Stated as text when only one is possible; a dropdown otherwise; no question at all for meals only | **Yes** |
+| 9 | **Guest house** | Stated as text when only one is possible; a dropdown otherwise; no question at all for meals only. **Students and alumni bookings are Bageshri alone** (7 Oct 2026, `restrictedToOneGuestHouse`), checked on the server, the manager excepted | **Yes** |
 | 10 | **Check-in** date + time, **check-out** date + time (hour / minute / AM-PM dropdowns, with a "Your stay" read-back) | Room bookings | **Yes** |
 | 11 | **Purpose of visit** — labelled **Remarks** on a meal booking | Everyone | **Yes**, ≥ 5 characters, on a stay; **optional** on a meal booking (1 Oct 2026) |
 | 12 | **Rooms** — room cards, each with its guests | Room bookings | **At least 1 room, at most 10** |
@@ -123,7 +137,8 @@ its form is not in the Form Builder and every guest field is required.
 | 17 | Pets notice ("Pets are not allowed…") | **Room bookings only** (1 Oct 2026 — nobody stays on a meal booking) | Displayed only — the tick box was removed |
 | 18 | **Privacy consent** tick | Everyone | **Yes** |
 | 18a | **Confirm your meal booking** — kitchen, people, preferences, each day and its sittings, who pays, remarks | Meals only | Read-only, live |
-| — | Room availability panel (day / week / month, browsable) | Room bookings | Read-only |
+| 18b | **Rates** — what this guest house charges, from the office's own rate sheet (7 Oct 2026): room per day, extra bed per day, and each meal where the kitchen serves them. Resolved through the **same function the invoice prices from**, so the figure quoted is the figure charged; an unpriced charge reads "Not published" | Everyone | Read-only |
+| — | Room availability panel — **"N rooms available"** per day, and per hour on a single day (7 Oct 2026). The room-by-room chart is the **desk's** only | Room bookings | Read-only |
 
 ---
 
@@ -185,21 +200,24 @@ its form is not in the Form Builder and every guest field is required.
 
 | Requester | Booking types | Services | Route after submission | Debitable heads — room (default) | Dining |
 | --- | --- | --- | --- | --- | --- |
-| Student | Personal (not asked) | Room (Bageshri serves no meals) | Assistant Warden → GH Manager | Personal Funds | — |
+| Student | Personal (not asked) | Room, **Bageshri only and no meals** - a rule since 7 Oct, not just a consequence of Bageshri having no kitchen | Assistant Warden → GH Manager | **Not asked** (7 Oct 2026): Personal Funds, recorded by the server | — |
 | Employee — faculty, official | Official | Room, Room + Meals, Meals only | HOD → GH Manager (meals only: GH Manager) | Department, Project, PDF, Special Funds | Department, PDF, Personal, Special Funds |
 | Employee — staff, official | Official | same | same | Department, Special Funds | Department, Special Funds |
-| Employee — personal | Personal | same | GH Manager | Personal Funds, Special Funds | Personal Funds, Special Funds |
+| Employee — personal | Personal | same | GH Manager | **Not asked** (7 Oct 2026): Personal Funds, recorded by the server | **Not asked**: Personal Funds |
 | Official — officer office | Official (not asked) | same | Direct → GH Manager, or its own head → GH Manager | Institute Grant, Special Funds | Institute Grant, Special Funds |
 | Official — department office | Official (not asked) | same | Direct, or the parent department's HOD → GH Manager | Department, Special Funds | Department, Special Funds |
 | Club (by its Faculty Advisor) | Official (not asked) | Room, Room + Meals | **GH Manager directly** | Department, Special Funds | — |
 | IAR Office | Official / Alumni | Room, Room + Meals, Meals only | Direct, or its head → GH Manager | Official: its office class; Alumni: Institute Grant, Personal Funds, Special Funds | Official: its office class; Alumni: Personal Funds, Special Funds |
-| IAR Student Cell | Alumni (not asked) | Room (Bageshri) | IAR Office → GH Manager | Institute Grant, Personal Funds, Special Funds | — |
+| IAR Student Cell | Alumni (not asked) | Room, **Bageshri only and no meals** (7 Oct 2026 — every alumni booking, whoever raises it) | IAR Office → GH Manager | Institute Grant, Personal Funds, Special Funds | — |
 | GH Manager at the desk | Official / Alumni | Room, Room + Meals, Meals only | GH Manager (its own queue) | Official: Department, Institute Grant, PDF, Personal, Project, Special Funds; Alumni: Institute Grant, Personal Funds, Special Funds | Official: the same less Project; Alumni: Personal Funds, Special Funds |
 
-**Special Funds is offered to everyone except students** (25 Sep 2026).
-**Floors under Settings** (`FORBIDDEN_DEBIT_HEADS`, cannot be ticked back on):
-faculty never the Institute Grant; students never Special Funds. A student's
-booking is always the *student* category, never *personal*.
+**Special Funds is offered to everyone except students and personal bookings**
+(25 Sep 2026, narrowed 7 Oct). **Floors under Settings**
+(`FORBIDDEN_DEBIT_HEADS`, cannot be ticked back on): faculty never the
+Institute Grant; students never Special Funds; **a personal booking never
+Special Funds** — and is not asked which budget pays at all
+(`asksForDebitHead`). A student's booking is always the *student* category,
+never *personal*.
 
 **A meals-only booking** skips every approval stage and goes straight to the
 GH Manager, whoever raises it.
@@ -219,5 +237,8 @@ head) is skipped, and the submission log says so.
 | Debitable heads per category | Console → Settings → Debitable heads (floors in code) |
 | Booking window, stay cap, buffer, capacity, meal windows | Console → Settings |
 | Stay-cap / window exemptions | `BOOKING_DURATION_EXEMPT_ROLES` (`lib/policy.ts`), `isAdvanceWindowExempt` (`lib/workflow.ts`) |
-| Alumni guest house (Bageshri) | `ALUMNI_GUEST_HOUSE_NAME` in `lib/policy.ts` — the one rule still matched on a guest house's name |
+| The one guest house students and alumni use (Bageshri) | `RESTRICTED_GUEST_HOUSE_NAME` / `ALUMNI_GUEST_HOUSE_NAME` in `lib/policy.ts` — the one rule still matched on a guest house's name |
+| Who may be offered meals at all | `mealsAllowedFor` (`lib/policy.ts`) — not students, not an alumni booking |
+| Whether a booking type is asked which budget pays | `asksForDebitHead` (`lib/debit-heads.ts`) |
+| A student's locked parent names | Console → **Academic records** (migration 28); the rule is `guestNameRule` (`lib/academic/guest-names.ts`) |
 | Copy-to cap (25) | `MAX_COPY_TO_EMAILS` (`lib/booking-schema.ts`) and migration 24's check |

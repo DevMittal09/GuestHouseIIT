@@ -34,7 +34,7 @@ export function roomBlockError(input: { from: string; to: string; reason: string
   return null;
 }
 
-/** Whether a block overlaps a period (strict, half-open — the constraint's rule). */
+/** Whether a block overlaps a period (strict, half-open - the constraint's rule). */
 export function blockOverlaps(block: Pick<RoomBlock, "from" | "to">, from: string, to: string): boolean {
   return rangesOverlap(
     { from: Date.parse(block.from), to: Date.parse(block.to) },
@@ -85,12 +85,12 @@ export function extensionError(
  *
  * **In either direction** (1 Oct 2026). It arrived on 25 Sep 2026 as
  * `earlierCheckInError`, which only let the desk bring a check-in forward,
- * for a guest arriving before the booked time — without that an early
+ * for a guest arriving before the booked time - without that an early
  * arrival could not be marked Occupied, which is refused before the booked
  * check-in (`occupancyNotStartedError`).
  *
  * The office then reported the opposite case: "late entry check-in is not
- * possible — when the user comes late to check in he is unable to do it". A
+ * possible - when the user comes late to check in he is unable to do it". A
  * guest whose flight slips to the following day has a booking whose stay has
  * already begun on paper; the desk could extend the check-out but had no way
  * to say the stay starts later, so the register disagreed with the building
@@ -116,7 +116,7 @@ export function moveCheckInError(
   if (t === current) return "That is the check-in the stay already has";
   if (Math.abs(current - t) > 60 * 86_400_000) return "Move the check-in by at most 60 days at a time";
   if (t >= Date.parse(booking.check_out)) {
-    return "The new check-in must be before the check-out — extend the stay first if the whole booking is moving";
+    return "The new check-in must be before the check-out - extend the stay first if the whole booking is moving";
   }
   return null;
 }
@@ -171,7 +171,7 @@ export function planRoomRange(text: string, existingNumbers: string[]): RoomRang
     .filter(Boolean);
   if (parts.length === 0) return { create: [], existing: [], problems: ["Type room numbers, e.g. B-101 to B-120"] };
   for (const part of parts) {
-    const range = /^(.*?)(\d+)\s*(?:to|–|—|-|\.\.)\s*(.*?)(\d+)$/i.exec(part);
+    const range = /^(.*?)(\d+)\s*(?:to|–|-|-|\.\.)\s*(.*?)(\d+)$/i.exec(part);
     if (range && (range[3] === "" || range[3].toUpperCase() === range[1].toUpperCase())) {
       const [, prefix, a, , b] = range;
       const start = Number(a);

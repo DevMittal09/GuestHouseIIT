@@ -75,7 +75,7 @@ export function PageMasthead({
 }: {
   title: string;
   intro?: React.ReactNode;
-  /** A small line under the lead — an edition note, a count. */
+  /** A small line under the lead - an edition note, a count. */
   note?: React.ReactNode;
   aside?: React.ReactNode;
 }) {
@@ -230,7 +230,7 @@ export const siteButton = {
 };
 
 /**
- * A photograph, or — until the office supplies it — a labelled placeholder of
+ * A photograph, or - until the office supplies it - a labelled placeholder of
  * the same shape, so the layout is final either way. `aspect` is a CSS
  * aspect-ratio such as "4/3"; leave it out to fill a sized parent.
  */

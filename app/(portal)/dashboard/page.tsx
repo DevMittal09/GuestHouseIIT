@@ -47,14 +47,14 @@ export default async function DashboardPage() {
   // Meals get their own door rather than living inside "New Booking": a
   // department booking lunch for a visiting examiner has no room to ask for,
   // and having to start a room booking to find the option was the complaint.
-  // Meals chosen *alongside* a room are not here — they belong to the room
+  // Meals chosen *alongside* a room are not here - they belong to the room
   // booking, and appear once a guest house with a kitchen has been picked.
   const mealHouses = guestHouses.filter(
     (g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id)
   );
   const canBookMeals = serviceTypesFor(user.role, mealHouses.length > 0).includes("meals_only");
   // Named after the kitchen, because that is the question the requester is
-  // actually answering — never hardcoded to "Hamsanandi", which is a flag the
+  // actually answering - never hardcoded to "Hamsanandi", which is a flag the
   // developer console can move.
   const mealHouseNames = joinNames(mealHouses.map((g) => g.name));
 
@@ -84,7 +84,7 @@ export default async function DashboardPage() {
               title="New room booking"
               detail={
                 roomHouseNames
-                  ? `Rooms at ${roomHouseNames} — dates, guests and meals in one request`
+                  ? `Rooms at ${roomHouseNames} - dates, guests and meals in one request`
                   : "Dates, guests and meals in one request"
               }
             />
@@ -95,7 +95,7 @@ export default async function DashboardPage() {
               icon={UtensilsCrossed}
               tone="ink"
               title="Meal booking"
-              detail={`Meals only${mealHouseNames ? ` at ${mealHouseNames}` : ""} — no room needed`}
+              detail={`Meals only${mealHouseNames ? ` at ${mealHouseNames}` : ""} - no room needed`}
             />
           )}
           {/* A faculty in-charge books for each of their clubs. */}
@@ -106,7 +106,7 @@ export default async function DashboardPage() {
               icon={UsersRound}
               tone={booksForSelf ? "outline" : "brand"}
               title={`Book for ${c.full_name}`}
-              detail="As its Faculty Advisor — goes straight to the Guest House Manager"
+              detail="As its Faculty Advisor - goes straight to the Guest House Manager"
             />
           ))}
         </div>
@@ -127,7 +127,7 @@ export default async function DashboardPage() {
       </section>
       {/* DPDP (Phase 8): take a copy, or ask the office to erase it. */}
       <MyData openRequest={openPrivacyRequest} />
-      {/* The way out when the form will not do what the requester needs — a
+      {/* The way out when the form will not do what the requester needs - a
           stay over the 14-night cap, an exception, a booking taken at the
           desk. Values live in `lib/policy.ts`. */}
       <p className="border-l-4 border-border-strong bg-band/60 px-4 py-3 text-sm text-body">
@@ -145,7 +145,7 @@ const DOOR_TONES = {
 
 /**
  * A large, unmissable way into the booking form (30 Sep 2026): a solid
- * tile — vermilion for a room, ink for meals — with the icon in a hairline
+ * tile - vermilion for a room, ink for meals - with the icon in a hairline
  * square, the title in the serif at display size, one line on what it
  * covers, and an arrow that moves on hover. Small outlined buttons at the
  * end of the title were being missed; these are the page's first thing.

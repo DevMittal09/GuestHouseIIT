@@ -5,7 +5,7 @@ export type Role =
   | "club"
   /**
    * Legacy. Alumni have no institute login, so they can no longer sign in or
-   * submit anything themselves — the IAR Office and the IAR Student Cell book
+   * submit anything themselves - the IAR Office and the IAR Student Cell book
    * on their behalf (`booking_type: "alumni"`). The role is kept because
    * bookings made before that change still carry it.
    */
@@ -34,7 +34,14 @@ export type BookingStatus =
   | "OCCUPIED"
   | "VACATED"
   | "CANCELLATION_REQUESTED"
-  | "CANCELLATION_APPROVED";
+  | "CANCELLATION_APPROVED"
+  /**
+   * Nobody decided it in time: the check-in passed while it waited for an
+   * approval (migration 29, 7 Oct 2026). Set by the nightly job, never by a
+   * person, and reversible - the manager can reinstate it if the stay is
+   * still wanted.
+   */
+  | "MISSED";
 
 export type RoomType = "single" | "double_sharing";
 export type Gender = "male" | "female" | "other";
@@ -42,7 +49,7 @@ export type Gender = "male" | "female" | "other";
 /**
  * A guest's citizenship, asked per guest because one room can hold an Indian
  * host and a foreign collaborator. "other" makes nationality and passport
- * number mandatory — the register the guest house keeps for foreign nationals
+ * number mandatory - the register the guest house keeps for foreign nationals
  * needs both, and nothing else on the form supplies them.
  */
 export type Citizenship = "indian" | "other";
@@ -57,7 +64,7 @@ export const CITIZENSHIP_LABELS: Record<Citizenship, string> = {
  *
  * Distinct from `BookingType`, which says *why* the stay was booked. A stay
  * can be official and room-only, or personal with meals; the two answer
- * different questions and are approved differently — `meals_only` skips the
+ * different questions and are approved differently - `meals_only` skips the
  * room approval chain entirely.
  */
 export type ServiceType = "room" | "room_meals" | "meals_only";
@@ -93,7 +100,7 @@ export const MEAL_PREFERENCE_LABELS: Record<MealPreference, string> = {
 };
 
 /**
- * How many of the party eat vegetarian and how many do not — the booking's
+ * How many of the party eat vegetarian and how many do not - the booking's
  * own split, which must add up to the head count (`dietCountsError`). One
  * answer per booking rather than one per guest because a dining booking has
  * no guest list at all, only a head count, and the kitchen cooks to numbers:
@@ -109,7 +116,7 @@ export type MealDietCounts = Record<MealPreference, number>;
  * of staff books officially for a visiting collaborator one week and privately
  * for their own family the next, and the two are billed and approved
  * differently. Roles that only ever book one way (a club, a dignitary's
- * office) are not asked — see `bookingTypesFor` in `lib/booking-types.ts`.
+ * office) are not asked - see `bookingTypesFor` in `lib/booking-types.ts`.
  *
  * `alumni` means "on behalf of an alumnus", who has no login of their own; it
  * carries the alumnus's name, student id and ID card on the booking.
@@ -139,7 +146,7 @@ export type MealPlan = MealDay[];
  * `alumni` is deliberately absent: alumni have no institute login, so nobody
  * signs in as one any more. The IAR Office (`iar_cell`) and the IAR Student
  * Cell book for them instead. Both of those also submit bookings for their own
- * office, which is why a reviewer role appears in this list — `iar_cell`
+ * office, which is why a reviewer role appears in this list - `iar_cell`
  * reviews the Student Cell's requests *and* raises its own.
  */
 export const REQUESTER_ROLES: Role[] = [
@@ -158,7 +165,7 @@ export const REQUESTER_ROLES: Role[] = [
  */
 export const ARCHIVED_REQUESTER_ROLES: Role[] = ["alumni"];
 
-/** Every role a stored booking's `user_role` can be — current or retired. */
+/** Every role a stored booking's `user_role` can be - current or retired. */
 export const BOOKING_CATEGORY_ROLES: Role[] = [
   ...REQUESTER_ROLES,
   ...ARCHIVED_REQUESTER_ROLES,
@@ -178,14 +185,14 @@ export const STUDENT_RELATIONSHIPS = [
   // A student whose parents have both died, or are abroad and cannot travel,
   // is accompanied by the guardian the institute already holds on record (the
   // academic database's `guardian_name`). The guardian stands in for a parent
-  // in the relationship dependency too — see `STUDENT_PARENT_RELATIONSHIPS` —
+  // in the relationship dependency too - see `STUDENT_PARENT_RELATIONSHIPS` -
   // so siblings and grandparents are not locked out of a booking that no
   // parent can ever be on.
   "Guardian",
   "Grandmother",
   "Grandfather",
   "Siblings",
-  // The student as one of the guests on their own request (30 Sep 2026) —
+  // The student as one of the guests on their own request (30 Sep 2026) -
   // "Fill in from saved details" offers them as "Yourself". Neither a parent
   // nor a dependent, so it neither needs a parent nor lets a sibling in.
   "Self",
@@ -200,14 +207,14 @@ export type Profile = {
   department_or_club: string | null;
   roll_number: string | null;
   /**
-   * The person's institute LDAP username (migration 12) — what the LDAP
+   * The person's institute LDAP username (migration 12) - what the LDAP
    * sign-in form matches against. `null` means they cannot sign in with LDAP
    * until a developer sets it. Unique, compared lowercased.
    */
   ldap_uid: string | null;
   /**
    * The department, club or office this person belongs to (migration 15). It
-   * is what their approver is found through — see `lib/units.ts`. Optional
+   * is what their approver is found through - see `lib/units.ts`. Optional
    * because profiles written before migration 15 have none.
    */
   unit_id?: string | null;
@@ -231,7 +238,7 @@ export const STAFF_CATEGORY_LABELS: Record<StaffCategory, string> = {
  * Where the money for a stay comes from.
  *
  * Recorded on every booking so the accounts section knows which budget to
- * debit. A student's booking is always `personal_funds` — the guest settles
+ * debit. A student's booking is always `personal_funds` - the guest settles
  * at checkout; everyone else chooses one of these when it is made.
  */
 export type DebitHead =
@@ -292,7 +299,7 @@ export type Booking = {
   /** Always equal to the number of `booking_rooms` rows. Zero on a meals-only booking. */
   rooms_requested: number;
   /**
-   * Derived from `room_holds` on read — there is no such column. Holds are the
+   * Derived from `room_holds` on read - there is no such column. Holds are the
    * source of truth for which rooms a booking occupies; see
    * `supabase/migrations/00000000000003_room_holds_and_infants.sql`.
    */
@@ -305,7 +312,7 @@ export type Booking = {
    */
   service_type: ServiceType;
   /**
-   * The kitchen's veg / non-veg preference for the whole party — **legacy**.
+   * The kitchen's veg / non-veg preference for the whole party - **legacy**.
    * Bookings made before 1 Oct 2026 carry only this; read the split through
    * `mealDietCounts(booking)` (`lib/meals.ts`), which falls back to spreading
    * this one answer over the head count.
@@ -319,13 +326,13 @@ export type Booking = {
   meal_diet_counts: MealDietCounts | null;
   /**
    * Head count for a meals-only booking, which has no rooms and no guest
-   * rows — the kitchen wants a number, not a register. Null on every other
+   * rows - the kitchen wants a number, not a register. Null on every other
    * kind of booking, where the guest rows are the count.
    */
   meal_guest_count: number | null;
   /**
    * Whether the requester acknowledged that pets are not allowed. Always true
-   * on a booking made after migration 11 — the schema refuses the submission
+   * on a booking made after migration 11 - the schema refuses the submission
    * otherwise. Bookings made before it are false, meaning "never asked".
    */
   pets_policy_acknowledged: boolean;
@@ -333,14 +340,14 @@ export type Booking = {
   /**
    * Whether any guest on the booking is a foreign national. Derived from the
    * guest rows on write, and kept as a column so the desk can find those
-   * bookings without opening each one — the guest house has to report them.
+   * bookings without opening each one - the guest house has to report them.
    */
   has_foreign_national: boolean;
   /**
-   * Who actually submitted the booking, when that is not the requester — the
+   * Who actually submitted the booking, when that is not the requester - the
    * Guest House Manager booking on someone's behalf, or a club's faculty
    * in-charge booking for the club (24 Sep 2026: a club cannot book for
-   * itself — `lib/club-booking.ts`). Null on a booking the requester raised
+   * itself - `lib/club-booking.ts`). Null on a booking the requester raised
    * themselves.
    */
   created_by: string | null;
@@ -372,13 +379,13 @@ export type Booking = {
   debit_document_url: string | null;
   /**
    * The project's sub-head, typed by the requester when the head is Project
-   * (migration 24) — "Travel", "Contingency". Null otherwise, and on every
+   * (migration 24) - "Travel", "Contingency". Null otherwise, and on every
    * booking made before the question existed.
    */
   debit_subhead: string | null;
   /**
    * Extra addresses the requester asked to be copied on every mail sent to
-   * them about this booking (migration 24). Always an array downstream —
+   * them about this booking (migration 24). Always an array downstream -
    * empty when nobody was added, and on older rows.
    */
   copy_to_emails: string[];
@@ -394,7 +401,7 @@ export type Booking = {
    * for anyone who is not an office.
    */
   office_approval: "direct" | "hod" | null;
-  /** The alumnus this stay is for — only on `booking_type: "alumni"`. */
+  /** The alumnus this stay is for - only on `booking_type: "alumni"`. */
   alumni_name: string | null;
   /** That alumnus's student / roll number, for the IAR Office to verify against. */
   alumni_roll_number: string | null;
@@ -402,7 +409,7 @@ export type Booking = {
   custom_fields: CustomFieldValue[] | null;
   /**
    * The meals the requester asked for, per day of the stay. Always a clean
-   * plan — bookings predating the field, and the old whole-stay object, are
+   * plan - bookings predating the field, and the old whole-stay object, are
    * normalised on read, so no consumer needs a null check.
    */
   meals: MealPlan;
@@ -416,7 +423,7 @@ export type Booking = {
   has_infant: boolean;
   /**
    * A requester's request to stay longer (migration 20), awaiting the
-   * manager. Null — or absent on an older mock row — when nothing is asked.
+   * manager. Null - or absent on an older mock row - when nothing is asked.
    */
   extension_requested_until?: string | null;
   extension_reason?: string | null;
@@ -439,7 +446,7 @@ export type CustomFieldValue = {
 }
 
 /**
- * One room card on the booking form — "Room 1", "Room 2" — and, once the
+ * One room card on the booking form - "Room 1", "Room 2" - and, once the
  * manager has allocated, the physical room it maps to.
  *
  * Guests are entered inside a card rather than in one flat list, because the
@@ -456,7 +463,7 @@ export type BookingRoom = {
   room_type: RoomType | null;
   /**
    * The physical room the manager gave this card. `room_holds` remains the
-   * authority on *whether* a room is held and for when — this only records
+   * authority on *whether* a room is held and for when - this only records
    * which card it was held for, so the desk knows which party is in which room.
    */
   assigned_room_id: string | null;
@@ -484,7 +491,7 @@ export type BookingGuest = {
   /**
    * Derived from `age` on write (`isInfantAge`), never asked for directly.
    * Stored rather than generated because the threshold has already changed
-   * once — re-deriving would reclassify guests whose stay was agreed under
+   * once - re-deriving would reclassify guests whose stay was agreed under
    * the old rule. Infants share a guardian's bed and are kept out of capacity
    * by `countBedGuests`.
    */
@@ -513,7 +520,7 @@ export type BookingWithDetails = Booking & {
   guest_house: GuestHouse;
   /**
    * Every guest on the booking, flat and in room order. Kept alongside `rooms`
-   * because most readers — the register, the search index, the exports — want
+   * because most readers - the register, the search index, the exports - want
    * the whole party and do not care who shares with whom.
    */
   guests: BookingGuest[];
@@ -526,7 +533,7 @@ export type BookingWithDetails = Booking & {
 /**
  * One room held by one booking over a period, for the public availability
  * grid. `requester_name` and `purpose_of_visit` are filled by the store but
- * stripped for viewers who may not see who booked — see
+ * stripped for viewers who may not see who booked - see
  * `app/actions/availability.ts`.
  */
 export type RoomOccupancySegment = {
@@ -540,7 +547,7 @@ export type RoomOccupancySegment = {
    * When the room is ready again: check-out plus the turnaround buffer
    * (Phase 3). The booked bar still ends at `check_out`; the charts draw
    * `[check_out, turnaround_until)` separately, hatched. Null when there is no
-   * buffer — none configured, or a turnover the manager accepted.
+   * buffer - none configured, or a turnover the manager accepted.
    */
   turnaround_until: string | null;
   requester_name: string | null;
@@ -558,6 +565,13 @@ export interface BookingFilter {
   hostelName?: string;
   club?: string;
   userRole?: Role;
+  /**
+   * Exactly these bookings. "Awaiting payment" starts from the outstanding
+   * invoices and fetches their bookings, rather than the other way round -
+   * the list has no date window, and loading every booking ever made to find
+   * the few that still owe money would not scale (7 Oct 2026).
+   */
+  ids?: string[];
 }
 
 /** A guest as submitted, before the store gives it an id and a room. */
@@ -610,7 +624,7 @@ export interface NewBookingInput {
   rooms: NewBookingRoomInput[];
   /**
    * What the booking's first log entry says, when "Booking submitted" is not
-   * the whole truth — a manager overriding a policy, for instance. The
+   * the whole truth - a manager overriding a policy, for instance. The
    * override has to be in the audit trail from the moment the booking exists,
    * not added afterwards as a status change that never happened.
    */
@@ -662,7 +676,7 @@ export class BufferClashError extends Error {
 
 /** Raised when a hold collides with one written by someone else. */
 export class RoomClashError extends Error {
-  constructor(message = "Those rooms were just taken for these dates — refresh the grid") {
+  constructor(message = "Those rooms were just taken for these dates - refresh the grid") {
     super(message);
     this.name = "RoomClashError";
   }
@@ -681,6 +695,7 @@ export const STATUS_LABELS: Record<BookingStatus, string> = {
   VACATED: "Vacated",
   CANCELLATION_REQUESTED: "Cancellation Requested",
   CANCELLATION_APPROVED: "Cancellation Approved",
+  MISSED: "Missed",
 };
 
 export const ROLE_LABELS: Record<Role, string> = {

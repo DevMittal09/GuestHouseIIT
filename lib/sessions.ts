@@ -7,7 +7,7 @@ import { getStore } from "./store";
 /**
  * Server-side sessions (Phase 8).
  *
- * The cookie carries a 32-byte random token and nothing else — no user id, no
+ * The cookie carries a 32-byte random token and nothing else - no user id, no
  * signature to forge. The row in `sessions` is the session: it can be expired,
  * revoked, or required to prove a second factor, and "sign out everywhere"
  * is one statement. Only the token's SHA-256 is stored, so a leaked database
@@ -15,7 +15,7 @@ import { getStore } from "./store";
  *
  * Lifetimes: **30 minutes idle**, pushed forward as the session is used, and
  * **12 hours absolute** from sign-in. The token is **rotated** when a session
- * gains privilege — at sign-in and when a second factor is proved — so a token
+ * gains privilege - at sign-in and when a second factor is proved - so a token
  * captured before either is worthless after it.
  */
 
@@ -189,7 +189,7 @@ export async function endSession(): Promise<void> {
       const session = await getStore().getSessionByToken(hashToken(token));
       if (session) await getStore().revokeSession(session.id);
     } catch {
-      // Nothing to revoke — the cookie goes either way.
+      // Nothing to revoke - the cookie goes either way.
     }
   }
   jar.delete(SESSION_COOKIE);

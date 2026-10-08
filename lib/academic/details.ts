@@ -7,7 +7,7 @@ import {
   profileRows,
   type DetailRow,
 } from "./fields";
-import { academicRecordFor, isMockAcademicSource, type AcademicLookup } from "./index";
+import { academicRecordFor, type AcademicLookup } from "./index";
 import type { AcademicRecordKind } from "./types";
 
 export type { CopyToEntry };
@@ -26,7 +26,7 @@ export type AcademicDetails = {
   rows: DetailRow[];
   /** Null for kinds of account that have no "Copy to". */
   copyTo: CopyTo | null;
-  /** The record shown is one of the dummy ones. */
+  /** The record shown is one of the published dummy ones - the card says so. */
   sample: boolean;
 };
 
@@ -43,7 +43,7 @@ export async function academicDetailsFor(
     status: lookup.status,
     rows: record ? academicRecordRows(record) : profileRows(profile),
     copyTo: kind ? await copyToFor(profile, kind, raisedBy) : null,
-    sample: record !== null && isMockAcademicSource(),
+    sample: lookup.status === "found" && lookup.origin === "sample",
   };
 }
 
@@ -54,12 +54,12 @@ async function copyToFor(
 ): Promise<CopyTo | null> {
   if (COPY_TO_RULE[kind].length === 0) return null;
   // The same rule the staff mail uses for CC (`lib/academic/copy-to.ts`), for
-  // the request as the form opens — the role's default booking type.
+  // the request as the form opens - the role's default booking type.
   const { entries, failed } = await copyToRecipients(profile, formRouteFor(profile, raisedBy));
   return {
     entries,
     emptyNote: failed
       ? "Could not be looked up right now."
-      : "Nobody — this request goes straight to the Guest House Manager, or nobody is set up to approve it yet.",
+      : "Nobody - this request goes straight to the Guest House Manager, or nobody is set up to approve it yet.",
   };
 }

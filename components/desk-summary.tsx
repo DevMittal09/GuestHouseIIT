@@ -11,8 +11,8 @@ export type DeskFigure = {
 
 /**
  * The desk at a glance (30 Sep 2026): one ruled strip of figures at the top
- * of the manager's console and of reception — rooms due back, requests
- * waiting, guests in house, bills to settle — each a jump link to its list
+ * of the manager's console and of reception - rooms due back, requests
+ * waiting, guests in house, bills to settle - each a jump link to its list
  * below, in the high-density style of a GOV.UK dashboard. It only counts
  * what the page already lists; it decides nothing.
  */

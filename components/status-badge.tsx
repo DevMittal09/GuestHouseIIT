@@ -23,6 +23,9 @@ const STATUS_CLASSES: Record<BookingStatus, string> = {
   VACATED: "tag-turquoise",
   CANCELLATION_REQUESTED: "tag-orange",
   CANCELLATION_APPROVED: "tag-pink",
+  // Nobody decided it in time (migration 29). Grey, like a cancellation: it
+  // is a way a request ends, and not one anybody chose.
+  MISSED: "tag-grey",
 };
 
 export function StatusBadge({ status }: { status: BookingStatus }) {

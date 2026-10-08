@@ -1,6 +1,6 @@
 import { addMonths } from "date-fns";
 import type { BookingSearchCriteria } from "./booking-search";
-import type { BookingStatus, Profile, Role, ServiceType, StaffCategory } from "./types";
+import type { Booking, BookingLog, BookingStatus, Profile, Role, ServiceType, StaffCategory } from "./types";
 import { approversOf, hodApproversFor, unitsGovernedBy, type Unit } from "./units";
 import { formatDateTime } from "./format";
 import { raisedByFacultyInCharge } from "./club-booking";
@@ -19,8 +19,8 @@ export const ADVANCE_BOOKING_WINDOW_MONTHS = DEFAULT_RULES.booking.advance_booki
  *
  * Official / dignitary visits are arranged by the institute on its own notice.
  * The Guest House Manager is exempt because they take bookings at the desk for
- * whatever the institute has already committed to — a window they could not
- * reach past would simply move those bookings off the portal — and the
+ * whatever the institute has already committed to - a window they could not
+ * reach past would simply move those bookings off the portal - and the
  * developer because the console bypasses everything anyway.
  */
 export function isAdvanceWindowExempt(role: Role): boolean {
@@ -65,8 +65,8 @@ export interface RoutingContext {
   officeApproval?: OfficeApproval | null;
   /**
    * Whether anyone other than the requester gives HOD approval for them
-   * (`hodApproversFor`). With nobody, the HOD stage is skipped — and the
-   * submission log says so — rather than waiting forever.
+   * (`hodApproversFor`). With nobody, the HOD stage is skipped - and the
+   * submission log says so - rather than waiting forever.
    */
   hasHodApprover?: boolean;
   /**
@@ -81,22 +81,22 @@ export interface RoutingContext {
 /**
  * The whole approval chain for a request, in order: every intermediate stage
  * before the Guest House Manager. Empty when it goes straight to the manager.
- * **The single source of the pipeline** — the entry status, the next stage
+ * **The single source of the pipeline** - the entry status, the next stage
  * after each approval, the Copy-to chain and the public site's description of
  * the routes are all read from here.
  *
  * - **Student** → Assistant Warden.
- * - **Club** (always official) — since 24 Sep 2026 raised by its Faculty
+ * - **Club** (always official) - since 24 Sep 2026 raised by its Faculty
  *   Advisor, and then **straight to the manager**: no forwarding by anyone,
  *   HOD included. A club request stored before then (raised by the club's
  *   own account) keeps the old route: council secretary → its HOD, when the
  *   club has one (Departments & Clubs → "HOD approval by").
- * - **Employee, official** → HOD of their department — faculty and
+ * - **Employee, official** → HOD of their department - faculty and
  *   non-teaching staff alike. **Personal** → straight to the manager: it is
  *   their own money.
  * - **Office** (Director's Office, a department's office, the IAR Office) →
  *   straight to the manager (**Direct**), or HOD first (**Requires HOD
- *   approval**) — the office's choice per booking.
+ *   approval**) - the office's choice per booking.
  * - **IAR Student Cell** → the IAR Office.
  * - **Meals only** → straight to the manager: lunch for a visitor is the
  *   kitchen's business; the stages exist to vouch for an overnight stay.
@@ -187,7 +187,7 @@ export function routingContextFor(
 
 /**
  * Every intermediate stage a booking passes through before the Guest House
- * Manager, in order — its whole chain, not just where it is now. Used for the
+ * Manager, in order - its whole chain, not just where it is now. Used for the
  * Copy-to line (everyone who signs a request off is copied on the staff mail
  * about it for the rest of its life) and to find the next stage.
  */
@@ -232,7 +232,7 @@ export function nextStatusAfter(current: BookingStatus, stages: BookingStatus[])
 /**
  * Context-free next stage, for callers with no booking to hand: an
  * intermediate approval forwards to the manager. Prefer `nextStatusAfter`
- * with the booking's stages — a club's FA approval goes on to the HOD.
+ * with the booking's stages - a club's FA approval goes on to the HOD.
  */
 export function nextStatusOnApprove(current: BookingStatus): BookingStatus {
   return nextStatusAfter(current, []);
@@ -243,14 +243,14 @@ export function nextStatusOnApprove(current: BookingStatus): BookingStatus {
  *
  * Two kinds of approval live here:
  *
- * - **By unit** — a club's advisor or its council's secretary (`PENDING_FA`),
- *   and the HOD (`PENDING_HOD`) — decided by who heads the unit *now*
+ * - **By unit** - a club's advisor or its council's secretary (`PENDING_FA`),
+ *   and the HOD (`PENDING_HOD`) - decided by who heads the unit *now*
  *   (`approversOf`, `hodApproversFor`), so it follows a change of HOD without
  *   anyone touching the waiting requests. That is the HOD's department
  *   scoping: an HOD can act only on requests from units whose HOD they are.
  *   The approver need not hold a reviewer role at all: a council secretary is
  *   a student, an HOD an employee.
- * - **By role** — wardens scoped to their hostel, the IAR Office, the manager.
+ * - **By role** - wardens scoped to their hostel, the IAR Office, the manager.
  *
  * A club whose unit has nobody set falls back to the old advisor rule, so a
  * request cannot be stranded because the console was half filled in; the
@@ -265,7 +265,7 @@ export function canReview(
   units: Unit[] = []
 ): boolean {
   // Nobody signs off their own request. The IAR Office both books and reviews,
-  // and an HOD books too — this is the belt-and-braces check behind the
+  // and an HOD books too - this is the belt-and-braces check behind the
   // routing that already skips them.
   if (reviewer.id === requester.id) return false;
 
@@ -293,7 +293,7 @@ export function canReview(
 /**
  * `canReview`, for a booking that exists: also refuses whoever **raised** it.
  * `canReview` sees only the requester, and a club booking's requester is the
- * club — so a faculty in-charge who is also the club's HOD would otherwise be
+ * club - so a faculty in-charge who is also the club's HOD would otherwise be
  * asked to approve the request they raised themselves.
  */
 export function canReviewBooking(
@@ -306,7 +306,7 @@ export function canReviewBooking(
 }
 
 /**
- * Whether this person may act for a booking as its requester — ask to cancel
+ * Whether this person may act for a booking as its requester - ask to cancel
  * it, ask to extend it. The requester, and whoever raised it for them: a
  * club's faculty in-charge (24 Sep 2026). The Guest House Manager's desk
  * bookings are the manager's own already (`user_id`), so this adds nobody
@@ -330,8 +330,8 @@ export const ACTIVE_STATUSES: BookingStatus[] = [
 /**
  * Where a stay sits relative to now.
  *
- * `OCCUPIED` is a *fact the manager records at the desk* — the guest walked in
- * — not something a date implies. So the phase is read off the booking's own
+ * `OCCUPIED` is a *fact the manager records at the desk* - the guest walked in
+ * - not something a date implies. So the phase is read off the booking's own
  * check-in and check-out, and the manager console groups by it. Without this
  * a stay starting next week sat under the same heading as one happening now,
  * and a future booking could be marked Occupied by mistake.
@@ -356,8 +356,8 @@ export function stayPhase(
  *
  * A guest who turns up half an hour early is standing at the desk, and
  * refusing to record them means the register disagrees with the building.
- * A guest who turns up *a day* early has no room — the previous one is still
- * in it — so the window is the same two hours the changeover override uses,
+ * A guest who turns up *a day* early has no room - the previous one is still
+ * in it - so the window is the same two hours the changeover override uses,
  * and for the same reason.
  */
 export function earliestCheckIn(booking: { check_in: string }): Date {
@@ -377,7 +377,7 @@ export function occupancyNotStartedError(
   now: Date = new Date()
 ): string | null {
   if (now >= earliestCheckIn(booking)) return null;
-  return `This stay starts on ${formatDateTime(booking.check_in)}. A guest can be checked in up to ${TURNOVER_GRACE_HOURS} hours before that, no earlier — until then the room may still have someone in it.`;
+  return `This stay starts on ${formatDateTime(booking.check_in)}. A guest can be checked in up to ${TURNOVER_GRACE_HOURS} hours before that, no earlier - until then the room may still have someone in it.`;
 }
 
 /** Whether the guest is arriving before the time they booked. */
@@ -392,8 +392,8 @@ export function isEarlyArrival(
  * A request nobody decided in time.
  *
  * Its check-in has passed while it was still in a queue, so the stay it asks
- * for can no longer happen. Nothing deletes it — the archive keeps what was
- * asked for — but it must stop behaving like a live request: approving one
+ * for can no longer happen. Nothing deletes it - the archive keeps what was
+ * asked for - but it must stop behaving like a live request: approving one
  * would hold rooms for dates in the past, and it should not sit in a queue
  * looking actionable.
  *
@@ -411,7 +411,7 @@ type LapsableBooking = {
  * The instant after which the request can no longer be honoured.
  *
  * For a stay that is check-in: approving it afterwards would hold rooms for
- * dates in the past. A **dining booking has no check-in** — its `check_in` is
+ * dates in the past. A **dining booking has no check-in** - its `check_in` is
  * midnight on its first day of meals, which is already past the moment someone
  * books a meal for today, and booking a meal for today is allowed (the
  * kitchen's notice period is what limits it). What makes one lapse is its last
@@ -440,6 +440,89 @@ export function lapsedError(booking: LapsableBooking, now: Date = new Date()): s
   )}) has passed, so the stay cannot happen. Reject it, or ask the Guest House Manager to move the dates first.`;
 }
 
+// ------------------------------------------------------------------ missed
+
+/**
+ * A request nobody decided in time (migration 29, 7 Oct 2026).
+ *
+ * `hasLapsed` has described this state since September - the queues drew a
+ * badge and `lapsedError` refused to forward it - but the request kept its
+ * pending status, so it sat in somebody's queue for ever waiting to be
+ * rejected by hand, and the requester was never told. The nightly sweep now
+ * marks it, logs it and mails them.
+ *
+ * It is **not** a rejection: nobody decided anything. That is why it has its
+ * own status and why the manager can put it back
+ * ({@link reinstateMissedError}) - the office asked for a way to recover a
+ * request the desk still wants, which a rejection does not give.
+ */
+export const MISSED_STATUS: BookingStatus = "MISSED";
+
+/**
+ * Whether the nightly job should mark this request as Missed.
+ *
+ * Two things have to be true: the request has lapsed (its check-in has gone,
+ * or for a dining booking its last day of meals - `lapseDeadline`), **and**
+ * nobody has put it back since it was last marked. The second is what makes
+ * reinstating mean anything: without it the next night's run would mark a
+ * request the manager had deliberately recovered, every night, for ever.
+ *
+ * "Put back" is read structurally rather than from the remarks: reinstating
+ * writes a log entry whose `previous_status` is MISSED, so a reinstatement is
+ * a log row that says where it came from. No string matching, and no column.
+ */
+export function missedSweepable(
+  booking: LapsableBooking & { logs?: Pick<BookingLog, "new_status" | "previous_status" | "timestamp">[] },
+  now: Date = new Date()
+): boolean {
+  if (!hasLapsed(booking, now)) return false;
+  return !reinstatedAfterMissed(booking.logs ?? []);
+}
+
+/** Whether the newest reinstatement is newer than the newest Missed marking. */
+export function reinstatedAfterMissed(
+  logs: Pick<BookingLog, "new_status" | "previous_status" | "timestamp">[]
+): boolean {
+  const latest = (match: (l: Pick<BookingLog, "new_status" | "previous_status">) => boolean) =>
+    logs.filter(match).reduce<string | null>((at, l) => (at === null || l.timestamp > at ? l.timestamp : at), null);
+  const missedAt = latest((l) => l.new_status === "MISSED");
+  if (missedAt === null) return false;
+  const reinstatedAt = latest((l) => l.previous_status === "MISSED");
+  return reinstatedAt !== null && reinstatedAt > missedAt;
+}
+
+/**
+ * The stage a reinstated request goes back to: whichever it was waiting at
+ * when the sweep caught it, read from the log entry that marked it. A booking
+ * with no such entry - forced into MISSED from the developer console, say -
+ * goes to the manager, who is the one stage every route ends at.
+ */
+export function statusBeforeMissed(
+  logs: Pick<BookingLog, "new_status" | "previous_status" | "timestamp">[]
+): BookingStatus {
+  const marking = logs
+    .filter((l) => l.new_status === "MISSED")
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+  const before = marking?.previous_status;
+  return before && ACTIVE_STATUSES.includes(before) ? before : "PENDING_GH_MANAGER";
+}
+
+/**
+ * Why this request cannot be reinstated, or null when it can.
+ *
+ * Only a Missed one can be: a rejection was a decision and a cancellation was
+ * asked for, and neither should be undone by this. Reinstating puts the
+ * request back in the queue it was in, lapsed badge and all - the manager's
+ * next move is to move the dates and allocate, exactly as it was before the
+ * sweep existed. The nightly job will not mark it again
+ * ({@link missedSweepable}).
+ */
+export function reinstateMissedError(booking: Pick<Booking, "status">): string | null {
+  return booking.status === "MISSED"
+    ? null
+    : "Only a request marked Missed can be reinstated.";
+}
+
 /** Statuses that represent a booking where rooms are currently held/occupied. */
 export const ROOM_HOLDING_STATUSES: BookingStatus[] = [
   "APPROVED",
@@ -451,7 +534,7 @@ export const ROOM_HOLDING_STATUSES: BookingStatus[] = [
  * The status to *show* for a stay, which is not always the status stored.
  *
  * A booking whose check-in has not arrived cannot be occupied, whatever the
- * row says — and rows can say so, because the developer console can force any
+ * row says - and rows can say so, because the developer console can force any
  * status and older data predates the guard in `updateBookingLifecycle`. The
  * office reported exactly this: future bookings reading as "Occupied". Writes
  * are refused at the source; this keeps a bad row already in the database from
@@ -502,7 +585,7 @@ export function canUpdateLifecycle(role: Role): boolean {
   return LIFECYCLE_ROLES.includes(role);
 }
 
-/** All roles now have access to logs — requesters see their own bookings. */
+/** All roles now have access to logs - requesters see their own bookings. */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function canViewHistory(_role: Role): boolean {
   return true;
@@ -533,21 +616,21 @@ export type HistoryScope =
       label: string;
       /** False when the role is fixed by the scope (hides the category filter). */
       canFilterByRole: boolean;
-      /** True for requester roles — hides the "Handled by me / Everything" toggle. */
+      /** True for requester roles - hides the "Handled by me / Everything" toggle. */
       isOwnBookings: boolean;
     }
   | { ok: false; reason: string };
 
 /**
  * Archive counterpart to `canReview()`. A reviewer may look back over exactly
- * the requests they were ever responsible for — wardens their own hostel's
+ * the requests they were ever responsible for - wardens their own hostel's
  * students, advisors their own club, the IAR cell alumni requests. The manager
  * and the developer see every booking. Requesters see only their own bookings.
  */
 export function historyScope(user: Profile, units: Unit[] = []): HistoryScope {
   // An HOD, a council secretary, an office head: they approve by appointment,
   // so their archive is their own bookings plus the requests of the units
-  // they approve for — found the way `canReview` finds them.
+  // they approve for - found the way `canReview` finds them.
   const governed = unitsGovernedBy(user.id, units);
   if (governed.length > 0 && !["warden", "iar_cell", "gh_manager", "gh_caretaker", "developer"].includes(user.role)) {
     const names = units.filter((u) => governed.includes(u.id)).map((u) => u.name);

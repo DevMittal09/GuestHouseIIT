@@ -59,8 +59,8 @@ describe("reading stored settings", () => {
 
   /**
    * A capacity row saved before the per-room rule became a combination
-   * (23 Sep 2026) carries `max_infants_per_room: 1` — the *old default*, not a
-   * choice — and no combined cap. Obeying it would refuse two of the three
+   * (23 Sep 2026) carries `max_infants_per_room: 1` - the *old default*, not a
+   * choice - and no combined cap. Obeying it would refuse two of the three
    * combinations the office allows, so the infant cap comes from the defaults
    * until the office saves capacity once from the console. The `booking_guests`
    * trigger applies the same repair in SQL (migration 23).
@@ -144,13 +144,13 @@ describe("rule functions follow the settings", () => {
     });
     expect(roomPartyError(4, 0, rules.capacity)).toBeNull();
     expect(roomOccupancyNotice(rules.capacity)).toBe(
-      "Maximum 5 people per room, of whom at most 4 may need a bed — infants below 5 years share a guardian's bed."
+      "Maximum 5 people per room, of whom at most 4 may need a bed - infants below 5 years share a guardian's bed."
     );
   });
 
   /**
    * The office's rule, stated as combinations (Sep 2026). It is three settings
-   * working together — guests, infants and everybody — and no two of them can
+   * working together - guests, infants and everybody - and no two of them can
    * express it: a flat "3 guests + 1 infant" refuses 2 + 2, and a flat "at most
    * 4 people" would let in four adults.
    */
@@ -173,7 +173,7 @@ describe("rule functions follow the settings", () => {
 
   it("the Add buttons stop where the combination does", () => {
     // One guest and three infants is a full room, although only one of the
-    // three guest places is taken — the combined cap is what is in the way.
+    // three guest places is taken - the combined cap is what is in the way.
     expect(addGuestBlockedReason(1, 3)).toMatch(/4 people/);
     expect(addGuestBlockedReason(1, 2)).toBeNull();
     expect(addInfantBlockedReason(1, 3)).toMatch(/4 people/);

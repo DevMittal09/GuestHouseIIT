@@ -4,8 +4,8 @@
  * The Guest House Manager runs the guest house: they take bookings at the
  * desk for people who never open the portal, fix the ones that are wrong, and
  * override a rule when the institute has already promised something the form
- * refuses. None of that is a new role — `gh_manager` has existed since the
- * first migration — it is a set of permissions that were previously spread
+ * refuses. None of that is a new role - `gh_manager` has existed since the
+ * first migration - it is a set of permissions that were previously spread
  * across `role === "gh_manager"` checks in individual actions.
  *
  * Every override here is recorded in `booking_logs`, which is what makes it an
@@ -31,7 +31,7 @@ export function canManageAnyBooking(role: Role): boolean {
 }
 
 /**
- * Submit a booking in someone else's name, recording both parties — the desk
+ * Submit a booking in someone else's name, recording both parties - the desk
  * taking a booking for a guest who never opens the portal.
  *
  * **The manager only**, not the developer (24 Sep 2026). The developer runs
@@ -54,7 +54,23 @@ export function canOverrideApproval(role: Role): boolean {
 }
 
 /**
- * Book a guest house that a policy would otherwise rule out — an alumnus at
+ * Mark a personal stay Vacated although its invoice has not been paid, with a
+ * reason (7 Oct 2026).
+ *
+ * A personal stay is settled at check-out (`vacateBlocker`), and that is the
+ * rule. But an invoice can be impossible to issue - no tariff covers a
+ * night, or the office has agreed to bill a guest later - and a rule the desk
+ * cannot lift would leave a guest in the building on paper, holding a room
+ * nobody can let. **The manager's, not the caretaker's**: reception records
+ * what happens, and setting a payment rule aside is a decision about money.
+ * The reason goes into the booking's log.
+ */
+export function canOverrideVacatePayment(role: Role): boolean {
+  return hasFullBookingAccess(role);
+}
+
+/**
+ * Book a guest house that a policy would otherwise rule out - an alumnus at
  * Hamsanandi, say, when Bageshri is full. Gated here and logged at the point
  * of use, never silently allowed.
  */
@@ -83,9 +99,9 @@ export function canViewAllOccupancy(role: Role): boolean {
  * The console is not one permission but several.
  *
  * The developer built the portal; the Guest House Manager runs the guest
- * house. Both need to change how it is configured — rooms come in and out of
+ * house. Both need to change how it is configured - rooms come in and out of
  * service, a new manager joins, a booking form needs another field, the
- * wording of a mail is wrong — and making all of that developer-only means
+ * wording of a mail is wrong - and making all of that developer-only means
  * every operational change waits on a developer. So the console is split, and
  * each section names the roles that may use it.
  *
@@ -96,6 +112,7 @@ export function canViewAllOccupancy(role: Role): boolean {
 export type ConsoleSection =
   | "users"
   | "units"
+  | "academic"
   | "projects"
   | "billing"
   | "guest_houses"
@@ -123,6 +140,13 @@ export const CONSOLE_SECTIONS: Record<
     href: "/admin/units",
     roles: ["gh_manager", "developer"],
     blurb: "Departments, clubs, councils and offices, and who approves for each.",
+  },
+  academic: {
+    label: "Academic records",
+    href: "/admin/academic",
+    roles: ["gh_manager", "developer"],
+    blurb:
+      "The institute's records, pasted in as CSV: a student's parents, a staff member's department, an office's head. The booking form locks a student's parents to them.",
   },
   projects: {
     label: "Projects",
@@ -189,7 +213,7 @@ export const CONSOLE_SECTIONS: Record<
     label: "Console Access",
     href: "/admin/access",
     roles: ["developer"],
-    blurb: "The console password. Developer only — it is the key to this door.",
+    blurb: "The console password. Developer only - it is the key to this door.",
   },
 };
 
@@ -211,8 +235,8 @@ export function canUseConsole(role: Role): boolean {
 /**
  * Which roles this console user may hand out.
  *
- * A manager may appoint another manager — that is the point of giving them
- * Users & Roles — but **not** a developer, and not by editing an existing
+ * A manager may appoint another manager - that is the point of giving them
+ * Users & Roles - but **not** a developer, and not by editing an existing
  * developer account. Otherwise "add an admin" is a route to becoming one,
  * and the split above would be decoration.
  */
@@ -233,8 +257,8 @@ export function userEditError(actor: Profile, target: Profile): string | null {
 // ---------------------------------------------------------------- invoices
 
 /**
- * Preview, issue and print invoices and record payments (Phase 5): the desk —
- * manager and caretaker — plus the developer.
+ * Preview, issue and print invoices and record payments (Phase 5): the desk -
+ * manager and caretaker - plus the developer.
  */
 export function canIssueInvoices(role: Role): boolean {
   return role === "gh_manager" || role === "gh_caretaker" || role === "developer";

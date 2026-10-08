@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLink, Container, Label, PageMasthead } from "@/components/site/site-ui";
 import { GuestHouseMap } from "@/components/site/guest-house-map";
-import { GUEST_HOUSE_CONTACT, guestHouseMapPins, HOW_TO_REACH_URL, MRBS_URL } from "@/lib/site";
+import { GUEST_HOUSE_CONTACT, guestHouseMapPins, HOW_TO_REACH_URL } from "@/lib/site";
 import { getSiteGuestHouses } from "@/lib/site-data";
 
 export const metadata: Metadata = { title: "Contact us" };
 
 /**
- * The page itself is rendered per request — the header greets whoever is
- * signed in — but everything it *says* comes from `lib/site-data.ts`, which
+ * The page itself is rendered per request - the header greets whoever is
+ * signed in - but everything it *says* comes from `lib/site-data.ts`, which
  * holds its answers for half an hour under the `site` cache tag, so a visitor
  * does not wait for a database round trip to read the guidelines (Phase 9).
  * `revalidateEverything()` drops that tag the moment a setting or a guest
@@ -29,7 +29,7 @@ export default async function ContactPage() {
     <>
       <PageMasthead
         title="Contact us"
-        intro="Questions about a stay, meals or an invoice — the Guest House Office is a call or an email away."
+        intro="Questions about a stay, meals or an invoice - the Guest House Office is a call or an email away."
       />
 
       <Container className="grid gap-x-14 gap-y-12 pt-[clamp(56px,7vw,96px)] pb-24 lg:grid-cols-12">
@@ -66,13 +66,7 @@ export default async function ContactPage() {
               <Link href="/book-room" className={LINK}>
                 booking pages
               </Link>{" "}
-              on this site; telephone bookings are not taken. Lecture halls and meeting rooms are
-              booked on the institute&rsquo;s{" "}
-              <a href={MRBS_URL} target="_blank" rel="noopener noreferrer" className={LINK}>
-                Room Booking System (MRBS)
-                <span className="sr-only"> (opens in a new tab)</span>
-              </a>
-              .
+              on this site; telephone bookings are not taken.
             </p>
           </div>
         </div>

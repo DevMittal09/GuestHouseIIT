@@ -8,7 +8,7 @@ import { RATE_LIMITS } from "@/lib/security";
  *
  * **What this is and is not.** Identity in this app is still a persona cookie
  * (`lib/auth.ts`), so anyone can already claim to be the developer. This gate
- * stops casual poking at `/admin` during a demo — nothing more. It is enforced
+ * stops casual poking at `/admin` during a demo - nothing more. It is enforced
  * in `requireDeveloper()`, so it guards the *actions*, not just the UI, which
  * is what makes it worth having at all. It is not a substitute for real
  * authentication; see .memories/04-roadmap.md item 1.
@@ -28,7 +28,7 @@ const MAX_PASSWORD_LENGTH = 128;
 
 // ---------------------------------------------------------------- hashing
 
-/** `scrypt$<saltHex>$<hashHex>` — no dependency, and slow enough to matter. */
+/** `scrypt$<saltHex>$<hashHex>` - no dependency, and slow enough to matter. */
 export function hashPassword(password: string): string {
   const salt = randomBytes(16);
   const hash = scryptSync(password, salt, 64);
@@ -51,7 +51,7 @@ function verifyAgainstRecord(password: string, record: string): boolean {
 // ---------------------------------------------------------------- state
 
 /**
- * The stored hash, or null when the developer has never set one — in which
+ * The stored hash, or null when the developer has never set one - in which
  * case the password is `DEFAULT_ADMIN_PASSWORD`.
  *
  * A missing `app_settings` table (migration 5 not applied yet) is treated as
@@ -64,7 +64,7 @@ async function storedRecord(): Promise<string | null> {
     return await getStore().getSetting(SETTING_KEY);
   } catch (e) {
     console.error(
-      "admin-lock: could not read the console password — falling back to the default. " +
+      "admin-lock: could not read the console password - falling back to the default. " +
         "Has supabase/migrations/00000000000005_app_settings.sql been applied?",
       e
     );
@@ -166,7 +166,7 @@ export async function revokeAdminUnlock(): Promise<void> {
 
 /**
  * Attempt throttle, counted in the database (migration 21) so it survives a
- * restart and is shared by every instance — the in-process map this replaced
+ * restart and is shared by every instance - the in-process map this replaced
  * reset itself whenever the server did.
  *
  * Keys are the caller's choice: the console lock counts per profile

@@ -31,7 +31,7 @@ test("the booking doors ask for a sign-in rather than failing silently", async (
   await expect(page.getByLabel("LDAP username")).toBeVisible();
 });
 
-test("the contact page shows each guest house on the map, and the footer links MRBS", async ({ page }) => {
+test("the contact page shows each guest house on the map, and the footer links the institute", async ({ page }) => {
   await page.goto("/contact");
   const tabs = page.getByRole("tablist", { name: "Guest house" });
   await expect(tabs.getByRole("tab")).toHaveCount(2);
@@ -55,6 +55,8 @@ test("the contact page shows each guest house on the map, and the footer links M
   await expect(tabs.getByRole("tab", { name: "Hamsanandi" })).toHaveAttribute("aria-selected", "true");
 
   const footer = page.getByRole("contentinfo");
-  await expect(footer.getByRole("link", { name: /Open MRBS/ })).toHaveAttribute("href", "https://mrbs.iitpkd.ac.in");
   await expect(footer.getByRole("link", { name: /IIT Palakkad website/ })).toHaveAttribute("href", "https://iitpkd.ac.in");
+  // The meeting room booking system came off the site on 7 Oct 2026.
+  await expect(page.getByText(/MRBS/i)).toHaveCount(0);
+  await expect(footer.getByText(/Meeting Room Booking System/i)).toHaveCount(0);
 });

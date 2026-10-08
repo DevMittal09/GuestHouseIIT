@@ -11,7 +11,7 @@ import { REQUESTER_ROLES } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Book meals" };
 
-/** The booking form's meals door — see `app/(portal)/book/page.tsx`. */
+/** The booking form's meals door - see `app/(portal)/book/page.tsx`. */
 const MEAL_BOOKING_PATH = "/book?service=meals_only";
 
 /**
@@ -19,7 +19,7 @@ const MEAL_BOOKING_PATH = "/book?service=meals_only";
  *
  * It opens the booking form on `?service=meals_only`, which is the same door
  * the portal home offers. The form falls back to the ordinary room flow for a
- * requester whose role cannot book meals without a room — for them meals are
+ * requester whose role cannot book meals without a room - for them meals are
  * part of a room booking, chosen day by day. Meal times and the kitchen's
  * notice are on the Guidelines page, not here (the owner, 26 Sep 2026).
  */

@@ -25,7 +25,7 @@ import type { MfaState } from "@/lib/auth";
 /**
  * Security (Phase 8): the second factor for developer accounts, and the
  * sessions this account has open. The secret is shown once, at enrolment, and
- * the recovery codes once after it — neither can be read back afterwards.
+ * the recovery codes once after it - neither can be read back afterwards.
  */
 export function SecurityManager({
   mfa,
@@ -167,7 +167,7 @@ export function SecurityManager({
 
           {recovery && (
             <div className="space-y-2 border-l-4 border-saffron bg-notice p-3">
-              <p className="text-sm font-medium">Recovery codes — shown once</p>
+              <p className="text-sm font-medium">Recovery codes - shown once</p>
               <p className="text-xs text-muted-foreground">
                 Keep these somewhere safe and offline. Each works once, if you lose your phone.
               </p>
@@ -229,7 +229,7 @@ export function SecurityManager({
               <li key={r.id} className="space-y-2 p-3">
                 <p>
                   <span className="font-medium">{r.person}</span>{" "}
-                  <span className="text-muted-foreground">({r.email})</span> — {r.kind === "deletion" ? "erasure" : "copy"},
+                  <span className="text-muted-foreground">({r.email})</span> - {r.kind === "deletion" ? "erasure" : "copy"},
                   asked {formatDate(r.created_at)}{" "}
                   <Badge variant={r.status === "open" ? "secondary" : "outline"}>{r.status}</Badge>
                 </p>

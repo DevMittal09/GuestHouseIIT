@@ -1,0 +1,37 @@
+-- ============================================================================
+-- Migration 29 - MISSED: a request nobody decided in time
+-- ============================================================================
+--
+-- The office's eighth list of corrections (7 Oct 2026): a request whose
+-- check-in has passed while it waited for an approval should say so, rather
+-- than sitting in a queue as though it could still happen.
+--
+-- Until now such a request was only *described* as lapsed - `hasLapsed()`
+-- computed it from the dates, the queues drew a badge, and `lapsedError()`
+-- refused to forward it. It still had a pending status, so it stayed in
+-- somebody's queue for ever waiting to be rejected by hand, and the requester
+-- was never told their request had run out of time. Now the nightly job marks
+-- it **MISSED**, logs it and mails them; the manager can reinstate it if the
+-- stay is still wanted.
+--
+-- **This file contains nothing but the enum value, deliberately.** Postgres
+-- refuses to *use* a new enum value in the same transaction that adds it
+-- ("unsafe use of new value of enum type"), and a migration runner wraps each
+-- file in one. So anything that reads or writes 'MISSED' - a backfill, a
+-- check constraint, a function - belongs in a later file, and there is
+-- nothing here to tempt it. Nothing is backfilled in any case: a request that
+-- lapsed before today is marked by the first nightly run, which is also the
+-- run that tells the requester.
+--
+-- `if not exists` makes it idempotent; the value is added at the end of the
+-- enum, which `booking_logs.new_status` and `bookings.status` share.
+--
+-- Until this is applied, the job cannot mark anything on Supabase: the update
+-- is refused with an invalid-enum error, which `runMissedSweep` catches and
+-- logs once per booking rather than failing the whole nightly run. Everything
+-- else carries on exactly as before.
+--
+-- Safe to re-run.
+-- ============================================================================
+
+alter type public.booking_status add value if not exists 'MISSED';

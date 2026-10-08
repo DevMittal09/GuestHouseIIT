@@ -3,7 +3,7 @@
  *
  * Two seams live here, deliberately separate:
  *
- * - `Mailer` is the *transport* — one `send()` call, the way `lib/auth.ts` is
+ * - `Mailer` is the *transport* - one `send()` call, the way `lib/auth.ts` is
  *   the one swap point for identity. Swapping Gmail for the institute's SMTP
  *   relay, or for a transactional API, is an implementation of this and
  *   nothing else.
@@ -42,7 +42,9 @@ export type MailEventKey =
   | "invoice.issued.accounts"
   | "booking.extension_requested.manager"
   | "booking.extension_decided.requester"
-  | "booking.no_show.requester";
+  | "booking.no_show.requester"
+  /** Nobody decided it in time (migration 29, 7 Oct 2026). */
+  | "booking.missed.requester";
 
 /** What each event is, for the developer console's outbox table. */
 export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
@@ -54,7 +56,7 @@ export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
   "booking.allocated.requester": "Rooms allocated",
   "booking.allocated.desk": "Allocation record (desk)",
   "booking.cancellation_requested.manager": "Cancellation requested",
-  "booking.cancellation_requested.reviewer": "Cancellation requested (for information — retired, now CC)",
+  "booking.cancellation_requested.reviewer": "Cancellation requested (for information - retired, now CC)",
   "booking.cancellation_decided.requester": "Cancellation decided",
   "booking.cancelled.requester": "Booking cancelled",
   "booking.cancelled.desk": "Cancellation record (desk)",
@@ -66,6 +68,7 @@ export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
   "booking.extension_requested.manager": "Extension requested",
   "booking.extension_decided.requester": "Extension decided",
   "booking.no_show.requester": "Released as a no-show",
+  "booking.missed.requester": "Request missed - nobody decided it in time",
 };
 
 /**
@@ -78,7 +81,7 @@ export const RETIRED_MAIL_EVENTS: MailEventKey[] = ["booking.cancellation_reques
 
 /**
  * The daily thread a kind of mail joins; anything not listed is standalone.
- * Why, and how the thread is built, is in `lib/mail/thread.ts` — this lives
+ * Why, and how the thread is built, is in `lib/mail/thread.ts` - this lives
  * here only so the console can say which mails are threaded without pulling
  * server code into the browser.
  */
@@ -99,8 +102,8 @@ export const MAIL_THREAD_OF: Partial<Record<MailEventKey, MailThreadKind>> = {
   "booking.cancellation_requested.reviewer": "booking",
   "booking.cancelled.desk": "booking",
   "booking.extension_requested.manager": "booking",
-  // Scheduled mail has no booking to thread on — a digest is *about* a queue
-  // — so it keeps a daily thread of its own.
+  // Scheduled mail has no booking to thread on - a digest is *about* a queue
+  // - so it keeps a daily thread of its own.
   "queue.digest.reviewer": "daily_log",
   "queue.escalation.reviewer": "daily_log",
   "desk.daily_report": "daily_log",
@@ -116,7 +119,7 @@ export interface OutboundMessage {
   /**
    * RFC 5322 threading headers. Staff mail about one booking arrives as one
    * conversation rather than a pile of standalone messages, so every message
-   * after the first references the thread's root id — see
+   * after the first references the thread's root id - see
    * `lib/mail/thread.ts`.
    */
   messageId?: string;
@@ -144,7 +147,7 @@ export interface NewEmailInput {
   event_key: MailEventKey;
   /**
    * Natural key for this (event, subject, recipient). A unique index on it is
-   * what stops a retried action — or two dispatchers racing — from mailing the
+   * what stops a retried action - or two dispatchers racing - from mailing the
    * same parent twice.
    */
   idempotency_key: string;
@@ -164,7 +167,7 @@ export interface NewEmailInput {
   /** Earliest the worker may send it. Defaults to now. */
   scheduled_for?: string;
   /**
-   * Files to attach, as references resolved when the message is sent — the
+   * Files to attach, as references resolved when the message is sent - the
    * PDF of an issued invoice is rendered from its snapshot then, so no file
    * sits in the outbox (migration 19).
    */
@@ -194,7 +197,7 @@ export interface EmailMessage extends NewEmailInput {
 export interface EmailOutboxFilter {
   status?: MailStatus;
   bookingId?: string;
-  /** Messages in one thread — how the dispatcher tells whether a thread has started. */
+  /** Messages in one thread - how the dispatcher tells whether a thread has started. */
   threadRoot?: string;
   limit?: number;
 }

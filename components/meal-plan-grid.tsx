@@ -23,8 +23,8 @@ import { formatDateValue } from "@/lib/tz";
 
 /**
  * Meals for each day of a stay: days down the side, breakfast / lunch / dinner
- * across. A meal served before check-in or after check-out — or past the
- * kitchen's notice period, when `now` is given — shows a dash and cannot be
+ * across. A meal served before check-in or after check-out - or past the
+ * kitchen's notice period, when `now` is given - shows a dash and cannot be
  * ticked, with the reason on hover. Each column's "Every day" box ticks or
  * clears that meal on every day it is offered.
  *
@@ -48,7 +48,7 @@ export function MealPlanGrid({
   /**
    * The clock the kitchen's notice period is measured against. Given it, a
    * dashed cell can say "too late" instead of the misleading "served after you
-   * check out" — the meal is inside the stay, it has simply closed.
+   * check out" - the meal is inside the stay, it has simply closed.
    */
   now?: Date;
 }) {
@@ -109,7 +109,7 @@ export function MealPlanGrid({
                   const why = mealUnavailableReason(day.date, meal, checkIn, windows, now);
                   const reason =
                     why === "too-late"
-                      ? `Too late — ${mealDeadlineNote(day.date, meal, windows)}`
+                      ? `Too late - ${mealDeadlineNote(day.date, meal, windows)}`
                       : why === "before-check-in"
                         ? "Served before check-in"
                         : "Served after check-out";
@@ -119,7 +119,7 @@ export function MealPlanGrid({
                       className="text-center text-muted-foreground"
                       title={reason}
                     >
-                      <span aria-hidden>—</span>
+                      <span aria-hidden>-</span>
                       <span className="sr-only">{reason}</span>
                     </TableCell>
                   );

@@ -10,6 +10,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InvoiceDialog } from "@/components/invoice-dialog";
+import { settlesAtCheckOut } from "@/lib/invoice";
 import { ManageStayDialog } from "@/components/manage-stay-dialog";
 import {
   Table,
@@ -36,7 +37,7 @@ import { STATUS_LABELS, type BookingStatus, type BookingWithDetails } from "@/li
  * "Mark as Occupied" is deep green with an arrow into a door and "Mark as
  * Vacated" deep indigo with an arrow out of one (the `occupy` / `vacate`
  * button variants): check-in and check-out are the two things the desk clicks
- * all day, and telling them apart at a glance — by colour *and* by shape —
+ * all day, and telling them apart at a glance - by colour *and* by shape -
  * matters more than matching the rest of the palette.
  */
 const LIFECYCLE_ACTIONS: Record<
@@ -109,7 +110,7 @@ export function StaysTable({
   );
 }
 
-/** Approved/Occupied booking row — lifecycle updates. */
+/** Approved/Occupied booking row - lifecycle updates. */
 function StayRow({
   booking,
   showOverdue,
@@ -140,12 +141,22 @@ function StayRow({
   const leavingEarly =
     action?.nextStatus === "VACATED" && booking.check_out > new Date().toISOString();
 
+  /**
+   * A **personal** stay's check-out goes through the invoice (7 Oct 2026):
+   * issue, pay, then vacate, in one dialog. So the row offers one button -
+   * "Check out & settle", which opens that dialog - instead of a Mark as
+   * Vacated the server would refuse while the bill is unpaid. An official
+   * stay is unchanged: it is checked out here and the invoice follows it into
+   * "Awaiting payment".
+   */
+  const settlesHere = action?.nextStatus === "VACATED" && settlesAtCheckOut(booking);
+
   const handleLifecycle = () =>
     startTransition(async () => {
       if (!action) return;
       const result = await updateBookingLifecycle(booking.id, action.nextStatus);
       if (result.ok) {
-        toast.success(`${booking.booking_reference_id} — ${STATUS_LABELS[action.nextStatus]}`);
+        toast.success(`${booking.booking_reference_id} - ${STATUS_LABELS[action.nextStatus]}`);
         router.refresh();
       } else {
         toast.error(result.error);
@@ -175,7 +186,7 @@ function StayRow({
           </Badge>
         )}
       </TableCell>
-      <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "—"}</TableCell>
+      <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "-"}</TableCell>
       {showMeals && (
         <TableCell
           className="text-xs"
@@ -183,7 +194,7 @@ function StayRow({
         >
           {booking.guest_house.serves_meals || booking.meals.length > 0
             ? describeMeals(booking.meals)
-            : "—"}
+            : "-"}
         </TableCell>
       )}
       <TableCell>
@@ -191,11 +202,11 @@ function StayRow({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex flex-wrap justify-end gap-2">
-          {/* Inside the window the button says what it is actually doing —
-              an early arrival or an early departure — and the log records it
+          {/* Inside the window the button says what it is actually doing -
+              an early arrival or an early departure - and the log records it
               as such. Outside it, there is nothing to offer: the room may
               still have the previous guest in it. */}
-          {action && !tooEarly && (
+          {action && !tooEarly && !settlesHere && (
             <Button
               size="sm"
               variant={action.variant}
@@ -213,9 +224,15 @@ function StayRow({
             </Button>
           )}
           {/* Available from the moment a guest is in the building: the desk
-              is often asked for the bill before they have formally left. */}
+              is often asked for the bill before they have formally left. For
+              a personal stay this *is* the check-out. */}
           {(booking.status === "OCCUPIED" || booking.status === "VACATED") && (
-            <InvoiceDialog booking={booking} />
+            <InvoiceDialog
+              booking={booking}
+              isManager={isManager}
+              label={settlesHere ? "Check out & settle" : undefined}
+              variant={settlesHere ? "vacate" : undefined}
+            />
           )}
           {(booking.status === "APPROVED" || booking.status === "OCCUPIED") && (
             <ManageStayDialog booking={booking} isManager={isManager} />

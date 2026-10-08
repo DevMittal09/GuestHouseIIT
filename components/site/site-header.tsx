@@ -13,7 +13,7 @@ export const SITE_NAV: NavItem[] = [
 
 /**
  * The public site's header: a white bar with the lockup, the six pages and
- * Sign in / My portal — sticky on wide screens, so the links stay in reach.
+ * Sign in / My portal - sticky on wide screens, so the links stay in reach.
  * Below `lg` the links move to a second row that scrolls sideways inside
  * itself, so a phone gets one line of links rather than a block of them.
  * (For an afternoon on 26 Sep 2026 it lay transparent over a full-screen

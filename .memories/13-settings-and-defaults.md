@@ -85,16 +85,20 @@ and **dining** (meals only). Defaults:
 | Students | Personal Funds | Personal Funds |
 | IAR Student Cell (official — no longer used) | Institute Grant, Special Funds | Institute Grant, Special Funds |
 | On behalf of an alumnus | Institute Grant, Personal Funds, Special Funds | Personal Funds, Special Funds |
-| Any personal booking (not a student's) | Personal Funds, Special Funds | **Personal Funds only** (1 Oct 2026: a special fund does not pay for somebody's own family's lunch) |
+| Any personal booking (not a student's) | **Personal Funds only** — and **not asked at all** (7 Oct 2026: the money is the requester's own, so the form puts no question and the server records it) | **Personal Funds only** (1 Oct 2026: a special fund does not pay for somebody's own family's lunch) |
 | GH Manager at the desk | Department, Institute Grant, PDF, Personal, Project, Special Funds | the same less Project |
 
 - **Dining can never be charged to a Project** (schema).
 - **Floors** (`FORBIDDEN_DEBIT_HEADS`, greyed in the grid, stripped on read,
   refused on save): **faculty never Institute Grant**; **students never
-  Special Funds** (since 25 Sep 2026 Special Funds is for everyone else,
-  personal and alumni bookings included). A dining-only floor as well
-  (`FORBIDDEN_DINING_HEADS`, 1 Oct 2026): **no Special Funds on a personal
-  meal booking**.
+  Special Funds**; and since 7 Oct 2026 **no personal booking ever Special
+  Funds** — widened from the dining-only floor of 1 Oct, which is why
+  `FORBIDDEN_DINING_HEADS` is now empty (the seam is kept, since dining is
+  what the office narrows first).
+- **A personal booking is not asked which budget pays** (7 Oct 2026,
+  `asksForDebitHead`). The Settings grid still has the row — a floor and a
+  default are different things — but the form renders no card and the schema
+  writes `personal_funds` whatever arrived.
 - The category: a **student** is always *student* (checked first, 25 Sep
   2026 — a student's booking is personal, and used to fall into *personal*);
   otherwise personal → *personal*, on behalf of an alumnus → *alumni*, else
@@ -103,10 +107,10 @@ and **dining** (meals only). Defaults:
 - Special Funds is stored as `special_budget`. A saved Settings row gains it
   once per revision (`upgradeDebitRules`): revision 2 (24 Sep) for the
   official categories, revision 3 (25 Sep) for personal, alumni and the IAR
-  Student Cell. **Revision 4 (1 Oct) takes it off personal dining** — the one
-  revision that removes rather than adds; it runs after the additions, so a
-  row still on revision 1 is brought all the way forward. After that an untick
-  sticks.
+  Student Cell. **Revisions 4 (1 Oct) and 5 (7 Oct) take it off personal
+  dining and then off every personal list** — the only revisions that remove
+  rather than add; they run after the additions, so a row still on revision 1
+  is brought all the way forward. After that an untick sticks.
 - Legacy heads (Alumni Fund, Student Fund, Hostel Funds) stay valid for stored
   rows and can be ticked on here, but no default offers them.
 
@@ -155,7 +159,7 @@ edited or deleted — a new price is a new row. Seeded from the tariff sheet:
 | GSTIN | `32AAAAI9910J1ZR` (from the office's template — to confirm) |
 | Accounts email | **empty** — nothing is mailed to Accounts until it is set |
 | Bank | Guest house IIT PKD · SBI · A/c 39938270076 · IFSC SBIN0006640 · Kanjikode branch |
-| Contact on the invoice | Kanjikode West, Palakkad, Kerala · +91 491 209 2016 · ghm@iitpkd.ac.in (phone and email default to `GUEST_HOUSE_CONTACT`) |
+| Contact on the invoice | Kanjikode West, Palakkad, **Keralam** · +91 491 209 2016 · ghm@iitpkd.ac.in (phone and email default to `GUEST_HOUSE_CONTACT`). The spelling was corrected on 7 Oct 2026, and a saved row's address is rewritten **once** by `upgradeInvoiceRules` revision 3 — whole word, so "Keralam" is never made "Keralamm" |
 
 ---
 
@@ -186,7 +190,8 @@ edited or deleted — a new price is a new row. Seeded from the tariff sheet:
 | "Checked out — to bill" window **30 days** | `UNSETTLED_WINDOW_DAYS`, `lib/invoice.ts` | Older ones are invoiced from the Approval Log |
 | Additional charges ≤ **20** per invoice; description 2–80, comment ≤ 200 chars; quantity 1–999; ≤ ₹10,00,000 each | `parseExtraCharges`, `lib/invoice.ts` (and migration 26's check) | |
 | Extend or bring a check-in forward by at most **60 days** at a time | `extensionError`, `earlierCheckInError`, `lib/operations.ts` | |
-| Filled in from earlier bookings: at most **15** people | `MAX_KNOWN_FROM_BOOKINGS`, `lib/known-guests.ts` | The record's family comes first |
+| ~~Filled in from earlier bookings: at most 15 people~~ | **Withdrawn 7 Oct 2026** (`lib/known-guests.ts` deleted) | A student's parents come from the academic record and are locked instead; everyone else types their guests |
+| A CSV paste of academic records: at most **2,000** rows | `MAX_IMPORT_ROWS`, `lib/academic/stored.ts` | Split a longer list; an import is all or nothing |
 | Escalation after **48 h** pending | `ESCALATION_HOURS`, `lib/mail/digest.ts` | |
 | Availability window ≤ **62 days** | `MAX_AVAILABILITY_DAYS` | |
 | Archive scan cap **1,000** (Supabase), CSV export cap **5,000** | `SEARCH_SCAN_LIMIT`, `HISTORY_EXPORT_LIMIT` | |

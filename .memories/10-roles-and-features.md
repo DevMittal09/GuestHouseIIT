@@ -25,9 +25,9 @@ role is in [30-credentials-and-access.md](30-credentials-and-access.md).
 | `iar_student_cell` | IAR Student Cell | `/dashboard` | On behalf of an alumnus only | — | — | — |
 | `iar_cell` | IAR Office | `/iar` | Official or for an alumnus; meals only | The Student Cell's requests | — | — |
 | `warden` | Assistant Warden | `/warden` | — | Students of their hostel | — | — |
-| `gh_manager` | Guest House Manager | `/manager` | At the desk, for a guest (official / alumni) | Final stage of everything | Everything | 9 of 13 sections |
+| `gh_manager` | Guest House Manager | `/manager` | At the desk, for a guest (official / alumni) | Final stage of everything | Everything | 10 of 14 sections |
 | `gh_caretaker` | Guest House Caretaker | `/caretaker` | — | — | Check-in/out, extend, invoices | — |
-| `developer` | Developer (Superadmin) | `/admin` → `/admin/users` | — | — | Invoices | All 13 sections |
+| `developer` | Developer (Superadmin) | `/admin` → `/admin/users` | — | — | Invoices | All 14 sections |
 | `faculty_advisor` | Faculty Advisor | `/approvals` | *Legacy account type* — only if named on a council | Legacy club stage | — | — |
 | `alumni` | Alumni (via IAR, legacy) | `/availability` | **Retired** — kept only because stored bookings carry it | — | — | — |
 
@@ -70,7 +70,7 @@ console names them — change the name there and the queue or option moves.
 
 | Feature | Where | Notes |
 | --- | --- | --- |
-| **Room Availability** | `/availability` (nav, every role) | Day / Week / Month chart per guest house. Everyone sees booking periods, reference ids and statuses; **only the manager and developer** see who and why (`CAN_SEE_OCCUPANT`). **Only the manager, caretaker and developer** see the turnaround, accepted overlaps and maintenance drawn apart (`SEES_DETAIL`, 30 Sep 2026); everyone else sees Booked / Free — the booking form's panel follows the same rule. The **room-by-room list under the chart** is drawn for those three only (1 Oct 2026): the grid answers "is this room free", which is all a requester needs. Max 62 days per request. |
+| **Room Availability** | `/availability` (nav, every role) | **Two different answers since 7 Oct 2026.** The **manager, caretaker and developer** (`SEES_ROOMS`) get the Day / Week / Month chart per guest house, the turnaround, accepted overlaps, maintenance and the room-by-room list — and the manager and developer alone see who and why (`CAN_SEE_OCCUPANT`). **Everyone else is sent a count and no rooms at all**: "N rooms available" per day, and per hour on a single day. The booking form's panel follows the same rule. Max 62 days per request. |
 | **Booking History / Approval Log** | `/history` (nav, every role) | Requesters: their own bookings ("Booking History"). Staff: their jurisdiction ("Approval Log"), with "Handled by me / Everything in scope". Keyword search with `ref:`, `guest:`, `room:`, `by:`, `purpose:`, `gh:`, `status:` prefixes; date presets; **CSV export for everyone**; **PDF export for the manager and developer only**. |
 | Public website | `/`, `/guidelines`, `/gallery`, `/contact`, `/privacy` | Open to anyone, signed in or not. |
 
@@ -99,12 +99,19 @@ Everything a requester can do with a booking they own (or raised for a club):
 ### Student
 
 - **Books:** personal stays for family (not asked — the type is recorded
-  silently). **Bageshri only** by default (stated on the form, no dropdown), so
-  no meals (Bageshri serves none). Debited to **Personal Funds** (shown, not
-  asked) — never Special Funds.
-- **Father / Mother / Guardian filled in** from their academic record when
-  chosen on a guest (25 Sep 2026), and **Fill in from saved details** on every
-  guest card (the record's family and people from their earlier bookings).
+  silently). **Bageshri only and no meals** — a rule since 7 Oct 2026
+  (`restrictedToOneGuestHouse`, `mealsAllowedFor`), checked on the server, not
+  merely a consequence of Bageshri having no kitchen. **No debitable head is
+  asked at all** (7 Oct 2026): the money is their own, the server records
+  Personal Funds, and a **Payment** card states that the invoice is settled at
+  check-out.
+- **Father and Mother come from their academic record and are locked**
+  (7 Oct 2026, migration 28): choosing the relationship fills the name in
+  read-only, a parent the record does not name is not offered, and Guardian
+  appears only where it names neither. Siblings and grandparents are typed.
+  **No Aadhaar and no ID document** is demanded for a guest the record named.
+  ("Fill in from saved details" and "Yourself" were withdrawn for every role
+  on 7 Oct.)
 - **Route:** Assistant Warden of the hostel on their profile → GH Manager.
 - **Special rules:** relationship dropdown with the parent rule (siblings and
   grandparents only alongside Mother / Father / Guardian) and one-of-each
@@ -222,7 +229,10 @@ secretary's mailbox, e.g. `sec_arts@`).
 Every approver: **Forward** (to the next stage of the booking's route) or
 **Reject with a reason** (mandatory, shown to the requester verbatim). A
 request whose check-in passed while it waited has **lapsed** and can only be
-rejected. Nobody can ever act on a request they submitted or raised. Approvers
+rejected — and since 7 Oct 2026 the **nightly job marks it `MISSED`**, tells
+the requester and takes it out of every queue, so nothing sits unanswered for
+ever. Only the manager can put one back. Nobody can ever act on a request they
+submitted or raised. Approvers
 get **one daily digest**, not a mail per request, and a nudge (CC the
 manager) when something has waited over **48 hours**.
 
@@ -284,9 +294,16 @@ Faculty Advisor raises.
   there too.
 - **Checking out today**, **Current occupants**, **Awaiting check-out**,
   **Checked out — to bill** (vacated in the last 30 days, unpaid),
-  **Upcoming stays**.
+  **Upcoming stays**, **Missed requests** (nobody decided them in time; the
+  last 21 days — 7 Oct 2026) and **Awaiting payment** (every issued, unpaid
+  invoice, **with no cut-off** — 7 Oct 2026).
 - **Mark Occupied** (from 2 hours before check-in, never earlier) / **Mark
-  Vacated**.
+  Vacated** — except a **personal** stay, whose row shows **Check out &
+  settle** instead: its check-out is the invoice (issue → pay → vacate, in one
+  dialog, 7 Oct 2026). The manager alone may close one off unpaid, with a
+  reason that goes in the log.
+- **Reinstate** a Missed request: it goes back to the stage it was waiting at,
+  with a reason; its dates then need moving from Manage.
 - **Manage** a stay: a **later check-out**, or **Move check-in** either way
   (earlier for an early arrival, later for a late one — 1 Oct 2026); approve /
   decline a requester's extension; move
@@ -298,8 +315,9 @@ Faculty Advisor raises.
   may override the alumni-at-Bageshri rule (logged). Exempt from the booking
   window and the stay cap.
 - **Invoices:** preview, correct meal counts, **add additional charges with
-  comments** (extra bed, broken vase — 25 Sep 2026), issue & print, mark paid,
-  **cancel** (the manager and developer only).
+  comments** (extra bed, broken vase — 25 Sep 2026), issue & print, **mark
+  paid by UPI or account transfer** (cash withdrawn 7 Oct 2026; a reference is
+  required), **cancel** (the manager and developer only).
 - **Kitchen** (`/manager/meals`): plates per meal per day, confirmed and
   pending dining, "Dining to invoice".
 - **Console** ("Settings" in the menu → `/admin/users`), behind the console
@@ -316,11 +334,15 @@ Faculty Advisor raises.
 A deliberate **subset** of the manager's console — reception.
 
 - **Reception** (`/caretaker`): Checking out today, Current occupants,
-  Awaiting check-out, **Checked out — to bill**, Upcoming stays.
-- **Mark Occupied / Vacated**; **extend a stay** — later check-out, or
-  **Move check-in** earlier or later (1 Oct 2026).
+  Awaiting check-out, **Checked out — to bill**, Upcoming stays, and
+  **Awaiting payment** (every issued, unpaid invoice, no cut-off — 7 Oct
+  2026; a personal meal booking is settled here at the guest house).
+- **Mark Occupied / Vacated**; a **personal** stay is checked out through
+  **Check out & settle** instead (issue → pay → vacate). Reception **cannot**
+  close one off unpaid — that is the manager's. **Extend a stay** — later
+  check-out, or **Move check-in** earlier or later (1 Oct 2026).
 - **Invoices:** preview, correct meal counts, **add additional charges**,
-  issue & print, mark paid — **not cancel**.
+  issue & print, mark paid (UPI or transfer) — **not cancel**.
 - **Kitchen** (`/manager/meals`): a **Meal counts** button on Reception for a
   guest house that serves meals; the kitchen page's back link returns to
   Reception.
@@ -335,7 +357,7 @@ A deliberate **subset** of the manager's console — reception.
 - **Developer Console** (`/admin`), behind the console password **and** a TOTP
   second factor; step-up within 10 minutes for role changes, Settings and
   deletes.
-- **All 13 sections** — the manager's nine plus four that are developer-only:
+- **All 14 sections** — the manager's ten plus four that are developer-only:
   **All Bookings** (force a status — audit-logged, refuses Occupied before
   check-in — and hard delete), **Settings** (the rules, hostels, official
   whitelist), **Audit Log**, **Console Access** (the console password).
@@ -357,6 +379,7 @@ A deliberate **subset** of the manager's console — reception.
 | --- | --- | --- | --- |
 | Users & Roles | `/admin/users` | ✓ (not developer accounts) | ✓ |
 | Departments & Clubs (+ Faculty Advisors) | `/admin/units` | ✓ | ✓ |
+| **Academic records** (the institute's records, pasted in as CSV — migration 28, 7 Oct 2026) | `/admin/academic` | ✓ | ✓ |
 | Projects | `/admin/projects` | ✓ | ✓ |
 | Tariffs & Invoicing | `/admin/billing` | ✓ | ✓ |
 | Guest Houses & Rooms | `/admin/guest-houses` | ✓ | ✓ |

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { LogOut, PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import {
   cancelInvoiceAction,
@@ -32,6 +32,9 @@ import {
   formatINR,
   gstBreakdownLines,
   GST_INCLUDED_NOTE,
+  printsTaxLines,
+  settlesAtCheckOut,
+  vacateBlocker,
   INVOICE_STATUS_LABELS,
   invoiceFacts,
   invoiceTable,
@@ -47,6 +50,7 @@ import { MEAL_LABELS } from "@/lib/meals";
 import { formatDateTime, formatDate } from "@/lib/format";
 import { toInstituteDateValue } from "@/lib/tz";
 import type { BookingWithDetails } from "@/lib/types";
+import { updateBookingLifecycle } from "@/app/actions/bookings";
 
 /** An additional charge as the desk is typing it: rupees and quantity as text. */
 type ChargeRow = {
@@ -89,7 +93,7 @@ const parseCounts = (counts: CountRows): MealCounts => {
   return { breakfast: n(counts.breakfast), lunch: n(counts.lunch), dinner: n(counts.dinner) };
 };
 
-/** The charges as the server takes them — the row keys stay here. */
+/** The charges as the server takes them - the row keys stay here. */
 const chargesPayload = (rows: ChargeRow[]) =>
   rows.map(({ section, description, comment, quantity, amount }) => ({ section, description, comment, quantity, amount }));
 
@@ -99,18 +103,37 @@ const draftKeyOf = (counts: CountRows | null, rows: ChargeRow[]) =>
 
 /**
  * The invoice at the desk (Phase 5): preview, correct the meal counts the
- * kitchen actually served, add any additional charges (25 Sep 2026 — an extra
+ * kitchen actually served, add any additional charges (25 Sep 2026 - an extra
  * bed, a broken vase, with a comment), issue & print, then record the payment.
  *
  * Everything shown is what the server priced. The figures follow every change
- * as it is typed — `priceInvoiceDraft` reprices the unsaved counts and charges
- * a moment after the desk stops typing — so the amounts, the grand total and
+ * as it is typed - `priceInvoiceDraft` reprices the unsaved counts and charges
+ * a moment after the desk stops typing - so the amounts, the grand total and
  * the total quoted by the Issue dialog are always what will be issued. (Until
  * 25 Sep 2026 they changed only after "Save counts", and meals added at the
  * desk looked as if they were not being charged.) Once issued, the preview
  * *is* the stored snapshot.
  */
-export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "id" | "booking_reference_id"> }) {
+export function InvoiceDialog({
+  booking,
+  isManager = false,
+  label = "Invoice",
+  variant = "outline",
+}: {
+  /** The trigger's words - "Check out & settle" where this *is* the check-out. */
+  label?: string;
+  variant?: "outline" | "vacate";
+  booking: Pick<
+    BookingWithDetails,
+    "id" | "booking_reference_id" | "booking_type" | "service_type" | "status"
+  >;
+  /**
+   * The manager's desk. Only the manager may close a personal stay off
+   * unpaid, with a reason (`canOverrideVacatePayment`) - reception records
+   * what happens, and setting a payment rule aside is a decision about money.
+   */
+  isManager?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<InvoicePanel | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -123,9 +146,12 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
   const [confirmIssue, setConfirmIssue] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [mode, setMode] = useState<PaymentMode>("cash");
+  // Cash is retired (7 Oct 2026), so the form opens on UPI.
+  const [mode, setMode] = useState<PaymentMode>(PAYMENT_MODES[0]);
   const [reference, setReference] = useState("");
   const [paidOn, setPaidOn] = useState(() => toInstituteDateValue(new Date()));
+  const [overrideReason, setOverrideReason] = useState("");
+  const [confirmVacate, setConfirmVacate] = useState(false);
 
   const load = useCallback(async () => {
     const result = await getInvoicePanel(booking.id);
@@ -149,6 +175,13 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
 
   const issued = panel?.current && panel.current.status !== "draft" ? panel.current : null;
   const editable = !!panel && !issued;
+  /**
+   * A personal stay still in the building: its check-out happens here, in
+   * one dialog - issue, pay, vacate (7 Oct 2026). An official stay is
+   * checked out from its row as before and the bill follows it.
+   */
+  const checkingOut = settlesAtCheckOut(booking) && booking.status === "OCCUPIED";
+  const settled = issued?.status === "paid";
   const draftKey = draftKeyOf(counts, charges);
   const dirty = editable && !!counts && draftKey !== savedKey;
 
@@ -210,14 +243,15 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          Invoice
+        <Button size="sm" variant={variant}>
+          {variant === "vacate" && <LogOut aria-hidden />}
+          {label}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
-            Invoice — {booking.booking_reference_id}
+            Invoice - {booking.booking_reference_id}
             {panel && (
               <Badge variant={issued ? (issued.status === "paid" ? "default" : "secondary") : "outline"}>
                 {issued ? INVOICE_STATUS_LABELS[issued.status] : "Not issued"}
@@ -226,7 +260,7 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
           </DialogTitle>
           <DialogDescription>
             {issued
-              ? `${issued.invoice_number}, issued ${issued.issued_at ? formatDateTime(issued.issued_at) : ""}. An issued invoice cannot be changed — a correction is a cancellation and a new invoice.`
+              ? `${issued.invoice_number}, issued ${issued.issued_at ? formatDateTime(issued.issued_at) : ""}. An issued invoice cannot be changed - a correction is a cancellation and a new invoice.`
               : "Check the meal counts against the kitchen's tally and add any additional charges, then issue. The figures update as you type. Issuing numbers the invoice and freezes it."}
           </DialogDescription>
         </DialogHeader>
@@ -337,7 +371,7 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
                       </div>
                       <div className="space-y-1">
                         <Label htmlFor="pay-ref">
-                          {mode === "cash" ? "Receipt no. (optional)" : mode === "upi" ? "UPI transaction id" : "UTR / reference"}
+                          {mode === "upi" ? "UPI transaction id" : "UTR / reference"}
                         </Label>
                         <Input id="pay-ref" value={reference} onChange={(e) => setReference(e.target.value)} maxLength={80} />
                       </div>
@@ -354,7 +388,7 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
                     </div>
                     <div className="flex justify-end">
                       <Button
-                        disabled={isPending || (mode !== "cash" && !reference.trim())}
+                        disabled={isPending || !reference.trim()}
                         onClick={() =>
                           run(
                             () => markInvoicePaidAction(issued.id, mode, reference || null, paidOn || null),
@@ -374,6 +408,75 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
                     {issued.payment_mode ? PAYMENT_MODE_LABELS[issued.payment_mode] : ""}
                     {issued.payment_reference ? ` (ref ${issued.payment_reference})` : ""}.
                   </p>
+                )}
+              </div>
+            )}
+
+            {/* Step three of a personal stay's check-out: vacate (7 Oct
+                2026). The office asked for issue, pay and vacate to be one
+                thing, because a private guest cannot be chased for the bill
+                once they have gone home - so the room is only released from
+                here, and only once the invoice is settled. */}
+            {checkingOut && (
+              <div className="space-y-3 rounded-lg border p-3">
+                <p className="text-sm font-medium">Check the guest out</p>
+                {settled ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      The invoice is paid, so the stay can be closed off and the room released.
+                    </p>
+                    <div className="flex justify-end">
+                      <Button
+                        variant="vacate"
+                        disabled={isPending}
+                        onClick={() =>
+                          run(
+                            () => updateBookingLifecycle(booking.id, "VACATED"),
+                            `${booking.booking_reference_id} - checked out`,
+                            () => setOpen(false)
+                          )
+                        }
+                      >
+                        <LogOut aria-hidden />
+                        Mark as Vacated
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
+                      {vacateBlocker(booking, panel.current ? [panel.current] : [])}
+                    </p>
+                    {isManager && (
+                      <>
+                        <div className="space-y-1">
+                          <Label htmlFor="vacate-override">
+                            Close off unpaid - why (manager only)
+                          </Label>
+                          <Input
+                            id="vacate-override"
+                            value={overrideReason}
+                            maxLength={300}
+                            placeholder="e.g. no tariff covers the night; the office will bill the guest"
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            For a stay that cannot be invoiced at all. The reason goes into the
+                            booking&apos;s log.
+                          </p>
+                        </div>
+                        <div className="flex justify-end">
+                          <Button
+                            variant="outline"
+                            disabled={isPending || overrideReason.trim().length < 5}
+                            onClick={() => setConfirmVacate(true)}
+                          >
+                            Close off unpaid
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -400,7 +503,7 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
           open={confirmIssue}
           onOpenChange={setConfirmIssue}
           title="Issue this invoice?"
-          description={`It takes the next number for this financial year and can never be edited afterwards — a mistake means cancelling it and issuing another. Grand total ${shownDoc ? formatINR(shownDoc.grand_total) : ""}.`}
+          description={`It takes the next number for this financial year and can never be edited afterwards - a mistake means cancelling it and issuing another. Grand total ${shownDoc ? formatINR(shownDoc.grand_total) : ""}.`}
           consequences={
             dirty ? ["The meal counts and charges you have typed are used, even though they are not saved yet."] : undefined
           }
@@ -408,6 +511,25 @@ export function InvoiceDialog({ booking }: { booking: Pick<BookingWithDetails, "
           confirmVariant="default"
           pending={isPending || pricing}
           onConfirm={issue}
+        />
+        <ConfirmDialog
+          open={confirmVacate}
+          onOpenChange={setConfirmVacate}
+          title="Close this stay off without payment?"
+          description={`${booking.booking_reference_id} will be marked Vacated and its room released, although the invoice is not paid. Your reason goes into the booking's log, and the stay stays in "Awaiting payment" until it is settled.`}
+          consequences={[overrideReason.trim()]}
+          confirmLabel="Close off unpaid"
+          pending={isPending}
+          onConfirm={() =>
+            run(
+              () => updateBookingLifecycle(booking.id, "VACATED", overrideReason.trim()),
+              `${booking.booking_reference_id} - closed off unpaid`,
+              () => {
+                setConfirmVacate(false);
+                setOpen(false);
+              }
+            )
+          }
         />
         <ConfirmDialog
           open={confirmCancel}
@@ -468,16 +590,16 @@ function ExtraChargesEditor({
   const sectionLabels: [ExtraChargeSection, string][] = [
     // The letters of the subtotals as the invoice prints them (version 3):
     // A stay's dining subtotal is (C), after the rooms' (A) and their GST (B).
-    ...(dining ? [] : ([["room", `Room charges (A) — GST ${panel.gstRoomPercent}%`]] as [ExtraChargeSection, string][])),
-    ["dining", `Dining charges (${dining ? "A" : "C"}) — GST ${panel.gstMealPercent}%`],
-    ["other", "Other — no GST (damage, loss)"],
+    ...(dining ? [] : ([["room", `Room charges (A) - GST ${panel.gstRoomPercent}%`]] as [ExtraChargeSection, string][])),
+    ["dining", `Dining charges (${dining ? "A" : "C"}) - GST ${panel.gstMealPercent}%`],
+    ["other", "Other - no GST (damage, loss)"],
   ];
   return (
     <section className="space-y-3 rounded-lg border p-3">
       <div>
         <p className="text-sm font-medium">Additional charges</p>
         <p className="text-xs text-muted-foreground">
-          Anything to add at checkout — an extra bed arranged at the desk, a broken vase — with a comment saying what
+          Anything to add at checkout - an extra bed arranged at the desk, a broken vase - with a comment saying what
           it was. Each is printed in the section it is charged under and taxed at that section&apos;s rate. Enter the
           amount {panel.pricesIncludeGst ? "including GST, as the tariffs are" : "before GST"}.
         </p>
@@ -564,8 +686,8 @@ function ExtraChargesEditor({
 }
 
 /**
- * The invoice's figures laid out like the printed page — `invoiceTable`, the
- * same description the PDF draws — with the meal counts editable before issue.
+ * The invoice's figures laid out like the printed page - `invoiceTable`, the
+ * same description the PDF draws - with the meal counts editable before issue.
  */
 function InvoicePreview({
   doc,
@@ -592,7 +714,7 @@ function InvoicePreview({
         {facts.map(([k, v]) => (
           <div key={k} className="min-w-0">
             <dt className="text-xs text-muted-foreground">{k}</dt>
-            <dd className="break-words">{v || "—"}</dd>
+            <dd className="break-words">{v || "-"}</dd>
           </div>
         ))}
       </dl>
@@ -629,7 +751,11 @@ function InvoicePreview({
           </tbody>
         </table>
       </div>
-      {(doc.gst_breakdown?.length ?? 0) > 0 && (
+      {/* The tax lines under the GSTIN came off the invoice on 7 Oct 2026, so
+          the preview stops showing them too - the CGST / SGST split is in
+          each GST row's label instead. An older snapshot still prints them,
+          and so still previews them. */}
+      {printsTaxLines(doc) && (doc.gst_breakdown?.length ?? 0) > 0 && (
         <ul className="space-y-0.5 text-xs text-muted-foreground">
           {gstBreakdownLines(doc).map((l) => (
             <li key={l}>{l}</li>
@@ -639,8 +765,8 @@ function InvoicePreview({
       )}
       {counts && (
         <p className="text-xs text-muted-foreground">
-          Meal counts are covers — meals ticked × guests eating (infants excluded). Amounts and the grand total
-          update as you type{pricing ? " — updating…" : "."}
+          Meal counts are covers - meals ticked × guests eating (infants excluded). Amounts and the grand total
+          update as you type{pricing ? " - updating…" : "."}
         </p>
       )}
     </div>
@@ -700,7 +826,7 @@ function SectionRows({
               )}
             </td>
             <td className={`p-2 text-right tabular-nums ${figure}`}>
-              {row.rate === null ? (row.unpriced ? "⚠ no rate" : "—") : formatINR(row.rate)}
+              {row.rate === null ? (row.unpriced ? "⚠ no rate" : "-") : formatINR(row.rate)}
             </td>
             <td className={`p-2 text-right tabular-nums ${figure}`}>{formatINR(row.amount)}</td>
           </tr>

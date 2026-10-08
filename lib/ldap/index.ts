@@ -22,7 +22,7 @@ export function getDirectory(): Directory {
 
 /**
  * True while sign-in checks the dummy accounts. The sign-in page uses it to
- * show a sample login — never shown once a real directory is configured.
+ * show a sample login - never shown once a real directory is configured.
  */
 export function isMockDirectory(): boolean {
   return !process.env.LDAP_URL?.trim();

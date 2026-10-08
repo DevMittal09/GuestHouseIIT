@@ -10,13 +10,13 @@ import type { StudentRecord } from "./types";
  *
  * A pure comparison. The record is fetched on the warden's page for the
  * requests in their own queue only, shown there, and never stored, logged or
- * mailed — the rule in `.memories/17-academic-records.md`.
+ * mailed - the rule in `.memories/17-academic-records.md`.
  */
 
 export type FamilyVerdict =
   /** The name on the request is the one on record. */
   | "match"
-  /** Close — one name contains the other ("Ramesh" / "Ramesh Menon"). Worth a look. */
+  /** Close - one name contains the other ("Ramesh" / "Ramesh Menon"). Worth a look. */
   | "close"
   /** A different name from the record's. */
   | "differs"
@@ -35,7 +35,7 @@ export type FamilyCheck = {
 
 export const FAMILY_VERDICT_LABELS: Record<FamilyVerdict, string> = {
   match: "Matches the record",
-  close: "Partly matches — check",
+  close: "Partly matches - check",
   differs: "Differs from the record",
   not_on_record: "Not on record",
   not_on_request: "Not on this request",
@@ -105,12 +105,12 @@ export function checkFamily(
 
 /**
  * What the Assistant Warden sees beside a student's request: the student's
- * academic record — parents' and guardian's names included — and each
+ * academic record - parents' and guardian's names included - and each
  * Father / Mother / Guardian on the request checked against it. Built on the
  * server (`studentRecordPanels`), drawn by `components/student-record-check.tsx`.
  */
 export type StudentRecordPanel = {
-  /** How the lookup went — the same statuses as `academicRecordFor`. */
+  /** How the lookup went - the same statuses as `academicRecordFor`. */
   status: "found" | "not_found" | "unavailable" | "not_applicable";
   /** The record's rows, as the student's own card shows them; empty without a record. */
   rows: DetailRow[];

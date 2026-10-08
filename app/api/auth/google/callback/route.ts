@@ -17,7 +17,7 @@ function back(message: string, base: string): Response {
 
 /**
  * Leg two: verify the state, exchange the code with the PKCE verifier, check
- * the identity token, and only then start a session — and only for a verified
+ * the identity token, and only then start a session - and only for a verified
  * institute address that already has a portal account. Everything else goes
  * back to the sign-in page with a sentence the visitor can act on.
  */
@@ -27,7 +27,7 @@ export async function GET(request: Request): Promise<Response> {
   const jar = await cookies();
   const raw = jar.get(OAUTH_COOKIE)?.value;
   jar.delete(OAUTH_COOKIE);
-  if (!config || !raw) return back("Sign-in timed out — please try again.", base);
+  if (!config || !raw) return back("Sign-in timed out - please try again.", base);
 
   const url = new URL(request.url);
   const error = url.searchParams.get("error");
@@ -37,12 +37,12 @@ export async function GET(request: Request): Promise<Response> {
   try {
     remembered = JSON.parse(raw);
   } catch {
-    return back("Sign-in timed out — please try again.", base);
+    return back("Sign-in timed out - please try again.", base);
   }
   const state = url.searchParams.get("state");
   const code = url.searchParams.get("code");
   if (!code || !state || state !== remembered.state) {
-    return back("That sign-in did not match the one that was started — please try again.", base);
+    return back("That sign-in did not match the one that was started - please try again.", base);
   }
 
   let identity;
@@ -50,7 +50,7 @@ export async function GET(request: Request): Promise<Response> {
     identity = await completeGoogleSignIn(config, { code, verifier: remembered.verifier, nonce: remembered.nonce });
   } catch (e) {
     console.error("[auth] Google sign-in failed:", e);
-    return back("Google could not sign you in — please try again.", base);
+    return back("Google could not sign you in - please try again.", base);
   }
 
   if (!identity.emailVerified) return back("That Google account's email address is not verified.", base);
@@ -59,7 +59,7 @@ export async function GET(request: Request): Promise<Response> {
   // admits the student subdomain.
   if (!isInstituteEmail(identity.email) || (identity.hostedDomain !== null && !isInstituteEmail(`x@${identity.hostedDomain}`))) {
     await recordAudit(null, "signin.failure", identity.email, { method: "google", reason: "not an institute account" });
-    return back(`Use your @${LOGIN_DOMAIN} account — personal Google accounts cannot sign in.`, base);
+    return back(`Use your @${LOGIN_DOMAIN} account - personal Google accounts cannot sign in.`, base);
   }
 
   const profile = (await getStore().listProfiles()).find((p) => p.email.toLowerCase() === identity.email);

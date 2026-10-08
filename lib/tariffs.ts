@@ -9,7 +9,7 @@ import type { BookingType, MealKey, Role, RoomType } from "./types";
  * A tariff is a row, not a constant, because prices change and an invoice
  * must be priced at the rate in force on the night it charges for. A new
  * price is a new row with a later `effective_from`, never an edit of an old
- * one — a row already in force is part of how past stays were priced, so the
+ * one - a row already in force is part of how past stays were priced, so the
  * console refuses to change or delete it (`tariffLockedError`). Invoices keep
  * the rates they printed in their snapshot anyway, so even that is belt and
  * braces.
@@ -88,7 +88,7 @@ function applies(t: Tariff, q: TariffQuery): boolean {
 }
 
 /**
- * The row that prices this charge, or null when there is none — which the
+ * The row that prices this charge, or null when there is none - which the
  * invoice reports as a problem instead of printing a zero.
  *
  * Specificity is weighted guest house > requester > booking type > room type,
@@ -113,8 +113,8 @@ export function resolveTariff(tariffs: Tariff[], q: TariffQuery): Tariff | null 
 }
 
 /**
- * Whether a row is already in force, and so part of how some stay was — or is
- * being — priced. Such a row is never edited or deleted: the office adds a new
+ * Whether a row is already in force, and so part of how some stay was - or is
+ * being - priced. Such a row is never edited or deleted: the office adds a new
  * row from a later date instead.
  */
 export function tariffLockedError(t: Pick<Tariff, "effective_from">, today: string): string | null {
@@ -162,4 +162,98 @@ export function describeTariffScope(
     t.requester_role ? `requester: ${names.role(t.requester_role)}` : null,
   ];
   return parts.filter(Boolean).join(" · ");
+}
+
+// ------------------------------------------------------------- the preview
+
+/**
+ * The rates shown on the booking form (7 Oct 2026, the office's eighth list:
+ * "show the rates for the chosen guest house, using the same rates the
+ * invoice uses").
+ *
+ * It is the **same resolution the invoice performs** - `resolveTariff` with
+ * the same query shape `buildInvoiceDocument` builds - rather than a second
+ * price list beside it. A requester who is quoted one figure on the form and
+ * charged another at check-out has been misled, and the only way to be sure
+ * that cannot happen is for both to read one function.
+ *
+ * Two honest limits, stated on the form rather than papered over: the rate
+ * shown is the one in force **today**, and a stay crossing a rate change is
+ * priced per night when it is invoiced; and a `null` rate means the office
+ * has not set that charge up, which the invoice reports as a problem instead
+ * of printing a zero.
+ */
+export type TariffPreviewLine = {
+  item: TariffItem;
+  label: string;
+  /** Rupees, as the office entered them. Null when no rate covers this charge. */
+  rate: number | null;
+};
+
+export type TariffPreview = {
+  guest_house_id: string;
+  booking_type: BookingType;
+  lines: TariffPreviewLine[];
+};
+
+/** Which charges to quote: the room and an extra bed always, meals where they are served. */
+export function previewItemsFor(servesMeals: boolean): TariffItem[] {
+  return servesMeals ? TARIFF_ITEMS : ["room", "extra_bed"];
+}
+
+export function tariffPreviewLines(
+  tariffs: Tariff[],
+  q: {
+    guestHouseId: string;
+    bookingType: BookingType;
+    role: Role;
+    /** Both guest houses are double sharing; `null` would match a room-type-blind rate only. */
+    roomType: RoomType;
+    servesMeals: boolean;
+    /** Institute calendar date the rates are quoted for - today, on the form. */
+    date: string;
+  }
+): TariffPreviewLine[] {
+  return previewItemsFor(q.servesMeals).map((item) => {
+    const row = resolveTariff(tariffs, {
+      guest_house_id: q.guestHouseId,
+      item,
+      // Only rooms and extra beds are priced per room type; a meal is a meal.
+      room_type: item === "room" || item === "extra_bed" ? q.roomType : null,
+      booking_type: q.bookingType,
+      requester_role: q.role,
+      date: q.date,
+    });
+    return { item, label: TARIFF_ITEM_LABELS[item], rate: row ? row.rate : null };
+  });
+}
+
+/**
+ * One preview per guest house the requester may book and per booking type
+ * they may pick - a handful of rows, computed on the server so the form needs
+ * no action of its own and no rate is ever quoted that the caller could not
+ * already see on their own invoice.
+ */
+export function tariffPreviews(
+  tariffs: Tariff[],
+  guestHouses: { id: string; serves_meals: boolean }[],
+  bookingTypes: BookingType[],
+  role: Role,
+  date: string,
+  roomType: RoomType = "double_sharing"
+): TariffPreview[] {
+  return guestHouses.flatMap((house) =>
+    bookingTypes.map((bookingType) => ({
+      guest_house_id: house.id,
+      booking_type: bookingType,
+      lines: tariffPreviewLines(tariffs, {
+        guestHouseId: house.id,
+        bookingType,
+        role,
+        roomType,
+        servesMeals: house.serves_meals,
+        date,
+      }),
+    }))
+  );
 }

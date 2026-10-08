@@ -49,7 +49,7 @@ export function MyBookings({
   if (bookings.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-        No bookings yet — create your first request from the &ldquo;New Booking&rdquo; tab.
+        No bookings yet - create your first request from the &ldquo;New Booking&rdquo; tab.
       </p>
     );
   }
@@ -93,7 +93,7 @@ function BookingRow({ booking, invoice }: { booking: BookingWithDetails; invoice
       if (result.ok) {
         toast.success(
           needsManagerApproval
-            ? "Cancellation request submitted — awaiting GH Manager approval"
+            ? "Cancellation request submitted - awaiting GH Manager approval"
             : "Booking cancelled"
         );
         setShowCancelDialog(false);
@@ -142,7 +142,7 @@ function BookingRow({ booking, invoice }: { booking: BookingWithDetails; invoice
               href={`/api/invoices/${invoice.id}/pdf`}
               target="_blank"
               rel="noopener"
-              title={`${invoice.number}${invoice.paid ? " — paid" : " — awaiting payment"}`}
+              title={`${invoice.number}${invoice.paid ? " - paid" : " - awaiting payment"}`}
             >
               {invoice.paid ? "✓ " : ""}Invoice
             </a>
@@ -187,7 +187,7 @@ function BookingRow({ booking, invoice }: { booking: BookingWithDetails; invoice
               <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                 <p className="text-sm font-medium">
                   {needsManagerApproval
-                    ? "Submit a cancellation request — the GH Manager will review it."
+                    ? "Submit a cancellation request - the GH Manager will review it."
                     : "Cancel this booking"}
                 </p>
                 <div className="space-y-2">
@@ -235,8 +235,8 @@ function BookingRow({ booking, invoice }: { booking: BookingWithDetails; invoice
 }
 
 /**
- * Ask to stay longer (Phase 7). The manager approves — moving the room holds,
- * which is refused if someone else has the room by then — or declines, and the
+ * Ask to stay longer (Phase 7). The manager approves - moving the room holds,
+ * which is refused if someone else has the room by then - or declines, and the
  * requester is told either way. One request at a time.
  */
 function ExtensionRequest({ booking }: { booking: BookingWithDetails }) {
@@ -259,7 +259,7 @@ function ExtensionRequest({ booking }: { booking: BookingWithDetails }) {
     startTransition(async () => {
       const result = await requestExtensionAction(booking.id, until, reason);
       if (result.ok) {
-        toast.success("Extension requested — the Guest House Manager will reply by email");
+        toast.success("Extension requested - the Guest House Manager will reply by email");
         setReason("");
         router.refresh();
       } else {

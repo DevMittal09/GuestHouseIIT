@@ -36,7 +36,7 @@ describe("classifying a requested stay against one already held", () => {
   const next = (offsetHours: number) =>
     stay(new Date(Date.parse(A.to) + offsetHours * H).toISOString(), "2030-01-13T06:30:00.000Z");
 
-  it("free once the gap reaches the buffer — exactly four hours is enough", () => {
+  it("free once the gap reaches the buffer - exactly four hours is enough", () => {
     expect(conflictBetween(next(4), A, FOUR_H)).toBe("free");
     expect(conflictBetween(next(5), A, FOUR_H)).toBe("free");
   });
@@ -110,7 +110,7 @@ describe("charts: a booked bar ends at check-out, the turnaround is separate", (
   /**
    * 23 Sep 2026: a changeover the manager accepted really does put two stays
    * in one room for up to two hours. Drawn in the same red as an ordinary
-   * booking it said nothing — the room reads as taken either way — so the
+   * booking it said nothing - the room reads as taken either way - so the
    * overlapping stretch is now its own band.
    */
   describe("two bookings on one room at once", () => {
@@ -133,7 +133,7 @@ describe("charts: a booked bar ends at check-out, the turnaround is separate", (
       expect(day.overlaps[9]?.map((o) => o.booking_reference_id).sort()).toEqual(["REF", "REF2"]);
       expect(day.overlaps[10]?.map((o) => o.booking_reference_id).sort()).toEqual(["REF", "REF2"]);
       expect(day.overlaps[11]).toBeNull();
-      // The hour is still booked — the overlap is drawn over it, not instead.
+      // The hour is still booked - the overlap is drawn over it, not instead.
       expect(day.hours[9]).not.toBeNull();
     });
 

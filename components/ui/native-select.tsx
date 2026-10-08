@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Styled native <select> — plays nicely with react-hook-form's register().
+ * Styled native <select> - plays nicely with react-hook-form's register().
  * Drawn like `Input`: 4px corners, a firm edge, a vermilion focus ring. The
  * browser keeps its own arrow, which the compact time pickers rely on.
  */

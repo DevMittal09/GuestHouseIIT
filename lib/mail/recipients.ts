@@ -9,7 +9,7 @@ import { canReview } from "@/lib/workflow";
  * The rule that matters: **reviewers are found through `canReview()`**, the
  * same predicate that decides whether their button works. Re-deriving
  * "wardens of this hostel" here would be a second copy of the scoping rule,
- * and the two would drift — the Malhar warden would start getting mail about
+ * and the two would drift - the Malhar warden would start getting mail about
  * Saveri students while still, correctly, being unable to act on them.
  *
  * `canReview` also refuses `reviewer.id === requester.id`, so the IAR Office
@@ -64,7 +64,7 @@ export async function reviewersForStatus(
  * - the addresses the requester added under "Copy to" on New Booking
  *   (`bookings.copy_to_emails`), however many;
  * - on a club booking raised by the club's faculty in-charge, that faculty
- *   member — the mail goes to the club's account, and the person who
+ *   member - the mail goes to the club's account, and the person who
  *   actually booked has to hear what happened to it.
  *
  * Staff mail keeps its own CC (`copyToAddresses`, the approval chain). Never
@@ -85,7 +85,7 @@ export async function requesterCopyTo(booking: BookingWithDetails): Promise<stri
 }
 
 /**
- * As `reviewersForStatus`, before any booking exists — the "Copy to" line at
+ * As `reviewersForStatus`, before any booking exists - the "Copy to" line at
  * the top of New Booking names who will approve the request being filled in.
  */
 export async function reviewersOfRequester(
@@ -109,7 +109,7 @@ export async function profilesWithRole(...roles: Role[]): Promise<Profile[]> {
  * The guest house desk: the manager, and the caretaker on reception.
  *
  * The caretaker is included on allocations and cancellations because they are
- * the person who meets the guest, but never on approvals — approving is not
+ * the person who meets the guest, but never on approvals - approving is not
  * theirs to do, and mail implying otherwise invites them to try.
  */
 export async function deskRecipients(): Promise<Profile[]> {
@@ -121,7 +121,7 @@ export async function managerRecipients(): Promise<Profile[]> {
 }
 
 /**
- * The booking's Copy-to list as addresses — CC on every staff mail about it.
+ * The booking's Copy-to list as addresses - CC on every staff mail about it.
  * The rule is `lib/academic/copy-to.ts`, shared with the form's card; this
  * never throws, so a failed lookup costs the CC, not the mail.
  */

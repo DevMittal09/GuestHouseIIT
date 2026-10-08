@@ -6,13 +6,13 @@ type MockAccount = DirectoryEntry & { password: string };
 /**
  * Dummy LDAP accounts, one per seeded persona, standing in for the institute
  * directory until it is reachable. Listed with their passwords in
- * `.memories/30-credentials-and-access.md` — keep the two in step.
+ * `.memories/30-credentials-and-access.md` - keep the two in step.
  *
  * This is the *directory*, not the portal's user list: it answers "is this the
  * right password for this uid", and `profiles.ldap_uid` then says which portal
  * account that uid belongs to. So the uids here match the `ldap_uid` values in
  * `lib/store/seed.ts` and `supabase/seed.sql`, and `visitor` deliberately has
- * no portal account — it is how "valid LDAP login, not registered here" is
+ * no portal account - it is how "valid LDAP login, not registered here" is
  * tried out.
  *
  * Plaintext is fine because these passwords

@@ -5,7 +5,7 @@ import type { Mailer, OutboundMessage } from "./types";
 /**
  * SMTP transport (nodemailer).
  *
- * Configured for an authenticated mailbox — today a Gmail account with an app
+ * Configured for an authenticated mailbox - today a Gmail account with an app
  * password, which is what `MAIL_USER` / `MAIL_APP_PASSWORD` are. Host and port
  * are environment variables rather than constants because the production plan
  * is to move to the institute's own relay (`smtp-relay.gmail.com`) sending as

@@ -14,7 +14,7 @@ import { canReviewBooking } from "@/lib/workflow";
  * One queue for everyone who approves by appointment rather than by role.
  *
  * An HOD, a club's faculty advisor and a council's student secretary are all
- * here — whoever heads a unit today. The list is worked out on every visit
+ * here - whoever heads a unit today. The list is worked out on every visit
  * from `canReview`, the same predicate the Forward button checks, so a new
  * HOD sees their department's waiting requests the moment the console names
  * them, and the old HOD stops seeing them at the same moment.
@@ -70,7 +70,7 @@ export default async function ApprovalsPage() {
         {roles.length > 0 ? (
           <>
             Requests waiting on you as <span className="font-medium">{roles.join("; ")}</span>.
-            Forwarding sends them on — to the HOD where the club has one, otherwise to the
+            Forwarding sends them on - to the HOD where the club has one, otherwise to the
             Guest House Manager.
           </>
         ) : (

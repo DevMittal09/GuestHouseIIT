@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { updateBookingLifecycle } from "@/app/actions/bookings";
 import { InvoiceDialog } from "@/components/invoice-dialog";
+import { settlesAtCheckOut } from "@/lib/invoice";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,11 +42,14 @@ import { STATUS_LABELS, type BookingWithDetails } from "@/lib/types";
 export function CheckoutsToday({
   bookings,
   nowIso,
+  isManager = false,
 }: {
   /** Stays checking out today, already filtered and sorted by the server. */
   bookings: BookingWithDetails[];
   /** The server's "now", so the overdue flag agrees with the rest of the page. */
   nowIso: string;
+  /** The manager's desk: only they may close a personal stay off unpaid. */
+  isManager?: boolean;
 }) {
   return (
     <Card>
@@ -58,7 +62,7 @@ export function CheckoutsToday({
         </CardTitle>
         <CardDescription>
           Rooms due back today, earliest first. Mark a guest Vacated once they have handed the
-          room over — that is what releases it for the next booking.
+          room over - that is what releases it for the next booking.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -81,7 +85,7 @@ export function CheckoutsToday({
               </TableHeader>
               <TableBody>
                 {bookings.map((b) => (
-                  <CheckoutRow key={b.id} booking={b} nowIso={nowIso} />
+                  <CheckoutRow key={b.id} booking={b} nowIso={nowIso} isManager={isManager} />
                 ))}
               </TableBody>
             </Table>
@@ -92,9 +96,18 @@ export function CheckoutsToday({
   );
 }
 
-function CheckoutRow({ booking, nowIso }: { booking: BookingWithDetails; nowIso: string }) {
+function CheckoutRow({
+  booking,
+  nowIso,
+  isManager,
+}: {
+  booking: BookingWithDetails;
+  nowIso: string;
+  isManager: boolean;
+}) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const settlesHere = settlesAtCheckOut(booking);
 
   // Past its hour and still holding the room: the row the desk has to chase.
   const overdue = booking.check_out <= nowIso;
@@ -107,7 +120,7 @@ function CheckoutRow({ booking, nowIso }: { booking: BookingWithDetails; nowIso:
       const result = await updateBookingLifecycle(booking.id, "VACATED");
       if (result.ok) {
         toast.success(
-          `${booking.booking_reference_id} — ${STATUS_LABELS.VACATED}. Its invoice is under "Checked out — to bill".`
+          `${booking.booking_reference_id} - ${STATUS_LABELS.VACATED}. Its invoice is under "Checked out - to bill".`
         );
         router.refresh();
       } else {
@@ -132,20 +145,29 @@ function CheckoutRow({ booking, nowIso }: { booking: BookingWithDetails; nowIso:
           Head: {describeDebit(booking)}
         </span>
       </TableCell>
-      <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "—"}</TableCell>
+      <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "-"}</TableCell>
       <TableCell>
         <StatusBadge status={displayStatus(booking)} />
       </TableCell>
       <TableCell className="text-right">
         {canVacate ? (
           <div className="flex flex-wrap justify-end gap-2">
-            <Button size="sm" variant="vacate" disabled={isPending} onClick={vacate}>
-              <LogOut aria-hidden />
-              {isPending ? "Updating…" : "Mark as Vacated"}
-            </Button>
-            {/* The bill, beside the check-out it goes with. After Vacated the
-                stay moves to "Checked out — to bill", invoice and all. */}
-            <InvoiceDialog booking={booking} />
+            {/* A personal stay is settled before the guest leaves (7 Oct
+                2026), so its check-out is the invoice dialog: issue, pay,
+                vacate. An official stay is checked out here and its bill
+                follows it into "Awaiting payment". */}
+            {!settlesHere && (
+              <Button size="sm" variant="vacate" disabled={isPending} onClick={vacate}>
+                <LogOut aria-hidden />
+                {isPending ? "Updating…" : "Mark as Vacated"}
+              </Button>
+            )}
+            <InvoiceDialog
+              booking={booking}
+              isManager={isManager}
+              label={settlesHere ? "Check out & settle" : undefined}
+              variant={settlesHere ? "vacate" : undefined}
+            />
           </div>
         ) : (
           <span className="text-xs text-muted-foreground">Not checked in</span>

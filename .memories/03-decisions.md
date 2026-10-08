@@ -2546,6 +2546,13 @@ gets the panel: the other approvers see no students.
 
 ### Guests the portal already knows are filled in, not typed
 
+> **Superseded, 7 Oct 2026.** The office withdrew the whole mechanism for
+> every role: `lib/known-guests.ts` is deleted, and nothing is offered from
+> earlier bookings any more. A student's **parents** are now taken from the
+> academic record and locked instead (migration 28), which is the narrower
+> and firmer version of the same idea; everybody else types their guests.
+> See "A student's parents are taken from the record, not typed".
+
 > **Extended (30 Sep 2026, afternoon):** the requester themselves comes first
 > — "Yourself", relationship **Self** — for a student or employee. See
 > "Yourself, on your own request" under that date.
@@ -2747,6 +2754,11 @@ console field for two values that change never; revisit if the office starts
 adding guest houses.
 
 ### MRBS gets a sentence, not just a link
+
+> **Superseded, 7 Oct 2026.** The office asked for the Meeting Room Booking
+> System to come off the site altogether - the footer banner, the Contact
+> page sentence, the footer link and the portal footer's link. `MRBS_URL` is
+> gone from `lib/site.ts` with every use of it.
 
 **Decision.** The footer opens with "Booking a lecture hall or meeting room?
 Those are reserved on the institute's Meeting Room Booking System, not here"
@@ -2993,6 +3005,12 @@ because the one fixed head in use is a student's Personal Funds.
 
 ### Requesters see booked or free; the desk sees why
 
+> **Superseded, 7 Oct 2026.** The office went further: a requester is now
+> sent **a count and no rooms at all** - "N rooms available" per day, and per
+> hour on a one-day window. The simplified chart and the legend's `detailed`
+> flag are retired, since there is nobody left to simplify them for. See
+> "Availability: a count, not a simplified chart".
+
 **Decision.** `getRoomAvailability` returns `detailed` for `gh_manager`,
 `gh_caretaker` and `developer`. Everyone else gets `simple` charts — the
 turnaround and an accepted overlap are not drawn, maintenance is drawn as
@@ -3011,6 +3029,12 @@ detail** although it does not see occupants' names: it runs the rooms.
 what each role may see here (`showsOccupant`), so it decides this too.
 
 ### Yourself, on your own request
+
+> **Superseded, 7 Oct 2026.** "Yourself" was withdrawn with the whole
+> "Fill in…" list, for every role, at the office's request. The **Self
+> relationship** on the student form remains - a student may still name
+> themselves as a guest, typing their own name. See "Fill-in and 'Yourself'
+> withdrawn".
 
 **Decision.** "Fill in from saved details" starts with **Yourself — <name>**
 for a student or employee (`knownGuestSelf`): the academic record's name, else
@@ -3032,6 +3056,11 @@ spec defaults); until then "Yourself" fills the name and leaves the
 relationship. **Office to confirm** the policy.
 
 ### The invoice letters every figure — as a new version
+
+> **Extended, 7 Oct 2026.** New invoices are **version 4**: the lettering is
+> unchanged, but there are no blank ruled rows, no tax lines under the GSTIN,
+> and the CGST/SGST split now reads in each GST row's own label. A `version:
+> 3` snapshot reprints exactly as it was issued. See "Invoice version 4".
 
 **Decision.** New invoices are `version: 3`: Room Charges Subtotal (A),
 GST @ 18% on A (B), Dining Charges Subtotal (C), GST @ 5% on C (D), Other
@@ -3131,6 +3160,12 @@ anything that uses it.
 
 ### No auto-fill, even for parents
 
+> **Superseded, 7 Oct 2026.** The compact "Fill in…" control described here
+> is gone too, for every role. In its place, a student's father and mother
+> are **taken from the academic record and locked** - not filled in for them
+> to check, but not theirs to type either. See "A student's parents are taken
+> from the record, not typed".
+
 Choosing "Mother" filled in the name and gender from the academic record, and
 choosing something else took them back out. The office asked for it to stop. A
 box that writes itself is a box nobody checks, and the one thing the desk needs
@@ -3195,6 +3230,9 @@ no approval queue at all, so nothing changed there.
 
 ### The availability console's room list is the desk's
 
+> **Extended, 7 Oct 2026.** Still true, and now the chart is the desk's as
+> well: a requester is sent counts and no rooms at all.
+
 The grid answers "is this room free", which is all a requester needs. The list
 underneath adds every booking's exact period, reference id and housekeeping
 state — the guest house's own business, and it made the page read like an
@@ -3203,9 +3241,322 @@ operations screen. It follows the same `detailed` flag as the chart's legend
 
 ### Special Funds off a personal meal booking
 
+> **Widened, 7 Oct 2026.** Off **every** personal booking, a stay as well as
+> a meal, and the question is no longer asked at all on one.
+> `FORBIDDEN_DEBIT_HEADS.personal` is the floor now (so `FORBIDDEN_DINING_HEADS`
+> is empty), and revision 5 withdraws it from a stored row. See "A personal
+> booking is not asked which budget pays".
+
 A special fund pays for an institute occasion, not for somebody ordering lunch
 for their own family. Done as a **floor** (`FORBIDDEN_DINING_HEADS`), like the
 students' one, so a Settings row that still lists it is ignored on read rather
 than breaking the form — and `upgradeDebitRules` revision 4 withdraws it from a
 stored row once, after the earlier revisions have added everything they add, so
 the office can tick it back on and have that stick.
+
+## 7 Oct 2026 — the office's eighth list
+
+Four phases, each gated on the five checks before the next began. The whole
+round is in [99-recent-changes.md](99-recent-changes.md); this is why each
+decision went the way it did.
+
+### Em dashes: a blanket replacement, and a reader that takes both
+
+The office asked for every em dash to become a hyphen. Done as a blanket
+replacement over the source (1,559 of them, 214 files), not file by file: a
+rule applied by hand to the strings somebody noticed is a rule that lasts
+until the next message is written.
+
+The one place it was not cosmetic is the **project**. A Project head stores
+"number — title" in `debit_details` and the invoice splits it back
+(`projectFromDetails`). Replacing the separator in the code would have made
+every project stored before today print its whole entry as the project
+*number*, with the title blank, on invoices for stays that have already
+happened. So the reader takes **both** separators, em dash first — a hyphen
+also occurs inside project numbers and titles, where an em dash never did.
+
+Markdown and SQL comments were left as prose. They are not the product.
+
+### Keralam: once, and on a word boundary
+
+The spelling is in two kinds of place: the code's own defaults, and the
+office's copy in a saved Settings row. The first is an edit. The second is a
+one-time rewrite behind the invoice revision (`INVOICE_RULES_REVISION` 3), the
+same mechanism the GST change used on 25 Sep: once, and never again, so an
+office that deliberately writes something else keeps it.
+
+Two details worth keeping. The rewrite matches `\bKerala\b` — "Keralam"
+contains "Kerala", and a plain replace on a row already corrected would have
+produced "Keralamm". And it only touches a row that carries its own `contact`:
+writing `contact: undefined` over the default fails the schema, which
+`parseRuleGroup` reads as "no invoice settings at all" — found by the Accounts
+mail test, which went quiet because the whole invoice group had fallen back to
+defaults with an empty Accounts address.
+
+Issued invoices keep the words they were printed with. They are snapshots.
+
+### A personal booking is not asked which budget pays
+
+The office's words: personal bookings, students included, show no debitable
+head. The money is the requester's own, so the question has one possible
+answer, and a card headed "Debitable head" on a family visit read as though a
+department might be about to pay for it.
+
+Implemented as **a rule, `asksForDebitHead(bookingType)`**, not as a
+consequence of the allowed list having one entry. `fixedDebitHead` already
+handled "one option": it *states* the answer. This is different — the question
+is not put at all — and the two say different things to a requester. The
+server writes `personal_funds` itself, in the **schema's closing transform**
+rather than in `createBooking`, because the form validates with the same
+schema and sends `parsed.data`: doing it there means the browser's copy of the
+payload and the stored booking name the same budget.
+
+A crafted payload naming a department on a private stay is **overwritten, not
+rejected**. Rejecting it would mean an error message about a field the
+requester never saw.
+
+### Students and alumni: a rule, not a coincidence
+
+Both were already Bageshri-only in practice, and Bageshri has no kitchen, so
+"no meals" fell out of the configuration. That is not the same as a rule: a
+developer ticking "Serves meals" on Bageshri, or adding either to
+Hamsanandi's `allowed_guest_house_ids`, would have started offering meals the
+office does not sell them. Now `restrictedToOneGuestHouse` and
+`mealsAllowedFor` say it, the form applies it, and `createBooking` checks it.
+The manager overrides both, logged — the desk books what is standing at the
+counter.
+
+### The meal split fills itself in
+
+The two counts must add up to the head count, so answering one settles the
+other. Asking twice was asking the requester to do the subtraction, and the
+commonest way to meet "the two have to add up to N" was to answer one box and
+stop. Either box fills the other, so a correction still works, and it is
+written from the change event only — never an effect — so the box the
+requester is touching is never the one that moves.
+
+The rule itself stays in `dietCountsError` on both sides. The form can no
+longer produce a mismatch; a crafted payload still can.
+
+### The rates on the form come from the invoice's own function
+
+A requester quoted one figure on the form and charged another at check-out has
+been misled, and the only way to be sure that cannot happen is for both to
+read one function. `tariffPreviews` resolves through `resolveTariff` with the
+same query shape `buildInvoiceDocument` builds.
+
+Computed **on the server** and handed down as a prop, one set per guest house
+and booking type the requester may pick — a handful of rows, and no round
+trip while they fill the form in. Two limits are stated rather than hidden:
+the rates are today's, and a charge with no rate reads "Not published" rather
+than a zero, which is what the invoice does with it too.
+
+### Change rate, instead of letting a rate in force be edited
+
+A rate in force is never edited — stays have been priced with it — so changing
+a price means adding a row with the same scope from a later date. That is four
+dropdowns to repeat by hand, and repeating them by hand is how a new rate ends
+up applying to something slightly different from the old one. The button
+copies the scope and leaves the rate blank, dated today.
+
+### Availability: a count, not a simplified chart
+
+On 30 Sep requesters were given a simplified chart — booked or free, no
+turnaround, no overlap. The office went further: only how many rooms are free,
+and the server to send them that and nothing else.
+
+Which room is free is of no use to a requester. They cannot choose one, the
+manager allocates, and publishing the grid told anyone with a login which
+rooms a named stay occupied. So this is now a line between **two different
+answers**, not two styles of one: the desk gets rooms and segments, everyone
+else gets `AvailabilityCounts` with both arrays empty. A component that has no
+room numbers cannot leak one.
+
+The hourly breakdown is kept for a single day. Someone whose date is full
+needs to know whether it is full all day or only in the morning, and that is
+the one piece of detail a count can give without naming a room.
+
+With nobody left to simplify the charts for, the `simple` mode and the
+legend's `detailed` flag were retired rather than left as dead branches.
+
+### The institute's records, kept in the portal (migration 28)
+
+The academic database the portal was designed to read does not exist and
+nobody could say when it would. Meanwhile the booking form needs a student's
+parents **now**, because from this round it locks their names. So the office
+keeps the records themselves, pasted in as CSV.
+
+**One table for all six kinds**, with every field of every kind as a nullable
+column. The kinds share more than they differ by, and six tables would mean
+six importers and six console sections for the same six pastes. A row is
+folded into an `AcademicRecord` through `ACADEMIC_RECORD_FIELDS`, so a column
+that no record type names — or the other way round — is a compile error rather
+than a field nothing ever fills.
+
+**Service-role only, no `authenticated` policy**, exactly like `app_settings`:
+the rows hold parents' names and phone numbers, and what reaches a browser is
+only ever what the server chose to show.
+
+**A third `AcademicSource`, with the dummies behind it.** `StoreAcademicSource`
+prefers an imported row and falls through to `MockAcademicSource`, so a fresh
+install, the test suite and the demo personas keep working with nothing
+imported, while a real student not in the import correctly has no record —
+which is what leaves their parents' names editable. A missing table (migration
+28 unapplied) falls through too, rather than reading as an outage.
+
+**The "sample" caption became per lookup.** `isMockAcademicSource()` asked one
+question of the deployment, which stopped being a fair answer the moment the
+office could import real records alongside the published dummies: on the same
+install, one person's card is their own record and the next is a sample.
+`AcademicSource.find` now returns the record **and where it came from**.
+
+**The cache had to be invalidated.** Lookups are cached for ten minutes, so an
+imported record read back as the one it replaced — and, since this round, the
+booking form went on locking a parent to a name the office had just corrected.
+Found by the journey, not by reasoning. `forgetAcademicRecords()` runs on every
+import, delete and clear.
+
+### A student's parents are taken from the record, not typed
+
+The Assistant Warden's job at a student's request has been to confirm that the
+"Father" on it is the father the institute has on file (25 Sep). If the portal
+knows the name, there is nothing to compare: the request simply carries the
+right one. It also closes the one thing the check could only report — a
+student naming someone else's parent as their own.
+
+Three consequences, all the office's own words:
+
+- **A relationship the record cannot support is not offered.** No father on
+  record, no "Father" on the dropdown. Offering it would invite a typed parent
+  back in through the door this closes. Guardian is the mirror: it is for the
+  student whose parents have died or are abroad, so it appears only where the
+  record names neither — and where it names neither parent *and* no guardian,
+  Guardian is left open, because the record has nothing to say about them.
+- **The server writes the record's name**, whatever arrived. The form shows it
+  read-only; that is a courtesy, not the boundary.
+- **A recorded guest is not asked for an Aadhaar or an ID document.** The
+  institute has already identified them; asking for a document as well is
+  asking the student to prove what the record says. A sibling or grandparent,
+  typed by hand, is still asked — which is why the exemption is keyed on the
+  relationship being locked rather than on the role.
+
+Matched against the Form Builder's own option list, ignoring case, so an
+office that renames "Father" to "Dad" gets a dropdown that stops being locked
+rather than a form nobody can submit.
+
+### Fill-in and "Yourself" withdrawn
+
+On 1 Oct the office asked for auto-fill to go, because a box that writes
+itself is a box nobody checks, and the explicit "Fill in…" list replaced it.
+On 7 Oct they asked for that list to go too, for every role, "Yourself" with
+it. `lib/known-guests.ts` went with it rather than being left as dead code,
+and the tests that covered it were deleted rather than left asserting a
+feature the office had removed.
+
+`Self` stays on the student relationship list. It is a relationship, typed by
+hand, and withdrawing it would reverse a separate 30 Sep decision nobody asked
+to reverse.
+
+### Invoice version 4
+
+Three changes, one version. Labels are computed at print time, so a change of
+wording is a new version and never an upgrade of an invoice already handed
+over — the same rule versions 2 and 3 were added under.
+
+- **No blank rows.** The template had two ruled room rows, so a one-room stay
+  printed an empty second one that read as a charge nobody had filled in.
+- **No lines under the GSTIN.** The per-SAC taxable/CGST/SGST breakdown came
+  off. It is still computed and kept in the snapshot, so restoring it is one
+  line in `printsTaxLines` if the office wants it back. The "rates include
+  GST" note went with them, being one of the lines under the GSTIN — worth
+  confirming they meant that one too.
+- **The CGST/SGST split in the GST row's own label**, next to the figure it
+  describes rather than in a footnote under it. That is where the removed
+  information went.
+
+### Cash retired, but not erased
+
+`cash` stays in the `PaymentMode` union and in the labels: invoices paid in
+cash before today say so, and an invoice is a snapshot — a stored payment is a
+record of what happened, not a choice that can be re-made. What is gone is the
+*offer*. `PAYMENT_MODES` no longer lists it and `paymentModeError` refuses it
+on a new payment, so a crafted request cannot record one either. Both
+remaining modes carry a reference, so the reference is now required for both
+rather than optional for cash.
+
+### A personal stay is settled before the guest leaves
+
+Nobody chases a private guest for a guest-house bill once they have driven
+home, and the desk was discovering the unpaid invoice weeks later in "Checked
+out — to bill". So a personal stay's check-out **is** its invoice: one button,
+**Check out & settle**, and the room is released from inside the dialog, after
+the payment.
+
+Enforced on the server (`vacateBlocker`), not merely arranged in the UI. An
+official stay is the opposite and is untouched: issued at check-out, settled
+later by whichever department is paying.
+
+**The manager can set it aside with a reason**, and reception cannot. An
+invoice can be impossible to issue — no tariff covers a night, the office has
+agreed to bill a guest later — and a rule the desk cannot lift would leave a
+guest in the building on paper, holding a room nobody can let. But setting a
+payment rule aside is a decision about money, and reception records what
+happens. The reason goes into the log.
+
+### Awaiting payment has no window
+
+"Checked out — to bill" is the desk's **daily** list and is bounded to a few
+weeks: a stay nobody has invoiced yet is a thing to do today. This is the
+other half, and the opposite: the invoice has gone out and the money has not
+come in. An official stay's bill can sit with a department for months, so a
+list that quietly dropped it after thirty days would be a list of debts that
+forgets them.
+
+Built from the **invoices** rather than the bookings — `InvoiceFilter.statuses`
+and `BookingFilter.ids` were added for it — because with no window, loading
+every booking ever made to find the few that still owe money would not scale.
+
+Its own table, not `StaysTable`. A dining booking is exactly the sort of bill
+that waits, and it has no check-in, check-out or rooms: the office's own
+decision of 1 Oct was that a meal booking does not belong in a table of rooms
+with a dash in most of its cells.
+
+### Missed: a status, because "lapsed" was only a description
+
+`hasLapsed()` has described this state since September — the queues drew a
+badge and `lapsedError` refused to forward it — but the request kept its
+pending status. So it sat in somebody's queue for ever waiting to be rejected
+by hand, and the requester was never told: they had asked for a room, the date
+had gone past, and the portal still said "pending".
+
+**It is not a rejection.** Nobody decided anything, which is why it has its
+own status and why it can be undone. A rejection is a decision and should not
+be reversible by a single button.
+
+**Migration 29 contains the enum value and nothing else.** Postgres refuses to
+*use* a new enum value in the transaction that adds it, and a migration runner
+wraps each file in one — so anything that reads or writes 'MISSED' belongs in
+a later file, and there is nothing in 29 to tempt it. Nothing is backfilled
+either: the first nightly run marks what has lapsed, and that is the same run
+that tells the requester.
+
+**Reinstating returns the request to the stage it was waiting at**, not to the
+manager's queue. Nobody decided it, so the decision is still owed by whoever
+owed it. Read from the log entry that marked it (`statusBeforeMissed`).
+
+**And the sweep must not undo that.** A reinstated request's check-in is still
+in the past, so the next night would mark it again, every night, for ever.
+`missedSweepable` therefore skips a request reinstated since it was last
+marked — read **structurally** off the log, as a row whose `previous_status` is
+MISSED, rather than by matching the remarks or by adding a column. A
+reinstatement is already a log row that says where it came from.
+
+No "this stay has already ended" guard on reinstating, unlike the cancelled
+and rejected path: a missed request's check-in is in the past **by
+definition**, so that guard would refuse nearly every one of them. What the
+manager does next is move the dates and allocate — which is what they did with
+a lapsed request before this status existed.
+
+A **Missed** tile of its own in the Approval Log, not filed under Cancelled: a
+cancellation is something somebody asked for, and this is the opposite — the
+question asked and never answered. The office needs to be able to count them.

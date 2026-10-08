@@ -65,7 +65,7 @@ promises — make the messages vague and less promising."** So:
   pass between siblings); `DeskSummary` strip on `/manager` and
   `/caretaker`; the home hero an ink panel joined to the 4:3 photo; inner
   mastheads asymmetric (title 7 / lead 5 under a vermilion rule); sign-in a
-  split-screen panel; the footer's MRBS line a callout.
+  split-screen panel. (The footer's MRBS callout was removed on 7 Oct 2026.)
 - **Desk lifecycle buttons:** `Button variant="occupy"` (deep green,
   log-in icon) and `variant="vacate"` (deep indigo, log-out icon).
 - **Room grid seats:** free = pale green with a green edge, taken = solid red
@@ -174,7 +174,7 @@ routes or role names, no captions, instructions only on the Guidelines.
 app/
   layout.tsx            root: fonts (Source Sans 3 / Source Serif 4), metadata
   (site)/               PUBLIC website — open to everyone
-    layout.tsx          white header (sticky from lg), footer (MRBS, directions)
+    layout.tsx          white header (sticky from lg), footer (address, directions)
     page.tsx            /            Home
     book-room/          /book-room   gated entry → sign in → /book
     book-meal/          /book-meal   gated entry → sign in → /book (meals live in the room form)
@@ -292,7 +292,7 @@ Mail templates (`lib/mail/render.ts`) still carry the old amber header.
 | --- | --- |
 | `components/site/brand.tsx` | **`BrandBlock`** — the lockup: `iitpkd-logo.png` (emblem only) + "Guest House" (serif) + a tracked tagline (`tagline`, default "IIT Palakkad"); `tone="light"` over photos and on ink; `compact` for the portal. Used by the site header, the footer and the portal header |
 | `components/site/site-header.tsx` | **`SiteHeader`** and `SITE_NAV`: a white bar, sticky from `lg`; links inside the header, a sideways-scrolling row below `lg`; Sign in / My portal |
-| `components/site/site-chrome.tsx` | **`SiteFooter({ pins })`** — an **MRBS line** at the top ("Booking a lecture hall or meeting room?" → Open MRBS), then the lockup and address, front office, **Find us** (each guest house's Map and Directions, How to reach the campus), **Institute** (`SITE_LINKS`), and a bottom line (Guidelines, Contact, Privacy notice) |
+| `components/site/site-chrome.tsx` | **`SiteFooter({ pins })`** — the lockup and address, front office, **Find us** (each guest house's Map and Directions, How to reach the campus), **Institute** (`SITE_LINKS`), and a bottom line (Guidelines, Contact, Privacy notice). The **MRBS line** that opened it ("Booking a lecture hall or meeting room?") was removed on **7 Oct 2026** at the office's request, with every other mention of the Meeting Room Booking System |
 | `components/site/site-nav.tsx` | `NavBar` — `tone="dark"` (portal: charcoal bar, uppercase, vermilion bar under the current page) or `"light"` (the white site header, a short vermilion underline); `scroll` for the phone row |
 | `components/site/site-ui.tsx` | `Container` (1240px), `Label` (tracked capitals), `PageTitle` (the sign-in pages' `<h1>`, optional `kicker`), **`PageMasthead`** (a light band: breadcrumb, `<h1>`, lead, `note`, `aside`), `SectionHead` (label + `<h2>` + optional link), `ArrowLink`, `BulletList`, `siteButton.{brand,ink,outline,light,outlineLight}`, `SitePhotoFrame` (8px corners; `zoom` eases on hover) |
 | `components/site/guest-house-map.tsx` | **`GuestHouseMap`** (client): WAI-ARIA tabs, one per pin, the chosen embed, "Open in Google Maps" / "Get directions" |
@@ -307,7 +307,7 @@ Mail templates (`lib/mail/render.ts`) still carry the old amber header.
 **The portal shell** (`app/(portal)/layout.tsx`): white header with the
 compact lockup ("IIT Palakkad · Booking portal"), the user and role, Switch
 user; the charcoal `NavBar`, sticky; a slim ink footer linking the website,
-Guidelines, Contact, **MRBS** and iitpkd.ac.in.
+Guidelines, Contact and iitpkd.ac.in (**MRBS removed 7 Oct 2026**).
 
 **My Bookings** (`app/(portal)/dashboard/page.tsx`): under the title, large
 `BookingDoor` tiles — **New room booking** (vermilion, names the guest houses
@@ -333,7 +333,8 @@ the role's form allows), **Meal booking** (ink, names the kitchen; only for
   more leads with one photo at double size; **no visible captions** (alt text
   kept); each opens full size.
 - **Contact** — light masthead; front office, email, address and a Bookings
-  note (online only; lecture halls on MRBS); **Finding the guest houses**
+  note (online only — the lecture-hall sentence came off on 7 Oct 2026);
+  **Finding the guest houses**
   with the map tabs in a rounded card.
 - **Book a room / Book meals / Sign in** — the form beside a contained
   photo, one line of lead each. Book meals points to the guidelines for meal
@@ -367,8 +368,8 @@ wording of `isMealBookable`), `servingHouses`, `joinNames`.
 
 `LOGIN_DOMAIN`, `isInstituteEmail`, `safeNextPath`, `GUIDELINES_PDF_URL`
 (`null` hides the download button), **`GUIDELINES_PROVISIONAL`**,
-`INSTITUTE_WEBSITE`, **`MRBS_URL`** (`https://mrbs.iitpkd.ac.in`),
-**`HOW_TO_REACH_URL`**, `SITE_LINKS` (IIT Palakkad website, MRBS, the guest
+`INSTITUTE_WEBSITE`, **`HOW_TO_REACH_URL`**, `SITE_LINKS` (IIT Palakkad
+website, the guest
 house page on iitpkd.ac.in, How to reach, Telephone directory — all checked to
 resolve on 26 Sep 2026; there is no Bageshri page on iitpkd.ac.in),
 `GUEST_HOUSE_CONTACT`, **`GUEST_HOUSE_LOCATIONS`**,
@@ -466,7 +467,7 @@ Contact details are the ones on the foot of the office's own invoice template:
   `mealBookingDeadline`).
 - A production build on the mock store; `npm run test:e2e` **26**: the 320px
   check covers every public page; the map tabs (click and keyboard) with the
-  footer's MRBS and institute links; the My Bookings tiles.
+  footer's institute links; the My Bookings tiles. (MRBS removed 7 Oct 2026.)
 - **Short rounds of Playwright screenshots** after each of the day's passes
   (home desktop and phone, guidelines, sign-in, and others) to judge the
   look; the last found the amenities grid leaving one card alone on a row,

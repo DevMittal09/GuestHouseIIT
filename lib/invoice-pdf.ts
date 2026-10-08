@@ -15,6 +15,7 @@ import {
   invoiceFacts,
   invoiceTable,
   PAYMENT_MODE_LABELS,
+  printsTaxLines,
   type InvoiceDocument,
   type InvoiceRecord,
 } from "./invoice";
@@ -27,8 +28,8 @@ import { formatInstituteDate } from "./tz";
  * measurements: A4 with 12.7 mm margins, the two header images, a 185.5 mm
  * table whose columns are the template's grid (92.9 / 26.7 / 26.7 / 39.2 mm),
  * rows of at least 9.2 mm, the #B7B7B7 section bands and #D9D9D9 column heads,
- * and the bank-details box at the foot. Text is Arimo — metrically the
- * template's Arial, and unlike jsPDF's built-in fonts it has the rupee sign —
+ * and the bank-details box at the foot. Text is Arimo - metrically the
+ * template's Arial, and unlike jsPDF's built-in fonts it has the rupee sign -
  * so ₹1,23,456.00 prints as itself.
  *
  * **The Hindi half of the address line is artwork**, rendered from the
@@ -41,7 +42,7 @@ import { formatInstituteDate } from "./tz";
  * desk, downloaded from the dashboard and attached to the mail to Accounts.
  *
  * **The table is `invoiceTable()`**, the same description the desk's preview
- * draws, so every snapshot reprints with the labels of its version — version 1
+ * draws, so every snapshot reprints with the labels of its version - version 1
  * GST on the total, version 2 per-section GST, version 3 (30 Sep 2026) every
  * figure lettered up to Grand Total (A+B+C+D). A table the desk's additional
  * charges make longer than the page continues on the next one; the bank
@@ -248,14 +249,16 @@ function tariffTables(doc: jsPDF, invoice: InvoiceDocument, top: number): number
     at.y += ROW_H;
   };
 
-  // A dining booking had no room, so its invoice has no room table — only
+  // A dining booking had no room, so its invoice has no room table - only
   // the meals (24 Sep 2026). `invoiceTable` leaves the section out.
   for (const section of table.sections) {
     headRow(section.heading, section.qtyHeading);
     for (const row of section.rows) {
-      bodyRow(row.label, row.note, String(row.qty), row.rate === null ? "—" : formatINR(row.rate), formatINR(row.amount));
+      bodyRow(row.label, row.note, String(row.qty), row.rate === null ? "-" : formatINR(row.rate), formatINR(row.amount));
     }
-    // The template has two ruled room rows; a one-room stay keeps the second, blank.
+    // The template had two ruled room rows, so a one-room stay printed the
+    // second one blank. `minRows` is 0 from version 4 (7 Oct 2026, "no empty
+    // rows, including in room charges"); an older snapshot keeps them.
     for (let i = section.rows.length; i < section.minRows; i++) bodyRow("", null, "", "", "");
     for (const t of section.totals) totalRow(t.label, formatINR(t.amount));
   }
@@ -264,12 +267,18 @@ function tariffTables(doc: jsPDF, invoice: InvoiceDocument, top: number): number
 }
 
 function signatures(doc: jsPDF, invoice: InvoiceDocument, start: number, stamp: Stamp | null) {
-  // The tax breakdown a tax invoice needs: taxable value and CGST / SGST per
-  // SAC and rate. Snapshots from before it existed have none.
-  const lines = [
-    ...gstBreakdownLines(invoice),
-    ...(invoice.prices_include_gst ? [GST_INCLUDED_NOTE] : []),
-  ];
+  /**
+   * The tax lines that used to sit under the GSTIN: the taxable value and the
+   * CGST / SGST per SAC and rate, and the note that the rates include GST.
+   *
+   * **Gone from version 4** (7 Oct 2026): the office asked for the lines
+   * under the GSTIN to be removed, and the CGST / SGST split now reads in
+   * each GST row's own label instead (`totalLabels`). An older snapshot keeps
+   * them, so a reprint of an invoice already handed over is unchanged.
+   */
+  const lines = printsTaxLines(invoice)
+    ? [...gstBreakdownLines(invoice), ...(invoice.prices_include_gst ? [GST_INCLUDED_NOTE] : [])]
+    : [];
   const at: Cursor = { y: start };
   room(doc, at, Math.max(18, 9.5 + lines.length * 3.6 + 8) + 2);
   const top = at.y;
@@ -321,7 +330,7 @@ function footer(doc: jsPDF, invoice: InvoiceDocument) {
   doc.text(`BANK NAME: ${b.bank_name}`, x + PAD, y);
   doc.text(`BRANCH: ${b.branch}`, x + 129, y);
 
-  // "Kanjikode West, Palakkad, Kerala | <Hindi> | Phone: …  Email: …", centred.
+  // "Kanjikode West, Palakkad, Keralam | <Hindi> | Phone: …  Email: …", centred.
   const size = 8;
   const baseline = top + bankH + addressH / 2 + 1.2;
   // The Latin parts are set in Arimo Bold rather than the template's Palanquin
@@ -361,7 +370,7 @@ function watermark(doc: jsPDF, text: string, color: [number, number, number]) {
 }
 
 /**
- * The PDF for an invoice. `stamp` is the record's current state — the
+ * The PDF for an invoice. `stamp` is the record's current state - the
  * snapshot is fixed, but whether it has since been paid or cancelled is shown
  * on the page. A preview (no number yet) is marked DRAFT across the page.
  */
@@ -405,7 +414,7 @@ export function renderInvoicePdf(invoice: InvoiceDocument, stamp: Stamp | null =
   return new Uint8Array(doc.output("arraybuffer"));
 }
 
-/** "invoice-GH-2026-27-0001.pdf" — slashes are not allowed in a filename. */
+/** "invoice-GH-2026-27-0001.pdf" - slashes are not allowed in a filename. */
 export function invoiceFilename(invoice: InvoiceDocument): string {
   const id = invoice.invoice_number ?? `draft-${invoice.booking_reference}`;
   return `invoice-${id.replace(/[^A-Za-z0-9-]+/g, "-")}.pdf`;

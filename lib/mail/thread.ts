@@ -10,7 +10,7 @@ export { MAIL_THREAD_OF, type MailThreadKind };
  *
  * From the Guest House meeting notes: staff mail goes in a thread instead of a
  * pile of standalone emails, so the Guest House Manager and the approvers are
- * not spammed — but the person who *asked* for a room gets a standalone mail
+ * not spammed - but the person who *asked* for a room gets a standalone mail
  * for each step, because each one is news to them.
  *
  * - **Requesters: standalone.** No threading headers at all, and a
@@ -21,7 +21,7 @@ export { MAIL_THREAD_OF, type MailThreadKind };
  * - **Staff, scheduled mail** (the morning digest, the escalation nudge, the
  *   day-wise guest house log): a **daily log** thread per person per day.
  *   These are about a queue, not a booking, so there is nothing else to hang
- *   them on; and a new institute day starts a new one, which is the point —
+ *   them on; and a new institute day starts a new one, which is the point -
  *   today's digest should not keep bumping last week's.
  *
  * > **The booking thread replaced a daily "approvals" thread** (23 Sep 2026).
@@ -70,7 +70,7 @@ export function bookingThreadRoot(referenceId: string, address: string): string 
  * `[IITPKD-GH-2026-AB12C] Guest house booking`: the same for every message in
  * the booking's thread.
  *
- * Deliberately says nothing about *this* message — a thread needs one subject,
+ * Deliberately says nothing about *this* message - a thread needs one subject,
  * and Gmail splits it the moment that changes. What each message is about
  * leads its heading and its inbox preview line instead (`notify.ts`).
  */
@@ -89,9 +89,9 @@ export function dailyThreadRoot(kind: "daily_log", day: string, address: string)
   }>`;
 }
 
-/** `Guest house daily log — Mon 21 Sep 2026`: the same for every message that day. */
+/** `Guest house daily log - Mon 21 Sep 2026`: the same for every message that day. */
 export function dailyThreadSubject(kind: "daily_log", day: string): string {
-  return `${DAILY_THREAD_TITLES[kind]} — ${formatDateValue(day, { year: true })}`;
+  return `${DAILY_THREAD_TITLES[kind]} - ${formatDateValue(day, { year: true })}`;
 }
 
 /** A fresh Message-ID for a message that is not opening a thread. */
@@ -103,7 +103,7 @@ export function freshMessageId(): string {
  * Subject for standalone mail about a booking: `[IITPKD-GH-2026-AB12C] Rooms allocated`.
  *
  * The reference id leads so someone searching their mailbox for a reference
- * finds every message about it — which is how the office actually looks these
+ * finds every message about it - which is how the office actually looks these
  * up.
  */
 export function bookingSubject(referenceId: string, what: string): string {

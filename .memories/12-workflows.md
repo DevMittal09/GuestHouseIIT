@@ -212,11 +212,22 @@ that is what the invoice is priced from.
 | `CANCELLATION_APPROVED` | Cancelled at the requester's ask | — |
 | `REJECTED` | Refused, with a reason the requester sees | — |
 | `CANCELLED` | Cancelled by the office, or released as a no-show | — |
+| `MISSED` | **Nobody decided it before the check-in passed** — or, for a meal booking, before its last day of meals (migration 29, 7 Oct 2026). Set by the nightly job, never by a person | Manager, who can **reinstate** it |
 
 A stay is only ever shown as Occupied once it has actually started
 (`displayStatus`): a guest admitted early reads as Approved with the arrival in
 the log, because a badge saying "Occupied" on a booking for next week is a lie
 the desk has to argue with.
+
+**`MISSED` is not a rejection.** Nobody decided anything, which is why it has
+a status of its own and why it can be undone: **Reinstate** on the manager's
+console returns the request to **the stage it was waiting at**
+(`statusBeforeMissed`, read from the log entry that marked it), with a reason
+that goes in the log. Its dates are in the past by then, so the manager's next
+move is to move them (Manage) and allocate — which is what they did with a
+"lapsed" request before this status existed. A reinstated request is **never
+marked again**: `missedSweepable` reads the reinstatement structurally off the
+log, as a row whose `previous_status` is MISSED.
 
 ---
 
@@ -226,7 +237,7 @@ the desk has to argue with.
 | --- | --- | --- |
 | Every submission and decision | Mail to the actioner, copy to everyone who has signed it off so far | `lib/mail/notify.ts` |
 | Every mail to the requester | Copied to the booking's own **Copy to** addresses (New Booking — pre-filled with the council secretary's mailbox when a Faculty Advisor books), and on a club booking to the Faculty Advisor who raised it | `requesterCopyTo` in `lib/mail/recipients.ts`, `defaultCopyToFor` in `lib/club-booking.ts` |
-| Every night | No-show release, ID-number erasure past the retention window, audit trimming | `/api/mail/cron` (Vercel Cron) |
+| Every night | **Requests nobody decided in time are marked Missed**, logged and mailed to the requester (before the digest, so a dead request is out of the queues first); no-show release; ID-number erasure past the retention window; audit trimming | `/api/mail/cron` (Vercel Cron) — `runMissedSweep` in `lib/missed-server.ts` |
 | Every few minutes | The mail outbox is dispatched | `/api/mail/dispatch` |
 | Any change to bookings, holds, blocks or invoices | Open desk screens re-fetch | `components/live-updates.tsx` |
 | Any change to Settings, guest houses or rooms | The public site's cached data is expired | `lib/revalidate.ts` |
@@ -238,6 +249,8 @@ the desk has to argue with.
 | Question | Answer in code |
 | --- | --- |
 | Who reviews this? | `routeFor`, `approvalStagesFor`, `canReview` / `canReviewBooking` (`lib/workflow.ts`) |
+| Has this request run out of time? | `hasLapsed` / `lapseDeadline`, and `missedSweepable` for the nightly job (`lib/workflow.ts`) |
+| Can this one be put back? | `reinstateMissedError`, `statusBeforeMissed` (`lib/workflow.ts`); the action is `reinstateMissedBooking` |
 | Who may book for a club? | `facultyAdvisorOf` (`lib/units.ts`), `facultyInChargeOf`, `clubsBookableBy` (`lib/club-booking.ts`) |
 | Who heads this unit? | `approversOf`, `hodApproversFor` (`lib/units.ts`) |
 | May this role open this page? | `lib/access.ts`, and each page's own guard |

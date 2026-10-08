@@ -35,7 +35,7 @@ test("changing a council's Faculty Advisor in the console moves who can book for
   await openUnitsConsole(page);
   await page
     .getByLabel("Faculty Advisor of Cultural Affairs Council", { exact: true })
-    .selectOption({ label: "Dr. Priya Sharma — priya@iitpkd.ac.in" });
+    .selectOption({ label: "Dr. Priya Sharma - priya@iitpkd.ac.in" });
   await expect(page.getByText("Dr. Priya Sharma is now Faculty Advisor of Cultural Affairs Council")).toBeVisible();
 
   // A mailbox of Petrichor's own, in place of the council's.
@@ -46,11 +46,11 @@ test("changing a council's Faculty Advisor in the console moves who can book for
   // Priya now books as the council's advisor; Arun keeps only Petrichor,
   // which has an advisor of its own.
   await signIn(page, ACCOUNTS.faculty);
-  expect(await bookingAsOptions(page)).toContain("Faculty Advisor — Cultural Affairs Council");
+  expect(await bookingAsOptions(page)).toContain("Faculty Advisor - Cultural Affairs Council");
   await signIn(page, ADVISOR);
   const arun = await bookingAsOptions(page);
-  expect(arun).toContain("Faculty Advisor — Petrichor Fest Council");
-  expect(arun).not.toContain("Faculty Advisor — Cultural Affairs Council");
+  expect(arun).toContain("Faculty Advisor - Petrichor Fest Council");
+  expect(arun).not.toContain("Faculty Advisor - Cultural Affairs Council");
   await page.goto("/book?for=club-petrichor");
   await expect(page.locator('[name="copy_to.0.email"]')).toHaveValue("fest.secretary@iitpkd.ac.in");
 
@@ -58,7 +58,7 @@ test("changing a council's Faculty Advisor in the console moves who can book for
   await openUnitsConsole(page);
   await page
     .getByLabel("Faculty Advisor of Cultural Affairs Council", { exact: true })
-    .selectOption({ label: "Dr. Arun Prasad — arun.prasad@iitpkd.ac.in" });
+    .selectOption({ label: "Dr. Arun Prasad - arun.prasad@iitpkd.ac.in" });
   await expect(page.getByText("Dr. Arun Prasad is now Faculty Advisor of Cultural Affairs Council")).toBeVisible();
   await page.getByLabel("Secretary's mailbox for Petrichor", { exact: true }).fill("");
   await page.getByRole("button", { name: "Save secretary's mailbox for Petrichor" }).click();

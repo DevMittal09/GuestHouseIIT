@@ -29,7 +29,7 @@ export function toTimeValue(hour12: number, minute: number, period: "AM" | "PM")
   return `${pad(hour24)}:${pad(minute)}`;
 }
 
-/** "9:00 PM" — the plain reading of a "HH:mm" value. */
+/** "9:00 PM" - the plain reading of a "HH:mm" value. */
 export function describeTime(value: string): string {
   const { hour12, minute, period } = parseTime(value);
   return `${hour12}:${pad(minute)} ${period}`;
@@ -45,7 +45,7 @@ export function describeTime(value: string): string {
  * so changing the hour to 9 gives 9 PM, not the 9 AM the user meant. That
  * silently produced "Check-out must be after check-in" on a booking the user
  * had filled in correctly as far as they could see. Hence the read-back below
- * the dropdowns — the resolved time is spelled out so a wrong period is
+ * the dropdowns - the resolved time is spelled out so a wrong period is
  * visible before submitting, not after.
  */
 export function TimeSelect({

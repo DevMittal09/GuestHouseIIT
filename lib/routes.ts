@@ -33,5 +33,5 @@ export function homeForRole(role: Role): string {
 }
 
 // The official-booking whitelist used to live here as a constant. It is a
-// Setting now — the `official_email_whitelist` table (migration 16), edited in
+// Setting now - the `official_email_whitelist` table (migration 16), edited in
 // the developer console and read through `getOfficialEmails()`.

@@ -4,7 +4,7 @@ import type { Room, RoomType } from "./types";
 /**
  * Room capacity and the per-room party rule.
  *
- * **Two rules, applied at different moments** — they are not alternatives:
+ * **Two rules, applied at different moments** - they are not alternatives:
  *
  * - **Per room type** (`capacity.room_types`): a double sharing room sleeps 2,
  *   3 with an extra bed; a single sleeps 1, 2 with an extra bed. Checked at
@@ -24,8 +24,8 @@ import type { Room, RoomType } from "./types";
  *   may need a bed.
  *
  * All the numbers are Settings (`lib/settings.ts`). Every function takes them
- * as a parameter defaulting to `DEFAULT_RULES.capacity` — what the portal did
- * before they were configurable — so the booking form and the server action
+ * as a parameter defaulting to `DEFAULT_RULES.capacity` - what the portal did
+ * before they were configurable - so the booking form and the server action
  * are handed the same values and cannot disagree.
  */
 
@@ -35,7 +35,7 @@ const DEFAULT_CAPACITY: CapacityRules = DEFAULT_RULES.capacity;
  * How many people a room sleeps, under the default rules.
  *
  * `standard` is the room's own beds; `withExtraBed` is what it takes once an
- * extra bed is rolled in — a double sharing room is 2 + 1, a single is 1 + 1.
+ * extra bed is rolled in - a double sharing room is 2 + 1, a single is 1 + 1.
  * Infants share with their guardians and occupy neither. The office's own
  * values come from Settings; pass them as `capacity` to the functions below.
  */
@@ -47,7 +47,7 @@ export const ROOM_CAPACITY: Record<RoomType, { standard: number; withExtraBed: n
  * bed of their own and are not asked for an ID.
  *
  * The threshold was 10 until the office reset it to 5 (Sep 2026). Existing
- * bookings are **not** reclassified — a guest recorded as an infant under the
+ * bookings are **not** reclassified - a guest recorded as an infant under the
  * old rule stays one, because their stay was agreed on that basis. Only new
  * bookings are classified by this number; see migration 11, whose trigger
  * applies the same threshold in the database.
@@ -85,11 +85,11 @@ export function roomOccupancyNotice(capacity: CapacityRules = DEFAULT_CAPACITY):
   if (capacity.max_infants_per_room === 0 || total <= beds) {
     return `Maximum ${guestCount(beds)} per room.`;
   }
-  return `Maximum ${total} people per room, of whom at most ${beds} may need a bed — infants below ${INFANT_AGE_LIMIT} years share a guardian's bed.`;
+  return `Maximum ${total} people per room, of whom at most ${beds} may need a bed - infants below ${INFANT_AGE_LIMIT} years share a guardian's bed.`;
 }
 
 /**
- * The room parties that are *full* — one more of anybody would break the rule.
+ * The room parties that are *full* - one more of anybody would break the rule.
  *
  * Derived from the three settings rather than written out, so the wording
  * cannot drift from the rule when the office changes a number. A party counts
@@ -139,7 +139,7 @@ export const DEFAULT_ROOM_STANDARD = ROOM_CAPACITY.double_sharing.standard;
 /**
  * Whether an age makes this person an infant.
  *
- * The requester is never asked to pick a category — they type an age and the
+ * The requester is never asked to pick a category - they type an age and the
  * classification follows, so "is this child an infant?" cannot be answered one
  * way in the form and another way at the desk. An age that has not been
  * entered yet is not an infant: it is simply not known.
@@ -202,11 +202,11 @@ export function roomPartyError(
   }
   if (infants > capacity.max_infants_per_room) {
     return capacity.max_infants_per_room === 0
-      ? `Infants under ${INFANT_AGE_LIMIT} cannot be booked into a room at present — contact the Guest House Manager.`
+      ? `Infants under ${INFANT_AGE_LIMIT} cannot be booked into a room at present - contact the Guest House Manager.`
       : `A room takes at most ${infantCount(capacity.max_infants_per_room)} under ${INFANT_AGE_LIMIT}. Move the extra infant to another room.`;
   }
   // The combination. Named in full because "at most 4 people" alone does not
-  // explain why this particular four were refused — the requester is looking
+  // explain why this particular four were refused - the requester is looking
   // at a room they believe is within both of the caps above.
   if (guests + infants > capacity.max_occupants_per_room) {
     return `A room takes at most ${capacity.max_occupants_per_room} people in total, infants included. This room has ${guestCount(
@@ -214,7 +214,7 @@ export function roomPartyError(
     )} and ${infantCount(infants)}. Move someone to another room.`;
   }
   if (guests === 0 && infants > 0) {
-    return `An infant cannot be booked into a room on their own — add the guest they are staying with.`;
+    return `An infant cannot be booked into a room on their own - add the guest they are staying with.`;
   }
   if (guests === 0) return "Add at least one guest to this room.";
   return null;
@@ -233,7 +233,7 @@ export function addGuestBlockedReason(
   capacity: CapacityRules = DEFAULT_CAPACITY
 ): string | null {
   if (guests >= capacity.max_guests_per_room) {
-    return `This room is full — ${guestCount(capacity.max_guests_per_room)} is the maximum. Add another room for more guests.`;
+    return `This room is full - ${guestCount(capacity.max_guests_per_room)} is the maximum. Add another room for more guests.`;
   }
   if (guests + infants >= capacity.max_occupants_per_room) {
     return `This room already holds ${capacity.max_occupants_per_room} people, which is the maximum including infants. Add another room.`;
@@ -308,7 +308,7 @@ export function maxGuestsFor(rooms: number, capacity: CapacityRules = DEFAULT_CA
 
 /**
  * How many of the guests in `rooms` rooms would be on an extra bed, before the
- * rooms are chosen — so it assumes the roomier type. Once the actual rooms are
+ * rooms are chosen - so it assumes the roomier type. Once the actual rooms are
  * known, use `extraBedsFor`.
  */
 export function extraBedsNeeded(
@@ -360,7 +360,7 @@ export function allocationCapacityError(
 /**
  * Whether one room card's party fits the physical room the manager picked for
  * it. The aggregate check above can pass while a single room card still does
- * not fit — three guests allocated a single room, say — so allocation checks
+ * not fit - three guests allocated a single room, say - so allocation checks
  * card by card as well.
  */
 export function roomAssignmentError(
@@ -380,7 +380,7 @@ export function roomAssignmentError(
  * Occupancy of one room type in the manager's words, e.g.
  * "Occupancy: 2 guests (maximum 3 with an extra bed)". It is shown in the
  * Review & Allocate dialog, where "sleeps 2, 3 with an extra bed" was read as
- * too informal — so it is phrased like a specification, not a remark.
+ * too informal - so it is phrased like a specification, not a remark.
  */
 export function describeCapacity(
   roomType: RoomType,

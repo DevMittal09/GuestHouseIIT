@@ -15,8 +15,8 @@ const VERDICT_STYLES: Record<FamilyVerdict, string> = {
 };
 
 const LOOKUP_NOTES: Partial<Record<StudentRecordPanel["status"], string>> = {
-  not_found: "The academic database has no record for this student — check the guests' names yourself.",
-  unavailable: "The academic database could not be reached just now — check the guests' names yourself, or try again shortly.",
+  not_found: "The academic database has no record for this student - check the guests' names yourself.",
+  unavailable: "The academic database could not be reached just now - check the guests' names yourself, or try again shortly.",
 };
 
 /**
@@ -28,7 +28,7 @@ export function StudentRecordCheck({ panel }: { panel: StudentRecordPanel }) {
   return (
     <section className="space-y-3 rounded-lg border border-border-strong p-4 text-sm">
       <div className="border-b border-border pb-2.5">
-        <p className="font-heading text-[1.0625rem] font-semibold text-ink">Student&apos;s record — academic database</p>
+        <p className="font-heading text-[1.0625rem] font-semibold text-ink">Student&apos;s record - academic database</p>
         <p className="text-xs text-muted-foreground">
           Check the family on this request against the names the institute has on file before forwarding it.
         </p>
@@ -59,9 +59,9 @@ export function StudentRecordCheck({ panel }: { panel: StudentRecordPanel }) {
               {panel.family.map((c) => (
                 <tr key={c.relationship} className="border-t">
                   <td className="p-2">{c.relationship}</td>
-                  <td className="p-2">{c.onRecord ?? <span className="text-muted-foreground">—</span>}</td>
+                  <td className="p-2">{c.onRecord ?? <span className="text-muted-foreground">-</span>}</td>
                   <td className="p-2">
-                    {c.onRequest.length > 0 ? c.onRequest.join(", ") : <span className="text-muted-foreground">—</span>}
+                    {c.onRequest.length > 0 ? c.onRequest.join(", ") : <span className="text-muted-foreground">-</span>}
                   </td>
                   <td className="p-2">
                     <span
@@ -82,7 +82,7 @@ export function StudentRecordCheck({ panel }: { panel: StudentRecordPanel }) {
       )}
       {panel.sample && (
         <p className="border border-dashed px-3 py-2 text-xs text-muted-foreground">
-          Demo build — a sample record until the institute&apos;s academic database is connected.
+          Demo build - a sample record until the institute&apos;s academic database is connected.
         </p>
       )}
     </section>
@@ -99,7 +99,7 @@ export function FamilyBadge({ panel }: { panel: StudentRecordPanel | undefined }
       ✓ Matches record
     </Badge>
   ) : (
-    <Badge variant="tag" className="tag-yellow ml-2" title="A parent or guardian on this request differs from the academic record — open Review">
+    <Badge variant="tag" className="tag-yellow ml-2" title="A parent or guardian on this request differs from the academic record - open Review">
       ⚠ Check names
     </Badge>
   );

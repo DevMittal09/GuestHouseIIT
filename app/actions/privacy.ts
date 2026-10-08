@@ -29,7 +29,7 @@ export async function exportMyData(): Promise<
       : [];
     const data = {
       exported_at: new Date().toISOString(),
-      notice: "Your own copy of what the guest house portal holds about you. ID numbers are shown as their last four digits only; the documents themselves are not included — ask the guest house office for those.",
+      notice: "Your own copy of what the guest house portal holds about you. ID numbers are shown as their last four digits only; the documents themselves are not included - ask the guest house office for those.",
       account: {
         name: user.full_name,
         email: user.email,
@@ -84,7 +84,7 @@ export async function exportMyData(): Promise<
     };
   } catch (e) {
     console.error("exportMyData failed", e);
-    return { ok: false, error: "Could not prepare your data — try again shortly" };
+    return { ok: false, error: "Could not prepare your data - try again shortly" };
   }
 }
 
@@ -94,14 +94,14 @@ export async function requestDataDeletion(note: string): Promise<ActionResult> {
     const user = await requireUser();
     const store = getStore();
     const open = (await store.listPrivacyRequests({ userId: user.id })).filter((r) => r.status === "open");
-    if (open.length > 0) return { ok: false, error: "You already have a request open — the office will reply by email" };
+    if (open.length > 0) return { ok: false, error: "You already have a request open - the office will reply by email" };
     await store.createPrivacyRequest({ user_id: user.id, kind: "deletion", note: note.trim().slice(0, 1000) || null });
     await recordAudit(user, "privacy.deletion_requested", user.email, {});
     revalidatePath("/dashboard");
     return { ok: true };
   } catch (e) {
     console.error("requestDataDeletion failed", e);
-    return { ok: false, error: "Could not record your request — please email the guest house office" };
+    return { ok: false, error: "Could not record your request - please email the guest house office" };
   }
 }
 
@@ -138,7 +138,7 @@ export async function resolvePrivacyRequestAction(
   try {
     const user = await requireUser();
     if (!hasFullBookingAccess(user.role)) return { ok: false, error: "Only the guest house office can answer these" };
-    if (!response?.trim()) return { ok: false, error: "Say what was done — the person is told" };
+    if (!response?.trim()) return { ok: false, error: "Say what was done - the person is told" };
     await getStore().resolvePrivacyRequest(id, { status, response: response.trim().slice(0, 1000), handledBy: user.id });
     await recordAudit(user, "privacy.deletion_requested", id, { status, response: response.trim().slice(0, 200) });
     revalidatePath("/admin/security");

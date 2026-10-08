@@ -1,6 +1,7 @@
 import {
   ACADEMIC_RECORD_FIELDS,
   AcademicSourceUnavailableError,
+  type AcademicFind,
   type AcademicRecord,
   type AcademicRecordKind,
   type AcademicSource,
@@ -42,7 +43,7 @@ export class HttpAcademicSource implements AcademicSource {
     return this.config.url;
   }
 
-  async find(kind: AcademicRecordKind, email: string): Promise<AcademicRecord | null> {
+  async find(kind: AcademicRecordKind, email: string): Promise<AcademicFind | null> {
     let response: Response;
     try {
       // Built inside the try: a malformed ACADEMIC_DB_URL is an outage, not a crash.
@@ -68,7 +69,7 @@ export class HttpAcademicSource implements AcademicSource {
     } catch (e) {
       throw new AcademicSourceUnavailableError(e);
     }
-    return recordFromJson(kind, body);
+    return { record: recordFromJson(kind, body), origin: "database" };
   }
 }
 

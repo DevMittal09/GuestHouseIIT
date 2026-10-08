@@ -25,7 +25,7 @@ import { formatDate, formatDateTime } from "@/lib/format";
  * One booking, flattened and pre-formatted for the report. The action returns
  * data, not markup: the PDF itself is drawn in the browser (`lib/report-pdf.ts`)
  * because a real PDF server-side would mean bundling a headless browser.
- * Authorization still happens here — the client sends only a query string and
+ * Authorization still happens here - the client sends only a query string and
  * the user, scope and filters are all re-derived below.
  */
 export interface ReportRow {
@@ -52,7 +52,7 @@ export interface ReportRow {
   /**
    * Foreign nationals on the booking, with nationality and passport. The guest
    * house has to report these, and they are the reason the column exists at
-   * all — it is blank on the great majority of rows.
+   * all - it is blank on the great majority of rows.
    */
   foreignNationals: string;
 }
@@ -67,7 +67,7 @@ export interface HistoryReport {
   totals: {
     bookings: number;
     guests: number;
-    /** Bookings with an infant accompanying — bookings record whether, not how many. */
+    /** Bookings with an infant accompanying - bookings record whether, not how many. */
     withInfants: number;
     roomNights: number;
   };
@@ -98,18 +98,18 @@ function toReportRow(b: BookingWithDetails): ReportRow {
         : String(beds);
   return {
     reference: b.booking_reference_id,
-    requester: b.requester?.full_name ?? "—",
+    requester: b.requester?.full_name ?? "-",
     category: ROLE_LABELS[b.user_role],
     debitHead:
       b.debit_head === "project_grant" && b.debit_details
-        ? `Project ${b.debit_details.split(" — ")[0]}${b.debit_subhead ? ` / ${b.debit_subhead}` : ""}`
+        ? `Project ${b.debit_details.split(" - ")[0]}${b.debit_subhead ? ` / ${b.debit_subhead}` : ""}`
         : invoiceHeadLabel(b.debit_head),
-    guestHouse: b.guest_house?.name ?? "—",
+    guestHouse: b.guest_house?.name ?? "-",
     checkIn: formatDateTime(b.check_in),
     checkOut: formatDateTime(b.check_out),
     nights: nightsBetween(b.check_in, b.check_out),
     rooms: mealsOnly
-      ? "—"
+      ? "-"
       : b.assigned_rooms.length > 0
         ? b.assigned_rooms.map((r) => r.room_number).join(", ")
         : `${b.rooms_requested} requested`,
@@ -174,7 +174,7 @@ export async function exportHistoryPdf(queryString: string): Promise<PdfExportRe
     }
     if (params.userRole) filters.push(`Category: ${ROLE_LABELS[params.userRole]}`);
     if (params.actor === "me") filters.push("Handled by me");
-    if (filters.length === 0) filters.push("No filters — every booking in scope");
+    if (filters.length === 0) filters.push("No filters - every booking in scope");
 
     const counts = new Map<string, number>();
     for (const b of rows) {

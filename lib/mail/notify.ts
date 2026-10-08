@@ -34,8 +34,8 @@ import type { MailEventKey, NewEmailInput } from "./types";
  * The guest house's edits to the automatic mails, keyed by event.
  *
  * A missing table (migration 12 not yet applied) or an unreachable store must
- * not stop a booking being acknowledged, so this degrades to "no edits" — the
- * built-in wording — rather than throwing.
+ * not stop a booking being acknowledged, so this degrades to "no edits" - the
+ * built-in wording - rather than throwing.
  */
 async function loadMailOverrides(): Promise<Map<MailEventKey, MailTemplateOverride>> {
   try {
@@ -51,7 +51,7 @@ async function loadMailOverrides(): Promise<Map<MailEventKey, MailTemplateOverri
  * Queues the notifications for a workflow event.
  *
  * **Called from the server actions, not from `updateBookingStatus`.** The
- * store method sees a status and a log row; only the action knows *why* —
+ * store method sees a status and a log row; only the action knows *why* -
  * which reason the reviewer typed, which rooms the manager picked, whether a
  * cancellation was approved or declined. Hooking the store would mean
  * reconstructing intent from a status pair, and would also mail on the
@@ -74,7 +74,7 @@ const FOOTER = [
  *
  * `after()` runs the callback once the response has been sent, which is the
  * whole point: the requester's booking confirmation does not wait on an SMTP
- * handshake. Outside a request — an `npx tsx` script, say — `after` throws, so
+ * handshake. Outside a request - an `npx tsx` script, say - `after` throws, so
  * fall back to a detached promise.
  */
 async function scheduleDispatch(): Promise<void> {
@@ -110,7 +110,7 @@ interface QueueOne {
   attachments?: NewEmailInput["attachments"];
   /**
    * Send this one on its own even though its event normally joins a daily
-   * thread — the console's test message, which borrows an event key.
+   * thread - the console's test message, which borrows an event key.
    */
   standalone?: boolean;
 }
@@ -127,10 +127,10 @@ function buildInputs(
 
   // To is whoever must act; CC is the Copy-to list plus any address the
   // office added to this template. Anyone in To is dropped from CC, and both
-  // are de-duplicated ignoring case — see `lib/mail/addressing.ts`.
+  // are de-duplicated ignoring case - see `lib/mail/addressing.ts`.
   const { to, cc } = addressStaffMail(params.to, [...(params.cc ?? []), ...edit.cc]);
   if (to.length === 0) return [];
-  // A custom subject replaces the built-in one wholesale, tokens and all —
+  // A custom subject replaces the built-in one wholesale, tokens and all -
   // including the "[IITPKD-GH-…]" prefix, because an office that wants its
   // own subject usually wants the whole line.
   const itemSubject = edit.subject
@@ -143,14 +143,14 @@ function buildInputs(
   // hung on a root nobody else will reference.
   const kind = params.standalone ? undefined : MAIL_THREAD_OF[params.eventKey];
   const thread = kind === "booking" && !params.booking ? undefined : kind;
-  // The intro goes above everything, the outro below it as small print — the
+  // The intro goes above everything, the outro below it as small print - the
   // two places a standing sentence belongs without disturbing the facts the
   // template assembled from the booking.
   const doc: EmailDocument = {
     ...params.doc,
     // In a thread every message shares the thread's subject, so what this one
     // is about moves to the inbox preview, where it is still read first.
-    ...(thread ? { preheader: `${itemSubject} — ${params.doc.preheader}` } : {}),
+    ...(thread ? { preheader: `${itemSubject} - ${params.doc.preheader}` } : {}),
     blocks: [
       ...(edit.intro ? [{ kind: "paragraph" as const, text: fillTokens(edit.intro, params.booking) }] : []),
       ...params.doc.blocks,
@@ -178,7 +178,7 @@ function buildInputs(
     body_html: html,
     body_text: text,
     thread_root: threadRoot,
-    // Which message opens a thread is decided when it is sent — see dispatch.ts.
+    // Which message opens a thread is decided when it is sent - see dispatch.ts.
     is_thread_root: false,
     ...(params.scheduledFor ? { scheduled_for: params.scheduledFor } : {}),
     ...(params.attachments?.length ? { attachments: params.attachments } : {}),
@@ -190,7 +190,7 @@ function buildInputs(
   // reference only one root.
   //
   // Booking mail threads on the **booking**, so every message about one
-  // request — submitted, forwarded, allocated, cancelled — lands in one
+  // request - submitted, forwarded, allocated, cancelled - lands in one
   // conversation however many days apart they are. Scheduled mail has no
   // booking, so it threads on the institute day it was queued.
   const reference = params.booking?.booking_reference_id;
@@ -204,7 +204,7 @@ function buildInputs(
       ? bookingThreadRoot(reference, address)
       : dailyThreadRoot("daily_log", day, address);
   // Anyone copied is copied once, on the first recipient's message, not on
-  // every one of them — and so joins that recipient's thread: the message
+  // every one of them - and so joins that recipient's thread: the message
   // carries its References, and every later message to the same To carries
   // the same root.
   return to.map((address, i) => input([address], i === 0 ? cc : [], rootFor(address), subject));
@@ -244,7 +244,7 @@ async function safely(what: string, run: () => Promise<unknown>): Promise<void> 
 
 async function freshBooking(bookingId: string): Promise<BookingWithDetails | null> {
   // Always re-read: `assigned_room_ids` is derived from room_holds on read, so
-  // a booking object from before the write would name the wrong rooms — and
+  // a booking object from before the write would name the wrong rooms - and
   // `updated_at` is the stamp the idempotency key needs.
   return getStore().getBooking(bookingId);
 }
@@ -317,8 +317,8 @@ export async function notifyTierApproved(
         cc: requesterCc,
         subjectText:
           booking.status === "PENDING_HOD"
-            ? "Approved — now with the HOD"
-            : "Approved — now with the Guest House Manager",
+            ? "Approved - now with the HOD"
+            : "Approved - now with the Guest House Manager",
         doc: t.tierApprovedToRequester(booking, approver.full_name, stageApproved),
         stamp,
       },
@@ -367,7 +367,7 @@ export async function notifyRejected(
 }
 
 /**
- * Rooms allocated — the mail the Administration Section actually asked for
+ * Rooms allocated - the mail the Administration Section actually asked for
  * (requirement 5). The requester learns their room numbers without opening the
  * portal; the desk gets a copy for the register.
  */
@@ -388,7 +388,7 @@ export async function notifyRoomsAllocated(bookingId: string, manager: Profile):
         booking,
         to: [requester.email],
         cc: requesterCc,
-        subjectText: "Confirmed — rooms allocated",
+        subjectText: "Confirmed - rooms allocated",
         doc: t.allocatedToRequester(booking),
         stamp,
       },
@@ -411,8 +411,8 @@ export async function notifyRoomsAllocated(bookingId: string, manager: Profile):
  * Someone has asked to cancel.
  *
  * Only the **manager** decides, whatever stage the booking had reached, so the
- * manager is To. Whoever **reviewed** it — the Assistant Warden, the advisor,
- * the HOD, the IAR Office — is on the Copy-to list and so in CC: told at the
+ * manager is To. Whoever **reviewed** it - the Assistant Warden, the advisor,
+ * the HOD, the IAR Office - is on the Copy-to list and so in CC: told at the
  * same moment, because they signed it off and would otherwise never find out,
  * but not asked. Routing a cancellation through the review chain again would
  * leave a guest waiting on two approvals to undo one booking.
@@ -475,7 +475,7 @@ export async function notifyCancellationDecided(
 /**
  * A booking was cancelled outright.
  *
- * The desk is only copied when rooms were actually being held — a pending
+ * The desk is only copied when rooms were actually being held - a pending
  * request a student thought better of is not news at the reception.
  */
 export async function notifyCancelled(
@@ -495,7 +495,7 @@ export async function notifyCancelled(
     const stamp = booking.updated_at;
 
     await queueMessages([
-      // Not when they cancelled it themselves — they know, and a confirmation
+      // Not when they cancelled it themselves - they know, and a confirmation
       // of their own click is the sort of mail that teaches people to ignore
       // the portal's mail.
       requester && actor.id !== booking.user_id
@@ -515,7 +515,7 @@ export async function notifyCancelled(
             booking,
             to: addressesOf(desk),
             cc: copyTo,
-            subjectText: "Booking cancelled — rooms released",
+            subjectText: "Booking cancelled - rooms released",
             doc: t.cancellationToDesk(booking, actor.full_name),
             stamp,
           }
@@ -618,6 +618,38 @@ export async function notifyExtensionDecided(
   });
 }
 
+/**
+ * A request the nightly sweep marked as Missed (migration 29, 7 Oct 2026).
+ *
+ * To the requester alone: nobody else needs telling, because nobody did
+ * anything - the approvers' own queues simply stop showing it. Keyed on the
+ * booking's `updated_at`, which the marking has just moved, so a second run
+ * of the sweep queues nothing.
+ */
+export async function notifyMissed(bookingId: string): Promise<void> {
+  await safely("booking.missed", async () => {
+    const booking = await freshBooking(bookingId);
+    if (!booking) return;
+    const requester = requesterRecipient(booking);
+    // Copy to (New Booking) and, on a club booking, its faculty in-charge.
+    const requesterCc = await requesterCopyTo(booking);
+    await queueMessages([
+      requester && {
+        eventKey: "booking.missed.requester",
+        booking,
+        to: [requester.email],
+        cc: requesterCc,
+        subjectText:
+          booking.service_type === "meals_only"
+            ? "Meal booking missed - not decided in time"
+            : "Booking missed - not decided in time",
+        doc: t.missedToRequester(booking),
+        stamp: booking.updated_at,
+      },
+    ]);
+  });
+}
+
 export async function notifyNoShowReleased(bookingId: string, automatic: boolean, reason: string | null): Promise<void> {
   await safely("booking.no_show", async () => {
     const booking = await freshBooking(bookingId);
@@ -631,7 +663,7 @@ export async function notifyNoShowReleased(bookingId: string, automatic: boolean
         booking,
         to: [requester.email],
         cc: requesterCc,
-        subjectText: "Booking released — guest did not arrive",
+        subjectText: "Booking released - guest did not arrive",
         doc: t.noShowToRequester(booking, automatic, reason),
         // Once per booking: a re-run of the automatic release sends nothing.
         stamp: booking.no_show_released_at ?? booking.updated_at,

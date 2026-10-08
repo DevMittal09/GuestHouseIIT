@@ -1,7 +1,7 @@
 /**
- * To and CC on staff mail about a booking — the owner's decision (Sep 2026):
+ * To and CC on staff mail about a booking - the owner's decision (Sep 2026):
  *
- * - **To is the person who must act next** — approve, forward, allocate, or
+ * - **To is the person who must act next** - approve, forward, allocate, or
  *   decide a cancellation. Found through `canReview()` for the booking's
  *   current status (`reviewersForStatus`), or the desk for a desk record.
  * - **"Copy to" is CC.** The Copy-to list from `lib/academic/copy-to.ts`: the

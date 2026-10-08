@@ -24,7 +24,7 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const gate = await getStore().hitRateLimit(`oauth:${ip}`, RATE_LIMITS.oauth.limit, RATE_LIMITS.oauth.windowSeconds);
     if (!gate.allowed) {
-      return new NextResponse("Too many sign-in attempts — wait a minute and try again.", {
+      return new NextResponse("Too many sign-in attempts - wait a minute and try again.", {
         status: 429,
         headers: { "Retry-After": String(gate.retryAfter) },
       });

@@ -2,11 +2,20 @@
 
 Since **21 Sep 2026** the top of New Booking (`/book`) shows the signed-in
 person's record from the **institute's academic database**, not only what the
-portal's own profile holds. Wardens see theirs on the warden portal. Until the
-academic database is connected, the records are **dummy values**.
+portal's own profile holds. Wardens see theirs on the warden portal.
 
-Read this when you change the card or its fields, and when you connect the real
-academic database (§4).
+> **Since 7 Oct 2026 the records are the portal's own** (migration 28). The
+> institute's academic database does not exist yet and nobody could say when
+> it would, while the booking form needed a student's parents **now** — from
+> that round it takes their father's and mother's names from the record and
+> **locks** them. So the guest house office keeps the records themselves,
+> pasted in as CSV from **Console → Academic records** (§2b). The published
+> dummy values are still **behind** the imported rows, so a fresh install and
+> the demo personas work with nothing imported.
+
+Read this when you change the card or its fields, when you change what the
+booking form locks (§2c), and when you connect the real academic database
+(§4).
 
 ---
 
@@ -131,19 +140,17 @@ Rules worth keeping:
   never stored or logged by the portal, and never goes into mail. Keep it
   that way. The DPDP notes in [05-production-plan.md](05-production-plan.md)
   apply.
-- **The record's family fills in guests** (25 Sep 2026). On New Booking,
-  choosing Father / Mother / Guardian on a guest fills the name from the
-  student's record (`knownGuestsFromRecord` in `lib/known-guests.ts`), and
-  "Fill in from saved details" offers them. The names go only to the
-  student's own browser, as the card above already does. The other kinds of
-  record describe the requester, not a family, so they add nobody.
-- **The record's own name fills in "Yourself"** (30 Sep 2026). A student or
-  employee is offered themselves first in Fill in from saved details
-  (`knownGuestSelf`), relationship Self, with the name from a student or
-  employee record, else from the portal profile.
-- **A dashed "Demo build" note** appears under the card while a dummy record
-  is shown (`isMockAcademicSource()`), as the sign-in page does for the dummy
-  LDAP accounts.
+- **The record's family is no longer "filled in" — it is the answer** (7 Oct
+  2026, §2c). Choosing Father or Mother on a student's guest card puts the
+  record's name in the box **read-only**, and the server writes the record's
+  name whatever the browser sent. The 25 Sep "fill in from the record" and
+  30 Sep "Yourself" mechanisms, and `lib/known-guests.ts` with them, are
+  **gone** — withdrawn for every role at the office's request.
+- **A dashed "Demo build" note** appears under the card while a **dummy**
+  record is shown. Per record since 7 Oct 2026, not per deployment:
+  `AcademicSource.find` returns where the record came from
+  (`database` / `imported` / `sample`), because on the same install one
+  person's card can be their own imported record and the next a sample.
 
 ## 2a. The Assistant Warden's check (25 Sep 2026)
 
@@ -171,6 +178,82 @@ so and the warden checks the names themselves — the queue still works.
 
 Only the warden's queue gets this: `canReview` already confines it to their
 hostel's students, and no other approver sees students.
+
+## 2b. The records the office keeps (migration 28, 7 Oct 2026)
+
+**Console → Academic records** (`/admin/academic`, manager **and**
+developer). One list per kind of record, because the columns differ.
+
+- **Paste → Check the paste → Import.** The console shows the columns in
+  order, with a **Copy the header** button, and the paste may be comma-,
+  semicolon- or tab-separated (spreadsheet quoting is handled, so a department
+  called "Physics, Applied" survives). The **first column is the institute
+  email** — that is what a record is found by; everything after it is
+  optional, and a short line simply leaves the rest off the record. `#`
+  comments and a pasted header row are ignored.
+- **Check the paste** reports what the import *would* do — "412 added, 3
+  updated, 9 unchanged" — before it does it, and an import is **all or
+  nothing**: one unreadable line and nothing lands. A half-applied list of
+  students is worse than a rejected one, because nobody can tell which half
+  landed. At most 2,000 rows a paste.
+- The office's "we do not have it" spellings (`-`, `--`, `N/A`, `nil`,
+  `none`, `null`) are read as a **gap**, not as a name.
+- A row can be removed, a whole kind cleared, or everything cleared (typed
+  confirmation). **Every change is audited** — these rows decide what a
+  student's booking form locks their parents' names to.
+- The table is **`academic_records`**: one flat row per `(kind, email)`
+  (unique on `lower(email)`), with every kind's fields as nullable columns.
+  **Service-role only, no `authenticated` policy** — it holds parents' names
+  and phone numbers, like `app_settings`.
+- **Where the records come from** is `getAcademicSource()`:
+  `ACADEMIC_DB_URL` set → the institute's database over HTTP; otherwise
+  `StoreAcademicSource`, which prefers an imported row and falls through to
+  `lib/academic/mock-source.ts`. A table that is not there yet (migration 28
+  unapplied) falls through too, rather than reading as an outage.
+- **The 10-minute cache is cleared on every import, delete and clear**
+  (`forgetAcademicRecords`). Without it a pasted record read back as the one
+  it replaced for ten minutes — and the booking form went on locking a parent
+  to the name the office had just corrected.
+
+## 2c. What the booking form locks (7 Oct 2026)
+
+`lib/academic/guest-names.ts`, `guestNameRule(record, relationshipOptions)`.
+The office's words: "Father and Mother are offered when the record has them,
+with the name filled in and locked. Guardian is offered only when the record
+has neither parent. Siblings and grandparents are typed by hand. If there's no
+record, names stay editable."
+
+| The record says | The form does |
+| --- | --- |
+| Father's name | **Father** on the dropdown; the name read-only in the box |
+| No father's name | **Father is not offered at all** — there would be no name to lock it to |
+| Mother's name | **Mother**, likewise |
+| Neither parent, a guardian | **Guardian**, locked to that name; Father and Mother not offered |
+| Neither parent, no guardian | **Guardian** offered with the name **typed** — the record has nothing to say |
+| Either parent on record | **Guardian is not offered** |
+| No record at all | Nothing locked, nothing withheld — the form is exactly what it was |
+
+Two things follow, both enforced on the server and not merely shown:
+
+- **`createBooking` writes the record's name**, whatever the browser sent. It
+  rebuilds the rule from the record rather than trusting the submission — the
+  whole point is that the name is the institute's.
+- **A guest the record named is asked for neither an Aadhaar number nor an ID
+  document.** The institute has already identified them; demanding a document
+  as well is asking the student to prove what the record says. A sibling or
+  grandparent, typed by hand, is still asked — which is why the exemption is
+  keyed on the relationship being locked, not on the role.
+
+Matched against the Form Builder's own option list, ignoring case, so an
+office that renames "Father" to "Dad" gets a dropdown that stops being locked
+rather than a form nobody can submit.
+
+> This supersedes the warden's check in one sense and leaves it in another.
+> The check (§2a) was there because a student typed a name and somebody had to
+> compare it afterwards; now the request carries the right one. It is kept for
+> the guests the form does **not** fix (a request from a student with no
+> record, and anything stored before this round), and because the warden still
+> wants the record in front of them.
 
 ## 3. The dummy records
 

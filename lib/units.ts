@@ -1,10 +1,10 @@
 /**
- * Departments, clubs, councils and offices — and who heads each one.
+ * Departments, clubs, councils and offices - and who heads each one.
  *
  * Approvers used to be found by matching free text: a faculty advisor was
  * whoever had the same "Department / Club" string as the club asking. That
- * broke on a stray space, and it meant that when the advisor changed — which
- * happens every two years — two profiles had to be edited by hand and kept
+ * broke on a stray space, and it meant that when the advisor changed - which
+ * happens every two years - two profiles had to be edited by hand and kept
  * spelled identically.
  *
  * Now the *unit* holds the approver, not the people in it:
@@ -53,14 +53,14 @@ export function isStudentBody(kind: UnitKind): boolean {
 
 /**
  * A `type`, not an `interface`, on purpose: Supabase's generated client needs
- * its row types to satisfy an index signature, and an interface does not —
+ * its row types to satisfy an index signature, and an interface does not -
  * declaring this as one turns every table in `Database` into `never`.
  */
 export type Unit = {
   id: string;
   name: string;
   kind: UnitKind;
-  /** The unit this one sits under — a club's council, say. */
+  /** The unit this one sits under - a club's council, say. */
   parent_id: string | null;
   head_id: string | null;
   /** Stands in for the head while set. Both may approve. */
@@ -69,13 +69,13 @@ export type Unit = {
    * Offices only (migration 16): an **officer** office (Director, Registrar,
    * the Deans) books against the Institute Grant; a **department** office
    * (a department's own office) against its Department. Null for every other
-   * kind of unit, and for an office nobody has classified yet — which is
+   * kind of unit, and for an office nobody has classified yet - which is
    * treated as a department office, the narrower of the two.
    */
   office_class?: OfficeClass | null;
   /**
    * Whose HOD approves this unit's official requests (migration 18), when it is
-   * not the obvious one — a club whose bookings go to the Dean of Students'
+   * not the obvious one - a club whose bookings go to the Dean of Students'
    * office, say. Null means the default: a department is its own; a
    * department office answers to the department above it; an officer office
    * to its own head; a club or council has no HOD stage.
@@ -92,7 +92,7 @@ export type Unit = {
   faculty_advisor_id?: string | null;
   /**
    * Councils, fests and clubs only (migration 25): the student secretary's
-   * mailbox — `sec_arts@iitpkd.ac.in`, say — which outlives any one secretary.
+   * mailbox - `sec_arts@iitpkd.ac.in`, say - which outlives any one secretary.
    * Filled into Copy to on every booking the Faculty Advisor raises for the
    * unit or a club under it (`secretaryEmailOf`).
    */
@@ -106,12 +106,12 @@ export const OFFICE_CLASS_LABELS: Record<OfficeClass, string> = {
   department: "Department office",
 };
 
-/** The longest chain of parents followed — a guard against a cycle someone typed in. */
+/** The longest chain of parents followed - a guard against a cycle someone typed in. */
 const MAX_DEPTH = 8;
 
 /**
  * Who approves for a unit: its head and acting head, or, when it has neither,
- * its parent's — and so on up. Empty when nobody anywhere up the chain is
+ * its parent's - and so on up. Empty when nobody anywhere up the chain is
  * set, which the booking routes around rather than getting stuck on.
  */
 export function approversOf(unitId: string | null | undefined, units: Unit[]): string[] {
@@ -127,7 +127,7 @@ export function approversOf(unitId: string | null | undefined, units: Unit[]): s
   return [];
 }
 
-/** The unit whose head approved, for the log — the first one up the chain that has one. */
+/** The unit whose head approved, for the log - the first one up the chain that has one. */
 export function approvingUnit(unitId: string | null | undefined, units: Unit[]): Unit | null {
   const byId = new Map(units.map((u) => [u.id, u]));
   let current = unitId ? byId.get(unitId) : undefined;
@@ -140,7 +140,7 @@ export function approvingUnit(unitId: string | null | undefined, units: Unit[]):
 
 /**
  * The first value of `pick` found walking up from a unit through its parents
- * — a club's own, else its council's. Null when nobody up the chain has one.
+ * - a club's own, else its council's. Null when nobody up the chain has one.
  */
 function inherited(
   unitId: string | null | undefined,
@@ -159,7 +159,7 @@ function inherited(
 
 /**
  * The Faculty Advisor of a council, fest or club: its own, else the council
- * it sits under — "a faculty advisor for each council, and clubs under it".
+ * it sits under - "a faculty advisor for each council, and clubs under it".
  * A fest or club with an advisor of its own (Petrichor) keeps theirs.
  */
 export function facultyAdvisorOf(unitId: string | null | undefined, units: Unit[]): string | null {
@@ -206,7 +206,7 @@ export function hodApproversFor(
 }
 
 /**
- * Every unit whose requests this person approves — as its head (or the head
+ * Every unit whose requests this person approves - as its head (or the head
  * above it) or as its HOD. The archive scope of an approver by appointment.
  */
 export function unitsGovernedBy(profileId: string, units: Unit[]): string[] {
@@ -219,14 +219,14 @@ export function unitsGovernedBy(profileId: string, units: Unit[]): string[] {
     .map((u) => u.id);
 }
 
-/** Whether this person gives HOD approval for any unit — who sees `/hod`. */
+/** Whether this person gives HOD approval for any unit - who sees `/hod`. */
 export function isHodForAny(profileId: string, units: Unit[]): boolean {
   return units.some((u) => approversOf(hodUnitIdFor(u.id, units), units).includes(profileId));
 }
 
 /**
  * Whether this person approves a club or council's requests by appointment
- * (the Faculty Advisor / secretary stage) — who sees `/approvals`.
+ * (the Faculty Advisor / secretary stage) - who sees `/approvals`.
  */
 export function approvesClubsFor(profileId: string, units: Unit[]): boolean {
   return units.some(
@@ -241,7 +241,7 @@ export function headsAnyUnit(profileId: string, units: Unit[]): boolean {
 
 /**
  * Why a unit's parent may not be this one, or null when it may. A unit
- * cannot sit under itself or under one of its own descendants — that makes a
+ * cannot sit under itself or under one of its own descendants - that makes a
  * loop, and the approver would never be found.
  */
 export function parentError(unitId: string, parentId: string | null, units: Unit[]): string | null {

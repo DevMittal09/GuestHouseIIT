@@ -17,7 +17,7 @@ are not obvious from reading files, so you don't have to rediscover them.
 > `.memories/99-recent-changes.md`. That folder is the project's full memory —
 > background and every requirement round, the timeline, the product as
 > configured role by role and form by form (`10`–`17`, checked against the code
-> on 24 Sep 2026), the engineering notes, every demo login and where each real
+> on 24 Sep 2026, kept current through 7 Oct 2026), the engineering notes, every demo login and where each real
 > secret lives, and the roadmap. This file is the terse list of rules.
 
 **What it is:** a booking + multi-stage approval portal for IIT Palakkad's two
@@ -103,6 +103,22 @@ port 3000 before launching your own.
 > server after, or expect to restart it. This is easy to miss because the build
 > itself succeeds and says nothing.
 
+## House style the office asked for (7 Oct 2026)
+
+- **No em dashes in the source.** Every `—` in `app/ components/ lib/ tests/
+  e2e/ scripts/` is a plain hyphen, and new copy follows. The exception is
+  reading **stored** data: a project's `debit_details` holds "number - title"
+  and bookings made before 7 Oct hold an em dash there, so
+  `projectFromDetails` splits on **either**. Markdown docs and SQL comments
+  are prose and were left alone.
+- **The state is Keralam.** `lib/site.ts`, the privacy page and
+  `DEFAULT_RULES.invoice.contact.address`. A saved Settings row is rewritten
+  **once** by `upgradeInvoiceRules` revision 3, matching the whole word -
+  "Keralam" contains "Kerala", and a plain replace would make it "Keralamm".
+  Issued invoices and the Hindi footer artwork are untouched.
+- **The Meeting Room Booking System is off the site.** `MRBS_URL` is gone with
+  every use; don't reintroduce a link to it.
+
 ## Two backends, one interface
 
 `lib/store/types.ts` defines `DataStore`. Two implementations satisfy it and
@@ -121,7 +137,12 @@ trap-laden one — see the approval-log section below. The email outbox
 two implementations differ most: Supabase claims rows through a
 `for update skip locked` function, while the mock store can select-then-mark
 because it is single-process and `saveDb` is synchronous — the same reasoning
-as `assertNoClash`.
+as `assertNoClash`. The newest additions (7 Oct 2026) are the academic records
+(`findAcademicRecord` / `listAcademicRecords` / `saveAcademicRecords` /
+`deleteAcademicRecord` / `deleteAcademicRecords`, migration 28) and two
+filters that **Awaiting payment** needs — `InvoiceFilter.statuses` and
+`BookingFilter.ids`, so a list with no date window can start from the
+outstanding invoices instead of every booking ever made.
 
 - The mock store rewrites the whole JSON file on every mutation. It is
   single-process and not concurrency-safe — fine for dev, never for production.
@@ -219,21 +240,38 @@ are in **`.memories/17-academic-records.md`**. Keep that file and
   for the requests already in their queue only, with each Father / Mother /
   Guardian on the request checked against the record (`checkFamily`,
   `lib/academic/family.ts`).
-- **Known guests are filled in** (25 Sep 2026, `lib/known-guests.ts`):
-  **the requester themselves first** ("Yourself", relationship `Self` — a
-  student or employee only, `knownGuestSelf`, 30 Sep 2026), a student's
-  father / mother / guardian from the record, then the adults of the
-  requester's own earlier bookings (`knownGuestsFor`, not for the desk). Name,
-  gender, relationship, citizenship only — **never an ID or passport number
-  or an age** back to the browser. **Choosing a relationship fills in
-  nothing** (1 Oct 2026: "remove auto-fill even for parents" — a box that
-  writes itself is a box nobody checks, and the desk needs a name that is
-  actually the guest's). What the portal knows is one click away instead, in
-  the compact **Fill in…** select on the guest card's own header line, which
-  sets the name, gender, relationship and citizenship together. `Self` is on
-  the student relationship list and One of each; it is neither a parent nor a
-  dependent. A student row saved in the Form Builder before 30 Sep needs Self
-  added by hand.
+- **The office keeps the records itself** (7 Oct 2026, migration 28). The
+  institute's academic database still does not exist, and the booking form
+  needs a student's parents *now*, so `getAcademicSource()` returns
+  `StoreAcademicSource` when `ACADEMIC_DB_URL` is unset: the rows pasted in at
+  **Console → Academic records**, with the published dummies in
+  `mock-source.ts` **behind** them, so a fresh install and the demo personas
+  work with nothing imported. A missing table (migration 28 unapplied) falls
+  through to the dummies rather than reading as an outage.
+  `AcademicSource.find` returns `{record, origin}` — `database` / `imported` /
+  `sample` — so the card's "Demo build" caption is **per record**, not per
+  deployment (`isMockAcademicSource()` is gone). **Clear the cache on every
+  write**: `forgetAcademicRecords()` runs on import, delete and clear, or a
+  pasted record reads back as the one it replaced for ten minutes - and the
+  form goes on locking a parent to the name the office just corrected.
+  The import is pure in `lib/academic/stored.ts` and **all or nothing**.
+- **A student's parents come from the record and are locked** (7 Oct 2026,
+  `lib/academic/guest-names.ts`). `guestNameRule(record, relationshipOptions)`
+  is the one rule, carried to both sides by
+  `BookingSchemaContext.guestNames`: Father and Mother are offered **and
+  locked** where the record names them; a parent it does **not** name is **not
+  offered at all** (there would be no name to lock it to); Guardian only where
+  it names neither parent; **no record → nothing locked or withheld**.
+  `createBooking` rebuilds the rule from the record and writes **the record's
+  name whatever arrived**, and a guest the record named is asked for **neither
+  an Aadhaar nor an ID document**. Matched on the Form Builder's own options
+  ignoring case, so renaming "Father" simply stops it being locked.
+  > **`lib/known-guests.ts` is deleted.** "Fill in from saved details" and
+  > "Yourself" were withdrawn for every role on 7 Oct 2026; nothing is offered
+  > from earlier bookings any more. Don't rebuild it. `Self` stays on the
+  > student relationship list and One of each — it is a relationship, typed by
+  > hand, and is neither a parent nor a dependent; a student row saved in the
+  > Form Builder before 30 Sep needs Self added by hand.
 - **The card has no caption when the record is found** (30 Sep 2026); the
   fallbacks to the profile still say why.
 
@@ -322,23 +360,29 @@ Scoping lives in `canReview()` (HODs: `hodApproversFor`), which also refuses
 `historyScope(user, units)` gives an approver by appointment their own bookings
 **plus** their units' (`approverScope`).
 
-**Debitable head** (`lib/debit-heads.ts`): required on every booking; allowed
-heads per requester category are the Setting `rules.debit` (room and dining).
-`FORBIDDEN_DEBIT_HEADS` is a **floor under that Setting** — **faculty may never
-debit the Institute Grant** (23 Sep 2026), which is the offices' money — and
-`FORBIDDEN_DINING_HEADS` is the same for dining only: **no Special Funds on a
-personal meal booking** (1 Oct 2026). `allowedHeads(category, heads, kind)`
-applies both.
+**Debitable head** (`lib/debit-heads.ts`): required on every booking **except a
+personal one, which is never asked** (7 Oct 2026, `asksForDebitHead`) - the
+card is not rendered and the schema's closing transform writes
+`personal_funds` whatever arrived, so a crafted payload naming a department on
+a private stay is overwritten rather than refused. Allowed heads per requester
+category are the Setting `rules.debit` (room and dining).
+`FORBIDDEN_DEBIT_HEADS` is a **floor under that Setting**: **faculty may never
+debit the Institute Grant** (23 Sep 2026), which is the offices' money;
+**students never Special Funds** (25 Sep); and **no personal booking ever
+Special Funds** (7 Oct, widened from dining-only on 1 Oct, which is why
+`FORBIDDEN_DINING_HEADS` is now empty - the seam is kept because dining is
+what the office narrows first). `allowedHeads(category, heads, kind)` applies
+both.
 `allowedHeads()` strips a forbidden head on read (so a stored row that still
 lists one is ignored, not fatal), `debitRulesSchema` refuses to save it, and the
 console greys that cell. **Special Funds** (`special_budget`, relabelled
-24 Sep 2026) is in **every category's default but students'** (25 Sep 2026)
-and in `FORBIDDEN_DEBIT_HEADS` for `student` only; its fund name and
-sanction letter are optional. A Settings row is upgraded **once per
-revision** (`upgradeDebitRules`, `DebitRules.revision`, now **4**,
-`SPECIAL_FUNDS_ADDED_AT`) — bump the revision if you change a default list
-again. Revision 4 is the one that *removes* (Special Funds off personal
-dining), and it runs after the additions so a revision-1 row still comes all
+24 Sep 2026) is in **every category's default but students' and personal**
+(25 Sep, narrowed 7 Oct 2026); its fund name and sanction letter are optional.
+A Settings row is upgraded **once per revision** (`upgradeDebitRules`,
+`DebitRules.revision`, now **5**, `SPECIAL_FUNDS_ADDED_AT`) — bump the
+revision if you change a default list again. Revisions **4 and 5** are the
+ones that *remove* (Special Funds off personal dining, then off every personal
+list), and they run after the additions so a revision-1 row still comes all
 the way forward. **`debitCategoryFor` returns `student` for a student before looking at
 the booking type**: a student's only type is personal, and filing them under
 *personal* (as it did until 25 Sep) would hand them Special Funds.
@@ -493,7 +537,50 @@ Cancellation flow: a requester's **Cancel** (`cancelBooking`, reason required)
 approved; an Occupied stay is ended at the desk instead. The manager decides
 via `approveCancellation` (→ `CANCELLATION_APPROVED`, rooms freed) /
 `rejectCancellation` (restores the status the booking had). The manager
-cancels directly with `managerCancelBooking`.
+cancels directly with `managerCancelBooking`. A **Missed** request is terminal
+to a requester - there is nothing left to cancel.
+
+**A personal stay is settled before it is vacated** (7 Oct 2026). Its row
+shows one button, **Check out & settle**, which opens the invoice dialog:
+issue → record the payment → **Mark as Vacated**, in one place. The server
+refuses the transition otherwise (`vacateBlocker`, `settlesAtCheckOut`), and
+`updateBookingLifecycle(id, "VACATED", reason?)` lets **the manager only**
+(`canOverrideVacatePayment`) close one off unpaid with a reason that goes in
+the log - an invoice that cannot be issued at all must not leave a guest in
+the building on paper. An **official** stay is unchanged: issued at check-out,
+paid later from **Awaiting payment** (`awaitingPayment`, the last section of
+both consoles, **no date window**, dining bookings included).
+
+### `MISSED` — a request nobody decided in time (migration 29)
+
+```
+PENDING_* ──(nightly, check-in passed)──▶ MISSED ──(manager)──▶ back to that stage
+```
+
+`hasLapsed()` has *described* this since September; the request kept its
+pending status, so it sat in a queue for ever and the requester was never
+told. `runMissedSweep()` (`lib/missed-server.ts`, server-only, run by
+`/api/mail/cron` **before** the digest) sets `MISSED`, writes the log and
+mails `booking.missed.requester`. The cutoff is `lapseDeadline` - the check-in,
+or a **dining** booking's last day of meals.
+
+- **Running it twice changes nothing**: a marked request is no longer in
+  `ACTIVE_STATUSES`, and the mail is keyed on `updated_at`.
+- **Reinstating** (`reinstateMissedBooking`, manager only, reason required,
+  audited) returns it to **the stage it was waiting at**
+  (`statusBeforeMissed`, from the log entry that marked it), not to the
+  manager's queue - nobody decided it. There is deliberately no "this stay has
+  already ended" guard: a missed request's check-in is past by definition, and
+  the next move is to move the dates from Manage.
+- **A reinstated request is never marked again.** `missedSweepable` skips one
+  reinstated since it was last marked, read **structurally** off the log - a
+  row whose `previous_status` is `MISSED` - so it needed no column and no
+  string matching. Keep it that way, or the sweep undoes the manager's
+  decision every night.
+- `MISSED` is in `countsAgainstMealCapacity`'s exclusions (its places are
+  free), is terminal to `cancelBooking`, and has a **tile of its own** in the
+  Approval Log - a cancellation is something somebody asked for, and this is
+  the opposite.
 
 ## The form-config system (most important non-obvious part)
 
@@ -523,8 +610,10 @@ crafted request. Custom-field answers are snapshotted onto the booking
 (`custom_fields`) with their label, so reviewers still see the question text
 after an admin edits the form.
 
-Current defaults worth knowing: students are Bageshri-only and see the "double
-shared rooms will get first preference" banner; employee and official use
+Current defaults worth knowing: students are Bageshri-only **as a rule, not
+just a default** (7 Oct 2026, `restrictedToOneGuestHouse` — the Form Builder's
+`allowed_guest_house_ids` is no longer the only thing holding it) and see the
+"double shared rooms will get first preference" banner; employee and official use
 free-text relationship; **club and official hide the relationship field**;
 club ID uploads are optional; alumni ID card is mandatory; **employee collects
 no ID document** (`id_document: "hidden"`). Since 24 Sep 2026 **faculty/staff
@@ -677,10 +766,11 @@ blue selected, grouped into double-sharing and single.
 
 ### One guest house is not a dropdown
 
-Where a role has exactly one guest house to offer (students are Bageshri-only;
-an alumni booking narrows to Bageshri; a meals-only booking narrows to the one
-kitchen), the form **states the name and carries the id in a hidden registered
-input** — never a disabled `<select>`. The value is computed before `useForm`
+Where a role has exactly one guest house to offer (a student's booking and any
+alumni booking narrow to Bageshri — `restrictedToOneGuestHouse`, 7 Oct 2026,
+checked on the server too; a meals-only booking narrows to the one kitchen),
+the form **states the name and carries the id in a hidden registered input** —
+never a disabled `<select>`. The value is computed before `useForm`
 (`initialGuestHouseId`), so it is in the server-rendered HTML rather than
 arriving with an effect.
 
@@ -688,6 +778,14 @@ arriving with an effect.
 > booking fail with "Select a guest house" — a question the form had already
 > answered and was not offering. Don't reintroduce it, and don't rely on an
 > effect to fill a field that something might read before hydration.
+
+**And no meals for a student or an alumni booking** (7 Oct 2026,
+`mealsAllowedFor` / `mealsPolicyError` in `lib/policy.ts`). It used to fall out
+of Bageshri having no kitchen, which is a coincidence of configuration rather
+than a rule: a tick on "Serves meals" would have started offering them meals
+the office does not sell. The form withholds the question and `createBooking`
+refuses it; the **manager overrides** both this and the guest house, and the
+exception goes into the booking's first log entry.
 
 ### The booking form's availability panel is browsable
 
@@ -975,18 +1073,19 @@ reservation, and `OCCUPIED` is a separate fact recorded at the desk. A
 room-by-room list underneath gives each booking period and a Vacant / Partly
 booked / Booked badge for the whole period shown.
 
-- **Requesters see booked or free; the desk sees why** (30 Sep 2026).
-  `getRoomAvailability` returns `detailed` for `gh_manager`, `gh_caretaker`
-  and `developer`; for everyone else both charts render `simple` — no
-  turnaround, no overlap, maintenance drawn as booked — under a Booked / Free /
-  now legend. One `AvailabilityLegend` (`components/occupancy-chart.tsx`) for
-  `/availability` and the booking form's panel. The notes say "Times are
-  IST." Don't hand requesters the housekeeping states again.
-- **The room-by-room list under the chart is the desk's too** (1 Oct 2026):
-  `/availability` draws it only when `detailed`. The grid answers "is this
-  room free", which is all a requester needs; the list adds every booking's
-  period, reference id and state, and made the page read like an operations
-  screen.
+- **Everyone but the desk is sent a count, and no rooms at all** (7 Oct 2026).
+  `SEES_ROOMS` is `gh_manager`, `gh_caretaker`, `developer`: they get `rooms`
+  and `segments` and the chart. For everyone else `getRoomAvailability`
+  returns **both arrays empty** and `counts`
+  (`AvailabilityCounts` — rooms free per day, and per hour on a one-day
+  window), drawn by `components/availability-counts.tsx` on `/availability`
+  **and** in the booking form's panel. Which room is free is no use to a
+  requester — they cannot pick one — and publishing the grid told anyone with
+  a login which rooms a named stay occupied. A component with no room numbers
+  cannot leak one; don't hand them back.
+  The charts' `simple` mode and the legend's `detailed` flag (30 Sep 2026) are
+  **retired** — there is nobody left to simplify them for. The room-by-room
+  list is the desk's too (1 Oct 2026).
 
 - `listRoomOccupancy(guestHouseId, from, to)` (both stores) returns one segment
   per **(room, booking)** using the same `ROOM_HOLDING_STATUSES` + strict
@@ -1053,20 +1152,43 @@ Issued invoices are **snapshots** (`InvoiceDocument`), drawn by
   snapshots, so read it through the function) prints meal dates and head count
   and no room table, check-in/out, rooms or infants.
 - **After check-out**: `awaitingSettlement()` is the "Checked out — to bill"
-  list on **both** `/manager` and `/caretaker`; the Approval Log gives the desk
-  an Invoice button on any checked-out stay or approved dining booking
-  (`invoiceableFromArchive`). Don't let a vacated stay become unreachable.
+  list on **both** `/manager` and `/caretaker` — the **daily** list, bounded to
+  30 days; the Approval Log gives the desk an Invoice button on any
+  checked-out stay or approved dining booking (`invoiceableFromArchive`).
+  Don't let a vacated stay become unreachable.
+- **`awaitingPayment()` is the other half, with no window** (7 Oct 2026):
+  every booking whose invoice is **issued and not paid**, newest first, dining
+  bookings included, at the foot of both consoles
+  (`components/awaiting-payment.tsx` — its own table, since a meal booking has
+  no check-in, check-out or rooms). An official stay's bill can sit with a
+  department for months, so a thirty-day cut-off would be a list of debts that
+  forgets them. It is built from the **invoices** (`InvoiceFilter.statuses`,
+  `BookingFilter.ids`), not from the bookings - with no window the other way
+  round would not scale.
+- **Payment is UPI or an account transfer, each with a reference** (7 Oct
+  2026). `cash` stays in the `PaymentMode` union and in
+  `PAYMENT_MODE_LABELS` - invoices paid in cash before then say so, and a
+  snapshot is a record of what happened - but it is **off `PAYMENT_MODES`** and
+  `paymentModeError` refuses it on a new payment. Don't put it back on the
+  form.
 - **GST is per section** (25 Sep 2026, the office's revised template): 18% on
   rooms, 5% on dining, Other Charges none, one Grand Total. **`invoiceTable(doc)`
   is the one layout** for the PDF and the preview; **nothing fills the
-  .docx** — the PDF redraws it. New documents are **`version: 3`** (30 Sep
-  2026): Room Charges Subtotal (A), GST @ 18% on A (B), Dining Charges
-  Subtotal (C), GST @ 5% on C (D), Other (E), **Grand Total (A+B+C+D)**, a
-  Round off row only when rupee rounding needs one (`totalLabels`). A
-  `version: 2` snapshot keeps "on Subtotal (A)" / "Grand Total (Including
-  GST)", a `version: 1` Total (A+B) / GST on Total — labels are computed at
-  print time, so a label change is a new version, never an "upgrade" of an
-  issued invoice.
+  .docx** — the PDF redraws it. New documents are **`version: 4`** (7 Oct
+  2026): the lettering of version 3 — Room Charges Subtotal (A), GST @ 18% on
+  A (B), Dining Charges Subtotal (C), GST @ 5% on C (D), Other (E), **Grand
+  Total (A+B+C+D)**, a Round off row only when rupee rounding needs one
+  (`totalLabels`) — plus three changes the office asked for: **no blank ruled
+  rows** (`minRows` 0, the room section included), **no lines under the
+  GSTIN** (`printsTaxLines` false — the per-SAC taxable / CGST / SGST
+  breakdown and the GST-inclusive note), and **the CGST / SGST split in each
+  GST row's own label** ("GST @ 18% on A (B) - CGST 9% + SGST 9%"), which is
+  where the removed information went. The breakdown is still computed and kept
+  in every snapshot, so restoring it is one line. A `version: 3` snapshot
+  keeps the blank rows and the tax lines, a `version: 2` "on Subtotal (A)" /
+  "Grand Total (Including GST)", a `version: 1` Total (A+B) / GST on Total —
+  labels are computed at print time, so a change is a **new version**, never
+  an "upgrade" of an issued invoice.
 - **Additional charges** (`parseExtraCharges`, ≤ 20): each is charged under
   `room` / `dining` / `other`, which decides its GST; typed on the draft
   (`invoices.extra_charges`, migration 26), priced into `extra_lines` on the
@@ -1125,13 +1247,14 @@ console sections as well as the developer's.
 > before role changes, Settings and deletes (`stepUpProblem`). The password is
 > still a shared secret — change it from `0000` before go-live.
 
-## The console (`/admin` — manager 9 sections, developer all 13)
+## The console (`/admin` — manager 10 sections, developer all 14)
 
 `app/(portal)/admin/*` + `components/admin/*`; sections and their roles in
 `CONSOLE_SECTIONS` (`lib/access.ts`). Developer-only: All Bookings, Settings,
 Audit Log, Console Access. Actions in `app/actions/admin.ts` (and
 `units.ts`, `settings.ts`, `invoices.ts`, `projects.ts`, `operations.ts`,
-`mail-templates.ts`), each gated by `requireConsole(section)` or its sibling.
+`mail-templates.ts`, `academic.ts`), each gated by `requireConsole(section)` or
+its sibling.
 The full who-opens-what table is in `.memories/10-roles-and-features.md`.
 
 - **Destructive actions ask properly.** `components/ui/confirm-dialog.tsx`
@@ -1148,6 +1271,12 @@ The full who-opens-what table is in `.memories/10-roles-and-features.md`.
   recounted automatically from active rooms. Deleting is blocked when bookings
   reference the guest house, or when a room is assigned to a booking (deactivate
   instead).
+- **Academic records** (`/admin/academic`, migration 28, manager and
+  developer) — the institute's records pasted in as CSV: paste → **Check the
+  paste** (a plan, "412 added, 3 updated") → Import, **all or nothing**, with
+  remove-one / clear-a-kind / clear-everything behind a typed confirmation.
+  Audited: these rows decide what a student's booking form locks their
+  parents' names to.
 - **Form Builder** — edits `RoleFormConfig` per requester role.
 - **All Bookings** — filter by status, audit-logged force-status override,
   hard delete.
@@ -1419,6 +1548,23 @@ Migration files, applied sequentially:
    re-run. Until it is applied the store omits the column, so a booking with
    meals is stored without its split and reads back through the legacy
    preference.
+
+28. `00000000000028_academic_records.sql` — the enum `academic_record_kind`
+   and the table `academic_records`: **the institute's records as the office
+   pasted them in**. One flat row per `(kind, lower(email))` with every kind's
+   fields as nullable columns; RLS on with **no `authenticated` policy**
+   (parents' names and phone numbers — service-role only, like
+   `app_settings`); a trigger moves `updated_at`; `imported_by` is
+   `on delete set null`. Additive, safe to re-run. Until it is applied every
+   lookup falls through to the dummy records and the console reports the
+   missing table by name.
+29. `00000000000029_missed_status.sql` — `MISSED` on `booking_status`, **and
+   nothing else in the file**: Postgres refuses to *use* a new enum value in
+   the transaction that adds it, so anything that reads or writes it belongs
+   in a later migration. Nothing is backfilled — the first nightly run marks
+   what has lapsed, which is also the run that tells the requester. Until it
+   is applied the sweep cannot mark anything there (it logs the enum error per
+   booking and the run carries on).
 
 Full notes per migration in `.memories/22-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine

@@ -34,7 +34,7 @@ import type { Block, EmailDocument } from "./render";
 /**
  * What each mail says.
  *
- * Templates return an `EmailDocument` — blocks, not markup — so `render.ts`
+ * Templates return an `EmailDocument` - blocks, not markup - so `render.ts`
  * produces the HTML and the plain-text part from one description. They are
  * pure: no store access, no env beyond `portalUrl`, which makes them trivial
  * to eyeball with `npx tsx`.
@@ -80,7 +80,7 @@ export function bookingFacts(booking: BookingWithDetails): Block {
     rows.push(["Booked on behalf of", booking.on_behalf_of_name]);
   }
   if (booking.has_foreign_national) {
-    rows.push(["Foreign nationals", "Yes — passport details are on the booking in the portal"]);
+    rows.push(["Foreign nationals", "Yes - passport details are on the booking in the portal"]);
   }
   if (booking.alumni_name) {
     rows.push([
@@ -90,7 +90,7 @@ export function bookingFacts(booking: BookingWithDetails): Block {
         : booking.alumni_name,
     ]);
   }
-  // Only where the guest house serves them — elsewhere the row is a puzzle.
+  // Only where the guest house serves them - elsewhere the row is a puzzle.
   if (booking.guest_house.serves_meals) {
     rows.push(["Meals", describeMeals(booking.meals)]);
     // Each person's own preference (1 Oct 2026); a booking made before that
@@ -109,7 +109,7 @@ function requesterLine(booking: BookingWithDetails): string {
   const r = booking.requester;
   const scope = r.hostel_name ?? r.department_or_club;
   const role = ROLE_LABELS[booking.user_role];
-  return scope ? `${r.full_name} — ${role}, ${scope}` : `${r.full_name} — ${role}`;
+  return scope ? `${r.full_name} - ${role}, ${scope}` : `${r.full_name} - ${role}`;
 }
 
 function assignedRoomNumbers(booking: BookingWithDetails): string {
@@ -135,11 +135,11 @@ export function submittedToRequester(booking: BookingWithDetails): EmailDocument
   const pending = STATUS_LABELS[booking.status];
   return {
     heading: "We have your booking request",
-    preheader: `${booking.booking_reference_id} — ${pending}. No action needed from you yet.`,
+    preheader: `${booking.booking_reference_id} - ${pending}. No action needed from you yet.`,
     blocks: [
       {
         kind: "paragraph",
-        text: `Your request for ${booking.guest_house.name} has been recorded. Nothing is needed from you at this stage — you will get an email at each step.`,
+        text: `Your request for ${booking.guest_house.name} has been recorded. Nothing is needed from you at this stage - you will get an email at each step.`,
       },
       bookingFacts(booking),
       {
@@ -206,7 +206,7 @@ export function rejectedToRequester(
 ): EmailDocument {
   return {
     heading: "Your booking request was not approved",
-    preheader: `${booking.booking_reference_id} — rejected by ${reviewerName}.`,
+    preheader: `${booking.booking_reference_id} - rejected by ${reviewerName}.`,
     blocks: [
       {
         kind: "paragraph",
@@ -238,8 +238,8 @@ export function allocatedToRequester(booking: BookingWithDetails): EmailDocument
       title: "Allocated rooms",
       lines: [
         rooms
-          ? `${booking.guest_house.name} — room ${rooms}`
-          : `${booking.guest_house.name} — see the portal for room numbers`,
+          ? `${booking.guest_house.name} - room ${rooms}`
+          : `${booking.guest_house.name} - see the portal for room numbers`,
         `Check-in ${formatDateTime(booking.check_in)}, check-out ${formatDateTime(booking.check_out)}.`,
       ],
     },
@@ -269,10 +269,10 @@ export function allocatedToRequester(booking: BookingWithDetails): EmailDocument
   blocks.push({ kind: "button", label: "View in the portal", href: portalUrl("/dashboard") });
 
   return {
-    heading: "Confirmed — your rooms are allocated",
+    heading: "Confirmed - your rooms are allocated",
     preheader: rooms
-      ? `${booking.booking_reference_id} — room ${rooms} at ${booking.guest_house.name}.`
-      : `${booking.booking_reference_id} — approved at ${booking.guest_house.name}.`,
+      ? `${booking.booking_reference_id} - room ${rooms} at ${booking.guest_house.name}.`
+      : `${booking.booking_reference_id} - approved at ${booking.guest_house.name}.`,
     blocks,
   };
 }
@@ -281,7 +281,7 @@ export function reminderToRequester(booking: BookingWithDetails): EmailDocument 
   const rooms = assignedRoomNumbers(booking);
   return {
     heading: "Your stay begins tomorrow",
-    preheader: `${booking.booking_reference_id} — check-in ${formatDateTime(booking.check_in)}.`,
+    preheader: `${booking.booking_reference_id} - check-in ${formatDateTime(booking.check_in)}.`,
     blocks: [
       {
         kind: "paragraph",
@@ -316,7 +316,7 @@ export function cancelledToRequester(
 ): EmailDocument {
   return {
     heading: "Your booking has been cancelled",
-    preheader: `${booking.booking_reference_id} — cancelled. Any rooms held have been released.`,
+    preheader: `${booking.booking_reference_id} - cancelled. Any rooms held have been released.`,
     blocks: [
       {
         kind: "paragraph",
@@ -340,7 +340,7 @@ export function cancellationDecidedToRequester(
   if (outcome === "approved") {
     return {
       heading: "Your cancellation has been approved",
-      preheader: `${booking.booking_reference_id} — cancellation approved; rooms released.`,
+      preheader: `${booking.booking_reference_id} - cancellation approved; rooms released.`,
       blocks: [
         {
           kind: "paragraph",
@@ -353,7 +353,7 @@ export function cancellationDecidedToRequester(
   }
   return {
     heading: "Your cancellation request was declined",
-    preheader: `${booking.booking_reference_id} — cancellation declined; the booking stands.`,
+    preheader: `${booking.booking_reference_id} - cancellation declined; the booking stands.`,
     blocks: [
       {
         kind: "paragraph",
@@ -381,7 +381,7 @@ export function awaitingReview(
   const stage = STATUS_LABELS[booking.status];
   return {
     heading: forwardedBy ? "A booking has been forwarded to you" : "A booking is awaiting your review",
-    preheader: `${booking.booking_reference_id} from ${booking.requester.full_name} — ${stage}.`,
+    preheader: `${booking.booking_reference_id} from ${booking.requester.full_name} - ${stage}.`,
     blocks: [
       {
         kind: "paragraph",
@@ -398,7 +398,7 @@ export function awaitingReview(
       },
       {
         kind: "note",
-        text: "Guest ID documents are attached to the request in the portal — they are never sent by email.",
+        text: "Guest ID documents are attached to the request in the portal - they are never sent by email.",
       },
       {
         kind: "note",
@@ -412,7 +412,7 @@ export function allocatedToDesk(booking: BookingWithDetails, allocatedBy: string
   const rooms = assignedRoomNumbers(booking);
   return {
     heading: "Allocation recorded",
-    preheader: `${booking.booking_reference_id} — room ${rooms || "(none)"} at ${booking.guest_house.name}.`,
+    preheader: `${booking.booking_reference_id} - room ${rooms || "(none)"} at ${booking.guest_house.name}.`,
     blocks: [
       {
         kind: "paragraph",
@@ -439,7 +439,7 @@ export function cancellationRequestedToManager(
   const rooms = assignedRoomNumbers(booking);
   return {
     heading: "A cancellation needs your decision",
-    preheader: `${booking.booking_reference_id} — ${booking.requester.full_name} asks to cancel.`,
+    preheader: `${booking.booking_reference_id} - ${booking.requester.full_name} asks to cancel.`,
     blocks: [
       {
         kind: "paragraph",
@@ -461,7 +461,7 @@ export function cancellationRequestedToManager(
 }
 
 /**
- * The same cancellation, told to whoever reviewed the request — for
+ * The same cancellation, told to whoever reviewed the request - for
  * information only.
  *
  * They signed the booking off, so they should know it is being withdrawn;
@@ -475,11 +475,11 @@ export function cancellationRequestedToReviewer(
 ): EmailDocument {
   return {
     heading: "A booking you reviewed is being cancelled",
-    preheader: `${booking.booking_reference_id} — ${booking.requester.full_name} asks to cancel. No action needed.`,
+    preheader: `${booking.booking_reference_id} - ${booking.requester.full_name} asks to cancel. No action needed.`,
     blocks: [
       {
         kind: "paragraph",
-        text: `${booking.requester.full_name} has asked to cancel a request you reviewed. This is for your information — the Guest House Manager decides, and there is nothing for you to do.`,
+        text: `${booking.requester.full_name} has asked to cancel a request you reviewed. This is for your information - the Guest House Manager decides, and there is nothing for you to do.`,
       },
       { kind: "callout", tone: "info", title: "Reason given", lines: [reason] },
       bookingFacts(booking),
@@ -490,7 +490,7 @@ export function cancellationRequestedToReviewer(
 export function cancellationToDesk(booking: BookingWithDetails, actorName: string): EmailDocument {
   return {
     heading: "A booking was cancelled",
-    preheader: `${booking.booking_reference_id} — cancelled; rooms released.`,
+    preheader: `${booking.booking_reference_id} - cancelled; rooms released.`,
     blocks: [
       {
         kind: "paragraph",
@@ -555,7 +555,7 @@ export function reviewerDigest(
   };
 }
 
-/** "3 days" — how long a booking has sat in its current queue. */
+/** "3 days" - how long a booking has sat in its current queue. */
 export function waitingFor(booking: BookingWithDetails, now: Date = new Date()): string {
   const since = booking.updated_at ?? booking.created_at;
   const hours = Math.max(0, Math.floor((now.getTime() - new Date(since).getTime()) / 3_600_000));
@@ -632,7 +632,7 @@ export function dailyDeskReport(
   const stayRow = (b: BookingWithDetails) => [
     b.booking_reference_id,
     b.requester.full_name,
-    b.assigned_rooms.map((r) => r.room_number).join(", ") || "—",
+    b.assigned_rooms.map((r) => r.room_number).join(", ") || "-",
     describeParty(b),
     formatDateTime(b.check_in),
     formatDateTime(b.check_out),
@@ -648,7 +648,7 @@ export function dailyDeskReport(
     (sections.kitchen?.counts.every((c) => c.total === 0) ?? true);
 
   return {
-    heading: `${guestHouseName} — daily log for ${formatDate(day)}`,
+    heading: `${guestHouseName} - daily log for ${formatDate(day)}`,
     preheader: `${sections.arrivals.length} arriving, ${sections.departures.length} leaving, ${sections.inHouse.length} in house, ${free} of ${occupancy.rooms} rooms free.`,
     blocks: [
       // Said plainly, so a quiet day is not five empty tables the reader has
@@ -692,7 +692,7 @@ export function dailyDeskReport(
         ? [
             {
               kind: "table" as const,
-              caption: "Kitchen — plates today (approved bookings)",
+              caption: "Kitchen - plates today (approved bookings)",
               head: ["Meal", "Vegetarian", "Non-vegetarian", "Unspecified", "Total"],
               rows: sections.kitchen.counts.map((c) => [
                 MEAL_LABELS[c.meal],
@@ -713,7 +713,7 @@ export function dailyDeskReport(
                   b.booking_reference_id,
                   b.on_behalf_of_name ?? b.requester.full_name,
                   String(people),
-                  split ? describeDietCounts(split) : "—",
+                  split ? describeDietCounts(split) : "-",
                   mealsOn(b.meals, day).map((m) => MEAL_LABELS[m]).join(", "),
                   describeDebit(b),
                 ];
@@ -747,22 +747,22 @@ export function dailyDeskReport(
 export function invoiceToAccounts(booking: BookingWithDetails, invoice: InvoiceDocument): EmailDocument {
   return {
     heading: `Invoice ${invoice.invoice_number}`,
-    preheader: `${invoice.guest_house} Guest House — ${formatINR(invoice.grand_total)}, debitable to ${invoice.debit_head_label}.`,
+    preheader: `${invoice.guest_house} Guest House - ${formatINR(invoice.grand_total)}, debitable to ${invoice.debit_head_label}.`,
     blocks: [
       {
         kind: "paragraph",
-        text: `The Guest House has issued the invoice below for an official stay. The invoice is attached as a PDF; it is the record — this message only summarises it.`,
+        text: `The Guest House has issued the invoice below for an official stay. The invoice is attached as a PDF; it is the record - this message only summarises it.`,
       },
       {
         kind: "facts",
         rows: [
           ["Invoice No.", invoice.invoice_number ?? ""],
           ["Invoice date", formatInvoiceDate(invoice.invoice_date)],
-          ["Booked by", `${invoice.booked_by} — ${invoice.unit}`],
+          ["Booked by", `${invoice.booked_by} - ${invoice.unit}`],
           ["Debitable head", invoice.debit_head_label],
           // The project only with the Project head, and its sub-head with it.
           ...(invoice.debit_head === "project_grant" && invoice.project_number
-            ? ([["Project", `${invoice.project_number} — ${invoice.project_title ?? ""}`]] as [string, string][])
+            ? ([["Project", `${invoice.project_number} - ${invoice.project_title ?? ""}`]] as [string, string][])
             : []),
           ...(invoice.debit_head === "project_grant" && invoice.project_subhead
             ? ([["Project sub-head", invoice.project_subhead]] as [string, string][])
@@ -801,7 +801,7 @@ export function extensionRequestedToManager(booking: BookingWithDetails): EmailD
   const until = booking.extension_requested_until ?? booking.check_out;
   return {
     heading: "A guest asks to stay longer",
-    preheader: `${booking.booking_reference_id} — until ${formatDateTime(until)}.`,
+    preheader: `${booking.booking_reference_id} - until ${formatDateTime(until)}.`,
     blocks: [
       {
         kind: "paragraph",
@@ -824,7 +824,7 @@ export function extensionDecidedToRequester(
 ): EmailDocument {
   return {
     heading: approved ? "Your stay has been extended" : "Your extension was not approved",
-    preheader: `${booking.booking_reference_id} — ${approved ? `now until ${formatDateTime(until)}` : "check-out unchanged"}.`,
+    preheader: `${booking.booking_reference_id} - ${approved ? `now until ${formatDateTime(until)}` : "check-out unchanged"}.`,
     blocks: [
       {
         kind: "paragraph",
@@ -838,10 +838,45 @@ export function extensionDecidedToRequester(
   };
 }
 
+/**
+ * A request nobody decided in time (migration 29, 7 Oct 2026).
+ *
+ * Careful about whose fault this reads as. The requester did nothing wrong -
+ * they asked in good time and nobody answered - so the mail says what
+ * happened plainly, does not apologise on anyone's behalf, and tells them the
+ * two things they can actually do: ask the guest house office if the stay is
+ * still needed, or make a fresh request. It also names the date that passed,
+ * because a reference id on its own tells them nothing.
+ */
+export function missedToRequester(booking: BookingWithDetails): EmailDocument {
+  const dining = booking.service_type === "meals_only";
+  const deadline = dining ? booking.check_out : booking.check_in;
+  return {
+    heading: dining ? "Your meal booking was not decided in time" : "Your booking was not decided in time",
+    preheader: `${booking.booking_reference_id} - marked as missed.`,
+    blocks: [
+      {
+        kind: "paragraph",
+        text: dining
+          ? `This request was still waiting for a decision when its last day of meals (${formatDateTime(deadline)}) passed, so the kitchen can no longer serve it. It has been marked as missed and needs nothing further from you.`
+          : `This request was still waiting for a decision when its check-in (${formatDateTime(deadline)}) passed, so the stay can no longer go ahead. It has been marked as missed and needs nothing further from you.`,
+      },
+      bookingFacts(booking),
+      {
+        kind: "paragraph",
+        text: dining
+          ? "If you still need the meals, please make a fresh request with the new dates."
+          : "If the visit is still happening, please make a fresh request with the new dates, or contact the Guest House office - they can put this one back if the stay is still wanted.",
+      },
+      { kind: "button", label: "Open the portal", href: portalUrl("/dashboard") },
+    ],
+  };
+}
+
 export function noShowToRequester(booking: BookingWithDetails, automatic: boolean, reason: string | null): EmailDocument {
   return {
-    heading: "Your booking was released — the guest did not arrive",
-    preheader: `${booking.booking_reference_id} — rooms released.`,
+    heading: "Your booking was released - the guest did not arrive",
+    preheader: `${booking.booking_reference_id} - rooms released.`,
     blocks: [
       {
         kind: "paragraph",
@@ -853,7 +888,7 @@ export function noShowToRequester(booking: BookingWithDetails, automatic: boolea
       bookingFacts(booking),
       {
         kind: "paragraph",
-        text: "If the guest is still coming, contact the Guest House office — or make a fresh request from the portal.",
+        text: "If the guest is still coming, contact the Guest House office - or make a fresh request from the portal.",
       },
       { kind: "button", label: "Open the portal", href: portalUrl("/dashboard") },
     ],

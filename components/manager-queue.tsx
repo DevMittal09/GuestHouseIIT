@@ -12,6 +12,9 @@ import { DeskSummary } from "@/components/desk-summary";
 import type { CapacityRules } from "@/lib/settings";
 import { RoomGrid } from "@/components/room-grid";
 import { StaysTable } from "@/components/stays-table";
+import { AwaitingPaymentTable } from "@/components/awaiting-payment";
+import { MissedTable } from "@/components/missed-requests";
+import type { AwaitingPaymentRow } from "@/lib/invoice";
 import { Badge } from "@/components/ui/badge";
 import { SectionHeading } from "@/components/section-heading";
 import { Button } from "@/components/ui/button";
@@ -50,6 +53,8 @@ export function ManagerQueue({
   upcoming,
   overdue,
   toBill,
+  missed,
+  awaitingPayment,
   checkoutsToday,
   cancellationRequests,
   rooms,
@@ -63,14 +68,27 @@ export function ManagerQueue({
   /** The turnaround buffer from Settings, for the allocation grid. */
   bufferMinutes?: number;
   pending: BookingWithDetails[];
-  /** Stays happening right now — check-in has passed, check-out has not. */
+  /** Stays happening right now - check-in has passed, check-out has not. */
   current: BookingWithDetails[];
   /** Allocated stays that have not started yet. */
   upcoming: BookingWithDetails[];
-  /** Past their check-out but never marked Vacated — still need closing off. */
+  /** Past their check-out but never marked Vacated - still need closing off. */
   overdue: BookingWithDetails[];
   /** Checked out, invoice not yet paid. The desk's list of bills to settle. */
   toBill: BookingWithDetails[];
+  /**
+   * Requests the nightly sweep marked Missed, newest first (migration 29).
+   * Nobody decided them before their check-in, so they are nobody's queue any
+   * more - but the manager can put one back if the stay is still wanted.
+   */
+  missed: BookingWithDetails[];
+  /**
+   * Invoice issued and still unpaid, however long ago (7 Oct 2026). The last
+   * section on the page: nothing here is a thing to do today, but an official
+   * stay's bill can sit with a department for months and must not drop off a
+   * screen after thirty days.
+   */
+  awaitingPayment: AwaitingPaymentRow[];
   /** Rooms due back today, earliest first. */
   checkoutsToday: BookingWithDetails[];
   cancellationRequests: BookingWithDetails[];
@@ -103,12 +121,18 @@ export function ManagerQueue({
           { label: "Awaiting check-out", count: overdue.length, anchor: "awaiting", alert: true },
           { label: "To bill", count: toBill.length, anchor: "to-bill" },
           { label: "Upcoming stays", count: upcoming.length, anchor: "upcoming" },
+          ...(missed.length > 0
+            ? [{ label: "Missed requests", count: missed.length, anchor: "missed", alert: true }]
+            : []),
+          ...(awaitingPayment.length > 0
+            ? [{ label: "Awaiting payment", count: awaitingPayment.length, anchor: "awaiting-payment" }]
+            : []),
         ]}
       />
 
       {/* What the desk needs first thing: which rooms come back today. */}
       <div id="checkouts" className="scroll-mt-20">
-        <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} />
+        <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} isManager />
       </div>
 
       {/* Cancellation Requests Section */}
@@ -142,7 +166,7 @@ export function ManagerQueue({
         </section>
       )}
 
-      {/* Incoming room requests. A meal booking is not one of them — see
+      {/* Incoming room requests. A meal booking is not one of them - see
           below. */}
       <section id="incoming" className="scroll-mt-20">
         <SectionHeading
@@ -189,7 +213,7 @@ export function ManagerQueue({
           2026, the office's request).
           
           They were in the list above, under headings that are all about
-          rooms — check-in, check-out, rooms, "Review & Allocate" — with a
+          rooms - check-in, check-out, rooms, "Review & Allocate" - with a
           dash in most of the cells. Nobody arrives on a meal booking and
           there is nothing to allocate: what the manager needs to see is the
           day, the sitting, the head count and the split, which is what this
@@ -201,7 +225,7 @@ export function ManagerQueue({
             count={pendingMeals.length}
             description={
               <>
-                No room is held for these and nobody checks in — confirm the kitchen can serve
+                No room is held for these and nobody checks in - confirm the kitchen can serve
                 them. Head counts for a given day are on <span className="font-medium">Meal counts</span>.
               </>
             }
@@ -229,7 +253,7 @@ export function ManagerQueue({
         </section>
       )}
 
-      {/* Current occupants — guests physically in the building now */}
+      {/* Current occupants - guests physically in the building now */}
       <section id="in-house" className="scroll-mt-20">
         <SectionHeading
           title="Current occupants"
@@ -273,11 +297,11 @@ export function ManagerQueue({
       {toBill.length > 0 && (
         <section id="to-bill" className="scroll-mt-20">
           <SectionHeading
-            title="Checked out — to bill"
+            title="Checked out - to bill"
             count={toBill.length}
             description={
               <>
-                These guests have left and their invoice is not yet paid. Issue it, or record the payment against one already issued — they leave this list once it is settled.
+                These guests have left and their invoice is not yet paid. Issue it, or record the payment against one already issued - they leave this list once it is settled.
               </>
             }
           />
@@ -285,7 +309,7 @@ export function ManagerQueue({
         </section>
       )}
 
-      {/* Upcoming — allocated, not started */}
+      {/* Upcoming - allocated, not started */}
       <section id="upcoming" className="scroll-mt-20">
         <SectionHeading
           title="Upcoming stays"
@@ -304,6 +328,50 @@ export function ManagerQueue({
           <StaysTable bookings={upcoming} isManager />
         )}
       </section>
+
+      {/* **Missed** - requests nobody decided before their check-in
+          (migration 29, 7 Oct 2026). They used to sit in a queue for ever
+          with a "lapsed" badge, waiting to be rejected by hand; the nightly
+          sweep now closes them and tells the requester. The manager can put
+          one back where it was waiting, and then move its dates and
+          allocate. */}
+      {missed.length > 0 && (
+        <section id="missed" className="scroll-mt-20">
+          <SectionHeading
+            title="Missed requests"
+            count={missed.length}
+            tone="alert"
+            description={
+              <>
+                Nobody decided these before the check-in passed - or, for a meal booking, before its last day of meals. The requester has been told. Reinstate one to put it back in the queue it was waiting in; its dates will still need moving before it can be allocated.
+              </>
+            }
+          />
+          <MissedTable bookings={missed} />
+        </section>
+      )}
+
+      {/* **Awaiting payment** - the last section, and the only one with no
+          date window (7 Oct 2026). "Checked out - to bill" above is the
+          desk's daily list of stays nobody has invoiced yet, and is bounded
+          to a few weeks. This is the other half: the invoice has gone out
+          and the money has not come in. An official stay's bill can sit with
+          a department for months, and a dining booking never checks out at
+          all, so neither would ever appear above. */}
+      {awaitingPayment.length > 0 && (
+        <section id="awaiting-payment" className="scroll-mt-20">
+          <SectionHeading
+            title="Awaiting payment"
+            count={awaitingPayment.length}
+            description={
+              <>
+                An invoice has been issued for each of these and is not yet paid - most recent first, with no cut-off. Open the invoice to record the payment when it arrives. A personal stay cannot be closed off unpaid, so anything here is an official booking, a dining booking, or a stay a manager released with a reason.
+              </>
+            }
+          />
+          <AwaitingPaymentTable rows={awaitingPayment} isManager />
+        </section>
+      )}
     </div>
   );
 }
@@ -318,7 +386,7 @@ function sortOfficialFirst(bookings: BookingWithDetails[]): BookingWithDetails[]
 /**
  * One meal booking waiting for approval: the days and sittings, the head
  * count and each person's own preference. No rooms, no dates to allocate
- * against — approving is the whole decision.
+ * against - approving is the whole decision.
  */
 function MealRequestRow({ booking }: { booking: BookingWithDetails }) {
   const [open, setOpen] = useState(false);
@@ -359,7 +427,7 @@ function MealRequestRow({ booking }: { booking: BookingWithDetails }) {
         </ul>
       </TableCell>
       <TableCell>{headCount}</TableCell>
-      <TableCell className="text-xs">{split ? describeDietCounts(split) : "—"}</TableCell>
+      <TableCell className="text-xs">{split ? describeDietCounts(split) : "-"}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <Dialog open={open} onOpenChange={setOpen}>
@@ -368,7 +436,7 @@ function MealRequestRow({ booking }: { booking: BookingWithDetails }) {
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
               <DialogHeader>
-                <DialogTitle>Approve meals — {booking.booking_reference_id}</DialogTitle>
+                <DialogTitle>Approve meals - {booking.booking_reference_id}</DialogTitle>
                 <DialogDescription>
                   Confirm the kitchen can serve these meals. No room is held for a meal booking.
                 </DialogDescription>
@@ -385,7 +453,7 @@ function MealRequestRow({ booking }: { booking: BookingWithDetails }) {
   );
 }
 
-/** Incoming request row — allocate or reject. */
+/** Incoming request row - allocate or reject. */
 function ManagerRow({
   booking,
   rooms,
@@ -431,7 +499,7 @@ function ManagerRow({
           {ROLE_LABELS[booking.user_role]}
         </Badge>
         {/* Who is paying is a different question from who asked, and the desk
-            needs both — a staff member books officially one week and privately
+            needs both - a staff member books officially one week and privately
             the next. */}
         <span className="mt-0.5 block text-xs text-muted-foreground">
           {BOOKING_TYPE_LABELS[booking.booking_type]} · {SERVICE_TYPE_LABELS[booking.service_type]}
@@ -445,13 +513,13 @@ function ManagerRow({
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               {/* A meal booking has no room to allocate and is not in this
-                  table at all — it has its own section, where approving is
+                  table at all - it has its own section, where approving is
                   the whole decision. */}
               <Button size="sm">Review &amp; Allocate</Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
               <DialogHeader>
-                <DialogTitle>Allocate rooms — {booking.booking_reference_id}</DialogTitle>
+                <DialogTitle>Allocate rooms - {booking.booking_reference_id}</DialogTitle>
                 <DialogDescription>
                   Pick available rooms for the requested dates, then confirm to approve the booking.
                 </DialogDescription>
@@ -492,7 +560,7 @@ function ApproveMeals({
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
         {describeMeals(booking.meals)} for {headCount} guest{headCount === 1 ? "" : "s"}
-        {split ? ` — ${describeDietCounts(split)}` : ""}.
+        {split ? ` - ${describeDietCounts(split)}` : ""}.
       </p>
       <div className="flex justify-end">
         <Button
@@ -517,7 +585,7 @@ function ApproveMeals({
   );
 }
 
-/** Cancellation request row — approve or reject. */
+/** Cancellation request row - approve or reject. */
 function CancellationRow({ booking }: { booking: BookingWithDetails }) {
   const [isPending, startTransition] = useTransition();
   const [showRejectForm, setShowRejectForm] = useState(false);
@@ -529,7 +597,7 @@ function CancellationRow({ booking }: { booking: BookingWithDetails }) {
     startTransition(async () => {
       const result = await approveCancellation(booking.id);
       if (result.ok) {
-        toast.success(`Cancellation approved — ${booking.booking_reference_id}`);
+        toast.success(`Cancellation approved - ${booking.booking_reference_id}`);
         router.refresh();
       } else {
         toast.error(result.error);
@@ -540,7 +608,7 @@ function CancellationRow({ booking }: { booking: BookingWithDetails }) {
     startTransition(async () => {
       const result = await rejectCancellation(booking.id, rejectReason);
       if (result.ok) {
-        toast.success(`Cancellation rejected — booking restored`);
+        toast.success(`Cancellation rejected - booking restored`);
         setShowRejectForm(false);
         setRejectReason("");
         router.refresh();
@@ -561,9 +629,9 @@ function CancellationRow({ booking }: { booking: BookingWithDetails }) {
       </TableCell>
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
       <TableCell>{formatDateTime(booking.check_out)}</TableCell>
-      <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "—"}</TableCell>
+      <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "-"}</TableCell>
       <TableCell className="max-w-[200px] truncate text-sm" title={booking.rejection_reason ?? ""}>
-        {booking.rejection_reason || "—"}
+        {booking.rejection_reason || "-"}
       </TableCell>
       <TableCell className="text-right">
         <div className="flex flex-col items-end gap-2">
@@ -574,7 +642,7 @@ function CancellationRow({ booking }: { booking: BookingWithDetails }) {
               </DialogTrigger>
               <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle>Cancellation request — {booking.booking_reference_id}</DialogTitle>
+                  <DialogTitle>Cancellation request - {booking.booking_reference_id}</DialogTitle>
                   <DialogDescription>
                     {booking.requester.full_name} has requested cancellation of this booking.
                   </DialogDescription>

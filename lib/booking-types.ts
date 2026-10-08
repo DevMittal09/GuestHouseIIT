@@ -10,7 +10,7 @@ import {
  * Which booking types a role may choose, and which is selected by default.
  *
  * The office asked for this to be the *first* question on the booking form,
- * because it decides how the stay is billed and who has to approve it — not a
+ * because it decides how the stay is billed and who has to approve it - not a
  * detail buried near the bottom. A role with exactly one option is never asked:
  * a club or a dignitary's office only ever books officially, so showing them a
  * toggle with one position is a decision that isn't theirs to make.
@@ -34,7 +34,7 @@ const ROLE_BOOKING_TYPES: Partial<Record<Role, BookingType[]>> = {
   // until the IAR Office asked for it to be withdrawn (Sep 2026): office
   // bookings are raised by the IAR Office itself, which is also the body that
   // approves the Student Cell's requests. Stored bookings that used it keep
-  // reading through here — the value is retired, not deleted.
+  // reading through here - the value is retired, not deleted.
   iar_student_cell: ["alumni"],
   // Retired: no one books as an alumnus any more, but stored bookings read
   // their type through here.
@@ -42,13 +42,13 @@ const ROLE_BOOKING_TYPES: Partial<Record<Role, BookingType[]>> = {
   /**
    * The manager takes bookings at the desk for people who never open the
    * portal, so the kinds they raise on someone else's behalf are open to
-   * them — the guest decides which it is, not the account typing it in.
+   * them - the guest decides which it is, not the account typing it in.
    *
    * **Not `personal`** (23 Sep 2026). The manager's account is the desk, not
    * a person: a booking made on it is the guest house booking for somebody,
    * and "personal" would mean the manager's own family. Staff in this
    * position hold a second, ordinary institute account for their own
-   * bookings — the office asked for the desk account to stop offering a
+   * bookings - the office asked for the desk account to stop offering a
    * private stay, so a private stay cannot be raised, invoiced or approved
    * from the console that also approves it.
    */
@@ -61,7 +61,7 @@ export function bookingTypesFor(role: Role): BookingType[] {
 }
 
 /**
- * The type pre-selected for `role` — the first it is allowed, which is why the
+ * The type pre-selected for `role` - the first it is allowed, which is why the
  * arrays above list "official" first for staff. Null when the role cannot book.
  */
 export function defaultBookingTypeFor(role: Role): BookingType | null {
@@ -104,13 +104,13 @@ export function describeBookingType(role: Role, type: BookingType): string {
   }
   if (type === "personal") {
     return (
-      "A private visit — family or personal guests. Settled by you, not by " +
+      "A private visit - family or personal guests. Settled by you, not by " +
       "the department."
     );
   }
   return role === "iar_cell" || role === "iar_student_cell"
     ? "Institute business for the IAR office."
-    : "Institute business — a visitor, collaborator or committee hosted by " +
+    : "Institute business - a visitor, collaborator or committee hosted by " +
       "the institute.";
 }
 
@@ -120,7 +120,7 @@ export function describeBookingType(role: Role, type: BookingType): string {
  * Roles that may book meals without a room.
  *
  * Faculty, staff and institute offices eat at the guest house without staying
- * there — a department hosting an examiner for the day, a committee meeting
+ * there - a department hosting an examiner for the day, a committee meeting
  * over lunch. An ordinary guest has no reason to, and offering it to them
  * would only produce bookings the kitchen cannot place.
  *
@@ -133,7 +133,7 @@ export const MEALS_ONLY_ROLES: Role[] = [
   "gh_manager",
 ];
 
-/** Who {@link MEALS_ONLY_ROLES} are, in words — for error messages and the public site. */
+/** Who {@link MEALS_ONLY_ROLES} are, in words - for error messages and the public site. */
 export const MEALS_ONLY_AUDIENCE = "institute faculty, staff and offices";
 
 export function canBookMealsOnly(role: Role): boolean {
@@ -174,6 +174,6 @@ export function describeServiceType(service: ServiceType): string {
     case "room_meals":
       return "A room, plus meals from the guest house kitchen on the days you choose.";
     case "meals_only":
-      return "Meals at the guest house with no room booked — for a visitor you are hosting for the day.";
+      return "Meals at the guest house with no room booked - for a visitor you are hosting for the day.";
   }
 }

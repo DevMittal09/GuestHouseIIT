@@ -5,8 +5,8 @@ import { SITE_CACHE_TAG } from "./site-data";
  * What to re-render after a change (Phase 9).
  *
  * Every action used to call `revalidatePath("/", "layout")`, which throws away
- * the cache for **the whole application** — the public site, the guidelines,
- * the gallery, every console page — because one booking moved. That made the
+ * the cache for **the whole application** - the public site, the guidelines,
+ * the gallery, every console page - because one booking moved. That made the
  * public site uncacheable in practice and re-rendered a dozen pages nobody was
  * looking at.
  *

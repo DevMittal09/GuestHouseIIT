@@ -14,7 +14,7 @@
  */
 export const LDAP_UID_PATTERN = /^[a-z0-9][a-z0-9._@+-]{0,127}$/;
 
-/** Trimmed and lowercased — LDAP compares `uid` case-insensitively. */
+/** Trimmed and lowercased - LDAP compares `uid` case-insensitively. */
 export function normalizeLdapUid(value: string): string {
   return value.trim().toLowerCase();
 }

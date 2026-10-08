@@ -68,7 +68,7 @@ function csvRow(booking: BookingWithDetails, userId: string): string {
     SERVICE_TYPE_LABELS[booking.service_type],
     formatDateTime(booking.check_in),
     formatDateTime(booking.check_out),
-    // A meals-only booking has no rooms and no guest list — the head count is
+    // A meals-only booking has no rooms and no guest list - the head count is
     // the whole of it, so it goes in the Guests column rather than leaving the
     // row looking like an empty booking.
     booking.service_type === "meals_only" ? "" : booking.rooms_requested,

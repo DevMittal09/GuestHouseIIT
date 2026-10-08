@@ -2,7 +2,6 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   ACCOUNTS,
   fillGuest,
-  ID_DOCUMENT,
   localDate,
   REFERENCE,
   rowFor,
@@ -13,7 +12,7 @@ import {
 
 /**
  * The office's fifth list of corrections (25 Sep 2026), through the real
- * forms: a student's father filled in from the academic record and checked by
+ * forms: a student's father taken from the academic record and checked by
  * the Assistant Warden, the infant card, an earlier check-in at reception,
  * and an invoice that bills the meals and the additional charge the desk adds.
  */
@@ -29,15 +28,18 @@ async function grandTotal(invoice: Locator): Promise<number> {
 
 /**
  * A faculty member's personal stay at Bageshri, starting within the hour so
- * reception can check the guest in — straight to the manager, who allocates.
+ * reception can check the guest in - straight to the manager, who allocates.
  */
 async function facultyStayStartingNow(page: Page): Promise<string> {
   await signIn(page, ACCOUNTS.faculty);
   await page.goto("/book");
   await page.locator('[name="booking_type"][value="personal"]').check();
-  // Personal Funds or Special Funds since 25 Sep 2026.
-  await expect(page.locator('[name="debit_head"][value="special_budget"]')).toBeVisible();
-  await page.locator('[name="debit_head"][value="personal_funds"]').check();
+  // A personal booking is not asked which budget pays (7 Oct 2026): no head
+  // to choose, no Special Funds, and the server records Personal Funds. What
+  // is left is the line about settling the invoice at check-out.
+  await expect(page.locator('[name="debit_head"]')).toHaveCount(0);
+  await expect(page.getByText("Debitable head", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Payment", { exact: true })).toBeVisible();
   const house = page.locator('select[name="guest_house_id"]');
   const bageshri = await house.locator("option", { hasText: "Bageshri" }).getAttribute("value");
   await house.selectOption(bageshri!);
@@ -54,7 +56,7 @@ async function facultyStayStartingNow(page: Page): Promise<string> {
   const reference = (await toast.innerText()).match(REFERENCE)![0];
   await page.waitForURL("**/dashboard", { timeout: 30_000 });
 
-  // The manager allocates the first room that is simply free — not one inside
+  // The manager allocates the first room that is simply free - not one inside
   // another stay's turnaround, which would ask for an override.
   await signIn(page, ACCOUNTS.manager);
   await page.goto("/manager?gh=bageshri");
@@ -77,26 +79,23 @@ test("a student's father is filled in on request, an infant gets an infant card,
   await page.locator('[name="purpose_of_visit"]').fill("Father and my niece visiting");
 
   /**
-   * **Choosing a relationship fills in nothing** (1 Oct 2026, the office:
-   * "remove auto-fill even for parents"). A box that writes itself is a box
-   * nobody checks. What the portal knows is one click away instead — the
-   * compact "Fill in…" list on the guest's own card, which sets the name, the
-   * gender, the relationship and the citizenship together.
+   * **A parent's name comes from the record, and cannot be edited** (7 Oct
+   * 2026). This is the reverse of what the same test asserted a week
+   * earlier: on 1 Oct the office asked for auto-fill to go, because a box
+   * that writes itself is a box nobody checks, and the "Fill in…" list
+   * replaced it. On 7 Oct they went further - the name is the institute's,
+   * so it is not a question at all. Choosing Father fills the box in and
+   * locks it, the Fill-in list is gone, and no Aadhaar or ID document is
+   * demanded for a guest the record named.
    */
+  await expect(page.getByLabel(/Fill in guest/)).toHaveCount(0);
   await page.locator('[name="rooms.0.guests.0.relationship"]').selectOption("Father");
-  await expect(page.locator('[name="rooms.0.guests.0.name"]')).toHaveValue("");
-  await expect(page.locator('[name="rooms.0.guests.0.gender"]')).toHaveValue("");
-
-  await page
-    .getByLabel("Fill in guest 1 from saved details")
-    .selectOption({ label: "Ramesh Menon — Father (academic record)" });
-  await expect(page.locator('[name="rooms.0.guests.0.name"]')).toHaveValue("Ramesh Menon");
-  await expect(page.locator('[name="rooms.0.guests.0.gender"]')).toHaveValue("male");
-  await expect(page.locator('[name="rooms.0.guests.0.relationship"]')).toHaveValue("Father");
-  await expect(page.getByText("As on your academic record (Father).")).toBeVisible();
+  const fatherName = page.locator('[name="rooms.0.guests.0.name"]');
+  await expect(fatherName).toHaveValue("Ramesh Menon");
+  await expect(fatherName).toHaveAttribute("readonly", "");
+  await expect(page.getByText(/From your academic record/)).toBeVisible();
   await page.locator('[name="rooms.0.guests.0.age"]').fill("55");
-  await page.locator('[name="rooms.0.guests.0.id_number"]').fill("432112345678");
-  await page.locator('input[type="file"]').first().setInputFiles(ID_DOCUMENT);
+  await page.locator('[name="rooms.0.guests.0.gender"]').selectOption("male");
 
   // "Add infant" makes an infant card: its age is a list below 5, no ID asked.
   const room = page.locator("fieldset", { has: page.getByText("Room 1", { exact: true }) });
@@ -121,14 +120,14 @@ test("a student's father is filled in on request, an infant gets an infant card,
   await expect(request.getByText("✓ Matches record")).toBeVisible();
   await request.getByRole("button", { name: /Review/ }).first().click();
   const review = page.getByRole("dialog");
-  await expect(review.getByText("Student's record — academic database")).toBeVisible();
+  await expect(review.getByText("Student's record - academic database")).toBeVisible();
   await expect(review.getByText("Matches the record")).toBeVisible();
   await expect(review.getByText("1 guest + 1 infant").first()).toBeVisible();
 });
 
 test("reception moves a stay's check-in, earlier and later", async ({ page }) => {
   // The seeded official stay (DM005): approved, Bageshri, six days out. The
-  // caretaker may do it — whoever may extend a stay may move its start. Both
+  // caretaker may do it - whoever may extend a stay may move its start. Both
   // directions since 1 Oct 2026: a guest who arrives late could not be
   // checked in at all before that.
   const reference = "IITPKD-GH-2026-DM005";
@@ -165,16 +164,23 @@ test("the invoice bills the meals and the charge the desk adds, as they are type
   await signIn(page, ACCOUNTS.caretaker);
   await page.goto("/caretaker?gh=bageshri");
   await rowFor(page, reference).getByRole("button", { name: /Mark as Occupied|Early check-in/ }).click();
-  const button = rowFor(page, reference).getByRole("button", { name: "Invoice", exact: true });
+  // A personal stay checks out through its invoice (7 Oct 2026), so that is
+  // the one button on the row.
+  const button = rowFor(page, reference).getByRole("button", { name: "Check out & settle" });
   await expect(button).toBeVisible({ timeout: 30_000 });
   await button.click();
   const invoice = page.getByRole("dialog");
   await expect(invoice.getByText("Not issued")).toBeVisible({ timeout: 30_000 });
-  // The revised template (30 Sep 2026): every figure lettered.
-  await expect(invoice.getByText("GST @ 18% on A (B)")).toBeVisible();
+  // The revised template (30 Sep 2026): every figure lettered - and since
+  // 7 Oct the CGST / SGST split reads in the GST row's own label, where the
+  // block of tax lines under the GSTIN used to carry it.
+  await expect(invoice.getByText("GST @ 18% on A (B) - CGST 9% + SGST 9%")).toBeVisible();
+  await expect(invoice.getByText(/SAC 996311/)).toHaveCount(0);
+  // One room was booked, so the room section prints one row and no blank one.
+  await expect(invoice.locator("tbody tr").filter({ hasText: /^$/ })).toHaveCount(0);
   const start = await grandTotal(invoice);
 
-  // Two breakfasts the kitchen served: ₹80 each, GST included — the total
+  // Two breakfasts the kitchen served: ₹80 each, GST included - the total
   // follows without saving anything.
   await invoice.getByLabel("Breakfast served").fill("2");
   await expect.poll(() => grandTotal(invoice), { timeout: 15_000 }).toBe(start + 160);
@@ -194,4 +200,29 @@ test("the invoice bills the meals and the charge the desk adds, as they are type
   // The issued snapshot holds both.
   expect(await grandTotal(invoice)).toBe(start + 160 + 1500);
   await expect(invoice.getByText("Vase in the room broken on departure")).toBeVisible();
+
+  /**
+   * And the manager - whose console this is not - may close a personal stay
+   * off unpaid with a reason, for a bill the office has agreed to settle some
+   * other way. Reception cannot, which the student journey checks.
+   */
+  await signIn(page, ACCOUNTS.manager);
+  await page.goto("/manager?gh=bageshri");
+  await rowFor(page, reference).getByRole("button", { name: "Check out & settle" }).click();
+  const asManager = page.getByRole("dialog");
+  const reason = asManager.getByLabel(/Close off unpaid/);
+  await expect(reason).toBeVisible({ timeout: 30_000 });
+  await reason.fill("Accounts will recover this from the department directly");
+  await asManager.getByRole("button", { name: "Close off unpaid" }).click();
+  const confirm = page.getByRole("dialog").last();
+  await confirm.getByRole("button", { name: "Close off unpaid" }).click();
+  await expect(page.getByText(/closed off unpaid/)).toBeVisible({ timeout: 30_000 });
+
+  // The bill is still out, so it waits under Awaiting payment - with no
+  // cut-off, unlike "Checked out - to bill".
+  await page.goto("/manager?gh=bageshri");
+  const awaiting = page.locator("section", {
+    has: page.getByRole("heading", { name: /Awaiting payment/ }),
+  });
+  await expect(awaiting.locator("tr", { hasText: reference })).toBeVisible({ timeout: 30_000 });
 });

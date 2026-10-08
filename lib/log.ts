@@ -3,7 +3,7 @@
  *
  * Server logs end up in a hosting provider's console, which is not a place for
  * a guest's Aadhaar number or a session token. Everything logged through here
- * is JSON — greppable, and parsed by whatever collects it — and passes through
+ * is JSON - greppable, and parsed by whatever collects it - and passes through
  * `redact()` first: email addresses keep their shape but lose the name, long
  * digit strings become their last four, and anything that looks like a secret
  * is replaced outright.
@@ -58,7 +58,7 @@ export const log = {
 
 /**
  * Report an error: to the log always, and to Sentry when a DSN is configured.
- * Never throws — a failed report must not become the failure.
+ * Never throws - a failed report must not become the failure.
  */
 export async function reportError(error: unknown, context: Record<string, unknown> = {}): Promise<void> {
   log.error("exception", { ...context, error });

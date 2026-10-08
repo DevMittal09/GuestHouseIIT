@@ -8,25 +8,25 @@ import type { RoomOccupancySegment } from "./types";
  * empty by 10:00, because the outgoing guest leaves after breakfast and
  * housekeeping is quick. The portal used to refuse the 10:00 arrival outright,
  * so the desk booked them by telephone and the portal stopped describing
- * reality — which is the failure mode every rule here is trying to avoid.
+ * reality - which is the failure mode every rule here is trying to avoid.
  *
  * Two rules meet here:
  *
- * - **The turnaround buffer** (Phase 3, a Setting — `rules.booking.buffer_minutes`,
+ * - **The turnaround buffer** (Phase 3, a Setting - `rules.booking.buffer_minutes`,
  *   4 hours by default): the least time between one stay's check-out and the
  *   next check-in on the same room, for housekeeping. Only the *end* of a hold
  *   is padded, so the gap is the buffer, not twice it.
  * - **The turnover override** (migration 14): the Guest House Manager may
- *   accept a changeover that is tighter than that — even an overlap of up to
- *   `TURNOVER_GRACE_HOURS` — and it is recorded against the booking.
+ *   accept a changeover that is tighter than that - even an overlap of up to
+ *   `TURNOVER_GRACE_HOURS` - and it is recorded against the booking.
  *
  * So a requested stay is, against each stay a room already holds:
  *
- * - **free** — their guards (below) do not meet; allocatable.
- * - **soft** — they meet, but the real overlap is no more than the grace at one
+ * - **free** - their guards (below) do not meet; allocatable.
+ * - **soft** - they meet, but the real overlap is no more than the grace at one
  *   end (a gap shorter than the buffer counts: its "overlap" is negative).
  *   Shown to the manager in yellow, allocatable only by an explicit override.
- * - **hard** — a genuine clash. Never allocatable.
+ * - **hard** - a genuine clash. Never allocatable.
  *
  * `holdGuard` is the database's `room_hold_guard()` (migration 17) in JS: the
  * range the exclusion constraint compares. The mock store uses it to emulate
@@ -155,9 +155,9 @@ export function overrideNotice(bufferMinutes: number): string {
     bufferMinutes > 0
       ? `A room needs ${describeBuffer(bufferMinutes)} between guests for housekeeping. `
       : "";
-  return `${buffer}Another stay ends too close to this one starting (or starts too soon after it ends) — within the ${describeBuffer(
+  return `${buffer}Another stay ends too close to this one starting (or starts too soon after it ends) - within the ${describeBuffer(
     bufferMinutes
-  )} turnaround, or overlapping it by up to ${TURNOVER_GRACE_HOURS} hours. You can allocate the room anyway if you know the changeover will work — it is recorded against the booking.`;
+  )} turnaround, or overlapping it by up to ${TURNOVER_GRACE_HOURS} hours. You can allocate the room anyway if you know the changeover will work - it is recorded against the booking.`;
 }
 
 /** The notice under the default 4-hour buffer, for places without settings. */

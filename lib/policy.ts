@@ -4,8 +4,8 @@
  * Everything here is a rule the office can change without a developer reading
  * the code that enforces it: how long a stay may run and who is exempt, where
  * alumni are put up, the pets notice, and who to ring when the form will not
- * let you do what you need. Each is enforced somewhere else — the booking
- * schema, the form, the server actions — but the *value* lives only here, so
+ * let you do what you need. Each is enforced somewhere else - the booking
+ * schema, the form, the server actions - but the *value* lives only here, so
  * changing it changes every place that shows or applies it.
  */
 
@@ -28,14 +28,14 @@ export const MAX_BOOKING_NIGHTS = DEFAULT_RULES.booking.max_stay_nights;
  *
  * The Director's Office hosts visits the institute has already committed to,
  * and the manager and the developer are the people who fix a booking when the
- * rule gets in the way — a cap they could not lift would just mean the stay is
+ * rule gets in the way - a cap they could not lift would just mean the stay is
  * recorded somewhere other than this portal.
  */
 export const BOOKING_DURATION_EXEMPT_ROLES: Role[] = ["official", "gh_manager", "developer"];
 
 /**
  * Accounts exempt regardless of role. The Director's Office books through the
- * `official` role today, so this is belt-and-braces for the day it does not —
+ * `official` role today, so this is belt-and-braces for the day it does not -
  * an address here is exempt even if its role changes.
  */
 export const DIRECTOR_OFFICE_EMAILS = ["director.office@iitpkd.ac.in"];
@@ -59,7 +59,7 @@ export function stayNights(checkIn: Date, checkOut: Date): number {
 
 /**
  * A calendar date as a count of days, for subtracting one date from another.
- * UTC only because a UTC day is always 24 hours long — nothing here is an
+ * UTC only because a UTC day is always 24 hours long - nothing here is an
  * instant, and nothing reads the runtime's zone. Same reasoning as `lib/tz.ts`.
  */
 function dayNumber(value: string): number | null {
@@ -83,7 +83,7 @@ export function stayLengthError(
   if (isDurationExempt(role, email) || maxNights <= 0) return null;
   const nights = stayNights(checkIn, checkOut);
   if (nights <= maxNights) return null;
-  return `Bookings are limited to a maximum of ${maxNights} nights — this stay is ${nights} nights. ${CONTACT_FOR_LONGER_STAYS}`;
+  return `Bookings are limited to a maximum of ${maxNights} nights - this stay is ${nights} nights. ${CONTACT_FOR_LONGER_STAYS}`;
 }
 
 export const CONTACT_FOR_LONGER_STAYS =
@@ -118,33 +118,55 @@ export function latestCheckOutDate(
 // ------------------------------------------------------------------ alumni
 
 /**
- * Alumni are put up at Bageshri. Matched on the guest house *name* because
- * guest houses are created from the developer console and have no stable id —
- * see `alumniGuestHouses` in `lib/guest-house-policy.ts` for the lookup.
+ * Students and alumni are put up at Bageshri. Matched on the guest house
+ * *name* because guest houses are created from the developer console and have
+ * no stable id.
+ *
+ * It was the alumni rule alone until 7 Oct 2026, when the office asked for
+ * students to be held to it in the same way - "students and alumni get
+ * Bageshri only and no meal options". Students were already Bageshri-only in
+ * practice, through `allowed_guest_house_ids` on the student form config, but
+ * that is a Form Builder row a developer can edit; this is the policy, and
+ * {@link restrictedToOneGuestHouse} applies it to both.
  */
 export const ALUMNI_GUEST_HOUSE_NAME = "Bageshri";
 
+/** The one guest house students and alumni use, under its own name. */
+export const RESTRICTED_GUEST_HOUSE_NAME = ALUMNI_GUEST_HOUSE_NAME;
+
 export const ALUMNI_GUEST_HOUSE_NOTE = `Alumni bookings are accommodated at ${ALUMNI_GUEST_HOUSE_NAME} Guest House.`;
+
+export const STUDENT_GUEST_HOUSE_NOTE = `Student bookings are accommodated at ${RESTRICTED_GUEST_HOUSE_NAME} Guest House, which does not serve meals.`;
 
 /** Guest houses an alumni booking may use. */
 export function alumniGuestHouses(all: GuestHouse[]): GuestHouse[] {
-  return all.filter((g) => g.name === ALUMNI_GUEST_HOUSE_NAME);
+  return all.filter((g) => g.name === RESTRICTED_GUEST_HOUSE_NAME);
+}
+
+/**
+ * Whether this requester and this kind of booking are held to the one guest
+ * house: a **student**, whoever they are booking for, and any booking made
+ * **for an alumnus**, whichever account raises it.
+ */
+export function restrictedToOneGuestHouse(bookingType: BookingType, role?: Role | null): boolean {
+  return bookingType === "alumni" || role === "student";
 }
 
 /**
  * The guest houses to offer for this kind of booking.
  *
- * An alumni booking is narrowed to Bageshri — unless the institute has no
- * guest house by that name, in which case the rule cannot be applied and the
- * full list stands rather than leaving the requester with an empty dropdown.
- * Guest houses are created and renamed from the developer console, so that is
- * a real possibility, not a theoretical one.
+ * A student's or an alumnus's booking is narrowed to Bageshri - unless the
+ * institute has no guest house by that name, in which case the rule cannot be
+ * applied and the full list stands rather than leaving the requester with an
+ * empty dropdown. Guest houses are created and renamed from the developer
+ * console, so that is a real possibility, not a theoretical one.
  */
 export function guestHousesForBookingType(
   all: GuestHouse[],
-  bookingType: BookingType
+  bookingType: BookingType,
+  role?: Role | null
 ): GuestHouse[] {
-  if (bookingType !== "alumni") return all;
+  if (!restrictedToOneGuestHouse(bookingType, role)) return all;
   const allowed = alumniGuestHouses(all);
   return allowed.length > 0 ? allowed : all;
 }
@@ -157,13 +179,48 @@ export function guestHousesForBookingType(
 export function guestHousePolicyError(
   bookingType: BookingType,
   guestHouse: GuestHouse,
-  all: GuestHouse[]
+  all: GuestHouse[],
+  role?: Role | null
 ): string | null {
-  if (bookingType !== "alumni") return null;
+  if (!restrictedToOneGuestHouse(bookingType, role)) return null;
   const allowed = alumniGuestHouses(all);
   if (allowed.length === 0) return null;
   if (allowed.some((g) => g.id === guestHouse.id)) return null;
-  return `${ALUMNI_GUEST_HOUSE_NOTE} ${guestHouse.name} cannot be booked for an alumnus.`;
+  return bookingType === "alumni"
+    ? `${ALUMNI_GUEST_HOUSE_NOTE} ${guestHouse.name} cannot be booked for an alumnus.`
+    : `${STUDENT_GUEST_HOUSE_NOTE} ${guestHouse.name} cannot be booked by a student.`;
+}
+
+// ------------------------------------------------------------------- meals
+
+/**
+ * Whether meals may be booked at all, for this requester and this kind of
+ * booking (7 Oct 2026).
+ *
+ * **No** for a student and for any booking made for an alumnus. Both are
+ * accommodated at Bageshri, which has no kitchen, so until now the answer
+ * fell out of the guest house: the form offers meals only where
+ * `serves_meals`, and Bageshri does not. That is a coincidence of
+ * configuration rather than a rule - a developer ticking "Serves meals" on
+ * Bageshri, or adding either role to Hamsanandi's list, would have started
+ * offering meals the office does not sell to them. So it is written down
+ * here, applied by the form and checked by `createBooking`.
+ *
+ * The **manager** is not held to it: the desk books for whoever is standing
+ * at the counter, and an exception it cannot make is an exception recorded
+ * somewhere other than this portal. The override is logged, like the guest
+ * house one.
+ */
+export function mealsAllowedFor(bookingType: BookingType, role?: Role | null): boolean {
+  return !restrictedToOneGuestHouse(bookingType, role);
+}
+
+/** Why this booking may not include meals, or null when it may. */
+export function mealsPolicyError(bookingType: BookingType, role?: Role | null): string | null {
+  if (mealsAllowedFor(bookingType, role)) return null;
+  return bookingType === "alumni"
+    ? "Meals cannot be booked with a stay for an alumnus - they are accommodated at the guest house that has no kitchen."
+    : "Meals cannot be booked with a student's request - students are accommodated at the guest house that has no kitchen.";
 }
 
 // ------------------------------------------------------------------ pets
@@ -176,12 +233,12 @@ export const PETS_POLICY_ACKNOWLEDGEMENT =
 // ------------------------------------------------------------------ contact
 
 /**
- * Who to contact when the form will not allow what the requester needs — a
+ * Who to contact when the form will not allow what the requester needs - a
  * stay over the cap, an alumni booking at the other guest house, a category
  * that no longer exists.
  *
  * The guest house office's own phone and email, from the one place they are
- * kept (`GUEST_HOUSE_CONTACT`, `lib/site.ts` — the numbers on the office's
+ * kept (`GUEST_HOUSE_CONTACT`, `lib/site.ts` - the numbers on the office's
  * invoice template, also on the public site). This used to be a placeholder of
  * its own (+91 04923 226 100, guesthouse@), so the portal showed a different
  * number from the website and the invoice.

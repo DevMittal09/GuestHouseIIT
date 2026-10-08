@@ -108,7 +108,7 @@ function ReviewRow({
   const [isPending, startTransition] = useTransition();
   const [detailOpen, setDetailOpen] = useState(false);
   // Nobody decided this in time and its check-in has gone. It can still be
-  // rejected — that closes it and tells the requester — but forwarding it
+  // rejected - that closes it and tells the requester - but forwarding it
   // would move a stay that cannot happen one step closer to holding a room.
   const lapsed = lapsedError(booking);
 
@@ -168,7 +168,7 @@ function ReviewRow({
                 <DialogTitle>Review {booking.booking_reference_id}</DialogTitle>
                 <DialogDescription>
                   Forwarding sends this request to the Guest House Manager for room allocation.
-                  That is the only place it can go — you either forward it or reject it.
+                  That is the only place it can go - you either forward it or reject it.
                 </DialogDescription>
               </DialogHeader>
               {studentRecord && <StudentRecordCheck panel={studentRecord} />}

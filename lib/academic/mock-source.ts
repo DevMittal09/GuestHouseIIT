@@ -1,9 +1,9 @@
-import type { AcademicRecord, AcademicRecordKind, AcademicSource } from "./types";
+import type { AcademicFind, AcademicRecord, AcademicRecordKind, AcademicSource } from "./types";
 
 /**
  * Dummy academic records, one per seeded persona that the academic database
  * would describe, standing in until the real database is connected
- * (`ACADEMIC_DB_URL`). Listed in `.memories/17-academic-records.md` — keep the
+ * (`ACADEMIC_DB_URL`). Listed in `.memories/17-academic-records.md` - keep the
  * two in step.
  *
  * Matched by institute email, so these line up with the profiles in
@@ -11,7 +11,7 @@ import type { AcademicRecord, AcademicRecordKind, AcademicSource } from "./types
  * phone numbers are the obviously fake `+91 90000 …` range.
  *
  * Rahul has no parents' names on record, so his card shows the guardian
- * instead — the one persona that exercises that rule.
+ * instead - the one persona that exercises that rule.
  */
 const RECORDS: AcademicRecord[] = [
   // ----- Students -----
@@ -47,7 +47,7 @@ const RECORDS: AcademicRecord[] = [
     employee_id: "FAC-1042",
     name: "Dr. Priya Sharma",
     department: "Computer Science and Engineering",
-    employee_type: "Faculty — Assistant Professor",
+    employee_type: "Faculty - Assistant Professor",
     phone: "+91 90000 00201",
     email: "priya@iitpkd.ac.in",
     office_number: "0491 000 1042",
@@ -57,7 +57,7 @@ const RECORDS: AcademicRecord[] = [
     employee_id: "FAC-1057",
     name: "Dr. Arun Prasad",
     department: "Computer Science and Engineering",
-    employee_type: "Faculty — Associate Professor",
+    employee_type: "Faculty - Associate Professor",
     phone: "+91 90000 00202",
     email: "arun.prasad@iitpkd.ac.in",
     office_number: "0491 000 1057",
@@ -82,14 +82,14 @@ const RECORDS: AcademicRecord[] = [
   // ----- Student representatives -----
   {
     kind: "student_rep",
-    representative_type: "Fest Council — Petrichor",
+    representative_type: "Fest Council - Petrichor",
     email: "petrichor@iitpkd.ac.in",
     phone: "+91 90000 00401",
     faculty_in_charge_email: "arun.prasad@iitpkd.ac.in",
   },
   {
     kind: "student_rep",
-    representative_type: "Council — Cultural Affairs (Secretary)",
+    representative_type: "Council - Cultural Affairs (Secretary)",
     email: "sec_arts@iitpkd.ac.in",
     phone: "+91 90000 00402",
     faculty_in_charge_email: "arun.prasad@iitpkd.ac.in",
@@ -97,7 +97,7 @@ const RECORDS: AcademicRecord[] = [
   // ----- Alumni office -----
   {
     kind: "alumni_office",
-    department: "International & Alumni Relations — Alumni Cell",
+    department: "International & Alumni Relations - Alumni Cell",
     email: "alumnicell@iitpkd.ac.in",
     phone: "+91 90000 00501",
   },
@@ -121,7 +121,8 @@ const RECORDS: AcademicRecord[] = [
 export class MockAcademicSource implements AcademicSource {
   readonly description = "mock academic records";
 
-  async find(kind: AcademicRecordKind, email: string): Promise<AcademicRecord | null> {
-    return RECORDS.find((r) => r.kind === kind && r.email?.toLowerCase() === email) ?? null;
+  async find(kind: AcademicRecordKind, email: string): Promise<AcademicFind | null> {
+    const record = RECORDS.find((r) => r.kind === kind && r.email?.toLowerCase() === email);
+    return record ? { record, origin: "sample" } : null;
   }
 }

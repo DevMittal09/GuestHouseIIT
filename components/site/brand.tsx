@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  *
  * It uses the **emblem alone** (`public/iitpkd-logo.png`) and sets the words in
  * type. The stacked logo file carries "IIT PALAKKAD" under the emblem, which
- * at header size came out about 8px tall — the reason the old header looked
+ * at header size came out about 8px tall - the reason the old header looked
  * cheap. The hairline between emblem and words is the institutional lockup's
  * habit (30 Sep 2026): it makes the two read as one mark rather than a
  * picture beside a heading. `tone="light"` is for the ink footer.

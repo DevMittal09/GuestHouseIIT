@@ -73,7 +73,7 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   await page.goto("/book?service=meals_only");
   await expect(page.getByRole("heading", { name: /Meal|Dining/i }).first()).toBeVisible();
 
-  // No room, no guest list — a head count, the days and each person's own
+  // No room, no guest list - a head count, the days and each person's own
   // preference. No pets notice either (1 Oct 2026): nobody stays.
   await expect(page.locator('[name="rooms.0.guests.0.name"]')).toHaveCount(0);
   await expect(page.getByText(/pets are not/i)).toHaveCount(0);
@@ -87,7 +87,7 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   // console opens on a tab per guest house, so the name is still needed here.
   await expect(page.locator('[name="guest_house_id"]')).toHaveCount(0);
   const kitchen = await kitchenName(page);
-  // Remarks, and optional, since 1 Oct 2026 — filled in anyway, because the
+  // Remarks, and optional, since 1 Oct 2026 - filled in anyway, because the
   // kitchen reads it.
   await expect(page.getByLabel(/Remarks/)).toBeVisible();
   await page.locator('[name="purpose_of_visit"]').fill("Workshop lunch for the visiting panel");
@@ -96,7 +96,7 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
 
   // It opens on the first day the kitchen can still cook for, with **lunch**
   // ticked (1 Oct 2026: it used to be every meal of the day). A second day is
-  // one click away, and that is all the notice period leaves room to assert —
+  // one click away, and that is all the notice period leaves room to assert -
   // which meals of today are open depends on the hour the suite happens to
   // run.
   const day = page.locator("#meal-date-0");
@@ -110,12 +110,22 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   await expect(lunch).toBeEnabled();
   await lunch.check();
 
-  // Each person's own preference (1 Oct 2026): the split has to add up to the
-  // head count, so the form refuses 6 people as 4 + 1 and takes 4 + 2.
+  /**
+   * Each person's own preference (1 Oct 2026): the split has to add up to the
+   * head count. Answering one box now fills the other with the rest (7 Oct
+   * 2026), so 4 vegetarians settles 2 non-vegetarians without being asked -
+   * and a split that does not add up is no longer reachable from the form at
+   * all. `dietCountsError` still enforces it on both sides for a crafted
+   * payload; that is checked in tests/seventh-round.test.ts.
+   */
   await page.locator('[name="meal_veg_count"]').selectOption("4");
-  await page.locator('[name="meal_non_veg_count"]').selectOption("1");
-  await expect(page.getByText(/add up to 5, but the booking is for 6/).first()).toBeVisible();
-  await page.locator('[name="meal_non_veg_count"]').selectOption("2");
+  await expect(page.locator('[name="meal_non_veg_count"]')).toHaveValue("2");
+  // Either box fills the other, so a correction works the same way.
+  await page.locator('[name="meal_non_veg_count"]').selectOption("6");
+  await expect(page.locator('[name="meal_veg_count"]')).toHaveValue("0");
+  await page.locator('[name="meal_veg_count"]').selectOption("4");
+  await expect(page.locator('[name="meal_non_veg_count"]')).toHaveValue("2");
+  await expect(page.getByText(/counts add up to \d+, but the booking is for/)).toHaveCount(0);
 
   // The summary at the end reads back what is about to be ordered.
   const summary = page.getByText(/4 vegetarian, 2 non-vegetarian/).first();
@@ -148,8 +158,8 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   await page.goto(
     `/manager/meals?gh=${encodeURIComponent(kitchen)}&date=${nextDay(firstDay)}`
   );
-  // The reference appears twice on the day sheet — once in the table of
-  // bookings and once in the per-meal list — so either will do.
+  // The reference appears twice on the day sheet - once in the table of
+  // bookings and once in the per-meal list - so either will do.
   await expect(page.getByText(reference).first()).toBeVisible();
 });
 
@@ -157,7 +167,7 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
  * The kitchen's limit per sitting (1 Oct 2026): 30 people at any one meal,
  * **counting everyone already booked for it**. The limit is about the other
  * bookings, which the browser cannot see, so it is enforced in `createBooking`
- * — this is the only place that proves the wiring.
+ * - this is the only place that proves the wiring.
  *
  * A date nothing else in the suite books, so the two halves depend on each
  * other and on nothing else.
@@ -193,22 +203,40 @@ test("the kitchen refuses a sitting that is already full", async ({ page }) => {
 });
 
 /**
- * The availability console: **the grid for everyone, the room-by-room list for
- * the desk only** (1 Oct 2026). Both are drawn client-side after the
- * occupancy fetch, so this is the only place the split can be checked.
+ * The availability console: **a count for a requester, the grid for the desk**
+ * (7 Oct 2026). The office asked for everyone but the manager, the caretaker
+ * and the developer to be told only how many rooms are free, and for the
+ * server to send them the number and nothing else - so the check is not only
+ * that the chart is absent but that no room number reaches the page at all.
+ * Both views are drawn client-side after the occupancy fetch, so this is the
+ * only place the split can be checked.
  */
-test("the availability console shows requesters the grid and the desk the room list", async ({ page }) => {
+test("the availability console counts rooms for a requester and charts them for the desk", async ({ page }) => {
   await signIn(page, ACCOUNTS.student);
   await page.goto("/availability");
-  // The chart arrives once the occupancy fetch lands; its title carries the
-  // range, so it is also a check that dates read DD/MM (1 Oct 2026).
-  await expect(page.getByText(/^Room availability — \d{2}\/\d{2}/)).toBeVisible();
-  // Booked / Vacant / now, and no housekeeping states (30 Sep 2026)…
-  await expect(page.getByText("Vacant", { exact: true }).first()).toBeVisible();
-  // …and no room-by-room list at all.
+  // The panel arrives once the fetch lands; the card title carries the range,
+  // so this is also a check that dates read DD/MM (1 Oct 2026).
+  await expect(page.getByText(/^Room availability - \d{2}\/\d{2}/)).toBeVisible();
+  await expect(page.getByText(/rooms available|No rooms free all day/).first()).toBeVisible();
+  /**
+   * Not one room number. Every room number on the page sits in a cell whose
+   * `title` names the room and its type ("201 - Double sharing"), on the
+   * chart's header and on each bar, and the room-by-room list spells the type
+   * out - so the absence of both is the absence of the rooms. The room
+   * numbers themselves are the office's own (201, 302…), which is why this
+   * cannot be a pattern match on the text.
+   */
+  await expect(page.locator('[title*="Double sharing"]')).toHaveCount(0);
+  await expect(page.getByText("Double sharing")).toHaveCount(0);
+  // None of the desk's states, and no room-by-room list.
+  await expect(page.getByText("Vacant", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Turnaround \(housekeeping/)).toHaveCount(0);
   await expect(page.getByText("Room details", { exact: true })).toHaveCount(0);
 
   await signIn(page, ACCOUNTS.manager);
   await page.goto("/availability");
   await expect(page.getByText("Room details", { exact: true })).toBeVisible();
+  await expect(page.getByText("Vacant", { exact: true }).first()).toBeVisible();
+  // The desk does get the rooms, one chart column each.
+  await expect(page.locator('[title*="Double sharing"]').first()).toBeVisible();
 });

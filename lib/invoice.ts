@@ -17,7 +17,7 @@ import type { BookingWithDetails, DebitHead, MealKey, Room } from "./types";
  * The guest house invoice (Phase 5), as pure functions.
  *
  * Everything the printed invoice shows is worked out here from the booking,
- * the tariff rows and the invoice Settings — then **frozen**: issuing stores
+ * the tariff rows and the invoice Settings - then **frozen**: issuing stores
  * the whole `InvoiceDocument` as the invoice's snapshot, and the PDF is drawn
  * from the snapshot, never recomputed. A tariff edited next year, a guest
  * renamed or a project retitled cannot change an invoice already handed over.
@@ -33,7 +33,7 @@ import type { BookingWithDetails, DebitHead, MealKey, Room } from "./types";
  * GST @ 18% on A (B); a dining table of Breakfast, Lunch and Dinner, then
  * Dining Charges Subtotal (C) and GST @ 5% on C (D); and Grand Total
  * (A+B+C+D). The desk's **additional charges** (25 Sep 2026) print inside the
- * section they are charged under — or, with no GST, in an Other Charges table
+ * section they are charged under - or, with no GST, in an Other Charges table
  * of their own. Snapshots keep the layout they were issued with: `version: 2`
  * (25–30 Sep) letters only the subtotals, `version: 1` (before 25 Sep) prints
  * Sub Total (A), Sub Total (B), Total (A+B), GST on Total.
@@ -45,22 +45,46 @@ export type InvoiceStatus = "draft" | "issued" | "paid" | "cancelled";
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   draft: "Draft",
-  issued: "Issued — awaiting payment",
+  issued: "Issued - awaiting payment",
   paid: "Paid",
   cancelled: "Cancelled",
 };
 
+/**
+ * How a guest paid. **`cash` is retired** (7 Oct 2026): the office asked for
+ * cash to come off the form - UPI or an account transfer only, each of which
+ * leaves a reference the accounts section can match the invoice against.
+ *
+ * It stays in the union and in the labels because invoices paid in cash
+ * before today say so, and an invoice is a snapshot: a stored payment is a
+ * record of what happened, not a choice that can be re-made. What is gone is
+ * the *offer* - `PAYMENT_MODES` no longer lists it, and
+ * `paymentModeError` refuses it on a new payment, on both sides.
+ */
 export type PaymentMode = "cash" | "upi" | "account_transfer";
 
-export const PAYMENT_MODES: PaymentMode[] = ["cash", "upi", "account_transfer"];
+/** The modes the desk may record. Cash is not one of them (7 Oct 2026). */
+export const PAYMENT_MODES: PaymentMode[] = ["upi", "account_transfer"];
 
+/** Includes the retired mode, so an invoice paid in cash still reads. */
 export const PAYMENT_MODE_LABELS: Record<PaymentMode, string> = {
   cash: "Cash",
   upi: "UPI",
   account_transfer: "Account transfer",
 };
 
-/** A reference is required for anything but cash: the UTR or UPI transaction id. */
+/** Why this payment cannot be recorded that way, or null when it can. */
+export function paymentModeError(mode: PaymentMode): string | null {
+  return PAYMENT_MODES.includes(mode)
+    ? null
+    : `${PAYMENT_MODE_LABELS[mode]} payments are no longer accepted - record a UPI payment or an account transfer.`;
+}
+
+/**
+ * A reference is required for every mode the desk may now record: both of
+ * them carry one, and the accounts section matches the invoice against it.
+ * Cash, which carried an optional receipt number, is no longer offered.
+ */
 export function paymentReferenceError(mode: PaymentMode, reference: string | null | undefined): string | null {
   if (mode === "cash") return null;
   return reference?.trim()
@@ -74,8 +98,8 @@ export type MealCounts = Record<MealKey, number>;
 
 /**
  * Where the desk's additional charge is printed, which decides its GST:
- * with the room charges (accommodation GST — an extra bed arranged at the
- * desk), with the dining charges (food GST — an extra dinner), or on its own
+ * with the room charges (accommodation GST - an extra bed arranged at the
+ * desk), with the dining charges (food GST - an extra dinner), or on its own
  * with no GST (a broken vase: compensation for damage, not a supply).
  */
 export type ExtraChargeSection = "room" | "dining" | "other";
@@ -83,8 +107,8 @@ export type ExtraChargeSection = "room" | "dining" | "other";
 export const EXTRA_CHARGE_SECTIONS: ExtraChargeSection[] = ["room", "dining", "other"];
 
 /**
- * A charge the desk adds while invoicing (25 Sep 2026) — an extra bed, a
- * broken vase — with a comment saying what it was. Kept on the draft as typed
+ * A charge the desk adds while invoicing (25 Sep 2026) - an extra bed, a
+ * broken vase - with a comment saying what it was. Kept on the draft as typed
  * (`invoices.extra_charges`, migration 26) and priced into the snapshot's
  * `extra_lines` when the invoice is issued.
  */
@@ -101,7 +125,7 @@ export const MAX_EXTRA_CHARGES = 20;
 export const MAX_EXTRA_CHARGE_PAISE = 10_00_000_00; // ₹10,00,000 a unit
 
 /**
- * The desk's additional charges as typed, checked — or the first thing wrong
+ * The desk's additional charges as typed, checked - or the first thing wrong
  * with them, worded for the desk. Amounts arrive as rupees (a number or the
  * text of the box); they are kept as integer paise. A dining invoice has no
  * room charges to add to.
@@ -124,7 +148,7 @@ export function parseExtraCharges(
       return { ok: false, error: `${n}: choose what it is charged under` };
     }
     if (section === "room" && kind === "dining") {
-      return { ok: false, error: `${n}: a dining invoice has no room charges — charge it under dining or other` };
+      return { ok: false, error: `${n}: a dining invoice has no room charges - charge it under dining or other` };
     }
     const description = typeof row.description === "string" ? row.description.trim() : "";
     if (description.length < 2) return { ok: false, error: `${n}: say what it is for, e.g. Extra bed or Broken vase` };
@@ -231,7 +255,7 @@ export function formatInvoiceNumber(prefix: string, fy: string, seq: number, dig
 // ---------------------------------------------------------- chargeable days
 
 /**
- * The days a stay is charged for, each as the institute date it starts on —
+ * The days a stay is charged for, each as the institute date it starts on -
  * the date whose tariff prices it.
  *
  * - `night`: one per calendar night between the check-in and check-out dates.
@@ -326,7 +350,7 @@ export function actualStayTimes(booking: Pick<BookingWithDetails, "check_in" | "
  * On a stay the people are the guests with a bed (an infant shares a
  * guardian's plate as they share the bed); on a dining booking, its head
  * count. The desk corrects these on the invoice when the kitchen's tally
- * differs — the correction is what is printed.
+ * differs - the correction is what is printed.
  */
 export function mealCovers(
   booking: Pick<BookingWithDetails, "meals" | "guests" | "service_type" | "meal_guest_count">
@@ -373,18 +397,37 @@ export function extraBedsByRoom(
   return booking.assigned_rooms.map((r) => out.get(r.id)).filter((x): x is { room: Room; extra: number } => !!x);
 }
 
-/** "SP/2025/017 — Grid-scale storage (Dr. A. Kumar)" back into its parts. */
+/**
+ * "SP/2025/017 - Grid-scale storage (Dr. A. Kumar)" back into its parts.
+ *
+ * **Both separators are accepted.** The requester types the number and the
+ * title into one box and the portal stores them joined by a dash. Until
+ * 7 Oct 2026 that dash was an em dash; it is a plain hyphen now, so a
+ * booking stored before the change is separated by one character and a
+ * booking stored since by another. Splitting on only the new one would print
+ * a past stay's whole entry as the project *number* and leave the title blank
+ * on its invoice, so both are tried. The em dash goes first: a hyphen also
+ * occurs inside project numbers and titles, where an em dash never did.
+ */
+const PROJECT_DETAIL_SEPARATORS = [" \u2014 ", " - "];
+
 export function projectFromDetails(details: string | null): { number: string; title: string } | null {
   if (!details) return null;
-  const at = details.indexOf(" — ");
-  if (at < 0) return { number: details.trim(), title: "" };
-  return { number: details.slice(0, at).trim(), title: details.slice(at + 3).trim() };
+  for (const separator of PROJECT_DETAIL_SEPARATORS) {
+    const at = details.indexOf(separator);
+    if (at < 0) continue;
+    return {
+      number: details.slice(0, at).trim(),
+      title: details.slice(at + separator.length).trim(),
+    };
+  }
+  return { number: details.trim(), title: "" };
 }
 
 // ------------------------------------------------------------ the document
 
 /**
- * `rate` and `amount` are the **taxable value** (before GST) — what the Tariff
+ * `rate` and `amount` are the **taxable value** (before GST) - what the Tariff
  * and Amount columns print, so that Total (A+B) + GST = Grand Total. When the
  * tariff includes GST, `rate_incl` / `amount_incl` are the office's prices.
  */
@@ -416,7 +459,7 @@ export type InvoiceExtraLine = {
   description: string;
   comment: string | null;
   quantity: number;
-  /** Paise per unit before GST — what the Rate column prints. */
+  /** Paise per unit before GST - what the Rate column prints. */
   rate: number;
   amount: number;
   /** The price per unit including GST, when the tariffs include it. */
@@ -439,7 +482,7 @@ export type GstBreakdown = {
 /**
  * Taxable value and GST of a price. Inclusive: `gross` is the price paid,
  * the taxable value is backed out and rounded to the paisa, and the GST is the
- * difference — so the two always add back to the price exactly. Exclusive:
+ * difference - so the two always add back to the price exactly. Exclusive:
  * `gross` is the taxable value and GST is added, rounded to the paisa.
  */
 export function splitGst(gross: number, percent: number, inclusive: boolean): { taxable: number; tax: number } {
@@ -462,16 +505,16 @@ export function halves(tax: number): { cgst: number; sgst: number } {
 export type InvoiceDocument = {
   /**
    * 3 since 30 Sep 2026: the same figures as 2, with every one the grand total
-   * adds lettered — GST @ 18% on A (B), Dining Charges Subtotal (C),
+   * adds lettered - GST @ 18% on A (B), Dining Charges Subtotal (C),
    * GST @ 5% on C (D), Grand Total (A+B+C+D). 2 since 25 Sep 2026: GST per
    * section (18% on rooms, 5% on food) and the desk's additional charges, only
-   * the subtotals lettered. 1: the layout before — GST on the total. An issued
+   * the subtotals lettered. 1: the layout before - GST on the total. An issued
    * invoice prints as its version says, so a reprint never changes its labels.
    */
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   /**
    * A stay, or a dining (meals-only) booking, which has no rooms, no check-in
-   * and no check-out — so its invoice prints none of them (24 Sep 2026).
+   * and no check-out - so its invoice prints none of them (24 Sep 2026).
    * Absent on snapshots issued before then; read it through `invoiceKind`.
    */
   kind?: "stay" | "dining";
@@ -508,9 +551,9 @@ export type InvoiceDocument = {
   subtotal_dining: number;
   /** The desk's additional charges, each printed in its section (version 2 and later). */
   extra_lines?: InvoiceExtraLine[];
-  /** Additional charges with no GST — the Other Charges table (version 2 and later). */
+  /** Additional charges with no GST - the Other Charges table (version 2 and later). */
   subtotal_other?: number;
-  /** The rates applied to each section, as printed ("GST @ 18% on A (B)") — version 2 and later. */
+  /** The rates applied to each section, as printed ("GST @ 18% on A (B)") - version 2 and later. */
   gst_room_percent?: number;
   gst_meal_percent?: number;
   /** GST on each section, paise (version 2 and later). */
@@ -523,7 +566,7 @@ export type InvoiceDocument = {
   gst: number;
   cgst: number;
   sgst: number;
-  /** Per SAC and rate — printed under the table. */
+  /** Per SAC and rate - printed under the table. */
   gst_breakdown: GstBreakdown[];
   /** Whether the tariffs the invoice was priced at included GST. */
   prices_include_gst: boolean;
@@ -532,7 +575,7 @@ export type InvoiceDocument = {
   bank: InvoiceRules["bank"];
   contact: InvoiceRules["contact"];
   day_basis: InvoiceRules["day_basis"];
-  /** What stops it being issued — a charge no tariff covers. Empty when it can be. */
+  /** What stops it being issued - a charge no tariff covers. Empty when it can be. */
   problems: string[];
 };
 
@@ -592,7 +635,7 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
   };
   const missing = (item: TariffItem, date: string, what: string) =>
     problems.push(
-      `No ${RATE_NOUN[item]} rate covers ${what} at ${house} on ${formatDateValue(date, { year: true })} — add one in Tariffs & Invoicing, applying from that date or earlier.`
+      `No ${RATE_NOUN[item]} rate covers ${what} at ${house} on ${formatDateValue(date, { year: true })} - add one in Tariffs & Invoicing, applying from that date or earlier.`
     );
 
   // ---- rooms and extra beds
@@ -606,7 +649,7 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
       if (g.rate === null) missing("room", g.from, `room ${room.room_number}`);
       roomLines.push({
         kind: "room",
-        description: `${room.room_number} — ${typeLabel}${groups.length > 1 ? ` (${dayRange(g.from, g.to)})` : ""}`,
+        description: `${room.room_number} - ${typeLabel}${groups.length > 1 ? ` (${dayRange(g.from, g.to)})` : ""}`,
         days: g.days,
         ...price(g.rate, g.days, rules.gst_room_percent),
       });
@@ -618,7 +661,7 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
         // An extra bed is part of the room's accommodation, taxed with it.
         roomLines.push({
           kind: "extra_bed",
-          description: `Extra bed${extra > 1 ? ` ×${extra}` : ""} — ${room.room_number}${bedGroups.length > 1 ? ` (${dayRange(g.from, g.to)})` : ""}`,
+          description: `Extra bed${extra > 1 ? ` ×${extra}` : ""} - ${room.room_number}${bedGroups.length > 1 ? ` (${dayRange(g.from, g.to)})` : ""}`,
           days: g.days,
           ...price(g.rate, g.days * extra, rules.gst_room_percent),
         });
@@ -695,7 +738,15 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
   const mealsOnly = booking.service_type === "meals_only";
 
   return {
-    version: 3,
+    /**
+     * **Version 4** (7 Oct 2026, the office's eighth list): no blank ruled
+     * rows, no tax-breakdown lines under the GSTIN, and the CGST / SGST split
+     * in each GST row's own label. Labels are computed at print time, so a
+     * change of wording is a new version and never an "upgrade" of an invoice
+     * already handed over - a `version: 3` snapshot reprints exactly as it
+     * was issued.
+     */
+    version: 4,
     kind: mealsOnly ? "dining" : "stay",
     booking_id: booking.id,
     booking_reference: booking.booking_reference_id,
@@ -704,8 +755,8 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     unit: booking.on_behalf_of_name
       ? booking.booking_type === "official"
         ? "Institute"
-        : "—"
-      : (requester?.department_or_club ?? (booking.user_role === "official" ? "Institute" : "—")),
+        : "-"
+      : (requester?.department_or_club ?? (booking.user_role === "official" ? "Institute" : "-")),
     debit_head: booking.debit_head,
     debit_head_label: invoiceHeadLabel(booking.debit_head),
     project_title: project?.title || null,
@@ -780,7 +831,7 @@ export function describeMealDates(doc: Pick<InvoiceDocument, "meal_dates" | "che
 
 /**
  * The facts printed above the tariff table, left (who pays) and right (what
- * was booked), for the PDF and the desk's preview alike — so the two cannot
+ * was booked), for the PDF and the desk's preview alike - so the two cannot
  * disagree about what an invoice says.
  *
  * - **Project details only with the Project head** (24 Sep 2026). They used
@@ -788,7 +839,7 @@ export function describeMealDates(doc: Pick<InvoiceDocument, "meal_dates" | "che
  *   been filled in. The sub-head follows the project; a Special Fund's name
  *   follows that head.
  * - **A dining invoice says nothing about rooms**: no check-in or check-out,
- *   no rooms, no infants, no primary guest — the days the kitchen cooked and
+ *   no rooms, no infants, no primary guest - the days the kitchen cooked and
  *   the head count instead.
  */
 export function invoiceFacts(doc: InvoiceDocument): { left: [string, string][]; right: [string, string][] } {
@@ -805,7 +856,7 @@ export function invoiceFacts(doc: InvoiceDocument): { left: [string, string][]; 
     left.push(["Special Fund: ", doc.special_fund]);
   }
   const right: [string, string][] = [
-    ["Invoice No.: ", doc.invoice_number ?? "DRAFT — not yet issued"],
+    ["Invoice No.: ", doc.invoice_number ?? "DRAFT - not yet issued"],
     ["Invoice Date: ", formatInvoiceDate(doc.invoice_date)],
   ];
   if (invoiceKind(doc) === "dining") {
@@ -823,7 +874,7 @@ export function invoiceFacts(doc: InvoiceDocument): { left: [string, string][]; 
   return { left, right };
 }
 
-/** The totals rows under the tariff table — a dining invoice has no A and B. */
+/** The totals rows under the tariff table - a dining invoice has no A and B. */
 export function invoiceTotalLabels(doc: Pick<InvoiceDocument, "kind" | "rooms" | "room_lines">): {
   total: string;
   grandTotal: string;
@@ -838,7 +889,7 @@ export const INVOICE_TITLE = (guestHouse: string) => `INVOICE - IIT Palakkad ${g
 /** One row of the tariff table: a room, an extra bed, a meal, or an additional charge. */
 export type InvoiceTableRow = {
   label: string;
-  /** A second line under the label — an additional charge's comment. */
+  /** A second line under the label - an additional charge's comment. */
   note: string | null;
   /** Day(s) or No(s). */
   qty: number;
@@ -847,7 +898,7 @@ export type InvoiceTableRow = {
   amount: number;
   /** The three meal rows, which the desk corrects before issuing. */
   meal: MealKey | null;
-  /** A charge no tariff prices — the reason the invoice cannot be issued. */
+  /** A charge no tariff prices - the reason the invoice cannot be issued. */
   unpriced: boolean;
 };
 
@@ -858,20 +909,27 @@ export type InvoiceTableSection = {
   /** The quantity column's heading. */
   qtyHeading: string;
   rows: InvoiceTableRow[];
-  /** Ruled rows the template keeps even when a short table leaves them blank. */
+  /**
+   * Ruled rows kept blank to fill the template's own grid. **Zero since
+   * version 4** (7 Oct 2026): the office asked for no empty rows, the room
+   * section included, which is where the two blank rows were most visible -
+   * a one-room stay printed a second, empty room line that read as a charge
+   * nobody had filled in. A `version: 3` or older snapshot keeps them, so it
+   * reprints as it was issued.
+   */
   minRows: number;
   /** The rows under the section: its subtotal and the GST on it. */
   totals: { label: string; amount: number }[];
 };
 
 /**
- * The tariff table as printed — the PDF and the desk's preview both draw
+ * The tariff table as printed - the PDF and the desk's preview both draw
  * this, so they cannot disagree about what an invoice says.
  *
  * **Versions 2 and 3** (25 and 30 Sep 2026, the office's revised template):
  * the Rate column; the room section's subtotal and the GST on it; the dining
  * section's subtotal and the GST on it; Other Charges (no GST) when the desk
- * added any; one Grand Total. They differ only in the labels — see
+ * added any; one Grand Total. They differ only in the labels - see
  * `totalLabels`. Additional charges print in their section, their comment
  * under the description.
  *
@@ -956,7 +1014,7 @@ export function invoiceTable(doc: InvoiceDocument): {
       heading: "Room Details (with additional bed details)",
       qtyHeading: "Day(s)",
       rows: [...roomRows, ...extraRows("room")],
-      minRows: 2,
+      minRows: doc.version >= 4 ? 0 : 2,
       totals: [
         { label: labels.roomSubtotal, amount: doc.subtotal_rooms },
         { label: labels.roomGst, amount: doc.gst_rooms ?? 0 },
@@ -986,7 +1044,7 @@ export function invoiceTable(doc: InvoiceDocument): {
   }
   // A grand total that names its letters has to be their sum. It is, except
   // where GST is added on top (not the default) and the total is rounded to
-  // the rupee — then the rounding is a row of its own, as on a tax invoice.
+  // the rupee - then the rounding is a row of its own, as on a tax invoice.
   const roundOff = doc.grand_total - (doc.total + doc.gst);
   return {
     rateHeading: "Rate",
@@ -1001,6 +1059,13 @@ export function invoiceTable(doc: InvoiceDocument): {
 /**
  * The labels under each section, by the snapshot's version.
  *
+ * **Version 4** (7 Oct 2026, the office's eighth list) letters the figures as
+ * version 3 did and adds the **CGST / SGST split to each GST row's own
+ * label**: "GST @ 18% on A (B) - CGST 9% + SGST 9%". The split used to be
+ * printed as a block of tax lines under the GSTIN, which the office asked to
+ * remove; this is where that information went, next to the figure it
+ * describes rather than in a footnote under it.
+ *
  * **Version 3** (30 Sep 2026, the office's template revised again) letters
  * every figure the grand total adds, in turn: Room Charges Subtotal (A),
  * GST @ 18% on A (B), Dining Charges Subtotal (C), GST @ 5% on C (D), Other
@@ -1008,12 +1073,24 @@ export function invoiceTable(doc: InvoiceDocument): {
  * dining invoice has no room section, so its lettering starts at the dining
  * subtotal: (A), GST on A (B), Grand Total (A+B).
  *
- * **Version 2** letters only the subtotals — (A), (B), (C) — with "GST @ 18%
+ * **Version 2** letters only the subtotals - (A), (B), (C) - with "GST @ 18%
  * on Subtotal (A)" and "Grand Total (Including GST)", and a dining invoice
  * unlettered.
  */
 function totalLabels(doc: InvoiceDocument, dining: boolean, hasOther: boolean) {
   const pct = (n: number | undefined) => `${n ?? 0}%`;
+  /**
+   * The intra-state halves, for version 4's GST labels. The guest house is in
+   * Keralam and so is the institute, so every supply here is intra-state:
+   * half the rate is CGST and half SGST. A rate that does not halve to two
+   * decimals is printed as it divides.
+   */
+  const split = (n: number | undefined) => {
+    const rate = n ?? 0;
+    if (doc.version < 4 || rate === 0) return "";
+    const half = Math.round((rate / 2) * 100) / 100;
+    return ` - CGST ${half}% + SGST ${half}%`;
+  };
   if (doc.version === 2) {
     const letter = (l: string) => (dining ? "" : ` (${l})`);
     return {
@@ -1036,15 +1113,29 @@ function totalLabels(doc: InvoiceDocument, dining: boolean, hasOther: boolean) {
   const other = hasOther ? next() : "";
   return {
     roomSubtotal: `Room Charges Subtotal (${room}):`,
-    roomGst: `GST @ ${pct(doc.gst_room_percent)} on ${room} (${roomGst}):`,
+    roomGst: `GST @ ${pct(doc.gst_room_percent)} on ${room} (${roomGst})${split(doc.gst_room_percent)}:`,
     diningSubtotal: `Dining Charges Subtotal (${meal}):`,
-    diningGst: `GST @ ${pct(doc.gst_meal_percent)} on ${meal} (${mealGst}):`,
+    diningGst: `GST @ ${pct(doc.gst_meal_percent)} on ${meal} (${mealGst})${split(doc.gst_meal_percent)}:`,
     otherSubtotal: `Other Charges Subtotal (${other}):`,
     grandTotal: `Grand Total (${used.join("+")}):`,
   };
 }
 
-/** "GST on Total (CGST 2.5% + SGST 2.5%):" — the rate when there is one. */
+/**
+ * Whether the tax lines under the GSTIN are printed - the taxable value and
+ * the CGST / SGST per SAC and rate, plus the note about the rates including
+ * GST.
+ *
+ * **Not from version 4** (7 Oct 2026): the office asked for the lines under
+ * the GSTIN to come off, and the CGST / SGST split they carried is now in
+ * each GST row's own label (`totalLabels`). An older snapshot keeps them, so
+ * it reprints exactly as it was issued.
+ */
+export function printsTaxLines(doc: Pick<InvoiceDocument, "version">): boolean {
+  return doc.version < 4;
+}
+
+/** "GST on Total (CGST 2.5% + SGST 2.5%):" - the rate when there is one. */
 export function gstRowLabel(doc: Pick<InvoiceDocument, "gst_breakdown" | "gst">): string {
   const rates = [...new Set((doc.gst_breakdown ?? []).map((g) => g.percent))];
   if (doc.gst === 0 || rates.length === 0) return "GST on Total:";
@@ -1054,12 +1145,12 @@ export function gstRowLabel(doc: Pick<InvoiceDocument, "gst_breakdown" | "gst">)
 
 /**
  * The tax lines under the table, one per SAC and rate:
- * "Accommodation, SAC 996311: taxable ₹13,500.00 @ 5% — CGST ₹337.50 + SGST ₹337.50".
+ * "Accommodation, SAC 996311: taxable ₹13,500.00 @ 5% - CGST ₹337.50 + SGST ₹337.50".
  */
 export function gstBreakdownLines(doc: Pick<InvoiceDocument, "gst_breakdown" | "prices_include_gst">): string[] {
   return (doc.gst_breakdown ?? []).map(
     (g) =>
-      `${g.label}, SAC ${g.sac}: taxable ${formatINR(g.taxable)} @ ${g.percent}% — CGST ${formatINR(g.cgst)} + SGST ${formatINR(g.sgst)}`
+      `${g.label}, SAC ${g.sac}: taxable ${formatINR(g.taxable)} @ ${g.percent}% - CGST ${formatINR(g.cgst)} + SGST ${formatINR(g.sgst)}`
   );
 }
 
@@ -1067,7 +1158,7 @@ export const GST_INCLUDED_NOTE = "The tariff rates include GST; the amounts abov
 
 /**
  * Why an invoice cannot be issued for this booking now, or null when it can.
- * Issued at check-out — the desk may do it while the guest is still in the
+ * Issued at check-out - the desk may do it while the guest is still in the
  * room (they are often asked for the bill before the guest formally leaves),
  * so an occupied stay qualifies, billed to its booked check-out.
  */
@@ -1077,8 +1168,8 @@ export function invoiceBlocker(
   now: Date = new Date()
 ): string | null {
   if (booking.service_type === "meals_only") {
-    // A dining booking is billed once its first meal has come round — the
-    // kitchen may already have served it — and never before it was approved.
+    // A dining booking is billed once its first meal has come round - the
+    // kitchen may already have served it - and never before it was approved.
     if (!["APPROVED", "OCCUPIED", "VACATED"].includes(booking.status)) {
       return "A dining booking is invoiced once it has been approved.";
     }
@@ -1103,13 +1194,13 @@ export function invoiceBlocker(
 // ------------------------------------------------------ after check-out
 
 /**
- * How far back the desk's "Checked out — to bill" list reaches. Older stays
+ * How far back the desk's "Checked out - to bill" list reaches. Older stays
  * are still invoiced from the Approval Log; this is only the daily list.
  */
 export const UNSETTLED_WINDOW_DAYS = 30;
 
 /**
- * Stays that have checked out and are not yet paid for, newest first — the
+ * Stays that have checked out and are not yet paid for, newest first - the
  * desk's list of bills to settle, on the manager's console and the
  * caretaker's alike (24 Sep 2026: the caretaker issues invoices at
  * reception, and had no way back to a stay once it was marked Vacated).
@@ -1133,7 +1224,97 @@ export function awaitingSettlement(
 }
 
 /**
- * Whether the desk can open an invoice for this booking from the archive —
+ * Bookings whose invoice has been **issued and not yet paid**, newest first -
+ * the "Awaiting payment" list at the foot of the manager's and the
+ * caretaker's consoles (7 Oct 2026, the office's eighth list).
+ *
+ * **No window.** "Checked out - to bill" is the desk's daily list and is
+ * bounded to the last few weeks, because a stay nobody has invoiced yet is a
+ * thing to do today. This is the opposite: the invoice has gone out and the
+ * money has not come in, and an official stay's bill can sit with a
+ * department for months. A list that quietly dropped it after thirty days
+ * would be a list of debts that forgets them, so the office asked for it to
+ * reach back as far as it needs to.
+ *
+ * A **dining** booking is here too - it never checks out, so "Checked out -
+ * to bill" could never hold it, and an official meal booking is exactly the
+ * kind of bill that waits. A cancelled invoice is not awaiting anything: the
+ * booking goes back to the to-bill list instead.
+ */
+export type AwaitingPaymentRow<
+  I = Pick<InvoiceRecord, "invoice_number" | "issued_at" | "grand_total">,
+> = {
+  booking: BookingWithDetails;
+  /** The issued, unpaid invoice - the most recent one when there is more than one. */
+  invoice: I;
+};
+
+export function awaitingPayment<
+  I extends Pick<InvoiceRecord, "booking_id" | "status" | "issued_at">,
+>(bookings: BookingWithDetails[], invoices: I[]): AwaitingPaymentRow<I>[] {
+  const issued = new Map<string, I>();
+  const paid = new Set<string>();
+  for (const invoice of invoices) {
+    if (invoice.status === "paid") paid.add(invoice.booking_id);
+    if (invoice.status !== "issued") continue;
+    // The latest issued invoice for the booking - there is normally one, but
+    // a cancelled-and-reissued bill leaves two rows and the live one is the
+    // later. (A meal booking keeps one invoice; a stay can be reissued.)
+    const current = issued.get(invoice.booking_id);
+    if (!current || (invoice.issued_at ?? "") > (current.issued_at ?? "")) {
+      issued.set(invoice.booking_id, invoice);
+    }
+  }
+  return bookings
+    .filter((b) => issued.has(b.id) && !paid.has(b.id))
+    .map((booking) => ({ booking, invoice: issued.get(booking.id)! }))
+    .sort((a, b) => (b.invoice.issued_at ?? "").localeCompare(a.invoice.issued_at ?? ""));
+}
+
+/**
+ * Why this stay cannot be marked Vacated yet, or null when it can (7 Oct
+ * 2026, the office's eighth list).
+ *
+ * **A personal stay is paid for before the guest leaves.** The office's
+ * words: checking out means issue, pay, then vacate, in one go. Nobody is
+ * going to chase a private guest for a guest-house bill after they have
+ * driven home, and the portal was letting the desk close the stay off and
+ * discover the unpaid invoice weeks later in "Checked out - to bill".
+ *
+ * An **official** stay is the opposite: the invoice is issued at check-out
+ * and settled later by whichever department or project is paying, so nothing
+ * here stands in the way. So is an alumni booking - the institute carries it.
+ *
+ * The manager can set this aside with a reason (`canOverrideVacatePayment`),
+ * because an invoice that cannot be issued at all - no tariff for a night, a
+ * guest the office has agreed to bill later - must not trap a guest in the
+ * building on paper.
+ */
+export function vacateBlocker(
+  booking: Pick<BookingWithDetails, "booking_type" | "service_type">,
+  invoices: Pick<InvoiceRecord, "status">[]
+): string | null {
+  if (booking.booking_type !== "personal") return null;
+  if (invoices.some((i) => i.status === "paid")) return null;
+  const issued = invoices.some((i) => i.status === "issued");
+  return issued
+    ? "This is a personal stay, so its invoice is settled before the guest leaves. Record the payment, then mark the stay Vacated."
+    : "This is a personal stay, so it is invoiced and paid for at check-out. Issue the invoice and record the payment, then mark the stay Vacated.";
+}
+
+/**
+ * Whether this booking's check-out goes through the invoice - issue, pay,
+ * then vacate, in one dialog. True for a personal stay, which is the one the
+ * desk cannot chase afterwards.
+ */
+export function settlesAtCheckOut(
+  booking: Pick<BookingWithDetails, "booking_type" | "service_type">
+): boolean {
+  return booking.booking_type === "personal" && booking.service_type !== "meals_only";
+}
+
+/**
+ * Whether the desk can open an invoice for this booking from the archive -
  * after check-out, however long ago. Before that the consoles offer it: an
  * occupied stay from its row, a dining booking from the kitchen page.
  */
@@ -1188,6 +1369,12 @@ export type InvoiceRecord = {
 export type InvoiceFilter = {
   bookingId?: string;
   bookingIds?: string[];
+  /**
+   * Only these statuses. Used by "Awaiting payment", which asks for the
+   * issued-and-unpaid invoices across the whole history rather than loading
+   * every booking of the last month and looking at its bill (7 Oct 2026).
+   */
+  statuses?: InvoiceStatus[];
   /** Issued within [from, to), ISO instants. */
   issuedFrom?: string;
   issuedTo?: string;
@@ -1210,7 +1397,7 @@ export type IssueInvoiceInput = {
 };
 
 /**
- * A refused invoice operation — the database's INVOICE_EXISTS /
+ * A refused invoice operation - the database's INVOICE_EXISTS /
  * INVOICE_IMMUTABLE, or the mock's equivalent. Its message is written for the
  * desk and is shown as it stands.
  */

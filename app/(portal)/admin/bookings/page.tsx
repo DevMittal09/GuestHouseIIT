@@ -9,7 +9,7 @@ export default async function AdminBookingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect(SIGN_IN_PATH);
   // Forcing a status and deleting bookings stay developer-only, and the
-  // layout lets the manager into /admin now — so the page checks for itself
+  // layout lets the manager into /admin now - so the page checks for itself
   // rather than relying on its tab being hidden.
   if (!canUseConsoleSection(user.role, "bookings")) redirect("/admin/users");
 

@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = { title: "Guidelines" };
 
 /**
- * The page itself is rendered per request — the header greets whoever is
- * signed in — but what it *says* comes from the store and the office's
+ * The page itself is rendered per request - the header greets whoever is
+ * signed in - but what it *says* comes from the store and the office's
  * Settings, both cached (Phase 9), so a visitor does not wait for a database
  * round trip.
  */
@@ -22,7 +22,7 @@ export const metadata: Metadata = { title: "Guidelines" };
  * cite ("see 3.4"), opened by **How booking works** in five general steps.
  *
  * In general terms on purpose (26 Sep 2026, the owner): no requester
- * categories, no approval chains, no role names — who reviews a request is
+ * categories, no approval chains, no role names - who reviews a request is
  * the portal's business. Where a rule is stated (the advance window, the stay
  * cap, capacity, meal times, the kitchen's notice, charges) it comes from
  * `lib/` and Settings via `guidelineSections()`, so it cannot promise what the

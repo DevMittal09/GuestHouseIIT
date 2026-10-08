@@ -50,7 +50,7 @@ function errorText(error: unknown): string {
 /**
  * Whether this message opens its thread: the first one of the thread to be
  * sent claims the root id. Decided here rather than at queue time because
- * which message goes first is only known now — the day's first approval might
+ * which message goes first is only known now - the day's first approval might
  * fail and retry after the second has gone. Checking for a *sent* sibling
  * means a failed opener simply hands the role on.
  *
@@ -94,7 +94,7 @@ function toOutbound(row: EmailMessage, isRoot: boolean): OutboundMessage {
 
 /**
  * Turn the outbox row's attachment references into files. An invoice is drawn
- * from its stored snapshot now — the bytes are never kept in the outbox. A
+ * from its stored snapshot now - the bytes are never kept in the outbox. A
  * reference that cannot be resolved fails the send (and so retries): mailing
  * Accounts an invoice without the invoice would be worse than mailing late.
  */
@@ -126,7 +126,7 @@ export interface DispatchResult {
 /**
  * One in-process guard, so the `after()` hooks of three approvals landing
  * together do not open three SMTP pools at once. It is per-process and
- * deliberately not a distributed lock — `claimQueuedEmails` is what makes
+ * deliberately not a distributed lock - `claimQueuedEmails` is what makes
  * concurrency correct; this only keeps it tidy.
  */
 let running = false;
@@ -153,7 +153,7 @@ export async function dispatchOutbox(
         config.redirectAllTo
       );
       if (message.to.length === 0) {
-        // Nobody to send to — a profile without an address, most likely.
+        // Nobody to send to - a profile without an address, most likely.
         // Failing it outright is right: a retry would find the same nobody.
         await store.settleEmail(row.id, {
           ok: false,
@@ -192,7 +192,7 @@ export async function dispatchOutbox(
 }
 
 /**
- * Drain the queue rather than sending one batch — used by the cron route,
+ * Drain the queue rather than sending one batch - used by the cron route,
  * where the point is to clear a backlog. Bounded so a poisoned queue cannot
  * spin forever.
  */

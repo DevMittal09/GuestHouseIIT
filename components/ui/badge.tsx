@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 
 /**
  * Tags, GOV.UK-style (30 Sep 2026): square-cornered, sentence case, a solid
- * pale fill with a dark text of the same hue — never a pill. Status colours
+ * pale fill with a dark text of the same hue - never a pill. Status colours
  * come from the `tag-*` utilities in `app/globals.css` (see `StatusBadge`).
  */
 const badgeVariants = cva(

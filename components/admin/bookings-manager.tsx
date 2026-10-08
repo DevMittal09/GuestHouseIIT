@@ -170,7 +170,7 @@ function AdminBookingRow({ booking }: { booking: BookingWithDetails }) {
               <DialogHeader>
                 <DialogTitle>Manage {booking.booking_reference_id}</DialogTitle>
                 <DialogDescription>
-                  Developer override — force any status (audit-logged) or delete the booking.
+                  Developer override - force any status (audit-logged) or delete the booking.
                 </DialogDescription>
               </DialogHeader>
               <BookingDetails booking={booking} showAlumniCard />

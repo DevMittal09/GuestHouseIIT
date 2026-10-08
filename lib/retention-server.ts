@@ -9,7 +9,7 @@ import { getStore } from "@/lib/store";
  * Run daily from the cron route. Two jobs:
  *
  * - **Identity fields.** Stays that ended more than `id_retention_days` ago
- *   lose their guests' ID numbers, passport numbers and uploaded documents —
+ *   lose their guests' ID numbers, passport numbers and uploaded documents -
  *   the files as well as the references. What the guest house is entitled to
  *   keep as its own record (who stayed, when, in which room, what it cost) is
  *   untouched.

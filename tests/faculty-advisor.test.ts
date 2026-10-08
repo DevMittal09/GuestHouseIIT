@@ -16,8 +16,8 @@ import { profile, useThrowawayMockDb } from "./helpers";
 
 /**
  * Faculty Advisors (24 Sep 2026, migration 25). The student bodies are a
- * hierarchy — a Faculty Advisor and a student secretary for each council,
- * clubs under it, a fest with an advisor of its own — and the advisor is an
+ * hierarchy - a Faculty Advisor and a student secretary for each council,
+ * clubs under it, a fest with an advisor of its own - and the advisor is an
  * appointment in the console, not an account: whoever is named books for the
  * council or its clubs from their own faculty login, straight to the Guest
  * House Manager, with the secretary's mailbox in Copy to.
@@ -33,7 +33,7 @@ describe("who the Faculty Advisor is", () => {
     { id: "loose", name: "Unattached Club", kind: "club", parent_id: null, head_id: null, acting_head_id: null },
   ];
 
-  it("is the unit's own, else its council's — the clubs under a council share its advisor", () => {
+  it("is the unit's own, else its council's - the clubs under a council share its advisor", () => {
     expect(facultyAdvisorOf("tech", units)).toBe("prof-a");
     expect(facultyAdvisorOf("robotics", units)).toBe("prof-a");
     // A fest with an advisor of its own keeps them.
@@ -86,7 +86,7 @@ describe("the demo: Dr. Arun Prasad advises the Cultural Affairs Council and Pet
     expect(seedProfiles.some((p) => p.role === "faculty_advisor")).toBe(false);
   });
 
-  it("books for the council's account and for the fest — nobody else does", () => {
+  it("books for the council's account and for the fest - nobody else does", () => {
     expect(clubsBookableBy(arun, seedProfiles, units).map((c) => c.id)).toEqual([
       "council-cultural",
       "club-petrichor",
@@ -103,7 +103,7 @@ describe("the demo: Dr. Arun Prasad advises the Cultural Affairs Council and Pet
     expect(clubsBookableBy(P("employee-priya"), seedProfiles, next).map((c) => c.id)).toEqual(["council-cultural"]);
   });
 
-  it("Copy to starts with the secretary's mailbox — not when the booking is the secretary's own account", () => {
+  it("Copy to starts with the secretary's mailbox - not when the booking is the secretary's own account", () => {
     expect(defaultCopyToFor(P("club-petrichor"), units)).toEqual(["sec_arts@iitpkd.ac.in"]);
     // The council's account is sec_arts@ itself, and is mailed as the requester.
     expect(defaultCopyToFor(P("council-cultural"), units)).toEqual([]);

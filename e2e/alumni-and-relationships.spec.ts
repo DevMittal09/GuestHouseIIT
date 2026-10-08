@@ -14,7 +14,7 @@ import {
  * only when a real person fills the form in:
  *
  *   * the **IAR Student Cell** books for alumni, who are accommodated at one
- *     guest house — so the form never asks which, and was refusing the
+ *     guest house - so the form never asks which, and was refusing the
  *     request for an answer it had not offered;
  *   * a **student** could enter "Mother" twice.
  */
@@ -55,7 +55,7 @@ test("the IAR Student Cell is never asked to choose a guest house", async ({ pag
   await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
-  // It went through — no "Select a guest house" on a form that never asked.
+  // It went through - no "Select a guest house" on a form that never asked.
   const toast = page.getByText(REFERENCE).first();
   await expect(toast).toBeVisible({ timeout: 30_000 });
   const reference = (await toast.innerText()).match(REFERENCE)![0];
@@ -82,7 +82,7 @@ test("a student cannot enter two mothers", async ({ page }) => {
   const second = page.locator('[name="rooms.0.guests.1.relationship"]');
   await first.selectOption("Mother");
 
-  // The option is gone from the second guest's dropdown — greyed, not hidden,
+  // The option is gone from the second guest's dropdown - greyed, not hidden,
   // and it says why.
   await expect(second.locator('option[value="Mother"]')).toBeDisabled();
   await expect(second.locator('option[value="Mother"]')).toHaveText(/already on this request/);

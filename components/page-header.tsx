@@ -13,7 +13,7 @@ export function PageHeader({
   actions,
 }: {
   title: React.ReactNode;
-  /** A short grey line over the title — the desk, the queue, the section. */
+  /** A short grey line over the title - the desk, the queue, the section. */
   caption?: React.ReactNode;
   /** The description paragraph. */
   children?: React.ReactNode;

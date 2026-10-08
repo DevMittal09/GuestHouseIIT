@@ -10,14 +10,14 @@ import type { RoomType } from "./types";
  *
  * **What the public site says, and what it keeps to itself** (26 Sep 2026,
  * the owner): the site is for guests and the people who host them, so it
- * never shows the portal's internals — no requester categories, no approval
+ * never shows the portal's internals - no requester categories, no approval
  * chains, no role names. The home page stays visual and light; rules and
  * instructions live on the Guidelines page, in general terms.
  *
  * Where a rule *is* stated (the advance window, the stay cap, capacity, meal
  * times, the kitchen's notice, charges), it is rendered from the same
  * constants and Settings the portal enforces, so it cannot drift. Only facts
- * the backend does not model — amenities and house rules — are written out,
+ * the backend does not model - amenities and house rules - are written out,
  * marked TODO(site) until the guest house office confirms them.
  */
 
@@ -63,7 +63,7 @@ export const MEAL_NOTICE_RULE =
 // ------------------------------------------------------------------ home page
 
 /**
- * One line about a guest house for its card on the home page — what it
+ * One line about a guest house for its card on the home page - what it
  * offers, from the store, with no counts: "Double-sharing rooms, with meals
  * served on site."
  */
@@ -77,7 +77,7 @@ export function houseSummary(house: SiteGuestHouse): string {
 export type Amenity = { key: string; label: string };
 
 /**
- * The home page's amenities — short labels only, and always six, so the grid
+ * The home page's amenities - short labels only, and always six, so the grid
  * is two full rows of three: Dining where a guest house serves meals,
  * Reception otherwise.
  *
@@ -105,7 +105,7 @@ export function amenities(houses: SiteGuestHouse[]): Amenity[] {
 export type BookingStep = { title: string; body: string };
 
 /**
- * How booking works, for the Guidelines page — in general terms on purpose:
+ * How booking works, for the Guidelines page - in general terms on purpose:
  * who reviews a request depends on who raised it, and that is the portal's
  * business, not the public page's.
  */
@@ -174,10 +174,10 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
         rules.booking.buffer_minutes > 0
           ? `Rooms are made ready between guests, so a room stays held for ${describeBuffer(rules.booking.buffer_minutes)} after the booked check-out`
           : "A room becomes free again at the booked check-out time",
-        "Guests are checked in at reception on arrival — not before the booked check-in",
+        "Guests are checked in at reception on arrival - not before the booked check-in",
         "Every adult guest carries a photo identity document",
         "To arrive earlier or stay longer, ask reception; the stay is moved only if the rooms are free",
-        // TODO(site): house practice, not modelled by the portal — confirm.
+        // TODO(site): house practice, not modelled by the portal - confirm.
         "Room keys are collected from reception on arrival and returned there at check-out",
       ],
     },
@@ -189,7 +189,7 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
           ? [
               `Meals are served at ${joinNames(serving.map((h) => h.name))}, at the times below`,
               // Each person's own preference, and lunch only by default
-              // (1 Oct 2026) — the two things a requester notices on the form.
+              // (1 Oct 2026) - the two things a requester notices on the form.
               "Meals are chosen day by day on the request, with the number of vegetarian and non-vegetarian meals; lunch is included on each day to begin with",
               MEAL_NOTICE_RULE,
               ...(rules.meals.max_diners_per_meal > 0
@@ -205,14 +205,17 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
       title: "Charges and payment",
       items: [
         invoice.day_basis === "night"
-          ? "Rooms are charged by the night, counted between the actual check-in and check-out dates — never fewer than one"
+          ? "Rooms are charged by the night, counted between the actual check-in and check-out dates - never fewer than one"
           : `Rooms are charged in blocks of 24 hours from the actual check-in, with a permissible variation of ${plural(invoice.grace_hours, "hour")}`,
         invoice.prices_include_gst
-          ? `The tariff includes GST — ${invoice.gst_room_percent}% on rooms and ${invoice.gst_meal_percent}% on meals, shown separately on the invoice`
-          : `GST is added to the tariff on the invoice — ${invoice.gst_room_percent}% on rooms and ${invoice.gst_meal_percent}% on meals`,
+          ? `The tariff includes GST - ${invoice.gst_room_percent}% on rooms and ${invoice.gst_meal_percent}% on meals, shown separately on the invoice`
+          : `GST is added to the tariff on the invoice - ${invoice.gst_room_percent}% on rooms and ${invoice.gst_meal_percent}% on meals`,
         "An extra bed and meals served are charged in addition, each as its own line",
         "Damage or loss is recovered as an additional charge on the invoice",
-        "The invoice is issued at check-out and can be settled in cash, by UPI or by transfer; an official stay is charged to the account named on the request",
+        // Cash came off the invoice on 7 Oct 2026: UPI or an account
+        // transfer, each of which leaves a reference. A personal stay is
+        // settled before the guest leaves; an official one is billed on.
+        "The invoice is settled by UPI or account transfer - a personal stay at check-out, an official stay charged to the account named on the request",
       ],
     },
     {
@@ -229,7 +232,7 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
       title: "During your stay",
       provisional: true,
       // TODO(site): house rules usual at institute guest houses, written as
-      // placeholders — the office to confirm or replace them.
+      // placeholders - the office to confirm or replace them.
       items: [
         "Only the guests named on the booking may occupy the room; rooms cannot be transferred or shared with others",
         "Smoking, alcohol and intoxicants are not permitted anywhere on the premises",
@@ -248,7 +251,7 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
       id: "safety",
       title: "Safety and help",
       provisional: true,
-      // TODO(site): placeholders — the office to confirm.
+      // TODO(site): placeholders - the office to confirm.
       items: [
         "Note the fire exits and extinguishers on your floor when you arrive",
         "In a medical or other emergency, call reception at once; reception will reach the institute's medical centre and campus security",

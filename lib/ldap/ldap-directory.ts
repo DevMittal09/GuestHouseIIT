@@ -20,7 +20,7 @@ const TIMEOUT_MS = 8000;
  * The institute's LDAP server, by the usual search-then-bind:
  *
  * 1. bind as the service account (or anonymously) and search `baseDn` for the
- *    one entry whose `uidAttribute` equals the username — so students and
+ *    one entry whose `uidAttribute` equals the username - so students and
  *    staff can live under different OUs without the portal knowing the layout;
  * 2. bind as that entry's DN with the typed password. Success *is* the check.
  *

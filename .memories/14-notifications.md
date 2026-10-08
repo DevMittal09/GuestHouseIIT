@@ -23,6 +23,7 @@ the code on 24 Sep 2026** — `lib/mail/types.ts` (the events),
 | `booking.extension_requested.manager` | Requester asked to extend | Manager | Approval chain |
 | `booking.extension_decided.requester` | Extension approved / declined | Requester | Booking's Copy to |
 | `booking.no_show.requester` | Released as a no-show | Requester | Booking's Copy to |
+| `booking.missed.requester` | **Nobody decided the request in time** (7 Oct 2026, migration 29) — the check-in passed, or a meal booking's last day of meals. Careful about blame: the requester did nothing wrong, so it says what happened and names the two things they can do | Requester | Booking's Copy to |
 | `stay.reminder.requester` | Day before check-in | Requester | Booking's Copy to |
 | `queue.digest.reviewer` | Daily digest of waiting requests | Each reviewer with a non-empty queue | — |
 | `queue.escalation.reviewer` | Waiting over 48 h | Reviewer | Manager |
@@ -45,7 +46,7 @@ Every template's wording can be overridden in Console → Email Templates
 
 | Route | Does | Schedule (`vercel.json`, Hobby plan) |
 | --- | --- | --- |
-| `/api/mail/cron` | No-show release (if the Setting > 0) → purge dead sessions / throttles → retention erasure → digests, reminders, desk reports, escalations → drain the outbox | `30 2 * * *` (08:00 IST) |
+| `/api/mail/cron` | No-show release (if the Setting > 0) → **mark requests nobody decided in time as Missed** (7 Oct 2026, before the digest, so a dead request is out of the queues first) → purge dead sessions / throttles → retention erasure → digests, reminders, desk reports, escalations → drain the outbox. The response reports a count per job, `missed` among them | `30 2 * * *` (08:00 IST) |
 | `/api/mail/dispatch` | Drain the outbox (safety net — mail normally leaves within a second via `after()`) | `0 3 * * *` (Hobby allows daily crons only; `*/10` on Pro) |
 
 Both need `CRON_SECRET` as a bearer token in production (a GET is accepted only

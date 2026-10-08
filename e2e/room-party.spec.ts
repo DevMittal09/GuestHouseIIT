@@ -8,7 +8,7 @@ import { ACCOUNTS, fillGuest, localDate, REFERENCE, signIn } from "./helpers";
  * people however they are made up, of whom at most three may need a bed. So
  * 3 + 1, 2 + 2 and 1 + 3 all fit, and 3 + 2 does not. `tests/booking-rules.
  * test.ts` holds the schema to that; this holds the *form* to it, because the
- * form has its own copy of the rule in the two Add buttons — and a room with a
+ * form has its own copy of the rule in the two Add buttons - and a room with a
  * second infant used to be unreachable there even though nothing was wrong
  * with it.
  */
@@ -61,7 +61,7 @@ test("a student can book two guests and two infants in one room", async ({ page 
   const review = page.getByRole("dialog");
   await expect(review.getByText("2 guests + 2 infants").first()).toBeVisible();
   // Students book Bageshri, which serves no meals, so the review says nothing
-  // about them. "Meals requested — None requested" read to the warden as a
+  // about them. "Meals requested - None requested" read to the warden as a
   // request that had been refused rather than a question never asked.
   await expect(review.getByText("Meals requested")).toHaveCount(0);
 });

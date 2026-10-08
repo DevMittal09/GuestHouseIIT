@@ -13,7 +13,7 @@ import { GH } from "./helpers";
 /**
  * The booking form's rules as the office stated them in September 2026: who a
  * student may bring, what one room may hold, and which fields each role is
- * asked for. Every one of these is enforced twice — the form and the schema —
+ * asked for. Every one of these is enforced twice - the form and the schema -
  * and it is the schema that these tests hold to account, because that is what
  * a crafted request meets.
  */
@@ -70,7 +70,7 @@ describe("what one room may hold", () => {
   const infant = (relationship = "Daughter"): Person => ({ age: 2, relationship });
   // One Father and then siblings: a student has one father (the one-of-each
   // rule) but may bring several siblings, and a sibling needs a parent on the
-  // request anyway — so this is the only shape that isolates the capacity
+  // request anyway - so this is the only shape that isolates the capacity
   // rules from the relationship rules.
   const room = (adults: number, infants: number): Person[] => [
     ...Array.from({ length: adults }, (_, i) => adult(i === 0 ? "Father" : "Siblings")),
@@ -80,7 +80,7 @@ describe("what one room may hold", () => {
 
   /**
    * The combinations the office gave, exactly. A room holds four people
-   * however they are made up, of whom at most three may need a bed — which is
+   * however they are made up, of whom at most three may need a bed - which is
    * why neither cap alone is the rule.
    */
   it("follows the office's combinations", () => {
@@ -97,7 +97,7 @@ describe("what one room may hold", () => {
     expect(result.success).toBe(false);
     expect(messages(result)[0]).toMatch(/at most 4 people in total/);
     if (!result.success) {
-      // On the second card, not the first — the first one is fine.
+      // On the second card, not the first - the first one is fine.
       expect(result.error.issues[0].path).toEqual(["rooms", 1, "guests"]);
     }
   });
@@ -164,7 +164,7 @@ describe("who a student may bring", () => {
 describe("one of each: a student has only one mother", () => {
   /**
    * Reported by the office in September 2026: a student could add "Mother"
-   * twice — two different names, both described as the requester's mother,
+   * twice - two different names, both described as the requester's mother,
    * and nothing at the desk to say which was right. The rule is config
    * (`unique_relationships`), not a hardcoded list, and it spans the whole
    * request rather than a room card.
@@ -243,7 +243,7 @@ describe("an infant's relationship is free text", () => {
    * The dropdown lists the relationships an adult guest can have to the
    * requester. It has no "Nephew" or "Cousin's daughter" on it, and a small
    * child typed as "Siblings" just to get past the form tells the desk
-   * something untrue — so an infant's row is a text box whatever the role's
+   * something untrue - so an infant's row is a text box whatever the role's
    * style is, and the schema accepts anything there.
    */
   it("accepts a relationship that is not on the dropdown, for an infant only", () => {
@@ -272,7 +272,7 @@ describe("what each role is asked for", () => {
     const employee = sanitizeFormConfig(buildDefaultFormConfig("employee", HOUSES), HOUSES);
     expect(employee.guest_fields.id_document).toBe("hidden");
     // The Aadhaar number is still taken for the register, and still checked if
-    // typed — just not demanded.
+    // typed - just not demanded.
     expect(employee.guest_fields.id_number).toBe("optional");
     const schema = bookingPayloadSchema(employee, { mealsAvailable: false });
     const payload = {

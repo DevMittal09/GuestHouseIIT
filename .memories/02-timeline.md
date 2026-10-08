@@ -29,6 +29,7 @@ the notes of each session. The reasoning behind each step is in
 | **30 Sep** | **UI revamp**, presentation layer only: a fixed corner scale (4 / 6 / 8px, nothing rounder), GOV.UK-style cards, tables and status tags across the portal, distinct green / indigo check-in and check-out buttons, legible room-grid seats; on the public site an asymmetric hero, sections opening on a hairline rule with the label in the left quarter, a ruled amenity grid and a photo mosaic. No logic, action or schema touched. |
 | **30 Sep (afternoon)** | **The supervisor's review** of the live site: a plainer hero line and six amenities (no meeting or exercise room); no academic-database caption on the booking page; the office's wording for paying a personal stay; requesters see only Booked / Free on the availability charts (the desk keeps turnaround, overlap, maintenance); "Times are IST"; **"Yourself"** in Fill in from saved details with a **Self** relationship; invoices `version: 3`, lettered A–D up to Grand Total (A+B+C+D). |
 | **1 Oct** | The office's **seventh list**, mostly the meal booking: **each person's own meal preference** as counts (migration 27) instead of one answer for the party, the kitchen's **30 per sitting** limit counting who is already booked, **lunch** ticked by default, a people **dropdown**, **Remarks** optional, no pets notice, a **confirmation summary**; **incoming meal bookings in their own section** of the manager's console; the availability console's room list is the **desk's only**; **DD/MM/YYYY** everywhere; a check-in the desk can move **later** for a late arrival and a booking that may be entered for earlier today; the **project typed**, not picked; **no auto-fill** from a relationship and a compact Fill-in control; Special Funds off a **personal meal** booking. Copy-to mail diagnosed: `MAIL_REDIRECT_ALL_TO` drops CC — the console now says so. |
+| **7 Oct** | The office's **eighth list**, worked as four gated phases. **Text**: every em dash becomes a hyphen (1,559 of them), Kerala → **Keralam** (with a one-time rewrite of the saved invoice Setting), **MRBS off the site**. **The booking form**: a personal booking is **never asked** which budget pays (the server writes Personal Funds); students and alumni are held to Bageshri and to **no meals**, checked on the server; the meal split **fills itself in**; a **tariff table** priced by the same function the invoice uses, with a **Change rate** button for the desk. **Availability**: everyone but the manager, caretaker and developer is sent **a count and no rooms at all**. **The institute's records in the portal** (migration 28): an Academic records console the office pastes CSV into, which the details card, the warden's check and the booking form all read - and a student's **father and mother are taken from the record and locked**, with Aadhaar and the ID upload waived for them; Fill-in and "Yourself" withdrawn for every role. **Invoices**: version 4 - no blank rows, no tax lines under the GSTIN, the CGST/SGST split in the GST label; **cash retired**; a personal stay is **issued, paid and vacated in one dialog** and cannot be closed off unpaid without the manager's reason; a new **Awaiting payment** list with no cut-off. **Missed** (migration 29): the nightly job marks a request nobody decided before its check-in, logs it and mails the requester, and the manager can reinstate it to the stage it was waiting at. |
 
 ## Branches
 
@@ -38,8 +39,9 @@ the notes of each session. The reasoning behind each step is in
   and **superseded** by the 26 Sep redesign on `main`.
 - Dependabot branches on the remote (actions and npm updates), not merged.
 
-## Numbers, 1 Oct 2026
+## Numbers, 7 Oct 2026
 
-27 migrations · 7 one-off repairs · 12 roles (10 active, 2 legacy) · 18 demo
+29 migrations · 7 one-off repairs · 12 roles (10 active, 2 legacy) · 18 demo
 personas · 6 demo bookings · 23 real rooms (Bageshri 10, Hamsanandi 13) ·
-338 unit tests · 28 end-to-end journeys · 13 console sections.
+405 unit tests · 33 end-to-end journeys · 14 console sections ·
+13 booking statuses.

@@ -7,17 +7,17 @@ import { academicRecordKindFor, COPY_TO_RULE } from "./fields";
 import { academicRecordFor } from "./index";
 
 /**
- * The "Copy to" list for a request — **one rule, used twice**: the Requester
+ * The "Copy to" list for a request - **one rule, used twice**: the Requester
  * details card shows it on the booking form, and every staff mail about the
  * booking puts it in CC (`lib/mail/notify.ts`, via `addressStaffMail`).
  *
  * Built from `COPY_TO_RULE` (`./fields`):
  *
- * - `approver` — everyone `canReview()` lets act on *any* stage of this
+ * - `approver` - everyone `canReview()` lets act on *any* stage of this
  *   request's chain (`approvalStagesFor`). The chain, not the current stage:
  *   the warden who forwarded a request is still copied when it is allocated
  *   or cancelled.
- * - `head_of_department` — an office's head: from the Departments & Clubs
+ * - `head_of_department` - an office's head: from the Departments & Clubs
  *   console when set (the office unit's head, or the head of the unit above
  *   it), else the head named on the office's academic record.
  *
@@ -28,12 +28,12 @@ import { academicRecordFor } from "./index";
 
 export type CopyToEntry = { name: string | null; email: string | null };
 
-/** What the request is, for routing — a booking, or the form before one exists. */
+/** What the request is, for routing - a booking, or the form before one exists. */
 export type CopyToRoute = {
   user_role: Role;
   service_type?: ServiceType;
   booking_type?: BookingType | string;
-  /** Who raised it, where that is not the requester — a club's faculty in-charge. */
+  /** Who raised it, where that is not the requester - a club's faculty in-charge. */
   user_id?: string | null;
   created_by?: string | null;
 };

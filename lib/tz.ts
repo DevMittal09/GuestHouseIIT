@@ -6,7 +6,7 @@
  * timezone the browser reading it is set to. Before this module the app used
  * the *runtime's* timezone on both sides, which meant a booking made for
  * 12:00 showed up in the manager's console as 5:30 PM the moment the server
- * ran in UTC — the offset between UTC and IST, applied twice over.
+ * ran in UTC - the offset between UTC and IST, applied twice over.
  *
  * So: never call `new Date(...)` on a naked "YYYY-MM-DDTHH:mm" string, and
  * never format an instant with `toLocaleString()`/date-fns `format` without a
@@ -98,13 +98,13 @@ export function instituteDate(localDateTime: string): Date {
   return new Date(instituteIso(localDateTime));
 }
 
-/** An instant as "YYYY-MM-DDTHH:mm" in institute time — the `<input>` shape. */
+/** An instant as "YYYY-MM-DDTHH:mm" in institute time - the `<input>` shape. */
 export function toInstituteDateTimeValue(iso: string | Date): string {
   const p = instituteParts(iso instanceof Date ? iso : new Date(iso));
   return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`;
 }
 
-/** An instant as "YYYY-MM-DD" in institute time — the `<input type="date">` shape. */
+/** An instant as "YYYY-MM-DD" in institute time - the `<input type="date">` shape. */
 export function toInstituteDateValue(iso: string | Date): string {
   const p = instituteParts(iso instanceof Date ? iso : new Date(iso));
   return `${p.year}-${pad(p.month)}-${pad(p.day)}`;

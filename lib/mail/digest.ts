@@ -36,8 +36,8 @@ import * as t from "./templates";
  * still waiting on you".
  *
  * **Every job is idempotent per institute day.** The idempotency key carries
- * the calendar date, so running the cron twice — or a retry firing, or someone
- * curling the route out of curiosity — sends one mail, not two. That also
+ * the calendar date, so running the cron twice - or a retry firing, or someone
+ * curling the route out of curiosity - sends one mail, not two. That also
  * means the schedule is advisory: if the cron misses 8am, the 9am run still
  * delivers, and a second 9:05 run does nothing.
  */
@@ -96,7 +96,7 @@ async function holdingBookings(): Promise<BookingWithDetails[]> {
 /**
  * The morning digest: one mail per reviewer who has something waiting.
  *
- * The Guest House Manager is deliberately not included — their pending
+ * The Guest House Manager is deliberately not included - their pending
  * allocations are a section of the daily desk report below, and two mails
  * listing the same queue is how a report stops being read.
  */
@@ -170,7 +170,7 @@ export async function queueCheckInReminders(now: Date): Promise<number> {
 
 /**
  * The day-wise guest house log, mailed to the manager and the reception desk
- * — Administration Section requirement 3.
+ * - Administration Section requirement 3.
  *
  * One mail per guest house, because the desk is per building and a merged
  * report makes the reader do the filtering. Guest houses are read from the
@@ -211,7 +211,7 @@ export async function queueDailyDeskReports(now: Date): Promise<number> {
     const overdue = stays.filter((b) => stayPhase(b, now) === "past");
 
     // Rooms taken right now. The overlap test is strict, so a zero-width
-    // window would match nothing — hence a one-minute probe from now.
+    // window would match nothing - hence a one-minute probe from now.
     const held = await store.getOccupiedRoomIds(
       guestHouse.id,
       now.toISOString(),
@@ -223,7 +223,7 @@ export async function queueDailyDeskReports(now: Date): Promise<number> {
     // report would mean either "nothing happened" or "the cron stopped
     // running", and the reader could not tell which. The tables read "Nothing
     // to report." on their own. The one exception is a guest house with no
-    // rooms yet — a half-created one from the developer console, which has
+    // rooms yet - a half-created one from the developer console, which has
     // nothing to be a log *of*.
     if (rooms.length === 0) continue;
 
@@ -244,7 +244,7 @@ export async function queueDailyDeskReports(now: Date): Promise<number> {
         eventKey: "desk.daily_report",
         booking: null,
         to: addressesOf(desk),
-        subjectText: `${guestHouse.name} — daily guest house log`,
+        subjectText: `${guestHouse.name} - daily guest house log`,
         doc: t.dailyDeskReport(
           day,
           guestHouse.name,
@@ -260,7 +260,7 @@ export async function queueDailyDeskReports(now: Date): Promise<number> {
 
 /**
  * Requests that have sat in one queue too long. Sent to the reviewer, copying
- * the Guest House Manager — who is the person who has to explain to a guest
+ * the Guest House Manager - who is the person who has to explain to a guest
  * why there is still no answer.
  */
 export async function queueEscalations(now: Date): Promise<number> {

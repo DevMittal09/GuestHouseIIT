@@ -78,7 +78,7 @@ export function AdminLock({ usingDefault }: { usingDefault: boolean }) {
       </Card>
 
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        This password only guards the developer console. It is not a substitute for signing in —
+        This password only guards the developer console. It is not a substitute for signing in -
         the portal still uses mock authentication.
       </p>
     </div>

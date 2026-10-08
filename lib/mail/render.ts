@@ -2,8 +2,8 @@
  * Email rendering: one block list in, an HTML body and a plain-text body out.
  *
  * **Both bodies come from the same blocks on purpose.** Every mail client that
- * refuses HTML — and every screen reader, and every "view source" during a
- * support call — reads the text part, so a template that writes the two
+ * refuses HTML - and every screen reader, and every "view source" during a
+ * support call - reads the text part, so a template that writes the two
  * separately drifts until the text version is wrong. Describing the content
  * once and rendering it twice makes that impossible.
  *
@@ -12,11 +12,11 @@
  *   most clients ignore external CSS),
  * - no external images (they are blocked by default and the portal may be on
  *   localhost anyway), so the wordmark is text,
- * - no ID-document links, ever — those go to the portal behind a login.
+ * - no ID-document links, ever - those go to the portal behind a login.
  *
  * Palette is the institute's, from `app/globals.css`: amber #f7a600 on warm
  * off-white #faf9f7, text #2b2b2b, borders #e3e1dc. The header uses dark brown
- * on amber rather than the site's white-on-amber, which fails WCAG AA — the
+ * on amber rather than the site's white-on-amber, which fails WCAG AA - the
  * fix `AGENTS.md` recommends, applied here from the start.
  */
 
@@ -39,14 +39,14 @@ export type Tone = keyof typeof TONES;
 
 export type Block =
   | { kind: "paragraph"; text: string }
-  /** Label/value pairs — the booking's facts. Renders as a two-column table. */
+  /** Label/value pairs - the booking's facts. Renders as a two-column table. */
   | { kind: "facts"; rows: [string, string][] }
   /** A boxed remark: a rejection reason, the room numbers, what to bring. */
   | { kind: "callout"; tone: Tone; title?: string; lines: string[] }
   | { kind: "table"; caption?: string; head: string[]; rows: string[][] }
   | { kind: "list"; items: string[] }
   | { kind: "button"; label: string; href: string }
-  /** Small print under the body — why you received this, mostly. */
+  /** Small print under the body - why you received this, mostly. */
   | { kind: "note"; text: string };
 
 export interface EmailDocument {
@@ -265,7 +265,7 @@ export function renderEmail(
 </html>`;
 
   const textLines = [
-    "IIT PALAKKAD — GUEST HOUSE BOOKING PORTAL",
+    "IIT PALAKKAD - GUEST HOUSE BOOKING PORTAL",
     "=========================================",
     "",
     doc.heading,

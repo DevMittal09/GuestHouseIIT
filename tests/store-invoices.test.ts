@@ -6,8 +6,8 @@ import type { NewBookingInput } from "@/lib/types";
 import { useThrowawayMockDb } from "./helpers";
 
 /**
- * The mock store's invoices and tariffs — its stand-ins for migration 19's
- * counter, unique live invoice, immutability trigger and tariff lock — and the
+ * The mock store's invoices and tariffs - its stand-ins for migration 19's
+ * counter, unique live invoice, immutability trigger and tariff lock - and the
  * mail to Accounts with the PDF attached.
  */
 
@@ -43,7 +43,7 @@ function doc(bookingId: string, total = 250_000): InvoiceDocument {
     rooms: 1,
     guests: 1,
     infants: 0,
-    room_lines: [{ kind: "room", description: "H-101 — Double sharing", days: 1, rate: total, amount: total, rate_incl: total, amount_incl: total, gst_percent: 0 }],
+    room_lines: [{ kind: "room", description: "H-101 - Double sharing", days: 1, rate: total, amount: total, rate_incl: total, amount_incl: total, gst_percent: 0 }],
     subtotal_rooms: total,
     meal_lines: [
       { meal: "breakfast", count: 0, rate: 8000, amount: 0, rate_incl: 8000, amount_incl: 0, gst_percent: 0 },
@@ -197,7 +197,7 @@ describe("the invoice goes to Accounts", () => {
     expect(rows[0].cc_emails).toEqual(["hod.cse@iitpkd.ac.in", "priya@iitpkd.ac.in"]);
     expect(rows[0].attachments).toEqual([{ kind: "invoice", invoice_id: inv.id }]);
     // Queueing already started a dispatcher in the background; wait for it
-    // (or run one) until the message settles — rendering the PDF takes a moment.
+    // (or run one) until the message settles - rendering the PDF takes a moment.
     let status: string | undefined;
     for (let i = 0; i < 40; i++) {
       await dispatchOutbox({ batchSize: 50 });

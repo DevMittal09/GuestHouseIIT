@@ -25,6 +25,7 @@ every table in `.local-db.json` and self-heals old files.
 | `official_email_whitelist` | (Migration 16) Accounts allowed to submit Official / Dignitary bookings, lowercased. Replaced the constant in `lib/routes.ts`. Service-role only. |
 | `security_audit` | (Migration 16) The append-only security audit log. A trigger refuses every UPDATE, every DELETE except through `purge_security_audit(days)` (never under 180 days, CERT-In), and TRUNCATE. Service-role only. |
 | `email_outbox` | The notification queue (migration 10). One row per message: recipients, rendered HTML and text, status, attempts, backoff. **Service-role only, like `app_settings`** — the rendered bodies quote guest names, purposes of visit and rejection reasons, which makes this table more sensitive than the bookings it describes. |
+| `academic_records` | (Migration 28) The institute's records **as the guest house office pasted them in**: one flat row per `(kind, lower(email))`, with every kind's fields as nullable columns. Read by the Requester details card, the Assistant Warden's family check and the booking form's **locked parent names**. **Service-role only** — it holds parents' names and phone numbers. |
 
 ### `bookings` columns worth knowing
 
@@ -124,13 +125,16 @@ user_role:      student, employee, official, club, alumni,
                 iar_student_cell, gh_caretaker
 booking_status: PENDING_WARDEN, PENDING_FA, PENDING_HOD, PENDING_IAR,
                 PENDING_GH_MANAGER, APPROVED, OCCUPIED, VACATED, REJECTED,
-                CANCELLED, CANCELLATION_REQUESTED, CANCELLATION_APPROVED
+                CANCELLED, CANCELLATION_REQUESTED, CANCELLATION_APPROVED,
+                MISSED   -- migration 29: nobody decided it before the check-in
 room_type:      single, double_sharing
 booking_type:   official, personal, alumni
 citizenship:    indian, other
 service_type:   room, room_meals, meals_only
 meal_preference: veg, non_veg   -- legacy; see meal_diet_counts (migration 27)
 email_status:   QUEUED, SENDING, SENT, FAILED
+academic_record_kind: student, employee, office, student_rep,
+                      alumni_office, warden   -- migration 28
 ```
 
 Checked text columns rather than enums: `bookings.debit_head`
@@ -576,6 +580,70 @@ Current migrations:
    27 applied again; `{"veg":7,"non_veg":5}` stored; a null accepted on a room
    booking; a negative count, a stray key (`jain`) and an array each refused by
    the check.
+
+28. **`00000000000028_academic_records.sql`** — *the institute's records, held
+    in the portal* (7 Oct 2026, the office's eighth list: "student guest
+    details from your own database").
+
+    A new enum `academic_record_kind` (`student`, `employee`, `office`,
+    `student_rep`, `alumni_office`, `warden`) and a table
+    **`academic_records`**: `kind`, `email`, and **every field of every kind
+    as a nullable column** (22 in all), plus `imported_by`
+    (`on delete set null`), `created_at`, `updated_at`.
+
+    **One table, not six.** The kinds share more than they differ by, and six
+    tables would mean six importers and six console sections for the same six
+    CSV pastes. `kind` says which columns mean anything; the app folds a row
+    into an `AcademicRecord` through `ACADEMIC_RECORD_FIELDS`, so a column here
+    that no record type names — or the other way round — is a compile error
+    rather than a field nothing ever fills.
+
+    **Unique on `(kind, lower(email))`**, because that is how
+    `AcademicSource.find` asks; a second paste of the same person updates the
+    row. A trigger (`touch_academic_record`) moves `updated_at`.
+
+    **RLS on with no `authenticated` policy** — service-role only, exactly like
+    `app_settings`. The rows hold parents' names and phone numbers, and what
+    reaches a browser is only ever what the server chose to show: the person's
+    own card, or the warden's check of the requests already in their queue.
+
+    Additive and idempotent. **Until it is applied**, every lookup falls
+    through to the published dummy records as before (`StoreAcademicSource`
+    treats a missing table as "no row", not as an outage) and the Academic
+    records console reports the missing table by name.
+
+    Verified in a throwaway `postgres:16-alpine` (7 Oct 2026): 1–28 applied, 28
+    applied again; the enum's six labels; 22 columns; RLS on; a student row
+    stored and read back; found by `lower(email)` from a differently-cased
+    address; the same email **refused** for the same kind and **accepted** for
+    another; an unknown kind refused; `updated_at` moving on update and
+    `created_at` not; and the record surviving the deletion of the profile that
+    imported it.
+
+29. **`00000000000029_missed_status.sql`** — *`MISSED`: a request nobody
+    decided in time* (7 Oct 2026).
+
+    One statement: `alter type booking_status add value if not exists
+    'MISSED'`. **The file contains nothing else, deliberately** — Postgres
+    refuses to *use* a new enum value in the transaction that adds it ("unsafe
+    use of new value of enum type") and a migration runner wraps each file in
+    one, so anything that reads or writes 'MISSED' belongs in a later file and
+    there is nothing here to tempt it.
+
+    **Nothing is backfilled.** A request that lapsed before this is marked by
+    the first nightly run (`runMissedSweep`), which is also the run that tells
+    the requester — backfilling would mark them silently.
+
+    **Until it is applied**, the nightly job cannot mark anything on Supabase:
+    the update is refused with an invalid-enum error, which the sweep catches
+    and logs per booking rather than failing the whole run. Everything else
+    carries on as before, and `hasLapsed()` still describes the state.
+
+    Verified in a throwaway `postgres:16-alpine` (7 Oct 2026): 1–29 applied, 29
+    applied again (the label skipped); MISSED last on the enum; a booking moved
+    into it with its `booking_logs` row (`previous_status` PENDING_WARDEN) and
+    back out again with a second row whose `previous_status` is MISSED — which
+    is what `reinstatedAfterMissed` reads; and no `room_holds` row held.
 
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.

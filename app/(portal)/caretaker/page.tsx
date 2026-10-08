@@ -7,7 +7,7 @@ import { getStore } from "@/lib/store";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
 import { LinkTabs } from "@/components/link-tabs";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
-import { awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
+import { awaitingPayment, awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 
@@ -25,7 +25,7 @@ export default async function CaretakerPage({
   if (guestHouses.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-        No guest houses configured yet — ask a developer to add one in the admin console.
+        No guest houses configured yet - ask a developer to add one in the admin console.
       </p>
     );
   }
@@ -36,7 +36,7 @@ export default async function CaretakerPage({
   // Only the two statuses that put a guest in a room. Pending requests are the
   // manager's business, so the caretaker never loads them.
   // And the stays that have left without settling, because reception issues
-  // the invoice (24 Sep 2026) — the same list the manager has.
+  // the invoice (24 Sep 2026) - the same list the manager has.
   const [allApproved, allOccupied, allVacated] = await Promise.all([
     store.listBookings({ status: "APPROVED", guestHouseId: current.id }),
     store.listBookings({ status: "OCCUPIED", guestHouseId: current.id }),
@@ -54,6 +54,28 @@ export default async function CaretakerPage({
       : [],
     now
   );
+  /**
+   * **Awaiting payment** (7 Oct 2026, the office's eighth list): every
+   * booking at this guest house whose invoice has gone out and not come
+   * back, however long ago. The same list the manager has - reception marks
+   * a payment too.
+   *
+   * Built from the invoices rather than from the bookings, and with no date
+   * window: "Checked out - to bill" is the daily list and is bounded to a
+   * few weeks, but an official stay's bill can sit with a department for
+   * months. Dining bookings are here too - they never check out, so the
+   * to-bill list could never hold one.
+   */
+  const outstanding = await store.listInvoices({ statuses: ["issued"] }).catch(() => []);
+  const awaitingPaymentBookings = outstanding.length > 0
+    ? awaitingPayment(
+        (await store.listBookings({ ids: outstanding.map((i) => i.booking_id) })).filter(
+          (b) => b.guest_house_id === current.id
+        ),
+        outstanding
+      )
+    : [];
+
   const stays = [...allApproved, ...allOccupied].sort((a, b) =>
     a.check_in.localeCompare(b.check_in)
   );
@@ -61,7 +83,7 @@ export default async function CaretakerPage({
   const upcomingStays = stays.filter((b) => stayPhase(b, now) === "upcoming");
   const overdueStays = stays.filter((b) => stayPhase(b, now) === "past");
 
-  // "Today" is the guest house's day, not the server's — see lib/tz.ts.
+  // "Today" is the guest house's day, not the server's - see lib/tz.ts.
   const { start: dayStart, end: dayEnd } = instituteDayBounds(toInstituteDateValue(now));
   const checkoutsToday = stays
     .filter((b) => checksOutOn(b, dayStart, dayEnd))
@@ -74,7 +96,7 @@ export default async function CaretakerPage({
         title="Guest House Reception"
         actions={
           // The kitchen's head count for the day, and the dining bookings to
-          // bill — open to reception, and until now reachable only by URL.
+          // bill - open to reception, and until now reachable only by URL.
           current.serves_meals ? (
             <Button asChild variant="outline">
               <Link href={`/manager/meals?gh=${encodeURIComponent(current.name)}`}>Meal counts</Link>
@@ -104,6 +126,7 @@ export default async function CaretakerPage({
         overdue={overdueStays}
         checkoutsToday={checkoutsToday}
         toBill={toBill}
+        awaitingPayment={awaitingPaymentBookings}
         nowIso={now.toISOString()}
       />
     </div>

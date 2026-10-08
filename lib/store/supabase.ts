@@ -44,6 +44,12 @@ import {
 } from "@/lib/audit";
 import type { Json } from "@/lib/supabase/database.types";
 import type { NewProjectInput, Project } from "@/lib/projects";
+import type { NewAcademicRecordInput, StoredAcademicRecord } from "@/lib/academic/stored";
+import {
+  ACADEMIC_RECORD_FIELDS,
+  type AcademicRecord,
+  type AcademicRecordKind,
+} from "@/lib/academic/types";
 import type { NewTariffInput, Tariff } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import type { NewSessionInput, Session } from "@/lib/sessions";
@@ -116,7 +122,7 @@ type OccupancyRow = {
 
 /**
  * `serves_meals` arrives with migration 8. Until it is applied a guest house
- * serves no meals — the booking form then simply offers none.
+ * serves no meals - the booking form then simply offers none.
  */
 function withMealsFlag(row: GuestHouse): GuestHouse {
   return { ...row, serves_meals: row.serves_meals ?? false };
@@ -199,7 +205,7 @@ export class SupabaseStore implements DataStore {
       submission_remarks: _submissionRemarks,
       ...bookingInput
     } = input;
-    // Counted from the room cards rather than taken from the caller — see
+    // Counted from the room cards rather than taken from the caller - see
     // `deriveFromRooms`.
     const derived = deriveFromRooms(input);
     const nowIso = new Date().toISOString();
@@ -219,7 +225,7 @@ export class SupabaseStore implements DataStore {
         on_behalf_of_phone: on_behalf_of_phone ?? null,
         // Named only when there is something to store, so a database without
         // migration 24 still takes every booking that copies nobody and has
-        // no sub-head — which is most of them.
+        // no sub-head - which is most of them.
         ...(copy_to_emails && copy_to_emails.length > 0 ? { copy_to_emails } : {}),
         ...(debit_subhead ? { debit_subhead } : {}),
         // Named only on a booking that has meals, so a database without
@@ -285,7 +291,7 @@ export class SupabaseStore implements DataStore {
 
   /**
    * Fill in `assigned_room_ids` / `assigned_rooms` from `room_holds`. There is
-   * no `assigned_room_ids` column any more — holds are the source of truth, so
+   * no `assigned_room_ids` column any more - holds are the source of truth, so
    * the two cannot drift apart.
    */
   private async hydrate(rows: BookingRow[]): Promise<BookingWithDetails[]> {
@@ -313,7 +319,7 @@ export class SupabaseStore implements DataStore {
     }
 
     // A finished stay holds nothing, but it still has to be invoiced, so the
-    // rooms its cards were allocated are fetched too — one query for all of
+    // rooms its cards were allocated are fetched too - one query for all of
     // the rows, and only for the ids the holds did not already bring.
     const cardRoomIds = [
       ...new Set(
@@ -433,6 +439,7 @@ export class SupabaseStore implements DataStore {
       .from("bookings")
       .select(BOOKING_SELECT)
       .order("created_at", { ascending: false });
+    if (filter.ids) query = query.in("id", filter.ids);
     if (filter.status) query = query.eq("status", filter.status);
     if (filter.guestHouseId) query = query.eq("guest_house_id", filter.guestHouseId);
     if (filter.userRole) query = query.eq("user_role", filter.userRole);
@@ -523,7 +530,7 @@ export class SupabaseStore implements DataStore {
 
     // A hold exists exactly while the booking holds the room, so a status that
     // is not in ROOM_HOLDING_STATUSES releases the rooms with no caller
-    // involvement — VACATED, CANCELLED, REJECTED and CANCELLATION_APPROVED all
+    // involvement - VACATED, CANCELLED, REJECTED and CANCELLATION_APPROVED all
     // free their rooms here rather than at each call site.
     if (!ROOM_HOLDING_STATUSES.includes(update.status)) {
       const { error: releaseError } = await this.db
@@ -624,7 +631,7 @@ export class SupabaseStore implements DataStore {
     const checkOut = patch.check_out ?? current.check_out;
 
     // Dates first. The holds carry the period, so moving the stay moves them,
-    // and the exclusion constraint decides whether that is allowed — a stay
+    // and the exclusion constraint decides whether that is allowed - a stay
     // cannot be extended over a room someone else already has. Failing here
     // leaves the booking untouched.
     if (checkIn !== current.check_in || checkOut !== current.check_out) {
@@ -685,7 +692,7 @@ export class SupabaseStore implements DataStore {
   ): Promise<BookingWithDetails[]> {
     // The day is an institute calendar date and `meals` is keyed by the same,
     // so the date is matched inside the jsonb rather than against the stay's
-    // timestamps — a stay can span a day it asked for no meals on.
+    // timestamps - a stay can span a day it asked for no meals on.
     let query = this.db
       .from("bookings")
       .select(BOOKING_SELECT)
@@ -708,7 +715,7 @@ export class SupabaseStore implements DataStore {
     checkOut: string,
     excludeBookingId?: string
   ): Promise<string[]> {
-    // Straight off the holds — no status filter needed, because a hold row
+    // Straight off the holds - no status filter needed, because a hold row
     // only exists while the booking is actually holding the room. Compared on
     // the guard, against the requested stay padded by the turnaround buffer:
     // what the exclusion constraint would compare on allocation.
@@ -857,7 +864,7 @@ export class SupabaseStore implements DataStore {
       .eq("user_id", id);
     if (countError) throw countError;
     if ((count ?? 0) > 0) {
-      throw new Error("This user has bookings — delete or reassign those first");
+      throw new Error("This user has bookings - delete or reassign those first");
     }
     const { error } = await this.db.from("profiles").delete().eq("id", id);
     if (error) throw error;
@@ -928,7 +935,7 @@ export class SupabaseStore implements DataStore {
       .eq("guest_house_id", id);
     if (countError) throw countError;
     if ((count ?? 0) > 0) {
-      throw new Error("Bookings reference this guest house — delete those first");
+      throw new Error("Bookings reference this guest house - delete those first");
     }
     const { error } = await this.db.from("guest_houses").delete().eq("id", id);
     if (error) throw error;
@@ -989,7 +996,7 @@ export class SupabaseStore implements DataStore {
       .eq("room_id", id);
     if (countError) throw countError;
     if ((count ?? 0) > 0) {
-      throw new Error("This room is assigned to a booking — deactivate it instead");
+      throw new Error("This room is assigned to a booking - deactivate it instead");
     }
     const { data, error } = await this.db
       .from("rooms")
@@ -1079,7 +1086,7 @@ export class SupabaseStore implements DataStore {
     if (error) {
       // 23503 = foreign_key_violation: an account still names it.
       if (error.code === "23503") {
-        throw new Error(`Accounts still name ${name} — move them first`);
+        throw new Error(`Accounts still name ${name} - move them first`);
       }
       throw error;
     }
@@ -1127,6 +1134,110 @@ export class SupabaseStore implements DataStore {
     }
   }
 
+  // ---- academic records (migration 28) --------------------------------
+
+  /**
+   * One flat row becomes an {@link AcademicRecord}: `kind` plus the fields
+   * that kind names, read through `ACADEMIC_RECORD_FIELDS`. Columns belonging
+   * to the other kinds are left behind rather than carried along, so a record
+   * pasted as a student cannot arrive downstream with an `employee_id` on it.
+   */
+  private academicRecordOf(row: Record<string, unknown>): AcademicRecord {
+    const kind = row.kind as AcademicRecordKind;
+    const record = { kind } as Record<string, unknown>;
+    for (const field of ACADEMIC_RECORD_FIELDS[kind] as readonly string[]) {
+      record[field] = (row[field] as string | null | undefined) ?? null;
+    }
+    return record as AcademicRecord;
+  }
+
+  private academicRowOf(input: NewAcademicRecordInput): Record<string, unknown> {
+    const record = input.record as unknown as Record<string, unknown>;
+    const row: Record<string, unknown> = {
+      kind: input.record.kind,
+      email: input.email,
+      imported_by: input.imported_by,
+    };
+    for (const field of ACADEMIC_RECORD_FIELDS[input.record.kind] as readonly string[]) {
+      if (field === "email") continue;
+      row[field] = (record[field] as string | null | undefined) ?? null;
+    }
+    return row;
+  }
+
+  async findAcademicRecord(
+    kind: AcademicRecordKind,
+    email: string
+  ): Promise<AcademicRecord | null> {
+    const { data, error } = await this.db
+      .from("academic_records")
+      .select("*")
+      .eq("kind", kind)
+      // The unique index is on `lower(email)`; `ilike` with no wildcard is an
+      // exact, case-insensitive match, and the index serves it.
+      .ilike("email", email.trim())
+      .maybeSingle();
+    if (error) throw error;
+    return data ? this.academicRecordOf(data as unknown as Record<string, unknown>) : null;
+  }
+
+  async listAcademicRecords(kind?: AcademicRecordKind): Promise<StoredAcademicRecord[]> {
+    let query = this.db.from("academic_records").select("*").order("email");
+    if (kind) query = query.eq("kind", kind);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? []).map((raw) => {
+      const row = raw as unknown as Record<string, unknown>;
+      return {
+        id: row.id as string,
+        email: row.email as string,
+        record: this.academicRecordOf(row),
+        imported_by: (row.imported_by as string | null) ?? null,
+        created_at: row.created_at as string,
+        updated_at: row.updated_at as string,
+      };
+    });
+  }
+
+  async saveAcademicRecords(
+    added: NewAcademicRecordInput[],
+    updated: { id: string; input: NewAcademicRecordInput }[]
+  ): Promise<void> {
+    if (added.length > 0) {
+      // One statement: the paste import is all or nothing, like the projects
+      // and LDAP username imports.
+      const { error } = await this.db
+        .from("academic_records")
+        .insert(added.map((input) => this.academicRowOf(input)) as never);
+      if (error) {
+        if (error.code === "23505") {
+          throw new Error("One of those records is already stored for that email");
+        }
+        throw error;
+      }
+    }
+    for (const { id, input } of updated) {
+      const { error } = await this.db
+        .from("academic_records")
+        .update(this.academicRowOf(input) as never)
+        .eq("id", id);
+      if (error) throw error;
+    }
+  }
+
+  async deleteAcademicRecord(id: string): Promise<void> {
+    const { error } = await this.db.from("academic_records").delete().eq("id", id);
+    if (error) throw error;
+  }
+
+  async deleteAcademicRecords(kind?: AcademicRecordKind): Promise<number> {
+    let query = this.db.from("academic_records").delete();
+    if (kind) query = query.eq("kind", kind);
+    const { data, error } = await query.select("id");
+    if (error) throw error;
+    return (data ?? []).length;
+  }
+
   async updateProject(id: string, patch: Partial<NewProjectInput>): Promise<void> {
     const { error } = await this.db.from("projects").update(patch).eq("id", id);
     if (error) {
@@ -1139,7 +1250,7 @@ export class SupabaseStore implements DataStore {
     const { error } = await this.db.from("projects").delete().eq("id", id);
     if (error) {
       if (error.code === "23503") {
-        throw new Error("A booking is debited to this project — deactivate it instead");
+        throw new Error("A booking is debited to this project - deactivate it instead");
       }
       throw error;
     }
@@ -1432,6 +1543,7 @@ export class SupabaseStore implements DataStore {
     let query = this.db.from("invoices").select("*").order("created_at", { ascending: false });
     if (filter.bookingId) query = query.eq("booking_id", filter.bookingId);
     if (filter.bookingIds) query = query.in("booking_id", filter.bookingIds);
+    if (filter.statuses) query = query.in("status", filter.statuses);
     if (filter.issuedFrom) query = query.gte("issued_at", filter.issuedFrom);
     if (filter.issuedTo) query = query.lt("issued_at", filter.issuedTo);
     if (filter.paidFrom) query = query.gte("paid_at", filter.paidFrom);
@@ -1461,10 +1573,10 @@ export class SupabaseStore implements DataStore {
       .maybeSingle();
     if (readError) throw readError;
     if (live && live.status !== "draft") {
-      throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} — cancel it first to issue a corrected one.`);
+      throw new InvoiceStateError(`This booking already has invoice ${live.invoice_number} - cancel it first to issue a corrected one.`);
     }
     // The charges column is migration 26. Named only when there is
-    // something to write in it — or something already there to clear — so
+    // something to write in it - or something already there to clear - so
     // an install without the migration still saves meal counts.
     const hadCharges = Array.isArray(live?.extra_charges) && live.extra_charges.length > 0;
     const charges =
@@ -1504,7 +1616,7 @@ export class SupabaseStore implements DataStore {
     });
     if (error) {
       if (error.code === "23505") {
-        throw new InvoiceStateError("Another invoice was issued for this booking a moment ago — reload to see it.");
+        throw new InvoiceStateError("Another invoice was issued for this booking a moment ago - reload to see it.");
       }
       throw invoiceErrorFrom(error.message) ?? error;
     }
@@ -1529,7 +1641,7 @@ export class SupabaseStore implements DataStore {
       .eq("status", "issued")
       .select("id");
     if (error) throw invoiceErrorFrom(error.message) ?? error;
-    if (!data?.length) throw new InvoiceStateError("Only an issued, unpaid invoice can be marked paid — reload to see its state.");
+    if (!data?.length) throw new InvoiceStateError("Only an issued, unpaid invoice can be marked paid - reload to see its state.");
   }
 
   async cancelInvoice(id: string, cancel: { reason: string; by: string }): Promise<void> {
@@ -1547,7 +1659,7 @@ export class SupabaseStore implements DataStore {
       .in("status", ["issued", "paid"])
       .select("id");
     if (error) throw invoiceErrorFrom(error.message) ?? error;
-    if (!data?.length) throw new InvoiceStateError("Only an issued or paid invoice can be cancelled — reload to see its state.");
+    if (!data?.length) throw new InvoiceStateError("Only an issued or paid invoice can be cancelled - reload to see its state.");
   }
 
   async deleteBooking(id: string): Promise<void> {
@@ -1562,7 +1674,7 @@ export class SupabaseStore implements DataStore {
     const { error } = await this.db.from("bookings").delete().eq("id", id);
     if (error) {
       if (error.code === "23503" && /invoices/.test(error.message)) {
-        throw new InvoiceStateError("An invoice was issued for this booking, so it cannot be deleted — cancel the booking instead.");
+        throw new InvoiceStateError("An invoice was issued for this booking, so it cannot be deleted - cancel the booking instead.");
       }
       throw error;
     }
@@ -1744,7 +1856,7 @@ function profileWriteError(error: { code?: string; message: string }): Error | t
   }
   // Migration 16: `profiles.hostel_name` must name a hostel on the list.
   if (error.code === "23503" && error.message.includes("profiles_hostel_fk")) {
-    return new Error("That hostel is not on the list — add it in Settings first");
+    return new Error("That hostel is not on the list - add it in Settings first");
   }
   return error;
 }

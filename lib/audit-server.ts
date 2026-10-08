@@ -11,8 +11,8 @@ import type { AuditEventKind } from "./audit";
  * has already happened, and failing the request would only tell the operator
  * it did not. (Before migration 16 there is no table; that is the usual cause.)
  *
- * The client address is the first hop of `x-forwarded-for` — what Vercel and
- * most proxies set — and is recorded as given, not trusted for anything.
+ * The client address is the first hop of `x-forwarded-for` - what Vercel and
+ * most proxies set - and is recorded as given, not trusted for anything.
  */
 export async function recordAudit(
   actor: Pick<Profile, "id" | "full_name" | "role"> | null,

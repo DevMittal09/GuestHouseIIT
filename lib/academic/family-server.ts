@@ -2,12 +2,12 @@ import "server-only";
 import type { BookingWithDetails } from "@/lib/types";
 import { checkFamily, type StudentRecordPanel } from "./family";
 import { academicRecordRows } from "./fields";
-import { academicRecordFor, isMockAcademicSource } from "./index";
+import { academicRecordFor } from "./index";
 
 /**
  * One panel per student request, keyed by booking id. Called by the warden's
- * page for the requests already in their queue — `canReview` scoped them to
- * the warden's hostel — so it widens nothing. Uses the same cached,
+ * page for the requests already in their queue - `canReview` scoped them to
+ * the warden's hostel - so it widens nothing. Uses the same cached,
  * never-throwing lookup as the details card; the record is shown, never
  * stored, logged or mailed.
  */
@@ -26,7 +26,7 @@ export async function studentRecordPanels(
           status: lookup.status,
           rows: record ? academicRecordRows(record) : [],
           family: checkFamily(record?.kind === "student" ? record : null, guests),
-          sample: record !== null && isMockAcademicSource(),
+          sample: lookup.status === "found" && lookup.origin === "sample",
         },
       ];
     })

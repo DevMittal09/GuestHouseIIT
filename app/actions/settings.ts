@@ -31,7 +31,7 @@ import type { ActionResult } from "./bookings";
  * change without a deploy.
  *
  * Each action re-checks, server-side, that the caller may use the Settings
- * section and that the console is unlocked — the page hiding a form is not the
+ * section and that the console is unlocked - the page hiding a form is not the
  * boundary. Each validates the proposed value, refuses a change that would
  * break stored data (naming what it would break), and records what changed in
  * the security audit log.
@@ -49,7 +49,7 @@ async function requireConsoleFor(group: RuleGroup): Promise<Profile> {
     throw new Error("Only the Guest House Manager or a developer can change invoice settings");
   }
   if (!(await isAdminUnlocked())) {
-    throw new Error("The console is locked — enter the console password again");
+    throw new Error("The console is locked - enter the console password again");
   }
   return user;
 }
@@ -60,7 +60,7 @@ async function requireSettingsConsole(): Promise<Profile> {
     throw new Error("Only a developer can change Settings");
   }
   if (!(await isAdminUnlocked())) {
-    throw new Error("The console is locked — enter the console password again");
+    throw new Error("The console is locked - enter the console password again");
   }
   return user;
 }
@@ -71,7 +71,7 @@ function fail(e: unknown): ActionResult {
     return {
       ok: false,
       error:
-        "The settings tables are not there yet — apply supabase/migrations/00000000000016_settings_and_audit.sql.",
+        "The settings tables are not there yet - apply supabase/migrations/00000000000016_settings_and_audit.sql.",
     };
   }
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
@@ -79,7 +79,7 @@ function fail(e: unknown): ActionResult {
 
 /**
  * Settings change what the booking form offers and what the public site says
- * (meal times, the advance window), so the whole layout is revalidated — this
+ * (meal times, the advance window), so the whole layout is revalidated - this
  * is one of the few actions that genuinely changes every page.
  */
 function done(): ActionResult {
@@ -170,7 +170,7 @@ export async function saveRuleGroup(group: RuleGroup, proposed: unknown): Promis
     }
 
     // The turnaround buffer is enforced by the database's exclusion
-    // constraint, so changing it rebuilds every hold — in Postgres, in one
+    // constraint, so changing it rebuilds every hold - in Postgres, in one
     // transaction that refuses (naming the stays) if any two would clash.
     // That comes first: if it is refused, nothing in the group is saved.
     if (group === "booking") {
@@ -209,7 +209,7 @@ export async function addHostelAction(name: string): Promise<ActionResult> {
   }
 }
 
-/** Renames the hostel and moves every account in it — wardens' scoping follows. */
+/** Renames the hostel and moves every account in it - wardens' scoping follows. */
 export async function renameHostelAction(from: string, to: string): Promise<ActionResult> {
   try {
     const user = await requireSettingsConsole();
@@ -224,7 +224,7 @@ export async function renameHostelAction(from: string, to: string): Promise<Acti
   }
 }
 
-/** Refused while any account names the hostel — the store enforces it too. */
+/** Refused while any account names the hostel - the store enforces it too. */
 export async function removeHostelAction(name: string): Promise<ActionResult> {
   try {
     const user = await requireSettingsConsole();

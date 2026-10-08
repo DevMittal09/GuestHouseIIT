@@ -52,7 +52,7 @@ async function requireConsole(
     throw new Error(`You do not have access to ${CONSOLE_SECTIONS[section].label}`);
   }
   if (!(await isAdminUnlocked())) {
-    throw new Error("The console is locked — enter the console password again");
+    throw new Error("The console is locked - enter the console password again");
   }
   // Phase 8: changing who may do what, or deleting records, asks a developer
   // for a fresh second factor. Anyone else is already behind the console
@@ -89,7 +89,7 @@ export async function unlockAdminConsole(password: string): Promise<ActionResult
       await recordAudit(user, "signin.failure", "console", { reason: "throttled" });
       return {
         ok: false,
-        error: `Too many attempts — try again in ${gate.retryInSeconds}s`,
+        error: `Too many attempts - try again in ${gate.retryInSeconds}s`,
       };
     }
 
@@ -115,7 +115,7 @@ export async function lockAdminConsole(): Promise<ActionResult> {
 
 /**
  * Change the console password. Requires the current one even though the caller
- * is already unlocked — an unlocked console left open should not let a passer-by
+ * is already unlocked - an unlocked console left open should not let a passer-by
  * lock the real developer out.
  */
 export async function changeAdminPassword(
@@ -135,7 +135,7 @@ export async function changeAdminPassword(
     }
 
     await setAdminPassword(newPassword);
-    // The unlock cookie is signed with the old hash, so it is now invalid —
+    // The unlock cookie is signed with the old hash, so it is now invalid -
     // mint a fresh one so the developer is not thrown out of their own session.
     await grantAdminUnlock();
     return done();
@@ -360,8 +360,8 @@ export async function createUserAction(input: UserFormInput): Promise<ActionResu
     const actor = await requireConsole("users", { stepUp: true });
     const parsed = userSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid user" };
-    // A manager may appoint another manager — that is the point of giving
-    // them this section — but not a developer. Otherwise "add an admin" is a
+    // A manager may appoint another manager - that is the point of giving
+    // them this section - but not a developer. Otherwise "add an admin" is a
     // route to becoming one, and the section split would be decoration.
     const roleError = assignRoleError(actor, parsed.data.role);
     if (roleError) return { ok: false, error: roleError };
@@ -407,7 +407,7 @@ export type LdapImportResult =
   | { ok: false; error: string; problems?: string[] };
 
 /**
- * Bulk-load LDAP usernames onto existing accounts — how the institute's real
+ * Bulk-load LDAP usernames onto existing accounts - how the institute's real
  * LDAP logins get into the portal. Planned by `planLdapUidImport` (all or
  * nothing); see there for the accepted format.
  */
@@ -417,7 +417,7 @@ export async function importLdapUidsAction(text: string): Promise<LdapImportResu
     const store = getStore();
     const plan = planLdapUidImport(text, await store.listProfiles());
     if (plan.problems.length) {
-      return { ok: false, error: "Nothing was changed — fix these lines and try again", problems: plan.problems };
+      return { ok: false, error: "Nothing was changed - fix these lines and try again", problems: plan.problems };
     }
     if (plan.changes.length === 0 && plan.unchanged === 0) {
       return { ok: false, error: "No \"email, LDAP username\" lines found" };
@@ -466,9 +466,12 @@ const OVERRIDABLE: BookingStatus[] = [
   "PENDING_WARDEN", "PENDING_FA", "PENDING_IAR", "PENDING_GH_MANAGER",
   "APPROVED", "REJECTED", "CANCELLED",
   "OCCUPIED", "VACATED", "CANCELLATION_REQUESTED", "CANCELLATION_APPROVED",
+  // Migration 29. The manager's own Reinstate is the ordinary way out of
+  // MISSED; this is the repair tool, and it can reach every status.
+  "MISSED",
 ];
 
-/** Force a booking into any status (audit-logged) — for unsticking workflows. */
+/** Force a booking into any status (audit-logged) - for unsticking workflows. */
 export async function adminSetBookingStatusAction(
   id: string,
   status: BookingStatus,
@@ -510,7 +513,7 @@ export async function adminSetBookingStatusAction(
 /**
  * The mail log, for the developer console.
  *
- * Developer-only, like everything else in this file — rendered bodies quote
+ * Developer-only, like everything else in this file - rendered bodies quote
  * guest names, purposes of visit and rejection reasons verbatim, so the outbox
  * is more sensitive than the bookings it describes.
  *
@@ -615,8 +618,8 @@ export async function flushMailOutbox(): Promise<
  * Prove the SMTP credentials and the route before trusting them.
  *
  * Goes through the queue like everything else rather than calling the
- * transport directly, so a successful test proves the *whole* path —
- * enqueue, claim, render, send — and not merely that a password is accepted.
+ * transport directly, so a successful test proves the *whole* path -
+ * enqueue, claim, render, send - and not merely that a password is accepted.
  */
 export async function sendTestEmail(): Promise<ActionResult> {
   try {
@@ -629,7 +632,7 @@ export async function sendTestEmail(): Promise<ActionResult> {
         eventKey: "desk.daily_report",
         booking: null,
         to: [dev.email],
-        subjectText: "Guest house portal — mail test",
+        subjectText: "Guest house portal - mail test",
         standalone: true,
         // The instant, so a second test is a second message rather than a
         // duplicate the idempotency key swallows.
@@ -649,7 +652,7 @@ export async function sendTestEmail(): Promise<ActionResult> {
                 ["SMTP host", `${config.host}:${config.port}`],
                 ["From", config.from],
                 ["Reply-To", config.replyTo],
-                ["Redirecting all mail to", config.redirectAllTo ?? "(not set — real recipients)"],
+                ["Redirecting all mail to", config.redirectAllTo ?? "(not set - real recipients)"],
                 ["Portal base URL", config.baseUrl],
                 ["Requested by", `${dev.full_name} <${dev.email}>`],
               ],

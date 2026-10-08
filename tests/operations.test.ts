@@ -145,8 +145,8 @@ describe("no-shows and early check-out", () => {
   });
 
   it("a checked-out stay still knows which room it used, so it can be invoiced", async () => {
-    // The hold is gone the moment the guest leaves — that is what frees the
-    // room — but the invoice is priced from the room they actually occupied.
+    // The hold is gone the moment the guest leaves - that is what frees the
+    // room - but the invoice is priced from the room they actually occupied.
     // Releasing the room card with the hold left the bill with nothing to
     // charge for every stay closed off before it was invoiced.
     const b = await store.createBooking(input("2031-08-10T08:30:00.000Z", "2031-08-12T05:30:00.000Z"));

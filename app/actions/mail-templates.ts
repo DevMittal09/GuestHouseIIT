@@ -19,7 +19,7 @@ import type { ActionResult } from "./bookings";
  * Reading and editing what the automatic emails say.
  *
  * Separate from `admin.ts` only because that file is already long; the gate
- * is the same one — a console section plus the console unlock, checked on the
+ * is the same one - a console section plus the console unlock, checked on the
  * action rather than trusted from the page.
  */
 async function requireMailConsole() {
@@ -28,7 +28,7 @@ async function requireMailConsole() {
     throw new Error("You do not have access to Email Templates");
   }
   if (!(await isAdminUnlocked())) {
-    throw new Error("The console is locked — enter the console password again");
+    throw new Error("The console is locked - enter the console password again");
   }
   return user;
 }
@@ -58,13 +58,13 @@ export type MailTemplateList =
   | { ok: false; error: string };
 
 /**
- * Every event, with its stored edits folded in — so the console shows one row
+ * Every event, with its stored edits folded in - so the console shows one row
  * per kind of mail whether or not it has been touched. Events with no row
  * come back as `defaultOverride`, which is what "unedited" looks like.
  *
  * Returns a result rather than throwing. It is read by a server component,
  * and an exception there replaces the whole console with "page cannot be
- * loaded" — which is a terrible way to be told that a migration has not been
+ * loaded" - which is a terrible way to be told that a migration has not been
  * run yet, or that this account cannot open this tab.
  */
 export async function listMailTemplates(): Promise<MailTemplateList> {
@@ -111,7 +111,7 @@ export async function saveMailTemplateAction(input: MailTemplateInput): Promise<
     if (bad) return { ok: false, error: `“${bad}” is not a valid email address` };
 
     // Blank means "use the built-in wording", which is why these are stored
-    // as null rather than an empty string — an empty subject would send mail
+    // as null rather than an empty string - an empty subject would send mail
     // with no subject at all.
     const trimmed = (v: string) => (v.trim() === "" ? null : v.trim());
     await getStore().saveMailTemplate({

@@ -12,7 +12,7 @@ import type { ActionResult } from "./bookings";
 
 /**
  * The project list behind the Project debitable head (Phase 4). The same gate
- * as the rest of the console — the section and the unlock — checked here, on
+ * as the rest of the console - the section and the unlock - checked here, on
  * the action. Every change is audited: this list decides what can be debited.
  */
 async function requireProjectsConsole(): Promise<Profile> {
@@ -21,7 +21,7 @@ async function requireProjectsConsole(): Promise<Profile> {
     throw new Error("You do not have access to Projects");
   }
   if (!(await isAdminUnlocked())) {
-    throw new Error("The console is locked — enter the console password again");
+    throw new Error("The console is locked - enter the console password again");
   }
   return user;
 }
@@ -31,7 +31,7 @@ function fail(e: unknown): ActionResult {
   if (code === "42P01" || code === "PGRST205") {
     return {
       ok: false,
-      error: "The projects table is not there yet — apply supabase/migrations/00000000000018_hod_approval_and_projects.sql.",
+      error: "The projects table is not there yet - apply supabase/migrations/00000000000018_hod_approval_and_projects.sql.",
     };
   }
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
@@ -85,7 +85,7 @@ export async function importProjects(
     const store = getStore();
     const plan = planProjectImport(text, await store.listProjects());
     if (plan.problems.length > 0) {
-      return { ok: false, error: "Nothing was imported — fix these lines first.", problems: plan.problems };
+      return { ok: false, error: "Nothing was imported - fix these lines first.", problems: plan.problems };
     }
     await store.createProjects(plan.added);
     for (const change of plan.updated) await store.updateProject(change.id, change.patch);
@@ -112,7 +112,7 @@ export async function setProjectActive(id: string, active: boolean): Promise<Act
   }
 }
 
-/** Refused while a booking is debited to it — deactivate it instead. */
+/** Refused while a booking is debited to it - deactivate it instead. */
 export async function deleteProjectAction(id: string): Promise<ActionResult> {
   try {
     const user = await requireProjectsConsole();

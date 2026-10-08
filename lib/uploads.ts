@@ -12,7 +12,7 @@ import { randomUUID } from "crypto";
  *    bytes are not one of the four accepted formats is refused, so `x.pdf`
  *    holding a script is never stored as a PDF.
  * 2. **Camera metadata is stripped.** A photograph of an ID card carries the
- *    GPS position, the phone and the time it was taken — none of which the
+ *    GPS position, the phone and the time it was taken - none of which the
  *    guest house asked for. JPEG APPn segments and PNG text/EXIF chunks go.
  * 3. **The name is thrown away.** Files are stored under a random name with
  *    the extension of the sniffed type, so nothing in the path can be guessed,
@@ -44,7 +44,7 @@ export function sniffUploadType(bytes: Uint8Array): UploadType | null {
 /**
  * JPEG: drop every APPn segment (EXIF, GPS, XMP, thumbnails) while keeping the
  * image data. PNG: drop eXIf, tEXt, iTXt, zTXt and time chunks. Other types are
- * returned unchanged — a PDF's metadata is inside its object graph, and
+ * returned unchanged - a PDF's metadata is inside its object graph, and
  * rewriting that needs a parser we are not going to add.
  */
 export function stripMetadata(bytes: Uint8Array, type: UploadType): Uint8Array {
@@ -100,7 +100,7 @@ export async function prepareUpload(file: File): Promise<{ ok: true; file: Prepa
   if (file.size > MAX_UPLOAD_BYTES) return { ok: false, error: "That file is larger than 5 MB" };
   const raw = new Uint8Array(await file.arrayBuffer());
   const type = sniffUploadType(raw);
-  if (!type) return { ok: false, error: "Upload a JPG, PNG, WEBP or PDF — that file is none of them" };
+  if (!type) return { ok: false, error: "Upload a JPG, PNG, WEBP or PDF - that file is none of them" };
   const bytes = stripMetadata(raw, type);
   const scan = await scanForViruses(bytes);
   if (!scan.ok) return { ok: false, error: scan.error };
@@ -110,7 +110,7 @@ export async function prepareUpload(file: File): Promise<{ ok: true; file: Prepa
 /**
  * Optional virus scan: when `CLAMAV_HOST` is set, the bytes are streamed to
  * clamd (INSTREAM) before they are stored. Without it, nothing is scanned and
- * the upload goes through — the office may not have a scanner, and refusing
+ * the upload goes through - the office may not have a scanner, and refusing
  * every upload because of that would be worse.
  */
 export async function scanForViruses(bytes: Uint8Array): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -143,6 +143,6 @@ export async function scanForViruses(bytes: Uint8Array): Promise<{ ok: true } | 
     // A scanner that is configured but unreachable is a failure to scan, and
     // an ID document is not urgent enough to store unscanned.
     console.error("[uploads] could not reach clamd:", e);
-    return { ok: false, error: "The virus scanner is unavailable — try again shortly" };
+    return { ok: false, error: "The virus scanner is unavailable - try again shortly" };
   }
 }

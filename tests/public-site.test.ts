@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { mealBookingDeadline } from "@/lib/meals";
 import { DEFAULT_RULES, type Rules } from "@/lib/settings";
-import { GUEST_HOUSE_LOCATIONS, guestHouseMapPins, INSTITUTE_MAP, MRBS_URL, SITE_LINKS } from "@/lib/site";
+import { GUEST_HOUSE_LOCATIONS, guestHouseMapPins, INSTITUTE_MAP, SITE_LINKS } from "@/lib/site";
 import { amenities, BOOKING_STEPS, guidelineSections, houseSummary, MEAL_NOTICE_RULE } from "@/lib/site-content";
 import type { SiteGuestHouse } from "@/lib/site-data";
 import { ROLE_LABELS, type Role } from "@/lib/types";
 
 /**
  * The public site (26 Sep 2026): the two guest-house map pins, the footer's
- * links, the amenities, and the Guidelines — whose rules are computed from
+ * links, the amenities, and the Guidelines - whose rules are computed from
  * Settings, and which must never show the portal's internals (the owner:
  * "do not display the backend logic like who are the users, who approves
  * who").
@@ -68,11 +68,19 @@ describe("guest house map pins", () => {
 });
 
 describe("footer links", () => {
-  it("carries the institute website and MRBS", () => {
+  it("carries the institute website", () => {
     const hrefs = SITE_LINKS.map((l) => l.href);
     expect(hrefs).toContain("https://iitpkd.ac.in");
-    expect(hrefs).toContain(MRBS_URL);
-    expect(MRBS_URL).toBe("https://mrbs.iitpkd.ac.in");
+  });
+
+  // The office asked for the Meeting Room Booking System to come off the site
+  // entirely (7 Oct 2026) - the footer banner, the Contact page sentence and
+  // the portal footer's link.
+  it("no longer mentions the meeting room booking system", () => {
+    for (const link of SITE_LINKS) {
+      expect(link.href).not.toContain("mrbs");
+      expect(link.label).not.toMatch(/MRBS/i);
+    }
   });
 });
 

@@ -23,7 +23,7 @@ export default async function MailTemplatesPage() {
           <p className="font-medium">Email templates are not available yet</p>
           <p className="mt-1">{result.error}</p>
           <p className="mt-2 text-amber-800 dark:text-amber-200">
-            Mail is unaffected in the meantime — every message goes out with its built-in
+            Mail is unaffected in the meantime - every message goes out with its built-in
             wording.
           </p>
         </div>
