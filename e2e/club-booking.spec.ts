@@ -8,6 +8,7 @@ import {
   REFERENCE,
   rowFor,
   selectedGuestHouseName,
+  settleDebitHead,
   signIn,
 } from "./helpers";
 
@@ -47,7 +48,9 @@ test("a club's Faculty Advisor books for it from their faculty login; the club's
   await page.getByRole("button", { name: "Add another email" }).click();
   await page.locator('[name="copy_to.1.email"]').fill("events.coordinator@example.org");
 
-  await page.locator('[name="debit_head"][value="department_budget"]').check();
+  // A fest or club spends the student fund (8 Oct 2026), not a department's.
+  await page.locator('[name="debit_head"][value="student_fund"]').check();
+  await settleDebitHead(page);
   await chooseGuestHouse(page);
   const house = await selectedGuestHouseName(page);
   await page.locator('[name="check_in_date"]').fill(localDate(4));

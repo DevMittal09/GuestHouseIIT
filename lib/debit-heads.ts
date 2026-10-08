@@ -5,28 +5,34 @@ import type { Unit } from "./units";
 /**
  * Which budget a stay is charged to - the "debitable head" (Phase 4).
  *
- * Required on every booking. **Which heads a requester may choose is
+ * Required on every booking except a personal one, which is never asked
+ * ({@link asksForDebitHead}). **Which heads a requester may choose is
  * configuration** (Settings → Debitable heads, `rules.debit`), keyed by the
- * requester's *category*, with defaults from the meeting notes:
+ * requester's *category*. The defaults are the office's own list of
+ * 8 October 2026, which replaced the one taken from the meeting notes:
  *
  * | Category | Room booking | Dining (Phase 6) |
  * | --- | --- | --- |
- * | Faculty | Department / Project / PDF / Special Funds | Department / PDF / Personal / Special Funds |
- * | Non-teaching staff | Department / Special Funds | Department / Special Funds |
- * | Officer office (Director, Registrar…) | Institute / Special Funds | Institute / Special Funds |
- * | Department office | Department / Special Funds | Department / Special Funds |
- * | Club | Department / Special Funds | - |
- * | Personal booking (anyone) | Personal / Special Funds | Personal / Special Funds |
+ * | Faculty | every head except Institute Grant, Alumni Fund, Student Fund and Hostel Funds | the same, less Project |
+ * | Non-teaching staff | Personal | Personal |
+ * | Offices (officer and department alike) | Institute / Department / Special Budget / Student Fund / Hostel Funds / Alumni Fund | the same |
+ * | Clubs, councils and fests | Student Fund / Special Budget | the same |
+ * | Students | Personal | Personal |
+ * | On behalf of an alumnus, and the IAR Student Cell | Alumni Fund / Special Budget | the same |
+ * | Personal booking (anyone) | Personal | Personal |
  *
- * **Special Funds** is offered to **everyone except students** (25 Sep 2026;
- * on 24 Sep it was official bookings only). It is stored as `special_budget`,
- * the value migration 15 created for the same idea.
+ * It is stated as the office wrote it, not reasoned from the earlier table:
+ * **non-teaching staff lost the department budget** and **the two classes of
+ * office are now one list**, which the previous defaults split. The nine
+ * heads themselves have existed since migration 15; four of them
+ * (Alumni Fund, Student Fund, Hostel Funds, and Personal on an official
+ * faculty booking) were not offered anywhere until this list.
  *
  * The allowed list is computed on the server (`debitHeadsByType`) and handed
  * to the booking form, and the schema checks the choice against the same list
  * on both sides - so a crafted request cannot charge a project from a staff
- * account. Choosing **Project** requires picking a project from the list the
- * console maintains (`lib/projects.ts`).
+ * account. Any head but Personal Funds also needs the requester's
+ * {@link FUND_DECLARATION}.
  *
  * Kept apart from the tariff: the head records *who pays*; the rate still
  * follows the room, the kind of booking and the category of guest.
@@ -70,24 +76,34 @@ export const DEBIT_CATEGORY_LABELS: Record<DebitCategory, string> = {
   manager: "Guest House Manager, booking at the desk",
 };
 
-/** The heads the office uses; the others are legacy (migration 15). */
+/**
+ * Every head the office uses, in the order it listed them (8 Oct 2026). All
+ * nine are in use now: Alumni Fund, Student Fund and Hostel Funds were on
+ * the enum from migration 15 but offered to nobody until this list.
+ */
 export const STANDARD_DEBIT_HEADS: DebitHead[] = [
-  "department_budget",
   "institute_grant",
   "professional_development_fund",
-  "personal_funds",
   "project_grant",
+  "department_budget",
   "special_budget",
+  "personal_funds",
+  "alumni_fund",
+  "student_fund",
+  "hostel_funds",
 ];
 
-/** How the head prints on the invoice: "Department / Institute / PDF / Personal / Project / Special Funds". */
+/** How the head prints on the invoice: "Department / Institute / PDF / Personal / Project / Special Budget". */
 export const INVOICE_HEAD_LABELS: Partial<Record<DebitHead, string>> = {
   department_budget: "Department",
   institute_grant: "Institute",
   professional_development_fund: "PDF",
   personal_funds: "Personal",
   project_grant: "Project",
-  special_budget: "Special Funds",
+  special_budget: "Special Budget",
+  alumni_fund: "Alumni",
+  student_fund: "Student",
+  hostel_funds: "Hostel",
 };
 
 export function invoiceHeadLabel(head: DebitHead | null | undefined): string {
@@ -101,124 +117,152 @@ export type DebitRules = {
   /** Meals-only / dining bookings (Phase 6). Never Project. */
   dining: Record<DebitCategory, DebitHead[]>;
   /**
-   * Which shape of the defaults a saved row was made from. Each revision
-   * added Special Funds to more categories, so `upgradeDebitRules` adds it
-   * once to the categories a row has not yet been offered it for; a row saved
-   * since then is the office's own choice and is left alone, even where
-   * Special Funds was unticked. Absent on rows saved before 24 Sep 2026.
+   * Which shape of the defaults a saved row was made from, so
+   * `upgradeDebitRules` brings it forward exactly once. Absent on rows saved
+   * before 24 Sep 2026.
    */
   revision?: number;
 };
 
 /**
- * Revision 2 (24 Sep 2026): Special Funds on every official booking.
- * Revision 3 (25 Sep 2026): Special Funds for everyone except students.
- * Revision 4 (1 Oct 2026): **not** on a personal dining booking - the office
- * asked for it to go from a personal meal booking, where the only honest
- * answer is the requester's own money.
- * Revision 5 (7 Oct 2026): **not** on a personal booking of any kind. The
- * office asked for a personal booking to stop asking the question at all, so
- * the one answer it can have is the requester's own money - a stay as well as
- * a meal (see {@link asksForDebitHead}).
+ * Revision 2 (24 Sep 2026): Special Budget on every official booking.
+ * Revision 3 (25 Sep 2026): Special Budget for everyone except students.
+ * Revision 4 (1 Oct 2026): not on a personal dining booking.
+ * Revision 5 (7 Oct 2026): not on a personal booking of any kind, which is
+ * also when the form stopped asking (see {@link asksForDebitHead}).
+ * Revision 6 (8 Oct 2026): **the office's own list of heads per requester**,
+ * which is not reachable by adding or removing one head from revision 5 -
+ * non-teaching staff lost the department budget, the two classes of office
+ * were merged onto one longer list, clubs moved from the department budget to
+ * the Student Fund, and alumni bookings moved from the Institute Grant to the
+ * Alumni Fund. So revision 6 **replaces** both lists with
+ * {@link DEFAULT_DEBIT_RULES} rather than editing them.
  */
-export const DEBIT_RULES_REVISION = 5;
-
-/**
- * The categories Special Funds reached at each revision. A row is upgraded by
- * every revision after its own, so a category the office unticked after
- * revision 2 stays unticked when revision 3 arrives.
- */
-const SPECIAL_FUNDS_ADDED_AT: Record<number, DebitCategory[]> = {
-  2: ["faculty", "staff", "officer_office", "department_office", "club", "manager"],
-  3: ["iar_student_cell", "alumni", "personal"],
-};
-
-/**
- * The categories Special Funds is offered to by default: **everyone except
- * students** (25 Sep 2026). A student's stay is always their own money.
- */
-export const SPECIAL_FUNDS_CATEGORIES: DebitCategory[] = DEBIT_CATEGORIES.filter((c) => c !== "student");
+export const DEBIT_RULES_REVISION = 6;
 
 export const DEFAULT_DEBIT_RULES: DebitRules = {
   room: {
-    faculty: ["department_budget", "project_grant", "professional_development_fund", "special_budget"],
-    staff: ["department_budget", "special_budget"],
-    officer_office: ["institute_grant", "special_budget"],
-    department_office: ["department_budget", "special_budget"],
-    club: ["department_budget", "special_budget"],
+    // "All funds except Institute Grant, Alumni, Student Fund and Hostel" -
+    // the grant is the offices' money, and the other three are not a
+    // department's to spend. Personal Funds is on the list because a faculty
+    // member may host a visitor at their own expense.
+    faculty: [
+      "professional_development_fund",
+      "project_grant",
+      "department_budget",
+      "special_budget",
+      "personal_funds",
+    ],
+    // Non-teaching staff: Personal Funds only. Their official hosting is
+    // raised by the office or the department that is paying, which has its
+    // own list below.
+    staff: ["personal_funds"],
+    // Both classes of office get the same six: the office's list says
+    // "Offices" without dividing them, and the Director's office and a
+    // department office draw on the same funds in practice.
+    officer_office: [
+      "institute_grant",
+      "department_budget",
+      "special_budget",
+      "student_fund",
+      "hostel_funds",
+      "alumni_fund",
+    ],
+    department_office: [
+      "institute_grant",
+      "department_budget",
+      "special_budget",
+      "student_fund",
+      "hostel_funds",
+      "alumni_fund",
+    ],
+    // "Fests - Student Funds Special Budget Only". Councils, clubs and fests
+    // are all `club` here, and a fest's visiting speakers are paid for out of
+    // the student fund, not a department's budget.
+    club: ["student_fund", "special_budget"],
     student: ["personal_funds"],
-    iar_student_cell: ["institute_grant", "special_budget"],
-    alumni: ["institute_grant", "personal_funds", "special_budget"],
+    // "Alumni IAR - Alumni Fund, Special Budget", which covers both the
+    // Student Cell's own official requests and any booking made for an
+    // alumnus.
+    iar_student_cell: ["alumni_fund", "special_budget"],
+    alumni: ["alumni_fund", "special_budget"],
     // A personal booking is the requester's own money, and since 7 Oct 2026
     // it is not even asked about - the form states nothing and the server
     // writes Personal Funds itself.
     personal: ["personal_funds"],
+    // The desk books for everyone, so it can name any head.
     manager: [...STANDARD_DEBIT_HEADS],
   },
   dining: {
-    faculty: ["department_budget", "professional_development_fund", "personal_funds", "special_budget"],
-    staff: ["department_budget", "special_budget"],
-    officer_office: ["institute_grant", "special_budget"],
-    department_office: ["department_budget", "special_budget"],
-    club: ["department_budget", "special_budget"],
+    // The same lists, less Project: dining is never charged to a project
+    // (`debitRulesSchema` refuses it).
+    faculty: [
+      "professional_development_fund",
+      "department_budget",
+      "special_budget",
+      "personal_funds",
+    ],
+    staff: ["personal_funds"],
+    officer_office: [
+      "institute_grant",
+      "department_budget",
+      "special_budget",
+      "student_fund",
+      "hostel_funds",
+      "alumni_fund",
+    ],
+    department_office: [
+      "institute_grant",
+      "department_budget",
+      "special_budget",
+      "student_fund",
+      "hostel_funds",
+      "alumni_fund",
+    ],
+    club: ["student_fund", "special_budget"],
     student: ["personal_funds"],
-    iar_student_cell: ["institute_grant", "special_budget"],
-    alumni: ["personal_funds", "special_budget"],
-    // Personal dining: the requester's own money and nothing else (1 Oct
-    // 2026). A special fund pays for an institute occasion, not for somebody
-    // ordering lunch for their own family.
+    iar_student_cell: ["alumni_fund", "special_budget"],
+    alumni: ["alumni_fund", "special_budget"],
     personal: ["personal_funds"],
-    manager: ["department_budget", "institute_grant", "professional_development_fund", "personal_funds", "special_budget"],
+    manager: STANDARD_DEBIT_HEADS.filter((h) => h !== "project_grant"),
   },
   revision: DEBIT_RULES_REVISION,
 };
 
 /**
- * Bring a saved Settings row up to the current defaults' shape, once.
+ * The categories Special Budget is offered to by default - read off the
+ * defaults rather than written out again, so the two cannot disagree. Not
+ * students, not non-teaching staff, and never a personal booking.
+ */
+export const SPECIAL_FUNDS_CATEGORIES: DebitCategory[] = DEBIT_CATEGORIES.filter((c) =>
+  DEFAULT_DEBIT_RULES.room[c].includes("special_budget")
+);
+
+/**
+ * Bring a saved Settings row up to the current defaults, once.
  *
- * Settings rows replace the default lists wholesale, so a row saved before
- * Special Funds reached a category would never offer it there - and the
- * console could not show it either, because the grid only lists heads in use.
- * A row's `revision` says which categories it has already been offered it
- * for (none without one): Special Funds is added to the categories each later
- * revision brought in, and the row is marked current. Saving from the console
- * writes the revision, after which this leaves the row alone for good, so a
- * head the office unticks stays unticked.
+ * Settings rows replace the default lists wholesale, so a row saved before a
+ * head reached a category would never offer it there - and the console could
+ * not show it either, because the grid only lists heads in use. A row's
+ * `revision` says which shape of the defaults it was made from.
+ *
+ * **Revision 6 (8 Oct 2026) replaces both lists.** Revisions 2 to 5 each
+ * added or removed one head (Special Budget), so they could be applied to a
+ * saved row field by field. The office's own list is a different mapping
+ * altogether - four categories changed heads rather than gaining one - and
+ * there is no edit that turns the old row into it. The honest upgrade is
+ * therefore to take the new defaults, which is also what the office means by
+ * giving the list: it is the mapping, not a suggestion the console had
+ * already overridden. Saving from the console writes the current revision,
+ * after which this leaves the row alone for good.
  */
 export function upgradeDebitRules(stored: Record<string, unknown>): Record<string, unknown> {
   const revision = typeof stored.revision === "number" ? stored.revision : 1;
   if (revision >= DEBIT_RULES_REVISION) return stored;
-  const categories = Object.entries(SPECIAL_FUNDS_ADDED_AT)
-    .filter(([at]) => Number(at) > revision)
-    .flatMap(([, list]) => list);
-  const add = (lists: unknown) => {
-    if (!lists || typeof lists !== "object") return lists;
-    const out: Record<string, unknown> = { ...(lists as Record<string, unknown>) };
-    for (const category of categories) {
-      const list = out[category];
-      if (Array.isArray(list) && !list.includes("special_budget")) out[category] = [...list, "special_budget"];
-    }
-    return out;
-  };
-  /**
-   * Revisions 4 and 5 take Special Funds *off* the personal lists - the only
-   * thing in here that removes rather than adds. They run after the additions
-   * above, so a row still on revision 1 is brought all the way forward:
-   * Special Funds is offered everywhere revisions 2 and 3 offered it, and
-   * then withdrawn from personal dining (revision 4) and from personal room
-   * bookings too (revision 5).
-   */
-  const withoutPersonalSpecialFunds = (lists: unknown) => {
-    if (!lists || typeof lists !== "object") return lists;
-    const out: Record<string, unknown> = { ...(lists as Record<string, unknown>) };
-    const list = out.personal;
-    if (Array.isArray(list)) out.personal = list.filter((h) => h !== "special_budget");
-    return out;
-  };
   return {
     ...stored,
-    room: withoutPersonalSpecialFunds(add(stored.room)),
-    dining: withoutPersonalSpecialFunds(add(stored.dining)),
+    room: { ...DEFAULT_DEBIT_RULES.room },
+    dining: { ...DEFAULT_DEBIT_RULES.dining },
     revision: DEBIT_RULES_REVISION,
   };
 }
@@ -253,8 +297,16 @@ export const debitHeadSchema = z.enum(DEBIT_HEAD_VALUES);
  * {@link debitRulesSchema} refuses to save it.
  */
 export const FORBIDDEN_DEBIT_HEADS: Partial<Record<DebitCategory, DebitHead[]>> = {
-  faculty: ["institute_grant"],
-  // Special Funds are for everyone except students (25 Sep 2026): a
+  /**
+   * "All funds except Institute Grant, Alumni, Student Fund and Hostel"
+   * (8 Oct 2026) - the office's own wording, read as a floor and not only as
+   * a default. The grant is the institute's own money, spent by the offices
+   * that hold it; the other three belong to the alumni, the students and the
+   * hostels. Institute Grant has been refused here since 23 Sep 2026; the
+   * three funds joined it when they were first offered to anyone.
+   */
+  faculty: ["institute_grant", "alumni_fund", "student_fund", "hostel_funds"],
+  // Special Budget is for everyone except students (25 Sep 2026): a
   // student's stay is always their own money.
   student: ["special_budget"],
   /**
@@ -450,9 +502,14 @@ export function debitHeadFor(
  * What may be written down beside the head, or null when the head takes
  * nothing.
  *
- * - **Special Funds** asks which fund; it is optional, like the sanction
- *   letter, because the office asked for the head and nothing more - but the
- *   accounts section is better off with it, so the box is offered.
+ * - **Special Budget** asks which fund, and is **mandatory** (8 Oct 2026).
+ *   The office's own list writes it as "Special Budget (Please specify the
+ *   details)", so the details are part of choosing the head rather than a
+ *   courtesy: a sanction nobody names cannot be checked by the accounts
+ *   section. It was optional from 24 Sep 2026, when the office had asked for
+ *   the head and nothing more. The sanction letter beside it stays optional -
+ *   a requester waiting on a scan should not be stopped from booking, and the
+ *   desk can ask for it later.
  * - **Project** asks for the project itself, and is mandatory (1 Oct 2026).
  *   It used to be a dropdown of the projects in the console, which the office
  *   asked to remove: the list was always behind the real one, and a requester
@@ -466,14 +523,49 @@ export function debitDetailsPrompt(head: DebitHead | null | undefined): string |
   return null;
 }
 
-/** Whether the details above are mandatory. Only the project is. */
+/** Whether the details above are mandatory. The project and Special Budget are. */
 export function debitDetailsRequired(head: DebitHead | null | undefined): boolean {
-  return head === "project_grant";
+  return head === "project_grant" || head === "special_budget";
 }
 
-/** Special Funds may carry its sanction letter. Optional since 24 Sep 2026. */
+/** Special Budget may carry its sanction letter. Optional since 24 Sep 2026. */
 export function acceptsDebitDocument(head: DebitHead | null | undefined): boolean {
   return head === "special_budget";
+}
+
+/**
+ * The declaration a requester signs when somebody else's money pays
+ * (8 Oct 2026, the office's words, reproduced exactly).
+ *
+ * Personal Funds is the one head it is not asked for: the requester is the
+ * competent authority for their own money and there is no balance for them to
+ * verify. Every other head spends a budget they do not own, and the office
+ * wanted the request itself to carry the assurance - until now the first
+ * person to ask whether a department had the money was the accounts section,
+ * after the guest had gone.
+ *
+ * Checked on both sides ({@link fundDeclarationError}) and recorded with the
+ * booking (`fund_declaration_at`, migration 30), so an approver can see that
+ * it was given and when.
+ */
+export const FUND_DECLARATION =
+  "I have the necessary approval for the usage of funds from the competent authority and verified that sufficient balance is there in the debitable head.";
+
+/** Whether this head asks for {@link FUND_DECLARATION}: any but Personal Funds. */
+export function requiresFundDeclaration(head: DebitHead | null | undefined): boolean {
+  return head !== null && head !== undefined && head !== PERSONAL_DEBIT_HEAD;
+}
+
+/**
+ * Why the declaration is missing, or null when it is not needed or was given.
+ * One rule for the form, the schema and `createBooking`.
+ */
+export function fundDeclarationError(
+  head: DebitHead | null | undefined,
+  declared: boolean | null | undefined
+): string | null {
+  if (!requiresFundDeclaration(head)) return null;
+  return declared === true ? null : "Tick the declaration to confirm the funds are approved and available";
 }
 
 /** Whether this head needs a project picked from the list. */

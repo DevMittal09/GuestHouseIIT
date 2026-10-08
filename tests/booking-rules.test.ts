@@ -279,6 +279,7 @@ describe("what each role is asked for", () => {
       ...studentBooking([[{ age: 40, relationship: "Colleague" }]]),
       booking_type: "official",
       debit_head: "department_budget",
+      fund_declaration: true,
     };
     payload.rooms[0].guests[0].id_number = undefined;
     expect(schema.safeParse(payload).success).toBe(true);

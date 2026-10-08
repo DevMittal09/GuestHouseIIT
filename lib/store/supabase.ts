@@ -200,6 +200,7 @@ export class SupabaseStore implements DataStore {
       on_behalf_of_phone,
       copy_to_emails,
       debit_subhead,
+      fund_declaration,
       meal_diet_counts,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars -- discarded on purpose; see above
       submission_remarks: _submissionRemarks,
@@ -228,6 +229,9 @@ export class SupabaseStore implements DataStore {
         // no sub-head - which is most of them.
         ...(copy_to_emails && copy_to_emails.length > 0 ? { copy_to_emails } : {}),
         ...(debit_subhead ? { debit_subhead } : {}),
+        // Likewise migration 30: named only on a booking that spends somebody
+        // else's money, so a personal booking is stored either way.
+        ...(fund_declaration ? { fund_declaration_at: nowIso } : {}),
         // Named only on a booking that has meals, so a database without
         // migration 27 still takes every booking that has none.
         ...(meal_diet_counts ? { meal_diet_counts } : {}),

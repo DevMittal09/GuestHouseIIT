@@ -147,8 +147,10 @@ export async function chooseGuestHouse(page: Page): Promise<void> {
  * to know which.
  */
 export async function kitchenName(page: Page): Promise<string> {
-  const text = await page.getByText(/Meals from the .* kitchen/).first().innerText();
-  return text.match(/Meals from the (.+?) kitchen/)![1];
+  // The card states it in one short line since 8 Oct 2026 ("From the X
+  // kitchen."), when the form's explanations were cut back.
+  const text = await page.getByText(/From the .* kitchen/).first().innerText();
+  return text.match(/From the (.+?) kitchen/)![1];
 }
 
 /** The institute calendar date after `date` ("yyyy-MM-dd"), as the form shows it. */
@@ -217,6 +219,23 @@ export async function fillGuest(
   }
 }
 
+/**
+ * Answer whatever the chosen debitable head asks for (8 Oct 2026): the funds
+ * declaration on any head but Personal Funds, and the details box where the
+ * head makes it mandatory (Special Budget, Project). Both appear and
+ * disappear with the head, so this is run after it is picked.
+ */
+export async function settleDebitHead(page: Page): Promise<void> {
+  const details = page.locator('[name="debit_details"]');
+  if ((await details.count()) && (await details.isVisible())) {
+    await details.fill("SP/2026/001 - Verified by the end-to-end suite");
+  }
+  const declaration = page.locator('[name="fund_declaration"]');
+  if ((await declaration.count()) && (await declaration.isVisible())) {
+    await declaration.check();
+  }
+}
+
 /** Fill and submit a one-room stay; returns the reference the portal gave it. */
 export async function submitRoomBooking(
   page: Page,
@@ -248,6 +267,7 @@ export async function submitRoomBooking(
     const value = options.debitHead ?? (await head.first().getAttribute("value")) ?? "";
     await page.locator(`[name="debit_head"][value="${value}"]`).check();
   }
+  await settleDebitHead(page);
 
   await chooseGuestHouse(page);
 

@@ -9,110 +9,209 @@ and `AGENTS.md` (the rules).
 
 ---
 
-## Round of 7 October 2026 — the office's eighth list, in four phases
+## Round of 8 October 2026 — the office's ninth list
 
-Relayed by the owner as a four-phase plan, each phase gated on `npm run lint`,
-`npm run typecheck`, `npm test`, a production build on the mock store and
-`npm run test:e2e` before the next began. Status item by item in
-[01-background.md](01-background.md) ("The office's eighth list — 7 October
-2026"); reasoning in [03-decisions.md](03-decisions.md) ("7 Oct 2026").
+Five items, relayed by the owner, who said that **most of what the office is
+now asking for is about the production deployment, not the demo** - the real
+accounts, the real debitable heads, the real mail. The lasting answer to that
+is a new memory file: **[06-production-requirements.md](06-production-requirements.md)**,
+the single checklist of what a production build needs.
 
-**Two migrations, 28 and 29**, both outstanding on the hosted project.
+Status item by item in [01-background.md](01-background.md) ("The office's
+ninth list"); reasoning in [03-decisions.md](03-decisions.md) ("8 Oct 2026").
 
-### Phase 1 — text, the booking form, availability
+**One migration, 30** - and it is **already applied** on the hosted project,
+along with 24-29 (see "Migrations, settled" below).
 
-| Asked for | Now |
-| --- | --- |
-| Every em dash becomes a hyphen | 1,559 of them across 214 source files (`.ts`, `.tsx`, `.css` in `app/ components/ lib/ tests/ e2e/ scripts/`). Markdown and SQL comments left alone. **`projectFromDetails` accepts both** `" — "` and `" - "`, em dash first, so a project stored before today still prints its title on the invoice |
-| Kerala → Keralam | `lib/site.ts`, the privacy page, the default invoice address, the console's GST note. `INVOICE_RULES_REVISION` **3** + `renameState()` rewrites a saved Settings row's address **once**, whole-word (so "Keralam" is never made "Keralamm") and only where the row carries its own contact. Already-issued invoices and the Hindi artwork are untouched |
-| MRBS off the site | `MRBS_URL` deleted; the footer banner, the `SITE_LINKS` row, the Contact page sentence and the portal footer's link all gone. Both test suites now assert its absence |
-| A personal booking asks no debitable head | `asksForDebitHead(bookingType)` is the rule, not "the list has one entry": the card is **not rendered** for a personal booking, and the schema's closing `.transform()` writes `personal_funds` whatever arrived. `DEBIT_RULES_REVISION` **5** withdraws Special Funds from `room.personal` once; `FORBIDDEN_DEBIT_HEADS.personal` is the floor under Settings (`FORBIDDEN_DINING_HEADS` is now empty). What is left on screen is a **Payment** card with the pay-at-checkout note |
-| Students and alumni: Bageshri only, no meals, server-checked | `restrictedToOneGuestHouse(bookingType, role)` in `lib/policy.ts`; `guestHousesForBookingType` and `guestHousePolicyError` take a role; `mealsAllowedFor` / `mealsPolicyError` are new. `createBooking` refuses both and the **manager overrides**, with the exception in the booking's log |
-| The meal split fills itself in | Either count box sets the other to the rest (`fillOtherDietCount`). A split that does not add up is no longer reachable from the form; `dietCountsError` still enforces it for a crafted payload |
-| The tariff table on the booking form | `tariffPreviews` / `tariffPreviewLines` resolve through the **same `resolveTariff` the invoice prices from**, on the server, one set per guest house and booking type. New `components/tariff-table.tsx`; an unpriced charge reads "Not published", never a zero |
-| A Change rate button for the GHM | Tariffs & Invoicing: a rate in force cannot be edited, so **Change rate** copies its scope into the Add-a-rate form dated today |
-| Everyone but the desk sees only a count | `SEES_ROOMS` (manager, caretaker, developer) in `app/actions/availability.ts`. Everyone else is sent `rooms: []`, `segments: []` and `counts` — rooms free per day, and per hour on a one-day window. New `lib/availability.ts` `AvailabilityCounts` / `rangeBetween` / `availabilityCounts` and `components/availability-counts.tsx`. The charts' `simple` mode and the legend's `detailed` flag are **retired**: the charts are the desk's now |
-
-### Phase 2 — the institute's records, in the portal (migration 28)
+### 1. The debitable heads, as the office gave them
 
 | Asked for | Now |
 | --- | --- |
-| A table for the records, and a console to paste them in | **Migration 28** `academic_records`: one flat table for all six kinds, unique on `(kind, lower(email))`, RLS on with **no `authenticated` policy** (it holds parents' names and phone numbers — service-role only, like `app_settings`). New console section **Academic records** (manager + developer): paste → **Check the paste** (a plan: "412 added, 3 updated, 9 unchanged") → Import, all or nothing, audited |
-| The card, the warden's check and the guest form read it | A third `AcademicSource`: `StoreAcademicSource` is what `getAcademicSource()` returns when `ACADEMIC_DB_URL` is unset — imported rows first, the published dummies **behind** them, so a fresh install and the demo personas still work. `AcademicSource.find` now returns `{record, origin}` (`database` / `imported` / `sample`), and `isMockAcademicSource()` is **gone**: the card's "sample" caption is per lookup, not per deployment |
-| Fill-in and "Yourself" removed for every role | `lib/known-guests.ts` and `lib/known-guests-server.ts` **deleted**; the compact `Fill in…` select and the "filled in from…" note are gone. `Self` stays on the student relationship list — it is a relationship, typed by hand |
-| Students: parents locked from the record | `lib/academic/guest-names.ts`. Father and Mother are offered **and locked** where the record has them; a parent it does not name is **not offered at all**; Guardian only where neither parent is on record; no record → nothing locked or withheld. `BookingSchemaContext.guestNames` carries the rule to both sides |
-| The server takes the parent names from the record | `createBooking` rebuilds the rule from the record and writes **the record's name** whatever arrived |
-| Aadhaar and the ID upload optional only for recorded guests | In the schema, in the form's own file check, and in the labels. A sibling or grandparent, typed by hand, is still asked |
+| The nine heads by name | `STANDARD_DEBIT_HEADS` holds all nine, in the office's order. **Alumni Fund, Student Fund and Hostel Funds** had been on the enum since migration 15 and offered to nobody; **Personal Funds** reaches a faculty member's *official* booking for the first time |
+| The mapping of requester to head | `DEFAULT_DEBIT_RULES`, **revision 6**. Four categories changed which heads they have: non-teaching staff have **Personal Funds alone** (they lost the department budget), the two classes of office share **one list of six**, clubs and fests moved to the **Student Fund**, and alumni bookings to the **Alumni Fund** |
+| "All funds except Institute Grant, Alumni, Student Fund and Hostel" for faculty | Read as a **floor**, not only a default: `FORBIDDEN_DEBIT_HEADS.faculty` holds all four, so Settings cannot tick them back on and a stored row that still lists one is ignored on read |
+| Special **Budget** (it was labelled Special Funds from 24 Sep) | Relabelled in `DEBIT_HEAD_LABELS` and `INVOICE_HEAD_LABELS`. The stored value is still `special_budget`, so nothing in the database moved |
+| "Special Budget (Please specify the details)" | `debitDetailsRequired` includes it, so the box is **mandatory**. The **Upload approval** beside it is offered and stays **optional** - a requester waiting on a scan should not be stopped from booking. One line to change if the office meant otherwise ([06](06-production-requirements.md) §2) |
 
-A bug found by the journey and fixed: the 10-minute lookup cache served the
-**old** record for ten minutes after an import, so the form went on locking a
-parent to a name the office had just corrected. `forgetAcademicRecords()` now
-runs on every import, delete and clear.
+**Revision 6 replaces a saved Settings row's lists** rather than editing them.
+Revisions 2-5 each added or removed one head and could be applied field by
+field; the office's mapping is different, not narrower, so there is no such
+edit - and the office giving the list means the list *is* the configuration.
+After revision 6 the row is the office's own again and is never touched.
 
-### Phase 3 — invoices and payments (no migration)
+### 2. The funds declaration (migration 30)
 
-| Asked for | Now |
-| --- | --- |
-| No empty rows, room charges included | `minRows` is 0 from **version 4**; a one-room stay no longer prints a blank second room line |
-| The lines under the GSTIN removed | `printsTaxLines(doc)` is false from version 4, in the PDF and the preview. The breakdown is still computed and kept in the snapshot, so nothing is lost if the office wants it back |
-| The CGST/SGST split in the GST row's label | "GST @ 18% on A (B) - CGST 9% + SGST 9%" |
-| New invoices are version 4; old ones reprint as they were | Labels are computed at print time, so a `version: 3` snapshot is byte-for-byte what it was issued as |
-| Cash removed | `PAYMENT_MODES` is UPI and account transfer; `cash` stays in the union and the labels so a stored cash payment still reads, and `paymentModeError` refuses it on a new payment. Both offered modes now require a reference |
-| A personal stay: issue, pay, vacate, in one dialog | The row shows one button, **Check out & settle**, which opens the invoice; the dialog gained a third step. `vacateBlocker` + `updateBookingLifecycle(id, "VACATED", reason?)` refuse an unpaid personal stay on the server |
-| The manager can override with a reason | `canOverrideVacatePayment` — the manager's, not reception's — behind a typed confirmation, and the reason goes into the log |
-| Official stays are billed on | Unchanged: issued at check-out, marked paid later by either desk |
-| **Awaiting payment**, no 30-day limit | The last section of both consoles. `awaitingPayment(bookings, invoices)` returns every issued-and-unpaid invoice, newest first, **dining bookings included**. Its own table (`components/awaiting-payment.tsx`), because a meal booking has no check-in, check-out or rooms. New `InvoiceFilter.statuses` and `BookingFilter.ids` let it have no window without loading every booking ever made |
+> "I have the necessary approval for the usage of funds from the competent
+> authority and verified that sufficient balance is there in the debitable
+> head."
 
-### Phase 4 — lapsed requests become Missed (migration 29)
+- `FUND_DECLARATION` is the one constant, so the words on screen are the words
+  in the record. `requiresFundDeclaration(head)` is **any head but Personal
+  Funds**; `fundDeclarationError` is the one message, read by the form and the
+  schema.
+- **Inside the Debitable head card**, not beside the privacy tick: it is a
+  statement about the head just chosen, and it appears and disappears with it.
+- Enforced on **both sides**, and `createBooking` only records it where the
+  head asked for it, so a personal booking cannot carry a declaration it never
+  made.
+- Stored as **`bookings.fund_declaration_at`** (migration 30) - an instant, like
+  `privacy_consent_at` beside it. **Nothing is backfilled**: a null means
+  either "personal booking" or "made before today".
+- Until the migration is applied, the store leaves the column out unless the
+  declaration was given, so **every personal booking still works** and only a
+  booking on somebody else's budget is refused.
 
-| Asked for | Now |
-| --- | --- |
-| A Missed status, in a file of its own | **Migration 29** is `alter type booking_status add value if not exists 'MISSED'` and nothing else: Postgres refuses to *use* a new enum value in the transaction that adds it. Nothing is backfilled |
-| A nightly job that marks, logs and mails | `lib/missed-server.ts` `runMissedSweep(now)`, wired into `/api/mail/cron` **before** the digest, so a lapsed request is out of the queues before the day's digest is built. The mail is `booking.missed.requester` |
-| A meal booking's cutoff is its last meal day | `lapseDeadline` already said so; the sweep reads it |
-| Running it twice changes nothing | A marked request is no longer active, and the mail is keyed on `updated_at` |
-| The manager can reinstate | `reinstateMissedBooking` sends it back to **the stage it was waiting at** (`statusBeforeMissed`), not to the manager's queue — nobody decided it. A reinstated request is never marked again: `missedSweepable` reads the reinstatement structurally off the log (a row whose `previous_status` is MISSED), so it needed no column and no string matching |
-| The queue shows Missed | A **Missed requests** section on `/manager` (21 days; older ones are in the Approval Log, which gained a **Missed** tile of its own — a cancellation is something somebody asked for, and this is the opposite) |
+### 3. One mail thread per booking id - verified, and completed
+
+The office said "I think it's already like that, please verify". It was true of
+the **staff's** mail (since 23 Sep 2026) and **not** of the requester's, which
+stood alone by an earlier decision from the meeting notes.
+
+Eleven events moved into the booking thread (`MAIL_THREAD_OF`): every
+`*.requester` event about a booking, the check-in reminder, and
+`invoice.issued.accounts`. The threading machinery was already generic, so
+nothing else changed. The daily log thread still carries the digest, the
+escalation and the desk report - they are about a queue and have no booking to
+hang on.
+
+**The cost is the shared subject.** Gmail splits a thread the moment the
+subject changes, so a requester now sees `[IITPKD-GH-2026-AB12C] Guest house
+booking` and "Rooms allocated" moves to the inbox preview line. Same trade the
+staff mail made in September.
+
+### 4. Less text on screen
+
+The supervisor asked for the content and not the commentary. Every rule and
+every figure was kept; what went is the clause that explains the clause.
+
+- **The booking form**: nine card descriptions cut or removed (Type of booking
+  and Approval now have none - their own headings say it), and eight help
+  paragraphs trimmed. The infant note stated the **room's capacity**, which the
+  notice on the room card a few lines below states again - `INFANT_HELP_TEXT`
+  is now the infant fact alone and is a constant, not a function of Settings.
+- **`/book`**: the page lead is one short line or none; "What happens next"
+  beside the form is where the steps live.
+- **The desk**: Checking out today, the availability chart descriptions, the
+  reviewer's Review dialog, the dashboard's "Your requests".
+- **The Guidelines page**: every item is one statement. `BOOKING_STEPS` too,
+  which is shared with the panel beside the booking form.
+
+Two e2e assertions had to follow the copy: `kitchenName` reads "From the X
+kitchen", and the Users console is recognised by "N accounts" rather than a
+heading it never had.
+
+### 5. Accounts from a spreadsheet (and bulk delete)
+
+The office asked, for the GH Manager: "add the data from excel, edit the
+columns, and delete data... when we add data of all users". It was practical,
+so it is built rather than parked.
+
+**Users & Roles → Import from spreadsheet.** Paste the columns out of Excel →
+**Check the paste** (a plan: "412 added, 3 updated, 9 unchanged", and what
+changed per person) → **Import**, all or nothing.
+
+- **"Edit the columns" is the header line**: it names the columns in whatever
+  order the office's sheet has them, and only `email` is required. Aliases in
+  `KNOWN_COLUMNS` (`Roll No.`, `Dept / Club`, `LDAP username`…). With no header
+  the default order is read.
+- **A column the paste does not carry is left alone**, so a sheet of email and
+  name cannot wipe everyone's hostel. A person already on the list is
+  **updated**, matched on the email, so the same paste can be re-run when the
+  sheet grows.
+- `faculty` / `staff` are read as the **employee** role and set the staff
+  category at the same time.
+- A **header must start with the email column**, because `columnFor` also
+  matches the bare word "email" - which is the first cell of a data line for
+  anybody whose address is `email@…`.
+- A manager cannot import a developer into existence, and an account they may
+  not edit is refused **by name** (`assignableRoles`, `userEditError`, checked
+  in the action). At most 2,000 rows a paste. Audited.
+- **Bulk delete**: tick rows, Delete N selected, type the phrase. Whatever
+  cannot go (a person with bookings, a developer's account to a manager) is
+  **named back** and the rest still go - the opposite of the import, because a
+  delete has no half-applied state to be confused about.
+
+`lib/users-import.ts` is pure, so the console previews the plan with the same
+function that applies it.
 
 ### Verified
 
-`npm run lint`, `npm run typecheck`, **`npm test` — 405 passed** (23 files; new
-`tests/eighth-round.test.ts` 21, `tests/academic-records.test.ts` 24,
-`tests/invoices-and-payments.test.ts` 14, `tests/missed-requests.test.ts` 13),
-a production build on the mock store (`NEXT_PUBLIC_SUPABASE_URL=`), and
-**`npm run test:e2e` — 33 journeys**, including a new `e2e/eighth-round.spec.ts`
-(the student's form and its rates, the faculty rates and the head question,
-Change rate, a pasted record locking a student's parents, and the whole Missed
-journey through the real cron route).
+`npm run lint`, `npm run typecheck`, **`npm test` - 431 passed** (24 files; new
+`tests/ninth-round.test.ts` 24), a production build on the mock store
+(`NEXT_PUBLIC_SUPABASE_URL=`), and **`npm run test:e2e` - 36 journeys**,
+including a new `e2e/ninth-round.spec.ts`: a faculty booking refused without
+the declaration and accepted with it, Special Budget demanding the fund's name,
+and the manager importing two accounts from a paste, re-running it for
+"0 added, 0 updated, 2 unchanged", and deleting both together.
 
-**Migrations 28 and 29 in a throwaway `postgres:16-alpine`**: 1–29 applied,
-each re-applied cleanly. 28 — the enum, the 22 columns, RLS on, the
-case-insensitive unique index, the same email allowed for another kind, an
-unknown kind refused, `updated_at` moving on update, and the record surviving
-the deletion of whoever imported it. 29 — MISSED on the enum, a booking moved
-into it and back out with both log rows, and no room held.
+**Migration 30 in a throwaway `postgres:16-alpine`**: 1-30 applied, 30
+re-applied with the test rows still in place; the column nullable and
+`timestamptz` with its comment; a booking stored without it (a personal stay)
+and another with it beside a `department_budget` head; MISSED still last on the
+enum.
 
-Tests that now assert the opposite of what they did a week earlier, as the plan
-predicted: `e2e/fifth-round.spec.ts` (a parent's name is locked, not filled in
-from a list) and the known-guests blocks of `tests/fifth-round.test.ts` and
-`tests/sixth-round.test.ts`, which were deleted with the feature.
+**And on the hosted project** (9 Oct 2026, read-only):
+`npm run check:migrations` reports **1-30 all applied**, with 17 and 23 named
+as the two it cannot see.
+
+Tests that now assert the opposite of what they did a week ago, as expected
+when a mapping changes: the per-category head lists in
+`tests/workflow-hod.test.ts` and `tests/dining.test.ts`, the Special
+Funds/Budget blocks of `tests/fourth-round.test.ts` and
+`tests/fifth-round.test.ts`, the revision assertions in
+`tests/seventh-round.test.ts` and `tests/eighth-round.test.ts`, and the Missed
+mail's subject in `tests/missed-requests.test.ts` (it is the thread's now).
+
+### 6. Migrations, settled - and a script so it stays settled (9 Oct 2026)
+
+The owner said migrations 24-30 had already been run in the Supabase SQL
+editor and asked why the portal was reporting otherwise. **It was not the
+portal - it was these notes.** `.memories/23-running-and-testing.md` said
+"which migrations the hosted project has is not recorded here" and offered a
+hand-written SQL query whose marker list **stopped at migration 25**. So 26
+onwards could not be checked at all, and the sentence "24-30 are outstanding"
+was copied forward from round to round, long after they were applied.
+
+**Fixed by asking the database instead of writing the answer down:**
+
+```bash
+npm run check:migrations      # scripts/check-migrations.mjs
+```
+
+One marker per migration - the table, column or enum value it created - probed
+**read-only** over PostgREST (`GET`, at most one row, shape only; nothing is
+written and no guest data is read). It exits 1 if a marker is missing, so a
+deploy step can gate on it.
+
+**Result, 9 Oct 2026: migrations 1-30 are all applied** on the hosted project.
+Migrations **17 and 23** are the two it cannot see - they only add or replace a
+plpgsql function, PostgREST cannot read `pg_proc`, and calling either would be
+a write - so it names them and prints the one-line SQL for the editor rather
+than guessing. Their observable symptoms if missing: 23, Supabase refuses a
+second infant in one room; 17, changing the turnaround buffer fails.
+
+The old prose and the truncated query are gone from
+[23-running-and-testing.md](23-running-and-testing.md), which now points at the
+script, and the stale claims are struck through in
+[04-roadmap.md](04-roadmap.md) and
+[06-production-requirements.md](06-production-requirements.md).
 
 ### Still open
 
-- **Apply migrations 28 and 29 to the hosted project**, with 24–27 which were
-  already outstanding. Until 28 the records console reports the missing table
-  by name and every lookup falls through to the published dummies; until 29
-  the nightly job cannot mark anything there (it logs the enum error per
-  booking and the rest of the run carries on).
-- **Then import the real records** — Academic records → Students first, since
-  that is the list the booking form locks parents' names against. A student
-  who is not in the import simply types their parents' names, as before.
+- **The Special Budget approval upload stays optional** (the office, 9 Oct
+  2026). The details box beside it is mandatory; the upload is offered and not
+  required, so a requester waiting on a scan is not stopped from booking.
+  [06-production-requirements.md](06-production-requirements.md) §2 keeps the
+  one-line change if that is ever revisited.
 - **`MAIL_REDIRECT_ALL_TO` must be unset in the Vercel environment** or no
   Copy-to address will ever receive mail (carried over from 1 Oct).
-- The office may want the **tax breakdown** back under the GSTIN; it is still
-  in every snapshot, so that is a one-line change to `printsTaxLines`.
-- `GST_INCLUDED_NOTE` ("the tariff rates include GST") came off the invoice
-  with the other lines under the GSTIN. Worth confirming the office meant
-  that one too.
-- AM's photographs; the placeholder house rules (Guidelines §7–8); each
-  council's Faculty Advisor and mailbox — [04-roadmap.md](04-roadmap.md).
+- **Load the real accounts** once LDAP is connected - that is what the
+  spreadsheet import is for, and §1 of
+  [06-production-requirements.md](06-production-requirements.md) is the
+  per-field guide.
+- In Supabase mode an imported profile also creates a Supabase Auth user with
+  the password `password123`. Harmless (that password is not a portal login)
+  but wrong at six hundred rows -
+  [06-production-requirements.md](06-production-requirements.md) §7.
+- AM's photographs; the placeholder house rules (Guidelines §7-8); each
+  council's Faculty Advisor and mailbox - [04-roadmap.md](04-roadmap.md).

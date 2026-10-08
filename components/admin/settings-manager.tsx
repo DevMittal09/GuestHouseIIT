@@ -660,8 +660,9 @@ type DebitKind = "room" | "dining";
 
 function DebitHeadsSection({ current }: { current: Rules["debit"] }) {
   const [draft, setDraft] = useState<DebitRules>(current);
-  // The five heads the invoice names, plus any legacy head a saved row still
-  // uses, so nothing configured disappears from view.
+  // The office's nine heads (8 Oct 2026 - all of them are in use now), plus
+  // any head a saved row still lists that is somehow not among them, so
+  // nothing configured disappears from view.
   const heads: DebitHead[] = [
     ...STANDARD_DEBIT_HEADS,
     ...(Object.values({ ...current.room, ...current.dining })

@@ -606,6 +606,8 @@ export class MockStore implements DataStore {
       // DPDP: which notice was agreed to, and when (Phase 8).
       privacy_notice_version: input.privacy_notice_version ?? null,
       privacy_consent_at: input.privacy_notice_version ? nowIso : null,
+      // The funds declaration, where the head asked for one (migration 30).
+      fund_declaration_at: input.fund_declaration ? nowIso : null,
       has_foreign_national: derived.has_foreign_national,
       created_by: input.created_by ?? null,
       on_behalf_of_name: input.on_behalf_of_name ?? null,

@@ -260,7 +260,7 @@ export const DEBIT_HEAD_LABELS: Record<DebitHead, string> = {
   // Stored as `special_budget` since migration 15; the office calls it
   // Special Funds (24 Sep 2026), offered to everyone except students
   // (25 Sep 2026).
-  special_budget: "Special Funds",
+  special_budget: "Special Budget",
   personal_funds: "Personal Funds",
   alumni_fund: "Alumni Fund",
   student_fund: "Student Fund",
@@ -433,6 +433,13 @@ export type Booking = {
   /** The privacy notice the requester agreed to when submitting (Phase 8, DPDP). */
   privacy_notice_version?: string | null;
   privacy_consent_at?: string | null;
+  /**
+   * When the requester declared that the funds are approved and available
+   * (migration 30, 8 Oct 2026). Null on a personal booking, which spends
+   * nobody else's money and is never asked - and absent on a booking stored
+   * before the question existed.
+   */
+  fund_declaration_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -610,6 +617,12 @@ export interface NewBookingInput {
   pets_policy_acknowledged: boolean;
   /** The privacy notice version the requester agreed to (Phase 8, DPDP). */
   privacy_notice_version?: string | null;
+  /**
+   * The requester's declaration that they hold the approval for the debitable
+   * head and that it has the balance (migration 30). Only ever true where
+   * `requiresFundDeclaration` asked for it; the store stamps the time.
+   */
+  fund_declaration?: boolean;
   alumni_name: string | null;
   alumni_roll_number: string | null;
   alumni_id_url: string | null;

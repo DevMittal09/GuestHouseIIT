@@ -41,8 +41,10 @@ form, all approval tiers, the room grid, invoices, the desk and the console.
 | --- | --- | --- |
 | `npm run lint` | ESLint incl. the strict React Compiler rules | must stay clean |
 | `npm run typecheck` | `next typegen && tsc --noEmit` | `npm run build` also typechecks |
-| `npm test` | Vitest, `tests/` — 23 files, 405 checks (7 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
-| `npm run test:e2e` | Playwright, `e2e/` — 33 journeys (about 70 s) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
+| `npm test` | Vitest, `tests/` — 24 files, 431 checks (8 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
+| `npm run test:e2e` | Playwright, `e2e/` — 36 journeys (about 70 s) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
+| `npm run check:migrations` | Which migrations the project in `.env.local` actually has | **Read-only** (`GET`, one row, shape only). Exits 1 if any marker is missing. Migrations 17 and 23 are function-only and cannot be seen — it says so and gives the SQL. **Not a CI step** — CI runs with no secrets, where it prints "no project configured" and exits 0. Run it against a deployment, before relying on one |
+| `npm run check:lockfile` | The npm optional-dependency bug that breaks `npm ci` | Runs in CI |
 
 Playwright journeys: `booking-journey` (student → warden → manager → desk →
 invoice → paid), `official-and-dining` (faculty through the HOD; a meals-only
@@ -150,36 +152,50 @@ variables; `.env.local` is gitignored and must stay that way.
 > create Supabase Auth users.
 
 The hosted project has the schema, seed data and the private `documents`
-bucket. **Which migrations it has is not recorded here** — the last written
-note (10 Sep 2026) said migration 5, and the owner has applied some since
-while testing against it. Before relying on it, check, then apply what is
-missing **in order**; every migration from 6 onwards is re-runnable, so a file
-applied twice is harmless. Paste this into the SQL editor — each row is one
-migration's marker, and `false` means that migration is missing:
+bucket.
 
-```sql
-select m, exists(select 1 from information_schema.columns
-                 where table_schema='public' and table_name=t and column_name=c) as applied
-from (values
-  ('06 meals','bookings','meals'), ('07 has_infant','bookings','has_infant'),
-  ('08 serves_meals','guest_houses','serves_meals'), ('09 booking_type','bookings','booking_type'),
-  ('10 outbox','email_outbox','idempotency_key'), ('11 rooms','booking_rooms','booking_id'),
-  ('12 ldap_uid','profiles','ldap_uid'), ('13 templates','mail_templates','event_key'),
-  ('14 guard','room_holds','guard'), ('15 units','units','head_id'),
-  ('16 hostels','hostels','name'), ('18 hod_unit','units','hod_unit_id'), ('19 invoices','invoices','document'),
-  ('20 blocks','room_blocks','reason'), ('21 sessions','sessions','token_hash'),
-  ('22 search','bookings','search_text'), ('24 copy_to','bookings','copy_to_emails'),
-  ('25 advisors','units','faculty_advisor_id')
-) as v(m,t,c);
+**Which migrations it has is a question for the database, not for these
+notes** (9 Oct 2026):
+
+```bash
+npm run check:migrations      # node scripts/check-migrations.mjs
 ```
 
+It reads `.env.local`, asks the project whether each migration's marker - the
+table, column or enum value that migration created - exists, and prints one
+line each. **Read-only**: every request is a `GET` of at most one row, and
+only the shape is read, never anybody's data. It exits 1 if anything is
+missing, so a deploy step can gate on it.
+
+> **This replaced a paragraph that was wrong for weeks.** The note used to say
+> "which migrations it has is not recorded here", followed by a hand-written
+> SQL query whose marker list stopped at migration **25**. So 26 onwards could
+> not be checked at all, and the prose claim that 24-30 were "outstanding on
+> the hosted project" was carried forward from round to round by hand - long
+> after the owner had applied them in the SQL editor. A missing migration fails
+> writes quietly; a migration *wrongly believed* missing sends somebody to
+> re-apply files that were already there. Both are ended by asking.
+>
+> **Verified 9 Oct 2026: migrations 1-30 are all applied** on the hosted
+> project (`azfd…`), except the two the script cannot see.
+
+**The two it cannot see are 17 and 23**, which only add or replace a plpgsql
+function - PostgREST cannot read `pg_proc`, and calling either function would
+be a write. Run this in the SQL editor instead:
+
 ```sql
-select exists(select 1 from pg_proc where proname = 'set_booking_buffer') as "17 buffer applied";
+select proname from pg_proc
+ where proname in ('set_booking_buffer', 'check_room_occupancy');
 ```
 
-Migration 23 only replaces a function (`check_room_occupancy`) and cannot be
-detected this way — if in doubt, run it again; it is safe to re-run. The list, and what
-each migration needs, is in [22-database.md](22-database.md#migrations).
+Both names present means both are applied. If in doubt, re-apply the file:
+every migration from 6 onwards is re-runnable, so a file applied twice is
+harmless. The observable symptom of **23** missing is that Supabase refuses a
+*second* infant in one room although the form and the schema allow it; of
+**17**, that changing the turnaround buffer in Settings fails.
+
+The list, and what each migration needs, is in
+[22-database.md](22-database.md#migrations).
 
 `supabase/repairs/` holds one-off data fixes, some of which the hosted project
 may still need — the timezone repair for bookings stored 5h30m late, the real

@@ -73,46 +73,72 @@ Setting.
 ### Debitable heads — `rules.debit`
 
 A grid: requester category × head, separately for **room** (and room + meals)
-and **dining** (meals only). Defaults:
+and **dining** (meals only). The defaults are **the office's own list of
+8 October 2026**, which replaced the table taken from the meeting notes:
 
 | Category | Room | Dining |
 | --- | --- | --- |
-| Faculty (official) | Department, Project, PDF, Special Funds | Department, PDF, Personal, Special Funds |
-| Non-teaching staff (official) | Department, Special Funds | Department, Special Funds |
-| Officer offices (Director, Registrar, Deans) | Institute Grant, Special Funds | Institute Grant, Special Funds |
-| Department offices | Department, Special Funds | Department, Special Funds |
-| Student clubs | Department, Special Funds | Department, Special Funds |
+| Faculty (official) | PDF, Project, Department, Special Budget, Personal | the same, less Project |
+| Non-teaching staff (official) | **Personal Funds** | Personal Funds |
+| Officer offices (Director, Registrar, Deans) | Institute Grant, Department, Special Budget, Student Fund, Hostel Funds, Alumni Fund | the same |
+| Department offices | the same six | the same six |
+| Student clubs, councils and fests | **Student Fund, Special Budget** | the same |
 | Students | Personal Funds | Personal Funds |
-| IAR Student Cell (official — no longer used) | Institute Grant, Special Funds | Institute Grant, Special Funds |
-| On behalf of an alumnus | Institute Grant, Personal Funds, Special Funds | Personal Funds, Special Funds |
-| Any personal booking (not a student's) | **Personal Funds only** — and **not asked at all** (7 Oct 2026: the money is the requester's own, so the form puts no question and the server records it) | **Personal Funds only** (1 Oct 2026: a special fund does not pay for somebody's own family's lunch) |
-| GH Manager at the desk | Department, Institute Grant, PDF, Personal, Project, Special Funds | the same less Project |
+| IAR Student Cell (official — no longer used) | **Alumni Fund, Special Budget** | the same |
+| On behalf of an alumnus | **Alumni Fund, Special Budget** | the same |
+| Any personal booking (not a student's) | **Personal Funds only** — and **not asked at all** (7 Oct 2026: the money is the requester's own, so the form puts no question and the server records it) | **Personal Funds only** |
+| GH Manager at the desk | **all nine heads** | the same less Project |
+
+**All nine heads are in use now.** Alumni Fund, Student Fund and Hostel Funds
+were on the enum from migration 15 and offered to nobody until this list;
+Personal Funds reached the faculty's *official* list at the same time. The
+head the office calls **Special Budget** is still stored as `special_budget`
+(it was labelled "Special Funds" from 24 Sep 2026 to 8 Oct).
 
 - **Dining can never be charged to a Project** (schema).
 - **Floors** (`FORBIDDEN_DEBIT_HEADS`, greyed in the grid, stripped on read,
-  refused on save): **faculty never Institute Grant**; **students never
-  Special Funds**; and since 7 Oct 2026 **no personal booking ever Special
-  Funds** — widened from the dining-only floor of 1 Oct, which is why
+  refused on save): **faculty never Institute Grant, Alumni Fund, Student Fund
+  or Hostel Funds** — the office's "all funds except …" read as a rule, not
+  only a default (the Institute Grant has been refused since 23 Sep 2026, the
+  other three since they were first offered to anyone); **students never
+  Special Budget**; and since 7 Oct 2026 **no personal booking ever Special
+  Budget** — widened from the dining-only floor of 1 Oct, which is why
   `FORBIDDEN_DINING_HEADS` is now empty (the seam is kept, since dining is
   what the office narrows first).
 - **A personal booking is not asked which budget pays** (7 Oct 2026,
   `asksForDebitHead`). The Settings grid still has the row — a floor and a
   default are different things — but the form renders no card and the schema
   writes `personal_funds` whatever arrived.
+- **Special Budget must say which fund** (8 Oct 2026, `debitDetailsRequired`):
+  the office's list writes the head as "Special Budget (Please specify the
+  details)", so the box is mandatory. The **approval letter** beside it stays
+  optional — a requester waiting on a scan should not be stopped from booking,
+  and the desk can ask for it later. Project Grant asks for the number and
+  title, typed, and is mandatory too.
+- **Any head but Personal Funds asks for the funds declaration** (8 Oct 2026,
+  `FUND_DECLARATION` / `requiresFundDeclaration`): "I have the necessary
+  approval for the usage of funds from the competent authority and verified
+  that sufficient balance is there in the debitable head." Checked on both
+  sides and stored as `bookings.fund_declaration_at` (migration 30). Personal
+  Funds is not asked — the requester is the competent authority for their own
+  money and has no balance to verify.
 - The category: a **student** is always *student* (checked first, 25 Sep
   2026 — a student's booking is personal, and used to fall into *personal*);
   otherwise personal → *personal*, on behalf of an alumnus → *alumni*, else
   the account — faculty or staff by `profiles.staff_category` (none =
   faculty), an office by its unit's `office_class` (none = department office).
-- Special Funds is stored as `special_budget`. A saved Settings row gains it
-  once per revision (`upgradeDebitRules`): revision 2 (24 Sep) for the
-  official categories, revision 3 (25 Sep) for personal, alumni and the IAR
-  Student Cell. **Revisions 4 (1 Oct) and 5 (7 Oct) take it off personal
-  dining and then off every personal list** — the only revisions that remove
-  rather than add; they run after the additions, so a row still on revision 1
-  is brought all the way forward. After that an untick sticks.
-- Legacy heads (Alumni Fund, Student Fund, Hostel Funds) stay valid for stored
-  rows and can be ticked on here, but no default offers them.
+  **Both classes of office now get the same list**, so that distinction
+  decides nothing about the heads; it is kept because it is a true fact about
+  the office and the office may narrow one of them again.
+- **Revisions** (`upgradeDebitRules`, `DebitRules.revision`, now **6**). A
+  saved Settings row replaces the defaults wholesale, so each revision brings
+  an older row forward exactly once. Revisions 2 (24 Sep) and 3 (25 Sep)
+  *added* Special Budget to more categories; 4 (1 Oct) and 5 (7 Oct) *removed*
+  it from personal dining and then from every personal list. **Revision 6
+  (8 Oct) replaces both lists with the new defaults** — the office's mapping is
+  not reachable by adding or removing one head (four categories changed which
+  heads they have), so there is no edit that turns the old row into it. After
+  that an untick sticks: a row on the current revision is left alone for good.
 
 ### Privacy — `rules.privacy`
 

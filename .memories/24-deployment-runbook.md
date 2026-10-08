@@ -49,6 +49,10 @@ if `DEV_LOGIN` is set, or if Supabase, `APP_URL`, `CRON_SECRET` or
 4. Deploy; Vercel detects Next.js automatically. `npm run build` must pass first.
 5. Apply **all** migrations, in order, and the seed to the production Supabase
    project if it is separate from the development one.
+   Then **`npm run check:migrations`** against that project (read-only) to see
+   that each one's marker is really there — do not rely on a note saying so,
+   which is how 24–30 were believed missing for weeks after they were applied.
+   It cannot see 17 and 23 (function-only) and prints the SQL for those.
 6. Schedule the two mail routes (`vercel.json` `crons`, or a systemd timer):
    `/api/mail/dispatch` every few minutes, `/api/mail/cron` at 08:00 IST
    (`30 2 * * *` UTC). Without the second, digests, reminders and the day-wise
@@ -192,7 +196,7 @@ what hurts most if it is left alone.
 | GST percentages and SAC codes | 5% up to ₹7,500/day, 18% above, 5% on food | As in force since 22 Sep 2025. Check before the next Council revision bites. |
 | Meal windows | 07:30–09:30, 12:30–14:00, 19:30–21:00 | Which meals a stay can include, and the kitchen's day. |
 | Room capacity | Per room type: single 1 (2 with an extra bed), double 2 (3). Per room card: 4 people, at most 3 needing a bed, at most 3 infants | Room type at allocation; room card at submission. |
-| Debitable heads per category | See [13-settings-and-defaults.md](13-settings-and-defaults.md#debitable-heads--rulesdebit) | What each kind of requester may charge a stay to. **Faculty can never be given the Institute Grant, and students and personal bookings never Special Funds** (`FORBIDDEN_DEBIT_HEADS`) — those cells are greyed, and the rule is applied on read as well as on save. |
+| Debitable heads per category | See [13-settings-and-defaults.md](13-settings-and-defaults.md#debitable-heads--rulesdebit) | What each kind of requester may charge a stay to. **The nine heads and their mapping are the office's own list of 8 Oct 2026.** Floors (`FORBIDDEN_DEBIT_HEADS`, greyed cells, applied on read as well as on save): faculty can never be given the Institute Grant, the Alumni Fund, the Student Fund or the Hostel Funds; students and personal bookings never Special Budget. Any head but Personal Funds asks the requester for the funds declaration. |
 | ID retention | 365 days after the stay | When identity numbers and ID documents are erased. |
 | Audit retention | 180 days | Cannot be set lower — CERT-In expects 180 days of logs. |
 

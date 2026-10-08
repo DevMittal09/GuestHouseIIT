@@ -232,7 +232,9 @@ total, and issuing uses exactly those figures. **Preview PDF** prints the
 - **What the page prints (24 Sep 2026).** `invoiceFacts()` builds the two
   columns of facts for the PDF *and* the desk's preview. Project Detail,
   Project Number and Project Sub-head appear **only with the Project head**; a
-  Special Fund's name only with Special Funds. A **dining** invoice
+  the fund's name only with Special Budget - whose **label is snapshotted**
+  (`debit_head_label`), so an invoice issued before 8 Oct 2026 still prints
+  "Special Funds" while a new one prints "Special Budget". A **dining** invoice
   (`InvoiceDocument.kind`, read through `invoiceKind()` so older snapshots
   work) prints Meal Date(s) (`describeMealDates`) and No. of Guests instead of
   check-in/out, rooms, infants and primary guest, has no room table, and its

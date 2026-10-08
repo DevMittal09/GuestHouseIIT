@@ -147,13 +147,16 @@ export default async function BookPage({
                 : "New Booking Request"
         }
       >
+        {/* One line, or none (8 Oct 2026): the office asked the portal to
+            stop explaining itself. What happens after Submit is the
+            "What happens next" panel beside the form. */}
         {club
-          ? "You are booking as its Faculty Advisor. The request is theirs - it follows their form and debitable heads, and every mail about it reaches their account with you copied - and it goes straight to the Guest House Manager: nobody has to forward it."
+          ? "Booking as its Faculty Advisor. The request is the club's."
           : mealsOnly
-            ? "Meals at the guest house with no room booked. Tell the kitchen how many people, which days and whether it is vegetarian - it goes straight to the Guest House Manager. Each meal has to be booked before the previous one finishes being served."
+            ? "Meals with no room booked."
             : onBehalf
-              ? "Take a booking for someone who cannot use the portal themselves. It is recorded against your account and names them as the guest."
-              : "Fill in the stay and guest details - the request enters the approval pipeline for your role automatically."}
+              ? "For a guest who cannot use the portal themselves."
+              : null}
       </PageHeader>
       {/* Two columns from `lg` (30 Sep 2026): the form in eight, and in the
           other four the requester's record and what happens after Submit.
@@ -284,9 +287,7 @@ function BookingAs({
       <CardHeader>
         <CardTitle>Booking as</CardTitle>
         <CardDescription>
-          You are the Faculty Advisor of {clubs.map((c) => c.full_name).join(", ")}. Book for
-          yourself, or as Faculty Advisor: that booking is the council&apos;s or club&apos;s, goes
-          straight to the Guest House Manager, and copies the secretary.
+          Faculty Advisor of {clubs.map((c) => c.full_name).join(", ")}.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -311,10 +312,7 @@ function BookingAs({
 function ClubChooser({ clubs }: { clubs: { id: string; full_name: string; email: string }[] }) {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader title="New Booking for a Club">
-        You are the Faculty Advisor of more than one council or club. Choose the one this booking
-        is for.
-      </PageHeader>
+      <PageHeader title="New Booking for a Club">Choose the one this booking is for.</PageHeader>
       <div className="grid gap-3 sm:grid-cols-2">
         {clubs.map((c) => (
           <Card key={c.id}>

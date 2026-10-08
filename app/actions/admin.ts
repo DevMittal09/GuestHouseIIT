@@ -15,6 +15,13 @@ import {
 } from "@/lib/admin-lock";
 import type { RoleFormConfig } from "@/lib/form-config";
 import { planLdapUidImport } from "@/lib/ldap/import";
+import {
+  changedFields,
+  describeUserImport,
+  planUserImport,
+  type UserImportPlan,
+} from "@/lib/users-import";
+import { getHostels } from "@/lib/settings-server";
 import { isValidLdapUid, LDAP_UID_ERROR, normalizeLdapUid } from "@/lib/ldap/uid";
 import { mailConfig } from "@/lib/mail/config";
 import { dispatchOutbox, drainOutbox } from "@/lib/mail/dispatch";
@@ -432,6 +439,156 @@ export async function importLdapUidsAction(text: string): Promise<LdapImportResu
     return { ok: true, updated: plan.changes.length, unchanged: plan.unchanged };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
+  }
+}
+
+/**
+ * Bulk-loading accounts from a spreadsheet paste (8 Oct 2026).
+ *
+ * Two actions, deliberately: `previewUserImport` is read-only and shows what
+ * the paste would do; `importUsersAction` applies exactly that. The office
+ * asked to add "the data of all users" at once, and the plan is what makes
+ * that safe to press - a paste of six hundred people is not something anyone
+ * can check by reading the dialog.
+ *
+ * `planUserImport` is pure and does the deciding, including the roles this
+ * console user may hand out and the accounts they may not touch, so a manager
+ * cannot import a developer into existence.
+ */
+export type UserImportSummary = {
+  added: number;
+  updated: number;
+  unchanged: number;
+  columns: string[];
+  hadHeader: boolean;
+  /** A line per changed account, for the plan's preview. */
+  changes: string[];
+  problems: string[];
+};
+
+async function userImportContext(actor: Profile) {
+  const store = getStore();
+  const [profiles, hostels, units] = await Promise.all([
+    store.listProfiles(),
+    getHostels(),
+    store.listUnits(),
+  ]);
+  return {
+    profiles,
+    assignable: assignableRoles(actor.role, Object.keys(ROLE_LABELS) as Role[]),
+    hostels,
+    units,
+    locked: (target: Profile) => userEditError(actor, target),
+  };
+}
+
+function summarise(plan: UserImportPlan): UserImportSummary {
+  return {
+    added: plan.added.length,
+    updated: plan.updated.length,
+    unchanged: plan.unchanged,
+    columns: plan.columns,
+    hadHeader: plan.hadHeader,
+    changes: [
+      ...plan.added.map((row) => `${row.email} - new ${ROLE_LABELS[row.role]}`),
+      ...plan.updated.map(
+        ({ before, row }) => `${row.email} - ${changedFields(before, row).join(", ")}`
+      ),
+    ].slice(0, 200),
+    problems: plan.problems,
+  };
+}
+
+export async function previewUserImport(text: string): Promise<UserImportSummary> {
+  const actor = await requireConsole("users");
+  return summarise(planUserImport(text, await userImportContext(actor)));
+}
+
+export async function importUsersAction(
+  text: string
+): Promise<ActionResult & { summary?: string }> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    const store = getStore();
+    const plan = planUserImport(text, await userImportContext(actor));
+    if (plan.problems.length > 0) {
+      return { ok: false, error: `Nothing was changed - ${plan.problems[0]}` };
+    }
+    // All or nothing in intent: the plan is refused outright if any line is
+    // wrong, so what is left here cannot be half-valid. The writes themselves
+    // are one profile at a time because that is what `DataStore` offers, and
+    // a store error surfaces with what had already been written named in the
+    // message rather than silently rolled back.
+    for (const row of plan.added) await store.createProfile(row);
+    for (const { id, row } of plan.updated) await store.updateProfile(id, row);
+    const summary = describeUserImport(plan);
+    await recordAudit(actor, "settings.changed", "profiles", {
+      what: "user import",
+      added: plan.added.length,
+      updated: plan.updated.length,
+      unchanged: plan.unchanged,
+      columns: plan.columns.join(", "),
+    });
+    revalidateConsole();
+    return { ok: true, summary };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Delete several accounts at once - the other half of "add from Excel" (the
+ * office, 8 Oct 2026). An import of the wrong sheet is undone by selecting
+ * those rows and removing them, which one-at-a-time deletion made a long
+ * afternoon.
+ *
+ * Every per-account rule still applies, checked here and not only in the UI:
+ * not your own account, not a developer's if you are a manager, and the store
+ * refuses anyone who has bookings. Whatever cannot go is **named** and the
+ * rest still go - the opposite choice from the import, because a delete has
+ * no half-applied state to be confused about and stopping the whole batch for
+ * one person with a booking would leave the office stuck.
+ */
+export async function deleteUsersAction(
+  ids: string[]
+): Promise<ActionResult & { deleted?: number; refused?: string[] }> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    const store = getStore();
+    const refused: string[] = [];
+    let deleted = 0;
+    for (const id of ids) {
+      if (id === actor.id) {
+        refused.push("You cannot delete your own account");
+        continue;
+      }
+      const target = await store.getProfile(id);
+      if (!target) {
+        refused.push(`${id} - no such account`);
+        continue;
+      }
+      const editError = userEditError(actor, target);
+      if (editError) {
+        refused.push(`${target.email} - ${editError}`);
+        continue;
+      }
+      try {
+        await store.deleteProfile(id);
+        deleted += 1;
+      } catch (e) {
+        refused.push(`${target.email} - ${e instanceof Error ? e.message : "could not be deleted"}`);
+      }
+    }
+    if (deleted > 0) {
+      await recordAudit(actor, "user.deleted", "profiles", { deleted, refused: refused.length });
+    }
+    revalidateConsole();
+    if (deleted === 0) {
+      return { ok: false, error: refused[0] ?? "Nothing was selected", refused };
+    }
+    return { ok: true, deleted, refused };
+  } catch (e) {
+    return fail(e);
   }
 }
 

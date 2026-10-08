@@ -55,7 +55,7 @@ import {
   advanceWindowMessage,
   bookingPayloadSchema,
   checkOutOrderError,
-  infantHelpText,
+  INFANT_HELP_TEXT,
   MAX_COPY_TO_EMAILS,
 } from "@/lib/booking-schema";
 import { DEFAULT_RULES, type CapacityRules, type Rules } from "@/lib/settings";
@@ -113,6 +113,8 @@ import {
   asksForDebitHead,
   debitDetailsPrompt,
   debitDetailsRequired,
+  FUND_DECLARATION,
+  requiresFundDeclaration,
   describeDebit,
   fixedDebitHead,
   MAX_SUBHEAD_LENGTH,
@@ -171,8 +173,13 @@ interface FormValues {
   booking_type: BookingType;
   /** Which budget pays. Ignored when the booking can only be paid one way. */
   debit_head: "" | DebitHead;
-  /** Which special fund, with the Special Funds head. Optional. */
+  /** Which special fund, with the Special Budget head. */
   debit_details: string;
+  /**
+   * The requester's declaration that the funds are approved and available
+   * (8 Oct 2026). Asked by every head but Personal Funds.
+   */
+  fund_declaration: boolean;
   /** The project for a Project head, from the console's list. */
   project_id: string;
   /** The project's sub-head, typed. Optional, and only with a Project head. */
@@ -413,6 +420,7 @@ export function BookingForm({
       booking_type: defaultBookingTypeFor(config.role) ?? "official",
       debit_head: "",
       debit_details: "",
+      fund_declaration: false,
       project_id: "",
       debit_subhead: "",
       copy_to: defaultCopyTo.length > 0 ? defaultCopyTo.map((email) => ({ email })) : [{ email: "" }],
@@ -485,6 +493,11 @@ export function BookingForm({
   const paymentHead = chosenHead;
   const debitPrompt = debitDetailsPrompt(chosenHead);
   const debitDetailsMandatory = debitDetailsRequired(chosenHead);
+  // Somebody else's money: the declaration the office asked for (8 Oct 2026).
+  // Read off the head that is actually in force - `paymentHead`, not the radio
+  // - so a personal booking, which is never asked for a head, is never asked
+  // for the declaration either.
+  const needsDeclaration = requiresFundDeclaration(paymentHead);
   // The Alumni ID card is demanded by the role's form config *or* by this
   // request being raised for an alumnus, since the IAR accounts book both ways
   // from one form.
@@ -814,6 +827,9 @@ export function BookingForm({
       // to Personal must not carry a department budget along with it.
       debit_head: paymentHead,
       debit_details: debitPrompt ? values.debit_details : undefined,
+      // Only where the head asks for it, so switching to Personal Funds
+      // after ticking it does not send a declaration about nothing.
+      fund_declaration: needsDeclaration ? values.fund_declaration : false,
       // No project is picked from a list any more (1 Oct 2026) - the number
       // and title are typed into the details box above, which is what the
       // invoice prints.
@@ -1037,10 +1053,6 @@ export function BookingForm({
         <Card>
           <CardHeader>
             <CardTitle>Type of booking</CardTitle>
-            <CardDescription>
-              Who the stay is for decides who approves it and how it is settled, so this comes
-              first - the rest of the form follows from it.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1080,10 +1092,6 @@ export function BookingForm({
         <Card>
           <CardHeader>
             <CardTitle>Approval</CardTitle>
-            <CardDescription>
-              Send this booking straight to the Guest House Manager, or have your HOD approve it
-              first.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="grid gap-2 sm:grid-cols-2">
@@ -1147,11 +1155,7 @@ export function BookingForm({
         <CardHeader>
           <CardTitle>Debitable head</CardTitle>
           <CardDescription>
-            {mealsOnly
-              ? "The budget these meals will be charged to."
-              : fixedHead
-                ? "How this stay will be settled."
-                : "The budget this stay will be charged to. The accounts section debits it after checkout."}
+            {mealsOnly ? "Which budget pays for these meals." : "Which budget pays for this stay."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1215,10 +1219,6 @@ export function BookingForm({
                     placeholder="e.g. Travel, Contingency, Consumables"
                     {...register("debit_subhead")}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    The head within the project that the accounts section should debit. It is printed
-                    on the invoice under the project.
-                  </p>
                   <FieldError message={err("debit_subhead")} />
                 </div>
               )}
@@ -1239,31 +1239,42 @@ export function BookingForm({
                     }
                     {...register("debit_details")}
                   />
-                  {needsProject(chosenHead) && (
-                    <p className="text-xs text-muted-foreground">
-                      The project number, then its title after a dash - both are printed on the
-                      invoice. The accounts section debits this project.
-                    </p>
-                  )}
                   <FieldError message={err("debit_details")} />
                 </div>
               )}
 
               {acceptsDebitDocument(chosenHead) && (
                 <div className="space-y-2">
-                  <Label htmlFor="debit_document">Sanction letter (optional)</Label>
+                  <Label htmlFor="debit_document">Upload approval (optional)</Label>
                   <Input
                     id="debit_document"
                     type="file"
                     accept="image/jpeg,image/png,image/webp,application/pdf"
                     onChange={(e) => setDebitDocument(e.target.files?.[0] ?? null)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    JPG, PNG, WEBP or PDF, up to 5 MB.
-                  </p>
+                  <p className="text-xs text-muted-foreground">JPG, PNG, WEBP or PDF, up to 5 MB.</p>
                 </div>
               )}
             </>
+          )}
+
+          {/* Somebody else's money (8 Oct 2026, the office's ninth list).
+              Inside this card rather than beside the privacy tick at the foot
+              of the form: it is a statement about the head just chosen, and
+              it appears and disappears with it. Personal Funds is never asked
+              - the requester is the competent authority for their own money. */}
+          {needsDeclaration && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border-strong bg-background px-4 py-3.5 text-sm leading-relaxed">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-[18px] shrink-0 cursor-pointer accent-vermilion-deep"
+                {...register("fund_declaration")}
+              />
+              <span>
+                {FUND_DECLARATION}
+                <FieldError message={err("fund_declaration")} />
+              </span>
+            </label>
           )}
         </CardContent>
       </Card>
@@ -1273,10 +1284,7 @@ export function BookingForm({
         <Card>
           <CardHeader>
             <CardTitle>Booking on behalf of</CardTitle>
-            <CardDescription>
-              You are raising this booking for someone else. The booking is recorded against your
-              account and names them as the guest, so the desk knows who is arriving.
-            </CardDescription>
+            <CardDescription>Recorded against your account, and names them as the guest.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
@@ -1305,8 +1313,8 @@ export function BookingForm({
             <CardTitle>Meal booking</CardTitle>
             <CardDescription>
               {offeredGuestHouses.length === 1
-                ? `Meals from the ${offeredGuestHouses[0].name} kitchen - the guest house that serves them. Choose the days and the meals below.`
-                : "Choose the kitchen, then the days and the meals below."}
+                ? `From the ${offeredGuestHouses[0].name} kitchen.`
+                : "Choose the kitchen."}
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -1338,11 +1346,11 @@ export function BookingForm({
                   </option>
                 ))}
               </NativeSelect>
-              <p className="text-xs text-muted-foreground">
-                How many people the kitchen is cooking for. A meals booking needs no guest list.
-                {mealPartyLimit > 0 &&
-                  ` The kitchen serves at most ${mealPartyLimit} people at a sitting, counting everyone already booked for it.`}
-              </p>
+              {mealPartyLimit > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  At most {mealPartyLimit} at a sitting, counting everyone already booked.
+                </p>
+              )}
               <FieldError message={err("meal_guest_count")} />
             </div>
 
@@ -1551,9 +1559,7 @@ export function BookingForm({
         <CardHeader>
           <CardTitle>{mealsOnly ? "Meal rates" : "Rates"}</CardTitle>
           <CardDescription>
-            {mealsOnly
-              ? "What the kitchen charges per head. Your invoice is priced from these rates."
-              : "What this guest house charges. Your invoice is priced from these rates."}
+            {mealsOnly ? "Charged per head." : "Your invoice is priced from these rates."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1572,9 +1578,7 @@ export function BookingForm({
           <CardHeader>
             <CardTitle>Room availability</CardTitle>
             <CardDescription>
-              What is already booked at your chosen guest house in the week of your check-in
-              date - switch to Day or Month, or move to other dates, to find room to spare.
-              Nothing here is reserved for you until the Guest House Manager allocates a room.
+              Nothing is held until the Guest House Manager allocates a room.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1593,10 +1597,8 @@ export function BookingForm({
             <CardTitle>{mealsOnly ? "Days and meals" : "Meals (optional)"}</CardTitle>
             <CardDescription>
               {mealsOnly
-                ? `Lunch is included on each day you add; tick breakfast or dinner as well, or untick what you will not need. "Add another date" books further days.`
-                : `${selectedGuestHouse?.name} serves meals. Tick the ones your party would like - each is charged on the invoice - or leave the table empty to book the room on its own.`}{" "}
-              The kitchen uses this for head counts, so tell the manager if plans change after
-              booking.
+                ? "Lunch is ticked on each day you add."
+                : "Each meal is charged on the invoice. Leave the table empty for the room on its own."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1610,9 +1612,7 @@ export function BookingForm({
               <fieldset className="space-y-2 rounded-md border border-border-strong bg-band/40 p-3">
                 <legend className="px-1.5 text-sm font-medium">Meal preferences *</legend>
                 <p className="text-xs text-muted-foreground">
-                  How many of the {mealHeadCount}{" "}
-                  {mealHeadCount === 1 ? "person" : "people"} eating would like vegetarian meals,
-                  and how many would not. The two have to add up to {mealHeadCount}.
+                  The two must add up to {mealHeadCount}.
                 </p>
                 {/* Answering one box fills the other with the rest (7 Oct
                     2026, the office's eighth list). The two always have to
@@ -1734,9 +1734,7 @@ export function BookingForm({
         <Card>
           <CardHeader>
             <CardTitle>Guests, room by room</CardTitle>
-            <CardDescription>
-              Fill in who is staying in each room. {infantHelpText(rules.capacity)}
-            </CardDescription>
+            <CardDescription>{INFANT_HELP_TEXT}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm text-muted-foreground">
@@ -1819,7 +1817,7 @@ export function BookingForm({
             <CardTitle>Alumni verification</CardTitle>
             <CardDescription>
               {forAlumnus
-                ? "The alumnus cannot sign in to confirm their own details, so record them here for the IAR Office to verify against the ID card."
+                ? "For the IAR Office to check against the ID card."
                 : `Upload your Alumni ID card${alumniCardRequired ? " (mandatory)" : " (optional)"}.`}
             </CardDescription>
           </CardHeader>
@@ -1856,9 +1854,7 @@ export function BookingForm({
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 onChange={(e) => setAlumniCard(e.target.files?.[0] ?? null)}
               />
-              <p className="text-xs text-muted-foreground">
-                JPG, PNG, WEBP or PDF, up to 5 MB.
-              </p>
+              <p className="text-xs text-muted-foreground">JPG, PNG, WEBP or PDF, up to 5 MB.</p>
               <FieldError message={alumniCardError ?? undefined} />
             </div>
           </CardContent>
@@ -1873,10 +1869,8 @@ export function BookingForm({
         <CardHeader>
           <CardTitle>Copy to (optional)</CardTitle>
           <CardDescription>
-            Email addresses that should get a copy of every mail sent to you about this booking -
-            received, approved, rooms allocated, cancelled. Add as many as you need.
-            {defaultCopyTo.length > 0 &&
-              " The secretary's mailbox is filled in for you; clear it if they should not be copied."}
+            Copied on every mail you get about this booking.
+            {defaultCopyTo.length > 0 && " The secretary's mailbox is filled in; clear it to remove."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -1938,10 +1932,6 @@ export function BookingForm({
         <Card>
           <CardHeader>
             <CardTitle>Confirm your meal booking</CardTitle>
-            <CardDescription>
-              This is what will be sent to the Guest House Manager. Nothing is cooked until they
-              approve it, and you will get an email with a reference number either way.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             {mealPlan.length === 0 ? (
@@ -2150,7 +2140,7 @@ function RoomCard({
               + <span className="font-medium text-foreground">{infants}</span> infant
             </>
           )}{" "}
-          in this room. The Guest House Manager allocates the actual room.
+          in this room.
         </p>
       </div>
 
@@ -2398,7 +2388,7 @@ function GuestRow({
             <Input type="number" min={0} max={120} {...register(`${base}.age`)} />
             {gf.age !== "required" && !age?.trim() && (
               <p className="text-xs text-muted-foreground">
-                Needed only for a child below {INFANT_AGE_LIMIT} - or use Add infant.
+                Needed for a child below {INFANT_AGE_LIMIT}.
               </p>
             )}
             <FieldError message={err(`${base}.age`)} />
@@ -2462,11 +2452,6 @@ function GuestRow({
                 {...relationshipField}
               />
             )}
-            {lockedName !== null && (
-              <p className="text-xs text-muted-foreground">
-                On your academic record, so the name above is filled in for you.
-              </p>
-            )}
             <FieldError message={err(`${base}.relationship`)} />
           </div>
         )}
@@ -2527,9 +2512,7 @@ function GuestRow({
               placeholder="1234 5678 9012"
               {...register(`${base}.id_number`)}
             />
-            <p className="text-xs text-muted-foreground">
-              {AADHAAR_DIGITS} digits. Spaces and hyphens are ignored.
-            </p>
+            <p className="text-xs text-muted-foreground">{AADHAAR_DIGITS} digits.</p>
             <FieldError message={err(`${base}.id_number`)} />
           </div>
         )}

@@ -14,6 +14,13 @@ import type { RoomType } from "./types";
  * chains, no role names. The home page stays visual and light; rules and
  * instructions live on the Guidelines page, in general terms.
  *
+ * **One statement per line** (8 Oct 2026). Every guideline was a sentence
+ * with a second clause explaining the first - "contact the Guest House
+ * Office", "a particular room cannot be promised", "which is what reception
+ * checks". The supervisor asked for the content and not the commentary, so
+ * each line now says one thing and stops. Nothing was dropped that a guest
+ * has to know.
+ *
  * Where a rule *is* stated (the advance window, the stay cap, capacity, meal
  * times, the kitchen's notice, charges), it is rendered from the same
  * constants and Settings the portal enforces, so it cannot drift. Only facts
@@ -110,11 +117,11 @@ export type BookingStep = { title: string; body: string };
  * business, not the public page's.
  */
 export const BOOKING_STEPS: BookingStep[] = [
-  { title: "Sign in", body: "Use your institute account. Visitors are booked by the person hosting them." },
-  { title: "Request", body: "Give the dates of the stay and the details of each guest." },
-  { title: "Approval", body: "The request is reviewed, and you hear by email at each step." },
-  { title: "Arrival", body: "Your rooms are ready and reception checks you in." },
-  { title: "Departure", body: "The invoice is settled at reception when you leave." },
+  { title: "Sign in", body: "With your institute account." },
+  { title: "Request", body: "The dates of the stay, and each guest." },
+  { title: "Approval", body: "You hear by email at each step." },
+  { title: "Arrival", body: "Reception checks you in." },
+  { title: "Departure", body: "The invoice is settled at reception." },
 ];
 
 /**
@@ -148,11 +155,9 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
         "Rooms are requested online by members of the institute, for themselves or for their guests",
         "Visitors from outside the institute are booked by the person hosting them",
         `Check-in must fall within ${plural(rules.booking.advance_booking_months, "month")} of the day the request is made`,
-        ...(maxNights > 0
-          ? [`A single request may cover up to ${plural(maxNights, "night")}; for a longer stay, contact the Guest House Office`]
-          : []),
-        "Every request is reviewed before it is confirmed; you are told by email at each step, and a request that is declined carries its reason",
-        "Rooms are allotted by the Guest House Office once a request is approved; a particular room cannot be promised",
+        ...(maxNights > 0 ? [`A single request may cover up to ${plural(maxNights, "night")}`] : []),
+        "Every request is reviewed before it is confirmed, and you are told by email at each step",
+        "Rooms are allotted by the Guest House Office once a request is approved",
       ],
     },
     {
@@ -163,22 +168,22 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
         roomOccupancyNotice(rules.capacity),
         `A room is full at ${describeRoomParties(rules.capacity)}`,
         `Children under ${INFANT_AGE_LIMIT} share a guardian's bed`,
-        "An extra bed is rolled in by the staff, and charged as its own line on the invoice",
+        "An extra bed is charged as its own line on the invoice",
       ],
     },
     {
       id: "arrival",
       title: "Check-in and check-out",
       items: [
-        "Arrival and departure times are chosen on the request, and the room is held for exactly that period",
+        "Arrival and departure times are chosen on the request, and the room is held for that period",
         rules.booking.buffer_minutes > 0
-          ? `Rooms are made ready between guests, so a room stays held for ${describeBuffer(rules.booking.buffer_minutes)} after the booked check-out`
+          ? `A room stays held for ${describeBuffer(rules.booking.buffer_minutes)} after the booked check-out, to be made ready`
           : "A room becomes free again at the booked check-out time",
-        "Guests are checked in at reception on arrival - not before the booked check-in",
+        "Guests are checked in at reception on arrival",
         "Every adult guest carries a photo identity document",
-        "To arrive earlier or stay longer, ask reception; the stay is moved only if the rooms are free",
+        "To arrive earlier or stay longer, ask reception",
         // TODO(site): house practice, not modelled by the portal - confirm.
-        "Room keys are collected from reception on arrival and returned there at check-out",
+        "Room keys are collected from reception and returned there at check-out",
       ],
     },
     {
@@ -188,12 +193,10 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
         serving.length > 0
           ? [
               `Meals are served at ${joinNames(serving.map((h) => h.name))}, at the times below`,
-              // Each person's own preference, and lunch only by default
-              // (1 Oct 2026) - the two things a requester notices on the form.
-              "Meals are chosen day by day on the request, with the number of vegetarian and non-vegetarian meals; lunch is included on each day to begin with",
+              "Meals are chosen day by day on the request, with the number of vegetarian and non-vegetarian meals",
               MEAL_NOTICE_RULE,
               ...(rules.meals.max_diners_per_meal > 0
-                ? [`The kitchen serves up to ${rules.meals.max_diners_per_meal} people at one meal, counting everyone already booked for it`]
+                ? [`The kitchen serves up to ${rules.meals.max_diners_per_meal} people at one meal`]
                 : []),
             ]
           : ["Meals are not being served at the guest houses at present"],
@@ -205,13 +208,13 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
       title: "Charges and payment",
       items: [
         invoice.day_basis === "night"
-          ? "Rooms are charged by the night, counted between the actual check-in and check-out dates - never fewer than one"
+          ? "Rooms are charged by the night, and never fewer than one"
           : `Rooms are charged in blocks of 24 hours from the actual check-in, with a permissible variation of ${plural(invoice.grace_hours, "hour")}`,
         invoice.prices_include_gst
           ? `The tariff includes GST - ${invoice.gst_room_percent}% on rooms and ${invoice.gst_meal_percent}% on meals, shown separately on the invoice`
           : `GST is added to the tariff on the invoice - ${invoice.gst_room_percent}% on rooms and ${invoice.gst_meal_percent}% on meals`,
-        "An extra bed and meals served are charged in addition, each as its own line",
-        "Damage or loss is recovered as an additional charge on the invoice",
+        "An extra bed and meals served are charged in addition",
+        "Damage or loss is recovered as an additional charge",
         // Cash came off the invoice on 7 Oct 2026: UPI or an account
         // transfer, each of which leaves a reference. A personal stay is
         // settled before the guest leaves; an official one is billed on.
@@ -222,8 +225,8 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
       id: "cancellation",
       title: "Cancellation",
       items: [
-        "A request can be cancelled from My Bookings at any time, with a reason; the Guest House Office confirms the cancellation",
-        "The rooms stay held until then, and are released as soon as it is confirmed",
+        "A request can be cancelled from My Bookings at any time, with a reason",
+        "The Guest House Office confirms the cancellation, and the rooms are released then",
         "Once a guest has checked in, the stay is ended at reception instead",
       ],
     },
@@ -234,7 +237,7 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
       // TODO(site): house rules usual at institute guest houses, written as
       // placeholders - the office to confirm or replace them.
       items: [
-        "Only the guests named on the booking may occupy the room; rooms cannot be transferred or shared with others",
+        "Only the guests named on the booking may occupy the room",
         "Smoking, alcohol and intoxicants are not permitted anywhere on the premises",
         "Quiet hours are 10:00 PM to 6:00 AM",
         "Visitors are received in the lounge between 8:00 AM and 9:00 PM, and may not stay overnight",
@@ -242,8 +245,8 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
         "Pets are not allowed",
         "Furniture, linen and fittings stay in the room they belong to; nothing is to be fixed to the walls",
         "Switch off lights, fans and air-conditioning when leaving the room",
-        "Keep valuables locked away; the guest house is not responsible for belongings left in rooms",
-        "Rooms are cleaned daily between 9:00 AM and 12:00 noon; linen and towels are changed every third day and between guests",
+        "The guest house is not responsible for belongings left in rooms",
+        "Rooms are cleaned daily between 9:00 AM and 12:00 noon",
         "The Guest House Office may end a stay that breaks these rules",
       ],
     },
@@ -254,10 +257,10 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
       // TODO(site): placeholders - the office to confirm.
       items: [
         "Note the fire exits and extinguishers on your floor when you arrive",
-        "In a medical or other emergency, call reception at once; reception will reach the institute's medical centre and campus security",
-        "Carry your booking confirmation and identity document when entering the campus; security may ask for them at the gate",
+        "In an emergency, call reception; they will reach the medical centre and campus security",
+        "Carry your booking confirmation and identity document when entering the campus",
         "Lost property is kept at reception for 30 days",
-        "Report a fault in the room to reception, and send feedback or a complaint to the Guest House Office by email",
+        "Report a fault in the room to reception",
       ],
     },
   ];

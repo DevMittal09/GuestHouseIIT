@@ -72,7 +72,7 @@ which needed the same missing piece.
 | `redirect.ts` | `MAIL_REDIRECT_ALL_TO`, applied at **send** time |
 | `render.ts` | Blocks → HTML **and** plain text, from one description |
 | `templates.ts` | What each mail says. Pure functions, no store access |
-| `thread.ts` | Daily per-person thread roots and subjects; the `[reference]` subject for standalone mail |
+| `thread.ts` | Per-booking and daily per-person thread roots and subjects; the `[reference]` subject for mail with no thread (the console's test message) |
 | `recipients.ts` | Who gets told — via `canReview()`, never a re-derived rule; `copyToAddresses()` for CC |
 | `addressing.ts` | `addressStaffMail(to, copyTo)`: CC minus anyone in To, de-duplicated ignoring case |
 | `notify.ts` | `notify*()` per workflow event: queue, then `after()` a dispatch |
@@ -184,13 +184,15 @@ correctly, being unable to act on them. `canReview` also refuses
 `reviewer.id === requester.id`, so the IAR Office is never asked to approve its
 own booking.
 
-### Threads: per booking for staff, standalone for requesters
+### Threads: one conversation per booking, for everyone
 
 From the meeting notes: *"Email — try to send in a single thread instead of a
-standalone email."* Staff mail about a booking joins that recipient's thread
-**for that booking**; the scheduled mail that has no booking (digest,
-escalation, desk report) joins a **daily log** thread; requester mail stands
-alone with a `[reference]`-led subject. Two things must line up for mail
+standalone email."* **Every mail about one booking joins that recipient's
+thread for that booking** - the requester's as well as the staff's, since the
+office asked on 8 Oct 2026 to "keep all emails for the same booking id in one
+email thread". The scheduled mail that has no booking (digest, escalation,
+desk report) joins a **daily log** thread instead, because it is about a queue
+and a new institute day starts a new one. Two things must line up for mail
 clients to group messages:
 
 1. `bookingThreadRoot(referenceId, address)` — or `dailyThreadRoot("daily_log",
@@ -212,6 +214,16 @@ later message about the same booking to the same To carries the same root.
 > conversation and one booking's messages were split across days. See
 > [03-decisions.md](03-decisions.md), "Mail threads on the booking, not on the
 > day".
+
+> **Requester mail stood alone until 8 Oct 2026.** The meeting notes' reasoning
+> was that each step is news to the person who asked, and it still is - each
+> message still arrives, with what happened leading its heading and its inbox
+> preview. What standing alone cost was the trail: a requester with three
+> bookings in a fest week had nine loose messages whose only connection was a
+> reference id they had to notice and search for. The price of the thread is
+> the shared subject, which is the same trade the staff mail made in
+> September. `invoice.issued.accounts` threads on the booking too, so Accounts
+> keeps one conversation per stay rather than one per document.
 
 ### HTML and text from one description
 

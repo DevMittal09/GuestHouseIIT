@@ -13,7 +13,7 @@ import {
 import { requireUser } from "@/lib/auth";
 import { aadhaarDigits, bookingPayloadSchema } from "@/lib/booking-schema";
 import { defaultBookingTypeFor, needsAlumniDetails } from "@/lib/booking-types";
-import { acceptsDebitDocument, needsProject } from "@/lib/debit-heads";
+import { acceptsDebitDocument, needsProject, requiresFundDeclaration } from "@/lib/debit-heads";
 import { mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser } from "@/lib/club-booking-server";
 import { hodApproversFor } from "@/lib/units";
@@ -457,6 +457,10 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       meal_guest_count: wantsRooms ? null : payload.meal_guest_count,
       pets_policy_acknowledged: payload.pets_policy_acknowledged,
       privacy_notice_version: PRIVACY_NOTICE_VERSION,
+      // Recorded only where the head asked for it, so a personal booking -
+      // which is never asked - cannot carry a declaration it did not make
+      // (migration 30).
+      fund_declaration: requiresFundDeclaration(payload.debit_head) && payload.fund_declaration,
       alumni_name: forAlumnus ? payload.alumni_name : null,
       alumni_roll_number: forAlumnus ? payload.alumni_roll_number : null,
       alumni_id_url: alumniIdUrl,

@@ -172,6 +172,20 @@ export function BookingDetails({
 
       <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
         <Field label="Debitable head" value={describeDebit(booking)} />
+        {/* The funds declaration the requester gave (8 Oct 2026, migration
+            30). Shown to whoever is deciding: the point of recording it is
+            that an approver, and the accounts section later, can see the
+            assurance was given and when. Absent on a personal booking, which
+            is never asked, and on anything stored before the question
+            existed - so the row only appears when there is something to say. */}
+        {booking.fund_declaration_at && (
+          <Field
+            label="Funds declared"
+            value={`Approval and balance confirmed by the requester on ${formatDateTime(
+              booking.fund_declaration_at
+            )}`}
+          />
+        )}
         {/* Who else hears about it: every mail to the requester is copied. */}
         {(booking.copy_to_emails ?? []).length > 0 && (
           <Field label="Copy to" value={booking.copy_to_emails.join(", ")} />

@@ -1,5 +1,12 @@
 # Roadmap — what is open, in priority order
 
+> **For the production deployment, read
+> [06-production-requirements.md](06-production-requirements.md) first**
+> (8 Oct 2026). It is the single checklist of what a production build needs -
+> the real accounts, the data the office must supply, the secrets, the
+> migrations, and what production turns off. This page stays the list of what
+> is *open*, including the things that are not deployment.
+
 Rewritten **24 Sep 2026** after a full audit of these notes against the code.
 The portal is feature-complete for every workflow the institute has specified
 and has been through a ten-phase production-readiness programme; it is **not
@@ -20,7 +27,7 @@ Each of these is configuration or plumbing, not new design.
 | 3 | **Production secrets** | The server refuses to start without them | `APP_URL`, `CRON_SECRET`, `ID_ENCRYPTION_KEY` + the Supabase keys ([30-credentials-and-access.md](30-credentials-and-access.md)) |
 | 4 | **Change the console password** | Default `0000` | Console → Console Access |
 | 5 | **Delete or disable the demo personas and demo data** | They sign in with published passwords | Users & Roles; `supabase/repairs/2026-09-21-clear-test-bookings.sql` for bookings |
-| 6 | **Apply every migration to the production database** | Missing ones fail writes quietly | [23-running-and-testing.md](23-running-and-testing.md#hosted-supabase) has a query that shows which are missing |
+| 6 | **Apply every migration to the production database** | Missing ones fail writes quietly | **`npm run check:migrations`** asks the project and names what is missing. Do not write the answer down instead — that is how 24-30 were believed missing for weeks after they were applied |
 | 7 | **The office's Settings** | Defaults are guesses: extra-bed rate (none), GSTIN, Accounts email (empty), bank details, retention days, heads of units, Faculty Advisors, hostels and wardens, whitelist | [24-deployment-runbook.md](24-deployment-runbook.md#settings-the-office-must-fill-in) |
 | 8 | **Decide `MAIL_REDIRECT_ALL_TO`** | Unset only in production; set everywhere else | |
 | 9 | **Backups** | Supabase's free plan has none | Confirm the plan; run the restore drill in the runbook |
@@ -32,9 +39,8 @@ security becomes the boundary rather than a second line behind the server
 
 ## 2. Loose ends from the 24 and 25 Sep 2026 rounds
 
-- **Apply migration 26 to the hosted project** (with 24 and 25 if missing).
-  Until it is applied, an invoice with an additional charge is refused there;
-  everything else works.
+- ~~Apply migration 26 to the hosted project~~ — **done; verified 9 Oct 2026**
+  with the rest (`npm run check:migrations`).
 - **Confirm the GST treatment with the office's accountant** (25 Sep 2026):
   the tariffs are read as **including** GST at 18% on rooms and 5% on food
   (Settings → Tariffs & Invoicing, "Rates include GST"), so the guest pays the
@@ -51,16 +57,34 @@ security becomes the boundary rather than a second line behind the server
   to" address receives anything — the office's 1 Oct report. `/admin/mail`
   shows a red warning naming the mailbox whenever it is set. Keep it on any
   staging deployment.
-- **Apply migrations 24 – 29 to the hosted project** (and check what else it
-  is missing — its state is not recorded). Until 25, nobody can book for a
-  club there; until 24, a booking with a Copy-to address or a project sub-head
-  is refused, and a baby typed as age 0 still is; until 26, an invoice with an
-  additional charge is refused; until 27, a booking's meal split is dropped
-  and reads back as the one old whole-party preference; **until 28** every
-  academic lookup falls through to the published dummy records and the
-  Academic records console reports the missing table by name; **until 29** the
-  nightly job cannot mark a request Missed there (it logs the enum error per
-  booking and the rest of the run carries on).
+- ~~Apply migrations 24 – 30 to the hosted project~~ — **done; verified
+  9 Oct 2026.** `npm run check:migrations` asks the project itself and reports
+  **1 – 30 all applied** (`azfd…`). It had said otherwise here for weeks
+  because nobody could check: the recipe in
+  [23-running-and-testing.md](23-running-and-testing.md) listed markers only up
+  to migration 25, so the claim was carried forward by hand after the owner had
+  already applied them. **Run the script rather than writing the answer down
+  again.** Migrations **17 and 23** are function-only and it cannot see them;
+  the one-line SQL for those is in the same file.
+## 2a. Loose ends from the 8 Oct 2026 round
+
+- ~~Confirm whether the Special Budget approval upload should be mandatory~~ —
+  **answered 9 Oct 2026: it stays optional.** The details box beside it is
+  mandatory; the upload is offered and not required, so a requester waiting on
+  a scan is not stopped from booking and the desk can ask for it later.
+  [06-production-requirements.md](06-production-requirements.md) §2 still
+  records how to flip it if the office changes its mind.
+- **An imported profile still creates a Supabase Auth user** with the password
+  `password123` in Supabase mode. Harmless - that password is not a portal
+  login, everyone signs in through LDAP or Google - but wrong at six hundred
+  rows. Settle it when request-scoped database access moves off the
+  service-role key: either stop creating Auth users for imported profiles, or
+  create them with a random unusable password.
+- **Load the real accounts** once LDAP is connected: Users & Roles → **Import
+  from spreadsheet**, with the `ldap_uid` column or the separate LDAP import.
+  The per-field guide is
+  [06-production-requirements.md](06-production-requirements.md) §1.
+
 - **Then import the real records** (7 Oct 2026): Console → **Academic
   records** → Students first, since that is the list the booking form locks
   parents' names against. A student who is not in the import simply types

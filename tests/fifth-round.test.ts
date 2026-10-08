@@ -46,16 +46,15 @@ describe("Special Funds for everyone except students", () => {
   it("is in every category's defaults but the students'", () => {
     for (const kind of ["room", "dining"] as const) {
       for (const category of SPECIAL_FUNDS_CATEGORIES) {
-        // Personal is the one exception: off a personal meal booking from
-        // 1 Oct 2026, and off a personal booking of any kind from 7 Oct, when
-        // the office asked for a personal booking to stop being asked which
-        // budget pays at all.
-        if (category === "personal") continue;
         expect(DEFAULT_DEBIT_RULES[kind][category]).toContain("special_budget");
       }
       expect(DEFAULT_DEBIT_RULES[kind].student).not.toContain("special_budget");
     }
-    expect(SPECIAL_FUNDS_CATEGORIES).not.toContain("student");
+    // Read off the defaults since 8 Oct 2026, so the list cannot drift from
+    // them: not students, not non-teaching staff, never a personal booking.
+    for (const category of ["student", "staff", "personal"] as const) {
+      expect(SPECIAL_FUNDS_CATEGORIES).not.toContain(category);
+    }
   });
 
   it("is not offered on any personal booking (1 Oct, widened 7 Oct 2026)", () => {
@@ -97,7 +96,14 @@ describe("Special Funds for everyone except students", () => {
     expect(debitHeadsByType("student", ["personal"], priya, [], forced).personal).toEqual(["personal_funds"]);
   });
 
-  it("upgrades a revision-2 row once, leaving the office's earlier unticks alone", () => {
+  /**
+   * Revision 6 (8 Oct 2026) **replaces** both lists with the office's own
+   * mapping. Revisions 2-5 each added or removed Special Budget and so could
+   * be applied head by head, leaving an earlier untick of the office's
+   * alone; the new mapping changes which heads four categories have at all,
+   * and there is no edit that turns the old row into it.
+   */
+  it("brings any row saved before revision 6 onto the office's mapping, once", () => {
     const rev2 = {
       revision: 2,
       room: { ...DEFAULT_DEBIT_RULES.room, staff: ["department_budget"], personal: ["personal_funds"], alumni: ["institute_grant"] },
@@ -105,17 +111,15 @@ describe("Special Funds for everyone except students", () => {
     };
     const upgraded = upgradeDebitRules(rev2) as typeof DEFAULT_DEBIT_RULES;
     expect(upgraded.revision).toBe(DEBIT_RULES_REVISION);
-    expect(upgraded.room.alumni).toEqual(["institute_grant", "special_budget"]);
-    // Revisions 4 and 5 withdraw it from personal dining and then from
-    // personal room bookings, after revision 3 had added it to both.
-    expect(upgraded.dining.personal).toEqual(["personal_funds"]);
-    expect(upgraded.room.personal).toEqual(["personal_funds"]);
-    // Staff unticked it after revision 2: that choice stands.
-    expect(upgraded.room.staff).toEqual(["department_budget"]);
-    // A row with no revision gets both rounds.
-    const rev1 = upgradeDebitRules({ room: { staff: ["department_budget"], personal: ["personal_funds"] } }) as { room: Record<string, string[]> };
-    expect(rev1.room.staff).toEqual(["department_budget", "special_budget"]);
-    expect(rev1.room.personal).toEqual(["personal_funds"]);
+    expect(upgraded.room).toEqual(DEFAULT_DEBIT_RULES.room);
+    expect(upgraded.dining).toEqual(DEFAULT_DEBIT_RULES.dining);
+    // A row with no revision at all comes forward the same way.
+    const rev1 = upgradeDebitRules({ room: { staff: ["department_budget"] } }) as { room: Record<string, string[]> };
+    expect(rev1.room.staff).toEqual(["personal_funds"]);
+    // And a row already on the current revision is left exactly as it is -
+    // the office's own choices stand from here on.
+    const own = { revision: DEBIT_RULES_REVISION, room: { staff: [] }, dining: {} };
+    expect(upgradeDebitRules(own)).toEqual(own);
   });
 });
 
@@ -499,6 +503,7 @@ describe("the infant card", () => {
     service_type: "room",
     booking_type: "official",
     debit_head: "department_budget",
+    fund_declaration: true,
     privacy_consent: true,
     purpose_of_visit: "Visiting collaborator",
     check_in: `${checkIn}T12:00`,

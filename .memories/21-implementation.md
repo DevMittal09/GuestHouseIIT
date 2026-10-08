@@ -101,7 +101,8 @@ Rooms are added as individual cards via `useFieldArray`. Each room card holds it
   `bookings.copy_to_emails`; every mail **to the requester** is CC'd to it.
 - **Project sub-head** — an optional text box under the project list when the
   head is Project (`debit_subhead`, 120 chars). Sent only with Project.
-- **Special Funds** — the head's name box and sanction letter are both
+- **Special Budget** — the fund's name is **mandatory** since 8 Oct 2026
+  ("Special Budget (Please specify the details)"); the approval letter is
   optional now (`debitDetailsRequired` is false, `acceptsDebitDocument`
   replaced `needsDebitDocument`).
 - **Age** — labelled per the form config; where optional it says "Needed only
@@ -440,7 +441,7 @@ The first four sections, which predate the split:
 
 | Tab | UI | Capabilities |
 | --- | --- | --- |
-| Users & Roles | `components/admin/users-manager.tsx` | Create/edit/delete profiles; assign any of the 12 roles (a manager cannot create or edit a developer); set hostel, department/club, roll number (these drive warden and FA scoping) and **LDAP username**. **Import LDAP usernames** bulk-loads `email, ldap username` pairs, all or nothing. Cannot delete yourself or drop your own developer role. In Supabase mode, creating a user also creates a Supabase Auth user (password `password123`) — needs the service-role key. |
+| Users & Roles | `components/admin/users-manager.tsx` | Create/edit/delete profiles; assign any of the 12 roles (a manager cannot create or edit a developer); set hostel, department/club, roll number (these drive warden and FA scoping) and **LDAP username**. **Import from spreadsheet** (8 Oct 2026) pastes the office's own columns - a header line names them in any order - shows the plan ("412 added, 3 updated"), then imports all or nothing (`previewUserImport` / `importUsersAction`, `lib/users-import.ts`); **Import LDAP usernames** bulk-loads `email, ldap username` pairs onto existing accounts. Rows can be **ticked and deleted together** (`deleteUsersAction`, typed confirmation; anyone with bookings is refused and named back). Cannot delete yourself or drop your own developer role. In Supabase mode, creating a user also creates a Supabase Auth user (password `password123`) — needs the service-role key, and is not a portal login. |
 | Guest Houses & Rooms | `components/admin/guest-houses-manager.tsx` | Create/rename/delete guest houses; add, enable/disable, delete rooms. `total_rooms` is recounted from active rooms automatically. Deleting is blocked when bookings reference the guest house, or when a room is assigned to a booking (disable it instead). A **Serves meals** switch per guest house (`setGuestHouseMealsAction` → `updateGuestHouse`) decides whether the booking form offers meals there; new guest houses start with it off. |
 | Form Builder | `components/admin/form-config-editor.tsx` | Per requester role: allowed guest houses, every guest field's mode, relationship style and options, the relationship dependency (two checkbox lists — which options unlock, which are restricted), alumni-card mode, banner text, and custom fields. Editing the option list re-filters both dependency lists so they cannot reference a deleted option; save is blocked when a restriction has nothing to unlock it. "Reset to spec defaults" deletes the saved row. |
 | All Bookings | `components/admin/bookings-manager.tsx` | Developer only. Every booking with status filters, an audit-logged force-status override (remark required; refuses Occupied before check-in), and hard delete. |
@@ -470,7 +471,8 @@ Guest Houses & Rooms.
 | `lib/form-config-server.ts` | `getEffectiveFormConfig` — saved config or defaults. |
 | `lib/booking-schema.ts` | `bookingPayloadSchema` — the config-driven zod schema both sides run; `checkOutOrderError`, `MAX_COPY_TO_EMAILS`, Aadhaar format. |
 | `lib/booking-context-server.ts` | `bookingContextFor` — the Settings, debitable heads, projects and HOD names the form and `createBooking` both use. |
-| `lib/debit-heads.ts` | Categories, `DEFAULT_DEBIT_RULES`, `FORBIDDEN_DEBIT_HEADS`, `debitCategoryFor`, `debitHeadsByType`, `upgradeDebitRules`, `describeDebit`. |
+| `lib/debit-heads.ts` | Categories, `DEFAULT_DEBIT_RULES` (the office's nine heads and their mapping, revision 6, 8 Oct 2026), `FORBIDDEN_DEBIT_HEADS`, `debitCategoryFor`, `debitHeadsByType`, `upgradeDebitRules`, `describeDebit`, `asksForDebitHead`, and the funds declaration - `FUND_DECLARATION`, `requiresFundDeclaration`, `fundDeclarationError`. |
+| `lib/users-import.ts` | Loading the accounts from a spreadsheet paste (8 Oct 2026): `KNOWN_COLUMNS` and `columnFor` / `headerColumns` (the header may name the columns in any order), `planUserImport` (all or nothing, updates whoever is already on the list, leaves out what the paste does not carry), `describeUserImport`, `changedFields`. Pure - the console previews the plan with it before applying it. |
 | `lib/policy.ts` | Stay cap and its exemptions (`stayLengthError`), the alumni guest house, the pets notice, the manager contact line. |
 | `lib/settings.ts` (+ `-server.ts`, `-impact.ts`) | `DEFAULT_RULES`, the Settings schemas, `getRules` / `getOfficialEmails` / `getHostels`, and what a change would break. |
 | `lib/occupancy.ts` | Capacity per room type, `INFANT_AGE_LIMIT`, `roomPartyError` and the Add-button reasons, `extraBedsFor`, `allocationCapacityError`, `describeCapacity`. |

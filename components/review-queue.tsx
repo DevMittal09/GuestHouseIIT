@@ -167,8 +167,7 @@ function ReviewRow({
               <DialogHeader>
                 <DialogTitle>Review {booking.booking_reference_id}</DialogTitle>
                 <DialogDescription>
-                  Forwarding sends this request to the Guest House Manager for room allocation.
-                  That is the only place it can go - you either forward it or reject it.
+                  Forward to the Guest House Manager for room allocation, or reject.
                 </DialogDescription>
               </DialogHeader>
               {studentRecord && <StudentRecordCheck panel={studentRecord} />}

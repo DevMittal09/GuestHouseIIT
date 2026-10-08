@@ -415,6 +415,34 @@ Playwright journeys before the next began. Reasoning in
 | The manager can **reinstate** a Missed booking | **Done** | `reinstateMissedBooking` returns it to the stage it was waiting at (`statusBeforeMissed`), with a reason, audited. A reinstated request is never marked again - the sweep reads the reinstatement off the log |
 | The queue shows Missed | **Done** | A **Missed requests** section on `/manager` (21 days), and a **Missed** tile in the Approval Log - its own tile, not filed under Cancelled |
 
+## The office's ninth list — 8 October 2026
+
+Relayed by the owner, who noted that **most of it is about the production
+deployment** rather than the demo - the real accounts, the real heads, the real
+mail. The lasting answer to that is a new file,
+[06-production-requirements.md](06-production-requirements.md), which records
+everything a production build needs in one place. Reasoning in
+[03-decisions.md](03-decisions.md) ("8 Oct 2026"); what changed in
+[99-recent-changes.md](99-recent-changes.md). One migration, **30**.
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| The **nine debitable heads**, named: Institute Grant, Professional Development Fund, Project Grant, Department Budget, Special Budget, Personal Funds, Alumni Fund, Student Fund, Hostel Funds | **Done** | `STANDARD_DEBIT_HEADS`. All nine are in use now; three had been on the enum since migration 15 and offered to nobody |
+| **Special Budget (Please specify the details)** - a text box, with an approval upload | **Done** | `debitDetailsRequired` includes it, so the box is **mandatory**; the upload is offered and stays optional (a requester waiting on a scan is not stopped from booking). One line to make it mandatory - [06](06-production-requirements.md) §2 |
+| The **mapping of requester to head**: student / non-faculty → Personal; faculty → all but Institute Grant, Alumni, Student Fund and Hostel; offices → Institute Grant, Department, Special Budget, Student Fund, Hostel Funds, Alumni Fund; fests → Student Fund and Special Budget; Alumni IAR → Alumni Fund and Special Budget | **Done** | `DEFAULT_DEBIT_RULES` **revision 6**, which *replaces* a saved Settings row's lists rather than editing them - four categories changed which heads they have. "All funds except…" is also a **floor** (`FORBIDDEN_DEBIT_HEADS.faculty`), not only a default |
+| A **declaration** whenever any fund but Personal is chosen: "I have the necessary approval for the usage of funds from the competent authority and verified that sufficient balance is there in the debitable head." | **Done** | `FUND_DECLARATION`, one constant. Inside the Debitable head card, so it appears and disappears with the head; checked on both sides; stored as `bookings.fund_declaration_at` (**migration 30**) |
+| **All emails for one booking id in one thread** - "I think it's already like that, please verify" | **Verified and completed** | It was true of the **staff's** mail since 23 Sep and **not** of the requester's, which stood alone by an earlier decision. Eleven events moved into the booking thread, the invoice mail to Accounts among them. The cost is the shared subject, which is what a thread needs |
+| **Less text on the website** - "it should look simple, that is the content; don't put too much explanations, instructions and mansplainings" | **Done** | The booking form's card descriptions and help paragraphs, the `/book` leads, the desk's lists and the Guidelines items. Every rule and figure kept; the clause that explains the clause dropped. The infant note had stated the room capacity that the room card below it states again |
+| For the **GH Manager: add the users' data from Excel, edit the columns, and delete data** | **Done** - it was practical | Users & Roles → **Import from spreadsheet**: paste, **Check the paste**, Import, all or nothing. A **header line** names the columns in any order and only `email` is required, which is what "edit the columns" needed; a column the paste does not carry is left alone. Rows can be **ticked and deleted together**. `lib/users-import.ts` |
+| A **.md file recording everything the production build needs** | **Done** | [06-production-requirements.md](06-production-requirements.md) - the users, the heads, the data the office must supply, the secrets, the migrations, what production turns off, and what was asked for and parked |
+
+**Answered on 9 October 2026:**
+
+| Question | Answer |
+| --- | --- |
+| Should the **Special Budget approval upload** be mandatory? | **No - leave it optional for now** (the office). The fund's name beside it stays mandatory |
+| Why did the portal say **migrations 24-30** were missing from the hosted project, when they had been run in the SQL editor? | It did not - **these notes did**. The check recipe in [23-running-and-testing.md](23-running-and-testing.md) listed markers only up to migration 25, so nothing past it could be verified, and each round copied the previous round's "outstanding" sentence forward. A read-only probe found **1-30 all applied**. Fixed by replacing the prose with **`npm run check:migrations`**, which asks the project itself |
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

@@ -6,6 +6,7 @@ import {
   REFERENCE,
   rowFor,
   selectedGuestHouseName,
+  settleDebitHead,
   signIn,
 } from "./helpers";
 
@@ -29,8 +30,10 @@ test("the IAR Student Cell is never asked to choose a guest house", async ({ pag
   expect(await selectedGuestHouseName(page)).toBe("Bageshri");
   expect(await page.locator('[name="guest_house_id"]').inputValue()).not.toBe("");
 
-  // Two heads are offered for an alumni stay, so the question is asked.
-  await page.locator('[name="debit_head"][value="institute_grant"]').check();
+  // Two heads are offered for an alumni stay, so the question is asked - the
+  // Alumni Fund and a special budget, since the office's list of 8 Oct 2026.
+  await page.locator('[name="debit_head"][value="alumni_fund"]').check();
+  await settleDebitHead(page);
 
   await page.locator('[name="alumni_name"]').fill("R. Krishnan");
   await page.locator('[name="alumni_roll_number"]').fill("112009033");

@@ -263,11 +263,11 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           <CardDescription>
             {!detailed
               ? view === "day"
-                ? "How many rooms are free, for the day and hour by hour. The guest house allocates the actual room when your request is approved."
-                : "How many rooms are free on each day. The guest house allocates the actual room when your request is approved."
+                ? "Rooms free, for the day and hour by hour."
+                : "Rooms free on each day."
               : view === "day"
-                ? "Hours of the day down the side, room numbers across the top. Red means the room is booked for that hour; blank means it is free."
-                : "Days down the side, room numbers across the top. Each day's row runs from midnight at its top edge to midnight at its bottom, so a stay is one red bar from check-in to check-out. The figure beside each date is the number of rooms free all day."}
+                ? "Hours down the side, room numbers across the top. Red is booked."
+                : "Days down the side, room numbers across the top. Each day runs midnight to midnight, so a stay is one bar. The figure beside each date is the rooms free all day."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

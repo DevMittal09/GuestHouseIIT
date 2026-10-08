@@ -8,17 +8,19 @@ export { MAIL_THREAD_OF, type MailThreadKind };
 /**
  * Threading: which mail arrives as one conversation, and which stands alone.
  *
- * From the Guest House meeting notes: staff mail goes in a thread instead of a
- * pile of standalone emails, so the Guest House Manager and the approvers are
- * not spammed - but the person who *asked* for a room gets a standalone mail
- * for each step, because each one is news to them.
+ * **Everything about one booking is one conversation** (8 Oct 2026), for the
+ * requester as well as for the staff. The reference id promises a trail -
+ * search for IITPKD-GH-2026-AB12C and get the whole story - and a thread is
+ * what makes a mail client keep it.
  *
- * - **Requesters: standalone.** No threading headers at all, and a
- *   `[reference]`-led subject that says what happened.
- * - **Staff, per-booking mail** (a new request, a forwarded one, a
- *   cancellation, the desk's copy of an allocation): one thread **per
- *   booking**, per person.
- * - **Staff, scheduled mail** (the morning digest, the escalation nudge, the
+ * - **Per-booking mail, to anyone** (a new request, a forwarded one, an
+ *   allocation, a rejection, a cancellation, a reminder, the invoice): one
+ *   thread **per booking**, per mailbox. Requester mail stood alone until
+ *   8 Oct 2026, on the meeting notes' reasoning that each step is news to the
+ *   person who asked; it still is, and it still arrives as its own message -
+ *   what happened leads the heading and the inbox preview. Only the subject
+ *   is shared, because that is what a thread costs.
+ * - **Scheduled mail** (the morning digest, the escalation nudge, the
  *   day-wise guest house log): a **daily log** thread per person per day.
  *   These are about a queue, not a booking, so there is nothing else to hang
  *   them on; and a new institute day starts a new one, which is the point -
@@ -47,6 +49,9 @@ export { MAIL_THREAD_OF, type MailThreadKind };
  * message per address (`notify.ts`): one message can carry only one
  * `References`, and a thread whose root went to someone else's mailbox is not
  * reliably grouped.
+ *
+ * {@link bookingSubject} is still used for a message with no thread - the
+ * console's test mail, and anything whose event is not in `MAIL_THREAD_OF`.
  */
 
 /** A stable, short fingerprint of a mailbox, so a root id carries no address. */

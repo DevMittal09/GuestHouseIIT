@@ -56,6 +56,7 @@ function payload(guests: Record<string, unknown>[], patch: Record<string, unknow
     service_type: "room",
     booking_type: "official",
     debit_head: "department_budget",
+    fund_declaration: true,
     privacy_consent: true,
     purpose_of_visit: "Visiting collaborator",
     check_in: `${checkInDate}T12:00`,
@@ -177,16 +178,20 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
   });
 
   // Widened on 25 Sep 2026 to everyone except students - see fifth-round.test.ts
-  // - and narrowed again on 7 Oct, when personal bookings stopped being asked.
-  it("offers Special Funds to everyone except students and personal bookings", () => {
+  // - narrowed again on 7 Oct, when personal bookings stopped being asked,
+  // and narrowed once more on 8 Oct: the office's own mapping leaves
+  // non-teaching staff with Personal Funds alone.
+  it("offers Special Budget to every category that spends somebody else's money", () => {
     const priya = { staff_category: "faculty" as const, unit_id: null };
     const room = debitHeadsByType("employee", ["official", "personal"], priya, [], DEFAULT_DEBIT_RULES, "room");
     expect(room.official).toContain("special_budget");
     expect(room.personal).toEqual(["personal_funds"]);
-    for (const category of ["faculty", "staff", "officer_office", "department_office", "club", "manager", "alumni", "iar_student_cell"] as const) {
+    for (const category of ["faculty", "officer_office", "department_office", "club", "manager", "alumni", "iar_student_cell"] as const) {
       expect(DEFAULT_DEBIT_RULES.room[category]).toContain("special_budget");
     }
-    expect(DEFAULT_DEBIT_RULES.room.student).not.toContain("special_budget");
+    for (const category of ["student", "staff", "personal"] as const) {
+      expect(DEFAULT_DEBIT_RULES.room[category]).not.toContain("special_budget");
+    }
     // A floor under Settings, like the faculty's Institute Grant.
     const forced = debitHeadsByType("student", ["personal"], priya, [], {
       ...DEFAULT_DEBIT_RULES,
@@ -195,20 +200,28 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
     expect(forced.personal).toEqual(["personal_funds"]);
   });
 
-  it("Special Funds needs nothing more; which fund may be named", () => {
+  // Mandatory since 8 Oct 2026: the office's list writes the head as
+  // "Special Budget (Please specify the details)". It was optional from
+  // 24 Sep, when the office had asked for the head and nothing more.
+  it("Special Budget must say which fund", () => {
     const heads = { room: { official: ["department_budget" as const, "special_budget" as const] }, dining: {} };
     const schema = bookingPayloadSchema(config("employee"), { mealsAvailable: false, debitHeads: heads });
-    expect(schema.safeParse(payload(guest1, { debit_head: "special_budget" })).success).toBe(true);
+    const bare = schema.safeParse(payload(guest1, { debit_head: "special_budget" }));
+    expect(bare.success).toBe(false);
+    expect(!bare.success && JSON.stringify(bare.error.issues)).toContain("special fund");
     const named = schema.safeParse(payload(guest1, { debit_head: "special_budget", debit_details: "Director's fund" }));
     expect(named.success && named.data.debit_details).toBe("Director's fund");
   });
 
-  it("adds Special Funds once to a Settings row saved before it existed, and never again", () => {
+  // Revisions 2-5 edited a saved row one head at a time. Revision 6 (8 Oct
+  // 2026) replaces both lists, because the office's mapping is not reachable
+  // by adding or removing one head - four categories changed heads.
+  it("brings a Settings row saved before the office's mapping onto it, once", () => {
     const old = { room: { ...DEFAULT_DEBIT_RULES.room, staff: ["department_budget"] }, dining: DEFAULT_DEBIT_RULES.dining };
     const upgraded = parseRuleGroup("debit", old);
-    expect(upgraded.room.staff).toEqual(["department_budget", "special_budget"]);
+    expect(upgraded.room.staff).toEqual(["personal_funds"]);
     expect(upgraded.revision).toBe(DEBIT_RULES_REVISION);
-    // Saved since: the office's untick stands.
+    // Saved since: the office's own edit stands.
     const unticked = parseRuleGroup("debit", { ...upgraded, room: { ...upgraded.room, staff: ["department_budget"] } });
     expect(unticked.room.staff).toEqual(["department_budget"]);
     expect(upgradeDebitRules({ revision: DEBIT_RULES_REVISION, room: { staff: [] } })).toEqual({
@@ -221,7 +234,7 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
     expect(
       describeDebit({ debit_head: "project_grant", debit_details: "SP/2025/017 - Storage", debit_subhead: "Travel" })
     ).toBe("Project Grant - SP/2025/017 - Storage · Sub-head: Travel");
-    expect(describeDebit({ debit_head: "special_budget", debit_details: null })).toBe("Special Funds");
+    expect(describeDebit({ debit_head: "special_budget", debit_details: null })).toBe("Special Budget");
   });
 });
 

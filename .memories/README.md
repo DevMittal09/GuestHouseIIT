@@ -20,7 +20,10 @@ the history.
    [10-roles-and-features.md](10-roles-and-features.md) (who can do what),
    [11-booking-forms.md](11-booking-forms.md) (what each form asks, what is
    mandatory), [12-workflows.md](12-workflows.md) (where requests go).
-4. **[04-roadmap.md](04-roadmap.md)** — what is left.
+4. **[04-roadmap.md](04-roadmap.md)** — what is left, and
+   **[06-production-requirements.md](06-production-requirements.md)** — the one
+   checklist of what the **production** build needs (the real accounts, the
+   office's data, the secrets, the migrations).
 5. Anything else from the file map below, when the task touches it.
 
 Before changing code, also read `AGENTS.md` (the Next.js 16 note at its top
@@ -52,20 +55,22 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest ·
 Playwright. **Node 20** via nvm (the machine default is 18).
 
-**Status, 7 Oct 2026.** Feature-complete for every workflow specified; taken
+**Status, 8 Oct 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme (Settings, mail
 addressing, turnaround buffer, HOD approval and debitable heads, invoices,
 dining, operational states, security, performance and tests, documentation),
-eight rounds of the office's corrections, a UI revamp and the supervisor's
-review of the live site (30 Sep). **Not deployed for real use.**
+nine rounds of the office's corrections, a UI revamp and the supervisor's
+review of the live site (30 Sep). **Not deployed for real use** - everything
+that first deployment needs is in
+[06-production-requirements.md](06-production-requirements.md).
 Runs locally on the mock store, and against one hosted Supabase project with
 demo data. Gates before real bookings: connect the institute LDAP, close Mock
 Authentication (configure Google or `MOCK_LOGIN=false`), production secrets,
 the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 
-**Numbers.** 29 migrations · 12 roles (10 active) · 13 booking statuses ·
-18 demo personas · 6 demo bookings · 405 unit tests · 33 end-to-end journeys ·
-14 console sections.
+**Numbers.** 30 migrations · 12 roles (10 active) · 13 booking statuses ·
+9 debitable heads · 18 demo personas · 6 demo bookings · 431 unit tests ·
+36 end-to-end journeys · 14 console sections.
 
 ---
 
@@ -80,6 +85,7 @@ the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 | [03-decisions.md](03-decisions.md) | The decision log — what was decided, why, what was rejected; reversed decisions carry a dated *Superseded* note |
 | [04-roadmap.md](04-roadmap.md) | **What is left**: deployment gates, loose ends, audit findings, asks of other people, next features |
 | [05-production-plan.md](05-production-plan.md) | The 2 Sep production plan — history now, mostly executed; kept for its reasoning |
+| [06-production-requirements.md](06-production-requirements.md) | **What the production build needs, in one checklist** (8 Oct 2026): the users and how they are loaded, the debitable heads as the office gave them, the data the office must supply, the secrets and switches, the migrations, what production turns off, and what was asked for and parked |
 | [Guest House Meeting Notes.md](Guest%20House%20Meeting%20Notes.md) | The office's own notes from the 15 Sep meeting, verbatim |
 
 **The product, as configured**
@@ -138,9 +144,11 @@ the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 | Developer | The whole console (14 sections), behind a password and TOTP |
 
 Every booking: a **debitable head** is mandatory **except on a personal
-booking, which is never asked** (the server records Personal Funds); **Copy
-to** is optional (≤ 25, CC on every mail to the requester); **privacy consent**
-is mandatory; check-in within **1 month**, at most **14 nights**; a room card
+booking, which is never asked** (the server records Personal Funds) - nine
+heads, mapped per requester by the office's own list of 8 Oct 2026, and **any
+head but Personal Funds asks the requester to declare that the funds are
+approved and available**; **Copy to** is optional (≤ 25, CC on every mail to
+the requester); **privacy consent** is mandatory; check-in within **1 month**, at most **14 nights**; a room card
 holds **4 people, at most 3 needing a bed, at most 3 infants** (under 5);
 meals only at a guest house that serves them and **never for a student or an
 alumni booking**, booked **before the previous meal finishes being served**,
@@ -167,7 +175,8 @@ files 10–15.
 | Booking types, service types | `lib/booking-types.ts` |
 | Form fields per role | `lib/form-config.ts` (+ saved rows) |
 | Everything a submission is checked against | `lib/booking-schema.ts` (client and server) + `createBooking` |
-| Debitable heads | `lib/debit-heads.ts` |
+| Debitable heads, and the funds declaration | `lib/debit-heads.ts` |
+| Loading the accounts from a spreadsheet | `lib/users-import.ts` (console: Users & Roles → Import from spreadsheet) |
 | Settings and their defaults | `lib/settings.ts` |
 | Stay cap, the one guest house students and alumni use, who may be offered meals, contact line | `lib/policy.ts` |
 | Capacity and infants | `lib/occupancy.ts` |
@@ -247,7 +256,7 @@ After every working round:
 | --- | --- |
 | **Booking type** | *Why* the stay is booked: official, personal, or on behalf of an alumnus (`bookings.booking_type`). A property of the request, not the person |
 | **Service type** | *What* is booked: room, room + meals, meals only |
-| **Debitable head** | Which budget pays: Department, Institute Grant, PDF (Professional Development Fund), Personal, Project, Special Funds (`special_budget`) |
+| **Debitable head** | Which budget pays. Nine of them since the office's list of 8 Oct 2026: Institute Grant, Professional Development Fund, Project Grant, Department Budget, Special Budget (`special_budget`), Personal Funds, Alumni Fund, Student Fund, Hostel Funds. Any but Personal Funds asks the requester to declare the funds are approved and available |
 | **Unit** | A department, council, club or office in Departments & Clubs; has a head, an acting head, a parent, and (councils/clubs) a Faculty Advisor and secretary's mailbox |
 | **HOD** | Whoever heads the unit a requester's HOD approval comes from — found when someone looks, never stored on the booking |
 | **Faculty Advisor** | The professor named on a council or club (`units.faculty_advisor_id`); books for it. Not a role — the `faculty_advisor` role is a legacy account type |

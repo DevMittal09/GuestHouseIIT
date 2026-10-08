@@ -121,7 +121,7 @@ export default async function DashboardPage() {
         <SectionHeading
           title="Your requests"
           count={bookings.length}
-          description="Newest first. Open one for its full details, the approval trail, and to ask for a cancellation or a later check-out."
+          description="Newest first."
         />
         <MyBookings bookings={bookings} invoices={invoices} />
       </section>

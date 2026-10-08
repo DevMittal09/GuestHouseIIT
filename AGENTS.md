@@ -17,8 +17,11 @@ are not obvious from reading files, so you don't have to rediscover them.
 > `.memories/99-recent-changes.md`. That folder is the project's full memory —
 > background and every requirement round, the timeline, the product as
 > configured role by role and form by form (`10`–`17`, checked against the code
-> on 24 Sep 2026, kept current through 7 Oct 2026), the engineering notes, every demo login and where each real
-> secret lives, and the roadmap. This file is the terse list of rules.
+> on 24 Sep 2026, kept current through 8 Oct 2026), the engineering notes, every demo login and where each real
+> secret lives, and the roadmap. **`06-production-requirements.md` is the one
+> checklist of what a production build needs** — the real accounts and how they
+> are loaded, the office's data, the secrets, the migrations, what production
+> turns off. This file is the terse list of rules.
 
 **What it is:** a booking + multi-stage approval portal for IIT Palakkad's two
 guest houses, **Bageshri** and **Hamsanandi**. Students, faculty and staff,
@@ -103,7 +106,15 @@ port 3000 before launching your own.
 > server after, or expect to restart it. This is easy to miss because the build
 > itself succeeds and says nothing.
 
-## House style the office asked for (7 Oct 2026)
+## House style the office asked for (7 and 8 Oct 2026)
+
+- **One fact per line; no commentary** (8 Oct 2026, the supervisor). The form,
+  the desk's lists and the Guidelines state the rule and stop - no "so
+  that…", no restating the heading, no explaining a rule the line below also
+  explains (`INFANT_HELP_TEXT` is the infant fact alone; the room card states
+  the capacity). Keep every rule and figure; drop the second clause. New copy
+  follows, and so does anything added to `lib/site-content.ts`.
+
 
 - **No em dashes in the source.** Every `—` in `app/ components/ lib/ tests/
   e2e/ scripts/` is a plain hyphen, and new copy follows. The exception is
@@ -282,14 +293,14 @@ are in **`.memories/17-academic-records.md`**. Keep that file and
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
 | student | personal | Assistant Warden → GH Manager | Personal |
-| club / council / fest — **raised by its Faculty Advisor** | official | **Direct → GH Manager** — nobody forwards it, HOD included | Department / Special Funds |
-| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF / Special Funds |
-| employee — staff | official | **HOD** → GH Manager | Department / Special Funds |
+| club / council / fest — **raised by its Faculty Advisor** | official | **Direct → GH Manager** — nobody forwards it, HOD included | Student Fund / Special Budget |
+| employee — faculty | official | **HOD** → GH Manager | PDF / Project / Department / Special Budget / Personal |
+| employee — staff | official | **HOD** → GH Manager | Personal |
 | employee | personal | GH Manager | Personal |
-| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute / Special Funds |
-| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department / Special Funds |
-| iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | Institute (alumni: Institute / Personal) |
-| iar_student_cell | alumni | IAR Office → GH Manager | Institute / Personal |
+| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute / Department / Special Budget / Student Fund / Hostel Funds / Alumni Fund |
+| official — department office | official | Direct, or → its department's **HOD** → GH Manager | the same six — one list for both classes of office |
+| iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | the offices' six (alumni: Alumni Fund / Special Budget) |
+| iar_student_cell | alumni | IAR Office → GH Manager | Alumni Fund / Special Budget |
 | any | meals only | GH Manager | dining heads (Phase 6) |
 | alumni | *retired* | kept only for stored bookings | — |
 
@@ -366,26 +377,43 @@ card is not rendered and the schema's closing transform writes
 `personal_funds` whatever arrived, so a crafted payload naming a department on
 a private stay is overwritten rather than refused. Allowed heads per requester
 category are the Setting `rules.debit` (room and dining).
+**The nine heads and their mapping are the office's own list of 8 Oct 2026**
+(`STANDARD_DEBIT_HEADS`, `DEFAULT_DEBIT_RULES`): student and non-teaching
+staff → Personal; **faculty** → everything **except** Institute Grant, Alumni
+Fund, Student Fund and Hostel Funds; **offices** (both classes, one list) →
+Institute Grant, Department, Special Budget, Student Fund, Hostel Funds,
+Alumni Fund; **clubs, councils and fests** → Student Fund and Special Budget;
+**an alumni booking and the IAR Student Cell** → Alumni Fund and Special
+Budget; the desk → all nine. Dining is the same list less Project.
 `FORBIDDEN_DEBIT_HEADS` is a **floor under that Setting**: **faculty may never
-debit the Institute Grant** (23 Sep 2026), which is the offices' money;
-**students never Special Funds** (25 Sep); and **no personal booking ever
-Special Funds** (7 Oct, widened from dining-only on 1 Oct, which is why
-`FORBIDDEN_DINING_HEADS` is now empty - the seam is kept because dining is
-what the office narrows first). `allowedHeads(category, heads, kind)` applies
-both.
+debit the Institute Grant, the Alumni Fund, the Student Fund or the Hostel
+Funds** (the office's "all funds except…" read as a rule; the grant has been
+refused since 23 Sep 2026); **students never Special Budget** (25 Sep); and
+**no personal booking ever Special Budget** (7 Oct, widened from dining-only on
+1 Oct, which is why `FORBIDDEN_DINING_HEADS` is now empty - the seam is kept
+because dining is what the office narrows first).
+`allowedHeads(category, heads, kind)` applies both.
 `allowedHeads()` strips a forbidden head on read (so a stored row that still
 lists one is ignored, not fatal), `debitRulesSchema` refuses to save it, and the
-console greys that cell. **Special Funds** (`special_budget`, relabelled
-24 Sep 2026) is in **every category's default but students' and personal**
-(25 Sep, narrowed 7 Oct 2026); its fund name and sanction letter are optional.
+console greys that cell. **Special Budget** (`special_budget`; labelled
+"Special Funds" from 24 Sep 2026 to 8 Oct) **must name the fund**
+(`debitDetailsRequired`, 8 Oct) - its approval letter stays optional.
+**Any head but Personal Funds asks for `FUND_DECLARATION`** - the office's
+sentence, one constant, checked by `fundDeclarationError` on both sides,
+rendered inside the Debitable head card so it appears and disappears with the
+head, and stored as `bookings.fund_declaration_at` (migration 30, nothing
+backfilled). `createBooking` records it only where the head asked for it.
 A Settings row is upgraded **once per revision** (`upgradeDebitRules`,
-`DebitRules.revision`, now **5**, `SPECIAL_FUNDS_ADDED_AT`) — bump the
-revision if you change a default list again. Revisions **4 and 5** are the
-ones that *remove* (Special Funds off personal dining, then off every personal
-list), and they run after the additions so a revision-1 row still comes all
-the way forward. **`debitCategoryFor` returns `student` for a student before looking at
+`DebitRules.revision`, now **6**) — bump the revision if you change a default
+list again. Revisions 2-3 added Special Budget to more categories, 4-5 removed
+it from personal dining and then from every personal list, and **revision 6
+replaces both lists wholesale**: the office's mapping is not reachable by
+adding or removing one head (four categories changed which heads they have),
+so there is no edit that turns an older row into it. After it, a row on the
+current revision is left alone for good.
+**`debitCategoryFor` returns `student` for a student before looking at
 the booking type**: a student's only type is personal, and filing them under
-*personal* (as it did until 25 Sep) would hand them Special Funds.
+*personal* (as it did until 25 Sep) would hand them Special Budget.
 `bookingContextFor(user)` computes them once for the page and for
 `createBooking`. Project → **the number and title typed** into the details box beside the head
 (1 Oct 2026; it was a dropdown of the Projects console's list, which was always
@@ -1029,9 +1057,10 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
 - **HTML and plain text are rendered from one block list** (`lib/mail/render.ts`).
   Do not hand-write either body. Tables and inline styles only, no external
   images, and **never a link to an ID document** — mail points at the portal.
-- **Staff mail threads on the booking; requester mail stands alone**
-  (`lib/mail/thread.ts`, `MAIL_THREAD_OF` in `types.ts`). Reviewer and desk
-  mail about a booking joins that recipient's thread **for that booking**
+- **Every mail about one booking is one thread, for everyone**
+  (`lib/mail/thread.ts`, `MAIL_THREAD_OF` in `types.ts`). Reviewer, desk,
+  **requester** and Accounts mail about a booking joins that recipient's thread
+  **for that booking** (the requester's stood alone until 8 Oct 2026)
   (`bookingThreadRoot(referenceId, address)`, fixed subject
   `[IITPKD-GH-2026-AB12C] Guest house booking`), so everything about one
   request is one conversation however many days it spans. **Scheduled mail —
@@ -1042,8 +1071,9 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
   carries one `References`), shares a fixed subject (the per-item subject moves
   to the preview line), and the **first one actually sent** claims the root
   `Message-ID` — decided in `dispatch.ts` by looking for a SENT sibling, not
-  at queue time, so a failed opener hands the role on. Requester mail has no
-  threading headers and a `[reference]`-led subject that says what happened.
+  at queue time, so a failed opener hands the role on. `bookingSubject` - the
+  `[reference]`-led subject that says what happened - is now only for mail with
+  no thread, which is the console's test message.
 
   > **It used to be one "approvals" thread per person per day** (before 23 Sep
   > 2026). That grouped by when a message was queued, which nobody follows: a
@@ -1264,9 +1294,23 @@ The full who-opens-what table is in `.memories/10-roles-and-features.md`.
 - **Users & Roles** — CRUD profiles, assign any role, set hostel / dept-club /
   roll number (these drive warden and FA scoping). Cannot delete yourself or
   drop your own developer role. In Supabase mode, creating a user also creates a
-  Supabase Auth user (password `password123`) — needs the service-role key.
+  Supabase Auth user (password `password123`) — needs the service-role key, and
+  is **not** a portal login (everyone signs in through LDAP or Google).
   The **LDAP username** field and **Import LDAP usernames** (paste
   `email, ldap username` lines) are how real LDAP logins get onto profiles.
+  **Import from spreadsheet** (`lib/users-import.ts`, 8 Oct 2026) is how the
+  office loads the institute's people: paste the columns out of Excel →
+  `previewUserImport` shows the plan → `importUsersAction` applies it, **all or
+  nothing**. A **header line** names the columns in any order (`KNOWN_COLUMNS`
+  holds the aliases) and only `email` is required; with none, `DEFAULT_COLUMNS`
+  is read. A person already on the list is **updated** by email, and **a column
+  the paste does not carry is left alone** — a sheet of email and name must not
+  wipe everyone's hostel. A header must **start with the email column**, or a
+  data line for `email@…` would be eaten as one. Rows can also be ticked and
+  deleted together (`deleteUsersAction`): whatever cannot go is **named back**
+  and the rest still go, unlike the import. Both are gated by
+  `assignableRoles` / `userEditError` **in the action**, so a manager cannot
+  import a developer into existence.
 - **Guest Houses & Rooms** — CRUD guest houses and rooms; `total_rooms` is
   recounted automatically from active rooms. Deleting is blocked when bookings
   reference the guest house, or when a room is assigned to a booking (deactivate
@@ -1565,10 +1609,34 @@ Migration files, applied sequentially:
    what has lapsed, which is also the run that tells the requester. Until it
    is applied the sweep cannot mark anything there (it logs the enum error per
    booking and the run carries on).
+30. `00000000000030_fund_declaration.sql` — `bookings.fund_declaration_at
+   timestamptz`: **when the requester declared that the funds are approved and
+   available** (the office's ninth list, 8 Oct 2026). An instant, like
+   `privacy_consent_at` beside it, because an approver months later wants to
+   know when. Asked for by every head except Personal Funds
+   (`requiresFundDeclaration`); **nothing is backfilled**, so null means
+   either "personal booking" or "made before 8 Oct". Additive, nullable and
+   safe to re-run. Until it is applied the store names the column only when
+   the declaration was given, so every personal booking still works and only
+   a booking on somebody else's budget is refused.
 
 Full notes per migration in `.memories/22-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine
 without it (`.memories/23-running-and-testing.md`) — never the hosted project.
+
+> **Which migrations a project *has* is a question for the database, never a
+> note.** `npm run check:migrations` (`scripts/check-migrations.mjs`) probes
+> one marker per migration, **read-only**, against the project in `.env.local`
+> and exits 1 if any is missing. Add a row to its `MARKERS` table whenever you
+> add a migration. It cannot see **17 and 23** (function-only — PostgREST
+> cannot read `pg_proc`, and calling them would be a write); it names them and
+> prints the `pg_proc` query for the SQL editor.
+>
+> This exists because the notes claimed migrations 24–30 were outstanding on
+> the hosted project for weeks after they had been applied: the old check
+> recipe listed markers only up to 25, so nothing past it could be verified and
+> the claim was copied forward by hand. **Verified 9 Oct 2026: the hosted
+> project has 1–30.**
 
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are
 not applied automatically. Read the header of each before running it.

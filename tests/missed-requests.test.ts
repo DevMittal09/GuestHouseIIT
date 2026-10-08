@@ -259,7 +259,16 @@ describe("the nightly sweep", () => {
       (m) => m.event_key === "booking.missed.requester"
     );
     expect(mails).toHaveLength(1);
-    expect(mails[0].subject).toMatch(/missed/i);
+    /**
+     * Since 8 Oct 2026 requester mail joins the booking's thread, so the
+     * subject is the thread's and "missed" moves into the body and the
+     * preview line (`lib/mail/thread.ts`).
+     */
+    expect(mails[0].subject).toBe(`[${lapsed.booking_reference_id}] Guest house booking`);
+    expect(mails[0].thread_root).toContain(
+      `<gh-booking-${lapsed.booking_reference_id.toLowerCase()}-`
+    );
+    expect(mails[0].body_text).toMatch(/missed/i);
 
     /**
      * **Running it twice changes nothing** - the office's own test. The

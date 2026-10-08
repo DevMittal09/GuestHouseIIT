@@ -60,10 +60,7 @@ export function CheckoutsToday({
             {bookings.length}
           </Badge>
         </CardTitle>
-        <CardDescription>
-          Rooms due back today, earliest first. Mark a guest Vacated once they have handed the
-          room over - that is what releases it for the next booking.
-        </CardDescription>
+        <CardDescription>Rooms due back today, earliest first.</CardDescription>
       </CardHeader>
       <CardContent>
         {bookings.length === 0 ? (

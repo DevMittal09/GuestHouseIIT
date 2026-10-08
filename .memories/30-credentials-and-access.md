@@ -28,9 +28,9 @@ Authentication** and pick the persona with one click (no password).
 | Dr. Priya Sharma | Employee (faculty, CSE) | `priya` | `Priya@2026` | `priya@iitpkd.ac.in` | `employee-priya` | Official → CSE HOD; personal; meals only. Shown as the sample on the sign-in card |
 | Dr. Arun Prasad | Employee (faculty, CSE) — **Faculty Advisor** of the Cultural Affairs Council and Petrichor | `arun.prasad` | `Arun@2026` | `arun.prasad@iitpkd.ac.in` | `faculty-arun` | "Booking as: Faculty Advisor — …", straight to the manager |
 | Prof. R. Venkatesh | Employee (faculty) — **HOD, CSE** by appointment | `hod.cse` | `HodCse@2026` | `hod.cse@iitpkd.ac.in` | `hod-cse` | HOD Queue (`/hod`) |
-| Ravi K. | Employee — non-teaching staff, CSE | `ravi.k` | `Ravi@2026` | `ravi.k@iitpkd.ac.in` | `staff-ravi` | Staff debit heads (Department / Special Funds) |
+| Ravi K. | Employee — non-teaching staff, CSE | `ravi.k` | `Ravi@2026` | `ravi.k@iitpkd.ac.in` | `staff-ravi` | Staff debit heads (**Personal Funds only**, 8 Oct 2026) |
 | Director's Office | Official — officer office, whitelisted | `admin` | `Director@2026` | `admin@iitpkd.ac.in` | `official-admin` | Direct / HOD choice; Institute Grant; exempt from window and stay cap |
-| CSE Department Office | Official — department office | `cse.office` | `CseOffice@2026` | `cse.office@iitpkd.ac.in` | `office-cse` | Department office → CSE HOD; Department / Special Funds. On the whitelist through the demo seeds |
+| CSE Department Office | Official — department office | `cse.office` | `CseOffice@2026` | `cse.office@iitpkd.ac.in` | `office-cse` | Department office → CSE HOD; the offices' six heads. On the whitelist through the demo seeds |
 | Petrichor Fest Council | Club (fest) | `petrichor` | `Petrichor@2026` | `petrichor@iitpkd.ac.in` | `club-petrichor` | Cannot book — told to ask its Faculty Advisor; demo booking 2 (legacy club stage) |
 | Cultural Affairs Council | Club (council's own account = secretary's mailbox) | `sec_arts` | `SecArts@2026` | `sec_arts@iitpkd.ac.in` | `council-cultural` | Booked for by its Faculty Advisor |
 | Meera Nair | Student — Cultural Affairs **secretary** (heads the council) | `112301045` | `Meera@2026` | `112301045@smail.iitpkd.ac.in` | `secretary-cultural` | Club Approvals (`/approvals`) for legacy club requests |

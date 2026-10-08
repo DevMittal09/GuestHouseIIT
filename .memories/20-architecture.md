@@ -215,14 +215,14 @@ because the rendered string no longer depends on which machine rendered it.
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
 | student | personal | Assistant Warden → GH Manager | Personal |
-| club — raised by its **Faculty Advisor** | official | **Direct → GH Manager** (a club request stored before 24 Sep 2026: council secretary → HOD if any → GH Manager) | Department / Special Funds |
-| employee — faculty | official | **HOD** → GH Manager | Department / Project / PDF / Special Funds |
-| employee — staff | official | **HOD** → GH Manager | Department / Special Funds |
+| club — raised by its **Faculty Advisor** | official | **Direct → GH Manager** (a club request stored before 24 Sep 2026: council secretary → HOD if any → GH Manager) | Student Fund / Special Budget |
+| employee — faculty | official | **HOD** → GH Manager | PDF / Project / Department / Special Budget / Personal |
+| employee — staff | official | **HOD** → GH Manager | Personal |
 | employee | personal | GH Manager | Personal |
-| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute / Special Funds |
-| official — department office | official | Direct, or → its department's **HOD** → GH Manager | Department / Special Funds |
-| iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | its office class (alumni: Institute / Personal) |
-| iar_student_cell | alumni | IAR Office → GH Manager | Institute / Personal |
+| official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute / Department / Special Budget / Student Fund / Hostel Funds / Alumni Fund |
+| official — department office | official | Direct, or → its department's **HOD** → GH Manager | the same six - one list for both classes of office |
+| iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | the offices' six (alumni: Alumni Fund / Special Budget) |
+| iar_student_cell | alumni | IAR Office → GH Manager | Alumni Fund / Special Budget |
 | any | meals only | GH Manager | dining heads (Phase 6) |
 | alumni | *retired* | kept only for stored bookings | — |
 

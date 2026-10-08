@@ -62,6 +62,10 @@ every table in `.local-db.json` and self-heals old files.
 - `debit_subhead text` (migration 24) — the project sub-head the requester
   typed; only with `debit_head = 'project_grant'`, 1–120 characters
   (`bookings_debit_subhead_check`).
+- `fund_declaration_at timestamptz` (migration 30) — when the requester
+  declared they hold the approval for the debitable head and that it has the
+  balance. Null on a personal booking, which is never asked, and on anything
+  stored before 8 Oct 2026; nothing was backfilled.
 - `created_by` also marks a **club booking raised by its Faculty Advisor**
   (24 Sep 2026): `user_id` is the club's account, `created_by` the professor.
   On the manager's desk bookings the two are equal.
@@ -139,7 +143,8 @@ academic_record_kind: student, employee, office, student_rep,
 
 Checked text columns rather than enums: `bookings.debit_head`
 (`institute_grant`, `professional_development_fund`, `project_grant`,
-`department_budget`, `special_budget` = Special Funds, `personal_funds`, and
+`department_budget`, `special_budget` = **Special Budget** (labelled "Special
+Funds" from 24 Sep 2026 to 8 Oct), `personal_funds`, and
 the legacy `alumni_fund`, `student_fund`, `hostel_funds`),
 `bookings.office_approval` (`direct` / `hod`), `units.kind`
 (`department`, `club`, `council`, `office`), `units.office_class`
@@ -272,7 +277,7 @@ no data fix-up is required. See
 ## Storage
 
 A **private** bucket named `documents` holds ID scans, alumni cards and
-Special Funds sanction letters (`guest-ids/`, `alumni-cards/`,
+Special Budget approval letters (`guest-ids/`, `alumni-cards/`,
 `debit-documents/`). Since Phase 8 the booking stores the object path, and a
 file is served only through `/api/documents/…`, which checks who is asking,
 writes a `document.viewed` audit row and signs a **five-minute** link (the
@@ -497,7 +502,7 @@ Current migrations:
    `bookings.copy_to_emails text[] not null default '{}'` (at most 25) and
    `bookings.debit_subhead text` (only with `project_grant`, 1–120 chars), and
    `booking_guests_age_check` relaxed to `age is null or age between 0 and
-   120`. Additive and idempotent. Special Funds needs nothing here — it is
+   120`. Additive and idempotent. Special Budget needs nothing here — it is
    `special_budget`, which migration 15 already allows. **Until it is
    applied**, the Supabase store leaves both columns out of the insert when
    they are empty, so bookings without a Copy-to address or a sub-head still
@@ -644,6 +649,37 @@ Current migrations:
     into it with its `booking_logs` row (`previous_status` PENDING_WARDEN) and
     back out again with a second row whose `previous_status` is MISSED — which
     is what `reinstatedAfterMissed` reads; and no `room_holds` row held.
+
+30. **`00000000000030_fund_declaration.sql`** — *the requester's declaration
+    about the debitable head* (8 Oct 2026).
+
+    One nullable column, `bookings.fund_declaration_at timestamptz`, plus its
+    comment. The office's ninth list added a sentence to the booking form -
+    "I have the necessary approval for the usage of funds from the competent
+    authority and verified that sufficient balance is there in the debitable
+    head" - asked for by every head except Personal Funds.
+
+    **An instant, not a boolean**, like `privacy_consent_at` beside it: an
+    approver reading a request months later wants to know *when* the assurance
+    was given, and a boolean cannot answer "was this the form as it stood
+    then".
+
+    **Nothing is backfilled.** A booking made before this was never asked, and
+    a timestamp invented for it would record something that did not happen. So
+    `fund_declaration_at is null` means either "personal booking" or "made
+    before 8 Oct 2026", and the booking's own date tells them apart.
+
+    Additive, nullable and safe to re-run. **Until it is applied** the store
+    leaves the column out of the insert unless the declaration was actually
+    given (the `...(x ? { col } : {})` pattern migrations 24, 26 and 27 also
+    use), so every personal booking still works and only a booking on somebody
+    else's budget is refused, with "column does not exist" in the log.
+
+    Verified in a throwaway `postgres:16-alpine` (8 Oct 2026): 1–30 applied, 30
+    applied again with the two test bookings still in place; the column
+    nullable and `timestamptz`; its comment present; a booking stored **without**
+    it (a personal stay) and another **with** it beside a `department_budget`
+    head; and MISSED still last on the enum, so 29 and 30 do not interfere.
 
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.

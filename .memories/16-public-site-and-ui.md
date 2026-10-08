@@ -30,6 +30,39 @@ promises — make the messages vague and less promising."** So:
 - **For future copy:** state what exists, plainly — no adjectives about the
   rooms, no lists of who may stay, no service the office has not confirmed.
 
+## One fact per line (8 Oct 2026)
+
+The supervisor again, on the portal this time: it should look simple, that is
+the content — **no explanations, no instructions, no mansplaining**. So the
+prose was cut back wherever it explained itself:
+
+- **The booking form** had reached twenty-eight card descriptions and
+  twenty-nine help paragraphs. Nine descriptions went or were cut to a
+  clause - **Type of booking** and **Approval** now carry none at all, their
+  headings being the question - and eight help paragraphs with them. The worst
+  of it was a rule stated twice: `INFANT_HELP_TEXT` said what an infant is
+  **and** what a room holds, and the notice on the room card a few lines below
+  says what a room holds. It is the infant fact alone now, and a constant
+  rather than a function of Settings.
+- **`/book`**: the lead under the page title is one short line, or none. What
+  happens after Submit is the **What happens next** panel beside the form,
+  which is where it belonged.
+- **The desk and the approvers**: Checking out today, the availability chart
+  descriptions, the Review dialog, "Your requests" on My Bookings.
+- **The Guidelines page**: every item is one statement. The second clause -
+  "; the Guest House Office confirms", "which is what reception checks",
+  "for a longer stay, contact…" - is gone, and so is the explanatory tail of
+  each `BOOKING_STEPS` entry, which the booking page shows too.
+
+**What was kept:** every rule and every figure. The kitchen's limit per
+sitting, the room capacity, the Aadhaar length, the pay-at-checkout note, the
+privacy consent, "nothing is held until the Guest House Manager allocates a
+room", and anything the office asked for by name.
+
+> **Guidelines is where things are explained.** The owner put the instructions
+> there on 26 Sep, in general terms, and that has not changed - this round
+> stopped the *portal* explaining them a second time.
+
 ## The 30 Sep revamp
 
 - **Corner scale** fixed in `@theme inline`: `rounded` 4px (inputs),

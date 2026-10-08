@@ -127,9 +127,12 @@ Everything a requester can do with a booking they own (or raised for a club):
 - **Route:** official → **HOD** of their department → GH Manager (the HOD
   stage is skipped, and logged, when nobody other than the requester heads the
   department); personal → straight to the GH Manager.
-- **Debitable heads (official, room):** Department / Project / PDF / Special
-  Funds — **never the Institute Grant**. Dining: Department / PDF / Personal /
-  Special Funds. Personal: Personal Funds / Special Funds (since 25 Sep 2026).
+- **Debitable heads (official, room):** PDF / Project / Department / Special
+  Budget / Personal — the office's "all funds **except** Institute Grant,
+  Alumni, Student Fund and Hostel" (8 Oct 2026), and those four are a floor,
+  not just a default. Dining: the same, less Project. Personal: **not asked** -
+  Personal Funds, recorded by the server (7 Oct 2026). **Any head but Personal
+  Funds asks for the funds declaration.**
 - **Guest details:** only **name and gender** are mandatory; no ID upload.
 - **Also, when appointed:** HOD Queue (`/hod`) if they head a department;
   Club Approvals if they head a club/council; **Booking as: Faculty Advisor —
@@ -140,9 +143,11 @@ Everything a requester can do with a booking they own (or raised for a club):
 
 ### Employee — non-teaching staff
 
-As faculty, except the debitable heads: **Department / Special Funds** only
-(room and dining). The category comes from `profiles.staff_category`; an
-employee with none set is treated as faculty.
+As faculty, except the debitable heads: **Personal Funds only** (room and
+dining) since the office's list of 8 Oct 2026 - their official hosting is
+raised by the office or department that is paying, which has its own list. So
+they are never asked for the funds declaration either. The category comes from
+`profiles.staff_category`; an employee with none set is treated as faculty.
 
 ### Faculty Advisor (a professor, by appointment)
 
@@ -157,7 +162,8 @@ contract. A club with none of its own takes its council's.
   Yourself / Faculty Advisor — <council or club>**. Choosing the advisor
   option opens the **club's** form (`/book?for=<club profile id>`).
 - **The booking is the club's:** its account (`user_id`), official, the club's
-  debitable heads (**Department / Special Funds**), the club's guest form.
+  debitable heads (**Student Fund / Special Budget**, 8 Oct 2026), the club's
+  guest form.
   `created_by` is the professor.
 - **Route: straight to the GH Manager** — nobody forwards it, HOD included.
 - **Copy to** starts with the council secretary's mailbox
@@ -179,8 +185,10 @@ contract. A club with none of its own takes its council's.
 - **Chooses per booking:** **Direct** (straight to the GH Manager) or
   **Requires HOD approval** (its own head for an officer office; the parent
   department's HOD for a department office). Stored on the booking.
-- **Debitable heads:** officer office → **Institute Grant / Special Funds**;
-  department office (or unclassified) → **Department / Special Funds**.
+- **Debitable heads:** **one list for both classes of office** (8 Oct 2026) -
+  Institute Grant, Department Budget, Special Budget, Student Fund, Hostel
+  Funds, Alumni Fund. The office class still decides the approval route, not
+  the heads.
 - **Guest details:** only **gender** is mandatory.
 - Highlighted and sorted to the top of the manager's queue; Hamsanandi rate
   ₹4,000 (the "government officers" tariff).
@@ -205,7 +213,8 @@ secretary's mailbox, e.g. `sec_arts@`).
   stays are at **Bageshri** (stated, no dropdown), which serves no meals, so in
   practice a room booking; meals-only is not open to it.
 - **Route:** IAR Office → GH Manager.
-- **Debitable heads:** Institute Grant / Personal Funds (the alumni category).
+- **Debitable heads:** **Alumni Fund / Special Budget** - the alumni category
+  since the office's list of 8 Oct 2026.
 - **Menu:** My Bookings · New Booking · Room Availability · Booking History.
 
 ### IAR Office (books *and* approves)
@@ -215,9 +224,8 @@ secretary's mailbox, e.g. `sec_arts@`).
   `PENDING_IAR` — that would be approving itself.
 - **Approves:** the IAR Student Cell's requests at **IAR Queue** (`/iar`),
   with the alumni ID card shown.
-- **Debitable heads:** official → the office's class (the seeded IAR unit is
-  an officer office: Institute Grant / Special Funds); alumni → Institute Grant
-  / Personal Funds.
+- **Debitable heads:** official → the offices' list (the seeded IAR unit is an
+  officer office); alumni → **Alumni Fund / Special Budget** (8 Oct 2026).
 - **Approval Log:** alumni requests, the Student Cell's, and its own.
 - **Menu:** My Bookings · New Booking · IAR Queue · Room Availability ·
   Approval Log.
@@ -378,6 +386,9 @@ A deliberate **subset** of the manager's console — reception.
 | Section | Path | Manager | Developer |
 | --- | --- | --- | --- |
 | Users & Roles | `/admin/users` | ✓ (not developer accounts) | ✓ |
+| ↳ **Import from spreadsheet** — paste the office's own columns, check the plan, import; all or nothing (8 Oct 2026) | same | ✓ | ✓ |
+| ↳ Import LDAP usernames — `email, uid` pairs onto existing accounts | same | ✓ | ✓ |
+| ↳ **Tick rows and delete together**, behind a typed confirmation (8 Oct 2026) | same | ✓ (not developer accounts) | ✓ |
 | Departments & Clubs (+ Faculty Advisors) | `/admin/units` | ✓ | ✓ |
 | **Academic records** (the institute's records, pasted in as CSV — migration 28, 7 Oct 2026) | `/admin/academic` | ✓ | ✓ |
 | Projects | `/admin/projects` | ✓ | ✓ |

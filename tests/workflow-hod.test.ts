@@ -144,16 +144,31 @@ describe("club: advisor or council secretary first, then the HOD it answers to",
   });
 });
 
-describe("debitable heads from the brief, per category", () => {
+/**
+ * The office's own mapping of requester to head (8 Oct 2026, revision 6). It
+ * replaced the table taken from the meeting notes: non-teaching staff lost
+ * the department budget, the two classes of office were merged onto one
+ * longer list, clubs moved to the Student Fund, and alumni bookings to the
+ * Alumni Fund.
+ */
+describe("debitable heads from the office's list, per category", () => {
+  const OFFICES = [
+    "institute_grant",
+    "department_budget",
+    "special_budget",
+    "student_fund",
+    "hostel_funds",
+    "alumni_fund",
+  ];
   it.each<[string, Role, BookingType, string[]]>([
-    // Special Funds on every official booking since 24 Sep 2026.
-    ["faculty", "employee-priya" as Role, "official", ["department_budget", "project_grant", "professional_development_fund", "special_budget"]],
-    ["staff", "staff-ravi" as Role, "official", ["department_budget", "special_budget"]],
-    ["officer office", "official-admin" as Role, "official", ["institute_grant", "special_budget"]],
-    ["department office", "office-cse" as Role, "official", ["department_budget", "special_budget"]],
-    // Special Funds for everyone except students since 25 Sep 2026, and off
-    // every personal booking since 7 Oct, when a personal booking stopped
-    // being asked which budget pays at all.
+    // "All funds except Institute Grant, Alumni, Student Fund and Hostel."
+    ["faculty", "employee-priya" as Role, "official", ["professional_development_fund", "project_grant", "department_budget", "special_budget", "personal_funds"]],
+    // "Non faculty - Personal Funds."
+    ["staff", "staff-ravi" as Role, "official", ["personal_funds"]],
+    // "Offices" is one list, not one per class of office.
+    ["officer office", "official-admin" as Role, "official", OFFICES],
+    ["department office", "office-cse" as Role, "official", OFFICES],
+    // A personal booking is not even asked which budget pays (7 Oct 2026).
     ["personal", "employee-priya" as Role, "personal", ["personal_funds"]],
     ["student", "student-anjali" as Role, "personal", ["personal_funds"]],
   ])("%s", (_label, id, type, heads) => {
@@ -162,11 +177,31 @@ describe("debitable heads from the brief, per category", () => {
     expect(DEFAULT_DEBIT_RULES.room[cat]).toEqual(heads);
   });
 
-  it("dining never offers Project; staff get Department only", () => {
+  it("clubs and fests: the Student Fund and Special Budget only", () => {
+    expect(DEFAULT_DEBIT_RULES.room.club).toEqual(["student_fund", "special_budget"]);
+    expect(DEFAULT_DEBIT_RULES.dining.club).toEqual(["student_fund", "special_budget"]);
+  });
+
+  it("a booking for an alumnus: the Alumni Fund and Special Budget", () => {
+    for (const kind of ["room", "dining"] as const) {
+      expect(DEFAULT_DEBIT_RULES[kind].alumni).toEqual(["alumni_fund", "special_budget"]);
+      expect(DEFAULT_DEBIT_RULES[kind].iar_student_cell).toEqual(["alumni_fund", "special_budget"]);
+    }
+  });
+
+  it("dining never offers Project; the rest of a category's list is the same", () => {
     const priya = P("employee-priya");
     const dining = debitHeadsByType("employee", ["official"], priya, units, DEFAULT_DEBIT_RULES, "dining");
-    expect(dining.official).toEqual(["department_budget", "professional_development_fund", "personal_funds", "special_budget"]);
-    expect(DEFAULT_DEBIT_RULES.dining.staff).toEqual(["department_budget", "special_budget"]);
+    expect(dining.official).toEqual([
+      "professional_development_fund",
+      "department_budget",
+      "special_budget",
+      "personal_funds",
+    ]);
+    expect(DEFAULT_DEBIT_RULES.dining.staff).toEqual(["personal_funds"]);
+    for (const heads of Object.values(DEFAULT_DEBIT_RULES.dining)) {
+      expect(heads).not.toContain("project_grant");
+    }
   });
 
   /**
@@ -176,7 +211,12 @@ describe("debitable heads from the brief, per category", () => {
    * console cannot save it.
    */
   it("never offers faculty the Institute Grant, whatever Settings says", () => {
-    expect(DEFAULT_DEBIT_RULES.room.faculty).not.toContain("institute_grant");
+    // And, since 8 Oct 2026, nor the Alumni Fund, the Student Fund or the
+    // Hostel Funds - the office's "all funds except" read as a floor.
+    for (const head of ["institute_grant", "alumni_fund", "student_fund", "hostel_funds"] as const) {
+      expect(DEFAULT_DEBIT_RULES.room.faculty).not.toContain(head);
+      expect(allowedHeads("faculty", [head])).toEqual([]);
+    }
     expect(allowedHeads("faculty", ["department_budget", "institute_grant"])).toEqual([
       "department_budget",
     ]);
@@ -239,6 +279,7 @@ describe("the schema accepts its own output for every requester role", () => {
           privacy_consent: true,
           booking_type: type,
           debit_head: head,
+          fund_declaration: true,
           project_id: head === "project_grant" ? "proj-storage" : null,
           office_approval: role === "official" || role === "iar_cell" ? "hod" : null,
           alumni_name: type === "alumni" ? "A. Alumnus" : null,
@@ -287,6 +328,7 @@ describe("the schema accepts its own output for every requester role", () => {
     const r = bookingPayloadSchema(config, { mealsAvailable: true, debitHeads: lists }).safeParse({
       ...base,
       debit_head: "project_grant",
+      fund_declaration: true,
       project_id: "proj-storage",
     });
     expect(r.success).toBe(false);
@@ -301,28 +343,34 @@ describe("the schema accepts its own output for every requester role", () => {
     const schema = bookingPayloadSchema(config, { mealsAvailable: true, debitHeads: faculty, projectIds: ["proj-storage"] });
     // Typed, not picked (1 Oct 2026): what is required is the number and
     // title, not a row from the console's list.
-    expect(schema.safeParse({ ...base, debit_head: "project_grant" }).error?.issues[0].message).toMatch(
+    const project = { debit_head: "project_grant", fund_declaration: true };
+    expect(schema.safeParse({ ...base, ...project }).error?.issues[0].message).toMatch(
       /Project number and title/
     );
     expect(
-      schema.safeParse({ ...base, debit_head: "project_grant", debit_details: "SP/2025/017 - Storage" }).success
+      schema.safeParse({ ...base, ...project, debit_details: "SP/2025/017 - Storage" }).success
     ).toBe(true);
     // A payload that still carries an id is checked against the list.
     expect(
       schema.safeParse({
         ...base,
-        debit_head: "project_grant",
+        ...project,
         debit_details: "SP/2025/017 - Storage",
         project_id: "proj-old",
       }).error?.issues[0].message
     ).toMatch(/not on the list/);
-    expect(schema.safeParse({ ...base, debit_head: "department_budget", project_id: "proj-storage" }).success).toBe(false);
+    expect(
+      schema.safeParse({ ...base, debit_head: "department_budget", fund_declaration: true, project_id: "proj-storage" }).success
+    ).toBe(false);
   });
 
   it("only offices choose an approval route", () => {
+    // Personal Funds because `lists` is a non-teaching staff member's, and
+    // since 8 Oct 2026 that is the only head they have - a department budget
+    // here would be refused before the route was looked at.
     const r = bookingPayloadSchema(config, { mealsAvailable: true, debitHeads: lists }).safeParse({
       ...base,
-      debit_head: "department_budget",
+      debit_head: "personal_funds",
       office_approval: "hod",
     });
     expect(r.error?.issues[0].message).toMatch(/Only an office/);

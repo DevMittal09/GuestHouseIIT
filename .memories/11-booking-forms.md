@@ -2,8 +2,8 @@
 
 The New Booking form (`/book`) as each role sees it, and every rule the
 server applies to a submission. **Checked against the code on 24 Sep 2026**,
-and updated for the 25 Sep round (infant card, filling in known guests,
-Special Funds):
+and kept current through the office's ninth list (8 Oct 2026: the nine
+debitable heads, the funds declaration, and the cut-back on-screen text):
 `lib/form-config.ts` (`buildDefaultFormConfig`), `lib/booking-types.ts`,
 `lib/debit-heads.ts`, `lib/booking-schema.ts` (`bookingPayloadSchema`, run on
 the client *and* the server), `app/actions/bookings.ts` (`createBooking`),
@@ -123,7 +123,9 @@ its form is not in the Form Builder and every guest field is required.
 | 6 | **Debitable head** | **Not a personal booking at all** (7 Oct 2026 — the money is the requester's own, so the question is not put and the server records Personal Funds). Shown, not asked, when a role has only one. A personal **stay** gets a **Payment** card instead: "An invoice will be generated and can be settled at the time of checkout. Multiple payment options are available at the guest house." A personal **meal** booking gets no card - nobody checks out | **Yes**, where it is asked |
 | 6a | Project — **number and title, typed** into the details box beside the head (1 Oct 2026; it was a dropdown of the Projects list) | Head = Project | **Yes** |
 | 6b | Project sub-head (text, ≤ 120) | Head = Project | Optional; refused with any other head |
-| 6c | Special fund's name / sanction reference (≤ 300) and sanction letter upload | Head = Special Funds | Both optional |
+| 6c | Special fund's name / sanction reference (≤ 300) | Head = Special Budget | **Yes** since 8 Oct 2026 — the office's list writes the head as "Special Budget (Please specify the details)" |
+| 6d | **Upload approval** (JPG/PNG/WEBP/PDF, ≤ 5 MB) | Head = Special Budget | Optional — a requester waiting on a scan is not stopped from booking |
+| 6e | **Funds declaration** tick: "I have the necessary approval for the usage of funds from the competent authority and verified that sufficient balance is there in the debitable head." | **Every head except Personal Funds** (8 Oct 2026) | **Yes**. Inside the Debitable head card, so it appears and disappears with the head. Stored as `bookings.fund_declaration_at` (migration 30) |
 | 7 | **On behalf of** — guest's name, email, phone | GH Manager | Name **yes** |
 | 8 | **Alumnus** — full name, student / roll number, **Alumni ID card** | Booking type = alumni | All three **yes** |
 | 9 | **Guest house** | Stated as text when only one is possible; a dropdown otherwise; no question at all for meals only. **Students and alumni bookings are Bageshri alone** (7 Oct 2026, `restrictedToOneGuestHouse`), checked on the server, the manager excepted | **Yes** |
@@ -198,26 +200,32 @@ its form is not in the Form Builder and every guest field is required.
 
 ## Per role: what they book, where it goes, what it is charged to
 
-| Requester | Booking types | Services | Route after submission | Debitable heads — room (default) | Dining |
-| --- | --- | --- | --- | --- | --- |
-| Student | Personal (not asked) | Room, **Bageshri only and no meals** - a rule since 7 Oct, not just a consequence of Bageshri having no kitchen | Assistant Warden → GH Manager | **Not asked** (7 Oct 2026): Personal Funds, recorded by the server | — |
-| Employee — faculty, official | Official | Room, Room + Meals, Meals only | HOD → GH Manager (meals only: GH Manager) | Department, Project, PDF, Special Funds | Department, PDF, Personal, Special Funds |
-| Employee — staff, official | Official | same | same | Department, Special Funds | Department, Special Funds |
-| Employee — personal | Personal | same | GH Manager | **Not asked** (7 Oct 2026): Personal Funds, recorded by the server | **Not asked**: Personal Funds |
-| Official — officer office | Official (not asked) | same | Direct → GH Manager, or its own head → GH Manager | Institute Grant, Special Funds | Institute Grant, Special Funds |
-| Official — department office | Official (not asked) | same | Direct, or the parent department's HOD → GH Manager | Department, Special Funds | Department, Special Funds |
-| Club (by its Faculty Advisor) | Official (not asked) | Room, Room + Meals | **GH Manager directly** | Department, Special Funds | — |
-| IAR Office | Official / Alumni | Room, Room + Meals, Meals only | Direct, or its head → GH Manager | Official: its office class; Alumni: Institute Grant, Personal Funds, Special Funds | Official: its office class; Alumni: Personal Funds, Special Funds |
-| IAR Student Cell | Alumni (not asked) | Room, **Bageshri only and no meals** (7 Oct 2026 — every alumni booking, whoever raises it) | IAR Office → GH Manager | Institute Grant, Personal Funds, Special Funds | — |
-| GH Manager at the desk | Official / Alumni | Room, Room + Meals, Meals only | GH Manager (its own queue) | Official: Department, Institute Grant, PDF, Personal, Project, Special Funds; Alumni: Institute Grant, Personal Funds, Special Funds | Official: the same less Project; Alumni: Personal Funds, Special Funds |
+The heads are **the office's own list of 8 October 2026** — all nine in use,
+the mapping below. Dining is each category's list less Project, which dining
+can never be charged to.
 
-**Special Funds is offered to everyone except students and personal bookings**
-(25 Sep 2026, narrowed 7 Oct). **Floors under Settings**
-(`FORBIDDEN_DEBIT_HEADS`, cannot be ticked back on): faculty never the
-Institute Grant; students never Special Funds; **a personal booking never
-Special Funds** — and is not asked which budget pays at all
+| Requester | Booking types | Services | Route after submission | Debitable heads — room (default) |
+| --- | --- | --- | --- | --- |
+| Student | Personal (not asked) | Room, **Bageshri only and no meals** - a rule since 7 Oct, not just a consequence of Bageshri having no kitchen | Assistant Warden → GH Manager | **Not asked** (7 Oct 2026): Personal Funds, recorded by the server |
+| Employee — faculty, official | Official | Room, Room + Meals, Meals only | HOD → GH Manager (meals only: GH Manager) | PDF, Project, Department, Special Budget, Personal — "all funds except Institute Grant, Alumni, Student Fund and Hostel" |
+| Employee — staff (non-faculty), official | Official | same | same | **Personal Funds** |
+| Employee — personal | Personal | same | GH Manager | **Not asked** (7 Oct 2026): Personal Funds, recorded by the server |
+| Official — officer office | Official (not asked) | same | Direct → GH Manager, or its own head → GH Manager | Institute Grant, Department, Special Budget, Student Fund, Hostel Funds, Alumni Fund |
+| Official — department office | Official (not asked) | same | Direct, or the parent department's HOD → GH Manager | the same six — "Offices" is one list |
+| Club, council or fest (by its Faculty Advisor) | Official (not asked) | Room, Room + Meals | **GH Manager directly** | **Student Fund, Special Budget** |
+| IAR Office | Official / Alumni | Room, Room + Meals, Meals only | Direct, or its head → GH Manager | Official: its office's six; Alumni: **Alumni Fund, Special Budget** |
+| IAR Student Cell | Alumni (not asked) | Room, **Bageshri only and no meals** (7 Oct 2026 — every alumni booking, whoever raises it) | IAR Office → GH Manager | **Alumni Fund, Special Budget** |
+| GH Manager at the desk | Official / Alumni | Room, Room + Meals, Meals only | GH Manager (its own queue) | **All nine** (dining: the same less Project) |
+
+**Floors under Settings** (`FORBIDDEN_DEBIT_HEADS`, cannot be ticked back on):
+faculty never the Institute Grant, the Alumni Fund, the Student Fund or the
+Hostel Funds; students never Special Budget; **a personal booking never
+Special Budget** — and is not asked which budget pays at all
 (`asksForDebitHead`). A student's booking is always the *student* category,
 never *personal*.
+
+**Any head but Personal Funds asks for the funds declaration** (row 6e above),
+and **Special Budget must name the fund**.
 
 **A meals-only booking** skips every approval stage and goes straight to the
 GH Manager, whoever raises it.

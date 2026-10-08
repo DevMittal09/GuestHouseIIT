@@ -7,6 +7,7 @@ import {
   nextDay,
   REFERENCE,
   rowFor,
+  settleDebitHead,
   signIn,
 } from "./helpers";
 
@@ -25,6 +26,7 @@ test("a faculty official stay waits for the HOD before the manager", async ({ pa
 
   await page.locator('[name="booking_type"][value="official"]').check();
   await page.locator('[name="debit_head"][value="department_budget"]').check();
+  await settleDebitHead(page);
 
   await chooseGuestHouse(page);
   await page.locator('[name="check_in_date"]').fill(localDate(6));
@@ -82,6 +84,7 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   if (await head.count()) {
     await page.locator(`[name="debit_head"][value="${await head.first().getAttribute("value")}"]`).check();
   }
+  await settleDebitHead(page);
   // A dining booking has no guest house question: only a kitchen can take one
   // and there is one, so the form states it rather than asking. The manager's
   // console opens on a tab per guest house, so the name is still needed here.
@@ -182,6 +185,7 @@ test("the kitchen refuses a sitting that is already full", async ({ page }) => {
     if (await head.count()) {
       await page.locator(`[name="debit_head"][value="${await head.first().getAttribute("value")}"]`).check();
     }
+    await settleDebitHead(page);
     // One sitting, far enough out that every meal is open: lunch on `day`,
     // which is ticked by default and the only meal that is.
     await page.locator("#meal-date-0").fill(day);

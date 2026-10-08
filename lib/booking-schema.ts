@@ -10,6 +10,7 @@ import {
   debitDetailsRequired,
   debitHeadError,
   debitHeadFor,
+  fundDeclarationError,
   MAX_SUBHEAD_LENGTH,
   needsProject,
   type DebitHeadsByType,
@@ -38,9 +39,9 @@ import {
   normalizeDietCounts,
   normalizeMeals,
 } from "./meals";
-import { describeRoomParties, INFANT_AGE_LIMIT, isInfantAge, roomPartyError } from "./occupancy";
+import { INFANT_AGE_LIMIT, isInfantAge, roomPartyError } from "./occupancy";
 import { stayLengthError } from "./policy";
-import { DEFAULT_RULES, type CapacityRules, type Rules } from "./settings";
+import { DEFAULT_RULES, type Rules } from "./settings";
 import {
   formatInstituteDate,
   formatInstituteDateTime,
@@ -360,6 +361,19 @@ export function bookingPayloadSchema(
         .nullish()
         .default(null),
       debit_details: optionalTrimmed,
+      /**
+       * The requester's declaration that the funds are approved and
+       * available (8 Oct 2026). Required by every head but Personal Funds,
+       * which is why it is a plain boolean here and checked in the debit
+       * refinement below, beside the head it belongs to.
+       *
+       * Round-trip safe: the output is a boolean, which is a valid input.
+       */
+      fund_declaration: z
+        .boolean()
+        .optional()
+        .default(false)
+        .transform((v) => v === true),
       // The project for a Project head, picked from the console's list.
       project_id: z.string().nullish().default(null),
       // The project's sub-head, typed - only with a Project head.
@@ -567,9 +581,20 @@ export function bookingPayloadSchema(
       if (!prompt && v.debit_details) {
         ctx.addIssue({
           code: "custom",
-          message: "Details apply only to Special Funds and Project bookings",
+          message: "Details apply only to Special Budget and Project bookings",
           path: ["debit_details"],
         });
+      }
+      /**
+       * Somebody else's money: the requester declares they have the approval
+       * for it and that the head has the balance (8 Oct 2026). Checked here
+       * rather than on the field so it reads the head that was actually
+       * chosen - and so a payload that ticks it on a Personal Funds booking
+       * is not refused for having been honest.
+       */
+      const declaration = fundDeclarationError(v.debit_head, v.fund_declaration);
+      if (declaration) {
+        ctx.addIssue({ code: "custom", message: declaration, path: ["fund_declaration"] });
       }
     })
     .superRefine((v, ctx) => {
@@ -1075,15 +1100,16 @@ export function isAadhaarNumber(value: string): boolean {
   return aadhaarDigits(value).length === AADHAAR_DIGITS;
 }
 
-/** The fine print next to the infant counter, kept with the rule it explains. */
-export function infantHelpText(capacity: CapacityRules = DEFAULT_RULES.capacity): string {
-  const opening = `A guest below ${INFANT_AGE_LIMIT} years is an infant: they share a guardian's bed, need no bed of their own and are not asked for an ID.`;
-  if (capacity.max_infants_per_room === 0) {
-    return `${opening} A room takes up to ${capacity.max_guests_per_room} guests.`;
-  }
-  return `${opening} A room takes ${capacity.max_occupants_per_room} people in all, of whom at most ${capacity.max_guests_per_room} may need a bed - so a full room is ${describeRoomParties(capacity)}.`;
-}
-
-export const INFANT_HELP_TEXT = infantHelpText();
+/**
+ * The fine print next to the infant counter: what counts as an infant, and
+ * nothing else.
+ *
+ * It used to go on to state the room's capacity, which the notice on every
+ * room card (`roomOccupancyNotice`) states a few lines below it. The office
+ * asked for the form to stop explaining itself twice (8 Oct 2026), so each
+ * now carries one fact - and with the capacity gone there is nothing in here
+ * that comes from Settings, so it reads as a constant.
+ */
+export const INFANT_HELP_TEXT = `A guest below ${INFANT_AGE_LIMIT} shares a guardian's bed, needs no bed of their own and is not asked for an ID.`;
 
 export type BookingPayload = z.infer<ReturnType<typeof bookingPayloadSchema>>;

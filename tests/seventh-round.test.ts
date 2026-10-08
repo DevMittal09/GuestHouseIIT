@@ -197,6 +197,7 @@ describe("the kitchen's limit per sitting", () => {
       service_type: "meals_only",
       booking_type: "official",
       debit_head: "department_budget",
+      fund_declaration: true,
       purpose_of_visit: "",
       check_in: `${today}T00:00`,
       check_out: `${addDaysToDateValue(today, 1)}T23:59`,
@@ -298,6 +299,7 @@ describe("a late check-in", () => {
       service_type: "room",
       booking_type: "official",
       debit_head: "department_budget",
+      fund_declaration: true,
       purpose_of_visit: "A guest who arrived late",
       check_in: `${checkInDate}T${time}`,
       check_out: `${addDaysToDateValue(today, 2)}T10:00`,
@@ -334,9 +336,11 @@ describe("a project is typed, not picked", () => {
     expect(needsProject("project_grant")).toBe(true);
     expect(debitDetailsPrompt("project_grant")).toMatch(/Project number/);
     expect(debitDetailsRequired("project_grant")).toBe(true);
-    // Special Funds still asks which fund, and still optionally.
+    // Special Budget asks which fund, and since 8 Oct 2026 it is mandatory:
+    // the office's own list writes it "Special Budget (Please specify the
+    // details)".
     expect(debitDetailsPrompt("special_budget")).toMatch(/special fund/i);
-    expect(debitDetailsRequired("special_budget")).toBe(false);
+    expect(debitDetailsRequired("special_budget")).toBe(true);
   });
 
   it("refuses a Project booking with nothing typed, and takes one with it", () => {
@@ -354,6 +358,7 @@ describe("a project is typed, not picked", () => {
       service_type: "room",
       booking_type: "official",
       debit_head: "project_grant",
+      fund_declaration: true,
       purpose_of_visit: "A collaborator's visit",
       check_in: `${addDaysToDateValue(today, 1)}T12:00`,
       check_out: `${addDaysToDateValue(today, 2)}T10:00`,
@@ -382,7 +387,9 @@ describe("Special Funds on a personal meal booking", () => {
   it("is gone, and the revision says so", () => {
     // Revision 4 took it off personal *dining* (1 Oct 2026); revision 5 took
     // it off every personal booking (7 Oct) - see eighth-round.test.ts.
-    expect(DEBIT_RULES_REVISION).toBe(5);
+    // Revision 6 (8 Oct) replaced both lists with the office's own mapping,
+    // which still gives a personal booking Personal Funds and nothing else.
+    expect(DEBIT_RULES_REVISION).toBe(6);
     expect(DEFAULT_DEBIT_RULES.dining.personal).toEqual(["personal_funds"]);
     const heads = debitHeadsByType(
       "employee",
@@ -590,6 +597,7 @@ describe("Remarks on a dining booking, Purpose on a stay", () => {
     service_type: "meals_only",
     booking_type: "official",
     debit_head: "department_budget",
+    fund_declaration: true,
     purpose_of_visit: purpose,
     check_in: `${addDaysToDateValue(today, 1)}T00:00`,
     check_out: `${addDaysToDateValue(today, 1)}T23:59`,
@@ -605,6 +613,7 @@ describe("Remarks on a dining booking, Purpose on a stay", () => {
     service_type: "room",
     booking_type: "official",
     debit_head: "department_budget",
+    fund_declaration: true,
     purpose_of_visit: purpose,
     check_in: `${addDaysToDateValue(today, 1)}T12:00`,
     check_out: `${addDaysToDateValue(today, 2)}T10:00`,

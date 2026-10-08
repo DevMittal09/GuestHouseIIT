@@ -3560,3 +3560,254 @@ a lapsed request before this status existed.
 A **Missed** tile of its own in the Approval Log, not filed under Cancelled: a
 cancellation is something somebody asked for, and this is the opposite — the
 question asked and never answered. The office needs to be able to count them.
+
+## 8 Oct 2026 — the office's ninth list
+
+Five items, relayed by the owner, and all of them about **the production
+portal** rather than the demo: the debitable heads the institute actually uses,
+the declaration that goes with them, one mail thread per booking, less text on
+screen, and loading the real accounts. The owner also asked for a single place
+recording what a production build needs, which is
+[06-production-requirements.md](06-production-requirements.md).
+
+### The debitable heads are the office's list, not a table derived from them
+
+> **Supersedes** "Debitable heads per requester category" (23 Sep 2026) and the
+> narrowings of 24 Sep, 25 Sep, 1 Oct and 7 Oct, all of which edited a table
+> taken from the meeting notes. The office has now given the mapping itself.
+
+All **nine** heads are in use. Alumni Fund, Student Fund and Hostel Funds had
+been on the enum since migration 15 and offered to nobody; Personal Funds
+reaches a faculty member's *official* booking for the first time.
+
+Four categories changed which heads they have, not merely how many:
+**non-teaching staff** lost the department budget and have Personal Funds
+alone; the **two classes of office** were merged onto one list of six, which
+the old defaults split between officer and department offices; **clubs, fests
+and councils** moved from the department budget to the **Student Fund**; and
+**alumni bookings** moved from the Institute Grant to the **Alumni Fund**.
+
+**So revision 6 replaces a saved Settings row's lists rather than editing
+them.** Revisions 2 to 5 each added or removed one head (Special Budget) and
+could be applied field by field, which let an earlier untick of the office's
+stand. There is no such edit here — the mapping is different, not narrower —
+and the office giving the list means the list *is* the configuration. After
+revision 6 the row is the office's own again and is never touched.
+
+**"All funds except Institute Grant, Alumni, Student Fund and Hostel" is read
+as a floor, not a default.** `FORBIDDEN_DEBIT_HEADS.faculty` now holds all
+four: the grant is the institute's money, spent by the offices that hold it,
+and the other three belong to the alumni, the students and the hostels. A
+default can be ticked back on in Settings; this cannot, and
+`allowedHeads` strips it on read so a stored row that still lists one is
+ignored rather than fatal.
+
+**Special Budget is relabelled back.** The office called it "Special Funds" on
+24 Sep and "Special Budget" on this list; the label follows the office. The
+stored value is still `special_budget`, so nothing in the database moved -
+and an **invoice issued before today still prints "Special Funds"**, because
+`debit_head_label` is snapshotted into the `InvoiceDocument` at issue time.
+That is the right answer for the same reason the invoice versions are: an
+issued invoice is a record of what happened, not a view of today's
+configuration.
+
+**And it must now say which fund.** The office writes the head as "Special
+Budget (Please specify the details)", so `debitDetailsRequired` includes it: a
+sanction nobody names cannot be checked by the accounts section. **The approval
+letter beside it stays optional** — a requester waiting on a scan should not be
+stopped from booking, and the desk can ask for it later. That is a judgement,
+not the office's instruction, and §2 of
+[06-production-requirements.md](06-production-requirements.md) says how to make
+it mandatory in one line if they meant otherwise.
+
+### The funds declaration lives in the Debitable head card, not with the privacy tick
+
+**Decision.** Any head but Personal Funds asks the requester to tick the
+office's sentence, word for word, and the instant is stored
+(`bookings.fund_declaration_at`, migration 30).
+
+**Why inside that card.** It is a statement *about the head just chosen*, and
+it appears and disappears with it. Beside the privacy consent at the foot of
+the form it would read as a second piece of boilerplate, and a requester who
+switched from a department budget to their own money would still be looking at
+it.
+
+**Why Personal Funds is not asked.** The requester is the competent authority
+for their own money and there is no balance for them to verify. A tick there
+would be theatre, and the office's own list says "whenever any other fund
+except Personal fund is checked".
+
+**Why it is stored and not merely enforced.** An approver reading a request,
+and the accounts section reading an invoice months later, both want to see that
+the assurance was given. An instant rather than a boolean, like
+`privacy_consent_at` beside it, because "when" also answers "was this the form
+as it stood then". Nothing is backfilled: a booking made before today was never
+asked, and inventing a timestamp for it would record something that did not
+happen.
+
+**Cost.** A thirtieth migration applied by hand. The store names the column
+only when the declaration was actually given, so until it is applied every
+personal booking still works and only a booking on somebody else's budget is
+refused.
+
+> **Written as "a project with six already outstanding", which was wrong** -
+> see "The hosted project's migrations were never missing" below. 24-30 had all
+> been applied; these notes could not check and said otherwise.
+
+### Every mail about one booking is one thread, the requester's included
+
+> **Updates** "Mail threads on the booking, not on the day" (23 Sep 2026),
+> which threaded the staff's mail and deliberately left the requester's
+> standalone.
+
+**Decision.** The requester's mail joins the booking's thread too, as does the
+invoice mail to Accounts.
+
+**Why the old reasoning no longer wins.** The meeting notes' point was that
+each step is news to the person who asked. It still is, and the thread does not
+take it away: each message still arrives, with what happened leading its
+heading and its inbox preview line. What standing alone cost was the trail — a
+requester with three bookings in a fest week had nine loose messages whose only
+connection was a reference id they had to notice and search for. One
+conversation per request is what the reference id already promised.
+
+**Cost.** The shared subject. Gmail splits a thread the moment the subject
+changes, so `[IITPKD-GH-2026-AB12C] Guest house booking` is now what a
+requester sees in their list, and "Rooms allocated" moves to the preview. That
+is the same trade the staff mail made in September, and it is the whole reason
+the preheader carries the per-message subject.
+
+Nothing else moved: the threading machinery was already generic, so this is
+eleven lines in `MAIL_THREAD_OF`. The daily log thread still carries the
+digest, the escalation and the desk report, which are about a queue and have no
+booking to hang on.
+
+### Less text on screen: one fact per line
+
+**Decision.** Cut the explanatory prose from the booking form, the `/book`
+page, the desk's lists and the Guidelines items. Keep every rule and every
+figure; drop the sentence that explains the sentence.
+
+**Why.** The supervisor asked for the content and not the commentary. The form
+had reached twenty-eight card descriptions and twenty-nine help paragraphs,
+several of them explaining the same rule twice — the infant note stated the
+room's capacity, and the room card below it stated the capacity again. Reading
+"Who the stay is for decides who approves it and how it is settled, so this
+comes first" before a question titled "Type of booking" is work, not help.
+
+**What was kept.** Anything that is a rule or a figure (the kitchen's limit,
+the room capacity, the Aadhaar length, the pay-at-checkout note, the privacy
+consent, the "nothing is held until a room is allocated" line), and anything
+the office asked for by name. **What went** is the second clause: the
+"so that…", the "which is what…", the restatement of what the heading already
+says.
+
+**Cost.** A requester who would have read the explanation now has to infer it,
+and two e2e assertions had to follow the copy (`kitchenName` reads "From the X
+kitchen"). The Guidelines page is the place that still explains things, which
+is where the owner put the instructions on 26 Sep.
+
+### Accounts come in from a spreadsheet, as a plan then a write
+
+**Decision.** Users & Roles takes a paste: copy the columns out of Excel,
+**Check the paste**, read the plan, **Import**. All or nothing. Rows can be
+ticked and deleted together.
+
+**Why a paste and not an .xlsx upload.** The paste handles what a spreadsheet
+copy actually puts on the clipboard — tabs, quoted commas — reuses
+`splitCsvLine` from the academic-records import, needs no parser dependency and
+no upload path, and can show the plan before anything is written. An `.xlsx`
+reader would be a package and a new file route for the same result.
+
+**Why a header line is the answer to "edit the columns".** The office's sheet
+has its columns in its own order and holds only some of them. A header names
+them in any order, only `email` is required, and **a column the paste does not
+carry is left alone** — so a sheet of email and name cannot wipe everyone's
+hostel. Without a header the default order is read, which is what a two-column
+paste of email and name most likely means.
+
+**Why a header must start with the email column.** `columnFor` also matches the
+bare word "email", which is the first cell of a data line for anybody whose
+address is `email@…`. Requiring the first cell to be the email column *and*
+every other cell to be a known name is what tells a header from a row.
+
+**All or nothing, like the other two imports.** Half an imported list is worse
+than none, because nobody can tell which half landed — and these rows decide
+who can sign in and what they can approve. **Bulk delete is the opposite**:
+whatever cannot go (a person with bookings, a developer's account to a manager)
+is named back and the rest still go, because a delete has no half-applied state
+to be confused about and stopping the whole batch for one person would leave
+the office stuck.
+
+**The roles a paste may hand out are the caller's** (`assignableRoles`), and an
+account the caller may not edit is refused by name, so a manager cannot import
+a developer into existence. Checked in the action, not only in the plan.
+
+**Cost.** In Supabase mode `createProfile` also creates a Supabase Auth user
+with the password `password123`. That is harmless — the Auth password is not a
+portal login, everyone signs in through LDAP or Google — but it is wrong at
+six hundred rows, and it is recorded as a thing to revisit in
+[06-production-requirements.md](06-production-requirements.md) §7.
+
+## 9 Oct 2026 — two answers from the office, and one of our own mistakes
+
+### The Special Budget approval upload stays optional
+
+**Decision.** The fund's name beside the head is mandatory; the approval letter
+is offered and not required. Asked on 8 Oct, answered by the office on 9 Oct:
+leave it optional for now.
+
+**Why it was a question at all.** The office's list writes the head as
+"Special Budget (Please specify the details) [Upload Approval (doc upload)]",
+and brackets do not say whether the upload is part of the requirement. The
+guess made on 8 Oct was to require the typed details and offer the file,
+because a requester waiting on a scan should not be blocked from booking and
+the desk can ask for the letter later. That guess is now the office's answer.
+
+**Cost.** A sanction can be claimed on a booking with nothing attached. The
+accounts section still has the fund's name, which is what they chase. Making
+the upload mandatory is one line if that changes
+([06-production-requirements.md](06-production-requirements.md) §2).
+
+### The hosted project's migrations were never missing
+
+> **Supersedes** the line in every round since 24 Sep 2026 that said
+> migrations 24-30 (and before that 24-26, then 24-29) were "outstanding on
+> the hosted project".
+
+**What happened.** The owner said they had run 24-30 in the Supabase SQL editor
+and asked why the portal was reporting otherwise. The portal was not: **these
+notes were.** `23-running-and-testing.md` said in prose that "which migrations
+the hosted project has is not recorded here", and offered a hand-written check
+query whose marker list **stopped at migration 25**. So from 26 onwards there
+was no way to check, and each round's author copied the previous round's
+sentence forward. A read-only probe on 9 Oct 2026 found **1-30 all applied**.
+
+**Decision.** Stop recording the answer and start asking the question:
+`scripts/check-migrations.mjs` / `npm run check:migrations`.
+
+**Why a script rather than a longer query in the notes.** The query *was* the
+problem - it was a list that had to be extended by hand with every migration,
+and nobody did, so it quietly stopped covering the recent ones while still
+looking authoritative. A marker table in code sits next to the migrations it
+describes, is reviewed with them, and is the kind of thing a reviewer notices
+is missing an entry. It also exits non-zero, so a deploy step can gate on it
+instead of a person remembering.
+
+**Why PostgREST and not SQL.** No new dependency and no database password:
+`.env.local` already holds the project URL and the service-role key, which is
+how the app itself reads the database. The cost is that **PostgREST cannot see
+functions**, so migrations **17 and 23** - which only add or replace a plpgsql
+function - cannot be probed. The script names them and prints the one-line
+`pg_proc` query rather than reporting them as applied or missing, because the
+whole point is not to assert what has not been checked. Calling either function
+to test it would be a *write*, which this script will not do.
+
+**Read-only, deliberately.** Every request is a `GET` of at most one row and
+reads only whether a column, table or enum label exists - never anybody's
+data. It is safe to run against production, which is the only way a check like
+this is any use.
+
+**What it cannot tell you** is whether a migration was applied *correctly* -
+only that its marker exists. That is what the throwaway `postgres:16-alpine`
+run is for, and that stays the rule for every new migration.

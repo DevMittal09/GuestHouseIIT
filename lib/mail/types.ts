@@ -102,6 +102,38 @@ export const MAIL_THREAD_OF: Partial<Record<MailEventKey, MailThreadKind>> = {
   "booking.cancellation_requested.reviewer": "booking",
   "booking.cancelled.desk": "booking",
   "booking.extension_requested.manager": "booking",
+  /**
+   * **And the requester's mail too** (8 Oct 2026, the office's ninth list:
+   * "keep all emails for the same booking id in one email thread").
+   *
+   * Requester mail stood alone until now, on the reasoning in the meeting
+   * notes that each step is news to the person who asked and deserves its own
+   * message. That is true of the *message*, and the thread does not take it
+   * away: each one still arrives, with what happened leading its heading and
+   * its inbox preview. What it took away was the trail - a requester with
+   * three bookings in a fest week had nine loose messages whose only
+   * connection was a reference id they had to notice and search for. One
+   * conversation per request is what the reference id already promised.
+   *
+   * The price is the shared subject: Gmail splits a thread the moment the
+   * subject changes, so a threaded message carries the thread's subject
+   * (`[IITPKD-GH-2026-AB12C] Guest house booking`) and "Rooms allocated"
+   * moves to the preview line. Worth it, and the same trade the staff mail
+   * made in September.
+   */
+  "booking.submitted.requester": "booking",
+  "booking.tier_approved.requester": "booking",
+  "booking.rejected.requester": "booking",
+  "booking.allocated.requester": "booking",
+  "booking.cancellation_decided.requester": "booking",
+  "booking.cancelled.requester": "booking",
+  "booking.extension_decided.requester": "booking",
+  "booking.no_show.requester": "booking",
+  "booking.missed.requester": "booking",
+  "stay.reminder.requester": "booking",
+  // The invoice is about the booking as well, so Accounts keeps one
+  // conversation per stay rather than one per document.
+  "invoice.issued.accounts": "booking",
   // Scheduled mail has no booking to thread on - a digest is *about* a queue
   // - so it keeps a daily thread of its own.
   "queue.digest.reviewer": "daily_log",

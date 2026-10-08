@@ -166,8 +166,11 @@ describe("a personal booking is not asked which budget pays", () => {
     ]);
   });
 
-  it("withdraws Special Funds from a saved row once, at revision 5", () => {
-    expect(DEBIT_RULES_REVISION).toBe(5);
+  it("withdraws Special Funds from a saved row, and revision 6 reseats the lists", () => {
+    // Revision 5 (7 Oct) took Special Funds off every personal list;
+    // revision 6 (8 Oct) replaced both lists with the office's own mapping,
+    // which also gives a personal booking Personal Funds and nothing else.
+    expect(DEBIT_RULES_REVISION).toBe(6);
     const rev4 = {
       revision: 4,
       room: { ...DEFAULT_DEBIT_RULES.room, personal: ["personal_funds", "special_budget"] },
@@ -176,11 +179,9 @@ describe("a personal booking is not asked which budget pays", () => {
     const upgraded = upgradeDebitRules(rev4) as typeof DEFAULT_DEBIT_RULES;
     expect(upgraded.room.personal).toEqual(["personal_funds"]);
     expect(upgraded.revision).toBe(DEBIT_RULES_REVISION);
-    // Current rows are left alone for good.
-    expect(upgradeDebitRules({ revision: 5, room: { personal: ["personal_funds"] } })).toEqual({
-      revision: 5,
-      room: { personal: ["personal_funds"] },
-    });
+    // A row already on the current revision is left alone for good.
+    const own = { revision: DEBIT_RULES_REVISION, room: { personal: ["personal_funds"] } };
+    expect(upgradeDebitRules(own)).toEqual(own);
   });
 
   it("accepts a personal payload that names no head, and records Personal Funds", () => {
