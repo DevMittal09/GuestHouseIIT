@@ -7,7 +7,7 @@ import { NavBar, type NavItem } from "@/components/site/site-nav";
 import { logout } from "@/app/actions/auth";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
-import { INSTITUTE_WEBSITE } from "@/lib/site";
+import { GUEST_HOUSE_CONTACT, INSTITUTE_WEBSITE } from "@/lib/site";
 import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
 import { isRequesterHistory } from "@/lib/workflow";
 import { getStore } from "@/lib/store";
@@ -103,9 +103,25 @@ export default async function PortalLayout({ children }: { children: React.React
           {children}
         </main>
       </div>
+      {/* The guest house office's own phone and email live here, on every
+          signed-in page (9 Oct 2026). They used to be a "Facing trouble
+          booking?" notice on My Bookings and again at the foot of the booking
+          form - a sentence in the middle of a form, where somebody who is not
+          stuck has to read it. A footer is where a reader looks for a number. */}
       <footer className="border-t-[3px] border-vermilion bg-ink text-[13.5px] text-on-ink-muted">
         <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-[clamp(14px,4vw,24px)] py-6">
-          <span>&copy; Indian Institute of Technology Palakkad</span>
+          <span className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <span>&copy; Indian Institute of Technology Palakkad</span>
+            <span className="flex flex-wrap gap-x-4 gap-y-1">
+              <span className="text-on-ink-muted">Guest house office</span>
+              <a href={GUEST_HOUSE_CONTACT.phoneHref} className="text-on-ink tabular-nums hover:text-white">
+                {GUEST_HOUSE_CONTACT.phone}
+              </a>
+              <a href={`mailto:${GUEST_HOUSE_CONTACT.email}`} className="text-on-ink hover:text-white">
+                {GUEST_HOUSE_CONTACT.email}
+              </a>
+            </span>
+          </span>
           <span className="flex flex-wrap gap-x-5 gap-y-1">
             <Link href="/" className="text-on-ink hover:text-white">
               Guest house website

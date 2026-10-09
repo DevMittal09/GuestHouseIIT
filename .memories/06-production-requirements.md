@@ -31,6 +31,8 @@ switches. In rough order of what breaks worst if skipped:
    departments, Faculty Advisors, hostels and wardens, the official whitelist.
 7. Import the **academic records** (students first).
 8. Schedule the two mail routes.
+9. **Point the per-office debitable heads at the real office mailboxes** and
+   drop the demo aliases - [§2](#and-then-narrowed-per-office-9-oct-2026).
 
 ---
 
@@ -154,6 +156,98 @@ line: require it in `app/actions/bookings.ts` where
 check beside it.
 
 **Project Grant** asks for the number and title, typed, and is mandatory.
+
+### And then narrowed per office (9 Oct 2026)
+
+The table above keys the heads by **category**, so every office shares one
+list of six. On 9 Oct 2026 the office sent the real mapping as a spreadsheet,
+kept verbatim beside this file as
+[offices-debitable-heads.csv](offices-debitable-heads.csv): one row per office
+mailbox, a column per head, **"Y" where that office may charge it**. It is
+finer than a category, and it does not follow `office_class` either - the
+Director's Office spends the Institute Grant, a department office its
+department's budget, the Students Section the student and hostel funds, IAR
+the alumni fund, the Sports Officer the grant and nothing else.
+
+It is transcribed into `OFFICE_DEBIT_HEADS` (`lib/office-debit-heads.ts`) and
+applied by `debitHeadsByType` as a **ceiling over the Settings list**: an
+intersection, so Settings can still take a head away from every office at once
+and this takes away the ones a particular office may not touch, and **neither
+can widen the other**. An office that is not on the spreadsheet keeps its
+category's list unchanged - guessing a narrower one would stop it booking, and
+guessing a wider one is the thing the table exists to prevent.
+
+**Project Grant and Personal Funds are on no row.** The spreadsheet has no
+column for either, which is the office saying an office does not spend them: a
+project is held by its investigator, and an office has no private money.
+Neither was in the offices' category lists before this, so nothing changed -
+but it is why there are six columns and nine heads.
+
+| Office | Mailbox (`@iitpkd.ac.in`) | May charge |
+| --- | --- | --- |
+| Director Office | `director_iitpkd` | Institute Grant, Special Budget |
+| Administration | `office_deanadmn` | Institute Grant, Special Budget |
+| Administration | `ro` | Institute Grant, Special Budget |
+| Administration | `personnel` | Institute Grant, Special Budget |
+| Administration | `people` | Institute Grant, Special Budget |
+| Administration | `recruitment` | Institute Grant, Special Budget |
+| Academics | `academic` | Institute Grant, Special Budget |
+| Academics | `acadresearch` | Institute Grant, Special Budget |
+| Finance & Accounts | `accounts` | Institute Grant, Special Budget |
+| Stores & Purchase Section | `purchase` | Institute Grant, Special Budget |
+| ICSR | `icsr` | Institute Grant, Special Budget |
+| Students Section | `office_studentssection` | Special Budget, **Student Fund, Hostel Funds** |
+| CCE | `cce` | Special Budget |
+| Placement / Career Development Cell | `tpo` | Special Budget |
+| Placement / Career Development Cell | `placements` | Special Budget |
+| International & Alumni Relations | `iar` | Special Budget, **Alumni Fund** |
+| Outreach | `eduoutreach` | Special Budget |
+| EWD | `ewd` | Institute Grant, Special Budget |
+| CET | `cet` | Special Budget |
+| Biological Sciences and Engineering | `office_bse` | Department Budget, Special Budget |
+| Chemistry | `office_cy` | Department Budget, Special Budget |
+| Civil Engineering | `office_ce` | Department Budget, Special Budget |
+| Computer Science and Engineering | `office_cs` | Department Budget, Special Budget |
+| Data Science | `office_ds` | Department Budget, Special Budget |
+| Electrical Engineering | `office_ee` | Department Budget, Special Budget |
+| Humanities and Social Sciences | `office_hss` | Department Budget, Special Budget |
+| Materials and Metallurgical Engineering | `office_mm` | Department Budget, Special Budget |
+| Mathematics | `office_ma` | Department Budget, Special Budget |
+| Mechanical Engineering | `office_me` | Department Budget, Special Budget |
+| Physics | `office_ph` | Department Budget, Special Budget |
+| Institute Clinic | `mo` | Special Budget |
+| Sports & Physical Education | `sportsofficer` | **Institute Grant only** |
+| Security | `security` | Special Budget |
+| Hostel | `hostelmanager` | **Hostel Funds only** |
+
+#### What production has to do about it
+
+1. **The key is the mailbox before the `@`**, because that is the account that
+   signs in. The real office accounts do not exist yet (Mock Authentication,
+   LDAP unconnected), so each row may also name **aliases** - demo or legacy
+   addresses that are the same office. Three are set today:
+   `admin` and `director.office` → Director Office (the demo `official`
+   persona is "Director's Office" on `admin@`), `registrar` → `ro`, and
+   `cse.office` → `office_cs` (the demo department office).
+   **Delete those aliases when the real accounts are loaded** - leaving them
+   is harmless but they will drift.
+2. **`ro` is read as the Registrar's Office**, and `registrar@iitpkd.ac.in`
+   (on the whitelist from `DEFAULT_OFFICIAL_EMAILS`) is aliased to it. That is
+   an inference from the mailbox name, not something the office wrote. **Ask
+   them to confirm it.**
+3. **An office the spreadsheet does not name keeps all six heads.** Any office
+   the institute adds later has to be added to the table, or it will be
+   offered more than it may spend. Until the console can edit it (below), that
+   is a code change.
+4. **It is not editable from the console yet.** Settings → Debitable heads
+   still edits the *category* lists. The per-office rows are a constant.
+   Giving them a home the office can edit means a column on `units` (a
+   migration) and a grid in Departments & Clubs; the seam is already there,
+   because `narrowToOffice` is the one place the narrowing happens.
+   [04-roadmap.md](04-roadmap.md) carries it.
+5. **The whitelist and this table are different lists.** `official_email_whitelist`
+   says who may book *as* an office; this says what that office may *charge*.
+   An office needs to be on both.
 
 ### The funds declaration
 
@@ -328,6 +422,9 @@ Recorded here so the next session does not have to rediscover the reasoning.
 - [ ] Academic records imported (students at least)
 - [ ] Tariffs entered, **including the extra-bed rate**; GSTIN and bank
       details confirmed; Accounts email set
+- [ ] Every office on `OFFICE_DEBIT_HEADS` matches a real mailbox, the demo
+      aliases (`admin`, `director.office`, `cse.office`, `registrar`) are gone,
+      and `ro` has been confirmed as the Registrar's Office
 - [ ] `MAIL_REDIRECT_ALL_TO` unset, and a test message from
       Console → Mail Outbox actually arrived
 - [ ] Both cron routes scheduled and `CRON_SECRET` set

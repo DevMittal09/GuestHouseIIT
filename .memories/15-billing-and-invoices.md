@@ -1,8 +1,9 @@
 # Billing — tariffs, invoices, payments and dining
 
 Phases 5 and 6 (22 Sep 2026), the 24 Sep corrections, the 25 Sep ones (GST per
-section, additional charges, live repricing) and the **7 Oct** ones (version 4,
-cash retired, a personal stay settled at check-out, Awaiting payment).
+section, additional charges, live repricing), the **7 Oct** ones (version 4,
+cash retired, a personal stay settled at check-out, Awaiting payment) and the
+**9 Oct** one (a dining booking is quoted meal rates only).
 **Checked against the code on 7 Oct 2026** — `lib/invoice.ts`,
 `lib/tariffs.ts`, `lib/invoice-pdf.ts`, `app/actions/invoices.ts`,
 `components/invoice-dialog.tsx`, `components/awaiting-payment.tsx`,
@@ -183,6 +184,16 @@ total, and issuing uses exactly those figures. **Preview PDF** prints the
   price is a new row. A charge no rate covers is a *problem* on the document
   and blocks issuing (`invoiceBlocker`) — nothing is ever priced at ₹0 by
   omission.
+- **The rates on the booking form** are the same resolution
+  (`tariffPreviews` → `tariffPreviewLines` → `resolveTariff`, 7 Oct 2026), so
+  the figure quoted and the figure charged cannot drift.
+  `previewItemsFor(servesMeals, service)` decides the rows: a stay gets the
+  room and the extra bed plus the meals where the kitchen serves them, and a
+  **dining booking gets the three meals and nothing else** (9 Oct 2026 — there
+  is no room on one to charge a room rate or an extra bed for). The table
+  stands on its own now: the paragraph under it about rates in force, GST
+  percentages and night-by-night pricing came off the same day, and those facts
+  are on the Guidelines page.
 - **Issuing** (`app/actions/invoices.ts` → `store.issueInvoice` →
   `issue_invoice()`) takes the financial year's next serial
   (`GH/2026-27/0001`, prefix and width are Settings) and stores the whole

@@ -46,7 +46,7 @@ be bypassed by a crafted request.
 | Aadhaar / ID number | R | O | O | O | O | O | R |
 | ID document upload | R | — | O | O | O | O | R |
 | Guest houses offered | **Bageshri only** | all | all | all | all | all (an alumnus → Bageshri) | all |
-| Banner | "Double shared rooms will get first preference" | — | — | — | — | — | — |
+| Banner | — (the double-sharing line was withdrawn on 9 Oct 2026) | — | — | — | — | — | — |
 
 The last column is the base default: the manager is not a requester role, so
 its form is not in the Form Builder and every guest field is required.
@@ -62,7 +62,11 @@ its form is not in the Form Builder and every guest field is required.
   relationship free text, citizenship as for anyone; no Aadhaar, no ID
   upload. The payload marks it `infant: true` and the schema refuses one
   without an age below 5. The age still decides: a guest card given an age
-  below 5 is an infant too.
+  below 5 is an infant too. **The card no longer explains itself**: the
+  sentence "A guest below 5 shares a guardian's bed, needs no bed of their own
+  and is not asked for an ID" (`INFANT_HELP_TEXT`) was **deleted** on 9 Oct
+  2026 — the infant card asks for an age 0-4 and no ID, which is the rule
+  performed, and the Guidelines page states it in words.
 - **A student's parents come from the academic record, locked** (7 Oct 2026,
   `lib/academic/guest-names.ts`). Where the record names them:
   - **Father** and **Mother** are on the dropdown, and choosing one puts the
@@ -107,6 +111,14 @@ its form is not in the Form Builder and every guest field is required.
   **Mother, Father, Guardian, Grandmother, Grandfather, Self at most once per
   request** — Siblings may repeat. A student form saved in the Form Builder
   before 30 Sep lacks Self until it is added there or reset.
+
+  > **Neither rule is written out on the form any more** (9 Oct 2026). The
+  > **option itself** says why it cannot be picked — "Siblings - needs a
+  > parent on this request", "Mother - already on this request" — and
+  > `parentDependencyError` / `duplicateRelationshipError` still enforce both
+  > on the client and the server. The two sentences that described them
+  > (`parentDependencyHint`, `uniqueRelationshipHint`) are **deleted**; the
+  > rules themselves are on the Guidelines page.
 - A guest with no name is stored as "Guest".
 
 ---
@@ -116,7 +128,7 @@ its form is not in the Form Builder and every guest field is required.
 | # | Section | Who sees it | Mandatory? |
 | --- | --- | --- | --- |
 | 1 | **Booking as** — Yourself / Faculty Advisor — each council or club | Professors named Faculty Advisor | Choosing one switches whose form it is |
-| 2 | **Requester details** (academic record, read-only, with its Copy-to line; no caption when the record is found, a line saying so when it falls back to the profile) | Everyone | — (never stored) |
+| 2 | **Requester details** (academic record, read-only, with its Copy-to line **only when there is somebody to copy** — 9 Oct 2026; no caption when the record is found, a line saying so when it falls back to the profile) | Everyone | — (never stored) |
 | 3 | **Type of booking** — Official / Personal / On behalf of an alumnus | Only roles with more than one option: Employee (Official default, Personal), IAR Office (Official, Alumni), GH Manager (Official, Alumni) | Yes; others record their single type silently |
 | 4 | **What to book** — Room booking / Room + Meals / Meals only | When a guest house the role may book serves meals | Yes. Meals only: Employee, Official, IAR Office, GH Manager |
 | 5 | **Approval** — Direct / Requires HOD approval | Offices (`official`, `iar_cell`), room bookings | **Yes** for offices; refused for anyone else |
@@ -133,14 +145,14 @@ its form is not in the Form Builder and every guest field is required.
 | 11 | **Purpose of visit** — labelled **Remarks** on a meal booking | Everyone | **Yes**, ≥ 5 characters, on a stay; **optional** on a meal booking (1 Oct 2026) |
 | 12 | **Rooms** — room cards, each with its guests | Room bookings | **At least 1 room, at most 10** |
 | 13 | **Meals** — days × breakfast / lunch / dinner grid, **nothing ticked by default on a stay** (they are charged), plus **how many vegetarian and how many not** | Room + Meals | **At least one meal**, and a split adding up to the guests needing a bed |
-| 14 | **Meals only** — a list of dates, each with its meals ("Add another date", **lunch ticked**), number of people as a **1…30 dropdown**, and the vegetarian / non-vegetarian split | Meals only | Count **1–30** (the kitchen's limit per sitting, a Setting), at least one meal, a split adding up to the count |
+| 14 | **Meals only** — a list of dates, each with its meals ("Add another date", **lunch ticked**), the number of people as a **typed box with − / + steppers** (`QuantityInput`, 9 Oct 2026 — it was a 1…30 dropdown from 1 Oct), and the vegetarian / non-vegetarian split in two boxes of the same kind | Meals only | Count **1–30** (the kitchen's limit per sitting, a Setting — the stepper's max, the schema's max, and `createBooking`'s check of the sitting), at least one meal, a split adding up to the count |
 | 15 | **Additional information** (custom fields) | Whatever the Form Builder added for the role | As configured |
 | 16 | **Copy to** — email rows, "Add another email" | Everyone | Optional, **at most 25**; pre-filled with the council secretary's mailbox when a Faculty Advisor books |
 | 17 | Pets notice ("Pets are not allowed…") | **Room bookings only** (1 Oct 2026 — nobody stays on a meal booking) | Displayed only — the tick box was removed |
 | 18 | **Privacy consent** tick | Everyone | **Yes** |
 | 18a | **Confirm your meal booking** — kitchen, people, preferences, each day and its sittings, who pays, remarks | Meals only | Read-only, live |
-| 18b | **Rates** — what this guest house charges, from the office's own rate sheet (7 Oct 2026): room per day, extra bed per day, and each meal where the kitchen serves them. Resolved through the **same function the invoice prices from**, so the figure quoted is the figure charged; an unpriced charge reads "Not published" | Everyone | Read-only |
-| — | Room availability panel — **"N rooms available"** per day, and per hour on a single day (7 Oct 2026). The room-by-room chart is the **desk's** only | Room bookings | Read-only |
+| 18b | **Rates** — what this guest house charges, from the office's own rate sheet (7 Oct 2026): room per day, extra bed per day, and each meal where the kitchen serves them — **the meals alone on a dining booking** (9 Oct 2026, `previewItemsFor(servesMeals, service)`: there is no room on one to charge for). Resolved through the **same function the invoice prices from**, so the figure quoted is the figure charged; an unpriced charge reads "Not published". **The table and nothing beside it** — the paragraph about rates in force, GST and night-by-night pricing is on the Guidelines page | Everyone | Read-only |
+| — | Room availability panel — **how many rooms are free**, as a labelled strip of figures per day (redrawn 9 Oct 2026), or a headline figure and hour chips on a single day. The room-by-room chart is the **desk's** only | Room bookings | Read-only |
 
 ---
 
@@ -163,7 +175,15 @@ its form is not in the Form Builder and every guest field is required.
 
 - At most **4 people**, of whom at most **3 need a bed** and at most **3 are
   infants** — so 3+1, 2+2, 1+3 fit; 3+2, 2+3, 1+4 do not. The two "Add"
-  buttons stop at the limit. The database trigger enforces the same.
+  buttons stop at the limit and say why
+  (`addGuestBlockedReason` / `addInfantBlockedReason`). The database trigger
+  enforces the same.
+
+  > **The form no longer states the rule** (9 Oct 2026). "Maximum 4 people per
+  > room, of whom at most 3 may need a bed…" (`roomOccupancyNotice`) appeared
+  > under *Number of rooms* **and** again in every room card; it is on the
+  > Guidelines page, and the disabled Add button is the rule where it matters.
+  > The function stays — Guidelines renders it.
 - At allocation the manager's rooms must hold the party by **room type**:
   double 2 (3 with an extra bed), single 1 (2). Both guest houses are all
   double sharing.
@@ -210,10 +230,10 @@ can never be charged to.
 | Employee — faculty, official | Official | Room, Room + Meals, Meals only | HOD → GH Manager (meals only: GH Manager) | PDF, Project, Department, Special Budget, Personal — "all funds except Institute Grant, Alumni, Student Fund and Hostel" |
 | Employee — staff (non-faculty), official | Official | same | same | **Personal Funds** |
 | Employee — personal | Personal | same | GH Manager | **Not asked** (7 Oct 2026): Personal Funds, recorded by the server |
-| Official — officer office | Official (not asked) | same | Direct → GH Manager, or its own head → GH Manager | Institute Grant, Department, Special Budget, Student Fund, Hostel Funds, Alumni Fund |
-| Official — department office | Official (not asked) | same | Direct, or the parent department's HOD → GH Manager | the same six — "Offices" is one list |
+| Official — officer office | Official (not asked) | same | Direct → GH Manager, or its own head → GH Manager | Institute Grant, Department, Special Budget, Student Fund, Hostel Funds, Alumni Fund — **then narrowed to this office's own row** (below) |
+| Official — department office | Official (not asked) | same | Direct, or the parent department's HOD → GH Manager | the same six as a category, **then narrowed the same way** |
 | Club, council or fest (by its Faculty Advisor) | Official (not asked) | Room, Room + Meals | **GH Manager directly** | **Student Fund, Special Budget** |
-| IAR Office | Official / Alumni | Room, Room + Meals, Meals only | Direct, or its head → GH Manager | Official: its office's six; Alumni: **Alumni Fund, Special Budget** |
+| IAR Office | Official / Alumni | Room, Room + Meals, Meals only | Direct, or its head → GH Manager | Official: **Special Budget, Alumni Fund** (`iar`'s row); Alumni: **Alumni Fund, Special Budget** |
 | IAR Student Cell | Alumni (not asked) | Room, **Bageshri only and no meals** (7 Oct 2026 — every alumni booking, whoever raises it) | IAR Office → GH Manager | **Alumni Fund, Special Budget** |
 | GH Manager at the desk | Official / Alumni | Room, Room + Meals, Meals only | GH Manager (its own queue) | **All nine** (dining: the same less Project) |
 
@@ -223,6 +243,20 @@ Hostel Funds; students never Special Budget; **a personal booking never
 Special Budget** — and is not asked which budget pays at all
 (`asksForDebitHead`). A student's booking is always the *student* category,
 never *personal*.
+
+**A ceiling over Settings: each office's own row** (9 Oct 2026). Settings
+keys the heads by *category*, so both classes of office share one list of six.
+The office's spreadsheet is per **mailbox** -
+[offices-debitable-heads.csv](offices-debitable-heads.csv), tabulated in
+[06-production-requirements.md](06-production-requirements.md) §2 - and
+`debitHeadsByType` intersects the two, so an office is offered only the heads
+its own row marks. It does not follow `office_class`: the Director's Office
+gets Institute Grant and Special Budget, a department office its department's
+budget and Special Budget, the Students Section the student and hostel funds,
+the Sports Officer the grant alone. **Project Grant and Personal Funds are on
+no row.** An office the spreadsheet does not name keeps the category's six.
+The narrowing applies to the two office categories only, so a person whose
+address resembles an office mailbox keeps their own heads.
 
 **Any head but Personal Funds asks for the funds declaration** (row 6e above),
 and **Special Budget must name the fund**.
@@ -243,6 +277,7 @@ head) is skipped, and the submission log says so.
 | Booking types a role may pick | `ROLE_BOOKING_TYPES` in `lib/booking-types.ts` |
 | Who may book meals only | `MEALS_ONLY_ROLES` in `lib/booking-types.ts` |
 | Debitable heads per category | Console → Settings → Debitable heads (floors in code) |
+| Debitable heads **per office** | `OFFICE_DEBIT_HEADS` in `lib/office-debit-heads.ts` — a constant, not yet editable from the console |
 | Booking window, stay cap, buffer, capacity, meal windows | Console → Settings |
 | Stay-cap / window exemptions | `BOOKING_DURATION_EXEMPT_ROLES` (`lib/policy.ts`), `isAdvanceWindowExempt` (`lib/workflow.ts`) |
 | The one guest house students and alumni use (Bageshri) | `RESTRICTED_GUEST_HOUSE_NAME` / `ALUMNI_GUEST_HOUSE_NAME` in `lib/policy.ts` — the one rule still matched on a guest house's name |

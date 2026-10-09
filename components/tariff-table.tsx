@@ -13,10 +13,12 @@ import type { BookingType } from "@/lib/types";
  * house and booking type the requester may choose, which is a handful of rows
  * and no round trip while they fill the form in.
  *
- * Two limits are stated rather than hidden. The rates are the ones **in force
- * today** - a stay crossing a rate change is priced night by night when it is
- * invoiced - and a charge the office has not set a rate for reads "Not
- * published" instead of a zero, which is what the invoice does with it too.
+ * The figures are the rates **in force today** (a stay crossing a rate change
+ * is priced night by night when it is invoiced), and a charge the office has
+ * not set a rate for reads "Not published" rather than a zero, which is what
+ * the invoice does with it too. Neither is written out on the form any more
+ * (9 Oct 2026): the office asked for the table and nothing beside it, and
+ * both facts are on the Guidelines page.
  */
 export function TariffTable({
   previews,
@@ -85,11 +87,6 @@ export function TariffTable({
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-muted-foreground">
-        The rates in force today, and the same ones your invoice is priced from. GST is charged at
-        18% on accommodation and 5% on food. A stay that crosses a change of rate is priced night by
-        night.
-      </p>
     </div>
   );
 }

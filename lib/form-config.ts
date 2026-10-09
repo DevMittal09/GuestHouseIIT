@@ -62,8 +62,6 @@ export const GUEST_FIELD_LABELS: Record<keyof RoleFormConfig["guest_fields"], st
   id_document: "ID document upload",
 };
 
-const DOUBLE_PREFERENCE_BANNER = "Double shared rooms will get first preference";
-
 /**
  * Students may bring parents freely; these satisfy the dependency below.
  *
@@ -125,7 +123,7 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
         parent_relationships: [...STUDENT_PARENT_RELATIONSHIPS],
         dependent_relationships: [...STUDENT_DEPENDENT_RELATIONSHIPS],
         unique_relationships: [...STUDENT_UNIQUE_RELATIONSHIPS],
-        banner_text: DOUBLE_PREFERENCE_BANNER,
+        banner_text: null,
       };
     // Faculty and staff (24 Sep 2026): **name and gender are the only
     // mandatory guest details**; everything else is optional. The requester
@@ -199,6 +197,16 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
  * remain) and keep the relationship dependency consistent with the options
  * actually offered.
  */
+/**
+ * Banners the office has withdrawn, dropped from a **saved** row on read
+ * (9 Oct 2026). The student form's "Double shared rooms will get first
+ * preference" came off the spec defaults the same day, but a role saved from
+ * the Form Builder keeps its own row, and the office asked for the sentence to
+ * be gone - not gone unless somebody had pressed Save. Matched exactly, so a
+ * banner the office typed itself is never touched.
+ */
+const RETIRED_BANNERS = ["Double shared rooms will get first preference"];
+
 export function sanitizeFormConfig(
   config: RoleFormConfig,
   guestHouses: GuestHouse[]
@@ -237,6 +245,9 @@ export function sanitizeFormConfig(
 
   return {
     ...config,
+    banner_text: RETIRED_BANNERS.includes((config.banner_text ?? "").trim())
+      ? null
+      : config.banner_text,
     unique_relationships: unique,
     allowed_guest_house_ids: ids.length > 0 ? ids : guestHouses.map((g) => g.id),
     guest_fields: {
@@ -337,28 +348,12 @@ export function usedUniqueRelationships(
   );
 }
 
-/** One-line description of the rule for form hints. Null when the rule is off. */
-export function uniqueRelationshipHint(config: RoleFormConfig): string | null {
-  if (config.unique_relationships.length === 0) return null;
-  return `${formatList(config.unique_relationships, "and")} can each be entered only once - there is only one of each.`;
-}
-
 /** Whether the request already carries a guest who unlocks the dependent options. */
 export function hasQualifyingParent(
   config: RoleFormConfig,
   relationships: (string | null | undefined)[]
 ): boolean {
   return relationships.some((r) => r && config.parent_relationships.includes(r.trim()));
-}
-
-/** One-line description of the rule for form hints. Null when the rule is off. */
-export function parentDependencyHint(config: RoleFormConfig): string | null {
-  const { parent_relationships: parents, dependent_relationships: dependents } = config;
-  if (parents.length === 0 || dependents.length === 0) return null;
-  return `${formatList(dependents, "and")} become selectable once a guest on this request is marked ${formatList(
-    parents,
-    "or"
-  )}.`;
 }
 
 /**

@@ -53,7 +53,6 @@ export function ReviewQueue({
     <SectionHeading
       title="Waiting for your review"
       count={bookings.length}
-      description="Open a request to see everything on it. Forward sends it on its route; rejecting needs a reason, which the requester is sent."
     />
   );
   if (bookings.length === 0) {

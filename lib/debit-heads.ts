@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DEBIT_HEAD_LABELS, type BookingType, type DebitHead, type Profile, type Role } from "./types";
+import { narrowToOffice } from "./office-debit-heads";
 import type { Unit } from "./units";
 
 /**
@@ -27,6 +28,16 @@ import type { Unit } from "./units";
  * heads themselves have existed since migration 15; four of them
  * (Alumni Fund, Student Fund, Hostel Funds, and Personal on an official
  * faculty booking) were not offered anywhere until this list.
+ *
+ * **An office is then narrowed to its own row** (9 Oct 2026): Settings keys
+ * the list by category, so every office shared the same six heads, and the
+ * office's spreadsheet of its mailboxes is finer than that - the Director's
+ * Office spends the Institute Grant, a department office its department's
+ * budget, the Students Section the student and hostel funds. The category
+ * list is the ceiling for offices in general and
+ * `lib/office-debit-heads.ts` is the ceiling for one office; `debitHeadsByType`
+ * intersects them. An office that is not on the spreadsheet keeps the
+ * category list.
  *
  * The allowed list is computed on the server (`debitHeadsByType`) and handed
  * to the booking form, and the schema checks the choice against the same list
@@ -436,10 +447,13 @@ export function debitCategoryFor(
 /** The heads offered, per booking type, for this requester - what the form and schema use. */
 export type DebitHeadsByType = Partial<Record<BookingType, DebitHead[]>>;
 
+/** The two categories the office's per-office spreadsheet applies to. */
+const OFFICE_CATEGORIES: DebitCategory[] = ["officer_office", "department_office"];
+
 export function debitHeadsByType(
   role: Role,
   bookingTypes: BookingType[],
-  requester: Pick<Profile, "staff_category" | "unit_id">,
+  requester: Pick<Profile, "staff_category" | "unit_id"> & { email?: string | null },
   units: Unit[],
   rules: DebitRules,
   kind: "room" | "dining" = "room"
@@ -450,7 +464,20 @@ export function debitHeadsByType(
       // Stripped here rather than trusted from Settings: the form and
       // `createBooking` both read this, so a head a category may never use
       // cannot be offered or accepted even if a stored row still lists it.
-      return [type, allowedHeads(category, rules[kind][category], kind)];
+      const configured = allowedHeads(category, rules[kind][category], kind);
+      // Then narrowed to the particular office (9 Oct 2026). Settings keys
+      // the list by category, and the office's own spreadsheet is per
+      // mailbox - the Director's Office spends the Institute Grant, a
+      // department office its department's budget - so the category list is
+      // a ceiling for every office and this is the ceiling for this one. Only
+      // the office categories: an employee's or a club's heads are not on
+      // that spreadsheet, and a personal booking is not asked at all.
+      return [
+        type,
+        OFFICE_CATEGORIES.includes(category)
+          ? narrowToOffice(configured, requester.email)
+          : configured,
+      ];
     })
   );
 }

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canBookOnBehalf, canViewAllOccupancy } from "@/lib/access";
 import { bookingTypesFor } from "@/lib/booking-types";
-import { GUEST_HOUSE_MANAGER_CONTACT, MANAGER_HELP_LINE } from "@/lib/policy";
 import { DEFAULT_RULES } from "@/lib/settings";
 import { GUEST_HOUSE_CONTACT } from "@/lib/site";
 import type { Role } from "@/lib/types";
@@ -12,6 +11,10 @@ import type { Role } from "@/lib/types";
  * submit, the portal's help line showed a placeholder phone that matched
  * neither the website nor the invoice, and reception had no way to the
  * kitchen's page it is allowed to open.
+ *
+ * The help line itself came off the portal on 9 Oct 2026 - the number lives
+ * in the portal footer - so what is left to check is that there is still only
+ * one phone number and one address for the guest house.
  */
 
 describe("who books on someone's behalf", () => {
@@ -36,12 +39,9 @@ describe("who books on someone's behalf", () => {
 });
 
 describe("one phone number for the guest house", () => {
-  it("the help line uses the office's own phone and email", () => {
-    expect(GUEST_HOUSE_MANAGER_CONTACT.phone).toBe(GUEST_HOUSE_CONTACT.phone);
-    expect(GUEST_HOUSE_MANAGER_CONTACT.email).toBe(GUEST_HOUSE_CONTACT.email);
-    expect(MANAGER_HELP_LINE).toContain(GUEST_HOUSE_CONTACT.phone);
-    expect(MANAGER_HELP_LINE).toContain(GUEST_HOUSE_CONTACT.email);
-    expect(MANAGER_HELP_LINE).not.toContain("04923");
+  it("is the office's own, not the old placeholder", () => {
+    expect(GUEST_HOUSE_CONTACT.phone).not.toContain("04923");
+    expect(GUEST_HOUSE_CONTACT.email).toBe("ghm@iitpkd.ac.in");
   });
 
   it("the invoice's default contact starts out the same", () => {

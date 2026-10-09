@@ -8,7 +8,6 @@ import { SectionHeading } from "@/components/section-heading";
 import { getCurrentUser } from "@/lib/auth";
 import { serviceTypesFor } from "@/lib/booking-types";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
-import { MANAGER_HELP_LINE } from "@/lib/policy";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { REQUESTER_ROLES } from "@/lib/types";
@@ -68,9 +67,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader caption={user.full_name} title="My Bookings">
-        Track your guest house requests through the approval pipeline.
-      </PageHeader>
+      <PageHeader caption={user.full_name} title="My Bookings" />
       {/* The two ways in, as large tiles rather than header buttons: people
           came to this page to book, and small outlined buttons at the far
           end of the title were being missed. */}
@@ -82,11 +79,7 @@ export default async function DashboardPage() {
               icon={BedDouble}
               tone="brand"
               title="New room booking"
-              detail={
-                roomHouseNames
-                  ? `Rooms at ${roomHouseNames} - dates, guests and meals in one request`
-                  : "Dates, guests and meals in one request"
-              }
+              detail={roomHouseNames ? `At ${roomHouseNames}` : "Dates, guests and meals"}
             />
           )}
           {booksForSelf && canBookMeals && (
@@ -95,7 +88,7 @@ export default async function DashboardPage() {
               icon={UtensilsCrossed}
               tone="ink"
               title="Meal booking"
-              detail={`Meals only${mealHouseNames ? ` at ${mealHouseNames}` : ""} - no room needed`}
+              detail={mealHouseNames ? `At ${mealHouseNames}, no room` : "No room"}
             />
           )}
           {/* A faculty in-charge books for each of their clubs. */}
@@ -106,7 +99,7 @@ export default async function DashboardPage() {
               icon={UsersRound}
               tone={booksForSelf ? "outline" : "brand"}
               title={`Book for ${c.full_name}`}
-              detail="As its Faculty Advisor - goes straight to the Guest House Manager"
+              detail="As its Faculty Advisor"
             />
           ))}
         </div>
@@ -118,21 +111,17 @@ export default async function DashboardPage() {
         </p>
       )}
       <section>
-        <SectionHeading
-          title="Your requests"
-          count={bookings.length}
-          description="Newest first."
-        />
+        <SectionHeading title="Your requests" count={bookings.length} />
         <MyBookings bookings={bookings} invoices={invoices} />
       </section>
-      {/* DPDP (Phase 8): take a copy, or ask the office to erase it. */}
+      {/* DPDP (Phase 8): take a copy, or ask the office to erase it. A quiet
+          line at the foot of the page, not a notice (9 Oct 2026).
+
+          The "Facing trouble booking?" line used to follow it. The office's
+          phone and email are in the portal footer on every page now
+          (`app/(portal)/layout.tsx`), which is where a reader looks for
+          them. */}
       <MyData openRequest={openPrivacyRequest} />
-      {/* The way out when the form will not do what the requester needs - a
-          stay over the 14-night cap, an exception, a booking taken at the
-          desk. Values live in `lib/policy.ts`. */}
-      <p className="border-l-4 border-border-strong bg-band/60 px-4 py-3 text-sm text-body">
-        {MANAGER_HELP_LINE}
-      </p>
     </div>
   );
 }

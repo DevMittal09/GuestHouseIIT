@@ -22,10 +22,10 @@ export default async function WardenPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader caption={`Approvals · ${user.hostel_name ?? "Hostel"}`} title="Assistant Warden Portal">
-        Student booking requests from <span className="font-medium">{user.hostel_name}</span>{" "}
-        hostel awaiting your review.
-      </PageHeader>
+      <PageHeader
+        caption={`Approvals · ${user.hostel_name ?? "Hostel"}`}
+        title="Assistant Warden Portal"
+      />
       <ReviewQueue
         bookings={bookings}
         emptyMessage={`No pending requests from ${user.hostel_name} hostel.`}

@@ -168,71 +168,71 @@ export function BookingAvailability({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1.5">
-          <Label className="block text-xs">View</Label>
-          <div className={segmentGroup} role="group" aria-label="View">
-            {AVAILABILITY_VIEWS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={option.value === view}
-                onClick={() => setView(option.value)}
-                className={segment(option.value === view, "sm")}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+    <div className="space-y-4">
+      {/* One tight row (9 Oct 2026): the view, the date, and the way back.
+          The labels are there for a screen reader and not on screen - three
+          field labels over three small controls was most of what the panel
+          looked like. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className={segmentGroup} role="group" aria-label="View">
+          {AVAILABILITY_VIEWS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={option.value === view}
+              onClick={() => setView(option.value)}
+              className={segment(option.value === view, "sm")}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="booking-availability-date" className="block text-xs">
-            {view === "day" ? "Showing" : `Any date in the ${period}`}
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label={`Previous ${period}`}
+            disabled={!range}
+            onClick={() => moveTo(shiftAnchor(view, anchor, -1))}
+          >
+            <ChevronLeftIcon />
+          </Button>
+          <Label htmlFor="booking-availability-date" className="sr-only">
+            {view === "day" ? "Date shown" : `Any date in the ${period}`}
           </Label>
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={`Previous ${period}`}
-              disabled={!range}
-              onClick={() => moveTo(shiftAnchor(view, anchor, -1))}
-            >
-              <ChevronLeftIcon />
-            </Button>
-            <Input
-              id="booking-availability-date"
-              type="date"
-              value={anchor}
-              onChange={(e) => moveTo(e.target.value)}
-              className="w-40"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={`Next ${period}`}
-              disabled={!range}
-              onClick={() => moveTo(shiftAnchor(view, anchor, 1))}
-            >
-              <ChevronRightIcon />
-            </Button>
-          </div>
+          <Input
+            id="booking-availability-date"
+            type="date"
+            value={anchor}
+            onChange={(e) => moveTo(e.target.value)}
+            className="w-[9.5rem]"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label={`Next ${period}`}
+            disabled={!range}
+            onClick={() => moveTo(shiftAnchor(view, anchor, 1))}
+          >
+            <ChevronRightIcon />
+          </Button>
         </div>
 
         {/* Only offered once it would do something - and it is how the
             requester gets back after wandering off. */}
         {browsing && (
           <Button type="button" variant="outline" size="sm" onClick={() => setBrowsed(null)}>
-            Back to check-in date
+            Back to check-in
           </Button>
         )}
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
+          className="ml-auto text-muted-foreground"
           onClick={() => setRefreshKey((k) => k + 1)}
           disabled={loading}
         >
@@ -240,32 +240,26 @@ export function BookingAvailability({
         </Button>
       </div>
 
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-body">
         {loading ? (
-          "Loading availability…"
+          <span className="text-muted-foreground">Loading availability…</span>
         ) : loaded?.failed ? (
           <span className="text-destructive">
-            Could not load availability - you can still submit; the manager checks again at
-            allocation.
+            Could not load availability - you can still submit.
           </span>
         ) : range ? (
           <>
-            <span className="font-medium text-foreground">{counts.freeThroughout}</span> of{" "}
-            <span className="font-medium text-foreground">{roomCount}</span> rooms
-            {guestHouseName ? ` at ${guestHouseName}` : ""} are free all {period} -{" "}
-            <span className="font-medium text-foreground">{describeRange(range)}</span>
+            <span className="font-semibold text-ink">{counts.freeThroughout}</span> of {roomCount}{" "}
+            rooms{guestHouseName ? ` at ${guestHouseName}` : ""} free all {period}
+            <span className="text-muted-foreground"> · {describeRange(range)}</span>
+            {browsing && (
+              <span className="text-muted-foreground"> · your booking is unchanged</span>
+            )}
           </>
         ) : (
-          "Pick a date to see room availability."
+          <span className="text-muted-foreground">Pick a date to see room availability.</span>
         )}
       </p>
-
-      {browsing && (
-        <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-xs text-ink">
-          You are looking at another date. This does not change your booking - the stay is still
-          the check-in and check-out you entered above.
-        </p>
-      )}
 
       {hasRooms && range && (
         <>
@@ -300,11 +294,6 @@ export function BookingAvailability({
               />
             ) : null}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Times are IST. Rooms are held by approved, occupied and pending-cancellation bookings -
-            a request still awaiting approval reserves nothing, so availability can change before
-            yours is approved.
-          </p>
         </>
       )}
 

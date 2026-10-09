@@ -55,12 +55,14 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest ·
 Playwright. **Node 20** via nvm (the machine default is 18).
 
-**Status, 8 Oct 2026.** Feature-complete for every workflow specified; taken
+**Status, 9 Oct 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme (Settings, mail
 addressing, turnaround buffer, HOD approval and debitable heads, invoices,
 dining, operational states, security, performance and tests, documentation),
-nine rounds of the office's corrections, a UI revamp and the supervisor's
-review of the live site (30 Sep). **Not deployed for real use** - everything
+nine rounds of the office's corrections, a UI revamp, the supervisor's review
+of the live site (30 Sep), the owner's own pass on how much the portal says
+(9 Oct) and the office's spreadsheet of **which budget each office may charge**
+(9 Oct evening). **Not deployed for real use** - everything
 that first deployment needs is in
 [06-production-requirements.md](06-production-requirements.md).
 Runs locally on the mock store, and against one hosted Supabase project with
@@ -69,8 +71,9 @@ Authentication (configure Google or `MOCK_LOGIN=false`), production secrets,
 the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 
 **Numbers.** 30 migrations · 12 roles (10 active) · 13 booking statuses ·
-9 debitable heads · 18 demo personas · 6 demo bookings · 431 unit tests ·
-36 end-to-end journeys · 14 console sections.
+9 debitable heads, mapped across **34 office mailboxes** · 18 demo personas ·
+6 demo bookings · 451 unit tests · 36 end-to-end journeys ·
+14 console sections.
 
 ---
 
@@ -86,6 +89,7 @@ the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 | [04-roadmap.md](04-roadmap.md) | **What is left**: deployment gates, loose ends, audit findings, asks of other people, next features |
 | [05-production-plan.md](05-production-plan.md) | The 2 Sep production plan — history now, mostly executed; kept for its reasoning |
 | [06-production-requirements.md](06-production-requirements.md) | **What the production build needs, in one checklist** (8 Oct 2026): the users and how they are loaded, the debitable heads as the office gave them, the data the office must supply, the secrets and switches, the migrations, what production turns off, and what was asked for and parked |
+| [offices-debitable-heads.csv](offices-debitable-heads.csv) | The office's spreadsheet of 9 Oct 2026, verbatim: **which budget each institute office may charge**, one row per mailbox. Transcribed into `lib/office-debit-heads.ts`; tabulated in [06-production-requirements.md](06-production-requirements.md) §2 |
 | [Guest House Meeting Notes.md](Guest%20House%20Meeting%20Notes.md) | The office's own notes from the 15 Sep meeting, verbatim |
 
 **The product, as configured**
@@ -145,9 +149,10 @@ the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 
 Every booking: a **debitable head** is mandatory **except on a personal
 booking, which is never asked** (the server records Personal Funds) - nine
-heads, mapped per requester by the office's own list of 8 Oct 2026, and **any
-head but Personal Funds asks the requester to declare that the funds are
-approved and available**; **Copy to** is optional (≤ 25, CC on every mail to
+heads, mapped per requester by the office's own list of 8 Oct 2026 and, for an
+**office**, narrowed again to that office's own row on the spreadsheet of
+9 Oct 2026, and **any head but Personal Funds asks the requester to declare
+that the funds are approved and available**; **Copy to** is optional (≤ 25, CC on every mail to
 the requester); **privacy consent** is mandatory; check-in within **1 month**, at most **14 nights**; a room card
 holds **4 people, at most 3 needing a bed, at most 3 infants** (under 5);
 meals only at a guest house that serves them and **never for a student or an
@@ -157,7 +162,9 @@ one sitting** counting who is already booked (lunch is ticked for you on a
 meal booking). A **turnaround buffer** of 4 h separates stays. A student's
 **father and mother come from their academic record and are locked**, and need
 no ID; "Add infant" opens an infant card. The form shows **the rates** and
-**how many rooms are free** - the room-by-room chart is the desk's. Invoices
+**how many rooms are free** - the room-by-room chart is the desk's. **The form
+does not state the rules it enforces** (9 Oct 2026): those are on the
+Guidelines page, in the error when it fires, or in the control itself. Invoices
 charge **GST 18% on rooms, 5% on food**, each on its own subtotal, lettered up
 to **Grand Total (A+B+C+D)**, settled by **UPI or account transfer**; a
 **personal stay is paid before the guest leaves**. A request nobody decides
@@ -176,6 +183,7 @@ files 10–15.
 | Form fields per role | `lib/form-config.ts` (+ saved rows) |
 | Everything a submission is checked against | `lib/booking-schema.ts` (client and server) + `createBooking` |
 | Debitable heads, and the funds declaration | `lib/debit-heads.ts` |
+| Which heads **one particular office** may charge | `lib/office-debit-heads.ts` (`OFFICE_DEBIT_HEADS`, `narrowToOffice`) - a ceiling over the Settings list |
 | Loading the accounts from a spreadsheet | `lib/users-import.ts` (console: Users & Roles → Import from spreadsheet) |
 | Settings and their defaults | `lib/settings.ts` |
 | Stay cap, the one guest house students and alumni use, who may be offered meals, contact line | `lib/policy.ts` |
@@ -241,12 +249,15 @@ After every working round:
    status) and a row to [02-timeline.md](02-timeline.md).
 4. Update the product files (10–15) wherever behaviour changed — they must stay
    true to the code.
-5. New migration → [22-database.md](22-database.md); new persona or password →
+5. A list the office sends as a file (a spreadsheet, a CSV) → **keep it in
+   this folder verbatim** and link it from the file map, so the transcription
+   in code can always be read against the original.
+6. New migration → [22-database.md](22-database.md); new persona or password →
    [30-credentials-and-access.md](30-credentials-and-access.md) **and**
    `lib/ldap/mock-directory.ts`; new academic record →
    [17-academic-records.md](17-academic-records.md) **and**
    `lib/academic/mock-source.ts`.
-6. Update [04-roadmap.md](04-roadmap.md) and `AGENTS.md`.
+7. Update [04-roadmap.md](04-roadmap.md) and `AGENTS.md`.
 
 ---
 

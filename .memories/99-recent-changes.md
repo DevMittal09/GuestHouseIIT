@@ -9,209 +9,140 @@ and `AGENTS.md` (the rules).
 
 ---
 
-## Round of 8 October 2026 — the office's ninth list
+## Round of 9 October 2026 (evening) — the offices' own debitable heads
 
-Five items, relayed by the owner, who said that **most of what the office is
-now asking for is about the production deployment, not the demo** - the real
-accounts, the real debitable heads, the real mail. The lasting answer to that
-is a new memory file: **[06-production-requirements.md](06-production-requirements.md)**,
-the single checklist of what a production build needs.
+The office sent a **spreadsheet** instead of a numbered list: one row per
+institute office mailbox, a column per debitable head, **"Y" where that office
+may charge it**. The owner's instruction with it:
 
-Status item by item in [01-background.md](01-background.md) ("The office's
-ninth list"); reasoning in [03-decisions.md](03-decisions.md) ("8 Oct 2026").
+> "The csv file has the mapping of the offices with the debitable heads, "Y"
+> means the offices can use that debitable head… Currently for offices we have
+> directors office as the mock user. So use this for that. **Only show the
+> debitable heads marked as Y do not show those which are not.** Project Funds
+> and Personal Funds wont be visible for any ig, if its not there in the csv"
 
-**One migration, 30** - and it is **already applied** on the hosted project,
-along with 24-29 (see "Migrations, settled" below).
+**No migration.** Nothing in the database moved, no Settings row changed.
 
-### 1. The debitable heads, as the office gave them
+The file is kept verbatim as
+[offices-debitable-heads.csv](offices-debitable-heads.csv), tabulated in
+[06-production-requirements.md](06-production-requirements.md) §2, reasoned in
+[03-decisions.md](03-decisions.md) ("9 Oct 2026 (evening)"), and recorded item
+by item in [01-background.md](01-background.md).
 
-| Asked for | Now |
+### What the spreadsheet says that the code did not
+
+Settings → Debitable heads keys the allowed heads by the requester's
+**category**, and since 8 Oct both classes of office (`officer_office`,
+`department_office`) carried the same six: Institute Grant, Department Budget,
+Special Budget, Student Fund, Hostel Funds, Alumni Fund. The spreadsheet is
+finer than that, and **it does not follow `office_class`**:
+
+| Office | May charge |
 | --- | --- |
-| The nine heads by name | `STANDARD_DEBIT_HEADS` holds all nine, in the office's order. **Alumni Fund, Student Fund and Hostel Funds** had been on the enum since migration 15 and offered to nobody; **Personal Funds** reaches a faculty member's *official* booking for the first time |
-| The mapping of requester to head | `DEFAULT_DEBIT_RULES`, **revision 6**. Four categories changed which heads they have: non-teaching staff have **Personal Funds alone** (they lost the department budget), the two classes of office share **one list of six**, clubs and fests moved to the **Student Fund**, and alumni bookings to the **Alumni Fund** |
-| "All funds except Institute Grant, Alumni, Student Fund and Hostel" for faculty | Read as a **floor**, not only a default: `FORBIDDEN_DEBIT_HEADS.faculty` holds all four, so Settings cannot tick them back on and a stored row that still lists one is ignored on read |
-| Special **Budget** (it was labelled Special Funds from 24 Sep) | Relabelled in `DEBIT_HEAD_LABELS` and `INVOICE_HEAD_LABELS`. The stored value is still `special_budget`, so nothing in the database moved |
-| "Special Budget (Please specify the details)" | `debitDetailsRequired` includes it, so the box is **mandatory**. The **Upload approval** beside it is offered and stays **optional** - a requester waiting on a scan should not be stopped from booking. One line to change if the office meant otherwise ([06](06-production-requirements.md) §2) |
+| Director's Office | Institute Grant, Special Budget |
+| Sports & Physical Education | Institute Grant **only** |
+| Students Section | Special Budget, Student Fund, Hostel Funds |
+| IAR Office | Special Budget, Alumni Fund |
+| The eleven department offices | Department Budget, Special Budget |
+| Institute Clinic, Security, CCE, Placements, Outreach, CET | Special Budget **only** |
+| Hostel | Hostel Funds **only** |
 
-**Revision 6 replaces a saved Settings row's lists** rather than editing them.
-Revisions 2-5 each added or removed one head and could be applied field by
-field; the office's mapping is different, not narrower, so there is no such
-edit - and the office giving the list means the list *is* the configuration.
-After revision 6 the row is the office's own again and is never touched.
+No category boundary produces those lists, so every office was being offered
+up to five budgets it has no authority over.
 
-### 2. The funds declaration (migration 30)
+### 1. `lib/office-debit-heads.ts` — the spreadsheet as data
 
-> "I have the necessary approval for the usage of funds from the competent
-> authority and verified that sufficient balance is there in the debitable
-> head."
+`OFFICE_DEBIT_HEADS`: 34 rows, keyed by the **mailbox before the `@`**,
+because that is the account that signs in. `officeDebitRowFor` /
+`officeDebitHeads` / `narrowToOffice` read it.
 
-- `FUND_DECLARATION` is the one constant, so the words on screen are the words
-  in the record. `requiresFundDeclaration(head)` is **any head but Personal
-  Funds**; `fundDeclarationError` is the one message, read by the form and the
-  schema.
-- **Inside the Debitable head card**, not beside the privacy tick: it is a
-  statement about the head just chosen, and it appears and disappears with it.
-- Enforced on **both sides**, and `createBooking` only records it where the
-  head asked for it, so a personal booking cannot carry a declaration it never
-  made.
-- Stored as **`bookings.fund_declaration_at`** (migration 30) - an instant, like
-  `privacy_consent_at` beside it. **Nothing is backfilled**: a null means
-  either "personal booking" or "made before today".
-- Until the migration is applied, the store leaves the column out unless the
-  declaration was given, so **every personal booking still works** and only a
-  booking on somebody else's budget is refused.
+**Project Grant and Personal Funds are on no row** - the spreadsheet has six
+columns for nine heads, which is the office saying an office spends neither.
+Neither was in the offices' category lists before, so nothing changed there;
+a test pins it now.
 
-### 3. One mail thread per booking id - verified, and completed
+### 2. `debitHeadsByType` narrows, as a ceiling over Settings
 
-The office said "I think it's already like that, please verify". It was true of
-the **staff's** mail (since 23 Sep 2026) and **not** of the requester's, which
-stood alone by an earlier decision from the meeting notes.
+The narrowing goes **inside the one computation the booking form and
+`createBooking` both read** (`bookingContextFor` → `debitHeadsByType`), so the
+form cannot offer a head the server would refuse.
 
-Eleven events moved into the booking thread (`MAIL_THREAD_OF`): every
-`*.requester` event about a booking, the check-in reminder, and
-`invoice.issued.accounts`. The threading machinery was already generic, so
-nothing else changed. The daily log thread still carries the digest, the
-escalation and the desk report - they are about a queue and have no booking to
-hang on.
+It is an **intersection**, not a replacement. Settings is the office's live
+control over heads in general; the spreadsheet is this office's own authority.
+Narrowing from both sides means **neither can widen the other** - the same
+shape as `FORBIDDEN_DEBIT_HEADS` being a floor under Settings, in the other
+direction.
 
-**The cost is the shared subject.** Gmail splits a thread the moment the
-subject changes, so a requester now sees `[IITPKD-GH-2026-AB12C] Guest house
-booking` and "Rooms allocated" moves to the inbox preview line. Same trade the
-staff mail made in September.
+Three guards worth keeping:
 
-### 4. Less text on screen
+- **Only the two office categories.** `people@iitpkd.ac.in` is an
+  Administration mailbox *and* a plausible person's address, so an employee, a
+  student or a club keeps their own category's heads whatever their address
+  looks like.
+- **An office not on the spreadsheet keeps the category's six.** Guessing
+  narrower would stop a new office booking; guessing wider is what the table
+  prevents.
+- **An empty intersection stays empty.** The form then says "No debitable head
+  is set up for this kind of booking", which is true, rather than quietly
+  restoring a budget the office has no authority over.
 
-The supervisor asked for the content and not the commentary. Every rule and
-every figure was kept; what went is the clause that explains the clause.
+### 3. The demo personas, narrowed today
 
-- **The booking form**: nine card descriptions cut or removed (Type of booking
-  and Approval now have none - their own headings say it), and eight help
-  paragraphs trimmed. The infant note stated the **room's capacity**, which the
-  notice on the room card a few lines below states again - `INFANT_HELP_TEXT`
-  is now the infant fact alone and is a constant, not a function of Settings.
-- **`/book`**: the page lead is one short line or none; "What happens next"
-  beside the form is where the steps live.
-- **The desk**: Checking out today, the availability chart descriptions, the
-  reviewer's Review dialog, the dashboard's "Your requests".
-- **The Guidelines page**: every item is one statement. `BOOKING_STEPS` too,
-  which is shared with the panel beside the booking form.
+Mock Authentication puts the demo offices on addresses the institute does not
+use for them, so a row may name **aliases**, matched like the mailbox:
+`admin` and `director.office` → Director Office, `cse.office` → `office_cs`,
+`registrar` → `ro`. Renaming the seed instead would have broken the whitelist,
+the demo bookings and every recorded login.
 
-Two e2e assertions had to follow the copy: `kitchenName` reads "From the X
-kitchen", and the Users console is recognised by "N accounts" rather than a
-heading it never had.
+So the owner's instruction is visible now, verified by fetching `/book` as
+each persona on a dev server over the mock store:
 
-### 5. Accounts from a spreadsheet (and bulk delete)
+| Persona | Heads rendered |
+| --- | --- |
+| `official-admin` — "Director's Office" (the demo `official`) | `institute_grant`, `special_budget` — and nothing else |
+| `office-cse` — CSE Department Office | `department_budget`, `special_budget` |
+| `iar-cell` — IAR Office (official booking) | `special_budget`, `alumni_fund` |
 
-The office asked, for the GH Manager: "add the data from excel, edit the
-columns, and delete data... when we add data of all users". It was practical,
-so it is built rather than parked.
-
-**Users & Roles → Import from spreadsheet.** Paste the columns out of Excel →
-**Check the paste** (a plan: "412 added, 3 updated, 9 unchanged", and what
-changed per person) → **Import**, all or nothing.
-
-- **"Edit the columns" is the header line**: it names the columns in whatever
-  order the office's sheet has them, and only `email` is required. Aliases in
-  `KNOWN_COLUMNS` (`Roll No.`, `Dept / Club`, `LDAP username`…). With no header
-  the default order is read.
-- **A column the paste does not carry is left alone**, so a sheet of email and
-  name cannot wipe everyone's hostel. A person already on the list is
-  **updated**, matched on the email, so the same paste can be re-run when the
-  sheet grows.
-- `faculty` / `staff` are read as the **employee** role and set the staff
-  category at the same time.
-- A **header must start with the email column**, because `columnFor` also
-  matches the bare word "email" - which is the first cell of a data line for
-  anybody whose address is `email@…`.
-- A manager cannot import a developer into existence, and an account they may
-  not edit is refused **by name** (`assignableRoles`, `userEditError`, checked
-  in the action). At most 2,000 rows a paste. Audited.
-- **Bulk delete**: tick rows, Delete N selected, type the phrase. Whatever
-  cannot go (a person with bookings, a developer's account to a manager) is
-  **named back** and the rest still go - the opposite of the import, because a
-  delete has no half-applied state to be confused about.
-
-`lib/users-import.ts` is pure, so the console previews the plan with the same
-function that applies it.
+The second row is the clearest demonstration that the mapping is per office
+and not per class.
 
 ### Verified
 
-`npm run lint`, `npm run typecheck`, **`npm test` - 431 passed** (24 files; new
-`tests/ninth-round.test.ts` 24), a production build on the mock store
-(`NEXT_PUBLIC_SUPABASE_URL=`), and **`npm run test:e2e` - 36 journeys**,
-including a new `e2e/ninth-round.spec.ts`: a faculty booking refused without
-the declaration and accepted with it, Special Budget demanding the fund's name,
-and the manager importing two accounts from a paste, re-running it for
-"0 added, 0 updated, 2 unchanged", and deleting both together.
+`npm run lint` · `npx tsc --noEmit` · `npm test` (**451** passing, 26 files -
+13 new in `tests/office-debit-heads.test.ts`) ·
+`NEXT_PUBLIC_SUPABASE_URL= npm run build` · the three `/book` fetches above.
 
-**Migration 30 in a throwaway `postgres:16-alpine`**: 1-30 applied, 30
-re-applied with the test rows still in place; the column nullable and
-`timestamptz` with its comment; a booking stored without it (a personal stay)
-and another with it beside a `department_budget` head; MISSED still last on the
-enum.
+One existing test moved: `tests/workflow-hod.test.ts`'s round-trip check takes
+**the first head on each requester's list** and sent no `debit_details`. The
+IAR Office's official list now begins at Special Budget, whose details are
+mandatory since 8 Oct, so the payload fills them in whenever
+`debitDetailsRequired(head)`. The check itself is unchanged.
 
-**And on the hosted project** (9 Oct 2026, read-only):
-`npm run check:migrations` reports **1-30 all applied**, with 17 and 23 named
-as the two it cannot see.
-
-Tests that now assert the opposite of what they did a week ago, as expected
-when a mapping changes: the per-category head lists in
-`tests/workflow-hod.test.ts` and `tests/dining.test.ts`, the Special
-Funds/Budget blocks of `tests/fourth-round.test.ts` and
-`tests/fifth-round.test.ts`, the revision assertions in
-`tests/seventh-round.test.ts` and `tests/eighth-round.test.ts`, and the Missed
-mail's subject in `tests/missed-requests.test.ts` (it is the thread's now).
-
-### 6. Migrations, settled - and a script so it stays settled (9 Oct 2026)
-
-The owner said migrations 24-30 had already been run in the Supabase SQL
-editor and asked why the portal was reporting otherwise. **It was not the
-portal - it was these notes.** `.memories/23-running-and-testing.md` said
-"which migrations the hosted project has is not recorded here" and offered a
-hand-written SQL query whose marker list **stopped at migration 25**. So 26
-onwards could not be checked at all, and the sentence "24-30 are outstanding"
-was copied forward from round to round, long after they were applied.
-
-**Fixed by asking the database instead of writing the answer down:**
-
-```bash
-npm run check:migrations      # scripts/check-migrations.mjs
-```
-
-One marker per migration - the table, column or enum value it created - probed
-**read-only** over PostgREST (`GET`, at most one row, shape only; nothing is
-written and no guest data is read). It exits 1 if a marker is missing, so a
-deploy step can gate on it.
-
-**Result, 9 Oct 2026: migrations 1-30 are all applied** on the hosted project.
-Migrations **17 and 23** are the two it cannot see - they only add or replace a
-plpgsql function, PostgREST cannot read `pg_proc`, and calling either would be
-a write - so it names them and prints the one-line SQL for the editor rather
-than guessing. Their observable symptoms if missing: 23, Supabase refuses a
-second infant in one room; 17, changing the turnaround buffer fails.
-
-The old prose and the truncated query are gone from
-[23-running-and-testing.md](23-running-and-testing.md), which now points at the
-script, and the stale claims are struck through in
-[04-roadmap.md](04-roadmap.md) and
-[06-production-requirements.md](06-production-requirements.md).
+`npm run test:e2e` was **not** re-run this round: no journey asserts an
+office's debit heads, and the build and unit suites cover the change. Run it
+before committing if you want the full gate.
 
 ### Still open
 
-- **The Special Budget approval upload stays optional** (the office, 9 Oct
-  2026). The details box beside it is mandatory; the upload is offered and not
-  required, so a requester waiting on a scan is not stopped from booking.
-  [06-production-requirements.md](06-production-requirements.md) §2 keeps the
-  one-line change if that is ever revisited.
-- **`MAIL_REDIRECT_ALL_TO` must be unset in the Vercel environment** or no
-  Copy-to address will ever receive mail (carried over from 1 Oct).
-- **Load the real accounts** once LDAP is connected - that is what the
-  spreadsheet import is for, and §1 of
-  [06-production-requirements.md](06-production-requirements.md) is the
-  per-field guide.
-- In Supabase mode an imported profile also creates a Supabase Auth user with
-  the password `password123`. Harmless (that password is not a portal login)
-  but wrong at six hundred rows -
-  [06-production-requirements.md](06-production-requirements.md) §7.
-- AM's photographs; the placeholder house rules (Guidelines §7-8); each
-  council's Faculty Advisor and mailbox - [04-roadmap.md](04-roadmap.md).
+- **Point the rows at the real office mailboxes and drop the four demo
+  aliases** once LDAP is connected -
+  [06-production-requirements.md](06-production-requirements.md) §2,
+  [04-roadmap.md](04-roadmap.md) §2b.
+- **Ask the office to confirm `ro` is the Registrar's Office.** The row sits
+  under "Administration" and the mailbox name is the only evidence;
+  `registrar@iitpkd.ac.in` is aliased to it on that reading.
+- **Ask what a newly added office may charge by default.** The code keeps the
+  category's six (permissive); the alternative is nothing, which is one line
+  and a worse failure mode.
+- **The table is not editable from the console.** Deliberate while the offices
+  it keys on are not accounts: an editable version is a column on `units` and
+  a grid in Departments & Clubs. `narrowToOffice` is the only place the
+  narrowing happens, so that change stays local.
+- Carried over, unchanged: **`MAIL_REDIRECT_ALL_TO` must be unset in the
+  Vercel environment** or no Copy-to address receives mail; **load the real
+  accounts** (Users & Roles → Import from spreadsheet); an imported profile in
+  Supabase mode still creates an Auth user with `password123`
+  ([06-production-requirements.md](06-production-requirements.md) §7);
+  migrations **1-30 are all applied** on the hosted project (verified 9 Oct
+  with `npm run check:migrations`); AM's photographs; the placeholder house
+  rules (Guidelines §7-8); each council's Faculty Advisor and mailbox.

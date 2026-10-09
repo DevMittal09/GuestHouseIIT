@@ -50,7 +50,7 @@ test("a student's form states one guest house, no meals, no debitable head, and 
 
   // No meals at all: not the grid, not the preferences, not a service choice.
   await expect(page.getByRole("heading", { name: /^Meals/ })).toHaveCount(0);
-  await expect(page.locator('[name="meal_veg_count"]')).toHaveCount(0);
+  await expect(page.locator("#meal_veg_count")).toHaveCount(0);
 
   // A student's booking is personal, so the budget is never asked.
   await expect(page.getByText("Debitable head", { exact: true })).toHaveCount(0);
@@ -86,7 +86,9 @@ test("a faculty member sees the meal rates at the kitchen and is still asked on 
   await expect(rates).toBeVisible();
   await expect(rates.getByRole("cell", { name: "Room, per day" })).toBeVisible();
   await expect(rates.getByRole("cell", { name: "Lunch, per head" })).toBeVisible();
-  await expect(page.getByText(/the same ones your invoice is priced from/)).toBeVisible();
+  // The table and nothing beside it (9 Oct 2026): the paragraph about rates in
+  // force, GST and night-by-night pricing is on the Guidelines page.
+  await expect(page.getByText(/the same ones your invoice is priced from/)).toHaveCount(0);
 
   // Switching to a personal stay takes the question away entirely.
   await page.locator('[name="booking_type"][value="personal"]').check();

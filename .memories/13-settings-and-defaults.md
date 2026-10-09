@@ -127,9 +127,10 @@ head the office calls **Special Budget** is still stored as `special_budget`
   otherwise personal → *personal*, on behalf of an alumnus → *alumni*, else
   the account — faculty or staff by `profiles.staff_category` (none =
   faculty), an office by its unit's `office_class` (none = department office).
-  **Both classes of office now get the same list**, so that distinction
-  decides nothing about the heads; it is kept because it is a true fact about
-  the office and the office may narrow one of them again.
+  **Both classes of office get the same list**, so that distinction decides
+  nothing about the heads; it is kept because it is a true fact about the
+  office, and because an office's heads are now narrowed per office anyway
+  (below).
 - **Revisions** (`upgradeDebitRules`, `DebitRules.revision`, now **6**). A
   saved Settings row replaces the defaults wholesale, so each revision brings
   an older row forward exactly once. Revisions 2 (24 Sep) and 3 (25 Sep)
@@ -139,6 +140,32 @@ head the office calls **Special Budget** is still stored as `special_budget`
   not reachable by adding or removing one head (four categories changed which
   heads they have), so there is no edit that turns the old row into it. After
   that an untick sticks: a row on the current revision is left alone for good.
+
+### Debitable heads per office — not a Setting (9 Oct 2026)
+
+**A ceiling over the grid above, and the one part of the debit rules the
+console cannot edit.** The office sent a spreadsheet of its mailboxes against
+the heads each may charge, "Y" where it may:
+[offices-debitable-heads.csv](offices-debitable-heads.csv) verbatim, the whole
+table in [06-production-requirements.md](06-production-requirements.md) §2,
+and `OFFICE_DEBIT_HEADS` in `lib/office-debit-heads.ts` as the transcription.
+
+| | |
+| --- | --- |
+| **Keyed by** | the mailbox before `@iitpkd.ac.in` — the account that signs in. Rows may also name **aliases** for demo and legacy addresses: `admin` and `director.office` → Director Office, `cse.office` → `office_cs`, `registrar` → `ro` |
+| **Applied by** | `narrowToOffice`, inside `debitHeadsByType` — so the booking form and `createBooking` narrow from one computation |
+| **How** | an **intersection** with the Settings list: Settings can take a head away from every office at once, this takes away the ones one office may not touch, and **neither can widen the other**. The same shape as `FORBIDDEN_DEBIT_HEADS` being a floor, in the other direction |
+| **Scope** | the two **office** categories only. `people@` is an Administration mailbox *and* a plausible person's address, so an employee, student or club keeps their own category's heads whatever their address looks like |
+| **An office not on it** | keeps the category's six, unchanged. Guessing narrower would stop a new office booking; guessing wider is what the table prevents |
+| **An empty intersection** | returned as such. The form says "No debitable head is set up for this kind of booking", which is true, rather than restoring a budget the office has no authority over |
+| **Not on any row** | **Project Grant** and **Personal Funds** — the spreadsheet has no column for either: a project is held by its investigator, and an office has no private money |
+
+**Why it is not a Setting.** Giving the office an editable grid means a column
+on `units` (a migration) and a section in Departments & Clubs. It was not
+worth a migration while the offices it keys on do not exist as accounts yet
+(Mock Authentication, LDAP unconnected), and `narrowToOffice` is the only
+place the narrowing happens, so adding it later is local.
+[04-roadmap.md](04-roadmap.md) carries it.
 
 ### Privacy — `rules.privacy`
 
@@ -198,6 +225,7 @@ edited or deleted — a new price is a new row. Seeded from the tariff sheet:
 | Projects (number, title, PI; paste import; deactivate) | Projects | Manager, developer |
 | Guest houses, rooms (single or bulk "B-101 to B-120", max 200), active/inactive, **serves meals**, **maintenance blocks** | Guest Houses & Rooms | Manager, developer |
 | Each requester role's form: guest houses, field modes, relationship options and rules, alumni card, banner, custom fields | Form Builder | Manager, developer |
+| — the **banner** under "Number of rooms" defaults to **none** for every role since 9 Oct 2026 (the student form's "Double shared rooms will get first preference" was withdrawn). A saved row carrying exactly that string loses it on read, `RETIRED_BANNERS` in `sanitizeFormConfig`; a banner the office typed itself is kept | Form Builder | Manager, developer |
 | Each automatic mail: subject, intro, outro, extra CC, on/off | Email Templates | Manager, developer |
 | The console password | Console Access | Developer |
 
@@ -227,7 +255,7 @@ edited or deleted — a new price is a new row. Seeded from the tariff sheet:
 | Who may book meals only | `MEALS_ONLY_ROLES` (`lib/booking-types.ts`) | Employee, Official, IAR Office, GH Manager |
 | Booking types per role | `ROLE_BOOKING_TYPES` (`lib/booking-types.ts`) | |
 | Alumni stays at **Bageshri** | `ALUMNI_GUEST_HOUSE_NAME` (`lib/policy.ts`) | Matched on the name; the manager may override |
-| **The guest house's phone and email** (+91 491 209 2016, ghm@iitpkd.ac.in) | `GUEST_HOUSE_CONTACT` (`lib/site.ts`) | The one source in code: the public site, the "Facing trouble booking?" line (`lib/policy.ts`) and the invoice's default contact all read it. The invoice's copy can then be changed in Tariffs & Invoicing |
+| **The guest house's phone and email** (+91 491 209 2016, ghm@iitpkd.ac.in) | `GUEST_HOUSE_CONTACT` (`lib/site.ts`) | The one source in code: the public site, the **portal footer** (9 Oct 2026 — it was a "Facing trouble booking?" line on My Bookings and the booking form, and `MANAGER_HELP_LINE` is deleted) and the invoice's default contact all read it. The invoice's copy can then be changed in Tariffs & Invoicing |
 | Public-site map, guidelines PDF, photos | `lib/site.ts` (`grep -rn "TODO(site)"`) | |
 | Timezone **Asia/Kolkata** | `lib/tz.ts` | Never the server's zone |
 

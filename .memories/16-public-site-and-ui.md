@@ -59,6 +59,93 @@ sitting, the room capacity, the Aadhaar length, the pay-at-checkout note, the
 privacy consent, "nothing is held until the Guest House Manager allocates a
 room", and anything the office asked for by name.
 
+## A rule has three homes, and the form is one of them (9 Oct 2026)
+
+The owner's own pass, a round later and a step further: **"the text which are
+supposed to be in the guidelines or should pop up when we make the error is
+unnecessarily shown in the main page. This is the case for all pages."**
+
+8 Oct cut the clause that explains the clause. This round cuts **the sentence
+that states a rule the form already enforces**, on the reasoning that a rule
+can live in three places and only one of them is the form:
+
+| Home | For whom |
+| --- | --- |
+| **The Guidelines page** (`guidelineSections`, rendered from `lib/` + Settings) | Someone reading before they book |
+| **The error, when it fires** | Someone who has just broken it, with their own numbers in it |
+| **The control itself** | A greyed-out option that says why it is greyed out, a disabled Add button |
+
+What came off, with where the rule still is:
+
+- the infant note (`INFANT_HELP_TEXT`), "one of each"
+  (`uniqueRelationshipHint`) and the parent-dependency hint
+  (`parentDependencyHint`) - **all three constants deleted**. The options read
+  "Mother - already on this request" and "Siblings - needs a parent on this
+  request";
+- the per-room capacity notice (`roomOccupancyNotice`), which appeared under
+  *Number of rooms* **and** in every room card - the Add buttons disable with
+  a reason;
+- the student banner **"Double shared rooms will get first preference"**, which
+  the office withdrew. Also stripped from a **saved** Form Builder row
+  (`RETIRED_BANNERS` in `sanitizeFormConfig`), because a default change alone
+  would have left it on screen;
+- the tariff table's paragraph about rates in force, GST and night-by-night
+  pricing; "At most 30 at a sitting"; "The two must add up to N"; the pets
+  notice's second paragraph; six more card descriptions;
+- **"What happens next"** off `/book` - the panel added on 30 Sep. The
+  requester hears by email at each step and the steps are on the Guidelines
+  page; the side column is the Requester details card alone;
+- the **"Copy to: Nobody - this request goes straight to the Guest House
+  Manager…"** row, which appeared on exactly the roles that never need it;
+- **eight page leads** across the portal. A lead that restates the title says
+  nothing; what one can carry is the **scope** ("Malhar hostel", "HOD for
+  CSE"), so that is all that is left;
+- the **desk's section descriptions**: gone where the heading says it (Current
+  occupants, Upcoming stays), one short fact where it does not ("Past
+  check-out, never marked Vacated - still holding their rooms").
+
+### The availability panel, redrawn
+
+> "its showing the 10 of 10 rooms available for each day of the week… I want
+> it to look minimal and simple but not too juvenile… this is too kiddish."
+
+`components/availability-counts.tsx` was seven cards each repeating "10 of 10
+rooms available", with a **24-row table** of the same sentence under a single
+day. The figure is the answer, so the figure is what is drawn: a strip of ruled
+columns under one label (**Rooms free each day**) with the date in micro-type,
+the count at display size, `/23` beside it and a 3px meter; a vermilion rule
+and the word **Full** on a day with nothing free; a **headline figure** instead
+of a one-cell grid for a one-day window; the hours as a wrapped grid of chips
+with the current hour outlined. **Every cell keeps the full sentence as its
+`aria-label`** - the repetition was visual, and a screen reader lost nothing.
+The panel's toolbar is one row (view, date, back to check-in, Refresh) with the
+field labels `sr-only`.
+
+### Two more things moved rather than cut
+
+- **The privacy line** at the foot of My Bookings was a tinted band with a left
+  rule - a standing legal right drawn like news. It is a hairline-ruled row of
+  three quiet links: Privacy notice · Download my data · Ask for erasure. An
+  open erasure request still states itself.
+- **The office's phone and email** were a "Facing trouble booking?" notice on
+  My Bookings *and* at the foot of every booking form. They are in the
+  **portal footer** now, beside the copyright, on every signed-in page - which
+  is where a reader looks for a number. `MANAGER_HELP_LINE` and
+  `GUEST_HOUSE_MANAGER_CONTACT` are deleted; `GUEST_HOUSE_CONTACT`
+  (`lib/site.ts`) stays the one place either is written down.
+
+### The log's filter bar
+
+Thirteen stage tick boxes, three meal tick boxes, fourteen date chips, two date
+boxes, three selects, a toggle and a paragraph of search prefixes, all open at
+once. Rearranged by how often each is used, losing no capability: one row of
+ordinary selects (Show, Guest house, Requester category, **Check-in** - the
+presets as a single `<select>` with `<optgroup>` Rolling / Calendar, each option
+carrying its dates - From, Until, Sort by), and a **"Stages and meals"**
+`<details>` holding the two tick-box lists and the prefix help. Closed, it
+names what it is holding ("4 of 13 stages"), so a filter can never be in force
+invisibly. The six tiles above remain the everyday status filter.
+
 > **Guidelines is where things are explained.** The owner put the instructions
 > there on 26 Sep, in general terms, and that has not changed - this round
 > stopped the *portal* explaining them a second time.
@@ -93,7 +180,8 @@ room", and anything the office asked for by name.
   takes a `caption` and closes on a 2px ink rule; controls 40px tall with a
   `--input` edge of `#8C857D` (3:1+); `/book` in two columns with the
   Requester details (a summary list, container-query rows) and a sticky
-  "What happens next"; the booking form's cards numbered by
+  "What happens next" (**the panel was removed on 9 Oct 2026**; the column is
+  the Requester details card alone); the booking form's cards numbered by
   `.numbered-sections` (the counter increments on the **card**, since values
   pass between siblings); `DeskSummary` strip on `/manager` and
   `/caretaker`; the home hero an ink panel joined to the 4:3 photo; inner
@@ -218,6 +306,8 @@ app/
     mock-login/         /mock-login  Mock Authentication persona picker (open while Google is unconfigured)
     privacy/            /privacy     the versioned DPDP privacy notice
   (portal)/             SIGNED-IN portal — unchanged routes, restyled shell
+    layout.tsx          ink masthead + service nav + ink footer: copyright, the
+                        guest house office's phone and email (9 Oct 2026), links
 ```
 
 **`/` used to be the sign-in form. It is now the public home page.** So:

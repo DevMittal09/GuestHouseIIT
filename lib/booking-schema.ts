@@ -1100,16 +1100,14 @@ export function isAadhaarNumber(value: string): boolean {
   return aadhaarDigits(value).length === AADHAAR_DIGITS;
 }
 
-/**
- * The fine print next to the infant counter: what counts as an infant, and
- * nothing else.
- *
- * It used to go on to state the room's capacity, which the notice on every
- * room card (`roomOccupancyNotice`) states a few lines below it. The office
- * asked for the form to stop explaining itself twice (8 Oct 2026), so each
- * now carries one fact - and with the capacity gone there is nothing in here
- * that comes from Settings, so it reads as a constant.
+/*
+ * **`INFANT_HELP_TEXT` is deleted** (9 Oct 2026). "A guest below 5 shares a
+ * guardian's bed, needs no bed of their own and is not asked for an ID" sat
+ * under the infant counter on every room booking. 8 Oct had already cut it to
+ * the infant fact alone; this round took the sentence itself, because the
+ * infant card asks for an age of 0-4 and no ID - the rule performed rather
+ * than described - and the Guidelines page states it in words for anyone
+ * reading before they book. Don't reintroduce it.
  */
-export const INFANT_HELP_TEXT = `A guest below ${INFANT_AGE_LIMIT} shares a guardian's bed, needs no bed of their own and is not asked for an ID.`;
 
 export type BookingPayload = z.infer<ReturnType<typeof bookingPayloadSchema>>;

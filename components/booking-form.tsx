@@ -48,21 +48,17 @@ import {
   countInfants,
   describeTotals,
   INFANT_AGE_LIMIT,
-  roomOccupancyNotice,
 } from "@/lib/occupancy";
 import {
   AADHAAR_DIGITS,
   advanceWindowMessage,
   bookingPayloadSchema,
   checkOutOrderError,
-  INFANT_HELP_TEXT,
   MAX_COPY_TO_EMAILS,
 } from "@/lib/booking-schema";
 import { DEFAULT_RULES, type CapacityRules, type Rules } from "@/lib/settings";
 import {
   hasQualifyingParent,
-  parentDependencyHint,
-  uniqueRelationshipHint,
   usedUniqueRelationships,
   validateCustomValue,
   type CustomField,
@@ -78,7 +74,6 @@ import {
 import {
   guestHousesForBookingType,
   latestCheckOutDate,
-  MANAGER_HELP_LINE,
   mealsAllowedFor,
   PETS_POLICY_NOTICE,
   stayLengthHint,
@@ -544,7 +539,6 @@ export function BookingForm({
     config,
     allGuests.map((g) => g?.relationship)
   );
-  const dependencyHint = parentDependencyHint(config);
   // Mother, Father, Guardian… once each across the whole request. Computed
   // here, where every room's guests are in view, and greyed out on every
   // guest but the one that already holds the answer.
@@ -552,7 +546,6 @@ export function BookingForm({
     config,
     allGuests.map((g) => g?.relationship)
   );
-  const uniqueHint = uniqueRelationshipHint(config);
 
   const totals = describeTotals({
     rooms: (watchedRooms ?? []).length,
@@ -669,17 +662,17 @@ export function BookingForm({
   };
   const dietChosen = vegCountRaw !== "" || nonVegCountRaw !== "";
   /**
-   * The two boxes are registered by hand so each can fill the other in
-   * (7 Oct 2026): the counts must add up to the head count, so answering one
-   * settles the other, and making the requester do the subtraction was the
-   * commonest way to end up with a split that did not add up.
+   * Answering one box fills the other with the rest (7 Oct 2026): the counts
+   * must add up to the head count, so answering one settles the other, and
+   * making the requester do the subtraction was the commonest way to end up
+   * with a split that did not add up.
    *
-   * Only ever written from a change event, never from an effect: the
-   * requester can still correct either box afterwards, and the one they are
-   * not touching is the one that moves.
+   * Only ever written from a change, never from an effect: the requester can
+   * still correct either box afterwards, and the one they are not touching is
+   * the one that moves. Both boxes are steppers written with `setValue`, the
+   * same way the two `TimeSelect`s are - they are in `defaultValues`, so the
+   * submitted values carry them without a `register()` of their own.
    */
-  const vegCountField = register("meal_veg_count");
-  const nonVegCountField = register("meal_non_veg_count");
   const fillOtherDietCount = (
     other: "meal_veg_count" | "meal_non_veg_count",
     chosen: string
@@ -1040,9 +1033,7 @@ export function BookingForm({
           because everything below is the club's form, not theirs. */}
       {forClub && (
         <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-          You are booking for <span className="font-medium">{forClub.name}</span> as its Faculty
-          Advisor. The booking is theirs - it appears under their account and yours - and it goes
-          straight to the Guest House Manager for approval, with nobody to forward it.
+          Booking for <span className="font-medium">{forClub.name}</span> as its Faculty Advisor.
         </p>
       )}
 
@@ -1335,22 +1326,19 @@ export function BookingForm({
 
             <div className="space-y-2">
               <Label htmlFor="meal_guest_count">Number of people *</Label>
-              {/* A list, not a plus/minus pair (1 Oct 2026, the office's
-                  request): a meal booking is usually for a round number of
-                  people, and reaching 24 by pressing + twenty-three times is
-                  not a way to answer a question. */}
-              <NativeSelect id="meal_guest_count" {...register("meal_guest_count")}>
-                {Array.from({ length: mealPartyMax }, (_, i) => i + 1).map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </NativeSelect>
-              {mealPartyLimit > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  At most {mealPartyLimit} at a sitting, counting everyone already booked.
-                </p>
-              )}
+              {/* Typed, with steppers either side (9 Oct 2026). It was a
+                  1…30 dropdown from 1 Oct, which hid the number the requester
+                  had chosen behind a list they had to scroll; the box takes
+                  "24" in two keystrokes. Capped at the kitchen's own limit per
+                  sitting, which the schema and `createBooking` check again. */}
+              <QuantityInput
+                id="meal_guest_count"
+                aria-label="Number of people"
+                min={1}
+                max={mealPartyMax}
+                value={mealGuestCount}
+                onChange={(raw) => setValue("meal_guest_count", raw, { shouldValidate: false })}
+              />
               <FieldError message={err("meal_guest_count")} />
             </div>
 
@@ -1425,8 +1413,7 @@ export function BookingForm({
             {forAlumnus && <p className="text-xs text-muted-foreground">{ALUMNI_GUEST_HOUSE_NOTE}</p>}
             {overridingHouse && (
               <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-xs text-ink">
-                This is an exception to the alumni policy. It will be allowed, and recorded in the
-                booking&apos;s log as an override by you.
+                An exception to the alumni policy, recorded in the booking&apos;s log.
               </p>
             )}
             <FieldError message={err("guest_house_id")} />
@@ -1442,7 +1429,6 @@ export function BookingForm({
               value={roomCountRaw}
               onChange={onRoomCountChange}
             />
-            <p className="text-xs text-muted-foreground">{roomOccupancyNotice(rules.capacity)}</p>
             <FieldError message={roomCountError ?? undefined} />
             <FieldError message={err("rooms")} />
             {config.banner_text && (
@@ -1540,10 +1526,6 @@ export function BookingForm({
             <TriangleAlertIcon className="mt-0.5 size-5 shrink-0" aria-hidden />
             <div>
               <p className="font-semibold">{PETS_POLICY_NOTICE}</p>
-              <p className="mt-1 text-sm">
-                There are no kennels on the premises and no way to isolate an animal, so a guest
-                arriving with a pet cannot be accommodated.
-              </p>
             </div>
           </div>
         </CardContent>
@@ -1558,9 +1540,6 @@ export function BookingForm({
       <Card>
         <CardHeader>
           <CardTitle>{mealsOnly ? "Meal rates" : "Rates"}</CardTitle>
-          <CardDescription>
-            {mealsOnly ? "Charged per head." : "Your invoice is priced from these rates."}
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <TariffTable
@@ -1577,9 +1556,6 @@ export function BookingForm({
         <Card>
           <CardHeader>
             <CardTitle>Room availability</CardTitle>
-            <CardDescription>
-              Nothing is held until the Guest House Manager allocates a room.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <BookingAvailability
@@ -1595,11 +1571,6 @@ export function BookingForm({
         <Card>
           <CardHeader>
             <CardTitle>{mealsOnly ? "Days and meals" : "Meals (optional)"}</CardTitle>
-            <CardDescription>
-              {mealsOnly
-                ? "Lunch is ticked on each day you add."
-                : "Each meal is charged on the invoice. Leave the table empty for the room on its own."}
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Each person's own preference (1 Oct 2026). It used to be one
@@ -1611,9 +1582,6 @@ export function BookingForm({
             {mealPlan.length > 0 && (
               <fieldset className="space-y-2 rounded-md border border-border-strong bg-band/40 p-3">
                 <legend className="px-1.5 text-sm font-medium">Meal preferences *</legend>
-                <p className="text-xs text-muted-foreground">
-                  The two must add up to {mealHeadCount}.
-                </p>
                 {/* Answering one box fills the other with the rest (7 Oct
                     2026, the office's eighth list). The two always have to
                     add up to the head count, so the second question only
@@ -1625,39 +1593,31 @@ export function BookingForm({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="meal_veg_count">{MEAL_PREFERENCE_LABELS.veg}</Label>
-                    <NativeSelect
+                    <QuantityInput
                       id="meal_veg_count"
-                      {...vegCountField}
-                      onChange={(e) => {
-                        vegCountField.onChange(e);
-                        fillOtherDietCount("meal_non_veg_count", e.target.value);
+                      aria-label={MEAL_PREFERENCE_LABELS.veg}
+                      min={0}
+                      max={Math.max(mealHeadCount, 1)}
+                      value={vegCountRaw}
+                      onChange={(raw) => {
+                        setValue("meal_veg_count", raw, { shouldValidate: false });
+                        fillOtherDietCount("meal_non_veg_count", raw);
                       }}
-                    >
-                      <option value="">Select…</option>
-                      {Array.from({ length: Math.max(mealHeadCount, 1) + 1 }, (_, n) => n).map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="meal_non_veg_count">{MEAL_PREFERENCE_LABELS.non_veg}</Label>
-                    <NativeSelect
+                    <QuantityInput
                       id="meal_non_veg_count"
-                      {...nonVegCountField}
-                      onChange={(e) => {
-                        nonVegCountField.onChange(e);
-                        fillOtherDietCount("meal_veg_count", e.target.value);
+                      aria-label={MEAL_PREFERENCE_LABELS.non_veg}
+                      min={0}
+                      max={Math.max(mealHeadCount, 1)}
+                      value={nonVegCountRaw}
+                      onChange={(raw) => {
+                        setValue("meal_non_veg_count", raw, { shouldValidate: false });
+                        fillOtherDietCount("meal_veg_count", raw);
                       }}
-                    >
-                      <option value="">Select…</option>
-                      {Array.from({ length: Math.max(mealHeadCount, 1) + 1 }, (_, n) => n).map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                    />
                   </div>
                 </div>
                 {dietChosen && (
@@ -1734,30 +1694,11 @@ export function BookingForm({
         <Card>
           <CardHeader>
             <CardTitle>Guests, room by room</CardTitle>
-            <CardDescription>{INFANT_HELP_TEXT}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{totals}</span> on this request.
             </div>
-
-            {dependencyHint && (
-              <p
-                className={
-                  parentPresent
-                    ? "rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
-                    : "rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
-                }
-              >
-                {dependencyHint}
-              </p>
-            )}
-
-            {uniqueHint && (
-              <p className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm text-muted-foreground">
-                {uniqueHint}
-              </p>
-            )}
 
             {roomFields.map((room, roomIndex) => (
               <RoomCard
@@ -1978,10 +1919,6 @@ export function BookingForm({
         </Card>
       )}
 
-      <p className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm text-muted-foreground">
-        {MANAGER_HELP_LINE}
-      </p>
-
       <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border-strong bg-background px-4 py-3.5 text-sm leading-relaxed">
         <input
           type="checkbox"
@@ -2122,10 +2059,6 @@ function RoomCard({
   return (
     <fieldset className="rounded-lg border border-border-strong px-4 pt-2 pb-4 sm:px-5">
       <legend className="px-1.5 font-heading text-[1.0625rem] font-semibold text-ink">Room {roomIndex + 1}</legend>
-
-      <p className="mb-3 border-l-4 border-border-strong bg-band/60 px-3 py-2 text-xs text-muted-foreground">
-        {roomOccupancyNotice(capacity)}
-      </p>
 
       {/* No room-type question: the guest houses have only double sharing
           rooms, so "preference" was a choice with one real answer. The

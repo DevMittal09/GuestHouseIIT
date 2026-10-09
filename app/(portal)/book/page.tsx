@@ -23,8 +23,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { clubBookingNotice, defaultCopyToFor, mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser, facultyInChargeForClub } from "@/lib/club-booking-server";
-import { BOOKING_STEPS } from "@/lib/site-content";
-import { GUEST_HOUSE_CONTACT } from "@/lib/site";
 
 export default async function BookPage({
   searchParams,
@@ -106,20 +104,6 @@ export default async function BookPage({
   // mailbox; the advisor may remove it or add more.
   const defaultCopyTo = club ? defaultCopyToFor(club, context.units) : [];
 
-  /**
-   * The rates to show on the form, one set per guest house and booking type
-   * this requester may pick. Resolved here, on the server, with the same
-   * function the invoice prices from - so the form quotes what the desk
-   * charges, and the browser never has to ask.
-   */
-  const rates = tariffPreviews(
-    context.tariffs,
-    guestHouses,
-    bookingTypesFor(requester.role),
-    requester.role,
-    toInstituteDateValue(new Date())
-  );
-
   // Meals and rooms are two doors onto the same form. `?service=meals_only`
   // is what the portal home's "Meal / Dining booking" button links to; an
   // unknown or ineligible value falls back to the ordinary room flow rather
@@ -132,6 +116,24 @@ export default async function BookPage({
     ? (service as ServiceType)
     : undefined;
   const mealsOnly = initialServiceType === "meals_only";
+
+  /**
+   * The rates to show on the form, one set per guest house and booking type
+   * this requester may pick. Resolved here, on the server, with the same
+   * function the invoice prices from - so the form quotes what the desk
+   * charges, and the browser never has to ask.
+   */
+  const rates = tariffPreviews(
+    context.tariffs,
+    guestHouses,
+    bookingTypesFor(requester.role),
+    requester.role,
+    toInstituteDateValue(new Date()),
+    "double_sharing",
+    // A dining booking is quoted the meals and nothing else: there is no room
+    // on it to charge a room rate or an extra bed for (9 Oct 2026).
+    mealsOnly ? "meals_only" : "room"
+  );
 
   return (
     <div className="space-y-8">
@@ -148,8 +150,7 @@ export default async function BookPage({
         }
       >
         {/* One line, or none (8 Oct 2026): the office asked the portal to
-            stop explaining itself. What happens after Submit is the
-            "What happens next" panel beside the form. */}
+            stop explaining itself. */}
         {club
           ? "Booking as its Faculty Advisor. The request is the club's."
           : mealsOnly
@@ -166,15 +167,17 @@ export default async function BookPage({
         <aside className="min-w-0 space-y-6 lg:col-span-4 lg:col-start-9 lg:row-start-1">
           {/* Who is asking, from the academic database. Outside the form
               because nothing in it is editable. For a club's booking, that
-              is the club. */}
+              is the club.
+
+              It used to have a numbered "What happens next" panel under it.
+              That came off on 9 Oct 2026: the steps are the Guidelines' own,
+              the requester hears by email at each step anyway, and the office
+              asked for the portal to stop narrating itself. */}
           <AcademicDetailsCard
             user={requester}
             title={club ? "Club details" : "Requester details"}
             raisedBy={club ? user : null}
           />
-          <div className="lg:sticky lg:top-20">
-            <NextSteps mealsOnly={mealsOnly} />
-          </div>
         </aside>
         <div className="min-w-0 space-y-6 lg:col-span-8 lg:row-start-1">
           {/* A professor who is a Faculty Advisor books as themselves or as
@@ -213,44 +216,6 @@ export default async function BookPage({
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * What happens after Submit, beside the form. The steps are the Guidelines'
- * own (`BOOKING_STEPS`, in general terms), less "Sign in"; a meals-only
- * booking stops at approval - nobody arrives or checks out.
- */
-function NextSteps({ mealsOnly }: { mealsOnly: boolean }) {
-  const steps = BOOKING_STEPS.slice(1, mealsOnly ? 3 : undefined);
-  return (
-    <section aria-labelledby="next-steps" className="rounded-lg border border-border-strong bg-card">
-      <h2
-        id="next-steps"
-        className="border-b border-border bg-band px-5 py-3.5 text-[1.1875rem] leading-snug font-semibold text-ink"
-      >
-        What happens next
-      </h2>
-      <ol className="px-5 py-4">
-        {steps.map((step, i) => (
-          <li key={step.title} className="grid grid-cols-[2rem_1fr] gap-x-2 border-b border-border py-3 last:border-b-0">
-            <span className="font-heading text-[1.375rem] leading-none font-semibold text-vermilion tabular-nums">
-              {i + 1}
-            </span>
-            <span>
-              <span className="block text-sm font-semibold text-ink">{step.title}</span>
-              <span className="mt-0.5 block text-sm leading-relaxed text-body">{step.body}</span>
-            </span>
-          </li>
-        ))}
-      </ol>
-      <p className="border-t border-border px-5 py-3.5 text-sm text-body">
-        Guest House Office:{" "}
-        <a href={GUEST_HOUSE_CONTACT.phoneHref} className="font-semibold text-ink tabular-nums">
-          {GUEST_HOUSE_CONTACT.phone}
-        </a>
-      </p>
-    </section>
   );
 }
 

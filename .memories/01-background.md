@@ -443,6 +443,50 @@ everything a production build needs in one place. Reasoning in
 | Should the **Special Budget approval upload** be mandatory? | **No - leave it optional for now** (the office). The fund's name beside it stays mandatory |
 | Why did the portal say **migrations 24-30** were missing from the hosted project, when they had been run in the SQL editor? | It did not - **these notes did**. The check recipe in [23-running-and-testing.md](23-running-and-testing.md) listed markers only up to migration 25, so nothing past it could be verified, and each round copied the previous round's "outstanding" sentence forward. A read-only probe found **1-30 all applied**. Fixed by replacing the prose with **`npm run check:migrations`**, which asks the project itself |
 
+## The owner's list — 9 October 2026 (afternoon)
+
+Not the office's: the owner's own reading of the portal, in one message. The
+headline is **"the application is too verbose in many places… the text which
+are supposed to be in the guidelines or should pop up when we make the error is
+unnecessarily shown in the main page. This is the case for all pages."**
+Reasoning in [03-decisions.md](03-decisions.md) ("9 Oct 2026 (afternoon)"); what
+changed in [99-recent-changes.md](99-recent-changes.md). **No migration.**
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| Less text everywhere - named: the infant note, "there is only one of each", "Maximum 4 people per room…", **"Double shared rooms will get first preference"**, and the tariff table's "The rates in force today…" | **Done** | All five off the booking form, with the capacity notice removed from **both** places it appeared. `INFANT_HELP_TEXT`, `uniqueRelationshipHint` and `parentDependencyHint` **deleted**; the banner is also stripped from a **saved** Form Builder row (`RETIRED_BANNERS` in `sanitizeFormConfig`). Six card descriptions and the pets notice's second paragraph went with them |
+| "This is the case for all pages please fix all of that" | **Done** | Eight page leads across the portal (a lead now carries the **scope** or nothing), the desk's section descriptions (gone where the heading says it), the availability console's descriptions and trailing paragraph |
+| The **room availability section in New Booking**: "showing the 10 of 10 rooms available for each day of the week… minimal and simple but not too juvenile… clean and easy to the eye but also aesthetic, this is too kiddish". And remove "Times are IST. Rooms are held by…" | **Done** | `components/availability-counts.tsx` redrawn: a labelled strip of ruled columns with the count at display size and a 3px meter, **Full** in vermilion on a full day, a headline figure for a one-day window, the 24-row hour table replaced by small chips. Every cell keeps the full sentence as its `aria-label`. The panel's toolbar is one row with `sr-only` labels |
+| The privacy line on **My Bookings** is "too noticeable"; and the "Facing trouble booking?" line is not needed - "we can also put it in the black footer box right??" | **Done** | The band became a hairline row of three quiet links. The help line is gone from My Bookings **and** the booking form; the office's phone and email are in the **portal footer** on every signed-in page. `MANAGER_HELP_LINE` deleted |
+| **Booking History**: "the filtering looks too cluttered and ugly… all the tick boxes"; and "we need to be able to export as pdf also" | **Done** | One row of selects (the fourteen date chips became one `<select>` with Rolling / Calendar groups); the thirteen stage and three meal tick boxes moved behind a **"Stages and meals"** disclosure that names what it is holding when closed. `canExportPdf` is **true for every role** - and a latent bug in `exportHistoryPdf`'s `defaultActor` was fixed on the way |
+| **"What happens next"** off the room booking form for faculty and others | **Done** | Removed for every role: the requester hears by email at each step, and the steps are on the Guidelines page. The side column is the Requester details card alone |
+| Where there is no default Copy to, do not mention it - "Copy to: Nobody - this request goes straight to the Guest House Manager…" | **Done** | `academicDetailsFor` returns `copyTo: null` when the chain is empty, so the row is absent. A lookup that *failed* still says so |
+| **Meal booking**: the number of people as "a text box with up and down sliders", limit 30; and "At most 30 at a sitting" is unnecessary | **Done** | `QuantityInput`, `max` = `rules.meals.max_diners_per_meal`. **Reverses** 1 Oct's dropdown. The cap is still enforced by the schema and by `createBooking`'s check of the sitting |
+| **Vegetarian and Non-Vegetarian** as the same kind of box | **Done** | Both are `QuantityInput`; answering one still fills the other with the rest |
+| In a **meals-only** booking, the **room rate and extra bed rate** are not needed | **Done** | `previewItemsFor(servesMeals, service)` quotes the three meals and nothing else for `meals_only`; `/book` passes the service type |
+
+## The office's tenth list — 9 October 2026 (evening): the offices' own debitable heads
+
+A spreadsheet rather than a numbered list: **one row per institute office
+mailbox, a column per debitable head, "Y" where that office may charge it**.
+Kept verbatim as [offices-debitable-heads.csv](offices-debitable-heads.csv)
+and tabulated in [06-production-requirements.md](06-production-requirements.md)
+§2.
+
+Reasoning in [03-decisions.md](03-decisions.md) ("9 Oct 2026 (evening)"); what
+changed in [99-recent-changes.md](99-recent-changes.md). **No migration.**
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| "The csv file has the mapping of the offices with the debitable heads, **Y** means the offices can use that debitable head… **Only show the debitable heads marked as Y do not show those which are not**" | **Done** | `OFFICE_DEBIT_HEADS` (`lib/office-debit-heads.ts`) is the spreadsheet transcribed, keyed by the **mailbox before the `@`**. `debitHeadsByType` intersects it with the Settings list, so the booking form and `createBooking` narrow from one computation. It does **not** follow `office_class`: six different lists fall across both classes of office |
+| "Currently for offices we have directors office as the mock user. **So use this for that**" | **Done** | The demo `official` persona is the seed's "Director's Office" on `admin@`, aliased to the CSV's `director_iitpkd`. Its form offers **Institute Grant and Special Budget** and nothing else - verified by fetching `/book` as that persona. The demo department office (`cse.office@` → `office_cs`) offers **Department Budget and Special Budget**, which shows the mapping is per office |
+| "Project Funds and Personal Funds wont be visible for any ig, if its not there in the csv" | **Confirmed, and already so** | The spreadsheet has no column for either. Neither was in the offices' category lists before this round, so nothing changed; a test now pins it (`project_grant` and `personal_funds` are on no row) |
+| "Currently i guess we cant implement it because we are using mock authentication. But please keep it in .memories folder for production plan" | **Both done** | The mapping *is* implemented, because its key is the mailbox and an alias covers the demo address. What production still owes - the real mailboxes, dropping the four demo aliases, confirming `ro` is the Registrar's Office, and an editable home for the table - is [06-production-requirements.md](06-production-requirements.md) §2 and [04-roadmap.md](04-roadmap.md) |
+
+**One thing to confirm with the office:** `ro` is read as the Registrar's
+Office, and the whitelisted `registrar@iitpkd.ac.in` is aliased to it. That is
+an inference from the mailbox name.
+
 ## Scope decisions made during the build
 
 - **The developer console was added beyond the original spec.** The spec fixed

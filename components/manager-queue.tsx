@@ -172,7 +172,7 @@ export function ManagerQueue({
         <SectionHeading
           title="Incoming room requests"
           count={pendingRooms.length}
-          description={<>Pick rooms for the requested dates; allocating is what approves the booking.</>}
+          description="Allocating rooms is what approves the request."
         />
         {pendingRooms.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
@@ -223,12 +223,7 @@ export function ManagerQueue({
           <SectionHeading
             title="Incoming meal bookings"
             count={pendingMeals.length}
-            description={
-              <>
-                No room is held for these and nobody checks in - confirm the kitchen can serve
-                them. Head counts for a given day are on <span className="font-medium">Meal counts</span>.
-              </>
-            }
+            description="No room is held and nobody checks in."
           />
           <div className="overflow-x-auto rounded-lg border">
             <Table>
@@ -258,11 +253,6 @@ export function ManagerQueue({
         <SectionHeading
           title="Current occupants"
           count={current.length}
-          description={
-            <>
-              Stays that have started and not yet reached their check-out time. Mark a guest as Occupied when they arrive at the desk, and Vacated when they leave.
-            </>
-          }
         />
         {current.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
@@ -282,11 +272,7 @@ export function ManagerQueue({
             title="Awaiting check-out"
             count={overdue.length}
             tone="alert"
-            description={
-              <>
-                These stays are past their check-out time and were never marked Vacated, so they are still holding their rooms. Close them off to release the rooms.
-              </>
-            }
+            description="Past check-out, never marked Vacated - still holding their rooms."
           />
           <StaysTable bookings={overdue} showOverdue isManager />
         </section>
@@ -299,11 +285,7 @@ export function ManagerQueue({
           <SectionHeading
             title="Checked out - to bill"
             count={toBill.length}
-            description={
-              <>
-                These guests have left and their invoice is not yet paid. Issue it, or record the payment against one already issued - they leave this list once it is settled.
-              </>
-            }
+            description="Left, and not yet settled."
           />
           <StaysTable bookings={toBill} isManager />
         </section>
@@ -314,11 +296,6 @@ export function ManagerQueue({
         <SectionHeading
           title="Upcoming stays"
           count={upcoming.length}
-          description={
-            <>
-              Rooms are already held for these bookings. A guest who arrives ahead of their booked time is checked in with <span className="font-medium">Early check-in</span>, which says so in the log.
-            </>
-          }
         />
         {upcoming.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
@@ -341,11 +318,7 @@ export function ManagerQueue({
             title="Missed requests"
             count={missed.length}
             tone="alert"
-            description={
-              <>
-                Nobody decided these before the check-in passed - or, for a meal booking, before its last day of meals. The requester has been told. Reinstate one to put it back in the queue it was waiting in; its dates will still need moving before it can be allocated.
-              </>
-            }
+            description="Nobody decided these in time. The requester has been told."
           />
           <MissedTable bookings={missed} />
         </section>
@@ -363,11 +336,7 @@ export function ManagerQueue({
           <SectionHeading
             title="Awaiting payment"
             count={awaitingPayment.length}
-            description={
-              <>
-                An invoice has been issued for each of these and is not yet paid - most recent first, with no cut-off. Open the invoice to record the payment when it arrives. A personal stay cannot be closed off unpaid, so anything here is an official booking, a dining booking, or a stay a manager released with a reason.
-              </>
-            }
+            description="Invoice issued, not yet paid. No date cut-off."
           />
           <AwaitingPaymentTable rows={awaitingPayment} isManager />
         </section>

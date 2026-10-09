@@ -83,12 +83,12 @@ export default async function HistoryPage({
 }
 
 function Heading({ scopeLabel, isRequester }: { scopeLabel: string | null; isRequester: boolean }) {
+  // The lead was a sentence restating the title (9 Oct 2026). What it carried
+  // that the title does not is the scope - which slice of the archive this
+  // is - so that is all that is left, and only when there is one.
   return (
     <PageHeader caption="Records" title={isRequester ? "Booking History" : "Approval Log"}>
-      {isRequester
-        ? "A complete record of all your guest house booking requests and their status."
-        : "Every request you have approved or rejected, and a searchable archive of past bookings."}
-      {scopeLabel && <span className="ml-1 font-medium text-foreground">{scopeLabel}.</span>}
+      {scopeLabel ? `${scopeLabel}.` : null}
     </PageHeader>
   );
 }

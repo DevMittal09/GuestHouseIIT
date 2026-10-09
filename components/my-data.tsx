@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { exportMyData, requestDataDeletion } from "@/app/actions/privacy";
-import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format";
@@ -14,6 +13,13 @@ import { formatDate } from "@/lib/format";
  * A person's own data (Phase 8, DPDP): take a copy, or ask for it to be
  * erased. Erasure is a request the office answers, because the guest house
  * has to keep a record of who stayed.
+ *
+ * **A quiet line at the foot of My Bookings** (9 Oct 2026). It was a tinted
+ * band with a rule down its left edge and a sentence about how details are
+ * held, which made a standing legal right look like something that had just
+ * happened to this booking. The rights are the same; what is left on screen
+ * is the privacy notice and the two things a person can actually do. An open
+ * erasure request still says so - that *is* news about their data.
  */
 export function MyData({ openRequest }: { openRequest: { created_at: string } | null }) {
   const router = useRouter();
@@ -41,27 +47,32 @@ export function MyData({ openRequest }: { openRequest: { created_at: string } | 
     });
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm text-muted-foreground">
-      <span>
-        Your details are held as set out in the{" "}
-        <Link href="/privacy" className="underline underline-offset-4">
-          privacy notice
-        </Link>
-        .{" "}
-        {openRequest
-          ? `You asked for your data to be erased on ${formatDate(openRequest.created_at)}; the office will reply by email.`
-          : "You can take a copy, or ask for it to be erased."}
-      </span>
-      <span className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" disabled={isPending} onClick={download}>
-          Download my data
-        </Button>
-        {!openRequest && (
-          <Button variant="outline" size="sm" disabled={isPending} onClick={() => setAsking(true)}>
-            Ask for erasure
-          </Button>
-        )}
-      </span>
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-border pt-4 text-[13.5px] text-muted-foreground">
+      <Link href="/privacy" className="underline underline-offset-4 hover:text-ink">
+        Privacy notice
+      </Link>
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={download}
+        className="cursor-pointer underline underline-offset-4 hover:text-ink disabled:opacity-60"
+      >
+        Download my data
+      </button>
+      {openRequest ? (
+        <span>
+          Erasure requested {formatDate(openRequest.created_at)} - the office will reply by email.
+        </span>
+      ) : (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => setAsking(true)}
+          className="cursor-pointer underline underline-offset-4 hover:text-ink disabled:opacity-60"
+        >
+          Ask for erasure
+        </button>
+      )}
 
       <ConfirmDialog
         open={asking}

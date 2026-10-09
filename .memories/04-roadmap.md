@@ -145,6 +145,34 @@ security becomes the boundary rather than a second line behind the server
 - **Office to confirm** that a student may be a guest on their own request —
   the owner's reading of "let the student write their name as well".
 
+## 2b. Loose ends from the 9 Oct 2026 (evening) round
+
+The offices' debitable heads are implemented from the office's spreadsheet
+(`OFFICE_DEBIT_HEADS`, `lib/office-debit-heads.ts`); what is left is about the
+real deployment and about who may edit the table.
+
+- **Point the rows at the real office mailboxes, and drop the demo aliases.**
+  The key is the mailbox before the `@`, and Mock Authentication means three
+  rows carry an alias so the demo personas are narrowed today: `admin` and
+  `director.office` → Director Office, `cse.office` → `office_cs`,
+  `registrar` → `ro`. Harmless, but they will drift once the real accounts
+  exist. [06-production-requirements.md](06-production-requirements.md) §2.
+- **Ask the office to confirm `ro` is the Registrar's Office.** The row is
+  under "Administration" and the mailbox name is the only evidence; the
+  whitelisted `registrar@iitpkd.ac.in` is aliased to it on that reading.
+- **Give the table a home the office can edit.** Settings → Debitable heads
+  edits the *category* lists; the per-office rows are a constant. An editable
+  version is a column on `units` (a migration) plus a grid in Departments &
+  Clubs. Deliberately not built while the offices it keys on are not accounts
+  yet - and `narrowToOffice` is the only place the narrowing happens, so the
+  change stays local. **Until then, a new institute office is a code change**,
+  or it is offered all six heads.
+- **The office has not said what a *new* office may charge by default.** The
+  code keeps the category's six, which is the permissive answer; if the
+  office would rather a mailbox it has not mapped could charge nothing, that
+  is one line in `narrowToOffice` and a worse failure mode (a new office
+  cannot book at all). Worth asking when they next revise the list.
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the
@@ -180,7 +208,9 @@ From the original plan's "Phase 0", still open:
   pipelines ([12-workflows.md](12-workflows.md)); the extra-bed rate and GST
   treatment; the ID retention period; the authoritative hostel and warden list;
   each department's HOD; **each council's Faculty Advisor and secretary
-  mailbox**; the guest house phone, email, house rules and photo attribution
+  mailbox**; whether **`ro`** on the debitable-heads spreadsheet is the
+  Registrar's Office and what a **newly added office** may charge by default;
+  the guest house phone, email, house rules and photo attribution
   (`grep -rn "TODO(site)"`).
 - **Academic office / IT:** the academic database API and token
   ([17-academic-records.md](17-academic-records.md) §4).
@@ -189,7 +219,7 @@ From the original plan's "Phase 0", still open:
 
 ## 5. Tests that are still thin
 
-`npm test` (405 checks) and `npm run test:e2e` (33 journeys) run in CI. What
+`npm test` (451 checks) and `npm run test:e2e` (36 journeys) run in CI. What
 would catch the most next:
 
 1. the mail layer end to end — rendering, outbox claim and retry, recipients
@@ -255,4 +285,6 @@ is written up (all in [03-decisions.md](03-decisions.md) unless noted):
 | Workflow documentation and the production runbook | Phase 10, 23 Sep |
 | The office's correction rounds (23 Sep ×2, 24 Sep) and Faculty Advisors by appointment (24 Sep) | [01-background.md](01-background.md), [99-recent-changes.md](99-recent-changes.md) |
 | The eighth list, in four phases (7 Oct): the text cleanup, a personal booking never asked which budget pays, students and alumni held to one guest house and no meals, the rates on the form, availability as a count, **the institute's records kept in the portal** (migration 28) with a student's parents locked, invoice version 4, cash retired, a personal stay settled at check-out, **Awaiting payment**, and **Missed** (migration 29) | [01-background.md](01-background.md), [99-recent-changes.md](99-recent-changes.md) |
+| The ninth list (8 Oct): the office's nine debitable heads and their mapping, the funds declaration (migration 30), one mail thread per booking, less text on screen, accounts from a spreadsheet | [01-background.md](01-background.md), [03-decisions.md](03-decisions.md) |
+| The owner's list (9 Oct): the rules the form **enforces** stop being **stated** on it, the availability counts redrawn, the privacy line quietened, the office's number moved into the portal footer, the log's filters rearranged with **PDF export for every role**, the meal booking's numbers typed again, and a dining booking quoted meal rates only | [01-background.md](01-background.md), [03-decisions.md](03-decisions.md) |
 | White-on-amber contrast | The 19 Sep redesign |

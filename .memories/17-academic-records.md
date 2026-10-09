@@ -111,6 +111,13 @@ Rules worth keeping:
   Copy to, because the Y warden is who approves. If nobody is set up to
   approve, the card says so ("No Assistant Warden is set up on the portal for
   Brindavani yet").
+- **No Copy-to row at all when nobody is to be copied** (9 Oct 2026). An empty
+  chain used to print "Nobody - this request goes straight to the Guest House
+  Manager, or nobody is set up to approve it yet", on exactly the roles that
+  never need it (a faculty member's own booking goes straight to the desk).
+  `academicDetailsFor` returns `copyTo: null` instead, so the row is absent.
+  A lookup that **failed** still says so - "could not be looked up right now"
+  is a different fact from "nobody".
 - **Copy to is CC (Phase 2, owner's decision).** The same list the card shows
   is CC on every staff mail about the booking — submission, forwarding,
   allocation, cancellation — while **To is whoever must act next**. Anyone in
@@ -127,7 +134,7 @@ Rules worth keeping:
 - **On a club's form filled in by its Faculty Advisor** the card shows the
   club's record ("Club details"), and its Copy-to line follows that booking's
   route (`formRouteFor(club, raisedBy)`) — which since 24 Sep 2026 has no
-  stage at all, so it names nobody. The requester-side copy (the council
+  stage at all, so since 9 Oct 2026 the row is simply not drawn. The requester-side copy (the council
   secretary's mailbox) is the booking's own **Copy to** field, not this line.
 - The "Faculty in Charge Email" on a student-representative record is
   **display only**: who may book for a club is decided by the Faculty Advisor

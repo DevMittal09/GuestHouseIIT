@@ -137,8 +137,11 @@ function toReportRow(b: BookingWithDetails): ReportRow {
 }
 
 /**
- * Gather the current log view as report data. GH Manager and Developer only.
- * Capped at HISTORY_EXPORT_LIMIT rows, like the CSV export.
+ * Gather the current log view as report data, for whoever is asking - their
+ * own bookings for a requester, their jurisdiction for an approver, all of it
+ * for the desk. The caller sends a query string and nothing else: the user,
+ * the scope and the filters are all re-derived here. Capped at
+ * HISTORY_EXPORT_LIMIT rows, like the CSV export.
  */
 export async function exportHistoryPdf(queryString: string): Promise<PdfExportResult> {
   try {
@@ -150,7 +153,10 @@ export async function exportHistoryPdf(queryString: string): Promise<PdfExportRe
     if (!scope.ok) return { ok: false, error: scope.reason };
 
     const raw = Object.fromEntries(new URLSearchParams(queryString ?? "").entries());
-    const defaultActor = user.role === "developer" ? "all" : "me";
+    // The same default the page and the CSV export use. A requester has no
+    // "Handled by me" toggle, so theirs is "all"; reading "me" here filtered
+    // their own history by who had acted on it.
+    const defaultActor = scope.isOwnBookings ? "all" : user.role === "developer" ? "all" : "me";
     const params = parseHistoryParams(raw, defaultActor);
     const criteria = criteriaFromParams(params, scope.criteria, user.id, {
       offset: 0,

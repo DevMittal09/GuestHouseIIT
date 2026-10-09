@@ -4,6 +4,7 @@ import { bookingTypesFor } from "@/lib/booking-types";
 import {
   allowedHeads,
   debitCategoryFor,
+  debitDetailsRequired,
   debitHeadsByType,
   debitRulesSchema,
   DEFAULT_DEBIT_RULES,
@@ -279,6 +280,12 @@ describe("the schema accepts its own output for every requester role", () => {
           privacy_consent: true,
           booking_type: type,
           debit_head: head,
+          // Whatever the first head on this requester's list turns out to be:
+          // Special Budget and Project both demand their details (8 Oct and
+          // 1 Oct 2026), and the IAR Office's official list now starts at
+          // Special Budget because its row on the office's spreadsheet marks
+          // only that and the Alumni Fund.
+          debit_details: debitDetailsRequired(head) ? "SP/2025/017 - Storage" : null,
           fund_declaration: true,
           project_id: head === "project_grant" ? "proj-storage" : null,
           office_approval: role === "official" || role === "iar_cell" ? "hod" : null,

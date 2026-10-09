@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parseDateValue } from "./tz";
-import type { BookingType, MealKey, Role, RoomType } from "./types";
+import type { BookingType, MealKey, Role, RoomType, ServiceType } from "./types";
 
 /**
  * The guest house tariff (Phase 5): what a room night, an extra bed and each
@@ -25,6 +25,9 @@ import type { BookingType, MealKey, Role, RoomType } from "./types";
 export type TariffItem = "room" | "extra_bed" | MealKey;
 
 export const TARIFF_ITEMS: TariffItem[] = ["room", "extra_bed", "breakfast", "lunch", "dinner"];
+
+/** The charges on a dining booking, which holds no room. */
+export const MEAL_TARIFF_ITEMS: TariffItem[] = ["breakfast", "lunch", "dinner"];
 
 export const TARIFF_ITEM_LABELS: Record<TariffItem, string> = {
   room: "Room, per day",
@@ -196,8 +199,18 @@ export type TariffPreview = {
   lines: TariffPreviewLine[];
 };
 
-/** Which charges to quote: the room and an extra bed always, meals where they are served. */
-export function previewItemsFor(servesMeals: boolean): TariffItem[] {
+/**
+ * Which charges to quote: the room and an extra bed for a stay, meals where
+ * the guest house serves them - and **only** the meals on a dining booking
+ * (9 Oct 2026). Nobody takes a room on one, so a room rate and an extra-bed
+ * rate on a form for ordering lunch were two figures that could not be
+ * charged.
+ */
+export function previewItemsFor(
+  servesMeals: boolean,
+  service: ServiceType = "room"
+): TariffItem[] {
+  if (service === "meals_only") return servesMeals ? MEAL_TARIFF_ITEMS : [];
   return servesMeals ? TARIFF_ITEMS : ["room", "extra_bed"];
 }
 
@@ -212,9 +225,11 @@ export function tariffPreviewLines(
     servesMeals: boolean;
     /** Institute calendar date the rates are quoted for - today, on the form. */
     date: string;
+    /** What is being booked: a dining booking is quoted meals and nothing else. */
+    service?: ServiceType;
   }
 ): TariffPreviewLine[] {
-  return previewItemsFor(q.servesMeals).map((item) => {
+  return previewItemsFor(q.servesMeals, q.service).map((item) => {
     const row = resolveTariff(tariffs, {
       guest_house_id: q.guestHouseId,
       item,
@@ -240,7 +255,8 @@ export function tariffPreviews(
   bookingTypes: BookingType[],
   role: Role,
   date: string,
-  roomType: RoomType = "double_sharing"
+  roomType: RoomType = "double_sharing",
+  service: ServiceType = "room"
 ): TariffPreview[] {
   return guestHouses.flatMap((house) =>
     bookingTypes.map((bookingType) => ({
@@ -253,6 +269,7 @@ export function tariffPreviews(
         roomType,
         servesMeals: house.serves_meals,
         date,
+        service,
       }),
     }))
   );

@@ -41,6 +41,7 @@ import {
   matchDatePreset,
   resolveDatePreset,
   type BookingSortKey,
+  type DatePreset,
   type HistoryActor,
   type HistoryParams,
 } from "@/lib/booking-search";
@@ -218,6 +219,17 @@ export function BookingHistory({
     });
 
   const filtersActive = hasActiveFilters(params, defaultActor);
+  /**
+   * What the closed "Stages and meals" disclosure has to admit to: an empty
+   * list means every stage, so a filter is only in force when something has
+   * been unticked.
+   */
+  const narrowed = [
+    ...(params.statuses.length > 0
+      ? [`${params.statuses.length} of ${ALL_STATUSES.length} stages`]
+      : []),
+    ...(params.meals.length > 0 ? [`${params.meals.length} of ${MEAL_KEYS.length} meals`] : []),
+  ];
   const grandTotal = Object.values(statusCounts).reduce((sum, n) => sum + n, 0);
   const firstRow = total === 0 ? 0 : (params.page - 1) * pageSize + 1;
   const lastRow = Math.min(params.page * pageSize, total);
@@ -295,69 +307,23 @@ export function BookingHistory({
           </div>
         </form>
 
-        <p className="text-xs text-muted-foreground">
-          Narrow a search with prefixes -{" "}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">ref:</code> booking id,{" "}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">guest:</code> guest name,{" "}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">room:</code> allotted room,{" "}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">by:</code> requester,{" "}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">status:</code> stage. Wrap several
-          words in quotes, e.g.{" "}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">guest:&quot;Anita Rao&quot;</code>.
-        </p>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Filter label="Stages">
-            {/* Every stage starts ticked, because an empty list means "all".
-                Drawn unticked it read as "nothing selected", which is the
-                opposite of what the archive was actually showing. */}
-            <CheckList
-              options={ALL_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
-              selected={params.statuses}
-              onChange={(next) =>
-                // All ticked is stored as "none", so the URL stays clean and
-                // a stage added later is included rather than silently missed.
-                apply({ statuses: next.length === ALL_STATUSES.length ? [] : next })
-              }
-            />
-          </Filter>
-
-          <Filter label="Meals">
-            <CheckList
-              options={MEAL_KEYS.map((m) => ({ value: m, label: MEAL_LABELS[m] }))}
-              selected={params.meals}
-              onChange={(next) =>
-                apply({ meals: next.length === MEAL_KEYS.length ? [] : next })
-              }
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Keeps bookings that asked for any ticked meal on any day of the stay.
-            </p>
-          </Filter>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Handled by me / Everything - only for approver roles. */}
+        {/* One row of ordinary controls (9 Oct 2026). It was two walls of
+            tick boxes - thirteen stages and three meals, every one of them
+            ticked, because an empty list means "all" - plus fourteen date
+            chips, all of it open at once. The tick boxes are capability
+            nobody uses on most visits, so they moved behind "Stages and
+            meals"; the date chips became one grouped list, which is what a
+            list of named periods is. Nothing can filter less than before. */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {!isOwnBookings && (
             <Filter label="Show">
-              <div className="flex h-9 rounded-md border border-border-strong p-0.5">
-                {(["me", "all"] as HistoryActor[]).map((actor) => (
-                  <button
-                    key={actor}
-                    type="button"
-                    aria-pressed={params.actor === actor}
-                    onClick={() => apply({ actor })}
-                    className={cn(
-                      "flex-1 cursor-pointer rounded px-2 text-xs font-semibold transition-colors",
-                      params.actor === actor
-                        ? "bg-ink text-white"
-                        : "text-body hover:bg-band hover:text-ink"
-                    )}
-                  >
-                    {actor === "me" ? "Handled by me" : "Everything in scope"}
-                  </button>
-                ))}
-              </div>
+              <NativeSelect
+                value={params.actor}
+                onChange={(e) => apply({ actor: e.target.value as HistoryActor })}
+              >
+                <option value="me">Handled by me</option>
+                <option value="all">Everything in scope</option>
+              </NativeSelect>
             </Filter>
           )}
 
@@ -393,79 +359,58 @@ export function BookingHistory({
             </Filter>
           )}
 
-          <div className="space-y-2 sm:col-span-2 lg:col-span-3">
-            <div className="flex items-center gap-3">
-              <p className="text-xs font-medium text-muted-foreground">Check-in range</p>
-              {(params.from || params.to) && (
-                <button
-                  type="button"
-                  onClick={() => apply({ from: undefined, to: undefined })}
-                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                >
-                  Clear · any date
-                </button>
-              )}
-            </div>
+          {/* Rolling windows and whole calendar periods are different
+              questions - "last 30 days" is not "last month" - so they stay
+              apart, as the two groups of one list. */}
+          <Filter label="Check-in">
+            <NativeSelect
+              value={activePreset ?? (params.from || params.to ? "custom" : "")}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === "custom") return;
+                apply(
+                  value === ""
+                    ? { from: undefined, to: undefined }
+                    : resolveDatePreset(value as DatePreset)
+                );
+              }}
+            >
+              <option value="">Any date</option>
+              {DATE_PRESET_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.presets.map((preset) => {
+                    const range = resolveDatePreset(preset, presetNow);
+                    return (
+                      <option key={preset} value={preset}>
+                        {DATE_PRESET_LABELS[preset]} ({formatDate(range.from)} - {formatDate(range.to)})
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              ))}
+              {/* Only reachable by typing dates into the two boxes below;
+                  choosing it changes nothing. */}
+              <option value="custom">Chosen dates</option>
+            </NativeSelect>
+          </Filter>
 
-            {/* Rolling windows and whole calendar periods are different
-                questions - "last 30 days" is not "last month" - so they are
-                grouped rather than mixed into one undifferentiated row. */}
-            {DATE_PRESET_GROUPS.map((group) => (
-              <div key={group.label} className="flex flex-wrap items-center gap-1.5">
-                <span className="w-14 shrink-0 text-[11px] text-muted-foreground">
-                  {group.label}
-                </span>
-                {group.presets.map((preset) => {
-                  const active = activePreset === preset;
-                  const range = resolveDatePreset(preset, presetNow);
-                  return (
-                    <button
-                      key={preset}
-                      type="button"
-                      aria-pressed={active}
-                      title={`${formatDate(range.from)} - ${formatDate(range.to)}`}
-                      onClick={() =>
-                        // Clicking the lit chip clears it, so the row is also
-                        // the way back to "any date".
-                        apply(
-                          active
-                            ? { from: undefined, to: undefined }
-                            : resolveDatePreset(preset)
-                        )
-                      }
-                      className={cn(
-                        "cursor-pointer rounded border px-2.5 py-1 text-xs font-semibold transition-colors",
-                        active
-                          ? "border-ink bg-ink text-white"
-                          : "border-border-strong text-body hover:border-ink hover:bg-band hover:text-ink"
-                      )}
-                    >
-                      {DATE_PRESET_LABELS[preset]}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
+          <Filter label="From">
+            <Input
+              type="date"
+              value={params.from ?? ""}
+              max={params.to}
+              onChange={(e) => apply({ from: e.target.value || undefined })}
+            />
+          </Filter>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Filter label="From">
-                <Input
-                  type="date"
-                  value={params.from ?? ""}
-                  max={params.to}
-                  onChange={(e) => apply({ from: e.target.value || undefined })}
-                />
-              </Filter>
-              <Filter label="Until">
-                <Input
-                  type="date"
-                  value={params.to ?? ""}
-                  min={params.from}
-                  onChange={(e) => apply({ to: e.target.value || undefined })}
-                />
-              </Filter>
-            </div>
-          </div>
+          <Filter label="Until">
+            <Input
+              type="date"
+              value={params.to ?? ""}
+              min={params.from}
+              onChange={(e) => apply({ to: e.target.value || undefined })}
+            />
+          </Filter>
 
           <Filter label="Sort by">
             <NativeSelect
@@ -480,6 +425,56 @@ export function BookingHistory({
             </NativeSelect>
           </Filter>
         </div>
+
+        <details className="group border-t border-border pt-3">
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden">
+            <span className="text-muted-foreground transition-transform group-open:rotate-90" aria-hidden>
+              ▸
+            </span>
+            Stages and meals
+            {narrowed.length > 0 && (
+              <span className="rounded-xs bg-ink px-1.5 py-px text-[11px] leading-[1.35] font-semibold text-white">
+                {narrowed.join(" · ")}
+              </span>
+            )}
+          </summary>
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            <Filter label="Stages">
+              {/* Every stage starts ticked, because an empty list means "all".
+                  Drawn unticked it read as "nothing selected", which is the
+                  opposite of what the archive was actually showing. */}
+              <CheckList
+                options={ALL_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
+                selected={params.statuses}
+                onChange={(next) =>
+                  // All ticked is stored as "none", so the URL stays clean and
+                  // a stage added later is included rather than silently missed.
+                  apply({ statuses: next.length === ALL_STATUSES.length ? [] : next })
+                }
+              />
+            </Filter>
+
+            <Filter label="Meals">
+              <CheckList
+                options={MEAL_KEYS.map((m) => ({ value: m, label: MEAL_LABELS[m] }))}
+                selected={params.meals}
+                onChange={(next) =>
+                  apply({ meals: next.length === MEAL_KEYS.length ? [] : next })
+                }
+              />
+            </Filter>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Prefixes narrow a search:{" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono">ref:</code> booking id,{" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono">guest:</code> guest name,{" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono">room:</code> allotted room,{" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono">by:</code> requester,{" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono">status:</code> stage. Quote
+            several words:{" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono">guest:&quot;Anita Rao&quot;</code>.
+          </p>
+        </details>
       </div>
 
       {truncated && (

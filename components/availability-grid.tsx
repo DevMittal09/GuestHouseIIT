@@ -260,15 +260,8 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
       <Card>
         <CardHeader>
           <CardTitle>Room availability{range ? ` - ${describeRange(range)}` : ""}</CardTitle>
-          <CardDescription>
-            {!detailed
-              ? view === "day"
-                ? "Rooms free, for the day and hour by hour."
-                : "Rooms free on each day."
-              : view === "day"
-                ? "Hours down the side, room numbers across the top. Red is booked."
-                : "Days down the side, room numbers across the top. Each day runs midnight to midnight, so a stay is one bar. The figure beside each date is the rooms free all day."}
-          </CardDescription>
+          {/* No description (9 Oct 2026): the legend below names every colour
+              and the chart's own axes are labelled. */}
         </CardHeader>
         <CardContent className="space-y-4">
           {detailed && (
@@ -332,10 +325,9 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
         <Card>
           <CardHeader>
             <CardTitle>Room details</CardTitle>
-            <CardDescription>
-              Every room in this guest house with its bookings during {describeRange(range)}.
-              {!showsOccupant && " Guest details are visible to guest house staff only."}
-            </CardDescription>
+            {!showsOccupant && (
+              <CardDescription>Guest names are visible to guest house staff only.</CardDescription>
+            )}
           </CardHeader>
           <CardContent className="space-y-2">
             {rooms.map((room) => {
@@ -389,14 +381,6 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
         </Card>
       )}
 
-      {range && (
-        <p className="text-xs text-muted-foreground">
-          Availability shown for {describeRange(range)}. Times are IST.
-          {detailed
-            ? " Rooms are held by approved, occupied and pending-cancellation bookings; requests still awaiting approval do not reserve a room."
-            : " The figures count rooms that are free for the whole period shown. Nothing is reserved for you until the Guest House Manager allocates a room, and a request still awaiting approval holds none."}
-        </p>
-      )}
     </div>
   );
 }

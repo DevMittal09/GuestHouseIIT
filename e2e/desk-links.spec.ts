@@ -34,10 +34,17 @@ test("the developer is sent to the console, not to a booking form it cannot subm
   await expect(page.getByRole("button", { name: "Submit booking request" })).toHaveCount(0);
 });
 
-test("the help line gives the guest house's own number", async ({ page }) => {
+/**
+ * The office's number used to be a "Facing trouble booking?" line on My
+ * Bookings and at the foot of the booking form. It is in the portal footer on
+ * every signed-in page since 9 Oct 2026, which is also what this checks: that
+ * moving it did not lose it.
+ */
+test("the portal footer gives the guest house's own number", async ({ page }) => {
   await signIn(page, ACCOUNTS.student);
   await page.goto("/dashboard");
-  const help = page.getByText(/Facing trouble booking\?/);
-  await expect(help).toContainText("+91 491 209 2016");
-  await expect(help).toContainText("ghm@iitpkd.ac.in");
+  await expect(page.getByText(/Facing trouble booking\?/)).toHaveCount(0);
+  const footer = page.locator("footer");
+  await expect(footer.getByRole("link", { name: "+91 491 209 2016" })).toBeVisible();
+  await expect(footer.getByRole("link", { name: "ghm@iitpkd.ac.in" })).toBeVisible();
 });

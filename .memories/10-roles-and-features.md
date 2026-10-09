@@ -70,8 +70,8 @@ console names them — change the name there and the queue or option moves.
 
 | Feature | Where | Notes |
 | --- | --- | --- |
-| **Room Availability** | `/availability` (nav, every role) | **Two different answers since 7 Oct 2026.** The **manager, caretaker and developer** (`SEES_ROOMS`) get the Day / Week / Month chart per guest house, the turnaround, accepted overlaps, maintenance and the room-by-room list — and the manager and developer alone see who and why (`CAN_SEE_OCCUPANT`). **Everyone else is sent a count and no rooms at all**: "N rooms available" per day, and per hour on a single day. The booking form's panel follows the same rule. Max 62 days per request. |
-| **Booking History / Approval Log** | `/history` (nav, every role) | Requesters: their own bookings ("Booking History"). Staff: their jurisdiction ("Approval Log"), with "Handled by me / Everything in scope". Keyword search with `ref:`, `guest:`, `room:`, `by:`, `purpose:`, `gh:`, `status:` prefixes; date presets; **CSV export for everyone**; **PDF export for the manager and developer only**. |
+| **Room Availability** | `/availability` (nav, every role) | **Two different answers since 7 Oct 2026.** The **manager, caretaker and developer** (`SEES_ROOMS`) get the Day / Week / Month chart per guest house, the turnaround, accepted overlaps, maintenance and the room-by-room list — and the manager and developer alone see who and why (`CAN_SEE_OCCUPANT`). **Everyone else is sent a count and no rooms at all**: **how many rooms are free**, as a labelled strip of figures per day — redrawn 9 Oct 2026 — or a headline figure plus hour chips on a single day, with the full sentence on each cell's `aria-label`. The booking form's panel is the same component. Max 62 days per request. |
+| **Booking History / Approval Log** | `/history` (nav, every role) | Requesters: their own bookings ("Booking History"). Staff: their jurisdiction ("Approval Log"), with "Handled by me / Everything in scope". Keyword search with `ref:`, `guest:`, `room:`, `by:`, `purpose:`, `gh:`, `status:` prefixes; date presets as one grouped `<select>`, and the thirteen stage / three meal tick boxes behind a **"Stages and meals"** disclosure that names what it is holding (9 Oct 2026); **CSV and PDF export for every role** — both re-derive the user, the scope and the filters server-side from the query string alone. |
 | Public website | `/`, `/guidelines`, `/gallery`, `/contact`, `/privacy` | Open to anyone, signed in or not. |
 
 ---
@@ -92,9 +92,12 @@ Everything a requester can do with a booking they own (or raised for a club):
   decides (approve → Cancellation Approved, rooms freed; decline → back to the
   status it had). A guest already in the building is ended at the desk.
 - **Ask to extend** a stay (new check-out + reason); the manager decides.
-- **Download my data** / **Ask for erasure** (DPDP) on the dashboard.
-- **"Facing trouble booking?"** line with the guest house office's contact
-  (+91 491 209 2016, ghm@iitpkd.ac.in — the same as the website and invoice).
+- **Download my data** / **Ask for erasure** (DPDP), a quiet ruled line of
+  links at the foot of My Bookings (9 Oct 2026 — it was a tinted notice).
+- The guest house office's contact (+91 491 209 2016, ghm@iitpkd.ac.in — the
+  same as the website and the invoice) is in the **portal footer** on every
+  signed-in page. It used to be a "Facing trouble booking?" notice on My
+  Bookings and at the foot of the booking form; both are gone (9 Oct 2026).
 
 ### Student
 
@@ -185,10 +188,17 @@ contract. A club with none of its own takes its council's.
 - **Chooses per booking:** **Direct** (straight to the GH Manager) or
   **Requires HOD approval** (its own head for an officer office; the parent
   department's HOD for a department office). Stored on the booking.
-- **Debitable heads:** **one list for both classes of office** (8 Oct 2026) -
-  Institute Grant, Department Budget, Special Budget, Student Fund, Hostel
-  Funds, Alumni Fund. The office class still decides the approval route, not
-  the heads.
+- **Debitable heads:** one list for both classes of office as a *category*
+  (8 Oct 2026) - Institute Grant, Department Budget, Special Budget, Student
+  Fund, Hostel Funds, Alumni Fund - **then narrowed to this office's own row**
+  on the office's spreadsheet (9 Oct 2026,
+  [offices-debitable-heads.csv](offices-debitable-heads.csv),
+  `lib/office-debit-heads.ts`). So the Director's Office is offered Institute
+  Grant and Special Budget, a department office its department's budget and
+  Special Budget, the Students Section the student and hostel funds, the
+  Sports Officer the grant alone. **Project Grant and Personal Funds are on no
+  office's row.** An office the spreadsheet does not name keeps the six. The
+  office class decides the approval route, and never the heads.
 - **Guest details:** only **gender** is mandatory.
 - Highlighted and sorted to the top of the manager's queue; Hamsanandi rate
   ₹4,000 (the "government officers" tariff).
@@ -224,8 +234,10 @@ secretary's mailbox, e.g. `sec_arts@`).
   `PENDING_IAR` — that would be approving itself.
 - **Approves:** the IAR Student Cell's requests at **IAR Queue** (`/iar`),
   with the alumni ID card shown.
-- **Debitable heads:** official → the offices' list (the seeded IAR unit is an
-  officer office); alumni → **Alumni Fund / Special Budget** (8 Oct 2026).
+- **Debitable heads:** official → **Special Budget / Alumni Fund** - the six
+  of the offices' category list narrowed to `iar`'s own row on the office's
+  spreadsheet (9 Oct 2026); alumni → **Alumni Fund / Special Budget** (8 Oct
+  2026). The two come out the same, by different routes.
 - **Approval Log:** alumni requests, the Student Cell's, and its own.
 - **Menu:** My Bookings · New Booking · IAR Queue · Room Availability ·
   Approval Log.

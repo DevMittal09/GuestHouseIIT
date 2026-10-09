@@ -591,11 +591,20 @@ export function canViewHistory(_role: Role): boolean {
   return true;
 }
 
-/** Roles allowed to generate PDF reports from logs. */
-export const PDF_EXPORT_ROLES: Role[] = ["gh_manager", "developer"];
-
-export function canExportPdf(role: Role): boolean {
-  return PDF_EXPORT_ROLES.includes(role);
+/**
+ * Who may take the log away as a PDF: **everybody**, since 9 Oct 2026.
+ *
+ * It was the manager and the developer. CSV was already open to every role,
+ * and both exports re-derive the user, the scope and the filters on the
+ * server from nothing but a query string (`exportHistoryCsv`,
+ * `exportHistoryPdf`) - so a requester's PDF holds their own bookings and an
+ * approver's holds their jurisdiction, exactly as the page they are looking
+ * at does. Keeping PDF back meant a requester could have the same rows in the
+ * one format a guest house office will not accept.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function canExportPdf(_role: Role): boolean {
+  return true;
 }
 
 /** Whether the role is a "requester" (their logs show own bookings, not approval actions). */

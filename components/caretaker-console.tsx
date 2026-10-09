@@ -67,11 +67,6 @@ export function CaretakerConsole({
         <SectionHeading
           title="Current occupants"
           count={current.length}
-          description={
-            <>
-              Guests in the building now. Mark a guest as Occupied when they arrive at the desk, and Vacated when they leave.
-            </>
-          }
         />
         {current.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
@@ -88,11 +83,7 @@ export function CaretakerConsole({
             title="Awaiting check-out"
             count={overdue.length}
             tone="alert"
-            description={
-              <>
-                Past their check-out time and never marked Vacated, so they are still holding their rooms. Close them off once the room is handed back.
-              </>
-            }
+            description="Past check-out, never marked Vacated - still holding their rooms."
           />
           <StaysTable bookings={overdue} showOverdue />
         </section>
@@ -107,11 +98,7 @@ export function CaretakerConsole({
           <SectionHeading
             title="Checked out - to bill"
             count={toBill.length}
-            description={
-              <>
-                These guests have left and their invoice is not yet paid. Issue it, print it again, or record the payment - they leave this list once it is settled. Older stays are invoiced from the Approval Log.
-              </>
-            }
+            description="Left, and not yet settled. Older stays are invoiced from the Approval Log."
           />
           <StaysTable bookings={toBill} />
         </section>
@@ -121,11 +108,6 @@ export function CaretakerConsole({
         <SectionHeading
           title="Upcoming stays"
           count={upcoming.length}
-          description={
-            <>
-              Rooms are already held for these bookings. If a guest turns up before their booked time, use <span className="font-medium">Early check-in</span> - the arrival is recorded as early rather than pretending it was on time.
-            </>
-          }
         />
         {upcoming.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
@@ -147,11 +129,7 @@ export function CaretakerConsole({
           <SectionHeading
             title="Awaiting payment"
             count={awaitingPayment.length}
-            description={
-              <>
-                An invoice has been issued for each of these and is not yet paid - most recent first, with no cut-off. Open the invoice to record the payment when it arrives.
-              </>
-            }
+            description="Invoice issued, not yet paid. No date cut-off."
           />
           <AwaitingPaymentTable rows={awaitingPayment} />
         </section>

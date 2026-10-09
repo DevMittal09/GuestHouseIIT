@@ -15,9 +15,7 @@ export default async function IarPage() {
   return (
     <div className="space-y-6">
       <PageHeader caption="Approvals" title="IAR Office Portal">
-        Requests raised by the IAR Student Cell - for an alumnus or for their office - awaiting
-        your verification. Open one to check the alumnus&rsquo;s details against the uploaded
-        Alumni ID card. Bookings you raise yourself go straight to the Guest House Manager.
+        Requests raised by the IAR Student Cell.
       </PageHeader>
       <ReviewQueue
         bookings={bookings}

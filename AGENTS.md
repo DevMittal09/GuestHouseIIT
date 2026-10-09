@@ -106,14 +106,34 @@ port 3000 before launching your own.
 > server after, or expect to restart it. This is easy to miss because the build
 > itself succeeds and says nothing.
 
-## House style the office asked for (7 and 8 Oct 2026)
+## House style the office asked for (7, 8 and 9 Oct 2026)
 
 - **One fact per line; no commentary** (8 Oct 2026, the supervisor). The form,
   the desk's lists and the Guidelines state the rule and stop - no "so
   that…", no restating the heading, no explaining a rule the line below also
-  explains (`INFANT_HELP_TEXT` is the infant fact alone; the room card states
-  the capacity). Keep every rule and figure; drop the second clause. New copy
+  explains. Keep every rule and figure; drop the second clause. New copy
   follows, and so does anything added to `lib/site-content.ts`.
+- **A rule the form enforces is not stated on the form** (9 Oct 2026, the
+  owner: "the text which are supposed to be in the guidelines or should pop up
+  when we make the error is unnecessarily shown in the main page"). A rule has
+  three homes and the form is only one of them: **the Guidelines page**
+  (`guidelineSections`, rendered from `lib/` and Settings), **the error when it
+  fires** (with the reader's own numbers in it), and **the control itself** - a
+  greyed-out option that says why, an Add button disabled with a reason. So
+  `INFANT_HELP_TEXT`, `uniqueRelationshipHint` and `parentDependencyHint` are
+  **deleted**, `roomOccupancyNotice` is rendered by the Guidelines page only,
+  and the tariff table carries no paragraph. Don't reintroduce any of them, and
+  don't add a new sentence describing a `superRefine`.
+- **A page lead carries the scope or nothing.** `PageHeader`'s children are for
+  the one thing the title cannot say - "Malhar hostel", "HOD for CSE", which
+  slice of the archive this is. A lead that restates the title was removed from
+  eight pages on 9 Oct 2026. Same for `SectionHeading`'s `description`: gone
+  where the heading says it, one short fact where it does not.
+- **The guest house office's phone and email are in the portal footer**
+  (`app/(portal)/layout.tsx`), not in a notice on a page.
+  `MANAGER_HELP_LINE` and `GUEST_HOUSE_MANAGER_CONTACT` are deleted;
+  `GUEST_HOUSE_CONTACT` (`lib/site.ts`) is the one place either is written
+  down.
 
 
 - **No em dashes in the source.** Every `—` in `app/ components/ lib/ tests/
@@ -298,7 +318,7 @@ are in **`.memories/17-academic-records.md`**. Keep that file and
 | employee — staff | official | **HOD** → GH Manager | Personal |
 | employee | personal | GH Manager | Personal |
 | official — officer office (Director, Registrar) | official | **Direct** → GH Manager, or **Requires HOD approval** → its own head → GH Manager | Institute / Department / Special Budget / Student Fund / Hostel Funds / Alumni Fund |
-| official — department office | official | Direct, or → its department's **HOD** → GH Manager | the same six — one list for both classes of office |
+| official — department office | official | Direct, or → its department's **HOD** → GH Manager | the same six as a category — **then narrowed to the office's own row** (`lib/office-debit-heads.ts`) |
 | iar_cell (IAR Office) | official / alumni | Direct, or → its head (HOD) → GH Manager (never `PENDING_IAR`: it *is* that approver) | the offices' six (alumni: Alumni Fund / Special Budget) |
 | iar_student_cell | alumni | IAR Office → GH Manager | Alumni Fund / Special Budget |
 | any | meals only | GH Manager | dining heads (Phase 6) |
@@ -393,6 +413,27 @@ refused since 23 Sep 2026); **students never Special Budget** (25 Sep); and
 1 Oct, which is why `FORBIDDEN_DINING_HEADS` is now empty - the seam is kept
 because dining is what the office narrows first).
 `allowedHeads(category, heads, kind)` applies both.
+**An office is then narrowed to its own row** (9 Oct 2026,
+`lib/office-debit-heads.ts`): Settings keys the heads by *category*, so both
+classes of office shared one list of six, and the office's spreadsheet
+(`.memories/offices-debitable-heads.csv`, tabulated in
+`.memories/06-production-requirements.md` §2) is **per mailbox** - the
+Director's Office spends the Institute Grant, a department office its
+department's budget, the Students Section the student and hostel funds, the
+Sports Officer the grant alone. `OFFICE_DEBIT_HEADS` is keyed by the mailbox
+before the `@` because that is the account that signs in, with **aliases** for
+the demo personas (`admin` / `director.office` → Director Office,
+`cse.office` → `office_cs`, `registrar` → `ro`). `narrowToOffice` is the only
+place it is applied, inside `debitHeadsByType`, as an **intersection** with
+the Settings list - so neither list can widen the other, and the form and
+`createBooking` narrow from one computation. Only the two **office**
+categories: `people@` is an Administration mailbox *and* a plausible person's
+address. An office not on the spreadsheet keeps the category's six; an empty
+intersection is left empty rather than restoring a budget the office has no
+authority over. **Project Grant and Personal Funds are on no row.** It is
+**not editable from the console** - deliberately, while the offices it keys on
+are not accounts yet; don't add a Setting for it without the migration and the
+Departments & Clubs grid that go with it.
 `allowedHeads()` strips a forbidden head on read (so a stored row that still
 lists one is ignored, not fatal), `debitRulesSchema` refuses to save it, and the
 console greys that cell. **Special Budget** (`special_budget`; labelled
@@ -473,7 +514,7 @@ cannot drift.
   constant in `lib/routes.ts`. They are highlighted + sorted to the top of the
   manager queue.
 - **Manager Overrides**: `lib/access.ts` grants `gh_manager` powers to book on behalf of others, override approvals, edit meals post-approval, and bypass guest house restrictions (like the alumni/Bageshri rule). **Booking on behalf is the manager's alone** (`canBookOnBehalf`) — the developer has no booking types or route, so `/book` sends it back to the console.
-- **The guest house's phone and email live in one place**, `GUEST_HOUSE_CONTACT` (`lib/site.ts`): the public site, the "Facing trouble booking?" line and the invoice's default contact read it.
+- **The guest house's phone and email live in one place**, `GUEST_HOUSE_CONTACT` (`lib/site.ts`): the public site, the **portal footer** and the invoice's default contact read it.
 
 ### Time is institute time — `lib/tz.ts`
 
@@ -640,9 +681,12 @@ after an admin edits the form.
 
 Current defaults worth knowing: students are Bageshri-only **as a rule, not
 just a default** (7 Oct 2026, `restrictedToOneGuestHouse` — the Form Builder's
-`allowed_guest_house_ids` is no longer the only thing holding it) and see the
-"double shared rooms will get first preference" banner; employee and official use
-free-text relationship; **club and official hide the relationship field**;
+`allowed_guest_house_ids` is no longer the only thing holding it); **no role
+has a banner** (9 Oct 2026 — the student form's "Double shared rooms will get
+first preference" was withdrawn, and `sanitizeFormConfig` drops it from a
+**saved** row through `RETIRED_BANNERS`, because editing the default alone
+would have left it on screen for any role someone had pressed Save on);
+employee and official use free-text relationship; **club and official hide the relationship field**;
 club ID uploads are optional; alumni ID card is mandatory; **employee collects
 no ID document** (`id_document: "hidden"`). Since 24 Sep 2026 **faculty/staff
 require only name and gender** and **official requires only gender**; the rest
@@ -669,8 +713,10 @@ waiting for someone who cannot come.
 
 - `parentDependencyError(config, relationships)` in `lib/form-config.ts` is the
   one matcher, called by the booking form *and* `bookingPayloadSchema`. The
-  form greys out the restricted `<option>`s until a parent is chosen; the zod
-  `superRefine` is what actually enforces it.
+  form greys out the restricted `<option>`s until a parent is chosen - the
+  option reads "Siblings - needs a parent on this request", which is the only
+  place the rule is stated on screen (`parentDependencyHint` was **deleted** on
+  9 Oct 2026); the zod `superRefine` is what actually enforces it.
 - `sanitizeFormConfig` backfills both arrays from the spec defaults when a
   saved row predates the rule, drops entries no longer in
   `relationship_options`, and **lapses the rule entirely if no parent option
@@ -688,9 +734,10 @@ rename the options, so the rule is config, not words in code.
 - `duplicateRelationshipError(config, relationships)` in `lib/form-config.ts`
   is the one matcher, called by the booking form *and* `bookingPayloadSchema`.
   The form greys the option out on every **other** guest
-  (`usedUniqueRelationships`, "— already on this request"); the zod
-  `superRefine` enforces it, and attaches the error to the **repeat**, not the
-  first one.
+  (`usedUniqueRelationships`, "- already on this request"), which is the only
+  place the rule is stated on screen (`uniqueRelationshipHint` was **deleted**
+  on 9 Oct 2026); the zod `superRefine` enforces it, and attaches the error to
+  the **repeat**, not the first one.
 - Never grey out a guest's own current answer — that silently clears the box.
 - `sanitizeFormConfig` empties it for a **free-text** role: there is no option
   list to be unique within, and "Mother " and "mother" would be two answers.
@@ -723,17 +770,32 @@ Everything" toggle and the "My decision" column are shown.
   expressed in PostgREST.
 - `exportHistoryCsv` (`app/actions/history.ts`) takes only a query string and
   re-derives user + scope + params server-side. Keep it that way.
-- `exportHistoryPdf` (`app/actions/history-pdf.ts`) — GH Manager and Developer
-  only. Returns **report data, not markup**; `lib/report-pdf.ts` draws a real
-  A4-landscape PDF client-side with jsPDF (dynamically imported) and saves it.
-  Keep the scope re-derivation server-side. Both exports take the **current
+- `exportHistoryPdf` (`app/actions/history-pdf.ts`) — **every role** since
+  9 Oct 2026 (`canExportPdf` returns true; CSV already was open to everyone,
+  and both re-derive the scope). Returns **report data, not markup**;
+  `lib/report-pdf.ts` draws a real A4-landscape PDF client-side with jsPDF
+  (dynamically imported) and saves it. Keep the scope re-derivation
+  server-side, and keep its `defaultActor` in step with the page's and the
+  CSV's — `scope.isOwnBookings ? "all" : role === "developer" ? "all" : "me"`;
+  it was missing the first case, which would have filtered a requester's own
+  report to bookings they had *acted on*. Both exports take the **current
   filters** and nothing else — CSV and PDF sit side by side as an "Export as"
   choice, so format is the only decision at that point.
 - **Date presets are a filter, not an export option.** `DATE_PRESET_GROUPS` /
   `resolveDatePreset()` / `matchDatePreset()` in `lib/booking-search.ts` back
-  the chip rows in the filter bar; clicking the lit chip clears it. They belong
-  there because a second date control on the export button let the two disagree
-  about what was exported.
+  the **Check-in** select in the filter bar - one `<select>` with an
+  `<optgroup>` per group, each option carrying its own dates, and "Any date" to
+  clear (9 Oct 2026; they were fourteen chips in two rows). They belong there
+  because a second date control on the export button let the two disagree about
+  what was exported.
+
+  **The rest of the filter bar is arranged by how often it is used** (9 Oct
+  2026): one row of ordinary selects (Show, Guest house, Requester category,
+  Check-in, From, Until, Sort by), and the thirteen stage and three meal tick
+  boxes behind a **"Stages and meals"** `<details>` that names what it is
+  holding when closed ("4 of 13 stages") - a filter must never be in force
+  invisibly. The six **tiles** are still the everyday status filter. Nothing
+  filters less than it did; don't open the tick boxes back up by default.
 
   Two groups, because they answer different questions and merging them loses
   one: **Rolling** windows measured from today (Today, Next 7/30 days, Last
@@ -926,10 +988,17 @@ Checked server-side via triggers on `booking_guests` (the per-card limits from S
 > `choicesFromMealSlots`) — not the opt-outs it held until 1 Oct, which cannot
 > express "breakfast on" once breakfast is off by default.
 >
-> On a meal booking: the number of people is a **1…30 dropdown**, "Purpose" is
+> On a meal booking: the number of people and the two diet counts are
+> **typed boxes with − / + steppers** (`QuantityInput`, 9 Oct 2026 - they were
+> dropdowns from 1 Oct; the owner asked for "a text box with up and down
+> sliders"), written with `setValue` like the two `TimeSelect`s because they
+> live in `defaultValues` and so need no `register()` of their own - which is
+> why an e2e selector is `#meal_guest_count`, not `[name=…]`. "Purpose" is
 > **Remarks** and **optional** (a stay still has to say what it is for), there
 > is **no pets notice** (nobody stays), and a live **Confirm your meal
-> booking** card at the end reads the order back.
+> booking** card at the end reads the order back. The kitchen's cap is the
+> stepper's `max`, the schema's `max` **and** `createBooking`'s check of the
+> sitting; the form does not state it in words.
 
 The requester chooses meals **per day of the stay** in a days × breakfast /
 lunch / dinner grid (`components/meal-plan-grid.tsx`), so the kitchen has head
@@ -1116,6 +1185,13 @@ booked / Booked badge for the whole period shown.
   The charts' `simple` mode and the legend's `detailed` flag (30 Sep 2026) are
   **retired** — there is nobody left to simplify them for. The room-by-room
   list is the desk's too (1 Oct 2026).
+  **The counts panel is figures, not sentences** (9 Oct 2026): a labelled strip
+  of ruled columns (date, the count at display size, `/total`, a 3px meter,
+  **Full** in vermilion on a day with nothing free), a **headline figure** for a
+  one-day window, and the hours as small chips rather than a 24-row table. It
+  was a card per day each reading "10 of 10 rooms available". **Every cell
+  carries the full sentence as its `aria-label`** - the repetition was visual,
+  so don't take it out of the labels.
 
 - `listRoomOccupancy(guestHouseId, from, to)` (both stores) returns one segment
   per **(room, booking)** using the same `ROOM_HOLDING_STATUSES` + strict

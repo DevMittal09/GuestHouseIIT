@@ -3811,3 +3811,309 @@ this is any use.
 **What it cannot tell you** is whether a migration was applied *correctly* -
 only that its marker exists. That is what the throwaway `postgres:16-alpine`
 run is for, and that stays the rule for every new migration.
+
+---
+
+## 9 Oct 2026 (afternoon) — the portal stops talking: a round of removals
+
+The owner's own round, relayed in one list: "the application is too verbose in
+many places… the text which are supposed to be in the guidelines or should pop
+up when we make the error is unnecessarily shown in the main page. This is the
+case for all pages."
+
+It is the second pass of the supervisor's 8 Oct request, and a sharper rule
+than that one. 8 Oct cut **the clause that explains the clause**. This round
+cuts **the sentence that states a rule the form already enforces**, because a
+rule has three possible homes and only one of them is the form:
+
+| Where a rule belongs | Why |
+| --- | --- |
+| **The Guidelines page** | Someone reading about the guest house before booking. Rendered from `lib/` and Settings (`guidelineSections`), so it cannot drift |
+| **The error, when it fires** | Someone who has just broken the rule. They are told at the moment it matters, with their own numbers in it |
+| **The control itself** | A greyed-out option that says why it is greyed out teaches the rule by being unusable |
+
+A form that states all three is a form that has said the same thing to
+everybody, including the people it does not apply to.
+
+### What came off the booking form
+
+| Removed | Where the rule still lives |
+| --- | --- |
+| "A guest below 5 shares a guardian's bed, needs no bed of their own and is not asked for an ID." (`INFANT_HELP_TEXT`) | Guidelines §Rooms; the infant card asks for an age 0-4 and no ID, which is the rule performed |
+| "Mother, Father, Guardian… can each be entered only once - there is only one of each." (`uniqueRelationshipHint`) | The option reads **"Mother - already on this request"** and cannot be picked; `duplicateRelationshipError` on both sides |
+| "Grandmother, Grandfather and Siblings become selectable once a guest is marked Mother, Father or Guardian." (`parentDependencyHint`) | The option reads **"Siblings - needs a parent on this request"**; `parentDependencyError` on both sides |
+| "Maximum 4 people per room, of whom at most 3 may need a bed…" (`roomOccupancyNotice`, **twice** - under Number of rooms and in every room card) | Guidelines §Rooms; the Add buttons disable with `addGuestBlockedReason` / `addInfantBlockedReason`, and `roomPartyError` refuses it |
+| "Double shared rooms will get first preference" (the student banner) | Nowhere. The office asked for it to go; both guest houses are all double sharing, so it promised a preference between one thing |
+| "The rates in force today, and the same ones your invoice is priced from. GST is charged at 18% on accommodation and 5% on food. A stay that crosses a change of rate is priced night by night." | Guidelines §Charges. The invoice prints its own GST lines |
+| "At most 30 at a sitting, counting everyone already booked." | `mealCapacityError` says how many places are left, which is the useful form of it |
+| "The two must add up to {n}." (the diet split) | `dietCountsError`; and the line under the two boxes reads the split back |
+| "Times are IST. Rooms are held by approved, occupied and pending-cancellation bookings - a request still awaiting approval reserves nothing…" | Guidelines; the panel's own banner already says nothing is held |
+| "There are no kennels on the premises and no way to isolate an animal…" | The notice above it (`PETS_POLICY_NOTICE`) is the rule |
+| Six card descriptions (Rates, Room availability, Meals, Guests room by room) | Their headings |
+
+**`INFANT_HELP_TEXT`, `uniqueRelationshipHint` and `parentDependencyHint` are
+deleted, not just unused.** A constant nothing renders is an invitation to
+render it again.
+
+### The banner is stripped from a **saved** row too
+
+`buildDefaultFormConfig` losing the banner would leave it on screen for any
+role saved from the Form Builder - which is how a default change silently does
+nothing in this project (trap #2). So `sanitizeFormConfig` drops a stored
+banner that **exactly** matches the retired string (`RETIRED_BANNERS`), the way
+`upgradeInvoiceRules` revision 3 rewrote Kerala once. A banner the office typed
+itself is untouched.
+
+### "What happens next" comes off `/book`
+
+The numbered panel beside the form (Request → Approval → Arrival → Departure,
+and the office's phone) is gone. The requester is told by email at each step,
+and the steps are on the Guidelines page where somebody deciding whether to
+book can read them. `BOOKING_STEPS` stays - the Guidelines page renders it.
+
+The side column is now the Requester details card alone, which is the one
+thing there that is about *this* request.
+
+### "Copy to: Nobody" is not a fact worth a row
+
+`academicDetailsFor` returns `copyTo: null` when the chain is empty, so the row
+is **absent** rather than reading "Nobody - this request goes straight to the
+Guest House Manager, or nobody is set up to approve it yet". That sentence
+appeared on exactly the roles that never need it (a faculty member's own
+booking goes straight to the desk). A lookup that *failed* still says so -
+"could not be looked up" is different from "nobody".
+
+### The availability panel, redrawn
+
+> **Supersedes** the per-day cards introduced with the counts on 7 Oct 2026
+> (the component, not the decision: requesters still get counts and no rooms).
+
+The owner: "its showing the 10 of 10 rooms available for each day of the week…
+I want it to look minimal and simple but not too juvenile."
+
+Seven cards, each spelling out "10 of 10 rooms available", and underneath a
+single day a **24-row table** of the same sentence. The figure is the answer,
+so the figure is what is drawn:
+
+- a strip of ruled columns under one label, **Rooms free each day** - the date
+  in micro-type, the count at display size, `/23` beside it, a 3px meter for
+  the proportion, and a vermilion rule with the word **Full** on a day with
+  nothing free;
+- a **one-day** window leads with the figure itself ("**21** of 23 rooms free
+  all day") instead of a one-cell grid;
+- the hours of a day become a wrapped grid of small chips, the current hour
+  outlined;
+- **every cell carries the full sentence as its `aria-label`**, so nothing was
+  taken from a screen reader - the repetition was visual.
+
+The panel's toolbar is one row (view, date, back to check-in, Refresh) with the
+field labels moved to `sr-only`: three labels over three small controls was
+most of what the panel looked like.
+
+### The privacy line is a line, not a notice
+
+"Your details are held as set out in the privacy notice. You can take a copy,
+or ask for it to be erased.", in a tinted band with a rule down its left edge
+at the foot of My Bookings. A standing legal right drawn like something that
+had just happened. It is now a hairline-ruled row of three quiet links -
+Privacy notice · Download my data · Ask for erasure - and an open erasure
+request still states itself, because that *is* news.
+
+### "Facing trouble booking?" moves into the footer
+
+The office's phone and email were a notice at the foot of My Bookings **and**
+at the foot of every booking form. They are in the **portal footer** now, on
+every signed-in page, beside the copyright - which is where a reader looks for
+a number, and is what the owner proposed ("we can also put it in the black
+footer box right??"). `MANAGER_HELP_LINE` and `GUEST_HOUSE_MANAGER_CONTACT` are
+deleted; `GUEST_HOUSE_CONTACT` (`lib/site.ts`) stays the one place either is
+written down.
+
+### A meal booking's head count is typed again
+
+> **Supersedes** the 1 Oct 2026 decision to make it a 1…30 dropdown.
+
+1 Oct replaced a stepper with a dropdown, reasoning that "reaching 24 by
+pressing + twenty-three times is not a way to answer a question". True, and the
+dropdown has the opposite fault: the number is hidden inside a list that has to
+be scrolled, and the answer is not visible as a number at all. The owner asked
+for "a text box with up and down sliders", which is what `QuantityInput`
+already is - the control the room count uses, which keeps the **raw string**
+(trap: never bind a number input to a coerced value) and leaves validation to
+the schema. Both diet counts moved with it.
+
+The three boxes are written with `setValue`, like the two `TimeSelect`s beside
+them: they are in `defaultValues`, so the submitted payload carries them
+without a `register()` of their own. The kitchen's cap is the stepper's `max`,
+the schema's `max`, and `createBooking`'s check of the sitting - three times,
+on purpose.
+
+### A dining booking is quoted meals and nothing else
+
+`previewItemsFor(servesMeals, service)` returns the three meals for
+`meals_only`. A room rate and an extra-bed rate on a form for ordering lunch
+were two figures that could not be charged, on a booking with no room. The
+service type comes from the page, which knows which door the requester came in
+by.
+
+### The log's filters: capability behind a disclosure
+
+The owner: "the filtering looks too cluttered and ugly… all the tick boxes and
+all makes it looks too cluttered."
+
+What was on screen at once: **thirteen** stage tick boxes, three meal tick
+boxes (all ticked, because an empty list means "all"), **fourteen** date chips
+in two labelled rows, two date boxes, three selects, a toggle, and a paragraph
+of search prefixes. Nothing can filter less than before; it is arranged by how
+often it is used:
+
+- one row of ordinary selects - Show, Guest house, Requester category,
+  **Check-in** (the presets as one grouped list, each option carrying its
+  dates), From, Until, Sort by;
+- **"Stages and meals"**, a `<details>` disclosure, holding the two tick-box
+  lists and the search-prefix help. Closed, it names what it is holding ("4 of
+  13 stages"), so a filter can never be in force invisibly;
+- the six **tiles** above are unchanged and remain the everyday status filter.
+
+The date chips became a `<select>` with `<optgroup>` for Rolling and Calendar,
+which is what a list of named periods is. The grouping survives, because "last
+30 days" is still not "last month" (1 Oct).
+
+### Everyone may export their own log as a PDF
+
+`canExportPdf` returns true for every role. CSV already was open to everyone,
+and both exports take **nothing but a query string** and re-derive the user,
+the scope and the filters server-side - so a requester's PDF is their own
+bookings and an approver's is their jurisdiction, exactly as the page is.
+Withholding PDF meant a requester could have the same rows in the one format a
+guest house office will not accept.
+
+One real bug surfaced while doing it: `exportHistoryPdf` computed its
+`defaultActor` as `developer ? "all" : "me"`, missing the
+`scope.isOwnBookings` case the page and the CSV export both have. A requester's
+PDF would have been filtered to bookings they had *acted on*.
+
+### The leads come off the portal's pages
+
+Eight page leads were a sentence restating the title ("A complete record of all
+your guest house booking requests and their status" under **Booking History**).
+What a lead can carry that a title cannot is the **scope** - which hostel, which
+department, which slice of the archive - so that is all that is left, and only
+where there is one. The desk's section descriptions went the same way: gone
+where the heading says it (Current occupants, Upcoming stays), one short fact
+where it does not ("Past check-out, never marked Vacated - still holding their
+rooms").
+
+## 9 Oct 2026 (evening) — an office's debitable heads are the office's, not its class's
+
+The office sent a spreadsheet: one row per office mailbox, a column per
+debitable head, **"Y" where that office may charge it**. Kept verbatim as
+[offices-debitable-heads.csv](offices-debitable-heads.csv), tabulated in
+[06-production-requirements.md](06-production-requirements.md) §2, transcribed
+into `OFFICE_DEBIT_HEADS` (`lib/office-debit-heads.ts`).
+
+The owner's instruction: **"Only show the debitable heads marked as Y do not
+show those which are not."** And, on the fact that the real office accounts do
+not exist yet: *"Currently i guess we cant implement it because we are using
+mock authentication… Currently for offices we have directors office as the mock
+user. So use this for that."*
+
+### Decision. Per mailbox, as a ceiling over Settings.
+
+Settings → Debitable heads keys the allowed heads by the requester's
+**category**, and for offices there are two of those (`officer_office`,
+`department_office`), both carrying the same six heads since 8 Oct. The
+spreadsheet is finer than either, and **it does not follow `office_class`**:
+
+| | |
+| --- | --- |
+| Director's Office (officer) | Institute Grant, Special Budget |
+| Sports & Physical Education (officer) | Institute Grant **only** |
+| Students Section | Special Budget, Student Fund, Hostel Funds |
+| IAR Office | Special Budget, Alumni Fund |
+| CSE Department Office (department) | Department Budget, Special Budget |
+| Institute Clinic | Special Budget **only** |
+
+There is no category boundary that produces those six lists. So the table is
+keyed by the **mailbox before the `@`** - the CSV's own key, and the account
+that signs in - and applied by `debitHeadsByType` as an **intersection** with
+the Settings list.
+
+**Why an intersection rather than a replacement.** The two lists answer
+different questions and both have to hold. Settings is the office's live
+control over heads in general: if they retire Special Budget, it has to
+disappear everywhere, including from an office whose row marks it. The
+spreadsheet is this office's own authority: it may not reach a head Settings
+offers offices at large. Narrowing from both sides means **neither can widen
+the other**, which is the same shape as `FORBIDDEN_DEBIT_HEADS` being a floor
+under Settings - this is a ceiling over it.
+
+**Why one function.** `debitHeadsByType` is already the single computation the
+booking form and `createBooking` both read, through `bookingContextFor`. The
+narrowing goes inside it, so the form cannot offer a head the server would
+refuse, and a crafted payload naming the Student Fund from the Director's
+Office is rejected by the same list that drew the dropdown.
+
+**Only the two office categories.** `people@iitpkd.ac.in` is an Administration
+mailbox on the spreadsheet *and* a plausible address for a person. The
+spreadsheet maps **offices' official spending**, so an employee, a student or a
+club keeps their own category's heads whatever their address looks like. A
+personal booking is not asked at all (7 Oct).
+
+**An office not on the spreadsheet keeps the category list.** Guessing a
+narrower list would stop a new office booking; guessing a wider one is the
+thing the table exists to prevent. Leaving it alone is the honest answer and
+the office supplies the row when it has one. An empty intersection is likewise
+returned as such - the form then says "No debitable head is set up for this
+kind of booking", which is true, rather than quietly restoring a budget the
+office has no authority over.
+
+### Project Grant and Personal Funds are on no row
+
+The spreadsheet has six columns for nine heads. That is the office saying an
+office does not spend either: a project is held by its investigator, and an
+office has no private money. Neither was in the offices' category lists
+before, so nothing changed - but it answers the owner's question ("Project
+Funds and Personal Funds wont be visible for any ig, if its not there in the
+csv"): correct, and for offices it was already so.
+
+### The demo aliases, and what production owes
+
+Mock Authentication means the demo personas sit on addresses the institute
+does not use for these offices. Rather than renaming the seed - which would
+break the whitelist, the demo bookings and every recorded login - each row may
+name **aliases**, matched like the mailbox:
+
+- `admin`, `director.office` → **Director Office** (`admin@` is the seed's
+  "Director's Office" profile, the demo `official`)
+- `cse.office` → **Computer Science and Engineering** (`office_cs`)
+- `registrar` → **Administration** (`ro`)
+
+The first two are what makes the owner's instruction visible today: the demo
+official's form now offers Institute Grant and Special Budget and nothing
+else, and the department office beside it offers Department Budget and Special
+Budget - which is also the clearest demonstration that the mapping is per
+office and not per class.
+
+**`ro` read as the Registrar's Office is an inference, not the office's
+words.** It is flagged for confirmation in
+[06-production-requirements.md](06-production-requirements.md) §2.
+
+### What is deliberately not built
+
+**The console cannot edit the table.** Settings still edits the category
+lists; the per-office rows are a constant in code. Giving them an editable
+home means a column on `units` and a grid in Departments & Clubs, and it is
+not worth a migration while the offices it keys on do not exist as accounts
+yet. The seam is in place - `narrowToOffice` is the only place the narrowing
+happens - so that change is local when the office asks for it.
+[04-roadmap.md](04-roadmap.md) carries it.
+
+### Cost
+
+One existing test moved. `tests/workflow-hod.test.ts`'s round-trip check takes
+**the first head on each requester's list** and submitted no `debit_details`;
+the IAR Office's official list now begins at Special Budget, whose details are
+mandatory since 8 Oct, so the payload fills them in whenever
+`debitDetailsRequired(head)`. The check itself - that the schema accepts its
+own output for every role - is unchanged.

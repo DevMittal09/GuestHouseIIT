@@ -94,8 +94,9 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   // kitchen reads it.
   await expect(page.getByLabel(/Remarks/)).toBeVisible();
   await page.locator('[name="purpose_of_visit"]').fill("Workshop lunch for the visiting panel");
-  // The head count is a dropdown of people (1 Oct 2026), not a stepper.
-  await page.locator('[name="meal_guest_count"]').selectOption("6");
+  // The head count is typed, with steppers either side (9 Oct 2026); it was
+  // a 1…30 dropdown from 1 Oct.
+  await page.locator("#meal_guest_count").fill("6");
 
   // It opens on the first day the kitchen can still cook for, with **lunch**
   // ticked (1 Oct 2026: it used to be every meal of the day). A second day is
@@ -121,13 +122,13 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
    * all. `dietCountsError` still enforces it on both sides for a crafted
    * payload; that is checked in tests/seventh-round.test.ts.
    */
-  await page.locator('[name="meal_veg_count"]').selectOption("4");
-  await expect(page.locator('[name="meal_non_veg_count"]')).toHaveValue("2");
+  await page.locator("#meal_veg_count").fill("4");
+  await expect(page.locator("#meal_non_veg_count")).toHaveValue("2");
   // Either box fills the other, so a correction works the same way.
-  await page.locator('[name="meal_non_veg_count"]').selectOption("6");
-  await expect(page.locator('[name="meal_veg_count"]')).toHaveValue("0");
-  await page.locator('[name="meal_veg_count"]').selectOption("4");
-  await expect(page.locator('[name="meal_non_veg_count"]')).toHaveValue("2");
+  await page.locator("#meal_non_veg_count").fill("6");
+  await expect(page.locator("#meal_veg_count")).toHaveValue("0");
+  await page.locator("#meal_veg_count").fill("4");
+  await expect(page.locator("#meal_non_veg_count")).toHaveValue("2");
   await expect(page.getByText(/counts add up to \d+, but the booking is for/)).toHaveCount(0);
 
   // The summary at the end reads back what is about to be ordered.
@@ -189,9 +190,9 @@ test("the kitchen refuses a sitting that is already full", async ({ page }) => {
     // One sitting, far enough out that every meal is open: lunch on `day`,
     // which is ticked by default and the only meal that is.
     await page.locator("#meal-date-0").fill(day);
-    await page.locator('[name="meal_guest_count"]').selectOption(people);
-    await page.locator('[name="meal_veg_count"]').selectOption(people);
-    await page.locator('[name="meal_non_veg_count"]').selectOption("0");
+    await page.locator("#meal_guest_count").fill(people);
+    await page.locator("#meal_veg_count").fill(people);
+    await page.locator("#meal_non_veg_count").fill("0");
     await page.locator('[name="privacy_consent"]').check();
     await page.getByRole("button", { name: "Submit booking request" }).click();
   };
@@ -221,7 +222,10 @@ test("the availability console counts rooms for a requester and charts them for 
   // The panel arrives once the fetch lands; the card title carries the range,
   // so this is also a check that dates read DD/MM (1 Oct 2026).
   await expect(page.getByText(/^Room availability - \d{2}\/\d{2}/)).toBeVisible();
-  await expect(page.getByText(/rooms available|No rooms free all day/).first()).toBeVisible();
+  // The counts panel, redrawn on 9 Oct 2026: one labelled strip of figures,
+  // not a card per day repeating "N of M rooms available". The console opens
+  // on the week.
+  await expect(page.getByText("Rooms free each day")).toBeVisible();
   /**
    * Not one room number. Every room number on the page sits in a cell whose
    * `title` names the room and its type ("201 - Double sharing"), on the

@@ -56,10 +56,17 @@ async function copyToFor(
   // The same rule the staff mail uses for CC (`lib/academic/copy-to.ts`), for
   // the request as the form opens - the role's default booking type.
   const { entries, failed } = await copyToRecipients(profile, formRouteFor(profile, raisedBy));
+  /**
+   * **No row at all when there is nobody to copy** (9 Oct 2026). A faculty
+   * member's own booking goes straight to the desk, so the card used to carry
+   * a "Copy to" line reading "Nobody - this request goes straight to the
+   * Guest House Manager, or nobody is set up to approve it yet": a sentence
+   * about an absence, on the one role that never needs it. A lookup that
+   * *failed* still says so - that is a different thing from nobody.
+   */
+  if (entries.length === 0 && !failed) return null;
   return {
     entries,
-    emptyNote: failed
-      ? "Could not be looked up right now."
-      : "Nobody - this request goes straight to the Guest House Manager, or nobody is set up to approve it yet.",
+    emptyNote: "Could not be looked up right now.",
   };
 }
