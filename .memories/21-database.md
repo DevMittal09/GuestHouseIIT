@@ -324,7 +324,7 @@ Current migrations:
    on `lower(ldap_uid)`). Additive, nullable, safe to re-run. **Not backfilled
    from email on purpose** — a guessed identity mapping signs one person in as
    another; the office loads real usernames by console import or SQL
-   ([31-ldap-sign-in.md](31-ldap-sign-in.md) §3). **Until it is applied, LDAP
+   ([05-credentials-and-security.md](05-credentials-and-security.md) §3). **Until it is applied, LDAP
    sign-in finds nobody on Supabase and saving a user in the console fails**
    (the update names the column). `supabase/seed.sql` sets the demo personas'
    usernames with an idempotent `update`, so re-run it afterwards. Verified in a
@@ -373,7 +373,7 @@ Current migrations:
    3 + 1 limits from `rules.capacity`; `security_audit` with its append-only
    triggers and `purge_security_audit()`. Verified in a throwaway Postgres 16
    with old-shape rows (untrimmed and blank hostel names), applied three times,
-   plus the seed twice — see [23-running-and-testing.md](23-running-and-testing.md#verifying-changes).
+   plus the seed twice — see [22-running-and-testing.md](22-running-and-testing.md#verifying-changes).
 
 17. `00000000000017_turnaround_buffer.sql` (Phase 3, Sep 2026). The turnaround
    buffer: `room_hold_guard(during, overridden, buffer)` (ordinary
@@ -695,7 +695,7 @@ Current migrations:
 > `auth` / `storage` schemas and roles, old-shape bookings inserted, 7 and 8
 > applied twice with the session zone set to New York, and every converted row
 > compared with what `normalizeMeals` produces for the same stay. The recipe is
-> in [23-running-and-testing.md](23-running-and-testing.md#verifying-changes).
+> in [22-running-and-testing.md](22-running-and-testing.md#verifying-changes).
 
 > Migration 3 is **destructive**: it drops `bookings.assigned_room_ids` after
 > backfilling. Its `on conflict do nothing` also swallows any pre-existing
@@ -706,7 +706,7 @@ When you change the schema you must update, in the same commit:
 
 1. **a new numbered migration file** — never edit one that may have been
    applied; test it in a throwaway Postgres
-   ([23-running-and-testing.md](23-running-and-testing.md#verifying-changes)),
+   ([22-running-and-testing.md](22-running-and-testing.md#verifying-changes)),
 2. `lib/supabase/database.types.ts`,
 3. `lib/types.ts` domain shapes,
 4. `lib/store/mock.ts` **and** `lib/store/supabase.ts`,

@@ -39,7 +39,7 @@ cash retired, a personal stay settled at check-out, Awaiting payment) and the
 - Dining: "Dining to invoice" on the kitchen page (`/manager/meals`).
 
 Rates and invoice settings with their defaults are in
-[13-settings-and-defaults.md](13-settings-and-defaults.md#console--tariffs--invoicing-manager-and-developer).
+[12-settings-and-defaults.md](12-settings-and-defaults.md#console--tariffs--invoicing-manager-and-developer).
 
 ## How it works — invoices and tariffs (Phase 5)
 

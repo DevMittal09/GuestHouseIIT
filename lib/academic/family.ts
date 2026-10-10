@@ -10,7 +10,7 @@ import type { StudentRecord } from "./types";
  *
  * A pure comparison. The record is fetched on the warden's page for the
  * requests in their own queue only, shown there, and never stored, logged or
- * mailed - the rule in `.memories/17-academic-records.md`.
+ * mailed - the rule in `.memories/11-booking-forms.md`.
  */
 
 export type FamilyVerdict =

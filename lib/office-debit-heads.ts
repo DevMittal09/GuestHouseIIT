@@ -33,7 +33,7 @@ import type { DebitHead } from "./types";
  * also name {@link OfficeDebitRow.aliases} - which is how the Director's
  * Office persona on `admin@` is narrowed today. The whole table, and what
  * production has to do with it, is in
- * `.memories/06-production-requirements.md` §2.
+ * `.memories/04-production.md` §2.
  */
 export type OfficeDebitRow = {
   /** The office as the spreadsheet names it. Several rows may share a name. */

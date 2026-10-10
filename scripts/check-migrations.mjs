@@ -4,7 +4,7 @@
  * This exists because the answer used to be a sentence in the notes that
  * nobody could check. The notes said migrations 24-30 were outstanding on the
  * hosted project for weeks after they had been applied, because the check
- * recipe in `.memories/23-running-and-testing.md` listed markers only up to
+ * recipe in `.memories/22-running-and-testing.md` listed markers only up to
  * migration 25 - so 26 onwards could not be verified, and the claim was
  * carried forward by hand instead. A missing migration fails writes quietly,
  * and a migration wrongly believed missing sends somebody to the SQL editor to

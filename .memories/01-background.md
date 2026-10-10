@@ -1,11 +1,48 @@
-# Background
+# Background — the problem, the people, and every list they sent
 
-The problem, the people, and **every list of requirements the institute has
-handed over, with what became of each** — the chronological record of what was
-asked. The dated story of how it was built is
-[02-timeline.md](02-timeline.md); the product as it now stands is
-[10-roles-and-features.md](10-roles-and-features.md) and
+Why the portal exists, who asks for what, and **every list of requirements the
+institute has handed over, with what became of each item**. This is the record
+of *what was asked*. Why it was built the way it was, round by round, is
+[02-decisions.md](02-decisions.md); what the product does today is
+[10-roles-and-workflows.md](10-roles-and-workflows.md) and
 [11-booking-forms.md](11-booking-forms.md).
+
+The session-by-session timeline used to be a file of its own. It was a third
+telling of every round - after the table here and the reasoning in
+[02-decisions.md](02-decisions.md) - so it is now the index below, one line per
+working day, pointing into the sections that follow.
+
+---
+
+## The build at a glance
+
+All dates are 2026. The detail is in the dated sections of this file and in
+[02-decisions.md](02-decisions.md).
+
+| Date | What happened |
+| --- | --- |
+| **19 Aug** | First commit: five requester categories and their approval chains, config-driven forms, the manager's cinema-style room grid, the developer console, two data stores behind one interface, a persona-picker mock auth. `AGENTS.md` written for AI agents. |
+| 21-22 Aug | Pushed to GitHub. The approval log and archive search at `/history`. |
+| 30 Aug | Booking lifecycle (Occupied, Vacated, cancellation flow); history PDF export. |
+| 2 Sep | `.memories/` created; the production plan written (now [04-production.md](04-production.md) Part 3). |
+| 3-4 Sep | **`room_holds` with an exclusion constraint** (migration 3) - room clashes made impossible in the database. Infants modelled (migrations 3-4). |
+| **10 Sep** | Everything pinned to **institute time** after bookings were stored 5h30m late on a UTC host. The office's **second list** (parent rule, availability grid, day-wise log, one-month window, allocation mail). Push access fixed. |
+| **15 Sep** | **Meeting with the guest house office**: week/month availability, "Booked" wording, formal capacity copy, one infant switch (migration 7), meals per day (migration 8), meals only at Hamsanandi. |
+| **16 Sep** | Second pass over the meeting notes: **booking type** (migration 9), alumni logins removed and the **IAR Student Cell** added, **GH Caretaker**, browsable availability in the form. **Email** built: `lib/mail/`, the outbox (migration 10), digests, the cron. |
+| 17 Sep | The booking schema must accept its own output - no role could submit, fixed. |
+| **19 Sep** | **UI redesign** from the designer's handoff: the public website at `/`, sign-in moved to `/sign-in`. **LDAP sign-in** with dummy accounts (migration 12). Also room-scoped guests and service types (11), mail templates (13), the turnover override (14). |
+| **21 Sep** | **Requester details** from the academic database. Units and debitable heads (15). The **production-readiness programme** begins: Phase 1 Settings (16), Phase 2 To/CC, Phase 3 turnaround buffer (17). |
+| **22 Sep** | Phase 4 HOD approval and debitable heads (18), Phase 5 invoices (19), Phase 6 dining, Phase 7 operational states (20), Phase 8 security (21), Phase 9 begins. |
+| **23 Sep** | Phase 9 finished (22; Playwright, CI), Phase 10 documentation. The office's **second and third lists**: all rooms double sharing, the 3+1 / 2+2 / 1+3 room rule (23), Guardian counts as a parent, meals-only as a set of dates, one Mother per request, **mail threads per booking**, faculty never Institute Grant. The office's real room numbers and the Bageshri rate. |
+| **24 Sep** | The office's **fourth list** (invoices after check-out, dining invoices, typed project sub-head, name + gender only for faculty, **clubs booked by their faculty in-charge**, per-booking Copy to (24), Special Funds). Then **Faculty Advisors by appointment** (25). Then a full audit of `.memories` against the code, and the three defects it found. |
+| **25 Sep** | The office's **fifth list**: the warden's family check, additional charges on invoices (26), **GST 18% rooms / 5% food** per section, the infant card, an earlier check-in at the desk. |
+| **26 Sep** | **Public site redesigned** in iitpkd.ac.in's own palette, over three passes in one day - morning (figures and route tables), afternoon (photo-led and quiet, no role names), evening (clean and institutional, photographs contained). |
+| **30 Sep** | **UI revamp**, presentation layer only: a fixed corner scale, GOV.UK-style cards, tables and tags, an asymmetric public hero. Then **the supervisor's review** of the live site that afternoon: a plainer hero line, six amenities, requesters see only Booked / Free, invoices `version: 3`. |
+| **1 Oct** | The office's **seventh list**, mostly the meal booking: **each person's own preference** as counts (27), the kitchen's 30 per sitting, lunch ticked by default, incoming meal bookings in their own section, **DD/MM/YYYY** everywhere, a check-in the desk can move later, the project typed rather than picked. Copy-to mail diagnosed as `MAIL_REDIRECT_ALL_TO`. |
+| **7 Oct** | The office's **eighth list**, worked as four gated phases: every em dash to a hyphen and Kerala to **Keralam**; a personal booking never asked which budget pays; students and alumni held to Bageshri and no meals; availability as **a count** for everyone but the desk; **the institute's records kept in the portal** (28) with a student's parents **locked**; invoice version 4 and cash retired; a personal stay settled at check-out; **Missed** (29). |
+| **8 Oct** | The office's **ninth list**, all of it about production: the **nine debitable heads** and the office's own mapping (revision 6), the **funds declaration** (30), one mail thread per booking id including the requester's, **less text on screen**, and **accounts from a spreadsheet**. A new production-requirements file - now [04-production.md](04-production.md). |
+| **9 Oct** | Two answers from the office, and one of our own mistakes: the migration check was replaced by **`npm run check:migrations`** after these notes had claimed 24-30 were missing for weeks when they were applied. That afternoon, **the owner's own list: the portal stops talking** - a rule the form enforces is no longer stated on it. That evening, the office's **tenth list**, a spreadsheet: **each office's own debitable heads**. |
+| **10 Oct** | This folder reorganised: 25 files to 15, each with one job, and a maintenance contract in [README.md](README.md) so a round updates every file it touches, enforced by `npm run check:memories`. `CLAUDE.md` at the repo root rewritten to carry the process - read the memory before planning, update it before finishing. |
 
 ## The problem
 
@@ -31,7 +68,7 @@ four recurring problems:
 ## Who uses it
 
 **Requesters** (submit bookings) — *as first specified; the current rules per
-role are in [10-roles-and-features.md](10-roles-and-features.md)*:
+role are in [10-roles-and-workflows.md](10-roles-and-workflows.md)*:
 
 | Role | Notes |
 | --- | --- |
@@ -72,7 +109,7 @@ of **10 Sep 2026**:
 
 | # | Requirement | Status | Where |
 | --- | --- | --- | --- |
-| 1 | Parents may stay freely; siblings and grandparents only when a father or mother is also staying | **Done** | `parent_relationships` / `dependent_relationships` on `RoleFormConfig`, enforced by `parentDependencyError()` — see [21-implementation.md](21-implementation.md). Joined 23 Sep 2026 by `unique_relationships` / `duplicateRelationshipError()`: a student has one mother, so a singular relationship may appear only once |
+| 1 | Parents may stay freely; siblings and grandparents only when a father or mother is also staying | **Done** | `parent_relationships` / `dependent_relationships` on `RoleFormConfig`, enforced by `parentDependencyError()` — see [20-architecture.md](20-architecture.md). Joined 23 Sep 2026 by `unique_relationships` / `duplicateRelationshipError()`: a student has one mother, so a singular relationship may appear only once |
 | 2 | Room availability grid for all users, showing room details, booking periods and vacant/occupied status | **Done** | `/availability` + `lib/availability.ts` + `app/actions/availability.ts` |
 | 3 | Day-wise guest house log / occupancy report, emailed automatically to the Guest House Manager | **Done** | `queueDailyDeskReports()` in `lib/mail/digest.ts`, driven by `/api/mail/cron`. One report per guest house per day to the manager *and* the caretaker: arrivals, departures, who is in house, stays past check-out still holding rooms, and what awaits allocation. Rendered as HTML tables, not a PDF, because `lib/report-pdf.ts` is client-side (jsPDF) and there is no browser in a cron job |
 | 4 | Bookings only within a one-month advance window | **Done** | `latestCheckIn()` / `isAdvanceWindowExempt()` in `lib/workflow.ts`, applied by `bookingPayloadSchema` on client and server |
@@ -83,12 +120,13 @@ of **10 Sep 2026**:
 > scheduled jobs — so `lib/mail/` provides both: a `Mailer` seam with SMTP /
 > file / dry-run implementations, an `email_outbox` queue (migration 10) that
 > keeps a slow or broken mail host from ever failing a booking, and two cron
-> routes. See the mail section in [21-implementation.md](21-implementation.md).
+> routes. See the mail section in [20-architecture.md](20-architecture.md).
 
 ## Meeting notes — 15 Sep 2026
 
 A third round came out of a meeting with the guest house office
-(`Guest House Meeting Notes.md`, kept alongside these files in `.memories/`).
+(the office's own notes, kept verbatim as the appendix at the foot of this
+file).
 Part of it was picked up the same day; everything else in the notes is not
 started.
 
@@ -117,12 +155,12 @@ The remainder of the same meeting notes. Status as of **16 Sep 2026**:
 | Remove alumni login; IAR cell books for them (office or on behalf of an alumnus), with alumni student ID and ID card as PDF/image | **Done** | Alumni persona and login removed; `iar_cell` (IAR Office) and a new `iar_student_cell` both book with an office/alumni choice. Alumni bookings carry `alumni_name`, `alumni_roll_number` and the ID card (JPG/PNG/WEBP/PDF, 5 MB) |
 | IAR student cell's requests go to the IAR office for approval | **Done** | `initialStatusFor()`: `iar_student_cell` → `PENDING_IAR` → manager; `iar_cell` → manager directly, because routing it to its own queue would be self-approval. `canReview()` also refuses `reviewer.id === requester.id` |
 | Warning messages for dangerous tasks like deleting a guest house | **Done** | `components/ui/confirm-dialog.tsx` replaced every `window.confirm`: it lists what will be lost and makes the operator type the guest house name, user email or booking reference |
-| Invoices with payment account details; invoice at checkout for GHM and caretaker; official invoices routed to accounts | **Done** (Phase 5, Sep 2026) | The office's template reproduced as a PDF with the bank details; issued and printed at check-out from the manager and caretaker consoles; official invoices mailed to Accounts with the PDF; tariffs by date in Tariffs & Invoicing. See [15-billing-and-invoices.md](15-billing-and-invoices.md) |
+| Invoices with payment account details; invoice at checkout for GHM and caretaker; official invoices routed to accounts | **Done** (Phase 5, Sep 2026) | The office's template reproduced as a PDF with the bank details; issued and printed at check-out from the manager and caretaker consoles; official invoices mailed to Accounts with the PDF; tariffs by date in Tariffs & Invoicing. See [13-billing-and-dining.md](13-billing-and-dining.md) |
 | ±4 hour buffer on bookings | **Done** (Phase 3, 21 Sep 2026) | A turnaround buffer after each stay, 4 h by default, a Setting; padded in `room_holds.guard`, not `during` (migration 17) |
 | HOD approval for a faculty member's booking; debitable heads (dept / project / personal fund) | **Done** (Phase 4, 22 Sep 2026) | `routeFor`, `units` + `hodApproversFor`, `/hod`; `lib/debit-heads.ts`, the Projects list (migrations 15, 18) |
 | Dining/lunch booking at the guest house with debitable heads | **Done** (Phase 6, 22 Sep 2026; reworked 23 Sep) | Service type "Meals only" for faculty, staff and offices; dining debit heads; the kitchen's day at `/manager/meals` |
-| Email in a single thread rather than standalone messages | **Done** (reworked 21 and 23 Sep 2026) | `lib/mail/thread.ts`. Staff mail about a booking joins one thread **per booking** per mailbox; the digest, escalation and day-wise log keep a **daily** thread; requesters get a standalone mail for each step. See [14-notifications.md](14-notifications.md) |
-| Documentation for every booking workflow | **Done** (Phase 10, 23 Sep 2026) | [12-workflows.md](12-workflows.md), with every pipeline drawn out |
+| Email in a single thread rather than standalone messages | **Done** (reworked 21 and 23 Sep 2026) | `lib/mail/thread.ts`. Staff mail about a booking joins one thread **per booking** per mailbox; the digest, escalation and day-wise log keep a **daily** thread; requesters get a standalone mail for each step. See [10-roles-and-workflows.md](10-roles-and-workflows.md) |
+| Documentation for every booking workflow | **Done** (Phase 10, 23 Sep 2026) | [10-roles-and-workflows.md](10-roles-and-workflows.md), with every pipeline drawn out |
 
 ## Requester details from the academic database — 21 Sep 2026
 
@@ -136,11 +174,11 @@ database and written instructions for doing so.
 
 | Requirement | Status | Where |
 | --- | --- | --- |
-| Show each kind of account's listed fields at the top of New Booking | **Done** (dummy data) | `lib/academic/`, `components/academic-details.tsx`; field list and role mapping in [17-academic-records.md](17-academic-records.md) §1 |
+| Show each kind of account's listed fields at the top of New Booking | **Done** (dummy data) | `lib/academic/`, `components/academic-details.tsx`; field list and role mapping in [11-booking-forms.md](11-booking-forms.md) §1 |
 | Guardian's name only when father's and mother's are empty | **Done** | `parentRows` in `lib/academic/fields.ts` |
 | Copy to: the approver (students, student reps), the HOD (offices) | **Done** — shown on the form and **CC on every staff mail** (Phase 2: To = the actioner, Copy to = CC) | `lib/academic/copy-to.ts`, `lib/mail/addressing.ts`; approvers through `canReview()`. HOD *approval* is Phase 4 |
 | Wardens' fields | **Done** | Wardens never open New Booking, so the card is on `/warden`, below the queue |
-| Provision for the real database, and how-to | **Done** | `ACADEMIC_DB_URL` / `ACADEMIC_DB_TOKEN` → `HttpAcademicSource`; [17-academic-records.md](17-academic-records.md) §4 |
+| Provision for the real database, and how-to | **Done** | `ACADEMIC_DB_URL` / `ACADEMIC_DB_TOKEN` → `HttpAcademicSource`; [11-booking-forms.md](11-booking-forms.md) §4 |
 
 ## Design handoff — 19 Sep 2026
 
@@ -154,14 +192,14 @@ the guest house's **map location** included, and then supplied 14 photographs
 
 Built the same day: the public site at `/`, sign-in moved to `/sign-in`, and
 the portal restyled to match. What was built, what was left out and why, and
-what is still waiting on the office: [16-public-site-and-ui.md](16-public-site-and-ui.md).
+what is still waiting on the office: [14-public-site-and-ui.md](14-public-site-and-ui.md).
 
 ## Office corrections — 23 Sep 2026
 
 Ten items from the guest house office, verbatim in substance. Most are the same
 complaint in different places: **the portal asks questions whose answer is
 already known.** Reasoning in
-[03-decisions.md](03-decisions.md) ("23 Sep 2026").
+[02-decisions.md](02-decisions.md) ("23 Sep 2026").
 
 | Asked for | Status | Where |
 | --- | --- | --- |
@@ -182,7 +220,7 @@ already known.** Reasoning in
 
 Seven more, from working the portal after the round above. Same theme again in
 places: **the portal asks questions whose answer is already known, and hides
-the ones that matter.** Reasoning in [03-decisions.md](03-decisions.md)
+the ones that matter.** Reasoning in [02-decisions.md](02-decisions.md)
 ("the office's third round"); the working summary, which is replaced each
 round, is [99-recent-changes.md](99-recent-changes.md).
 
@@ -200,7 +238,7 @@ round, is [99-recent-changes.md](99-recent-changes.md).
 
 Nine items, sent by the owner. Built on `main` (the `ui` branch holding the
 vermilion redesign was left for a separate merge). Reasoning in
-[03-decisions.md](03-decisions.md) ("24 Sep 2026"); the working summary is
+[02-decisions.md](02-decisions.md) ("24 Sep 2026"); the working summary is
 [99-recent-changes.md](99-recent-changes.md).
 
 | Asked for | Status | Where |
@@ -218,7 +256,7 @@ vermilion redesign was left for a separate merge). Reasoning in
 ## Faculty Advisors — 24 Sep 2026, afternoon
 
 The owner's follow-up to the club rule above. Reasoning in
-[03-decisions.md](03-decisions.md) ("24 Sep 2026 (afternoon)"); the working
+[02-decisions.md](02-decisions.md) ("24 Sep 2026 (afternoon)"); the working
 summary is [99-recent-changes.md](99-recent-changes.md).
 
 | Asked for | Status | Where |
@@ -232,7 +270,7 @@ summary is [99-recent-changes.md](99-recent-changes.md).
 
 ## Office corrections — 25 Sep 2026, fifth list
 
-Relayed by the owner. Reasoning in [03-decisions.md](03-decisions.md)
+Relayed by the owner. Reasoning in [02-decisions.md](02-decisions.md)
 ("25 Sep 2026"); the working summary is
 [99-recent-changes.md](99-recent-changes.md).
 
@@ -250,19 +288,19 @@ Relayed by the owner. Reasoning in [03-decisions.md](03-decisions.md)
 
 ## Public site redesign — 26 Sep 2026
 
-Asked by the owner. Reasoning in [03-decisions.md](03-decisions.md)
+Asked by the owner. Reasoning in [02-decisions.md](02-decisions.md)
 ("26 Sep 2026 — the public site redesigned"); the working summary is
 [99-recent-changes.md](99-recent-changes.md).
 
 | Asked for | Status | Where |
 | --- | --- | --- |
-| A clean, professional site that impresses, not AI-generated-looking, following the backend; the UI "too dull and dead" | **Done** | Every public page redesigned — [16-public-site-and-ui.md](16-public-site-and-ui.md) |
+| A clean, professional site that impresses, not AI-generated-looking, following the backend; the UI "too dull and dead" | **Done** | Every public page redesigned — [14-public-site-and-ui.md](14-public-site-and-ui.md) |
 | Keep the mock authentication | **Kept** | "Mock Authentication" on the sign-in card and `/mock-login`, unchanged in behaviour |
 | Follow the colour palette of the IITPKD websites | **Done** | Ink `#1A1A1A`, vermilion `#E94C26`, saffron `#F5A300`, from iitpkd.ac.in's CSS and the logo; the portal follows through the tokens |
 | Map with two options, Hamsanandi and Bageshri (two Google Maps links) | **Done** | `/contact` map tabs; `GUEST_HOUSE_LOCATIONS` in `lib/site.ts`; each house's Map and Directions in the footer and on the home page |
 | The MRBS booking portal in the footer with the contact details; the iitpkd website "and everything" | **Done** | Footer: an MRBS line and button, front office, Find us, Institute links (IIT Palakkad website, MRBS, guest house page, How to reach, Telephone directory); MRBS and iitpkd.ac.in in the portal footer too |
 | A Guidelines page with dummy guidelines from what was discussed and what guest houses usually have | **Done** | `/guidelines`: nine numbered sections; 1–7 the portal's rules, 8–9 placeholder house rules marked "To be confirmed" |
-| Look online for how to make it look less AI-generated | **Done** | Findings and how they were applied in [16-public-site-and-ui.md](16-public-site-and-ui.md) |
+| Look online for how to make it look less AI-generated | **Done** | Findings and how they were applied in [14-public-site-and-ui.md](14-public-site-and-ui.md) |
 | The New Booking and Meal Booking buttons should stand out after login | **Done** | Large vermilion / ink tiles at the top of My Bookings |
 
 ### The same day, afternoon — second list
@@ -287,7 +325,7 @@ Asked by the owner. Reasoning in [03-decisions.md](03-decisions.md)
 ## UI revamp — 30 Sep 2026
 
 Asked by the owner as a written brief (presentation layer only). Reasoning in
-[03-decisions.md](03-decisions.md) ("30 Sep 2026 — UI revamp").
+[02-decisions.md](02-decisions.md) ("30 Sep 2026 — UI revamp").
 
 | Asked for | Status | Where |
 | --- | --- | --- |
@@ -305,7 +343,7 @@ Asked by the owner as a written brief (presentation layer only). Reasoning in
 
 Notes from the owner's supervisor on the live site
 (https://guest-house-iit.vercel.app/), relayed by the owner, who also said
-what three of them meant. Reasoning in [03-decisions.md](03-decisions.md)
+what three of them meant. Reasoning in [02-decisions.md](02-decisions.md)
 ("30 Sep 2026 (afternoon)"); the working summary is
 [99-recent-changes.md](99-recent-changes.md).
 
@@ -313,7 +351,7 @@ what three of them meant. Reasoning in [03-decisions.md](03-decisions.md)
 | --- | --- | --- |
 | Landing page: "First sentence ?" (the owner: promise less, keep it vague) | **Done** | "Bageshri and Hamsanandi provide accommodation on campus for guests of the institute." — no list of who stays — `app/(site)/page.tsx` |
 | "Meeting room and exercise room (common) ?" (the owner: remove both) | **Done** | Six amenities, a three-column grid — `lib/site-content.ts` |
-| "Take couple of photos — AM" | **Open — not code** | AM to photograph the guest houses; [04-roadmap.md](04-roadmap.md) |
+| "Take couple of photos — AM" | **Open — not code** | AM to photograph the guest houses; [03-roadmap.md](03-roadmap.md) |
 | Booking page: remove "From the institute's academic database (Student)." | **Done** | No caption when the record is found; the fallbacks keep theirs — `components/academic-details.tsx` |
 | Personal Funds note: "Invoice will be generated and can be settled at the time of checkout. Multiple payment options are available at the guest house." | **Done** | `PAY_AT_CHECKOUT_NOTE` (`lib/debit-heads.ts`) |
 | Availability: don't show requesters the whole legend; overlap need not be shown | **Done** | Requesters see Booked / Free / Today; the desk keeps turnaround, overlap and maintenance — `getRoomAvailability().detailed`, `simple` charts, `AvailabilityLegend` |
@@ -324,7 +362,7 @@ what three of them meant. Reasoning in [03-decisions.md](03-decisions.md)
 ## The office's seventh list — 1 October 2026
 
 Relayed by the owner as one list, mostly about the **meal booking** and the
-desk. Reasoning in [03-decisions.md](03-decisions.md) ("1 Oct 2026"); what
+desk. Reasoning in [02-decisions.md](02-decisions.md) ("1 Oct 2026"); what
 changed in [99-recent-changes.md](99-recent-changes.md).
 
 | Asked for | Status | Where |
@@ -351,7 +389,7 @@ changed in [99-recent-changes.md](99-recent-changes.md).
 Relayed by the owner as a **four-phase plan**, each phase gated on lint,
 typecheck, the unit suite, a production build on the mock store and the
 Playwright journeys before the next began. Reasoning in
-[03-decisions.md](03-decisions.md) ("7 Oct 2026"); what changed in
+[02-decisions.md](02-decisions.md) ("7 Oct 2026"); what changed in
 [99-recent-changes.md](99-recent-changes.md). Two migrations, **28** and
 **29**, both still to be applied to the hosted project.
 
@@ -420,28 +458,28 @@ Playwright journeys before the next began. Reasoning in
 Relayed by the owner, who noted that **most of it is about the production
 deployment** rather than the demo - the real accounts, the real heads, the real
 mail. The lasting answer to that is a new file,
-[06-production-requirements.md](06-production-requirements.md), which records
+[04-production.md](04-production.md), which records
 everything a production build needs in one place. Reasoning in
-[03-decisions.md](03-decisions.md) ("8 Oct 2026"); what changed in
+[02-decisions.md](02-decisions.md) ("8 Oct 2026"); what changed in
 [99-recent-changes.md](99-recent-changes.md). One migration, **30**.
 
 | Asked for | Status | Where |
 | --- | --- | --- |
 | The **nine debitable heads**, named: Institute Grant, Professional Development Fund, Project Grant, Department Budget, Special Budget, Personal Funds, Alumni Fund, Student Fund, Hostel Funds | **Done** | `STANDARD_DEBIT_HEADS`. All nine are in use now; three had been on the enum since migration 15 and offered to nobody |
-| **Special Budget (Please specify the details)** - a text box, with an approval upload | **Done** | `debitDetailsRequired` includes it, so the box is **mandatory**; the upload is offered and stays optional (a requester waiting on a scan is not stopped from booking). One line to make it mandatory - [06](06-production-requirements.md) §2 |
+| **Special Budget (Please specify the details)** - a text box, with an approval upload | **Done** | `debitDetailsRequired` includes it, so the box is **mandatory**; the upload is offered and stays optional (a requester waiting on a scan is not stopped from booking). One line to make it mandatory - [04-production.md](04-production.md) §2 |
 | The **mapping of requester to head**: student / non-faculty → Personal; faculty → all but Institute Grant, Alumni, Student Fund and Hostel; offices → Institute Grant, Department, Special Budget, Student Fund, Hostel Funds, Alumni Fund; fests → Student Fund and Special Budget; Alumni IAR → Alumni Fund and Special Budget | **Done** | `DEFAULT_DEBIT_RULES` **revision 6**, which *replaces* a saved Settings row's lists rather than editing them - four categories changed which heads they have. "All funds except…" is also a **floor** (`FORBIDDEN_DEBIT_HEADS.faculty`), not only a default |
 | A **declaration** whenever any fund but Personal is chosen: "I have the necessary approval for the usage of funds from the competent authority and verified that sufficient balance is there in the debitable head." | **Done** | `FUND_DECLARATION`, one constant. Inside the Debitable head card, so it appears and disappears with the head; checked on both sides; stored as `bookings.fund_declaration_at` (**migration 30**) |
 | **All emails for one booking id in one thread** - "I think it's already like that, please verify" | **Verified and completed** | It was true of the **staff's** mail since 23 Sep and **not** of the requester's, which stood alone by an earlier decision. Eleven events moved into the booking thread, the invoice mail to Accounts among them. The cost is the shared subject, which is what a thread needs |
 | **Less text on the website** - "it should look simple, that is the content; don't put too much explanations, instructions and mansplainings" | **Done** | The booking form's card descriptions and help paragraphs, the `/book` leads, the desk's lists and the Guidelines items. Every rule and figure kept; the clause that explains the clause dropped. The infant note had stated the room capacity that the room card below it states again |
 | For the **GH Manager: add the users' data from Excel, edit the columns, and delete data** | **Done** - it was practical | Users & Roles → **Import from spreadsheet**: paste, **Check the paste**, Import, all or nothing. A **header line** names the columns in any order and only `email` is required, which is what "edit the columns" needed; a column the paste does not carry is left alone. Rows can be **ticked and deleted together**. `lib/users-import.ts` |
-| A **.md file recording everything the production build needs** | **Done** | [06-production-requirements.md](06-production-requirements.md) - the users, the heads, the data the office must supply, the secrets, the migrations, what production turns off, and what was asked for and parked |
+| A **.md file recording everything the production build needs** | **Done** | [04-production.md](04-production.md) - the users, the heads, the data the office must supply, the secrets, the migrations, what production turns off, and what was asked for and parked |
 
 **Answered on 9 October 2026:**
 
 | Question | Answer |
 | --- | --- |
 | Should the **Special Budget approval upload** be mandatory? | **No - leave it optional for now** (the office). The fund's name beside it stays mandatory |
-| Why did the portal say **migrations 24-30** were missing from the hosted project, when they had been run in the SQL editor? | It did not - **these notes did**. The check recipe in [23-running-and-testing.md](23-running-and-testing.md) listed markers only up to migration 25, so nothing past it could be verified, and each round copied the previous round's "outstanding" sentence forward. A read-only probe found **1-30 all applied**. Fixed by replacing the prose with **`npm run check:migrations`**, which asks the project itself |
+| Why did the portal say **migrations 24-30** were missing from the hosted project, when they had been run in the SQL editor? | It did not - **these notes did**. The check recipe in [22-running-and-testing.md](22-running-and-testing.md) listed markers only up to migration 25, so nothing past it could be verified, and each round copied the previous round's "outstanding" sentence forward. A read-only probe found **1-30 all applied**. Fixed by replacing the prose with **`npm run check:migrations`**, which asks the project itself |
 
 ## The owner's list — 9 October 2026 (afternoon)
 
@@ -449,7 +487,7 @@ Not the office's: the owner's own reading of the portal, in one message. The
 headline is **"the application is too verbose in many places… the text which
 are supposed to be in the guidelines or should pop up when we make the error is
 unnecessarily shown in the main page. This is the case for all pages."**
-Reasoning in [03-decisions.md](03-decisions.md) ("9 Oct 2026 (afternoon)"); what
+Reasoning in [02-decisions.md](02-decisions.md) ("9 Oct 2026 (afternoon)"); what
 changed in [99-recent-changes.md](99-recent-changes.md). **No migration.**
 
 | Asked for | Status | Where |
@@ -469,11 +507,10 @@ changed in [99-recent-changes.md](99-recent-changes.md). **No migration.**
 
 A spreadsheet rather than a numbered list: **one row per institute office
 mailbox, a column per debitable head, "Y" where that office may charge it**.
-Kept verbatim as [offices-debitable-heads.csv](offices-debitable-heads.csv)
-and tabulated in [06-production-requirements.md](06-production-requirements.md)
-§2.
+Kept verbatim, and tabulated, in
+[04-production.md](04-production.md) §2.
 
-Reasoning in [03-decisions.md](03-decisions.md) ("9 Oct 2026 (evening)"); what
+Reasoning in [02-decisions.md](02-decisions.md) ("9 Oct 2026 (evening)"); what
 changed in [99-recent-changes.md](99-recent-changes.md). **No migration.**
 
 | Asked for | Status | Where |
@@ -481,11 +518,20 @@ changed in [99-recent-changes.md](99-recent-changes.md). **No migration.**
 | "The csv file has the mapping of the offices with the debitable heads, **Y** means the offices can use that debitable head… **Only show the debitable heads marked as Y do not show those which are not**" | **Done** | `OFFICE_DEBIT_HEADS` (`lib/office-debit-heads.ts`) is the spreadsheet transcribed, keyed by the **mailbox before the `@`**. `debitHeadsByType` intersects it with the Settings list, so the booking form and `createBooking` narrow from one computation. It does **not** follow `office_class`: six different lists fall across both classes of office |
 | "Currently for offices we have directors office as the mock user. **So use this for that**" | **Done** | The demo `official` persona is the seed's "Director's Office" on `admin@`, aliased to the CSV's `director_iitpkd`. Its form offers **Institute Grant and Special Budget** and nothing else - verified by fetching `/book` as that persona. The demo department office (`cse.office@` → `office_cs`) offers **Department Budget and Special Budget**, which shows the mapping is per office |
 | "Project Funds and Personal Funds wont be visible for any ig, if its not there in the csv" | **Confirmed, and already so** | The spreadsheet has no column for either. Neither was in the offices' category lists before this round, so nothing changed; a test now pins it (`project_grant` and `personal_funds` are on no row) |
-| "Currently i guess we cant implement it because we are using mock authentication. But please keep it in .memories folder for production plan" | **Both done** | The mapping *is* implemented, because its key is the mailbox and an alias covers the demo address. What production still owes - the real mailboxes, dropping the four demo aliases, confirming `ro` is the Registrar's Office, and an editable home for the table - is [06-production-requirements.md](06-production-requirements.md) §2 and [04-roadmap.md](04-roadmap.md) |
+| "Currently i guess we cant implement it because we are using mock authentication. But please keep it in .memories folder for production plan" | **Both done** | The mapping *is* implemented, because its key is the mailbox and an alias covers the demo address. What production still owes - the real mailboxes, dropping the four demo aliases, confirming `ro` is the Registrar's Office, and an editable home for the table - is [04-production.md](04-production.md) §2 and [03-roadmap.md](03-roadmap.md) |
 
 **One thing to confirm with the office:** `ro` is read as the Registrar's
 Office, and the whitelisted `registrar@iitpkd.ac.in` is aliased to it. That is
 an inference from the mailbox name.
+
+
+## Branches
+
+- **`main`** — everything above.
+- **`ui`** — only the 21 Sep "vermilion" redesign experiment (3 commits of its
+  own), far behind `main`; a trial merge gave 30 conflicting files. Not merged,
+  and **superseded** by the 26 Sep redesign on `main`.
+- Dependabot branches on the remote (actions and npm updates), not merged.
 
 ## Scope decisions made during the build
 
@@ -495,24 +541,116 @@ an inference from the mailbox name.
   optional without a developer. That drove the configurable form system and the
   admin console, which are now the most distinctive parts of the project.
 - **Authentication was deliberately deferred, then built.** See
-  [03-decisions.md](03-decisions.md) — the app used a mock persona picker with a
+  [02-decisions.md](02-decisions.md) — the app used a mock persona picker with a
   single, well-marked swap point. Since 19 Sep 2026 sign-in is **LDAP**, against
   dummy accounts until the institute directory is connected (`LDAP_URL`), and
   since Phase 8 (22 Sep 2026) the session is a row with an opaque cookie and
   "Sign in with Google" is the real OpenID Connect flow. See
-  [31-ldap-sign-in.md](31-ldap-sign-in.md) and
-  [26-security.md](26-security.md).
+  [05-credentials-and-security.md](05-credentials-and-security.md) and
+  [05-credentials-and-security.md](05-credentials-and-security.md).
 - **Email notifications are built; SMS is not.** `lib/mail/` covers every
   workflow transition plus daily digests, reminders and escalations. SMS would
   be a second `Mailer`-shaped seam and has not been asked for.
 
 ## Status
 
-Feature-complete for the specified workflows, taken through a ten-phase
-production-readiness programme in September 2026 (Settings, mail addressing,
-the turnaround buffer, HOD approval and debitable heads, invoices, dining,
-operational states, security, performance and tests, documentation), and
-running against a hosted Supabase project. **Not yet deployed.** Two gates
-remain: pointing sign-in at the institute's real LDAP directory, and moving
-request-scoped database reads off the service-role key
-([04-roadmap.md](04-roadmap.md) §1).
+Feature-complete for every workflow the institute has specified, taken through
+the ten-phase production-readiness programme of September 2026 and ten rounds
+of the office's corrections. **Not deployed for real use.**
+
+What is left is [03-roadmap.md](03-roadmap.md); what a production build needs
+is [04-production.md](04-production.md).
+
+---
+
+## Appendix — the office's meeting notes, 15 Sep 2026, verbatim
+
+The guest house office's own notes from the meeting, word for word, as they
+sent them. Kept because every round since has been checked against them, and a
+paraphrase would lose the wording the office used. **Do not edit this to match
+what was built** - what was built, and what was left, is the two sections above
+("Meeting notes - 15 Sep 2026" and "second pass, 16 Sep 2026").
+
+(It was a file of its own, `Guest House Meeting Notes.md`, until 10 Oct 2026.)
+
+# Guest House Portal — Meeting Notes 
+
+# Page 1
+
+* Show room availability for per-week and per-month in addition to day.
+
+* Change booked/occupied to just booked in Room availability.
+
+* Make the room availability view dynamic in “new booking”.
+
+* Make meal combinations as dynamic.
+
+* Meals should be ticked as default, make it a table/grid for meals for days we booked instead of just one selection for all days.
+
+* Meals only applicable to Hamsanandhi.
+
+* Infant — remove and put near add guest, whether infant is there; no need for no. of infants and all option. \[only one option is required\]
+
+* Email — try to send in a single thread instead of a standalone email.
+
+* Write the “sleeps 2, 3 with extra bed” in Guest House Manager review & allocate console in a proper grammar, like its too informal now.
+
+* In GHM login, room availability/booking is not being reflected.
+
+* Introduce an invoice feature for all users, where the account details to which they can make the payment is also provided.
+
+* Implement a \+- 4 hr buffer for bookings.
+
+* In the GHM console, add a feature to see upcoming checkouts for today.
+
+* For users sitting in GH reception, there should not be too complex features in the UI so that its easy for them..
+
+* Future bookings should *not* be marked as occupied. \[Apparently it shows occupied now\]
+
+# 
+
+# Page 2
+
+* GH Caretaker role should be created and it will have a subset of features of GHM. Current Occupants and Upcoming stays should only be there in Landing Page, and ability to mark as occupied/vacated and all..
+
+* For faculty, staff \[regular staff\], official \[Default\] and personal options at the beginning of New Booking.
+
+* Student clubs/officials, there is only one option as official.
+
+* Remove alumni login as they have no LDAP, and IAR cell can book for them then. \[Two roles, Office and Alumni\] (option to book on behalf of alumni or for their office)
+
+* IAR student cell can also book, and then provide alumni student ID and book, and approval request goes to IAR office.
+
+* Invoice generation at the end — GHM and Caretaker will get it and will give it physically while checkout.
+
+* Official bookings — send invoice / payment stuff to accounts; like dept will deal with it.
+
+* For officers like Director, Registrar etc, only institute grant is allowed as Debitable Head, but for dept office like Mechanical, Electrical etc only dept is allowed as Debitable Head.
+
+* Offices should have two options/roles where one is as the one we made already, and other should require approval from a body (HOD’s like that).
+
+# 
+
+# Page 3
+
+**Faculty / Staff → official, personal → Approval required from HOD for faculty.**
+
+Debitable heads \[For official\]:
+
+* dept \[staff\]
+
+  * Project \[Excel sheet ask to share\]
+
+  * ~~Institute grant \[staff\]~~
+
+  * PDF \[Personal fund\]
+
+Student clubs / office bookings → official. Should go to respective HOD.
+
+* Add warning messages for dangerous tasks like delete GH.
+
+* Add an option/tab for lunch at Guest House with similar debitable heads as above, with one additional option for “personal” and remove project. \[Only Dining option\] \[only for Hamsanandi\] *\[Faculty, staff and office\] \[for staff only dept\].*
+
+* Documentation for every workflow we are doing while booking.
+
+* **Developer Account should be able to edit everything such that nothing is left to fix in backend for an IT person.**

@@ -171,7 +171,7 @@ export function LoginForm({
 
       {/*
         Everything below is for development and demos, and goes when real
-        authentication lands - see .memories/04-roadmap.md item 1.
+        authentication lands - see .memories/03-roadmap.md item 1.
       */}
       <div className="mt-8 rounded-[6px] border border-dashed border-border-strong px-4 py-3 text-center text-[13px] leading-normal text-muted-foreground">
         Demo build -{" "}

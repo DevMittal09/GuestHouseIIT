@@ -1,18 +1,21 @@
 # Roadmap — what is open, in priority order
 
-> **For the production deployment, read
-> [06-production-requirements.md](06-production-requirements.md) first**
-> (8 Oct 2026). It is the single checklist of what a production build needs -
-> the real accounts, the data the office must supply, the secrets, the
-> migrations, and what production turns off. This page stays the list of what
-> is *open*, including the things that are not deployment.
+The single list of what is **left**. Three neighbours, and the boundary
+between them matters, because keeping one item in two places is how this
+folder drifted before:
 
-Rewritten **24 Sep 2026** after a full audit of these notes against the code.
-The portal is feature-complete for every workflow the institute has specified
-and has been through a ten-phase production-readiness programme; it is **not
-deployed for real use**. This page is the single list of what is left.
-The original plan from 2 Sep 2026, now mostly executed, is kept for its
-reasoning in [05-production-plan.md](05-production-plan.md).
+- **[04-production.md](04-production.md)** owns everything about the
+  production deployment - the checklist of what it needs, how to deploy it,
+  and what must be settled with the institute. This page names the *gates* and
+  points there; it does not restate them.
+- **[02-decisions.md](02-decisions.md)** owns why anything was done the way it
+  was, including what was deliberately **not** built.
+- **[99-recent-changes.md](99-recent-changes.md)** owns the last round only.
+
+Rewritten **24 Sep 2026** after a full audit of these notes against the code,
+and reorganised **10 Oct 2026**. The portal is feature-complete for every
+workflow the institute has specified and has been through a ten-phase
+production-readiness programme; it is **not deployed for real use**.
 
 ---
 
@@ -22,20 +25,21 @@ Each of these is configuration or plumbing, not new design.
 
 | # | Gate | Why | How |
 | --- | --- | --- | --- |
-| 1 | **Connect the institute's LDAP** | Until `LDAP_URL` is set the dummy accounts work, and their passwords are published in this repository | [31-ldap-sign-in.md](31-ldap-sign-in.md) §3 — env vars, then load real usernames (Users & Roles → Import LDAP usernames) |
+| 1 | **Connect the institute's LDAP** | Until `LDAP_URL` is set the dummy accounts work, and their passwords are published in this repository | [05-credentials-and-security.md](05-credentials-and-security.md) Part 2, "Moving to the real LDAP accounts" — env vars, then load real usernames (Users & Roles → Import LDAP usernames) |
 | 2 | **Close Mock Authentication** | Open wherever Google is unconfigured, production included; anyone reaching `/mock-login` becomes any account | Configure Google (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APP_URL`) or set `MOCK_LOGIN=false` |
-| 3 | **Production secrets** | The server refuses to start without them | `APP_URL`, `CRON_SECRET`, `ID_ENCRYPTION_KEY` + the Supabase keys ([30-credentials-and-access.md](30-credentials-and-access.md)) |
+| 3 | **Production secrets** | The server refuses to start without them | `APP_URL`, `CRON_SECRET`, `ID_ENCRYPTION_KEY` + the Supabase keys ([05-credentials-and-security.md](05-credentials-and-security.md)) |
 | 4 | **Change the console password** | Default `0000` | Console → Console Access |
 | 5 | **Delete or disable the demo personas and demo data** | They sign in with published passwords | Users & Roles; `supabase/repairs/2026-09-21-clear-test-bookings.sql` for bookings |
 | 6 | **Apply every migration to the production database** | Missing ones fail writes quietly | **`npm run check:migrations`** asks the project and names what is missing. Do not write the answer down instead — that is how 24-30 were believed missing for weeks after they were applied |
-| 7 | **The office's Settings** | Defaults are guesses: extra-bed rate (none), GSTIN, Accounts email (empty), bank details, retention days, heads of units, Faculty Advisors, hostels and wardens, whitelist | [24-deployment-runbook.md](24-deployment-runbook.md#settings-the-office-must-fill-in) |
+| 7 | **The office's Settings** | Defaults are guesses: extra-bed rate (none), GSTIN, Accounts email (empty), bank details, retention days, heads of units, Faculty Advisors, hostels and wardens, whitelist | [04-production.md](04-production.md#3-data-the-office-has-to-supply) |
 | 8 | **Decide `MAIL_REDIRECT_ALL_TO`** | Unset only in production; set everywhere else | |
 | 9 | **Backups** | Supabase's free plan has none | Confirm the plan; run the restore drill in the runbook |
 
 **Next security phase** (not a gate for a pilot, but the next real step):
 move request-scoped database access off the service-role key so row-level
 security becomes the boundary rather than a second line behind the server
-([26-security.md](26-security.md) §6).
+([05-credentials-and-security.md](05-credentials-and-security.md), "What is
+deliberately not done yet").
 
 ## 2. Loose ends from the 24 and 25 Sep 2026 rounds
 
@@ -61,7 +65,7 @@ security becomes the boundary rather than a second line behind the server
   9 Oct 2026.** `npm run check:migrations` asks the project itself and reports
   **1 – 30 all applied** (`azfd…`). It had said otherwise here for weeks
   because nobody could check: the recipe in
-  [23-running-and-testing.md](23-running-and-testing.md) listed markers only up
+  [22-running-and-testing.md](22-running-and-testing.md) listed markers only up
   to migration 25, so the claim was carried forward by hand after the owner had
   already applied them. **Run the script rather than writing the answer down
   again.** Migrations **17 and 23** are function-only and it cannot see them;
@@ -72,7 +76,7 @@ security becomes the boundary rather than a second line behind the server
   **answered 9 Oct 2026: it stays optional.** The details box beside it is
   mandatory; the upload is offered and not required, so a requester waiting on
   a scan is not stopped from booking and the desk can ask for it later.
-  [06-production-requirements.md](06-production-requirements.md) §2 still
+  [04-production.md](04-production.md) §2 still
   records how to flip it if the office changes its mind.
 - **An imported profile still creates a Supabase Auth user** with the password
   `password123` in Supabase mode. Harmless - that password is not a portal
@@ -83,7 +87,7 @@ security becomes the boundary rather than a second line behind the server
 - **Load the real accounts** once LDAP is connected: Users & Roles → **Import
   from spreadsheet**, with the `ldap_uid` column or the separate LDAP import.
   The per-field guide is
-  [06-production-requirements.md](06-production-requirements.md) §1.
+  [04-production.md](04-production.md) §1.
 
 - **Then import the real records** (7 Oct 2026): Console → **Academic
   records** → Students first, since that is the list the booking form locks
@@ -131,7 +135,7 @@ security becomes the boundary rather than a second line behind the server
 
 - **Photographs — AM** ("Take couple of photos – AM"): new photos of the
   guest houses, to go through the recipe in
-  [16-public-site-and-ui.md](16-public-site-and-ui.md#photographs). Ask
+  [14-public-site-and-ui.md](14-public-site-and-ui.md#photographs). Ask
   which guest house each shows, so they can finally be attributed.
 - **Fix the .docx typo**: `public/GHM_Invoice.docx` reads "GST @ 5% on B (D)";
   the PDF prints "on C (D)", as the supervisor's list does. (The PDF has moved
@@ -156,7 +160,7 @@ real deployment and about who may edit the table.
   rows carry an alias so the demo personas are narrowed today: `admin` and
   `director.office` → Director Office, `cse.office` → `office_cs`,
   `registrar` → `ro`. Harmless, but they will drift once the real accounts
-  exist. [06-production-requirements.md](06-production-requirements.md) §2.
+  exist. [04-production.md](04-production.md) §2.
 - **Ask the office to confirm `ro` is the Registrar's Office.** The row is
   under "Administration" and the mailbox name is the only evidence; the
   whitelisted `registrar@iitpkd.ac.in` is aliased to it on that reading.
@@ -198,24 +202,24 @@ link to the kitchen page. Still open:
 
 ## 4. Things that need other people
 
-From the original plan's "Phase 0", still open:
+**Moved.** Who to ask for what - the Computer Centre, the Administration
+Section and the guest house office, the academic office - and the hosting
+decision, the Aadhaar recommendation, the residual DPDP items and the rollout
+order are all in
+**[04-production.md](04-production.md) Part 3**. They were listed in both
+places and the two drifted apart; Part 3 is now the only copy.
 
-- **Computer Centre:** LDAP host / base DN / service account / username
-  attribute and whether users can edit their own `mail`; a Google OAuth client
-  (or confirmation that LDAP alone will do); an SMTP relay or sending mailbox
-  (`guesthouse@` / `ghm@`); a subdomain and TLS; hosting (campus VM or Vercel).
-- **Administration Section / guest house office:** written sign-off on the
-  pipelines ([12-workflows.md](12-workflows.md)); the extra-bed rate and GST
-  treatment; the ID retention period; the authoritative hostel and warden list;
-  each department's HOD; **each council's Faculty Advisor and secretary
-  mailbox**; whether **`ro`** on the debitable-heads spreadsheet is the
-  Registrar's Office and what a **newly added office** may charge by default;
-  the guest house phone, email, house rules and photo attribution
-  (`grep -rn "TODO(site)"`).
-- **Academic office / IT:** the academic database API and token
-  ([17-academic-records.md](17-academic-records.md) §4).
-- **An owner after the current developers** — someone at the institute must be
-  named, or the portal becomes unmaintained software holding ID data.
+The one that is nobody's job yet and matters most: **an owner after the current
+developers.** Someone at the institute must be named, or the portal becomes
+unmaintained software holding ID data.
+
+## 4a. Operational gaps
+
+- **No uptime monitoring.** There is no `/api/health` route and nothing pinging
+  the deployment, so the first sign of an outage would be somebody at the guest
+  house office failing to sign in. A free pinger against a trivial health route
+  is the whole fix. (Error tracking is wired - `SENTRY_DSN`; backups and the
+  restore drill are in [04-production.md](04-production.md).)
 
 ## 5. Tests that are still thin
 
@@ -248,43 +252,63 @@ would catch the most next:
 - **Snapshot the academic record onto the booking** if reviewers need the
   requester's phone, and **fill `hostel_name` from the record at sign-in** so
   warden routing stops depending on a hand-typed profile field.
-- **Just-in-time provisioning** of profiles on first sign-in (the plan's
-  `account_directory` idea) instead of creating accounts by hand.
+- **Just-in-time provisioning** of profiles on first sign-in - the 2 Sep
+  plan's `account_directory` proposal, superseded by `units` and
+  `official_email_whitelist` but never built for provisioning - instead of
+  creating every account by hand.
 - SMS — never asked for; it would be a second `Mailer`-shaped seam.
 
 ## 8. Public website follow-ups
 
 Everything tagged `TODO(site)` in `lib/site.ts` and `lib/site-content.ts`:
-contact details, a guest-house map pin, the guidelines PDF URL, amenity lines
-(six since 30 Sep 2026 — the meeting room and exercise room came off) and
-house rules, which guest house each photograph shows, AM's new photographs.
+
+- the **placeholder house rules** (Guidelines §7 During your stay, §8 Safety
+  and help) - set `GUIDELINES_PROVISIONAL` to false once the office confirms
+  them;
+- the **amenities** list (six since 30 Sep 2026 - the meeting room and
+  exercise room came off), the guidelines PDF URL, front-office hours;
+- the guest house contact details and a map pin per guest house;
+- which guest house each **photograph** shows, and photo attribution; AM's new
+  photographs (asked for by the supervisor on 30 Sep 2026, not code).
+
 Copy stays plain and unpromising (the owner, 30 Sep 2026). Detail in
-[16-public-site-and-ui.md](16-public-site-and-ui.md).
+[14-public-site-and-ui.md](14-public-site-and-ui.md).
+
+Also open on the UI side:
+
+- **Mail templates** (`lib/mail/render.ts`) still use the pre-26-Sep amber
+  header. Align them with ink / vermilion if the office wants the mail to match
+  the site.
+- The design handoff asks for SSO on the booking pages. LDAP is in (dummy
+  accounts until `LDAP_URL`); real Google sign-in switches on with its three
+  environment variables, which also closes Mock Authentication - item 1 above.
+- The **`ui` branch** holds only the superseded 21 Sep redesign. Nothing from
+  it needs merging.
 
 ---
 
 ## Done — for the record
 
 Every item this roadmap used to carry that has since been built, with where it
-is written up (all in [03-decisions.md](03-decisions.md) unless noted):
+is written up (all in [02-decisions.md](02-decisions.md) unless noted):
 
 | Item | Done |
 | --- | --- |
-| Email notifications and the day-wise report | 16 Sep 2026 — [14-notifications.md](14-notifications.md) |
+| Email notifications and the day-wise report | 16 Sep 2026 — [10-roles-and-workflows.md](10-roles-and-workflows.md) |
 | Push to GitHub | 10 Sep 2026 |
 | Automated tests (Vitest, Playwright, CI) | 21–23 Sep 2026 |
 | Settings console (rules, hostels, whitelist) | Phase 1, 21 Sep |
 | To = actioner, Copy to = CC | Phase 2, 21 Sep |
 | Turnaround buffer | Phase 3, 21 Sep |
 | HOD approval, debitable heads, projects | Phase 4, 22 Sep |
-| Invoices in the office's template, tariffs, payments | Phase 5, 22 Sep — [15-billing-and-invoices.md](15-billing-and-invoices.md) |
+| Invoices in the office's template, tariffs, payments | Phase 5, 22 Sep — [13-billing-and-dining.md](13-billing-and-dining.md) |
 | Dining (meals only) and the kitchen's day | Phase 6, 22 Sep |
 | Extend, move rooms, no-shows, maintenance blocks, bulk rooms | Phase 7, 22 Sep |
-| Sessions, real Google OIDC, TOTP, throttles in the DB, CSP, encrypted IDs, retention, DPDP | Phase 8, 22 Sep — [26-security.md](26-security.md) |
+| Sessions, real Google OIDC, TOTP, throttles in the DB, CSP, encrypted IDs, retention, DPDP | Phase 8, 22 Sep — [05-credentials-and-security.md](05-credentials-and-security.md) |
 | Keyword search in Postgres, narrow revalidation, realtime instead of polling | Phase 9, 22–23 Sep |
 | Workflow documentation and the production runbook | Phase 10, 23 Sep |
 | The office's correction rounds (23 Sep ×2, 24 Sep) and Faculty Advisors by appointment (24 Sep) | [01-background.md](01-background.md), [99-recent-changes.md](99-recent-changes.md) |
 | The eighth list, in four phases (7 Oct): the text cleanup, a personal booking never asked which budget pays, students and alumni held to one guest house and no meals, the rates on the form, availability as a count, **the institute's records kept in the portal** (migration 28) with a student's parents locked, invoice version 4, cash retired, a personal stay settled at check-out, **Awaiting payment**, and **Missed** (migration 29) | [01-background.md](01-background.md), [99-recent-changes.md](99-recent-changes.md) |
-| The ninth list (8 Oct): the office's nine debitable heads and their mapping, the funds declaration (migration 30), one mail thread per booking, less text on screen, accounts from a spreadsheet | [01-background.md](01-background.md), [03-decisions.md](03-decisions.md) |
-| The owner's list (9 Oct): the rules the form **enforces** stop being **stated** on it, the availability counts redrawn, the privacy line quietened, the office's number moved into the portal footer, the log's filters rearranged with **PDF export for every role**, the meal booking's numbers typed again, and a dining booking quoted meal rates only | [01-background.md](01-background.md), [03-decisions.md](03-decisions.md) |
+| The ninth list (8 Oct): the office's nine debitable heads and their mapping, the funds declaration (migration 30), one mail thread per booking, less text on screen, accounts from a spreadsheet | [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |
+| The owner's list (9 Oct): the rules the form **enforces** stop being **stated** on it, the availability counts redrawn, the privacy line quietened, the office's number moved into the portal footer, the log's filters rearranged with **PDF export for every role**, the meal booking's numbers typed again, and a dining booking quoted meal rates only | [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |
 | White-on-amber contrast | The 19 Sep redesign |

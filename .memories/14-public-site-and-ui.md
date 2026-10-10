@@ -344,7 +344,7 @@ would go stale until the next build.
 > in use, and says what the Google button does. The username placeholder is
 > `e.g. 142301026`, the real format the user gave for students. The email
 > form, its client domain check and `DEMO_PASSWORD` are gone. See
-> [31-ldap-sign-in.md](31-ldap-sign-in.md). The bullets below describe the
+> [05-credentials-and-security.md](05-credentials-and-security.md). The bullets below describe the
 > email form as it was; `next` and `safeNextPath()` still work the same way,
 > and `isInstituteEmail()` is kept for real Google sign-in.
 
@@ -608,7 +608,7 @@ Contact details are the ones on the foot of the office's own invoice template:
   routes 307 → `/sign-in` signed out; 11 portal routes 200 for their personas;
   `/sign-in` signed in → 307 to the role home.
 - Headless Chrome (DevTools protocol, recipe in
-  [23-running-and-testing.md](23-running-and-testing.md#verifying-changes)): a gmail address is
+  [22-running-and-testing.md](22-running-and-testing.md#verifying-changes)): a gmail address is
   refused on the client with the domain message; `priya@` via Book a room lands
   on `/book`; wrong password gives the generic message; a student's `@smail`
   address signs in; a warden via Book a room ends on `/warden`; Switch user
@@ -621,15 +621,11 @@ Contact details are the ones on the foot of the office's own invoice template:
 
 ## Open items
 
-- Everything tagged `TODO(site)`: the **placeholder house rules** (Guidelines
-  §7 During your stay, §8 Safety and help — set `GUIDELINES_PROVISIONAL` to
-  false once confirmed), the **amenities** list, the guidelines PDF URL,
-  photo attribution, front-office hours.
-- The design asks for SSO on the booking pages. LDAP is in (dummy accounts
-  until `LDAP_URL`); real Google sign-in switches on with its three environment
-  variables, which also closes Mock Authentication —
-  [04-roadmap.md](04-roadmap.md) item 1.
-- Mail templates (`lib/mail/render.ts`) still use the old amber header; align
-  them with ink / vermilion if the office wants the emails to match.
-- The `ui` branch's 21 Sep redesign is superseded; nothing from it needs
-  merging.
+**Moved to [03-roadmap.md](03-roadmap.md) §8**, which is the one list of what
+is open - the `TODO(site)` items, the mail templates' pre-26-Sep amber header,
+SSO on the booking pages, and the superseded `ui` branch. They were listed
+here and there, and the two drifted.
+
+What this file still owns is **[Deliberately not built](#deliberately-not-built)**
+- which of the prototype's features were left out, and why. That is a design
+record, not an open item.

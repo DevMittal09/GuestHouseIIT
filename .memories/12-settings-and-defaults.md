@@ -7,7 +7,7 @@ against the code on 24 Sep 2026** (`lib/settings.ts` `DEFAULT_RULES`,
 `lib/debit-heads.ts`, `lib/access.ts`, `app/actions/settings.ts`).
 
 What the office still has to fill in before go-live is at the end of
-[24-deployment-runbook.md](24-deployment-runbook.md#settings-the-office-must-fill-in).
+[04-production.md](04-production.md#3-data-the-office-has-to-supply).
 
 ---
 
@@ -146,8 +146,8 @@ head the office calls **Special Budget** is still stored as `special_budget`
 **A ceiling over the grid above, and the one part of the debit rules the
 console cannot edit.** The office sent a spreadsheet of its mailboxes against
 the heads each may charge, "Y" where it may:
-[offices-debitable-heads.csv](offices-debitable-heads.csv) verbatim, the whole
-table in [06-production-requirements.md](06-production-requirements.md) §2,
+[04-production.md](04-production.md) verbatim, the whole
+table in [04-production.md](04-production.md) §2,
 and `OFFICE_DEBIT_HEADS` in `lib/office-debit-heads.ts` as the transcription.
 
 | | |
@@ -165,7 +165,7 @@ on `units` (a migration) and a section in Departments & Clubs. It was not
 worth a migration while the offices it keys on do not exist as accounts yet
 (Mock Authentication, LDAP unconnected), and `narrowToOffice` is the only
 place the narrowing happens, so adding it later is local.
-[04-roadmap.md](04-roadmap.md) carries it.
+[03-roadmap.md](03-roadmap.md) carries it.
 
 ### Privacy — `rules.privacy`
 
@@ -271,4 +271,4 @@ edited or deleted — a new price is a new row. Seeded from the tariff sheet:
 | `ACADEMIC_DB_URL` | Real academic records instead of the dummy ones |
 
 The full list, with what each is for, is in
-[30-credentials-and-access.md](30-credentials-and-access.md#environment-variables).
+[05-credentials-and-security.md](05-credentials-and-security.md#environment-variables--all-of-them-and-what-each-switches).

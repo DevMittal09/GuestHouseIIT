@@ -14,14 +14,18 @@ Read this before touching the code. It captures the decisions and the traps that
 are not obvious from reading files, so you don't have to rediscover them.
 
 > **New session? Start with `.memories/README.md`**, then
-> `.memories/99-recent-changes.md`. That folder is the project's full memory —
-> background and every requirement round, the timeline, the product as
-> configured role by role and form by form (`10`–`17`, checked against the code
-> on 24 Sep 2026, kept current through 8 Oct 2026), the engineering notes, every demo login and where each real
-> secret lives, and the roadmap. **`06-production-requirements.md` is the one
-> checklist of what a production build needs** — the real accounts and how they
-> are loaded, the office's data, the secrets, the migrations, what production
-> turns off. This file is the terse list of rules.
+> `.memories/99-recent-changes.md`. That folder is the project's full memory,
+> reorganised on 10 Oct 2026 into **fifteen files, one job each**: background
+> and every requirement round (`01`), why anything is the way it is (`02`),
+> what is open (`03`), what production needs (`04`), every login and secret
+> (`05`), the product as configured (`10`–`14`, checked against the code on
+> 10 Oct 2026), the engineering notes (`20`–`22`), and the last round (`99`).
+> Its `README.md` carries the file map and **the maintenance contract — which
+> files a change of each kind must update**; `npm run check:memories` fails if
+> a file goes missing or a link rots. **`04-production.md` is the one checklist
+> of what a production build needs** — the real accounts and how they are
+> loaded, the office's data, the secrets, the migrations, what production turns
+> off. This file is the terse list of rules.
 
 **What it is:** a booking + multi-stage approval portal for IIT Palakkad's two
 guest houses, **Bageshri** and **Hamsanandi**. Students, faculty and staff,
@@ -92,7 +96,7 @@ Beyond the suites, behaviour is verified these ways:
 3. **Headless Chrome** for client-rendered UI (dialogs, the meal grid, the
    week/month charts), driven over the DevTools protocol with Node 20's
    `--experimental-websocket` — no packages needed. Recipe and gotchas in
-   `.memories/23-running-and-testing.md`. Migrations are checked in a throwaway
+   `.memories/22-running-and-testing.md`. Migrations are checked in a throwaway
    `postgres:16-alpine` container the same way — never against the hosted
    project.
 
@@ -199,9 +203,9 @@ the card at `/sign-in`, which is also embedded in the public `/book-room` and
   when `LDAP_URL` is set, otherwise the dummy `MockDirectory`). Then
   **`profiles.ldap_uid`** (migration 12) says which portal account that is.
   A valid LDAP login with no profile gets in nowhere. The dummy logins are
-  in **`.memories/30-credentials-and-access.md`** (keep it and
-  `lib/ldap/mock-directory.ts` in step); how to switch to the real accounts
-  is **`.memories/31-ldap-sign-in.md`**.
+  in **`.memories/05-credentials-and-security.md`** (keep it and
+  `lib/ldap/mock-directory.ts` in step), which also covers how to switch to
+  the institute's real directory and usernames.
 - **"Mock Authentication"** → `/mock-login` (the persona picker) → `loginAs()`.
   A **placeholder** for Google OAuth and the one-click role switcher. It is open
   while `googleOauth()` is null (`mockLoginEnabled()` in `lib/env.ts`) — **not**
@@ -246,7 +250,7 @@ security boundary.
 The card at the top of `/book` (and on `/warden`) shows the person's record
 from the **institute's academic database**, with a per-kind field list and a
 **Copy to** line. The fields, dummy data and how to connect the real database
-are in **`.memories/17-academic-records.md`**. Keep that file and
+are in **`.memories/11-booking-forms.md`** (Part 2). Keep that file and
 `lib/academic/mock-source.ts` in step.
 
 - **Same seam as the store / mailer / directory:** `getAcademicSource()` is the
@@ -416,8 +420,8 @@ because dining is what the office narrows first).
 **An office is then narrowed to its own row** (9 Oct 2026,
 `lib/office-debit-heads.ts`): Settings keys the heads by *category*, so both
 classes of office shared one list of six, and the office's spreadsheet
-(`.memories/offices-debitable-heads.csv`, tabulated in
-`.memories/06-production-requirements.md` §2) is **per mailbox** - the
+(kept verbatim, and tabulated, in `.memories/04-production.md` §2) is
+**per mailbox** - the
 Director's Office spends the Institute Grant, a department office its
 department's budget, the Students Section the student and hostel funds, the
 Sports Officer the grant alone. `OFFICE_DEBIT_HEADS` is keyed by the mailbox
@@ -1361,7 +1365,7 @@ Audit Log, Console Access. Actions in `app/actions/admin.ts` (and
 `units.ts`, `settings.ts`, `invoices.ts`, `projects.ts`, `operations.ts`,
 `mail-templates.ts`, `academic.ts`), each gated by `requireConsole(section)` or
 its sibling.
-The full who-opens-what table is in `.memories/10-roles-and-features.md`.
+The full who-opens-what table is in `.memories/10-roles-and-workflows.md`.
 
 - **Destructive actions ask properly.** `components/ui/confirm-dialog.tsx`
   replaced every `window.confirm`: it lists what will be lost and, for guest
@@ -1413,7 +1417,7 @@ itself, so callers pass only `new_status`. `action_by_name` is denormalized so
 history survives account deletion (`action_by` is nullable / `on delete set
 null`).
 
-## Public website and branding — read `.memories/16-public-site-and-ui.md` first
+## Public website and branding — read `.memories/14-public-site-and-ui.md` first
 
 Built 19 Sep 2026 from `design_handoff/`; **redesigned 26 Sep 2026** in the
 institute's own palette, over three passes that day; **revamped 30 Sep 2026**
@@ -1524,7 +1528,7 @@ full-screen (the owner called a full-screen hero "so weird").
   a different persona in one tab changes who *every* open tab is, and live
   updates make the others re-render as that persona. This is inherent to cookie
   auth, not a bug to patch in the UI — a blocking "this browser switched user"
-  guard was built and **reverted** (see [.memories/03-decisions.md](.memories/03-decisions.md));
+  guard was built and **reverted** (see [.memories/02-decisions.md](.memories/02-decisions.md));
   don't rebuild it. Two identities at once need two browser profiles or a
   private window, and genuine per-tab sessions arrive with real auth.
 - **Never use `datetime-local` or `type="time"`.** Firefox makes them
@@ -1588,7 +1592,7 @@ full-screen (the owner called a full-screen hero "so weird").
 
 Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase auth
 password `password123`, which is *not* a portal login — each persona signs in
-with its dummy LDAP account, listed in `.memories/30-credentials-and-access.md`): two students in different hostels (Malhar, Saveri),
+with its dummy LDAP account, listed in `.memories/05-credentials-and-security.md`): two students in different hostels (Malhar, Saveri),
 an employee, a whitelisted official (`admin@iitpkd.ac.in`), the Petrichor club,
 the Cultural Affairs Council (`sec_arts@iitpkd.ac.in`, its secretary's mailbox),
 Dr. Arun Prasad (`arun.prasad@`, an ordinary **faculty employee** named Faculty
@@ -1639,7 +1643,7 @@ Migration files, applied sequentially:
    reading Settings, `security_audit`.
 17–22. Turnaround buffer, HOD approval and projects, tariffs and invoices,
    operational states, sessions and security, search and indexes — one line
-   each in `.memories/22-database.md`.
+   each in `.memories/21-database.md`.
 23. `00000000000023_room_occupancy_combination.sql` — `check_room_occupancy()`
    becomes the office's combination: at most 3 needing a bed, at most 3 infants,
    at most **4 people in all** (`rules.capacity.max_occupants_per_room`).
@@ -1696,9 +1700,9 @@ Migration files, applied sequentially:
    the declaration was given, so every personal booking still works and only
    a booking on somebody else's budget is refused.
 
-Full notes per migration in `.memories/22-database.md`. Migrations are tested
+Full notes per migration in `.memories/21-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine
-without it (`.memories/23-running-and-testing.md`) — never the hosted project.
+without it (`.memories/22-running-and-testing.md`) — never the hosted project.
 
 > **Which migrations a project *has* is a question for the database, never a
 > note.** `npm run check:migrations` (`scripts/check-migrations.mjs`) probes

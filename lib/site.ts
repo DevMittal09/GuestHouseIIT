@@ -178,7 +178,7 @@ export type SitePhoto = { src: string | null; alt: string };
  * The photographs supplied by the guest house office (`Images/` in the repo
  * root, 6000×4000 camera originals, not committed). The site serves 2000px
  * copies from `public/site/photos/`, made with EXIF orientation applied and
- * metadata stripped - see .memories/16-public-site-and-ui.md for the recipe when adding
+ * metadata stripped - see .memories/14-public-site-and-ui.md for the recipe when adding
  * more.
  */
 function photo(file: string, alt: string): SitePhoto {

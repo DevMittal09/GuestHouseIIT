@@ -12,7 +12,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test",
     "check:lockfile": "node scripts/check-lockfile.mjs",
-    "check:migrations": "node scripts/check-migrations.mjs"
+    "check:migrations": "node scripts/check-migrations.mjs",
+    "check:memories": "node scripts/check-memories.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

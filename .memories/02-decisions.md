@@ -1,13 +1,21 @@
-# Decision log
+# Decision log — why it is built this way
 
-Each entry: what was decided, why, and what it costs — **in the order it was
+Each entry: what was decided, why, and what it cost — **in the order it was
 decided**. Entries are a record, not a description of the present: they are
-not rewritten when a later decision reverses them. Instead a dated
-**Superseded** / **Updated** note sits under the heading. For how things are
-*now*, read [10-roles-and-features.md](10-roles-and-features.md),
-[11-booking-forms.md](11-booking-forms.md), [12-workflows.md](12-workflows.md)
-and [13-settings-and-defaults.md](13-settings-and-defaults.md). The dated
-summary of every session is [02-timeline.md](02-timeline.md).
+**not rewritten** when a later decision reverses them. Instead a dated
+**Superseded** / **Updated** note sits under the heading, so a reader can see
+that the question was reopened and what won.
+
+Two parts, in one file because they are one sequence: the standing decisions
+that explain the shape of the codebase come first, then one entry per working
+round from 16 September 2026 onwards.
+
+- For how things are **now**: [10-roles-and-workflows.md](10-roles-and-workflows.md),
+  [11-booking-forms.md](11-booking-forms.md),
+  [12-settings-and-defaults.md](12-settings-and-defaults.md).
+- For **what was asked** in each round, with the status of every item:
+  [01-background.md](01-background.md).
+- For **where the code is**: [20-architecture.md](20-architecture.md).
 
 ## Mock authentication with one swap point
 
@@ -46,7 +54,7 @@ signed-out guard already redirects there.
 
 **Cost.** A second path onto the same cookie, and a password that is not a
 secret — it is printed under the form. Neither is authentication, and both must
-be deleted together when real auth lands (05-production-plan.md step 5), not
+be deleted together when real auth lands (04-production.md step 5), not
 left behind a flag.
 
 **Detail worth keeping.** A wrong password and an unknown address return the
@@ -77,7 +85,7 @@ development needs one-click role switching.
 LDAP is real code behind an environment switch, like the store and the mailer.
 `LDAP_URL` selects `LdapDirectory` (`ldapts`, search-then-bind). Without it,
 `MockDirectory` serves one dummy account per persona, listed with passwords in
-[31-ldap-sign-in.md](31-ldap-sign-in.md) as the user asked.
+[05-credentials-and-security.md](05-credentials-and-security.md) as the user asked.
 
 **Identity is split in two.** The directory proves the password;
 `profiles.ldap_uid` (migration 12) says which portal account that is. The user
@@ -205,7 +213,7 @@ anyway. The scan cap plus a `truncated` flag keeps that honest.
 
 **It paid for itself immediately.** The one predicate that *was* pushed down
 (`statuses`) silently broke facet counts on Supabase while the mock store stayed
-correct — see [25-troubleshooting.md](25-troubleshooting.md).
+correct — see [22-running-and-testing.md](22-running-and-testing.md).
 
 ## Search state lives in the URL
 
@@ -307,7 +315,7 @@ verbatim, including white-on-amber buttons.
 
 **Cost.** White on `#f7a600` is low contrast by WCAG. Accepted deliberately for
 visual consistency; the fix (dark `--primary-foreground`) is documented in
-[21-implementation.md](21-implementation.md).
+[20-architecture.md](20-architecture.md).
 
 ## Print-Optimized HTML for PDF Reports
 
@@ -600,7 +608,7 @@ plaintext `0000` would have been a plaintext password in an exportable table.
 **What it costs — and what it is not.** Identity is still a persona cookie, so
 anyone can claim to be the developer; this only stops casual poking during a
 demo. It must not be described as securing the console, and it does not shorten
-the real work in [05-production-plan.md](05-production-plan.md) Phase 1. The
+the real work in [04-production.md](04-production.md) Phase 1. The
 throttle is in-process, so it resets on restart and does not span instances.
 
 **Degradation.** A missing `app_settings` table falls back to the default
@@ -647,7 +655,7 @@ still stored 5h30m late, so the code fix needed a data repair beside it
 (`supabase/repairs/2026-09-10-utc-parsed-bookings.sql`), which also has to
 rebuild `room_holds` because `during` is derived from the booking's dates.
 
-**What we got wrong the first time round.** [05-production-plan.md](05-production-plan.md)
+**What we got wrong the first time round.** [04-production.md](04-production.md)
 Phase 3 predicted this bug and prescribed "add it to `lib/format.ts` and test
 with `TZ=UTC npm run build`". Both halves were insufficient: fixing only
 formatting leaves the *parse* wrong, which is the half that corrupts stored
@@ -709,7 +717,7 @@ stay past its check-out that nobody marked Vacated is still holding its rooms, s
 it cannot be hidden. But counting it under "Current occupants" would be the same
 category error the split exists to remove. Its own section with a red count also
 turns the long-standing no-show problem
-([05-production-plan.md](05-production-plan.md) Phase 3) from invisible into
+([04-production.md](04-production.md) Phase 3) from invisible into
 visible.
 
 **What it costs.** Three tables where there was one, and the phase is computed at
@@ -768,7 +776,7 @@ so it froze with an explanation instead of quietly re-rendering as someone else.
 a tab, so signing in anywhere changes every tab, and with polling the others
 follow within seconds. Nothing in the UI can fix that; the session token has to
 move somewhere per-tab, which is a change to authentication itself
-([05-production-plan.md](05-production-plan.md) Phase 1). Until then the honest
+([04-production.md](04-production.md) Phase 1). Until then the honest
 answer is a private window or a second browser profile.
 
 **So: do not rebuild this.** If tab bleed is raised again, the options are
@@ -1109,7 +1117,7 @@ keeping when a test runner is installed (roadmap §4).
 
 ## UI redesign from the design handoff (19 Sep 2026)
 
-Detail in [16-public-site-and-ui.md](16-public-site-and-ui.md). The decisions, with the options
+Detail in [14-public-site-and-ui.md](14-public-site-and-ui.md). The decisions, with the options
 that lost:
 
 ### The public site is a route group, `/` included
@@ -1225,7 +1233,7 @@ is a one-line change once the office supplies coordinates.
 
 The owner asked for each kind of account's record in the institute's academic
 database to be shown at the top of New Booking, with dummy data until the
-database is connected. Full detail: [17-academic-records.md](17-academic-records.md).
+database is connected. Full detail: [11-booking-forms.md](11-booking-forms.md).
 
 ### A source seam, like the store, the mailer and the directory
 
@@ -1294,7 +1302,7 @@ the flat "3 guests + 1 infant per room" from migration 11. **It is both, at
 different moments**: the flat per-card rule at submission (no room exists yet),
 the per-type rule at allocation (the manager has picked rooms). A card of 3 is
 accepted, and must then be given a double. Recorded in
-[11-booking-forms.md](11-booking-forms.md) and [13-settings-and-defaults.md](13-settings-and-defaults.md). Both are now Settings.
+[11-booking-forms.md](11-booking-forms.md) and [12-settings-and-defaults.md](12-settings-and-defaults.md). Both are now Settings.
 
 ### Scalar rules are jsonb rows; lists are tables
 
@@ -1363,7 +1371,7 @@ This development machine (Windows) has no Docker. Migrations are tested on a
 real **PostgreSQL 16** server from the `embedded-postgres` npm package, in a
 fresh temporary cluster per run (UTF-8, `C` locale — the Windows default code
 page broke on migration 12's arrows), with the same Supabase stand-ins, never
-the hosted project. Recipe in [23-running-and-testing.md](23-running-and-testing.md#verifying-changes).
+the hosted project. Recipe in [22-running-and-testing.md](22-running-and-testing.md#verifying-changes).
 
 ### Vitest installed in Phase 1
 
@@ -1752,7 +1760,7 @@ stay, and adds:
   `site` tag for half an hour, and `revalidateEverything()` expires that tag
   when a Setting, a guest house or a room changes. `/guidelines` went from
   ~68 ms to ~27 ms warm (measured; see
-  [25-troubleshooting.md](25-troubleshooting.md)).
+  [22-running-and-testing.md](22-running-and-testing.md)).
 - **One subscription instead of a render every five seconds.**
   `components/live-updates.tsx` replaces `auto-refresh.tsx`: with Supabase it
   subscribes to `postgres_changes` on bookings, room holds, blocks and
@@ -1807,15 +1815,15 @@ stay, and adds:
 ## Phase 10: documentation (23 Sep 2026)
 
 - **Two new pages rather than more sections in old ones.**
-  [12-workflows.md](12-workflows.md) is what each role does and where a request
+  [10-roles-and-workflows.md](10-roles-and-workflows.md) is what each role does and where a request
   goes — every pipeline as a Mermaid diagram, the states a booking can be in,
   and what happens without anybody pressing anything.
-  [26-security.md](26-security.md) is the operational view of Phase 8: what is
+  [05-credentials-and-security.md](05-credentials-and-security.md) is the operational view of Phase 8: what is
   protected, by what, where each secret lives, and what to do about an
   incident. The reasoning stays here in the decision log; those pages say what
   is true now.
 - **A production runbook, not a deployment checklist**
-  ([23-running-and-testing.md](24-deployment-runbook.md#production-runbook)): every environment
+  ([22-running-and-testing.md](04-production.md#part-2--deploying-and-operating-it)): every environment
   variable with an example and what breaks without it, how to rotate each
   secret (including the one that needs care —
   `ID_ENCRYPTION_KEY`/`ID_ENCRYPTION_KEYS_OLD`), a **backup restore drill**
@@ -1865,7 +1873,7 @@ build with no Google configuration — the exact deployment where it broke.
 
 > Unchanged: this is a placeholder, not authentication. Anyone who can reach
 > the page can become any account on it. It must not be open on a deployment
-> holding real bookings — [04-roadmap.md](04-roadmap.md) item 1.
+> holding real bookings — [03-roadmap.md](03-roadmap.md) item 1.
 
 ### One room type, so stop asking
 
@@ -2694,7 +2702,7 @@ colour palette used by IITPKD websites**; a map for each of Hamsanandi and
 Bageshri (two Google Maps links supplied); MRBS and the institute site in the
 footer; a Guidelines page with placeholder rules; and the New Booking / Meal
 Booking buttons in the portal made to stand out. Detail in
-[16-public-site-and-ui.md](16-public-site-and-ui.md).
+[14-public-site-and-ui.md](14-public-site-and-ui.md).
 
 ### The institute's palette, taken from its CSS, not from the handoff
 
@@ -2806,7 +2814,7 @@ figures ("23 rooms… 1 month… 14 nights…"), no "see them on the map", no
 photo captions; "How booking works" into the guidelines, vaguer; "do not
 display the backend logic like who are the users, who approves who and all
 to the public"; no instruction text or meal timings on the landing page.
-Detail in [16-public-site-and-ui.md](16-public-site-and-ui.md).
+Detail in [14-public-site-and-ui.md](14-public-site-and-ui.md).
 
 ### The portal's internals stay off the public site
 
@@ -2871,7 +2879,7 @@ version used three of them. Effects (gradients, glass, shadows) are what the
 The owner on the afternoon version: "it looks so weird. Make it look clean
 and professional. The image filling the page this much looks so weird. Look
 online for ideas and inspirations." Detail in
-[16-public-site-and-ui.md](16-public-site-and-ui.md) ("The evening brief").
+[14-public-site-and-ui.md](14-public-site-and-ui.md) ("The evening brief").
 
 **Decision.** Photographs are **contained in the layout**: a split hero
 (headline, buttons and the front-office number beside one 4:3 photo), a
@@ -3568,7 +3576,7 @@ portal** rather than the demo: the debitable heads the institute actually uses,
 the declaration that goes with them, one mail thread per booking, less text on
 screen, and loading the real accounts. The owner also asked for a single place
 recording what a production build needs, which is
-[06-production-requirements.md](06-production-requirements.md).
+[04-production.md](04-production.md).
 
 ### The debitable heads are the office's list, not a table derived from them
 
@@ -3617,7 +3625,7 @@ sanction nobody names cannot be checked by the accounts section. **The approval
 letter beside it stays optional** — a requester waiting on a scan should not be
 stopped from booking, and the desk can ask for it later. That is a judgement,
 not the office's instruction, and §2 of
-[06-production-requirements.md](06-production-requirements.md) says how to make
+[04-production.md](04-production.md) says how to make
 it mandatory in one line if they meant otherwise.
 
 ### The funds declaration lives in the Debitable head card, not with the privacy tick
@@ -3747,7 +3755,7 @@ a developer into existence. Checked in the action, not only in the plan.
 with the password `password123`. That is harmless — the Auth password is not a
 portal login, everyone signs in through LDAP or Google — but it is wrong at
 six hundred rows, and it is recorded as a thing to revisit in
-[06-production-requirements.md](06-production-requirements.md) §7.
+[04-production.md](04-production.md) §7.
 
 ## 9 Oct 2026 — two answers from the office, and one of our own mistakes
 
@@ -3767,7 +3775,7 @@ the desk can ask for the letter later. That guess is now the office's answer.
 **Cost.** A sanction can be claimed on a booking with nothing attached. The
 accounts section still has the fund's name, which is what they chase. Making
 the upload mandatory is one line if that changes
-([06-production-requirements.md](06-production-requirements.md) §2).
+([04-production.md](04-production.md) §2).
 
 ### The hosted project's migrations were never missing
 
@@ -3777,7 +3785,7 @@ the upload mandatory is one line if that changes
 
 **What happened.** The owner said they had run 24-30 in the Supabase SQL editor
 and asked why the portal was reporting otherwise. The portal was not: **these
-notes were.** `23-running-and-testing.md` said in prose that "which migrations
+notes were.** `22-running-and-testing.md` said in prose that "which migrations
 the hosted project has is not recorded here", and offered a hand-written check
 query whose marker list **stopped at migration 25**. So from 26 onwards there
 was no way to check, and each round's author copied the previous round's
@@ -4008,8 +4016,8 @@ rooms").
 
 The office sent a spreadsheet: one row per office mailbox, a column per
 debitable head, **"Y" where that office may charge it**. Kept verbatim as
-[offices-debitable-heads.csv](offices-debitable-heads.csv), tabulated in
-[06-production-requirements.md](06-production-requirements.md) §2, transcribed
+[04-production.md](04-production.md), tabulated in
+[04-production.md](04-production.md) §2, transcribed
 into `OFFICE_DEBIT_HEADS` (`lib/office-debit-heads.ts`).
 
 The owner's instruction: **"Only show the debitable heads marked as Y do not
@@ -4097,7 +4105,7 @@ office and not per class.
 
 **`ro` read as the Registrar's Office is an inference, not the office's
 words.** It is flagged for confirmation in
-[06-production-requirements.md](06-production-requirements.md) §2.
+[04-production.md](04-production.md) §2.
 
 ### What is deliberately not built
 
@@ -4107,7 +4115,7 @@ home means a column on `units` and a grid in Departments & Clubs, and it is
 not worth a migration while the offices it keys on do not exist as accounts
 yet. The seam is in place - `narrowToOffice` is the only place the narrowing
 happens - so that change is local when the office asks for it.
-[04-roadmap.md](04-roadmap.md) carries it.
+[03-roadmap.md](03-roadmap.md) carries it.
 
 ### Cost
 
@@ -4117,3 +4125,38 @@ the IAR Office's official list now begins at Special Budget, whose details are
 mandatory since 8 Oct, so the payload fills them in whenever
 `debitDetailsRequired(head)`. The check itself - that the schema accepts its
 own output for every role - is unchanged.
+
+## 10 Oct 2026 — the process lives in `CLAUDE.md`, the rules in `AGENTS.md`
+
+**Decision.** `CLAUDE.md` at the repo root stops being a one-line
+`@AGENTS.md` import and carries the **process**: read `.memories/` before
+planning a change, update it before calling the change finished, run
+`npm run check:memories`. `AGENTS.md` keeps the hard rules about the code.
+
+**Why two files rather than one.** `AGENTS.md` is 1,700 lines of what the code
+does and what will bite you. The instruction "update the notes when you are
+done" was a short section near its end, which is exactly where it got read
+last and skipped first - the owner's report was that a change would update a
+couple of context files and leave the rest stale. Putting the process in a
+separate, short file that loads at the top of every session makes it the frame
+around the work rather than a footnote inside it. The split is also honest:
+one file is about the product, the other about how to work on it.
+
+**Why not fold it into `.memories/README.md` alone.** The README is *inside*
+the folder it describes, so it only helps whoever already opened it. The
+instruction to open it has to live somewhere that loads unprompted.
+
+**The order of the steps is the point.** The contract ends with README's
+*"if the round changed X, update Y as well"* table and says to **read** it
+rather than work from memory. Every other step is mechanical; that one is a
+judgement call, and judgement under time pressure is what produced the drift.
+
+**Cost, and the thing that nearly made this unsafe.** `next dev` regenerates
+its managed agent-rules block and will **overwrite `CLAUDE.md` with
+`@AGENTS.md\n`** - but only when `CLAUDE.md` is the file hosting that block.
+`writeAgentFiles` returns `claudeMd: "skipped"` whenever `AGENTS.md` carries
+the `<!-- BEGIN:nextjs-agent-rules -->` marker, which it does. Verified by
+running `writeAgentFiles` against a copy of both files: the result was
+`{"agentsMd":"unchanged","claudeMd":"skipped"}` and `CLAUDE.md` came back
+byte-identical. **So the marker must stay at the top of `AGENTS.md`.** Move it
+into `CLAUDE.md` and the next `next dev` silently deletes all of this.

@@ -1,134 +1,179 @@
 # IIT Palakkad Guest House Portal — project memory (start here)
 
-This folder is the project's memory: everything a new person — or a new AI
-chat — needs to pick the work up as if they had been here all along. It was
-**reorganised and audited line by line against the code on 24 Sep 2026**;
-every statement about the product in files 10–17 was checked then.
+This folder is the project's memory: everything a new person, or a new AI
+chat, needs to pick the work up as if they had been here all along.
 
-`AGENTS.md` (repo root, loaded automatically into every agent session) is the
-terse list of hard rules. This folder is the reasoning, the configuration and
-the history.
+**Fifteen files, each with exactly one job.** Reorganised on **10 Oct 2026**
+from twenty-five, which had grown overlapping and inconsistent: a round would
+be written up in three files and only one of them updated. The rule now is
+**one fact, one home** — if two files would both want a fact, the one named in
+the file map below owns it and the other links to it.
+
+Two files at the repo root load automatically into every agent session and
+point here. **`CLAUDE.md`** carries the *process* - read this folder before
+planning, update it before finishing, run `npm run check:memories`.
+**`AGENTS.md`** carries the terse list of hard rules about *the code*. This
+folder is the reasoning, the configuration and the history.
 
 ---
 
 ## For a new chat: read in this order
 
 1. **This file** — the project in one screen, the file map, the glossary.
-2. **[99-recent-changes.md](99-recent-changes.md)** — what the last session did
+2. **[99-recent-changes.md](99-recent-changes.md)** — what the last round did
    and left open.
 3. **The product as configured:**
-   [10-roles-and-features.md](10-roles-and-features.md) (who can do what),
+   [10-roles-and-workflows.md](10-roles-and-workflows.md) (who does what, where
+   a request goes, what mail it sends) and
    [11-booking-forms.md](11-booking-forms.md) (what each form asks, what is
-   mandatory), [12-workflows.md](12-workflows.md) (where requests go).
-4. **[04-roadmap.md](04-roadmap.md)** — what is left, and
-   **[06-production-requirements.md](06-production-requirements.md)** — the one
-   checklist of what the **production** build needs (the real accounts, the
-   office's data, the secrets, the migrations).
-5. Anything else from the file map below, when the task touches it.
+   mandatory, what the academic record locks).
+4. **[03-roadmap.md](03-roadmap.md)** — what is left — and
+   **[04-production.md](04-production.md)** — what a production build needs.
+5. Anything else from the file map, when the task touches it.
 
-Before changing code, also read `AGENTS.md` (the Next.js 16 note at its top
-matters: APIs differ from older versions; the docs are in
-`node_modules/next/dist/docs/`).
+Before changing code, also read `AGENTS.md`. The Next.js 16 note at its top
+matters: the APIs differ from older versions, and the docs are in
+`node_modules/next/dist/docs/`.
 
 ---
 
 ## The project in one screen
 
 **What it is.** A booking and multi-stage approval portal for IIT Palakkad's
-two guest houses, **Bageshri** (10 rooms, no kitchen) and **Hamsanandi** (13
-rooms, serves meals), plus the guest house's public website. Requesters —
-students, faculty and staff, institute offices, the IAR offices, and (through
-their Faculty Advisor) clubs and councils — submit bookings; each goes
-through its own approval chain (Assistant Warden, HOD, IAR Office) and ends
-with the **Guest House Manager**, who allocates real rooms on a visual grid. A
-**caretaker** runs reception (check-in/out, invoices). A **developer** console
-reconfigures almost everything without code.
+two guest houses, **Bageshri** (10 rooms, no kitchen) and **Hamsanandi**
+(13 rooms, serves meals), plus the guest house's public website. Requesters —
+students, faculty and staff, institute offices, the two IAR offices, and
+(through their Faculty Advisor) clubs and councils — submit bookings; each goes
+through its own approval chain and ends with the **Guest House Manager**, who
+allocates real rooms on a visual grid. A **caretaker** runs reception. A
+**developer** console reconfigures almost everything without code.
 
 **Who.** Built by students for the institute's Administration Section and the
-guest house office, who send numbered lists of corrections that are worked
-through one by one ([01-background.md](01-background.md)). Repository
-`github.com/DevMittal09/GuestHouseIIT` (branch `main`); local git identity
+guest house office, who send numbered lists of corrections worked through one
+by one ([01-background.md](01-background.md)). Repository
+`github.com/DevMittal09/GuestHouseIIT`, branch `main`; local git identity
 `Rizzwan285`.
 
 **Stack.** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript ·
 Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
-JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest ·
-Playwright. **Node 20** via nvm (the machine default is 18).
+JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwright.
+**Node 20** via nvm; the machine default is 18.
 
-**Status, 9 Oct 2026.** Feature-complete for every workflow specified; taken
-through a ten-phase production-readiness programme (Settings, mail
-addressing, turnaround buffer, HOD approval and debitable heads, invoices,
-dining, operational states, security, performance and tests, documentation),
-nine rounds of the office's corrections, a UI revamp, the supervisor's review
-of the live site (30 Sep), the owner's own pass on how much the portal says
-(9 Oct) and the office's spreadsheet of **which budget each office may charge**
-(9 Oct evening). **Not deployed for real use** - everything
-that first deployment needs is in
-[06-production-requirements.md](06-production-requirements.md).
-Runs locally on the mock store, and against one hosted Supabase project with
-demo data. Gates before real bookings: connect the institute LDAP, close Mock
-Authentication (configure Google or `MOCK_LOGIN=false`), production secrets,
-the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
+**Status, 10 Oct 2026.** Feature-complete for every workflow specified; taken
+through a ten-phase production-readiness programme and ten rounds of the
+office's corrections. **Not deployed for real use** — everything that first
+deployment needs is in [04-production.md](04-production.md), and the gates are
+[03-roadmap.md](03-roadmap.md) §1.
 
-**Numbers.** 30 migrations · 12 roles (10 active) · 13 booking statuses ·
-9 debitable heads, mapped across **34 office mailboxes** · 18 demo personas ·
-6 demo bookings · 451 unit tests · 36 end-to-end journeys ·
-14 console sections.
+**Numbers.** 30 migrations · 7 one-off repairs · 12 roles (10 active) ·
+13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
+18 demo personas · 6 demo bookings · 23 real rooms · 451 unit tests ·
+36 end-to-end journeys · 14 console sections.
 
 ---
 
-## File map
+## File map — and who owns what
 
-**Context and history**
+**Numbers group the files; they are not a reading order.** `0x` is history and
+plans, `1x` is the product as configured, `2x` is engineering, `99` is now.
 
-| File | Holds |
+| File | Owns — and nothing else does |
 | --- | --- |
-| [01-background.md](01-background.md) | The problem, the people, and **every requirement list** the institute sent, with the status of each item |
-| [02-timeline.md](02-timeline.md) | **The whole build, session by session**, 19 Aug – 30 Sep 2026 |
-| [03-decisions.md](03-decisions.md) | The decision log — what was decided, why, what was rejected; reversed decisions carry a dated *Superseded* note |
-| [04-roadmap.md](04-roadmap.md) | **What is left**: deployment gates, loose ends, audit findings, asks of other people, next features |
-| [05-production-plan.md](05-production-plan.md) | The 2 Sep production plan — history now, mostly executed; kept for its reasoning |
-| [06-production-requirements.md](06-production-requirements.md) | **What the production build needs, in one checklist** (8 Oct 2026): the users and how they are loaded, the debitable heads as the office gave them, the data the office must supply, the secrets and switches, the migrations, what production turns off, and what was asked for and parked |
-| [offices-debitable-heads.csv](offices-debitable-heads.csv) | The office's spreadsheet of 9 Oct 2026, verbatim: **which budget each institute office may charge**, one row per mailbox. Transcribed into `lib/office-debit-heads.ts`; tabulated in [06-production-requirements.md](06-production-requirements.md) §2 |
-| [Guest House Meeting Notes.md](Guest%20House%20Meeting%20Notes.md) | The office's own notes from the 15 Sep meeting, verbatim |
+| [README.md](README.md) | This index: the project in one screen, the file map, the glossary, the maintenance contract, the headline numbers |
+| [01-background.md](01-background.md) | The problem, the people, the build timeline, and **every requirement list the institute sent, with the status of each item** |
+| [02-decisions.md](02-decisions.md) | **Why** anything is the way it is: every decision, what it cost, what was rejected, and what later reversed it. Append-only, with dated *Superseded* notes |
+| [03-roadmap.md](03-roadmap.md) | **What is open**: the gates before real bookings, loose ends per round, thin tests, accessibility, features likely to be asked for next |
+| [04-production.md](04-production.md) | **The production build**: the checklist of what it needs, the office's debitable-heads spreadsheet verbatim, how to deploy and operate it, and what must still be settled with the institute |
+| [05-credentials-and-security.md](05-credentials-and-security.md) | **Every login** (dummy LDAP accounts, console password, 2FA), how sign-in works and how to switch to the real directory, **every secret by name and place — never a value**, every environment variable, and what protects the portal |
+| [10-roles-and-workflows.md](10-roles-and-workflows.md) | **Every role** — sign-in, landing page, menu, what they can and cannot do, who opens which console section — **every approval pipeline**, the statuses, the desk's lifecycle, and **every automatic mail** with its To and CC |
+| [11-booking-forms.md](11-booking-forms.md) | **Every booking form**: fields per role (required / optional / hidden), booking and service types, debitable heads, every rule checked on submission, and the **academic record** that fills and locks part of it |
+| [12-settings-and-defaults.md](12-settings-and-defaults.md) | Every configurable value, its default, who may change it; the values fixed in code; what the environment switches |
+| [13-billing-and-dining.md](13-billing-and-dining.md) | Tariffs, invoices, GST per section, payments, additional charges, dining |
+| [14-public-site-and-ui.md](14-public-site-and-ui.md) | The public website, the design tokens and primitives, the copy rules, sign-in pages, photographs, the map |
+| [20-architecture.md](20-architecture.md) | **How it is put together and why** (two stores, one auth seam, config-driven forms, institute time, holds in the database) and **where the code for each feature lives** |
+| [21-database.md](21-database.md) | Tables, enums, RLS, storage, **all 30 migrations**, the one-off repairs, resetting data |
+| [22-running-and-testing.md](22-running-and-testing.md) | Running locally, mock vs hosted database, the test suites, every way of verifying a change — and **every error already hit, with its cause and fix** |
+| [99-recent-changes.md](99-recent-changes.md) | **Only the most recent round** — replaced, never appended |
 
-**The product, as configured**
+### Boundaries that are easy to get wrong
 
-| File | Holds |
+- **Open work goes in [03-roadmap.md](03-roadmap.md); production prerequisites
+  go in [04-production.md](04-production.md).** The roadmap names a gate and
+  links; it does not restate the checklist.
+- **[02-decisions.md](02-decisions.md) holds the reasoning;
+  [01-background.md](01-background.md) holds the ask and its status.** Both
+  cover the same rounds, from different sides. Neither narrates the round a
+  third time — that is what [99-recent-changes.md](99-recent-changes.md) is
+  for, and it is replaced each round.
+- **Secrets and environment variables live once**, in
+  [05-credentials-and-security.md](05-credentials-and-security.md).
+  [04-production.md](04-production.md) says only *which* of them production
+  must set.
+- **"Deliberately not built" stays with its feature** (its file, or
+  [02-decisions.md](02-decisions.md)); **"still to do" goes to the roadmap.**
+
+---
+
+## Keeping this folder true
+
+This is the part that failed before. A round would touch the forms, the mail
+and the database, and only `99-recent-changes.md` and one product file would be
+updated. **Work the table, not your memory.**
+
+### After every round, always
+
+0. Re-read the five steps here. `CLAUDE.md` at the repo root says to, and
+   says why: working from memory is what let the folder drift.
+1. **Replace** [99-recent-changes.md](99-recent-changes.md) with the new round.
+   It is never appended to.
+2. **Append** the reasoning to [02-decisions.md](02-decisions.md), and add a
+   dated *Superseded* note under any older entry this round reverses.
+3. **Add the round to [01-background.md](01-background.md)** — a section with
+   what was asked and the status of each item, plus a row in *The build at a
+   glance*.
+4. **Update [03-roadmap.md](03-roadmap.md)**: strike what is done, add what the
+   round opened.
+5. **Run `npm run check:memories`** — it fails if a file is missing, a stray
+   file appears, or a link in this folder points at nothing.
+
+### And then, whatever the round touched
+
+| If the round changed… | Update these as well |
 | --- | --- |
-| [10-roles-and-features.md](10-roles-and-features.md) | **Every role**: sign-in, landing page, menu, what they can and cannot do; who opens which console section |
-| [11-booking-forms.md](11-booking-forms.md) | **Every booking form**: fields per role (required / optional / hidden), booking and service types, debitable heads, every rule checked on submission |
-| [12-workflows.md](12-workflows.md) | Every approval pipeline drawn out, the statuses, the desk's lifecycle, what runs automatically |
-| [13-settings-and-defaults.md](13-settings-and-defaults.md) | Every configurable value, its default, who changes it; the values fixed in code |
-| [14-notifications.md](14-notifications.md) | Every automatic mail — To, CC, threads, digests, the cron |
-| [15-billing-and-invoices.md](15-billing-and-invoices.md) | Tariffs, invoices, payments, dining, who may do what |
-| [16-public-site-and-ui.md](16-public-site-and-ui.md) | The public website, design tokens, sign-in pages, photos, map |
-| [17-academic-records.md](17-academic-records.md) | The Requester details card, its dummy records, and how to connect the real academic database |
+| What a role may do, or an approval route | [10-roles-and-workflows.md](10-roles-and-workflows.md), `AGENTS.md` |
+| A booking-form field, or a submission rule | [11-booking-forms.md](11-booking-forms.md), [12-settings-and-defaults.md](12-settings-and-defaults.md) if it is configurable, `AGENTS.md` |
+| An automatic mail, its recipients or its thread | [10-roles-and-workflows.md](10-roles-and-workflows.md) Part 3 |
+| A tariff, an invoice or a payment rule | [13-billing-and-dining.md](13-billing-and-dining.md) |
+| A Setting, a default, or a floor under a Setting | [12-settings-and-defaults.md](12-settings-and-defaults.md), [04-production.md](04-production.md) §3 if the office must fill it in |
+| A migration | [21-database.md](21-database.md), [04-production.md](04-production.md) §5, **and `scripts/check-migrations.mjs`'s `MARKERS` table** |
+| A new persona, password or secret | [05-credentials-and-security.md](05-credentials-and-security.md) **and `lib/ldap/mock-directory.ts`** |
+| An academic-record field or dummy record | [11-booking-forms.md](11-booking-forms.md) Part 2 **and `lib/academic/mock-source.ts`** |
+| Anything on the public site, or a design token | [14-public-site-and-ui.md](14-public-site-and-ui.md) |
+| Where a feature's code lives, or a new module | [20-architecture.md](20-architecture.md) Part 2 |
+| A new error you had to diagnose | [22-running-and-testing.md](22-running-and-testing.md) Part 2 |
+| A file the office sent (a spreadsheet, a CSV) | Keep it **verbatim** in the file that uses it, and say where the transcription in code is |
+| How a round should be *worked* (not what the code does) | `CLAUDE.md` at the repo root, and this contract |
 
-**Engineering**
+**Never put a real secret in this folder** — it is pushed to GitHub.
 
-| File | Holds |
+---
+
+## Where to look for a rule
+
+By topic, not by module. The detailed rule → code table is in
+[10-roles-and-workflows.md](10-roles-and-workflows.md) ("Where each rule
+actually lives").
+
+| Question | File |
 | --- | --- |
-| [20-architecture.md](20-architecture.md) | How it is put together and why: two stores, one auth seam, config-driven forms, institute time, holds in the database |
-| [21-implementation.md](21-implementation.md) | Feature → file map |
-| [22-database.md](22-database.md) | Tables, enums, RLS, storage, **all 27 migrations**, the one-off repairs |
-| [23-running-and-testing.md](23-running-and-testing.md) | Running locally, the mock vs hosted database, the test suites, every way of verifying a change |
-| [24-deployment-runbook.md](24-deployment-runbook.md) | Deploying, environment variables, the office's Settings, rotation, backups, incidents |
-| [25-troubleshooting.md](25-troubleshooting.md) | Every error already hit, with cause and fix |
-| [26-security.md](26-security.md) | What protects the portal, where each control lives, what is not done yet |
-
-**Credentials and access**
-
-| File | Holds |
-| --- | --- |
-| [30-credentials-and-access.md](30-credentials-and-access.md) | **Every demo login** (LDAP usernames and passwords, profile ids), the console password, 2FA, and **every real secret by name and location** (never the value) |
-| [31-ldap-sign-in.md](31-ldap-sign-in.md) | How LDAP sign-in works and how to switch to the institute's real directory |
-
-**Now**
-
-| File | Holds |
-| --- | --- |
-| [99-recent-changes.md](99-recent-changes.md) | **Only the most recent round** — replaced, not appended, each time |
+| Who approves this, and in what order? | [10-roles-and-workflows.md](10-roles-and-workflows.md) |
+| Why is a field mandatory for one role and not another? | [11-booking-forms.md](11-booking-forms.md) |
+| Which budget may this requester charge? | [11-booking-forms.md](11-booking-forms.md), and [04-production.md](04-production.md) §2 for the per-office table |
+| What is this limit, and who can change it? | [12-settings-and-defaults.md](12-settings-and-defaults.md) |
+| How is a room kept from being double-booked? | [20-architecture.md](20-architecture.md), [21-database.md](21-database.md) |
+| Which module implements this rule? | [20-architecture.md](20-architecture.md) Part 2 — the feature → file map, which absorbed the rule → module table this index used to carry |
+| Why was it done this way? | [02-decisions.md](02-decisions.md) |
+| It is broken and the error looks familiar | [22-running-and-testing.md](22-running-and-testing.md) Part 2 |
 
 ---
 
@@ -138,66 +183,40 @@ the office's Settings — [04-roadmap.md](04-roadmap.md) §1.
 | --- | --- |
 | Student | Books family (personal), **Bageshri only and no meals**, parents taken from their academic record → **Assistant Warden** of their hostel → manager |
 | Faculty / staff (`employee`) | Official → **HOD** → manager; personal → manager; meals only; **as Faculty Advisor** of a council or club when named in the console → straight to the manager |
-| Official (whitelisted office) | Direct → manager, or **Requires HOD approval**; exempt from the booking window and stay cap |
+| Official (whitelisted office) | Direct → manager, or **Requires HOD approval**; exempt from the booking window and the stay cap |
 | Club / fest / council account | **Cannot book** — its Faculty Advisor books for it; it sees the bookings and gets the mail |
 | IAR Student Cell | Books **for an alumnus** only → **IAR Office** → manager |
 | IAR Office | Books (official / alumni) **and** approves the Student Cell |
 | Assistant Warden, HOD, council secretary | Approve by queue; an HOD or secretary is **an appointment in the console, not a role**. The warden sees each student's academic record and a check of the parents on the request against it |
-| **Guest House Manager** | Final approval by **allocating rooms**; the whole desk (incl. an earlier check-in or later check-out); books for guests; invoices with additional charges; reinstates a **Missed** request; 10 console sections |
-| Guest House Caretaker | Reception: check-in/out, extend (earlier check-in or later check-out), invoices with additional charges |
+| **Guest House Manager** | Final approval by **allocating rooms**; the whole desk, including an earlier or later check-in; books for guests; invoices with additional charges; reinstates a **Missed** request; 10 console sections |
+| Guest House Caretaker | Reception: check-in and check-out, moving a stay's dates, invoices |
 | Developer | The whole console (14 sections), behind a password and TOTP |
 
 Every booking: a **debitable head** is mandatory **except on a personal
-booking, which is never asked** (the server records Personal Funds) - nine
-heads, mapped per requester by the office's own list of 8 Oct 2026 and, for an
+booking, which is never asked** (the server records Personal Funds) — nine
+heads, mapped per requester by the office's list of 8 Oct 2026 and, for an
 **office**, narrowed again to that office's own row on the spreadsheet of
-9 Oct 2026, and **any head but Personal Funds asks the requester to declare
-that the funds are approved and available**; **Copy to** is optional (≤ 25, CC on every mail to
-the requester); **privacy consent** is mandatory; check-in within **1 month**, at most **14 nights**; a room card
-holds **4 people, at most 3 needing a bed, at most 3 infants** (under 5);
-meals only at a guest house that serves them and **never for a student or an
-alumni booking**, booked **before the previous meal finishes being served**,
-with **each person's own veg / non-veg preference** and at most **30 people at
-one sitting** counting who is already booked (lunch is ticked for you on a
-meal booking). A **turnaround buffer** of 4 h separates stays. A student's
+9 Oct 2026; **any head but Personal Funds asks the requester to declare that
+the funds are approved and available**. **Copy to** is optional (≤ 25, CC on
+every mail to the requester); **privacy consent** is mandatory; check-in within
+**1 month**, at most **14 nights**; a room card holds **4 people, at most 3
+needing a bed, at most 3 infants** (under 5); meals only at a guest house that
+serves them and **never for a student or an alumni booking**, booked **before
+the previous meal finishes being served**, with **each person's own veg /
+non-veg preference** and at most **30 people at one sitting** counting who is
+already booked. A **turnaround buffer** of 4 h separates stays. A student's
 **father and mother come from their academic record and are locked**, and need
-no ID; "Add infant" opens an infant card. The form shows **the rates** and
-**how many rooms are free** - the room-by-room chart is the desk's. **The form
-does not state the rules it enforces** (9 Oct 2026): those are on the
-Guidelines page, in the error when it fires, or in the control itself. Invoices
-charge **GST 18% on rooms, 5% on food**, each on its own subtotal, lettered up
-to **Grand Total (A+B+C+D)**, settled by **UPI or account transfer**; a
-**personal stay is paid before the guest leaves**. A request nobody decides
-before its check-in is marked **Missed** overnight and the requester told. All
-times are **Asia/Kolkata** and every date reads **DD/MM/YYYY**. Details:
-files 10–15.
+no ID. The form shows **the rates** and **how many rooms are free** — the
+room-by-room chart is the desk's. **The form does not state the rules it
+enforces** (9 Oct 2026): those belong on the Guidelines page, in the error when
+it fires, or in the control itself. Invoices charge **GST 18% on rooms, 5% on
+food**, each on its own subtotal, lettered up to **Grand Total (A+B+C+D)**,
+settled by **UPI or account transfer**; a **personal stay is paid before the
+guest leaves**. A request nobody decides before its check-in is marked
+**Missed** overnight and the requester told. All times are **Asia/Kolkata** and
+every date reads **DD/MM/YYYY**.
 
-## Where the rules live in code
-
-| Rule | Module |
-| --- | --- |
-| Routes, approval stages, who reviews what, history scope | `lib/workflow.ts` (`routeFor`, `canReview`, `canReviewBooking`, `historyScope`) |
-| Heads of units, HODs, **Faculty Advisors**, secretaries' mailboxes | `lib/units.ts`, `lib/club-booking.ts` |
-| Console sections, desk powers, invoice powers | `lib/access.ts` |
-| Booking types, service types | `lib/booking-types.ts` |
-| Form fields per role | `lib/form-config.ts` (+ saved rows) |
-| Everything a submission is checked against | `lib/booking-schema.ts` (client and server) + `createBooking` |
-| Debitable heads, and the funds declaration | `lib/debit-heads.ts` |
-| Which heads **one particular office** may charge | `lib/office-debit-heads.ts` (`OFFICE_DEBIT_HEADS`, `narrowToOffice`) - a ceiling over the Settings list |
-| Loading the accounts from a spreadsheet | `lib/users-import.ts` (console: Users & Roles → Import from spreadsheet) |
-| Settings and their defaults | `lib/settings.ts` |
-| Stay cap, the one guest house students and alumni use, who may be offered meals, contact line | `lib/policy.ts` |
-| Capacity and infants | `lib/occupancy.ts` |
-| What a student's academic record **fixes** about their guests (locked parents, withheld relationships, the ID waiver) | `lib/academic/guest-names.ts` |
-| The institute's records the office pasted in, and the CSV import | `lib/academic/store-source.ts`, `lib/academic/stored.ts` (console: `/admin/academic`) |
-| Requests nobody decided in time (the nightly sweep, reinstating) | `lib/missed-server.ts`, `missedSweepable` / `statusBeforeMissed` in `lib/workflow.ts` |
-| Who sees rooms on availability, and the counts everyone else gets | `app/actions/availability.ts`, `availabilityCounts` in `lib/availability.ts` |
-| The warden's check of a student's family | `lib/academic/family.ts` (+ `family-server.ts`) |
-| Meals, serving windows, notice period, each person's preference, the kitchen's limit | `lib/meals.ts` |
-| Invoices and tariffs (GST per section, additional charges, `invoiceTable`) | `lib/invoice.ts`, `lib/tariffs.ts`, `lib/invoice-pdf.ts` |
-| Mail | `lib/mail/` |
-| Institute time | `lib/tz.ts` |
-| Data access | `lib/store/` (`types.ts` interface; `mock.ts`, `supabase.ts`) |
+---
 
 ## The traps that cost the most time
 
@@ -214,50 +233,30 @@ files 10–15.
 6. **The booking schema must accept its own output** (the form sends
    `parsed.data`, the server re-parses it).
 7. **Migrations are applied by hand**; a missing one fails writes quietly.
-8. **A form rendered from search params needs a `key`**, or switching keeps
-   the old state (24 Sep).
+   Ask the database with `npm run check:migrations` — never write the answer
+   down.
+8. **A form rendered from search params needs a `key`**, or switching keeps the
+   old state.
 9. `pkill -f "next start"` kills its own shell — use `"[n]ext start"`.
 
-The full list is in `AGENTS.md` and [25-troubleshooting.md](25-troubleshooting.md).
+The full list is in `AGENTS.md` and
+[22-running-and-testing.md](22-running-and-testing.md) Part 2.
+
+---
 
 ## Working with the owner
 
-- **Build on `main`.** The `ui` branch holds only a redesign experiment (superseded
-  by the 26 Sep redesign on `main`) and has
-  diverged.
+- **Build on `main`.** The `ui` branch holds only a redesign experiment,
+  superseded by the 26 Sep redesign on `main`, and has diverged.
 - **Verify cheaply.** Lint, typecheck, `npm test`, a build, the Playwright
   suite, `curl`, a throwaway Postgres for migrations — **not** ad-hoc
   headless-Chrome sessions, which the owner asked to avoid because they eat
   credits.
-- **Migrations are tested in a throwaway `postgres:16-alpine`** (Docker is on
-  this machine), never against the hosted project.
+- **Migrations are tested in a throwaway `postgres:16-alpine`**, never against
+  the hosted project.
 - The owner relays the office's numbered correction lists; each item is done,
-  verified, recorded in [01-background.md](01-background.md), reasoned in
-  [03-decisions.md](03-decisions.md) and summarised in
-  [99-recent-changes.md](99-recent-changes.md).
+  verified, and recorded as the maintenance contract above says.
 - The owner commits; changes are left in the working tree unless asked.
-- Never put a real secret in this folder — it is pushed to GitHub.
-
-## Keeping this folder true
-
-After every working round:
-
-1. **Replace** [99-recent-changes.md](99-recent-changes.md) with the new round.
-2. **Append** the reasoning to [03-decisions.md](03-decisions.md); add a
-   *Superseded* note under any older entry the round reverses.
-3. Add the round to [01-background.md](01-background.md) (what was asked, its
-   status) and a row to [02-timeline.md](02-timeline.md).
-4. Update the product files (10–15) wherever behaviour changed — they must stay
-   true to the code.
-5. A list the office sends as a file (a spreadsheet, a CSV) → **keep it in
-   this folder verbatim** and link it from the file map, so the transcription
-   in code can always be read against the original.
-6. New migration → [22-database.md](22-database.md); new persona or password →
-   [30-credentials-and-access.md](30-credentials-and-access.md) **and**
-   `lib/ldap/mock-directory.ts`; new academic record →
-   [17-academic-records.md](17-academic-records.md) **and**
-   `lib/academic/mock-source.ts`.
-7. Update [04-roadmap.md](04-roadmap.md) and `AGENTS.md`.
 
 ---
 
@@ -267,18 +266,18 @@ After every working round:
 | --- | --- |
 | **Booking type** | *Why* the stay is booked: official, personal, or on behalf of an alumnus (`bookings.booking_type`). A property of the request, not the person |
 | **Service type** | *What* is booked: room, room + meals, meals only |
-| **Debitable head** | Which budget pays. Nine of them since the office's list of 8 Oct 2026: Institute Grant, Professional Development Fund, Project Grant, Department Budget, Special Budget (`special_budget`), Personal Funds, Alumni Fund, Student Fund, Hostel Funds. Any but Personal Funds asks the requester to declare the funds are approved and available |
-| **Unit** | A department, council, club or office in Departments & Clubs; has a head, an acting head, a parent, and (councils/clubs) a Faculty Advisor and secretary's mailbox |
+| **Debitable head** | Which budget pays. Nine since the office's list of 8 Oct 2026: Institute Grant, Professional Development Fund, Project Grant, Department Budget, Special Budget (`special_budget`), Personal Funds, Alumni Fund, Student Fund, Hostel Funds. Any but Personal Funds asks the requester to declare the funds are approved and available |
+| **Unit** | A department, council, club or office in Departments & Clubs; has a head, an acting head, a parent, and (councils and clubs) a Faculty Advisor and a secretary's mailbox |
 | **HOD** | Whoever heads the unit a requester's HOD approval comes from — found when someone looks, never stored on the booking |
 | **Faculty Advisor** | The professor named on a council or club (`units.faculty_advisor_id`); books for it. Not a role — the `faculty_advisor` role is a legacy account type |
 | **Council secretary** | The student heading a council; approved club requests at the old club stage. Their **mailbox** (`sec_arts@…`) is copied on the advisor's bookings |
 | **Copy to (booking)** | Addresses typed on New Booking, CC on every mail to the requester |
+| **Copy to (card)** | The approval chain shown on the Requester details card, CC on staff mail. A different list |
 | **Academic record** | What the institute holds about a person. Since 7 Oct 2026 the office keeps these itself (Console → Academic records, migration 28); a student's father and mother on the booking form come from theirs |
-| **Copy to (card)** | The approval chain shown on the Requester details card, CC on staff mail. Different list |
 | **Hold** | A `room_holds` row: a booking holds a room exactly while one exists. The database refuses overlapping holds |
 | **Guard / turnaround** | The hold range the constraint compares — the stay plus the turnaround buffer (4 h); an accepted changeover may overlap ≤ 2 h |
 | **The desk** | The manager and caretaker together |
 | **Mock store / mock auth** | The JSON database (`.local-db.json`) used when Supabase is not configured; the one-click persona picker used when Google is not configured |
-| **Lapsed** | A request whose check-in passed while it waited (a meal booking: its last day of meals). It cannot be forwarded - and since 7 Oct 2026 the nightly job marks it **Missed** |
-| **Missed** | The status a lapsed request is given overnight (migration 29): the requester is told, it leaves every queue, and only the manager can **reinstate** it - back to the stage it was waiting at |
+| **Lapsed** | A request whose check-in passed while it waited (a meal booking: its last day of meals). It cannot be forwarded |
+| **Missed** | The status a lapsed request is given overnight (migration 29): the requester is told, it leaves every queue, and only the manager can **reinstate** it — back to the stage it was waiting at |
 | **Whitelist** | The official email whitelist — accounts allowed to book as the `official` role |

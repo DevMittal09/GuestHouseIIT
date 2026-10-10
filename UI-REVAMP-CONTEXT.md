@@ -1359,7 +1359,7 @@ NEXT_PUBLIC_SUPABASE_URL= npm run dev     # mock store (.local-db.json); safe to
   Six demo bookings put something in every queue: DM001 at the warden, DM002
   at the legacy club stage, DM003 at the IAR Office, DM004 and DM006 (meals
   only) at the manager, DM005 approved. Dummy LDAP logins are in
-  `.memories/30-credentials-and-access.md`.
+  `.memories/05-credentials-and-security.md`.
 - The console password is `0000`. The developer also needs TOTP (see the
   same file).
 - **Checks before finishing any change:** `npm run lint`, `npm run typecheck`,
