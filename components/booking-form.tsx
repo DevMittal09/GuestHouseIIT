@@ -118,6 +118,7 @@ import {
   type DebitHeadsByType,
   PAY_AT_CHECKOUT_NOTE,
 } from "@/lib/debit-heads";
+import { EmptyState } from "@/components/section-heading";
 import {
   BOOKING_TYPE_LABELS,
   CITIZENSHIP_LABELS,
@@ -1145,15 +1146,16 @@ export function BookingForm({
           is settled and nothing more. A personal *meal* booking has no
           check-out to settle anything at, so it gets no card at all. */}
       {!asksHead ? (
+        /* Not a card, and so not one of the form's numbered sections
+           (11 Oct 2026). The office asked for the pay-at-checkout note to be
+           kept, and it is - but a numbered section is a thing to fill in, and
+           this one held a single sentence and no control, so a student's form
+           opened on two sections before the first question. It is an inset
+           line now, in the same place in the reading order. */
         !mealsOnly && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{PAY_AT_CHECKOUT_NOTE}</p>
-            </CardContent>
-          </Card>
+          <p className="border-l-2 border-border-strong bg-band/50 px-4 py-2.5 text-sm text-muted-foreground">
+            {PAY_AT_CHECKOUT_NOTE}
+          </p>
         )
       ) : (
       <Card>
@@ -2582,9 +2584,7 @@ function FieldError({ message }: { message?: string }) {
 
 function EmptyNote({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-      {children}
-    </p>
+    <EmptyState>{children}</EmptyState>
   );
 }
 

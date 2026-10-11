@@ -4272,3 +4272,151 @@ them, are untouched - including the ones that follow the Form Builder
 (`star(mode)`, custom fields) and the conditional ones (Alumni ID card, ID
 document, the debit details box), which read "(optional)" when they are not
 required.
+
+---
+
+## 11 Oct 2026, the design pass
+
+> "The current site looks too meh, bland as well as looks too ai generated
+> [give the claude generated look]. The current UI looks generic and
+> recognizably AI-generated."
+
+The fourth time the look has been reworked, and the first where the answer was
+**not** the palette. What was asked for in detail: the institute's own
+branding, distinctive typography and spacing, no generic AI dashboard
+patterns, no excessive cards, gradients, decorative icons, unnecessary badges
+or repetitive layouts, a welcoming booking journey, dense approval and desk
+screens, minimal text, and consistency without one layout for every page.
+
+### The palette was checked again rather than changed
+
+iitpkd.ac.in's theme CSS was pulled and counted: `#e94c26` 22 times, then
+`#fff`, `#333`, `#ededed`, `#1a1a1a`, with `font-family: 'Source Serif Pro'`
+on the headings. That is what `app/globals.css` already holds, and it was put
+there on 26 Sep by reading the same files. **Nothing was recoloured.**
+
+**Why this mattered to the decision.** Three of the four previous rounds
+reached for colour (navy and gold, then vermilion with pills and gradients,
+then the institute's palette) and the complaint survived all of them. The
+things that actually read as template were countable, and none of them was a
+hue:
+
+| Screen | Measured |
+| --- | --- |
+| Manager console | 7 tiles 110px tall reading 0, then 6 near-identical sections, 4 of them 90px dashed boxes; the one row with work 1300px down |
+| Approval Log | 6 tiles in a 5-column grid, one orphaned on a second row |
+| My Bookings | 1150 x 180 of vermilion holding two lines of type |
+| Room availability | 20 cards, 19 reading "Free all week - available to book" |
+| Home | A quarter of every section empty, holding a six-word label |
+| Approver queues | A Status column repeating the single status the queue filters on, pushing Reject off a 1440px page |
+
+So the decision was to leave the colour alone and spend the whole round on
+**composition, type and density**.
+
+### Five named type steps, and two devices taken from the institute
+
+**Decision.** `--text-display / title / section / card / meta`, and two
+utilities, `rule-title` and `figure-serif`.
+
+**Why named steps.** Headings were written as one-off `clamp()` values at the
+point of use, which is how eight sizes of heading reached one page and how a
+section heading could be larger than the page title under it. A step is a
+decision about rank, so it is named once and referred to.
+
+**Why those two utilities and not more.** They are iitpkd.ac.in's own, which
+is the difference between "institutional" and "a template in institute
+colours": `h1.node-title { border-bottom: solid 1px #e94c26 }` and
+`.counters span { font-family: 'Source Serif Pro'; font-size: 4.5em }`. A
+third was written from its `.subtitle:after` and **deleted unused** - there was
+nowhere it did not double up with a rule already there, and an unused utility
+is a future inconsistency.
+
+**What `rule-title` replaced.** A 2px **ink** rule, which is the same mark
+`Table` uses to close its header row. A page and a table in it opened
+identically and neither outranked the other.
+
+> **The trap.** tailwind-merge classifies an unknown `text-<word>` as a
+> **colour**, so `cn("text-title", "text-ink")` dropped the size as the losing
+> half of a colour conflict and three home page headings rendered at 16px with
+> no error anywhere. `lib/utils.ts` builds `cn` with `extendTailwindMerge` now
+> and registers the five names under `font-size`. **Any new `--text-*` step
+> has to be added there too.**
+
+### A zero is not worth a tile
+
+**Decision.** `DeskSummary` is one ruled index - label, leader rule, figure,
+on a 44px baseline - with a zero set small and grey and a live count set in
+the serif at display size. `EmptyState` is one line against a hairline, not a
+dashed box 90px tall; 22 of them were replaced.
+
+**Why.** The desk's own screen, on an ordinary morning, was seven large
+figures all reading 0 followed by four boxes explaining that there was nothing
+in them. Both patterns spend the most space on the least information, which is
+the thing that makes a page read as generated rather than designed.
+
+**Why the order never re-sorts on the count.** It was tempting to float the
+lists with work in them to the front. This screen is read all day by the same
+two people, and a figure that moves because somebody checked out is a figure
+they have to find again.
+
+### A column that repeats itself is not a column
+
+**Decision.** `ReviewQueue` drops the **Status** column; check-in and
+check-out share one **Stay** cell. `BookingDetails` keeps one badge; the role,
+booking type, service type and diet split are a line of text. The manager
+queue's Category cell and Users & Roles' Role cell are plain text.
+
+**Why.** `/warden`, `/hod`, `/approvals` and `/iar` each list exactly one
+status, so the column printed the same words down every row - and it was what
+pushed **Forward** and **Reject** past the right edge of a 1440px page. The
+column cost the approver the two buttons the page exists for. After the change
+the table measures 1150px inside a 1150px container.
+
+**Why a badge is not free.** Six outlined pills opened `BookingDetails`, of
+which one was a state. The others were classifications, and in a row they read
+as decoration and buried the one that meant something. A foreign national
+keeps a mark of its own: the guest house has to report one.
+
+### The grid before the record
+
+**Decision.** The allocation dialog renders `RoomGrid` first and
+`BookingDetails` under it.
+
+**Why.** The dialog is called "Allocate rooms" and its only control is the
+grid. On a request with meals and a few guests the manager scrolled past a
+meal table, a guest table and the approval trail to reach it. Nothing had to
+be read first: the grid's own header carries the stay's period and "N of M
+requested", and the description now names the requester and the guest house -
+which also replaced an instruction sentence of the kind 9 Oct removed
+everywhere else.
+
+### What the form keeps, and what stops being a section
+
+**Decision.** The pay-at-checkout note stays, as an inset line rather than a
+numbered card. The form is six sections, not seven.
+
+**Why this is not a reversal of 8 Oct.** That round reviewed the portal's
+prose and **kept** this note by name. It is kept. What changed is that a
+numbered section is a thing to fill in, and a student's form opened on two of
+them before the first question - one holding a read-only value, one holding a
+sentence.
+
+### The home page's empty quarter
+
+**Decision.** `SectionHead` puts the label and any link on one line above a
+full-width hairline with the heading under it; the
+`lg:ml-[calc(25%+10px)]` indent comes off all three sections. The hero is
+6 + 6 rather than 5 + 7.
+
+**Why.** The label-in-the-left-quarter arrangement is a real editorial device,
+but it only works when the column holds something. Here it held a six-word
+label and then 600px of nothing, down the whole page - the single biggest
+reason the page read as mostly empty. The hero's five columns, meanwhile, left
+371px of text width for a 64px headline, so "Guest houses of IIT Palakkad"
+broke over three lines.
+
+**What was not touched.** Every content rule the owner and the supervisor set
+between 26 and 30 Sep: no figures, no requester categories, no approval chains
+or role names, no photo captions, photographs contained in the layout, promise
+little. This round moved boxes and type and left the words alone, apart from
+three page leads that restated their own titles.

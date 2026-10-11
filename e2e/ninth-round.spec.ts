@@ -143,7 +143,11 @@ test("the manager loads accounts from a spreadsheet paste and removes them again
   await expect(page.getByText("2 added, 0 updated, 0 unchanged")).toBeVisible();
   await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page.getByText(/Users imported - 2 added/)).toBeVisible({ timeout: 30_000 });
-  const row = (email: string) => page.getByRole("cell", { name: email, exact: true });
+  // Name and email share one "Account" cell since 11 Oct 2026, so the cell's
+  // accessible name is "Imported One imported.one@iitpkd.ac.in". Matching on
+  // the address alone also hits the row's tick box, whose label names the
+  // account; filtering on text content does not, because that cell has none.
+  const row = (email: string) => page.getByRole("cell").filter({ hasText: email });
   await expect(row("imported.one@iitpkd.ac.in")).toBeVisible({ timeout: 30_000 });
   await expect(row("imported.two@iitpkd.ac.in")).toBeVisible();
 

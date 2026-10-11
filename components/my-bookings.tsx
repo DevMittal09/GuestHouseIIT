@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { formatDateTime, toDatetimeLocal } from "@/lib/format";
 import type { BookingStatus, BookingWithDetails } from "@/lib/types";
+import { EmptyState } from "@/components/section-heading";
 
 /** Statuses where the requester can initiate cancellation. */
 const CANCELLABLE: BookingStatus[] = [
@@ -48,9 +49,7 @@ export function MyBookings({
 }) {
   if (bookings.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-        No bookings yet - create your first request from the &ldquo;New Booking&rdquo; tab.
-      </p>
+      <EmptyState>No bookings yet - create your first request from the &ldquo;New Booking&rdquo; tab.</EmptyState>
     );
   }
   return (

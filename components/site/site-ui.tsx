@@ -82,7 +82,7 @@ export function PageMasthead({
   return (
     <div className="border-b border-border bg-band">
       <Container className="pt-8 pb-12 sm:pt-10 sm:pb-16">
-        <nav aria-label="Breadcrumb" className="mb-10 text-[13px] text-muted-foreground">
+        <nav aria-label="Breadcrumb" className="mb-10 text-meta text-muted-foreground">
           <ol className="flex flex-wrap items-center gap-x-2">
             <li>
               <Link href="/" className="text-muted-foreground hover:text-ink">
@@ -99,7 +99,7 @@ export function PageMasthead({
             set under a vermilion rule in the remaining five, both sitting on
             one baseline. */}
         <div className="grid items-end gap-x-10 gap-y-6 lg:grid-cols-12">
-          <h1 className="min-w-0 text-[clamp(40px,5.6vw,72px)] leading-[1] font-semibold tracking-[-0.028em] text-ink lg:col-span-7">
+          <h1 className="min-w-0 text-[clamp(2.25rem,1.3rem+3vw,3.75rem)] leading-[1.02] font-semibold tracking-[-0.026em] text-ink lg:col-span-7">
             {title}
           </h1>
           {(intro || note || aside) && (
@@ -116,10 +116,17 @@ export function PageMasthead({
 }
 
 /**
- * A section's heading, set the editorial way (30 Sep 2026): a hairline ink
- * rule across the column, the small-capitals label in the left quarter and
- * the serif heading beside it, with an optional link at the far end. On a
- * phone the label simply sits above the heading.
+ * A section's heading, set the editorial way: the small-capitals label and
+ * any link on one line, a hairline ink rule under them, then the serif
+ * heading.
+ *
+ * Rearranged 11 Oct 2026. The label used to sit in the left quarter of a
+ * 12-column grid with the heading beside it, and every section's content was
+ * then indented to match (`lg:ml-[calc(25%+10px)]`). That left a quarter of
+ * the page empty down its whole length, holding one six-word label - the
+ * single biggest reason the home page read as mostly nothing. The rule now
+ * runs the full width and so does the content under it; the label keeps its
+ * place above, where it reads as furniture rather than as an empty column.
  */
 export function SectionHead({
   label,
@@ -138,36 +145,30 @@ export function SectionHead({
 }) {
   const dark = tone === "dark";
   return (
-    <div
-      className={cn(
-        "grid gap-x-10 gap-y-3 border-t pt-5 lg:grid-cols-12",
-        dark ? "border-white/40" : "border-ink",
-        className
+    <div className={cn("min-w-0", className)}>
+      {(label || link) && (
+        <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 pb-3">
+          {label && <Label className={cn(dark && "text-saffron")}>{label}</Label>}
+          {link && (
+            <ArrowLink
+              href={link.href}
+              className={cn("ml-auto", dark && "text-white hover:text-saffron")}
+            >
+              {link.label}
+            </ArrowLink>
+          )}
+        </div>
       )}
-    >
-      {label && (
-        <Label className={cn("pt-[0.55em] lg:col-span-3", dark && "text-saffron")}>{label}</Label>
-      )}
-      <div
-        className={cn(
-          "flex min-w-0 flex-wrap items-end justify-between gap-x-8 gap-y-3",
-          label ? "lg:col-span-9" : "lg:col-span-12"
-        )}
-      >
+      <div className={cn("border-t pt-5", dark ? "border-white/40" : "border-ink")}>
         <h2
           id={id}
           className={cn(
-            "max-w-[24ch] text-[clamp(28px,3.4vw,44px)] leading-[1.08] font-semibold tracking-[-0.018em]",
+            "max-w-[22ch] text-title font-semibold",
             dark ? "text-white" : "text-ink"
           )}
         >
           {title}
         </h2>
-        {link && (
-          <ArrowLink href={link.href} className={dark ? "text-white hover:text-saffron" : undefined}>
-            {link.label}
-          </ArrowLink>
-        )}
       </div>
     </div>
   );

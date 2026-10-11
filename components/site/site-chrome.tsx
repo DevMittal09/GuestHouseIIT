@@ -112,7 +112,7 @@ export function SiteFooter({ pins }: { pins: MapPin[] }) {
       </Container>
 
       <div className="border-t border-white/10">
-        <Container className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-5 text-[13px] text-on-ink-muted">
+        <Container className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-5 text-meta text-on-ink-muted">
           <span>
             &copy; {instituteParts(new Date()).year} Indian Institute of Technology Palakkad
           </span>

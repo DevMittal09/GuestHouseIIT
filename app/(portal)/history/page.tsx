@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/page-header";
 import { CollectionsExport } from "@/components/collections-export";
 import { canExportCollections, canIssueInvoices } from "@/lib/access";
 import { toInstituteDateValue } from "@/lib/tz";
+import { EmptyState } from "@/components/section-heading";
 
 export default async function HistoryPage({
   searchParams,
@@ -30,9 +31,7 @@ export default async function HistoryPage({
     return (
       <div className="space-y-6">
         <Heading scopeLabel={null} isRequester={false} />
-        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-          {scope.reason}
-        </p>
+        <EmptyState>{scope.reason}</EmptyState>
       </div>
     );
   }

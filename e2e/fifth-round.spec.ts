@@ -39,7 +39,7 @@ async function facultyStayStartingNow(page: Page): Promise<string> {
   // is left is the line about settling the invoice at check-out.
   await expect(page.locator('[name="debit_head"]')).toHaveCount(0);
   await expect(page.getByText("Debitable head", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Payment", { exact: true })).toBeVisible();
+  await expect(page.getByText(/settled at the time of checkout/)).toBeVisible();
   const house = page.locator('select[name="guest_house_id"]');
   const bageshri = await house.locator("option", { hasText: "Bageshri" }).getAttribute("value");
   await house.selectOption(bageshri!);

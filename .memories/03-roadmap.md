@@ -192,6 +192,33 @@ real deployment and about who may edit the table.
   one has to render it too. There is no lint for that - `AGENTS.md` and
   [14-public-site-and-ui.md](14-public-site-and-ui.md) carry the rule.
 
+## 2d. Opened by the 11 Oct 2026 design pass
+
+Presentation only; nothing here blocks anything.
+
+- **The console's other thirteen sections were not gone through one by one.**
+  They inherit the type scale, the primitives and the one-line empty state, so
+  none of them looks like the old build - but **Users & Roles was the only one
+  whose table was measured against its container** and narrowed to fit (name
+  over email in one cell, role as plain text). Tariffs & Invoicing, All
+  Bookings, Departments & Clubs and Academic records all carry wide tables and
+  may still overflow their container at 1440px, which hides whatever is in
+  their last column. Measuring one is a two-line script - the recipe is in
+  [22-running-and-testing.md](22-running-and-testing.md).
+- **"Type of booking" is still a numbered section with nothing to answer** for
+  a role with one booking type - a student sees a card headed 1 whose body is
+  the word "Personal". The pay-at-checkout note beside it stopped being a
+  numbered card this round for exactly that reason; this one was left because
+  the value is a real answer being recorded, not a sentence. Worth asking the
+  office whether a student's form should open on **Stay details**.
+- **Nothing enforces the type scale.** A new heading can still be written as a
+  one-off `clamp()`, and `cn()` will now keep it. The five steps are in
+  `app/globals.css` and [14-public-site-and-ui.md](14-public-site-and-ui.md);
+  there is no lint rule.
+- **`StatusBadge` is still the one place a colour means a state**, and the
+  GOV.UK tag palette behind it was not revisited. If the office ever asks for
+  fewer colours, that is the file.
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the

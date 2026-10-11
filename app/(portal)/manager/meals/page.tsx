@@ -41,6 +41,7 @@ import { getStore } from "@/lib/store";
 import { formatDateValue, parseDateValue, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { SERVICE_TYPE_LABELS, type BookingWithDetails } from "@/lib/types";
+import { EmptyState } from "@/components/section-heading";
 
 /**
  * What the kitchen is cooking on one day.
@@ -74,10 +75,8 @@ export default async function DailyMealsPage({
   const guestHouses = (await store.listGuestHouses()).filter((g) => g.serves_meals);
   if (guestHouses.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-        No guest house serves meals yet. A developer can turn meals on for one in Guest Houses &amp;
-        Rooms.
-      </p>
+      <EmptyState>No guest house serves meals yet. A developer can turn meals on for one in Guest Houses &amp;
+        Rooms.</EmptyState>
     );
   }
   const current =
@@ -122,10 +121,7 @@ export default async function DailyMealsPage({
             <Link href={back.href}>{back.label}</Link>
           </Button>
         }
-      >
-        Head counts for the {current.name} kitchen, across every booking that asked for a meal on
-        this day.
-      </PageHeader>
+      />
 
       {/* A plain GET form: the date and guest house live in the URL, so a
           particular day can be bookmarked or sent to the kitchen. */}
@@ -212,7 +208,7 @@ export default async function DailyMealsPage({
             the counts to what the kitchen served, then issue.
           </p>
           {toInvoice.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">Nothing waiting.</p>
+            <EmptyState>Nothing waiting.</EmptyState>
           ) : (
             <ul className="divide-y rounded-lg border">
               {toInvoice.map((b) => (
@@ -260,9 +256,7 @@ function MealBookingTable({
       </h2>
       <p className="mb-3 text-sm text-muted-foreground">{description}</p>
       {bookings.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-          Nothing to serve.
-        </p>
+        <EmptyState>Nothing to serve.</EmptyState>
       ) : (
         <div className={cn("overflow-x-auto rounded-lg border", muted && "opacity-80")}>
           <Table>

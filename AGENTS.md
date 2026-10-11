@@ -153,6 +153,32 @@ port 3000 before launching your own.
   `GUEST_HOUSE_CONTACT` (`lib/site.ts`) is the one place either is written
   down.
 
+- **Headings come off the five-step scale** (11 Oct 2026): `text-display` for
+  a page's `<h1>`, `text-title` for a public section, `text-section` for a
+  console list, `text-card` for a card, `text-meta` for small print. Don't
+  write a new `clamp()` at the point of use - that is how eight sizes of
+  heading reached one page. **A new step goes in `@theme inline`
+  (`app/globals.css`) *and* in `TYPE_STEPS` (`lib/utils.ts`)**: tailwind-merge
+  reads an unknown `text-<word>` as a **colour**, so `cn("text-title",
+  "text-ink")` drops the size with no error anywhere.
+- **A page title closes on `rule-title`, a figure is set in `figure-serif`.**
+  Both are iitpkd.ac.in's own (`h1.node-title`'s vermilion hairline, the
+  `.counters` serif numerals). They are the two devices the portal has; don't
+  add a third without somewhere it does not double up with a rule already
+  there.
+- **Nothing is a dashed box.** An empty list is `EmptyState` - one line on a
+  hairline. The 90px dashed box is gone from all 22 places it was in, and the
+  manager's console used to stack four of them above its first real row.
+- **A column that prints the same value in every row is not a column**
+  (11 Oct 2026). `ReviewQueue` has no Status column because `/warden`,
+  `/hod`, `/approvals` and `/iar` each list exactly one status - and that
+  column was what pushed Forward and Reject off a 1440px page. Before adding
+  a wide table, measure it against its container; the script is in
+  `.memories/22-running-and-testing.md`.
+- **A badge is for a state, not a classification.** `StatusBadge` and a
+  foreign-national mark earn their colour; role, booking type, service type
+  and the diet split are a line of plain text. `BookingDetails` opened on six
+  pills and the one that meant something was lost among them.
 
 - **No em dashes in the source.** Every `—` in `app/ components/ lib/ tests/
   e2e/ scripts/` is a plain hyphen, and new copy follows. The exception is

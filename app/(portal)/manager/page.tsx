@@ -177,9 +177,7 @@ export default async function ManagerPage({
             </Button>
           </div>
         }
-      >
-        Review pre-approved and direct requests, then allocate rooms per guest house.
-      </PageHeader>
+      />
 
       {/* Separate queue per guest house */}
       <LinkTabs

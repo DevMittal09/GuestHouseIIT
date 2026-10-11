@@ -55,7 +55,6 @@ test("a student's form states one guest house, no meals, no debitable head, and 
   // A student's booking is personal, so the budget is never asked.
   await expect(page.getByText("Debitable head", { exact: true })).toHaveCount(0);
   await expect(page.locator('[name="debit_head"]')).toHaveCount(0);
-  await expect(page.getByText("Payment", { exact: true })).toBeVisible();
   await expect(page.getByText(/settled at the time of checkout/)).toBeVisible();
 
   // And the rates for that guest house, from the office's own rate sheet.
@@ -93,7 +92,7 @@ test("a faculty member sees the meal rates at the kitchen and is still asked on 
   // Switching to a personal stay takes the question away entirely.
   await page.locator('[name="booking_type"][value="personal"]').check();
   await expect(page.locator('[name="debit_head"]')).toHaveCount(0);
-  await expect(page.getByText("Payment", { exact: true })).toBeVisible();
+  await expect(page.getByText(/settled at the time of checkout/)).toBeVisible();
 });
 
 /**

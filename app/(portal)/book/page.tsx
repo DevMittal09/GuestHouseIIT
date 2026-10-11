@@ -163,8 +163,11 @@ export default async function BookPage({
           other four the requester's record and what happens after Submit.
           On a phone the record comes first, as before - it is what the
           requester checks before filling anything in. */}
-      <div className="grid gap-x-10 gap-y-6 lg:grid-cols-12 lg:items-stretch">
-        <aside className="min-w-0 space-y-6 lg:col-span-4 lg:col-start-9 lg:row-start-1">
+      <div className="grid gap-x-10 gap-y-6 lg:grid-cols-12">
+        {/* Sticky from `lg` (11 Oct 2026): the form runs to about 2800px and
+            the record is what a requester checks a field against, so it has to
+            stay in view rather than scroll away after the first question. */}
+        <aside className="min-w-0 space-y-6 lg:col-span-4 lg:col-start-9 lg:row-start-1 lg:self-start lg:sticky lg:top-24">
           {/* Who is asking, from the academic database. Outside the form
               because nothing in it is editable. For a club's booking, that
               is the club.

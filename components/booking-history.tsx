@@ -59,6 +59,7 @@ import {
 
 const ALL_STATUSES = Object.keys(STATUS_LABELS) as BookingStatus[];
 import { ACTIVE_STATUSES } from "@/lib/workflow";
+import { EmptyState } from "@/components/section-heading";
 
 interface Tile {
   key: string;
@@ -237,8 +238,14 @@ export function BookingHistory({
 
   return (
     <div className="space-y-5">
-      {/* Headline counts, also the status filter. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* The headline counts, which are also the status filter.
+          
+          One ruled band of six rather than six free-standing cards (11 Oct
+          2026): six divides into 2, 3 and 6, so no breakpoint leaves an
+          orphan on a second row - the five-column grid left "Missed" alone
+          on one - and a row of segments reads as the control it is instead
+          of as a dashboard. Each keeps its status hue as a top rule. */}
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border-strong bg-border-strong sm:grid-cols-3 lg:grid-cols-6">
         {TILES.map((tile) => {
           const count =
             tile.statuses.length === 0
@@ -252,15 +259,25 @@ export function BookingHistory({
               aria-pressed={active}
               onClick={() => apply({ statuses: tile.statuses })}
               className={cn(
-                "cursor-pointer rounded-md border border-t-4 border-border-strong px-4 py-3 text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
+                "cursor-pointer border-t-[3px] px-4 pt-2.5 pb-3 text-left transition-colors duration-150 focus-visible:-outline-offset-2",
                 tile.tone,
-                active ? "bg-band outline-2 -outline-offset-2 outline-ink" : "bg-card hover:bg-band/60"
+                active ? "bg-ink" : "bg-card hover:bg-band"
               )}
             >
-              <span className="block text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              <span
+                className={cn(
+                  "block text-[11px] font-semibold tracking-[0.12em] uppercase",
+                  active ? "text-on-ink" : "text-muted-foreground"
+                )}
+              >
                 {tile.label}
               </span>
-              <span className="mt-1 block font-heading text-[1.75rem] leading-tight font-semibold text-ink tabular-nums">
+              <span
+                className={cn(
+                  "figure-serif mt-0.5 block text-[1.625rem] leading-tight",
+                  active ? "text-white" : count > 0 ? "text-ink" : "text-muted-foreground/70"
+                )}
+              >
                 {count}
               </span>
             </button>
@@ -518,13 +535,11 @@ export function BookingHistory({
       </div>
 
       {total === 0 ? (
-        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-          {isOwnBookings
+        <EmptyState>{isOwnBookings
             ? "You have not submitted any booking requests yet."
             : params.actor === "me"
               ? "You have not acted on any request matching these filters yet. Switch to \u201cEverything in scope\u201d to search the full archive."
-              : "No bookings match these filters."}
-        </p>
+              : "No bookings match these filters."}</EmptyState>
       ) : (
         <div
           className={cn(

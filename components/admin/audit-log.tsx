@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { formatDateTime } from "@/lib/format";
+import { EmptyState } from "@/components/section-heading";
 
 /**
  * The audit log as a table: newest first, filtered by kind or free text. The
@@ -80,9 +81,7 @@ export function AuditLog({
       </form>
 
       {events.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-          Nothing recorded for this filter.
-        </p>
+        <EmptyState>Nothing recorded for this filter.</EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full min-w-[48rem] text-sm">

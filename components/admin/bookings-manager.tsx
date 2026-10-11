@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/section-heading";
 import {
   ROLE_LABELS,
   STATUS_LABELS,
@@ -61,9 +62,7 @@ export function BookingsManager({ bookings }: { bookings: BookingWithDetails[] }
       </div>
 
       {visible.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-          No bookings match this filter.
-        </p>
+        <EmptyState>No bookings match this filter.</EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table>

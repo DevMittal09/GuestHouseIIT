@@ -76,17 +76,32 @@ export function BookingDetails({
   const dietCounts = mealDietCounts(booking, mealHeadCount);
   return (
     <div className="space-y-5 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* One badge, not six (11 Oct 2026). The status is a state and earns
+          its colour; the role, the booking type, the service and the diet
+          split are classifications, and six outlined pills in a row read as
+          decoration and buried the one that means something. They are a line
+          of plain text now. A foreign national keeps a mark of its own: the
+          guest house has to report one, so it is the single thing here a
+          reviewer must not miss. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="font-mono text-xs text-muted-foreground">{booking.booking_reference_id}</span>
         <StatusBadge status={booking.status} />
-        <Badge variant="outline">{ROLE_LABELS[booking.user_role]}</Badge>
-        <Badge variant="secondary">{BOOKING_TYPE_LABELS[booking.booking_type]}</Badge>
-        <Badge variant="outline">{SERVICE_TYPE_LABELS[booking.service_type]}</Badge>
-        {dietCounts && <Badge variant="outline">{describeDietCounts(dietCounts)}</Badge>}
-        {/* The guest house has to report foreign nationals, so it is on the
-            booking itself rather than only inside the guest list. */}
-        {booking.has_foreign_national && <Badge variant="outline">Foreign national</Badge>}
+        {booking.has_foreign_national && (
+          <Badge variant="tag" className="tag-yellow">
+            Foreign national
+          </Badge>
+        )}
       </div>
+      <p className="-mt-3 text-meta text-muted-foreground">
+        {[
+          ROLE_LABELS[booking.user_role],
+          BOOKING_TYPE_LABELS[booking.booking_type],
+          SERVICE_TYPE_LABELS[booking.service_type],
+          dietCounts ? describeDietCounts(dietCounts) : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      </p>
 
       <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
         <Field label="Requester" value={`${booking.requester.full_name} (${booking.requester.email})`} />

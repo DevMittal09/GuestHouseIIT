@@ -67,7 +67,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader caption={user.full_name} title="My Bookings" />
+      <PageHeader title="My Bookings" />
       {/* The two ways in, as large tiles rather than header buttons: people
           came to this page to book, and small outlined buttons at the far
           end of the title were being missed. */}
@@ -133,11 +133,14 @@ const DOOR_TONES = {
 } as const;
 
 /**
- * A large, unmissable way into the booking form (30 Sep 2026): a solid
- * tile - vermilion for a room, ink for meals - with the icon in a hairline
- * square, the title in the serif at display size, one line on what it
- * covers, and an arrow that moves on hover. Small outlined buttons at the
- * end of the title were being missed; these are the page's first thing.
+ * The way into the booking form: a solid door, vermilion for a room and ink
+ * for meals, with the icon beside the title and an arrow that moves on hover.
+ *
+ * Sized to its content since 11 Oct 2026. It was 148px tall with the icon
+ * pinned to the top and the title to the bottom, so a student with one way in
+ * met a 180px slab of vermilion holding two lines of type, and the void in
+ * the middle of it was the first thing on the page. The content now sets the
+ * height, and the door comes out a little over half as tall.
  */
 function BookingDoor({
   href,
@@ -157,33 +160,23 @@ function BookingDoor({
     <Link
       href={href}
       className={cn(
-        "group flex min-h-[148px] flex-col justify-between gap-6 rounded-lg p-6 no-underline transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
+        "group flex items-center gap-4 rounded-lg px-5 py-4 no-underline transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
         DOOR_TONES[tone]
       )}
     >
-      <span className="flex items-start justify-between gap-4">
-        <span
-          aria-hidden
-          className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-md border",
-            solid ? "border-white/35" : "border-border-strong bg-band"
-          )}
-        >
-          <Icon className="size-[22px]" strokeWidth={1.6} />
-        </span>
-        <ArrowRight
-          aria-hidden
-          className="mt-1 size-5 shrink-0 transition-transform duration-200 motion-safe:group-hover:translate-x-1"
-        />
-      </span>
-      <span className="min-w-0">
-        <span className="block font-heading text-[clamp(22px,2.4vw,26px)] leading-tight font-semibold">
+      <Icon aria-hidden className="size-7 shrink-0" strokeWidth={1.5} />
+      <span className="min-w-0 flex-1">
+        <span className="block font-heading text-[1.3125rem] leading-tight font-semibold">
           {title}
         </span>
-        <span className={cn("mt-1.5 block text-[14.5px] leading-snug", solid ? "text-white/85" : "text-body")}>
+        <span className={cn("mt-1 block text-[14px] leading-snug", solid ? "text-white/85" : "text-body")}>
           {detail}
         </span>
       </span>
+      <ArrowRight
+        aria-hidden
+        className="size-5 shrink-0 transition-transform duration-200 motion-safe:group-hover:translate-x-1"
+      />
     </Link>
   );
 }

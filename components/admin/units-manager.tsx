@@ -34,6 +34,7 @@ import {
   type UnitKind,
 } from "@/lib/units";
 import type { Profile } from "@/lib/types";
+import { EmptyState } from "@/components/section-heading";
 
 /**
  * Departments, clubs, councils and offices, and who approves for each.
@@ -170,10 +171,8 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
       </div>
 
       {units.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-          Nothing here yet. Add the departments first, then the councils, then the clubs under
-          them.
-        </p>
+        <EmptyState>Nothing here yet. Add the departments first, then the councils, then the clubs under
+          them.</EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table>

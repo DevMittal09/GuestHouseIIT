@@ -44,6 +44,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **9 Oct** | Two answers from the office, and one of our own mistakes: the migration check was replaced by **`npm run check:migrations`** after these notes had claimed 24-30 were missing for weeks when they were applied. That afternoon, **the owner's own list: the portal stops talking** - a rule the form enforces is no longer stated on it. That evening, the office's **tenth list**, a spreadsheet: **each office's own debitable heads**. |
 | **10 Oct** | This folder reorganised: 25 files to 15, each with one job, and a maintenance contract in [README.md](README.md) so a round updates every file it touches, enforced by `npm run check:memories`. `CLAUDE.md` at the repo root rewritten to carry the process - read the memory before planning, update it before finishing. |
 | **11 Oct** | The office's **eleventh list**, three items: an office with **no HOD** is not offered "Requires HOD approval" at all (`asksOfficeApproval`); the **pets notice** comes off every booking form, keeping the Guidelines and the booking mail; and every form that **stars** a field says what the star means (`RequiredFieldsNote`). **No migration.** |
+| **11 Oct**, later | The owner's **design pass**: the interface "looks too ai generated". The palette was checked against iitpkd.ac.in again and kept; what changed was composition. A **named five-step type scale**, the institute's own page-title rule and serif figures, the dashed empty state cut to one line in 22 places, the desk's seven KPI tiles redrawn as a ruled index, the approver queues' constant **Status** column dropped so their action buttons fit the page, the allocation grid moved above the record, and the home page's empty quarter-column recovered. **Presentation only.** |
 
 ## The problem
 
@@ -537,6 +538,30 @@ Three items, relayed by the owner. Reasoning in
 | "For director, its showing **Requires HOD Approval** but since his office doesnt have a HOD it shouldn't show that right [It is showing 'Nobody is set as HOD for your office yet - it would go straight to the manager.' though but i would prefer that **it shouldn't show that button itself**]" | **Done** | `asksOfficeApproval(role, service, hasHodApprover)` (`lib/workflow.ts`) is the one rule: the whole **Approval** card is withheld where the office's HOD unit has no head, the schema demands no choice (`BookingSchemaContext.hasHodApprover`), and `createBooking` records **Direct** whatever the payload carried. The Director's Office has no head; the CSE Department Office still chooses, and the option names Prof. R. Venkatesh |
 | "'Pets are not allowed in the guest house premises.' is only required in **the guidelines** no need to show it here" | **Done** | The amber card is off every booking form. `PETS_POLICY_NOTICE` stays as the **"Pets" line in every booking mail** and the Guidelines item under "During your stay"; the constant is unchanged, so nothing about the rule itself moved |
 | "Mention **'These field are mandatory for those shown with *'** Whenever we are using it [*]" | **Done** | `components/required-fields-note.tsx`: `MANDATORY_FIELDS_NOTE` = "Fields marked with * are mandatory.", drawn by `RequiredFieldsNote` above the first starred label on the **booking form**, in **Users & Roles**' add/edit dialog and in the **rejection** dialog - the three forms that star a field. The reject dialog's own "A reason is mandatory." came off its description, which now said it twice |
+
+## The owner's design pass — 11 October 2026 (second)
+
+The owner, on the interface as a whole rather than on any rule. Reasoning in
+[02-decisions.md](02-decisions.md) ("11 Oct 2026, the design pass"); what
+changed in [99-recent-changes.md](99-recent-changes.md); the design record is
+[14-public-site-and-ui.md](14-public-site-and-ui.md). **No migration, no
+Setting, no rule.**
+
+> "The current site looks too meh, bland as well as looks too ai generated
+> [give the claude generated look]. The current UI looks generic and
+> recognizably AI-generated. I want a distinctive, aesthetic, professional
+> interface that feels purpose-designed for an IIT campus guest house."
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| A coherent identity from **IIT Palakkad's own branding**, using iitpkd.ac.in for the palette | **Done** (already true, and confirmed) | Its theme CSS was pulled and counted again: `#e94c26` 22 times, then `#fff`, `#333`, `#ededed`, `#1a1a1a`, Source Serif Pro headings. The portal matched it already, so nothing was recoloured. What **was** taken from it is new: `rule-title` (its `h1.node-title` vermilion hairline) and `figure-serif` (its `.counters` treatment) |
+| **Distinctive typography, intentional spacing, strong hierarchy, restrained colour** | **Done** | `--text-display / title / section / card / meta` in `@theme inline` - five named steps, replacing one-off `clamp()` values written where they were used |
+| **No generic AI dashboard patterns, excessive cards, gradients, decorative icons, unnecessary badges, repetitive layouts** | **Done** | The desk's seven KPI tiles became a ruled index; the Approval Log's five-plus-orphan tile grid became one band of six; `Card` lost its band-tinted header strip; the dashed empty state became one line in **22 places**; `BookingDetails` went from six badges to one plus a text line; the availability page's twenty identical room cards became a table |
+| A **welcoming, intuitive** booking journey | **Done** | The My Bookings door is sized to its content rather than a 180px slab; the booking form is six numbered sections, not seven, and its Requester details panel is sticky |
+| **Efficient, information-dense** approval, reception and allocation screens | **Done** | The approver queues lost the column repeating the one status they filter on and gained a combined **Stay** cell, so Review, Forward and Reject all fit a 1440px page for the first time; the allocation dialog opens on the grid; Users & Roles' table fits its container |
+| **Minimal but informative text**, no em dashes | **Done** | Three page leads that restated their own titles deleted. No em dash was added; the only ones in the source remain the two in `tests/eighth-round.test.ts`, which assert on the legacy `debit_details` format |
+| Consistent **without forcing every page into one layout** | **Done** | One vocabulary - the scale, the vermilion title rule, serif figures, ruled section openers - used differently per register: the public site keeps its editorial openers and photographs, the desk reads as a ledger, the form as a numbered document |
+| **Preserve** the stack, backend, schema, server actions, authorisation, booking rules, workflows, responsive behaviour and accessibility | **Done** | No migration, no Setting, no server action, no rule. Every public and portal page still measures `scrollWidth` 320 at 320px with exactly one `<h1>`; 462 unit tests and 38 e2e journeys pass |
 
 ## Branches
 

@@ -37,6 +37,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { GuestHouse, Room, RoomType } from "@/lib/types";
 import type { ActionResult } from "@/app/actions/bookings";
+import { EmptyState } from "@/components/section-heading";
 
 export function GuestHousesManager({
   guestHouses,
@@ -395,9 +396,7 @@ function GuestHouseCard({
         </div>
 
         {rooms.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-            No rooms yet.
-          </p>
+          <EmptyState>No rooms yet.</EmptyState>
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {rooms.map((room) => (

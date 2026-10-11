@@ -3,7 +3,7 @@
 Read this before changing anything visual, adding a public page, or touching
 the sign-in pages.
 
-**Five passes so far:**
+**Six passes so far:**
 
 | Date | Where | What |
 | --- | --- | --- |
@@ -12,7 +12,102 @@ the sign-in pages.
 | 26 Sep 2026, morning | `main` | The owner: the site "looks ass", "too dull and dead"; wanted clean and professional, impressive, **not AI-generated-looking**, in **the colour palette of the IITPKD websites**, following the backend. Plus: a map for each guest house, MRBS and the institute site in the footer, a proper Guidelines page with placeholder house rules, and more prominent booking buttons in the portal. Built as an editorial page full of computed facts |
 | 26 Sep 2026, afternoon | `main` | The owner on the morning's version: header "should look more aesthetic", site "too plain", "too mehh"; **no figures** ("23 rooms… 1 month… 14 nights…"), **no "see them on the map"**, **no photo captions**, **"How booking works" moved to the guidelines and vaguer**, **"do not display the backend logic like who are the users, who approves who"**, no instruction text or meal timings on the landing page. Rebuilt photo-led and quiet — full-screen hero, photo banners |
 | 26 Sep 2026, evening | `main` | The owner: "it looks so weird… the image filling the page this much looks so weird"; make it **clean and professional**, researched online. Rebuilt **institutional**: photos contained in the layout — see "The evening brief" below |
-| **30 Sep 2026 (current)** | `main` | A written revamp brief: TGH structure, Aman / Standard editorial rules, **GOV.UK** tables and tags; 4px inputs, 6px buttons, 8px cards, never a pill, shadow, gradient or glass. Primitives rebuilt (see "The 30 Sep revamp" below); the evening's content rules all kept. **Afternoon:** the supervisor's review — see "Promise less" below |
+| 30 Sep 2026 | `main` | A written revamp brief: TGH structure, Aman / Standard editorial rules, **GOV.UK** tables and tags; 4px inputs, 6px buttons, 8px cards, never a pill, shadow, gradient or glass. Primitives rebuilt (see "The 30 Sep revamp" below); the evening's content rules all kept. **Afternoon:** the supervisor's review — see "Promise less" below |
+| **11 Oct 2026 (current)** | `main` | The owner: the interface "looks too ai generated"; wanted it distinctive, professional and purpose-designed, with no generic dashboard patterns, excessive cards, decorative icons, unnecessary badges or repetitive layouts. **The palette was checked against iitpkd.ac.in again and kept** - what changed was composition, type and density. See "The 11 Oct design pass" below |
+
+## The 11 Oct design pass
+
+The fourth rework of the look, and the first that changed no colour. Why it
+was done this way is in [02-decisions.md](02-decisions.md) ("11 Oct 2026, the
+design pass"); this is what the code now holds.
+
+**The palette was re-derived, not re-chosen.** iitpkd.ac.in's theme CSS was
+pulled again and counted: `#e94c26` 22 times, then `#fff`, `#333`, `#ededed`,
+`#1a1a1a`, `font-family: 'Source Serif Pro'` on headings. That is already what
+`:root` holds. Nothing in the token table further down this file changed.
+
+### The type scale - five named steps
+
+In `@theme inline` (`app/globals.css`), used through Tailwind as
+`text-display`, `text-title`, `text-section`, `text-card`, `text-meta`:
+
+| Step | Size | For |
+| --- | --- | --- |
+| `display` | `clamp(2rem, 1.35rem + 2.1vw, 3rem)` | A page's one `<h1>` (`PageHeader`) |
+| `title` | `clamp(1.75rem, 1.35rem + 1.5vw, 2.5rem)` | A public section's `<h2>` (`SectionHead`), the guest-house names |
+| `section` | `1.3125rem` | A console list's `<h2>` (`SectionHeading`) |
+| `card` | `1.0625rem` | `CardTitle` |
+| `meta` | `0.8125rem` | Small print |
+
+Body text is `text-base` / `text-sm`. Headings used to be one-off `clamp()`
+values written where they were used, which is how eight sizes of heading
+reached one page. **Add a step only by adding it here and to `TYPE_STEPS` in
+`lib/utils.ts`** - see the trap below.
+
+> **`cn()` will silently eat a new `text-*` size.** tailwind-merge classifies
+> an unknown `text-<word>` as a **colour**, so `cn("text-title", "text-ink")`
+> dropped the size as the losing half of a colour conflict and three home page
+> headings rendered at 16px with no error. `lib/utils.ts` builds `cn` with
+> `extendTailwindMerge` and registers the five names under `font-size`.
+
+### Two devices, both the institute's own
+
+| Utility | From iitpkd.ac.in | Used by |
+| --- | --- | --- |
+| `rule-title` | `h1.node-title { border-bottom: solid 1px #e94c26 }`, plus a 3px vermilion stub over the start of the rule | `PageHeader`, so every portal page title closes on it. It replaced a 2px **ink** rule - the same mark `Table` uses for its header row, so a page and a table in it opened identically |
+| `figure-serif` | `.counters span { font-family: 'Source Serif Pro' }` | Every figure meant to be compared: `SectionHeading`'s count, `DeskSummary`, the Approval Log's tiles |
+
+A third was written from its `.subtitle:after` (a short vermilion hairline
+under a label) and **deleted unused** - everywhere it would have gone already
+had a rule. Don't reintroduce it without a place for it.
+
+### What the primitives do now
+
+| Primitive | Change |
+| --- | --- |
+| `PageHeader` | `rule-title`; the caption is a tracked vermilion label, not a grey sentence |
+| `SectionHeading` | The count is a **serif figure**, vermilion on a `tone="alert"` list and quiet at zero, not a filled square tag; a hairline runs from the title to the far edge. **The rule, not a box, is what separates one list from the next** |
+| `EmptyState` | One quiet line on a left hairline (`py-2.5`), not a dashed box 90px tall. **22 of them were replaced across 16 files** - the manager's console alone stacked four between the top of the page and its first real row |
+| `Card` | No band-tinted header strip: the title sits over a hairline on the same white as the body. A long form had a grey bar every couple of hundred pixels |
+| `DeskSummary` | A ruled index, not seven tiles: label, leader rule, figure, on a 44px baseline. A zero is 13.5px grey, a live count the serif at 1.5rem. **The order is the caller's and never re-sorts on the count** - the desk reads it all day and a figure that moves is a figure to find again |
+
+### Density: a column that repeats itself is not a column
+
+- **`ReviewQueue`** (`/warden`, `/hod`, `/approvals`, `/iar`) has **no Status
+  column** - each of those pages lists exactly one status - and check-in and
+  check-out share one **Stay** cell with both instants. The table measures
+  1150px inside a 1150px container, so **Review, Forward and Reject all fit a
+  1440px page**; the Status column was what pushed them off it.
+- **`BookingDetails`** opens on one badge, not six. The status keeps its
+  colour and a **foreign national** keeps a mark (the guest house has to
+  report one); role, booking type, service type and the diet split are a line
+  of plain text. Same for the manager queue's Category cell and Users & Roles'
+  Role cell.
+- **The Approval Log's tiles** are one ruled band of six. Six divides into 2,
+  3 and 6, so no breakpoint orphans one; the active tile is ink-filled.
+- **`/availability`'s room list is a table.** A free room reads as a dash, not
+  "Free all week - available to book" twenty times.
+- **The allocation dialog renders `RoomGrid` first**, then `BookingDetails`.
+  The grid's own header carries the stay's period and "N of M requested" and
+  the description names the requester, so nothing has to be read before it.
+- **Users & Roles** puts name over email in one **Account** cell.
+
+### Before adding a wide table to the portal
+
+Measure it against its container, which is a two-line script in
+[22-running-and-testing.md](22-running-and-testing.md). Three tables were
+overflowing and hiding their own last column, which is where the actions are.
+
+### What this pass did not touch
+
+Every content rule from 26-30 Sep and 8-11 Oct: no figures, requester
+categories, approval chains, role names or photo captions on the public site;
+photographs contained in the layout; promise little; a rule the form enforces
+is not stated on the form; a house rule is not either; a form that stars a
+field says what the star means. Three page leads that restated their own
+titles were deleted (`/manager`, `/caretaker`, the kitchen day view), and the
+pay-at-checkout note became an inset line rather than a numbered card - the
+sentence is unchanged and still rendered.
 
 ## Promise less (30 Sep 2026, afternoon)
 

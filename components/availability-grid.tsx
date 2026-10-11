@@ -14,6 +14,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { AvailabilityCountsPanel } from "@/components/availability-counts";
 import {
@@ -41,6 +49,7 @@ import { instituteHour } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { segment, segmentGroup } from "@/components/segmented";
 import { type GuestHouse, type Room, type RoomOccupancySegment } from "@/lib/types";
+import { EmptyState } from "@/components/section-heading";
 
 interface Loaded {
   /** Which request this data answers - see `requestKey` below. */
@@ -152,9 +161,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
 
   if (guestHouses.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-        No guest houses have been set up yet.
-      </p>
+      <EmptyState>No guest houses have been set up yet.</EmptyState>
     );
   }
 
@@ -273,13 +280,9 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           )}
 
           {!range ? (
-            <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-              Pick a date to see room availability.
-            </p>
+            <EmptyState>Pick a date to see room availability.</EmptyState>
           ) : roomCount === 0 && !loading ? (
-            <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-              This guest house has no active rooms.
-            </p>
+            <EmptyState>This guest house has no active rooms.</EmptyState>
           ) : (
             <div className={cn("transition-opacity", loading && "opacity-60")}>
               {/* A requester is sent counts and no rooms at all (7 Oct 2026),
@@ -329,54 +332,72 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
               <CardDescription>Guest names are visible to guest house staff only.</CardDescription>
             )}
           </CardHeader>
-          <CardContent className="space-y-2">
-            {rooms.map((room) => {
-              const entry = daily?.get(room.id);
-              const status = roomRangeStatus(entry, range);
-              const roomSegments = entry?.segments ?? [];
-              return (
-                <div
-                  key={room.id}
-                  className="flex flex-wrap items-start gap-x-4 gap-y-2 rounded-lg border p-3"
-                >
-                  <div className="w-24 shrink-0">
-                    <p className="font-semibold">{room.room_number}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {room.room_type === "double_sharing" ? "Double sharing" : "Single"}
-                    </p>
-                  </div>
-                  <div className="w-28 shrink-0">
-                    {status === "vacant" ? (
-                      <Badge variant="secondary">Vacant</Badge>
-                    ) : status === "booked" ? (
-                      <Badge variant="destructive">Booked</Badge>
-                    ) : (
-                      <Badge variant="outline">Partly booked</Badge>
-                    )}
-                  </div>
-                  <div className="min-w-48 flex-1 space-y-1">
-                    {roomSegments.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Free all {period} - available to book.
-                      </p>
-                    ) : (
-                      roomSegments.map((s) => (
-                        <p key={s.booking_id} className="text-sm">
-                          <span className="font-medium">{formatDateTime(s.check_in)}</span>
-                          {" → "}
-                          <span className="font-medium">{formatDateTime(s.check_out)}</span>
-                          <span className="text-muted-foreground">
-                            {" "}
-                            · {s.booking_reference_id} · {describeSegmentStatus(s)}
-                            {s.requester_name && ` · ${s.requester_name}`}
-                          </span>
-                        </p>
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          {/* A table, not a card per room (11 Oct 2026).
+
+              Bageshri has twenty rooms and most weeks they are nearly all
+              free, so this was twenty bordered cards running 1100px down the
+              page, nineteen of them carrying the same sentence - "Free all
+              week - available to book." A free room now says nothing at all:
+              a dash in the last column and a quiet row, so the booked ones
+              are the only thing here with ink in them. */}
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Room</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>This {period}</TableHead>
+                  <TableHead className="w-full">Booked periods</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rooms.map((room) => {
+                  const entry = daily?.get(room.id);
+                  const status = roomRangeStatus(entry, range);
+                  const roomSegments = entry?.segments ?? [];
+                  const vacant = roomSegments.length === 0;
+                  return (
+                    <TableRow key={room.id} className={vacant ? "text-muted-foreground" : undefined}>
+                      <TableCell className="font-mono text-xs font-semibold text-ink">
+                        {room.room_number}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {room.room_type === "double_sharing" ? "Double sharing" : "Single"}
+                      </TableCell>
+                      <TableCell>
+                        {status === "vacant" ? (
+                          <span className="text-xs">Vacant</span>
+                        ) : (
+                          <Badge variant="tag" className={status === "booked" ? "tag-red" : "tag-yellow"}>
+                            {status === "booked" ? "Booked" : "Partly booked"}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-normal">
+                        {vacant ? (
+                          <span aria-label={`Free all ${period} - available to book`}>-</span>
+                        ) : (
+                          <ul className="space-y-1">
+                            {roomSegments.map((s) => (
+                              <li key={s.booking_id} className="text-meta text-foreground">
+                                <span className="font-medium">{formatDateTime(s.check_in)}</span>
+                                {" → "}
+                                <span className="font-medium">{formatDateTime(s.check_out)}</span>
+                                <span className="text-muted-foreground">
+                                  {" "}
+                                  · {s.booking_reference_id} · {describeSegmentStatus(s)}
+                                  {s.requester_name && ` · ${s.requester_name}`}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

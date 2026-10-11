@@ -16,7 +16,7 @@ import { AwaitingPaymentTable } from "@/components/awaiting-payment";
 import { MissedTable } from "@/components/missed-requests";
 import type { AwaitingPaymentRow } from "@/lib/invoice";
 import { Badge } from "@/components/ui/badge";
-import { SectionHeading } from "@/components/section-heading";
+import { EmptyState, SectionHeading } from "@/components/section-heading";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -108,7 +108,7 @@ export function ManagerQueue({
   const pendingRooms = pending.filter((b) => b.service_type !== "meals_only");
   const pendingMeals = pending.filter((b) => b.service_type === "meals_only");
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <DeskSummary
         figures={[
           { label: "Checking out today", count: checkoutsToday.length, anchor: "checkouts" },
@@ -172,12 +172,11 @@ export function ManagerQueue({
         <SectionHeading
           title="Incoming room requests"
           count={pendingRooms.length}
-          description="Allocating rooms is what approves the request."
+          // Nothing to explain about a list with nothing in it.
+          description={pendingRooms.length > 0 ? "Allocating rooms is what approves the request." : undefined}
         />
         {pendingRooms.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-            No requests waiting for allocation.
-          </p>
+          <EmptyState>No requests waiting for allocation.</EmptyState>
         ) : (
           <div className="overflow-x-auto rounded-lg border">
             <Table>
@@ -255,9 +254,7 @@ export function ManagerQueue({
           count={current.length}
         />
         {current.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-            Nobody is staying at this guest house right now.
-          </p>
+          <EmptyState>Nobody is staying at this guest house right now.</EmptyState>
         ) : (
           <StaysTable bookings={current} isManager />
         )}
@@ -298,9 +295,7 @@ export function ManagerQueue({
           count={upcoming.length}
         />
         {upcoming.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-            No upcoming stays for this guest house.
-          </p>
+          <EmptyState>No upcoming stays for this guest house.</EmptyState>
         ) : (
           <StaysTable bookings={upcoming} isManager />
         )}
@@ -383,10 +378,11 @@ function MealRequestRow({ booking }: { booking: BookingWithDetails }) {
         <span className="block text-xs text-muted-foreground">Head: {describeDebit(booking)}</span>
         <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>
       </TableCell>
-      <TableCell>
-        <Badge variant={booking.user_role === "official" ? "default" : "outline"}>
-          {ROLE_LABELS[booking.user_role]}
-        </Badge>
+      {/* Plain text: an official request is already marked by the saffron
+          rule and the tinted row, so a filled badge in every row said it
+          twice and put a pill on the others for nothing. */}
+      <TableCell className="text-meta whitespace-normal">
+        {ROLE_LABELS[booking.user_role]}
       </TableCell>
       <TableCell className="text-xs">
         <ul>
@@ -463,10 +459,8 @@ function ManagerRow({
         </span>
         <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>
       </TableCell>
-      <TableCell>
-        <Badge variant={booking.user_role === "official" ? "default" : "outline"}>
-          {ROLE_LABELS[booking.user_role]}
-        </Badge>
+      <TableCell className="text-meta whitespace-normal">
+        {ROLE_LABELS[booking.user_role]}
         {/* Who is paying is a different question from who asked, and the desk
             needs both - a staff member books officially one week and privately
             the next. */}
@@ -486,15 +480,22 @@ function ManagerRow({
                   the whole decision. */}
               <Button size="sm">Review &amp; Allocate</Button>
             </DialogTrigger>
+            {/* The grid first, the record under it (11 Oct 2026).
+                
+                This dialog exists to pick rooms, and the record came before
+                it: on a request with meals and a few guests the manager
+                scrolled past a meal table, a guest table and the approval
+                trail to reach the one control. The grid carries the stay's
+                period and "N of M requested" in its own header, and the
+                description names who it is for, so nothing needed to be read
+                first. Everything else is still here, below, for checking. */}
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
               <DialogHeader>
                 <DialogTitle>Allocate rooms - {booking.booking_reference_id}</DialogTitle>
                 <DialogDescription>
-                  Pick available rooms for the requested dates, then confirm to approve the booking.
+                  {booking.on_behalf_of_name ?? booking.requester.full_name} · {booking.guest_house.name}
                 </DialogDescription>
               </DialogHeader>
-              <BookingDetails booking={booking} showAlumniCard />
-              <Separator />
               <RoomGrid
                 booking={booking}
                 rooms={rooms}
@@ -503,6 +504,8 @@ function ManagerRow({
                 capacity={capacity}
                 bufferMinutes={bufferMinutes}
               />
+              <Separator />
+              <BookingDetails booking={booking} showAlumniCard />
             </DialogContent>
           </Dialog>
           <RejectDialog booking={booking} small />

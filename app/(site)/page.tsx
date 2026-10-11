@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Building2,
   ConciergeBell,
   Phone,
   Refrigerator,
@@ -68,12 +67,12 @@ export default async function HomePage() {
       <section aria-labelledby="hero-title" className="pt-[clamp(16px,3vw,40px)]">
         <Container>
           <div className="grid overflow-hidden rounded-lg border border-ink lg:grid-cols-12">
-            <div className="flex min-w-0 flex-col justify-between bg-ink px-[clamp(22px,4vw,56px)] py-[clamp(32px,5vw,64px)] lg:col-span-5">
+            <div className="flex min-w-0 flex-col justify-between bg-ink px-[clamp(22px,4vw,56px)] py-[clamp(32px,5vw,64px)] lg:col-span-6">
               <div>
                 <Label className="text-saffron">IIT Palakkad</Label>
                 <h1
                   id="hero-title"
-                  className="mt-5 text-[clamp(38px,4.7vw,64px)] leading-[1.02] font-semibold tracking-[-0.025em] text-white"
+                  className="mt-5 text-[clamp(2.375rem,1.5rem+2.6vw,3.5rem)] leading-[1.04] font-semibold tracking-[-0.024em] text-white"
                 >
                   Guest houses of IIT&nbsp;Palakkad
                 </h1>
@@ -96,10 +95,10 @@ export default async function HomePage() {
                 </a>
               </p>
             </div>
-            <div className="min-w-0 lg:col-span-7">
+            <div className="min-w-0 lg:col-span-6">
               <SitePhotoFrame
                 photo={HOME_PHOTOS.hero}
-                sizes="(min-width: 1024px) 700px, 100vw"
+                sizes="(min-width: 1024px) 620px, 100vw"
                 priority
                 className="aspect-[4/3] rounded-none lg:aspect-auto lg:h-full lg:min-h-[500px]"
               />
@@ -113,23 +112,22 @@ export default async function HomePage() {
         <section aria-labelledby="houses-title" className={SECTION}>
           <Container>
             <SectionHead id="houses-title" label="Accommodation" title="Our guest houses" />
-            <div className="mt-10 grid gap-5 md:grid-cols-2 lg:ml-[calc(25%+10px)]">
+            <div className="mt-9 grid gap-6 md:grid-cols-2">
               {houses.map((house) => (
                 <article
                   key={house.id}
                   className="flex flex-col overflow-hidden rounded-lg border border-border-strong bg-white"
                 >
-                  <div className="flex items-center justify-between gap-4 border-b border-border bg-band px-[clamp(20px,2.6vw,32px)] py-3">
-                    <span className="flex items-center gap-2 text-[12px] font-semibold tracking-[0.18em] text-vermilion-deep uppercase">
-                      <Building2 aria-hidden className="size-4" strokeWidth={1.8} />
-                      Guest house
-                    </span>
-                    <span className="rounded-xs border border-border-strong bg-white px-2 py-0.5 text-[12.5px] font-semibold text-ink">
-                      {house.serves_meals ? "Rooms & dining" : "Rooms"}
-                    </span>
-                  </div>
+                  {/* No "GUEST HOUSE" strip (11 Oct 2026): the section above
+                      is headed "Our guest houses", so a label on each card
+                      saying so again was a tinted bar carrying nothing. What
+                      the card does have to say is whether the kitchen serves,
+                      and that is one line of type. */}
                   <div className="px-[clamp(20px,2.6vw,32px)] pt-7 pb-8">
-                    <h3 className="text-[clamp(30px,3vw,40px)] leading-[1.05] font-semibold tracking-[-0.018em] text-ink">
+                    <p className="mb-3 text-[12px] font-semibold tracking-[0.18em] text-vermilion-deep uppercase">
+                      {house.serves_meals ? "Rooms & dining" : "Rooms"}
+                    </p>
+                    <h3 className="text-title font-semibold text-ink">
                       {house.name}
                     </h3>
                     <p className="mt-3 text-[15.5px] leading-[1.65] text-body">{houseSummary(house)}</p>
@@ -152,11 +150,11 @@ export default async function HomePage() {
               between the cells (the 1px gap over a border-coloured ground).
               `amenities()` always returns six, so 1, 2 and 3 columns leave
               no empty cell showing the ground. */}
-          <ul className="mt-10 grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border-strong bg-border-strong sm:grid-cols-2 lg:ml-[calc(25%+10px)] lg:grid-cols-3">
+          <ul className="mt-9 grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border-strong bg-border-strong sm:grid-cols-2 lg:grid-cols-3">
             {amenities(houses).map((item) => {
               const Icon = AMENITY_ICONS[item.key] ?? ConciergeBell;
               return (
-                <li key={item.key} className="flex items-center gap-3.5 bg-white px-4 py-5">
+                <li key={item.key} className="flex items-center gap-4 bg-white px-6 py-6">
                   <Icon aria-hidden className="size-[22px] shrink-0 text-vermilion-deep" strokeWidth={1.5} />
                   <span className="text-[15.5px] font-medium text-ink">{item.label}</span>
                 </li>
@@ -177,7 +175,7 @@ export default async function HomePage() {
           />
           {/* Contained in the grid: one photograph across half the width and
               two rows, the rest beside it - no captions (the owner). */}
-          <ul className="mt-10 grid grid-cols-2 gap-3 sm:gap-4 lg:h-[clamp(420px,40vw,540px)] lg:grid-cols-12 lg:grid-rows-2">
+          <ul className="mt-9 grid grid-cols-2 gap-3 sm:gap-4 lg:h-[clamp(420px,40vw,540px)] lg:grid-cols-12 lg:grid-rows-2">
             {feature && (
               <li className="col-span-2 lg:col-span-6 lg:row-span-2">
                 <SitePhotoFrame
@@ -206,7 +204,7 @@ export default async function HomePage() {
           <div className="min-w-0 lg:col-span-5">
             <h2
               id="visit-title"
-              className="text-[clamp(28px,3.2vw,40px)] leading-tight font-semibold tracking-[-0.018em] text-ink"
+              className="text-title font-semibold text-ink"
             >
               Planning a visit?
             </h2>

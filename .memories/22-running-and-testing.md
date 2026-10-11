@@ -994,3 +994,71 @@ The club (and its council) has no **Faculty Advisor** named in Departments &
 Clubs → Faculty Advisors, or the one named is not a faculty account, or — on
 Supabase — migration 25 is not applied (every unit then reads as having no
 advisor). The club's own account says "nobody is set as yours yet".
+
+### A new `text-*` size does nothing, with no error (11 Oct 2026)
+
+Three section headings on the home page rendered at **16px** after being given
+the new `text-title` step. The CSS was right - `.text-title { font-size:
+clamp(1.75rem, …) }` was in the served stylesheet - and the class was simply
+not on the element.
+
+**Cause.** `cn()` is tailwind-merge, which classifies an unknown
+`text-<word>` as a **colour**. `cn("max-w-[22ch] text-title", "text-ink")`
+reads as two colours in conflict and keeps the last one, so the size is
+dropped before it ever reaches the DOM. `PageHeader` was unaffected only
+because its classes are a plain string literal, never passed through `cn()`.
+
+**Fix.** `lib/utils.ts` builds `cn` with `extendTailwindMerge` and registers
+the five step names under the `font-size` class group. **A new `--text-*` step
+has to be added to `TYPE_STEPS` there as well as to `app/globals.css`**, or it
+will work in some places and vanish in others.
+
+**How it was found.** Not by eye - the sizes are close enough to argue about
+in a screenshot. Ask the browser:
+
+```bash
+node -e 'import("./node_modules/playwright/index.mjs").then(async ({chromium}) => {
+  const b = await chromium.launch(); const p = await b.newPage({viewport:{width:1440,height:900}});
+  await p.goto("http://localhost:3000/", {waitUntil:"load"}); await p.waitForTimeout(2000);
+  console.log(await p.evaluate(() => [...document.querySelectorAll("h2")]
+    .map(el => el.textContent.slice(0,22) + " = " + getComputedStyle(el).fontSize).join("\n")));
+  await b.close(); });'
+```
+
+### A table hides its own last column (11 Oct 2026)
+
+The Assistant Warden's queue showed **Review** and half of **Forward**, and no
+Reject at all, on an ordinary 1440px screen. Nothing was broken: the table was
+wider than its `overflow-x-auto` container and the actions were off to the
+right, where nobody scrolls because nothing suggests there is anything there.
+
+**Cause.** Columns that cost width and carry nothing. The queue printed a
+**Status** column although `/warden` lists only `PENDING_WARDEN`, and
+check-in and check-out as two full datetimes. Users & Roles had the same
+shape with eight columns.
+
+**Fix.** Drop a column that repeats itself; put two related values in one
+cell (`In` / `Out`, name over email). See
+[14-public-site-and-ui.md](14-public-site-and-ui.md).
+
+**Measure it, do not judge it.** Every portal table against its own
+container, in one pass:
+
+```bash
+node -e 'import("./node_modules/playwright/index.mjs").then(async ({chromium}) => {
+  const b = await chromium.launch();
+  for (const [path, as] of [["/manager","gh-manager"],["/warden","warden-malhar"],["/history","gh-manager"]]) {
+    const ctx = await b.newContext({viewport:{width:1440,height:900}});
+    await ctx.addCookies([{name:"gh_mock_user",value:as,domain:"localhost",path:"/"}]);
+    const p = await ctx.newPage(); await p.goto("http://localhost:3000"+path,{waitUntil:"load"});
+    await p.waitForTimeout(2200);
+    console.log(path, await p.evaluate(() => [...document.querySelectorAll("table")]
+      .map(t => t.scrollWidth - t.closest("[data-slot=table-container]").clientWidth)));
+    await ctx.close();
+  }
+  await b.close(); });'
+```
+
+A positive number is a hidden column. Run it against a dev server started
+with `NEXT_PUBLIC_SUPABASE_URL= DEV_LOGIN=true npm run dev`, which is what
+makes the `gh_mock_user` cookie work.

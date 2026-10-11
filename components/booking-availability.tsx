@@ -29,6 +29,7 @@ import { instituteHour } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { segment, segmentGroup } from "@/components/segmented";
 import type { Room, RoomOccupancySegment } from "@/lib/types";
+import { EmptyState } from "@/components/section-heading";
 
 interface Loaded {
   /** Which request this data answers - see `requestKey` below. */
@@ -161,9 +162,7 @@ export function BookingAvailability({
 
   if (!guestHouseId || !date) {
     return (
-      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-        Pick a guest house and a check-in date to see which rooms are free.
-      </p>
+      <EmptyState>Pick a guest house and a check-in date to see which rooms are free.</EmptyState>
     );
   }
 
@@ -298,9 +297,7 @@ export function BookingAvailability({
       )}
 
       {!loading && !hasRooms && !loaded?.failed && (
-        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-          This guest house has no active rooms.
-        </p>
+        <EmptyState>This guest house has no active rooms.</EmptyState>
       )}
     </div>
   );

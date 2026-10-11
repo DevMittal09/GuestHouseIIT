@@ -3,10 +3,13 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 /**
- * A card, as a GOV.UK summary card is drawn (30 Sep 2026): an 8px bordered
- * box whose header sits in its own band-tinted strip above a hairline, so a
- * long form reads as a column of titled sections rather than floating boxes.
- * No ring, no shadow. A card without a header is a plain bordered box.
+ * A card: an 8px bordered box whose header is a title over a hairline.
+ *
+ * The header sat in its own band-tinted strip until 11 Oct 2026, which gave a
+ * long form - the booking form runs to seven sections - a grey bar every
+ * couple of hundred pixels, and made a page of cards read as one repeated
+ * shape. The title now does the work it was doing: set in the serif, over a
+ * hairline, on the same white as the body. No ring, no shadow.
  */
 function Card({
   className,
@@ -31,7 +34,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-header"
       className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 border-b border-border bg-band last:border-b-0 px-(--card-spacing) py-3.5 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] group-data-[size=sm]/card:py-2.5",
+        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 border-b border-border last:border-b-0 px-(--card-spacing) pt-4 pb-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] group-data-[size=sm]/card:pt-3 group-data-[size=sm]/card:pb-2.5",
         className
       )}
       {...props}
@@ -44,7 +47,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-title"
       className={cn(
-        "font-heading text-[1.1875rem] leading-snug font-semibold text-ink group-data-[size=sm]/card:text-base",
+        "flex items-center font-heading text-card font-semibold text-ink group-data-[size=sm]/card:text-base",
         className
       )}
       {...props}
@@ -90,7 +93,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-footer"
       className={cn(
-        "flex items-center border-t border-border bg-band p-(--card-spacing)",
+        "flex items-center border-t border-border bg-band/60 p-(--card-spacing)",
         className
       )}
       {...props}

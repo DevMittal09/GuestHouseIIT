@@ -10,6 +10,7 @@ import { checksOutOn, stayPhase } from "@/lib/workflow";
 import { awaitingPayment, awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/section-heading";
 
 export default async function CaretakerPage({
   searchParams,
@@ -24,9 +25,7 @@ export default async function CaretakerPage({
   const guestHouses = await store.listGuestHouses();
   if (guestHouses.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-        No guest houses configured yet - ask a developer to add one in the admin console.
-      </p>
+      <EmptyState>No guest houses configured yet - ask a developer to add one in the admin console.</EmptyState>
     );
   }
   const { gh } = await searchParams;
@@ -103,10 +102,7 @@ export default async function CaretakerPage({
             </Button>
           ) : undefined
         }
-      >
-        Who is in the building, who arrives next, and who leaves today. Room allocation and
-        approvals are handled by the Guest House Manager.
-      </PageHeader>
+      />
 
       {guestHouses.length > 1 && (
         <LinkTabs

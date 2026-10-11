@@ -84,12 +84,74 @@
   color: #594d00;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * The institute's own graphic devices (11 Oct 2026)
+ * ---------------------------------------------------------------------------
+ * Taken from iitpkd.ac.in's theme CSS rather than invented, so the portal is
+ * recognisably the same institute's and not a template in its colours:
+ *
+ *   h1.node-title  { border-bottom: solid 1px #e94c26; padding-bottom: 15px }
+ *   .counters span { font-family: 'Source Serif Pro'; font-size: 4.5em }
+ *
+ * One class each, so a page title and a figure are drawn the same way
+ * everywhere and a new page cannot invent a third.
+ */
+
+/* A page title closes on the institute's vermilion hairline, with a heavier
+   stub over its start so a working screen still opens on a firm edge. */
+@utility rule-title {
+  position: relative;
+  border-bottom: 1px solid var(--vermilion);
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    bottom: -2px;
+    width: 3.5rem;
+    height: 3px;
+    background-color: var(--vermilion);
+  }
+}
+
+/* Every figure the reader is meant to compare - a queue's count, rooms free,
+   a total - is set in the serif with tabular numerals, as the institute sets
+   its own counters. Figures read as figures; nothing else has to. */
+@utility figure-serif {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.012em;
+  font-optical-sizing: auto;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-heading: var(--font-source-serif), Georgia, serif;
+  /*
+   * The type scale, five named steps and nothing between them (11 Oct 2026).
+   * Headings used to be written as one-off `clamp()` values at the point of
+   * use, which is how eight different sizes of heading appeared on one page.
+   * A step is a decision about rank, so it is named: display for a page
+   * title, title for a section of the public site, section for a console's
+   * list, card for a card, meta for small print. Body text is `text-base`.
+   */
+  --text-display: clamp(2rem, 1.35rem + 2.1vw, 3rem);
+  --text-display--line-height: 1.05;
+  --text-display--letter-spacing: -0.022em;
+  --text-title: clamp(1.75rem, 1.35rem + 1.5vw, 2.5rem);
+  --text-title--line-height: 1.1;
+  --text-title--letter-spacing: -0.018em;
+  --text-section: 1.3125rem;
+  --text-section--line-height: 1.25;
+  --text-section--letter-spacing: -0.008em;
+  --text-card: 1.0625rem;
+  --text-card--line-height: 1.35;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.45;
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-vermilion: var(--vermilion);

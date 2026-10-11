@@ -15,7 +15,6 @@ import {
   type UserImportSummary,
 } from "@/app/actions/admin";
 import { RequiredFieldsNote } from "@/components/required-fields-note";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -258,8 +257,12 @@ export function UsersManager({
                   }
                 />
               </TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
+              {/* Name over email in one cell (11 Oct 2026), the way every
+                  requester cell in the portal is already set. Eight columns
+                  pushed Actions past the right edge of the page, so the two
+                  buttons every row exists for were reachable only by
+                  scrolling the table sideways. */}
+              <TableHead>Account</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Hostel</TableHead>
               <TableHead>Dept / Club</TableHead>
@@ -281,12 +284,16 @@ export function UsersManager({
                     onChange={() => toggle(p.id)}
                   />
                 </TableCell>
-                <TableCell className="font-medium">{p.full_name}</TableCell>
-                <TableCell className="text-muted-foreground">{p.email}</TableCell>
                 <TableCell>
-                  <Badge variant={p.role === "developer" ? "default" : "secondary"}>
-                    {ROLE_LABELS[p.role]}
-                  </Badge>
+                  <span className="font-medium">{p.full_name}</span>
+                  <span className="block text-xs text-muted-foreground">{p.email}</span>
+                </TableCell>
+                <TableCell className="text-meta whitespace-normal">
+                  {p.role === "developer" ? (
+                    <span className="font-semibold text-ink">{ROLE_LABELS[p.role]}</span>
+                  ) : (
+                    ROLE_LABELS[p.role]
+                  )}
                 </TableCell>
                 <TableCell>{p.hostel_name ?? "-"}</TableCell>
                 <TableCell>{p.department_or_club ?? "-"}</TableCell>

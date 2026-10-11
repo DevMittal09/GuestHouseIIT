@@ -29,6 +29,7 @@ import {
 import { formatDateTime } from "@/lib/format";
 import { MAIL_EVENT_LABELS, MAIL_STATUSES, type MailStatus } from "@/lib/mail/types";
 import { segment, segmentGroup } from "@/components/segmented";
+import { EmptyState } from "@/components/section-heading";
 
 /**
  * The mail log.
@@ -221,11 +222,9 @@ export function MailOutbox() {
           )}
 
           {data && data.rows.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-              {total === 0
+            <EmptyState>{total === 0
                 ? "No mail has been queued yet. Submit or approve a booking and it will appear here."
-                : "No messages with that status."}
-            </p>
+                : "No messages with that status."}</EmptyState>
           ) : (
             <div className="overflow-x-auto">
               <Table>

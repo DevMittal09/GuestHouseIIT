@@ -56,7 +56,7 @@ async function Details({ user, title, raisedBy }: { user: Profile; title: string
           {details.copyTo && <CopyToField copyTo={details.copyTo} />}
         </dl>
         {details.sample && (
-          <p className="border border-dashed border-border-strong bg-band px-4 py-3 text-[13px] leading-normal text-muted-foreground">
+          <p className="border border-dashed border-border-strong bg-band px-4 py-3 text-meta leading-normal text-muted-foreground">
             Demo build - these are sample records until the institute&apos;s academic database is
             connected.
           </p>
@@ -89,7 +89,7 @@ function describeSource(user: Profile, details: AcademicDetails): string | null 
 function Field({ row }: { row: DetailRow }) {
   return (
     <div className="grid min-w-0 gap-x-4 gap-y-0.5 py-2.5 @md:grid-cols-[minmax(8rem,34%)_1fr]">
-      <dt className="text-[13px] font-semibold text-muted-foreground">{row.label}</dt>
+      <dt className="text-meta font-semibold text-muted-foreground">{row.label}</dt>
       <dd className="break-words text-ink">
         {row.value ?? <span className="text-muted-foreground">Not on record</span>}
       </dd>
@@ -100,7 +100,7 @@ function Field({ row }: { row: DetailRow }) {
 function CopyToField({ copyTo }: { copyTo: CopyTo }) {
   return (
     <div className="grid min-w-0 gap-x-4 gap-y-0.5 py-2.5 @md:grid-cols-[minmax(8rem,34%)_1fr]">
-      <dt className="text-[13px] font-semibold text-muted-foreground">Copy to</dt>
+      <dt className="text-meta font-semibold text-muted-foreground">Copy to</dt>
       <dd className="break-words text-ink">
         {copyTo.entries.length === 0 ? (
           <span className="font-normal text-muted-foreground">{copyTo.emptyNote}</span>

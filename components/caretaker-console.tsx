@@ -4,7 +4,7 @@ import { CheckoutsToday } from "@/components/checkouts-today";
 import { StaysTable } from "@/components/stays-table";
 import { AwaitingPaymentTable } from "@/components/awaiting-payment";
 import type { AwaitingPaymentRow } from "@/lib/invoice";
-import { SectionHeading } from "@/components/section-heading";
+import { EmptyState, SectionHeading } from "@/components/section-heading";
 import { DeskSummary } from "@/components/desk-summary";
 import type { BookingWithDetails } from "@/lib/types";
 
@@ -69,9 +69,7 @@ export function CaretakerConsole({
           count={current.length}
         />
         {current.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-            Nobody is staying at this guest house right now.
-          </p>
+          <EmptyState>Nobody is staying at this guest house right now.</EmptyState>
         ) : (
           <StaysTable bookings={current} />
         )}
@@ -110,9 +108,7 @@ export function CaretakerConsole({
           count={upcoming.length}
         />
         {upcoming.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-            No upcoming stays for this guest house.
-          </p>
+          <EmptyState>No upcoming stays for this guest house.</EmptyState>
         ) : (
           <StaysTable bookings={upcoming} />
         )}

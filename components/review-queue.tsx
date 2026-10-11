@@ -29,8 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
-import { StatusBadge } from "@/components/status-badge";
-import { SectionHeading } from "@/components/section-heading";
+import { EmptyState, SectionHeading } from "@/components/section-heading";
 import { lapsedError } from "@/lib/workflow";
 import type { StudentRecordPanel } from "@/lib/academic/family";
 import type { BookingWithDetails } from "@/lib/types";
@@ -60,9 +59,7 @@ export function ReviewQueue({
     return (
       <section>
         {heading}
-        <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-          {emptyMessage}
-        </p>
+        <EmptyState>{emptyMessage}</EmptyState>
       </section>
     );
   }
@@ -76,11 +73,23 @@ export function ReviewQueue({
             <TableHead>Reference</TableHead>
             <TableHead>Requester</TableHead>
             <TableHead>Guest House</TableHead>
-            <TableHead>Check-in</TableHead>
-            <TableHead>Check-out</TableHead>
+            {/* Check-in and check-out in one cell, each with its time
+                (11 Oct 2026). Two columns of full datetimes were a third of
+                the table's width, and with Actions on the end of it the
+                Reject button sat past the right edge of the page. Nothing is
+                lost: both instants are still printed, one above the other. */}
+            <TableHead>Stay</TableHead>
             <TableHead>Guests</TableHead>
             <TableHead>Rooms</TableHead>
-            <TableHead>Status</TableHead>
+            {/* No Status column (11 Oct 2026). Every queue that renders this
+                table lists exactly one status - a warden's holds only
+                PENDING_WARDEN, an HOD's only PENDING_HOD - so the column
+                repeated "Pending Assistant Warden Review" down every row and
+                said nothing. At 1440px it was also what pushed Forward and
+                Reject off the right edge, so an approver had to scroll
+                sideways to reach the two buttons the page exists for. The
+                heading above says what the list is; a row that has run out of
+                time still says so. */}
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -145,16 +154,19 @@ function ReviewRow({
         <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>
       </TableCell>
       <TableCell>{booking.guest_house.name}</TableCell>
-      <TableCell>{formatDateTime(booking.check_in)}</TableCell>
-      <TableCell>{formatDateTime(booking.check_out)}</TableCell>
+      <TableCell className="text-meta leading-snug">
+        <span className="block">
+          <span className="text-muted-foreground">In</span> {formatDateTime(booking.check_in)}
+        </span>
+        <span className="block">
+          <span className="text-muted-foreground">Out</span> {formatDateTime(booking.check_out)}
+        </span>
+      </TableCell>
       <TableCell>
         {booking.guests.length}
         <FamilyBadge panel={studentRecord} />
       </TableCell>
       <TableCell>{booking.rooms_requested}</TableCell>
-      <TableCell>
-        <StatusBadge status={booking.status} />
-      </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <Dialog open={detailOpen} onOpenChange={setDetailOpen}>

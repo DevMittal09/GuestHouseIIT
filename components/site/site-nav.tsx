@@ -67,7 +67,7 @@ export function NavBar({
               className={cn(
                 "relative flex shrink-0 items-center whitespace-nowrap transition-colors duration-200 focus-visible:-outline-offset-2",
                 dark
-                  ? "px-[clamp(9px,1.4vw,16px)] py-3.5 text-[13px] font-semibold tracking-[0.08em] text-white uppercase hover:bg-ink-soft hover:text-white"
+                  ? "px-[clamp(9px,1.4vw,16px)] py-3.5 text-meta font-semibold tracking-[0.08em] text-white uppercase hover:bg-ink-soft hover:text-white"
                   : service
                     ? cn(
                         "px-[clamp(8px,1.1vw,14px)] pt-4 pb-[14px] text-[15px] font-semibold",

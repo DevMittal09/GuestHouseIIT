@@ -9,15 +9,9 @@ import { updateBookingLifecycle } from "@/app/actions/bookings";
 import { InvoiceDialog } from "@/components/invoice-dialog";
 import { settlesAtCheckOut } from "@/lib/invoice";
 import { StatusBadge } from "@/components/status-badge";
+import { SectionHeading, EmptyState } from "@/components/section-heading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -52,44 +46,32 @@ export function CheckoutsToday({
   isManager?: boolean;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex flex-wrap items-center gap-2">
-          Checking out today
-          <Badge variant={bookings.length > 0 ? "default" : "secondary"} className="align-middle">
-            {bookings.length}
-          </Badge>
-        </CardTitle>
-        <CardDescription>Rooms due back today, earliest first.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {bookings.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border-strong bg-band/40 px-6 py-8 text-center text-sm text-muted-foreground">
-            Nobody is due to check out today.
-          </p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Check-out</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Guest</TableHead>
-                  <TableHead>Rooms</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {bookings.map((b) => (
-                  <CheckoutRow key={b.id} booking={b} nowIso={nowIso} isManager={isManager} />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <section>
+      <SectionHeading title="Checking out today" count={bookings.length} />
+      {bookings.length === 0 ? (
+        <EmptyState>Nobody is due to check out today.</EmptyState>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Check-out</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Guest</TableHead>
+                <TableHead>Rooms</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {bookings.map((b) => (
+                <CheckoutRow key={b.id} booking={b} nowIso={nowIso} isManager={isManager} />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </section>
   );
 }
 

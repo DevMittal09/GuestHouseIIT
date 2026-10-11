@@ -145,7 +145,7 @@ export function LoginForm({
 
         {googleSignIn !== "none" && (
           <>
-            <div className="my-6 flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden="true">
+            <div className="my-6 flex items-center gap-3 text-meta text-muted-foreground" aria-hidden="true">
               <span className="h-px flex-1 bg-border" />
               or
               <span className="h-px flex-1 bg-border" />
@@ -173,7 +173,7 @@ export function LoginForm({
         Everything below is for development and demos, and goes when real
         authentication lands - see .memories/03-roadmap.md item 1.
       */}
-      <div className="mt-8 rounded-[6px] border border-dashed border-border-strong px-4 py-3 text-center text-[13px] leading-normal text-muted-foreground">
+      <div className="mt-8 rounded-[6px] border border-dashed border-border-strong px-4 py-3 text-center text-meta leading-normal text-muted-foreground">
         Demo build -{" "}
         {sampleAccount ? (
           <>
