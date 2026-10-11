@@ -57,6 +57,26 @@ export function isOfficeRole(role: Role): boolean {
   return OFFICE_ROLES.includes(role);
 }
 
+/**
+ * Whether this requester is **asked** how their booking is approved.
+ *
+ * An office chooses Direct or Requires HOD approval - but only where there is
+ * somebody to give that approval (11 Oct 2026, the office). The Director's
+ * Office has no HOD, so "Requires HOD approval" sent the request straight to
+ * the manager anyway (`routeFor`'s `hasHodApprover`) and the option explained
+ * itself with "Nobody is set as HOD for your office yet". A question with one
+ * real answer is not put: the form withholds the card and `createBooking`
+ * records **Direct** whatever arrived, the same way a personal booking is
+ * recorded against Personal Funds without being asked.
+ */
+export function asksOfficeApproval(
+  role: Role,
+  service: ServiceType = "room",
+  hasHodApprover = true
+): boolean {
+  return isOfficeRole(role) && service !== "meals_only" && hasHodApprover;
+}
+
 /** What routing needs beyond the role and the service. */
 export interface RoutingContext {
   bookingType?: string;

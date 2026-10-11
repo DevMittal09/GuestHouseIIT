@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { reviewBooking } from "@/app/actions/bookings";
 import { BookingDetails } from "@/components/booking-details";
+import { RequiredFieldsNote } from "@/components/required-fields-note";
 import { FamilyBadge, StudentRecordCheck } from "@/components/student-record-check";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -241,10 +242,9 @@ export function RejectDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Reject {booking.booking_reference_id}</DialogTitle>
-          <DialogDescription>
-            The requester will see this justification. A reason is mandatory.
-          </DialogDescription>
+          <DialogDescription>The requester will see this justification.</DialogDescription>
         </DialogHeader>
+        <RequiredFieldsNote />
         <div className="space-y-2">
           <Label htmlFor={`reason-${booking.id}`}>Rejection reason *</Label>
           <Textarea

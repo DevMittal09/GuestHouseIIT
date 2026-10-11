@@ -41,7 +41,7 @@ every table in `.local-db.json` and self-heals old files.
   `{"veg": n, "non_veg": n}`, adding up to the booking's head count. Null on a
   booking with no meals and on every row written before 1 Oct 2026.
 - `meal_guest_count` (migration 11) — number of guests for `meals_only` bookings.
-- `pets_policy_acknowledged` (migration 11) — true if the requester acknowledged the no pets policy.
+- `pets_policy_acknowledged` (migration 11) — true if the requester ticked the no-pets box. **Always false on anything booked since the tick box was withdrawn** (19 Sep 2026 - the form stopped sending the field); the notice it replaced came off the form on 11 Oct 2026 and the column is kept for the rows that have it. The history CSV reads it as "Not asked".
 - `has_foreign_national` (migration 11) — derived from guests' citizenship, used for quick filtering.
 - `created_by`, `on_behalf_of_name`, `on_behalf_of_email`, `on_behalf_of_phone` (migration 11) — for bookings created by a manager on behalf of someone else.
 - `rejection_reason`, `alumni_id_url`.

@@ -67,6 +67,7 @@ import {
   lapsedError,
   canUpdateLifecycle,
   approvalStagesFor,
+  asksOfficeApproval,
   hodStageMissing,
   initialStatusFor,
   isOfficeRole,
@@ -182,6 +183,14 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       lookup.status === "found" ? lookup.record : null,
       config.relationship_options
     );
+    /**
+     * Whether anybody other than whoever is submitting gives this requester
+     * HOD approval. Read once, here: the schema needs it to know whether an
+     * office is asked how its booking is approved, and the route below needs
+     * it to know whether the HOD stage exists at all.
+     */
+    const hasHodApprover =
+      hodApproversFor(requester, bookingContext.units).filter((id) => id !== user.id).length > 0;
     const parsed = bookingPayloadSchema(config, {
       mealsAvailable,
       requesterEmail: requester.email,
@@ -189,6 +198,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       debitHeads: bookingContext.debitHeads,
       projectIds: bookingContext.projects.map((p) => p.id),
       guestNames,
+      hasHodApprover,
     }).safeParse(JSON.parse(rawPayload));
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid form data" };
@@ -401,13 +411,21 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     // office right now - read from the console, never the requester. The
     // person raising a club's booking is never its HOD stage either: they
     // cannot approve what they raised.
-    const officeApproval = isOfficeRole(requester.role) && wantsRooms ? payload.office_approval : null;
+    //
+    // An office with no HOD is not asked (11 Oct 2026): the question has one
+    // answer, so Direct is recorded whatever the payload carried rather than
+    // the submission being refused for a choice the form did not offer.
+    const officeApproval =
+      !isOfficeRole(requester.role) || !wantsRooms
+        ? null
+        : asksOfficeApproval(requester.role, payload.service_type, hasHodApprover)
+          ? payload.office_approval
+          : "direct";
     const routing = {
       bookingType: payload.booking_type,
       staffCategory: requester.staff_category ?? null,
       officeApproval,
-      hasHodApprover:
-        hodApproversFor(requester, bookingContext.units).filter((id) => id !== user.id).length > 0,
+      hasHodApprover,
       raisedByFacultyInCharge: club !== null,
     };
     const status = initialStatusFor(requester.role, payload.service_type, routing);

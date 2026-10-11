@@ -133,11 +133,12 @@ its form is not in the Form Builder and every guest field is required.
 
 | # | Section | Who sees it | Mandatory? |
 | --- | --- | --- | --- |
+| — | **"Fields marked with * are mandatory."** (`RequiredFieldsNote`, 11 Oct 2026) — above the first starred label, and in every other form that stars a field: Users & Roles, the rejection dialog | Everyone | — |
 | 1 | **Booking as** — Yourself / Faculty Advisor — each council or club | Professors named Faculty Advisor | Choosing one switches whose form it is |
 | 2 | **Requester details** (academic record, read-only, with its Copy-to line **only when there is somebody to copy** — 9 Oct 2026; no caption when the record is found, a line saying so when it falls back to the profile) | Everyone | — (never stored) |
 | 3 | **Type of booking** — Official / Personal / On behalf of an alumnus | Only roles with more than one option: Employee (Official default, Personal), IAR Office (Official, Alumni), GH Manager (Official, Alumni) | Yes; others record their single type silently |
 | 4 | **What to book** — Room booking / Room + Meals / Meals only | When a guest house the role may book serves meals | Yes. Meals only: Employee, Official, IAR Office, GH Manager |
-| 5 | **Approval** — Direct / Requires HOD approval | Offices (`official`, `iar_cell`), room bookings | **Yes** for offices; refused for anyone else |
+| 5 | **Approval** — Direct / Requires HOD approval | Offices (`official`, `iar_cell`), room bookings — **and only where an HOD is set for the office** (11 Oct 2026, `asksOfficeApproval`): with nobody to forward to, both answers enter at the manager, so the card is withheld and `createBooking` records Direct. The **Director's Office** has no HOD | **Yes** where it is asked; refused for anyone else |
 | 6 | **Debitable head** | **Not a personal booking at all** (7 Oct 2026 — the money is the requester's own, so the question is not put and the server records Personal Funds). Shown, not asked, when a role has only one. A personal **stay** gets a **Payment** card instead: "An invoice will be generated and can be settled at the time of checkout. Multiple payment options are available at the guest house." A personal **meal** booking gets no card - nobody checks out | **Yes**, where it is asked |
 | 6a | Project — **number and title, typed** into the details box beside the head (1 Oct 2026; it was a dropdown of the Projects list) | Head = Project | **Yes** |
 | 6b | Project sub-head (text, ≤ 120) | Head = Project | Optional; refused with any other head |
@@ -154,7 +155,7 @@ its form is not in the Form Builder and every guest field is required.
 | 14 | **Meals only** — a list of dates, each with its meals ("Add another date", **lunch ticked**), the number of people as a **typed box with − / + steppers** (`QuantityInput`, 9 Oct 2026 — it was a 1…30 dropdown from 1 Oct), and the vegetarian / non-vegetarian split in two boxes of the same kind | Meals only | Count **1–30** (the kitchen's limit per sitting, a Setting — the stepper's max, the schema's max, and `createBooking`'s check of the sitting), at least one meal, a split adding up to the count |
 | 15 | **Additional information** (custom fields) | Whatever the Form Builder added for the role | As configured |
 | 16 | **Copy to** — email rows, "Add another email" | Everyone | Optional, **at most 25**; pre-filled with the council secretary's mailbox when a Faculty Advisor books |
-| 17 | Pets notice ("Pets are not allowed…") | **Room bookings only** (1 Oct 2026 — nobody stays on a meal booking) | Displayed only — the tick box was removed |
+| 17 | ~~Pets notice~~ — **off the form** (11 Oct 2026, the office: "only required in the guidelines no need to show it here"). It is a house rule, not a rule the form enforces, so it keeps its other two homes: the Guidelines page ("During your stay") and the **"Pets" line in every booking mail**. It was a room-booking-only card from 1 Oct 2026, and displayed-only (no tick box) before that | — | — |
 | 18 | **Privacy consent** tick | Everyone | **Yes** |
 | 18a | **Confirm your meal booking** — kitchen, people, preferences, each day and its sittings, who pays, remarks | Meals only | Read-only, live |
 | 18b | **Rates** — what this guest house charges, from the office's own rate sheet (7 Oct 2026): room per day, extra bed per day, and each meal where the kitchen serves them — **the meals alone on a dining booking** (9 Oct 2026, `previewItemsFor(servesMeals, service)`: there is no room on one to charge for). Resolved through the **same function the invoice prices from**, so the figure quoted is the figure charged; an unpriced charge reads "Not published". **The table and nothing beside it** — the paragraph about rates in force, GST and night-by-night pricing is on the Guidelines page | Everyone | Read-only |
@@ -236,10 +237,10 @@ can never be charged to.
 | Employee — faculty, official | Official | Room, Room + Meals, Meals only | HOD → GH Manager (meals only: GH Manager) | PDF, Project, Department, Special Budget, Personal — "all funds except Institute Grant, Alumni, Student Fund and Hostel" |
 | Employee — staff (non-faculty), official | Official | same | same | **Personal Funds** |
 | Employee — personal | Personal | same | GH Manager | **Not asked** (7 Oct 2026): Personal Funds, recorded by the server |
-| Official — officer office | Official (not asked) | same | Direct → GH Manager, or its own head → GH Manager | Institute Grant, Department, Special Budget, Student Fund, Hostel Funds, Alumni Fund — **then narrowed to this office's own row** (below) |
-| Official — department office | Official (not asked) | same | Direct, or the parent department's HOD → GH Manager | the same six as a category, **then narrowed the same way** |
+| Official — officer office | Official (not asked) | same | Direct → GH Manager, or its own head → GH Manager — **not asked where its unit has no head** (the Director's Office; recorded as Direct) | Institute Grant, Department, Special Budget, Student Fund, Hostel Funds, Alumni Fund — **then narrowed to this office's own row** (below) |
+| Official — department office | Official (not asked) | same | Direct, or the parent department's HOD → GH Manager — asked, since the department has an HOD | the same six as a category, **then narrowed the same way** |
 | Club, council or fest (by its Faculty Advisor) | Official (not asked) | Room, Room + Meals | **GH Manager directly** | **Student Fund, Special Budget** |
-| IAR Office | Official / Alumni | Room, Room + Meals, Meals only | Direct, or its head → GH Manager | Official: **Special Budget, Alumni Fund** (`iar`'s row); Alumni: **Alumni Fund, Special Budget** |
+| IAR Office | Official / Alumni | Room, Room + Meals, Meals only | Direct, or its head → GH Manager — not asked while it has no head | Official: **Special Budget, Alumni Fund** (`iar`'s row); Alumni: **Alumni Fund, Special Budget** |
 | IAR Student Cell | Alumni (not asked) | Room, **Bageshri only and no meals** (7 Oct 2026 — every alumni booking, whoever raises it) | IAR Office → GH Manager | **Alumni Fund, Special Budget** |
 | GH Manager at the desk | Official / Alumni | Room, Room + Meals, Meals only | GH Manager (its own queue) | **All nine** (dining: the same less Project) |
 

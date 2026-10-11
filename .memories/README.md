@@ -59,16 +59,16 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwright.
 **Node 20** via nvm; the machine default is 18.
 
-**Status, 10 Oct 2026.** Feature-complete for every workflow specified; taken
-through a ten-phase production-readiness programme and ten rounds of the
+**Status, 11 Oct 2026.** Feature-complete for every workflow specified; taken
+through a ten-phase production-readiness programme and eleven rounds of the
 office's corrections. **Not deployed for real use** — everything that first
 deployment needs is in [04-production.md](04-production.md), and the gates are
 [03-roadmap.md](03-roadmap.md) §1.
 
 **Numbers.** 30 migrations · 7 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
-18 demo personas · 6 demo bookings · 23 real rooms · 451 unit tests ·
-36 end-to-end journeys · 14 console sections.
+18 demo personas · 6 demo bookings · 23 real rooms · 462 unit tests ·
+38 end-to-end journeys · 14 console sections.
 
 ---
 
@@ -183,7 +183,7 @@ actually lives").
 | --- | --- |
 | Student | Books family (personal), **Bageshri only and no meals**, parents taken from their academic record → **Assistant Warden** of their hostel → manager |
 | Faculty / staff (`employee`) | Official → **HOD** → manager; personal → manager; meals only; **as Faculty Advisor** of a council or club when named in the console → straight to the manager |
-| Official (whitelisted office) | Direct → manager, or **Requires HOD approval**; exempt from the booking window and the stay cap |
+| Official (whitelisted office) | Direct → manager, or **Requires HOD approval** - asked only where an HOD is set for the office; exempt from the booking window and the stay cap |
 | Club / fest / council account | **Cannot book** — its Faculty Advisor books for it; it sees the bookings and gets the mail |
 | IAR Student Cell | Books **for an alumnus** only → **IAR Office** → manager |
 | IAR Office | Books (official / alumni) **and** approves the Student Cell |
@@ -209,7 +209,9 @@ already booked. A **turnaround buffer** of 4 h separates stays. A student's
 no ID. The form shows **the rates** and **how many rooms are free** — the
 room-by-room chart is the desk's. **The form does not state the rules it
 enforces** (9 Oct 2026): those belong on the Guidelines page, in the error when
-it fires, or in the control itself. Invoices charge **GST 18% on rooms, 5% on
+it fires, or in the control itself - **nor the house rules it does not**
+(11 Oct 2026: the pets notice is the Guidelines' and the mail's). What it does
+say is that **"Fields marked with * are mandatory."** Invoices charge **GST 18% on rooms, 5% on
 food**, each on its own subtotal, lettered up to **Grand Total (A+B+C+D)**,
 settled by **UPI or account transfer**; a **personal stay is paid before the
 guest leaves**. A request nobody decides before its check-in is marked

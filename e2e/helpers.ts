@@ -24,6 +24,10 @@ export const ACCOUNTS = {
   developer: { uid: "developer", password: "Developer@2026", name: "Portal Developer" },
   iarStudentCell: { uid: "alumnicell", password: "AlumniCell@2026", name: "IAR Student Cell" },
   iarOffice: { uid: "iar", password: "IarOffice@2026", name: "IAR Office" },
+  // Two offices that differ in one thing: the Director's Office has no HOD,
+  // the CSE Department Office answers to the CSE HOD (11 Oct 2026).
+  directorOffice: { uid: "admin", password: "Director@2026", name: "Director's Office" },
+  departmentOffice: { uid: "cse.office", password: "CseOffice@2026", name: "CSE Department Office" },
 } as const;
 
 /** A 1×1 PNG that passes the upload sniffer, for guest ID documents. */

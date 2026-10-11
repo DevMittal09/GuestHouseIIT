@@ -76,7 +76,9 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   await expect(page.getByRole("heading", { name: /Meal|Dining/i }).first()).toBeVisible();
 
   // No room, no guest list - a head count, the days and each person's own
-  // preference. No pets notice either (1 Oct 2026): nobody stays.
+  // preference. The pets notice is off every booking form since 11 Oct 2026
+  // (it is a house rule, so the Guidelines state it); it came off a dining
+  // booking first, on 1 Oct, because nobody stays on one.
   await expect(page.locator('[name="rooms.0.guests.0.name"]')).toHaveCount(0);
   await expect(page.getByText(/pets are not/i)).toHaveCount(0);
 

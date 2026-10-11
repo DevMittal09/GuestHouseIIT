@@ -196,6 +196,12 @@ contract. A club with none of its own takes its council's.
 - **Chooses per booking:** **Direct** (straight to the GH Manager) or
   **Requires HOD approval** (its own head for an officer office; the parent
   department's HOD for a department office). Stored on the booking.
+  **Only where that HOD exists** (11 Oct 2026, `asksOfficeApproval`): with
+  nobody set as the head of its HOD unit both answers enter at the manager, so
+  the Approval card is not shown at all and the booking is recorded as Direct.
+  The **Director's Office** is the case the office reported - no head, and the
+  option used to carry the hint "Nobody is set as HOD for your office yet".
+  Appointing a head in Departments & Clubs brings the question back.
 - **Debitable heads:** one list for both classes of office as a *category*
   (8 Oct 2026) - Institute Grant, Department Budget, Special Budget, Student
   Fund, Hostel Funds, Alumni Fund - **then narrowed to this office's own row**
@@ -238,7 +244,8 @@ secretary's mailbox, e.g. `sec_arts@`).
 #### IAR Office (books *and* approves)
 
 - **Books:** Official or On behalf of an alumnus; meals only too; Direct or
-  Requires HOD approval (it is an office). Its own requests never go to
+  Requires HOD approval (it is an office) - **not asked while its unit has no
+  head**, as for any office (11 Oct 2026). Its own requests never go to
   `PENDING_IAR` — that would be approving itself.
 - **Approves:** the IAR Student Cell's requests at **IAR Queue** (`/iar`),
   with the alumni ID card shown.
@@ -485,8 +492,10 @@ offer differ (`lib/debit-heads.ts`).
 
 ```mermaid
 flowchart LR
-  O[Office submits] --> C{Approval chosen on the form}
-  C -->|Direct| M[Pending GH Manager]
+  O[Office submits] --> A{Is an HOD set for the office?}
+  A -->|No - not asked, recorded as Direct| M[Pending GH Manager]
+  A -->|Yes| C{Approval chosen on the form}
+  C -->|Direct| M
   C -->|Requires HOD approval| HOD[Pending HOD Approval]
   HOD -->|Forward| M
   M -->|Allocate rooms| AP[Approved]
@@ -651,6 +660,7 @@ log, as a row whose `previous_status` is MISSED.
 | Can this one be put back? | `reinstateMissedError`, `statusBeforeMissed` (`lib/workflow.ts`); the action is `reinstateMissedBooking` |
 | Who may book for a club? | `facultyAdvisorOf` (`lib/units.ts`), `facultyInChargeOf`, `clubsBookableBy` (`lib/club-booking.ts`) |
 | Who heads this unit? | `approversOf`, `hodApproversFor` (`lib/units.ts`) |
+| Is this office asked how its booking is approved? | `asksOfficeApproval` (`lib/workflow.ts`) - read by the form, the schema and `createBooking` |
 | May this role open this page? | `lib/access.ts`, and each page's own guard |
 | What may be charged? | `invoiceBlocker`, `buildInvoiceDocument` (`lib/invoice.ts`) |
 | How long may a stay be, how far ahead? | `lib/settings.ts` (`rules.booking`), applied by `lib/booking-schema.ts` |

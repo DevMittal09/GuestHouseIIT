@@ -110,7 +110,7 @@ port 3000 before launching your own.
 > server after, or expect to restart it. This is easy to miss because the build
 > itself succeeds and says nothing.
 
-## House style the office asked for (7, 8 and 9 Oct 2026)
+## House style the office asked for (7, 8, 9 and 11 Oct 2026)
 
 - **One fact per line; no commentary** (8 Oct 2026, the supervisor). The form,
   the desk's lists and the Guidelines state the rule and stop - no "so
@@ -128,6 +128,20 @@ port 3000 before launching your own.
   **deleted**, `roomOccupancyNotice` is rendered by the Guidelines page only,
   and the tariff table carries no paragraph. Don't reintroduce any of them, and
   don't add a new sentence describing a `superRefine`.
+- **A house rule is not stated on the form either** (11 Oct 2026, the owner,
+  of the pets notice: *"only required in the guidelines no need to show it
+  here"*). The rule above covers what the form *enforces*; this covers what it
+  merely tells you. `PETS_POLICY_NOTICE` is still the "Pets" line in every
+  booking mail and a Guidelines item ("During your stay"), and the amber card
+  that carried it on every room booking is **gone**. Don't put a conduct rule
+  back on the form.
+- **Every form that stars a field says what the star means** (11 Oct 2026, the
+  owner: *'Mention "These field are mandatory for those shown with *"
+  whenever we are using it [*]'*). `RequiredFieldsNote`
+  (`components/required-fields-note.tsx`, with `MANDATORY_FIELDS_NOTE`) is the
+  one wording, rendered **above** the first starred label: the booking form,
+  Users & Roles, the rejection dialog. Add it to any new form that stars a
+  field, and don't reword it in place.
 - **A page lead carries the scope or nothing.** `PageHeader`'s children are for
   the one thing the title cannot say - "Malhar hostel", "HOD for CSE", which
   slice of the archive this is. A lead that restates the title was removed from
@@ -334,6 +348,17 @@ status (`initialStatusFor`), the next stage after each approval
 public site's route descriptions are all read from it. `bookings.office_approval`
 records an office's Direct / HOD choice, so a waiting request's route cannot
 change under it.
+
+**An office with no HOD is not asked** (11 Oct 2026, `asksOfficeApproval`).
+With nobody set as the head of its HOD unit, Direct and Requires HOD approval
+both enter at the manager, and the option explained itself with "Nobody is set
+as HOD for your office yet" - the Director's Office, which has no HOD at all.
+So the form withholds the whole Approval card, the schema does not demand a
+choice (`BookingSchemaContext.hasHodApprover`), and `createBooking` records
+**Direct** whatever the payload carried - overwritten, not refused, like a
+personal booking's debitable head. Appoint a head in Departments & Clubs and
+the question comes back. One function, read by the form, the schema and the
+action; don't re-derive it from `hodApprovers.length` anywhere else.
 
 **HODs are approvers by appointment**, not a role: `units.head_id` /
 `acting_head_id` of the requester's **HOD unit** (`hodUnitIdFor`: a department
@@ -999,7 +1024,8 @@ Checked server-side via triggers on `booking_guests` (the per-card limits from S
 > live in `defaultValues` and so need no `register()` of their own - which is
 > why an e2e selector is `#meal_guest_count`, not `[name=…]`. "Purpose" is
 > **Remarks** and **optional** (a stay still has to say what it is for), there
-> is **no pets notice** (nobody stays), and a live **Confirm your meal
+> is no pets notice (it came off a dining booking on 1 Oct 2026 because nobody
+> stays, and off every form on 11 Oct), and a live **Confirm your meal
 > booking** card at the end reads the order back. The kitchen's cap is the
 > stepper's `max`, the schema's `max` **and** `createBooking`'s check of the
 > sitting; the form does not state it in words.

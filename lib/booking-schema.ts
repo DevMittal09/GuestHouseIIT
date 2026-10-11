@@ -22,7 +22,7 @@ import {
   withheldRelationshipError,
   type GuestNameRule,
 } from "./academic/guest-names";
-import { isOfficeRole } from "./workflow";
+import { asksOfficeApproval, isOfficeRole } from "./workflow";
 import { isCountryCode } from "./countries";
 import {
   duplicateRelationshipError,
@@ -315,6 +315,14 @@ export interface BookingSchemaContext {
   /** Ids of the projects that may be picked (active ones). */
   projectIds?: string[];
   /**
+   * Whether anybody other than the requester gives HOD approval for them
+   * (`hodApproversFor`). An office with nobody is not asked how its booking
+   * is approved (`asksOfficeApproval`) - both answers route to the manager -
+   * so the choice is not demanded of it either. Absent means "somebody
+   * does", which is what every caller before 11 Oct 2026 assumed.
+   */
+  hasHodApprover?: boolean;
+  /**
    * What the requester's academic record fixes about their guests (7 Oct
    * 2026): a student's father's and mother's names, locked, and the
    * relationships the record rules out. Built on the server by
@@ -457,11 +465,13 @@ export function bookingPayloadSchema(
         .transform((v) => normalizeMeals(v ?? [])),
       /**
         * Kept so a stored payload still parses, but nothing is required of it.
-        * The no-pets rule is *told* to the requester - a prominent notice on
-        * the form and a line in every booking mail - rather than signed for.
-        * The office asked for the tick box to go: it was one more thing to
+        * The no-pets rule is *told* to the requester - the Guidelines page and
+        * a line in every booking mail - rather than signed for. The office
+        * asked for the tick box to go (19 Sep 2026): it was one more thing to
         * click on a form that already refuses submission for eight other
-        * reasons, and a tick proves nothing a notice does not.
+        * reasons, and a tick proves nothing a notice does not. The notice
+        * itself came off the form on 11 Oct 2026, for the same reason a house
+        * rule is not briefed on a form.
         */
        pets_policy_acknowledged: z
          .boolean()
@@ -598,9 +608,14 @@ export function bookingPayloadSchema(
       }
     })
     .superRefine((v, ctx) => {
-      // Offices choose how their booking is approved; nobody else does.
+      // Offices choose how their booking is approved; nobody else does -
+      // and an office with no HOD is not asked at all (11 Oct 2026), so
+      // nothing is demanded of it. `createBooking` records Direct for it.
       if (isOfficeRole(config.role) && v.service_type !== "meals_only") {
-        if (!v.office_approval) {
+        if (
+          !v.office_approval &&
+          asksOfficeApproval(config.role, v.service_type, context.hasHodApprover ?? true)
+        ) {
           ctx.addIssue({
             code: "custom",
             message: "Choose Direct or Requires HOD approval",

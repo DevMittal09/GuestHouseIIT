@@ -14,6 +14,7 @@ import {
   type UserFormInput,
   type UserImportSummary,
 } from "@/app/actions/admin";
+import { RequiredFieldsNote } from "@/components/required-fields-note";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -504,6 +505,7 @@ export function UsersManager({
               Hostel scopes wardens/students; Dept/Club scopes faculty advisors and club accounts.
             </DialogDescription>
           </DialogHeader>
+          <RequiredFieldsNote />
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label>Full name *</Label>

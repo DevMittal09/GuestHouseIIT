@@ -3863,6 +3863,13 @@ everybody, including the people it does not apply to.
 deleted, not just unused.** A constant nothing renders is an invitation to
 render it again.
 
+> **Superseded, 11 Oct 2026** - for the pets row only. This round kept the
+> notice itself ("the notice above it is the rule") and cut only its second
+> paragraph. The office then asked for the notice to go as well: it is a
+> **house rule**, which the form does not enforce, so the Guidelines page and
+> the booking mail are its homes. The card is gone; `PETS_POLICY_NOTICE`
+> stays, because the mail still prints it. See "11 Oct 2026" below.
+
 ### The banner is stripped from a **saved** row too
 
 `buildDefaultFormConfig` losing the banner would leave it on screen for any
@@ -4160,3 +4167,108 @@ running `writeAgentFiles` against a copy of both files: the result was
 `{"agentsMd":"unchanged","claudeMd":"skipped"}` and `CLAUDE.md` came back
 byte-identical. **So the marker must stay at the top of `AGENTS.md`.** Move it
 into `CLAUDE.md` and the next `next dev` silently deletes all of this.
+
+## 11 Oct 2026 — the office's eleventh list: a question with one answer is not asked
+
+Three items, relayed by the owner. Nothing configurable changed and there is
+no migration; two of the three are copy, and the first is a rule.
+
+### An office with no HOD is not offered the HOD route
+
+> "For director, its showing 'Requires HOD Approval' but since his office
+> doesnt have a HOD it shouldn't show that right [It is showing 'Nobody is set
+> as HOD for your office yet - it would go straight to the manager.' though
+> but i would prefer that it shouldn't show that button itself]"
+
+**Decision.** `asksOfficeApproval(role, service, hasHodApprover)` in
+`lib/workflow.ts` decides whether the **Approval** card is put at all, and the
+form, the schema and `createBooking` all read it.
+
+**Why the hint was the wrong answer.** It was written in Phase 4 as a courtesy
+- an office with no HOD should not be left wondering where its request went -
+but what it actually said was *"this option does nothing"*. An option that
+does nothing is not an option. `routeFor` has always treated it that way:
+`context.hasHodApprover` is false, the HOD stage is dropped, and Direct and
+Requires HOD approval enter the pipeline at the same place. The Director's
+Office is not a configuration gap either - it genuinely has no HOD, which is
+why it is an *officer* office.
+
+**Why the whole card, not just the one radio.** With the HOD option gone the
+card is a single pre-selected radio labelled "Direct" - the one-option control
+this project has already ruled out twice (the disabled guest-house dropdown
+that broke the Student Cell's booking, and "a role with one booking type is
+never asked"). So the card is withheld and the value is **recorded**, exactly
+as a personal booking records Personal Funds without being asked.
+
+**Why `createBooking` overwrites rather than refuses.** The schema's rule is
+now conditional, so a payload that was never offered the choice and carries
+none is accepted; one that carries `"hod"` anyway is **rewritten to
+`"direct"`** rather than rejected. Refusing it would mean a form that asked
+nothing failing on a field the requester never saw - the same reasoning as
+the debitable head on a personal stay (7 Oct 2026). The stored value stays
+honest: `office_approval = 'direct'` is what actually happened.
+
+**Why it is not a change to the Director's Office's data.** Appointing a head
+for the office in Departments & Clubs brings the question straight back -
+`asksOfficeApproval` is computed per request from `hodApproversFor`, never
+stored. The alternative (a "no HOD" flag on the unit) would be a second place
+for the same fact to be wrong.
+
+**Cost.** A new field on `BookingSchemaContext` (`hasHodApprover`), which
+**defaults to true** so every existing caller and test behaves as before;
+`createBooking` reads the approver list once and hands it to both the schema
+and the route, where it used to compute it only for the route. Two e2e
+journeys (the Director's Office and the CSE Department Office, which does have
+an HOD) and eleven unit tests.
+
+### The pets notice is the Guidelines', not the form's
+
+> "'Pets are not allowed in the guest house premises.' is only required in the
+> guidelines no need to show it here."
+
+**Decision.** The amber card comes off every booking form.
+`PETS_POLICY_NOTICE` is unchanged and still prints as the **"Pets" line in
+every booking mail**; the Guidelines' "During your stay" section carries the
+rule.
+
+**Why this is consistent with 9 Oct rather than a reversal of it.** That round
+cut *"the sentence that states a rule the form enforces"*, and the pets notice
+enforces nothing - which is exactly why it survived, and why it was then the
+loudest thing left on the form. The rule it belongs to is the broader one: a
+form asks; it does not brief. A conduct rule for the stay is read before
+booking (Guidelines) or in the confirmation (mail), not between Purpose of
+visit and the rate table.
+
+**Why the constant stays.** The mail still needs the sentence, and it is the
+one place it is written down. Deleting it would put the wording in a template.
+
+### Every form that stars a field says what the star means
+
+> 'Mention "These field are mandatory for those shown with *" Whenever we are
+> using it [*].'
+
+**Decision.** `components/required-fields-note.tsx` holds
+`MANDATORY_FIELDS_NOTE` - "Fields marked with * are mandatory." - and the
+`RequiredFieldsNote` that draws it. It is rendered **above** the first starred
+label in the three forms that star a field: the booking form, Users & Roles'
+add/edit dialog, and the rejection dialog.
+
+**Why a component and not a sentence per form.** Three copies of a convention
+drift into three wordings, and this is a convention rather than a fact about
+any one form. One component also makes the rule enforceable by review: a new
+form either renders it or does not star its fields.
+
+**Why above the fields and not at the foot of the form.** A legend after the
+thing it explains is read second. The booking form is long enough that a note
+at the bottom would be read after Submit was pressed.
+
+**Why not "(mandatory)" beside each starred label.** That is the commentary
+8 Oct took out - the star and the word say the same thing. For the same reason
+the rejection dialog's description lost "A reason is mandatory.": with the
+note above it, the sentence said it twice.
+
+**What this does not change.** The stars themselves, and which fields carry
+them, are untouched - including the ones that follow the Form Builder
+(`star(mode)`, custom fields) and the conditional ones (Alumni ID card, ID
+document, the debit details box), which read "(optional)" when they are not
+required.

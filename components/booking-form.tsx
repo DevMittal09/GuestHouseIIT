@@ -12,7 +12,7 @@ import {
   type UseFormRegisterReturn,
   type UseFormSetValue,
 } from "react-hook-form";
-import { MailPlusIcon, PlusIcon, Trash2Icon, TriangleAlertIcon, XIcon } from "lucide-react";
+import { MailPlusIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { createBooking } from "@/app/actions/bookings";
 import { BookingAvailability } from "@/components/booking-availability";
@@ -75,7 +75,6 @@ import {
   guestHousesForBookingType,
   latestCheckOutDate,
   mealsAllowedFor,
-  PETS_POLICY_NOTICE,
   stayLengthHint,
   STUDENT_GUEST_HOUSE_NOTE,
   ALUMNI_GUEST_HOUSE_NOTE,
@@ -101,7 +100,8 @@ import {
 import type { TariffPreview } from "@/lib/tariffs";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
-import { isOfficeRole, latestCheckIn } from "@/lib/workflow";
+import { asksOfficeApproval, isOfficeRole, latestCheckIn } from "@/lib/workflow";
+import { RequiredFieldsNote } from "@/components/required-fields-note";
 import { canBookOnBehalf, canOverrideGuestHousePolicy } from "@/lib/access";
 import {
   acceptsDebitDocument,
@@ -647,6 +647,13 @@ export function BookingForm({
     : mealPlan.length > 0
       ? "room_meals"
       : "room";
+  /**
+   * Whether this office is asked how its booking is approved - only where
+   * somebody other than the requester is set to give HOD approval
+   * (11 Oct 2026). The server reads the same rule from the same function,
+   * with the same list of approvers behind it.
+   */
+  const asksApproval = asksOfficeApproval(config.role, serviceType, hodApprovers.length > 0);
   const mealHeadCount = wantsRooms
     ? allGuests.filter((g) => !isInfantEntry(g)).length
     : Number(mealGuestCount) || 0;
@@ -884,6 +891,8 @@ export function BookingForm({
       mealsAvailable,
       requesterEmail: user.email,
       rules,
+      // So the client does not demand a route the form did not offer.
+      hasHodApprover: hodApprovers.length > 0,
       // The names the academic record fixes, so the form applies the same
       // rule it renders: a locked parent needs no Aadhaar, and a withheld
       // relationship is refused here as well as on the server.
@@ -1037,6 +1046,9 @@ export function BookingForm({
         </p>
       )}
 
+      {/* What the stars below mean, said once, before the first one. */}
+      <RequiredFieldsNote />
+
       {/* Why the stay is booked. It decides the approval route and how the
           stay is settled. Roles with a single option are not asked - the value
           is still recorded on the booking. */}
@@ -1078,8 +1090,16 @@ export function BookingForm({
         )
       )}
 
-      {/* An office chooses how its booking is approved (Phase 4). */}
-      {isOfficeRole(config.role) && !mealsOnly && (
+      {/* An office chooses how its booking is approved (Phase 4) - **only
+          where somebody gives that approval** (11 Oct 2026, the office, of
+          the Director's Office: "since his office doesnt have a HOD it
+          shouldn't show that button"). With no HOD set for the office both
+          answers routed to the manager, and the option said so in its own
+          hint; the card is withheld instead and `createBooking` records
+          Direct. `asksOfficeApproval` is the one rule, and the schema reads
+          it too, so a payload is not refused for a choice it was never
+          offered. */}
+      {asksApproval && (
         <Card>
           <CardHeader>
             <CardTitle>Approval</CardTitle>
@@ -1089,13 +1109,7 @@ export function BookingForm({
               {(
                 [
                   ["direct", "Direct", "Straight to the Guest House Manager."],
-                  [
-                    "hod",
-                    "Requires HOD approval",
-                    hodApprovers.length > 0
-                      ? `${hodApprovers.join(" or ")} approves it first.`
-                      : "Nobody is set as HOD for your office yet - it would go straight to the manager.",
-                  ],
+                  ["hod", "Requires HOD approval", `${hodApprovers.join(" or ")} approves it first.`],
                 ] as const
               ).map(([value, label, hint]) => (
                 <label
@@ -1512,25 +1526,12 @@ export function BookingForm({
       </Card>
       )}
 
-      {/* Told, not signed for. A guest who arrives with an animal has to be
-          turned away at the desk, so the notice is given prominence here and
-          repeated in every booking mail - but there is no tick box: a tick
-          proves nothing a notice does not, and the office asked for it to go.
-          **Not on a dining booking** (1 Oct 2026): nobody stays, so there is
-          no animal to turn away, and the notice was the largest thing on a
-          form for ordering lunch. */}
-      {wantsRooms && (
-      <Card className="border-amber-300 dark:border-amber-900">
-        <CardContent className="space-y-3 pt-6">
-          <div className="flex gap-3 border-l-4 border-saffron bg-notice p-4 text-ink">
-            <TriangleAlertIcon className="mt-0.5 size-5 shrink-0" aria-hidden />
-            <div>
-              <p className="font-semibold">{PETS_POLICY_NOTICE}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      )}
+      {/* **The pets notice is off the form** (11 Oct 2026, the office: "only
+          required in the guidelines no need to show it here"). It is a house
+          rule, not a rule this form enforces, so it has the same homes as
+          every other one: the Guidelines page (`guidelineSections` ->
+          "During your stay") and the "Pets" line in every booking mail. It
+          was a card of its own here, in amber, on every room booking. */}
 
       {/* What it costs, from the office's own rate sheet (7 Oct 2026). Beside
           the stay rather than at the end: the requester is choosing a guest

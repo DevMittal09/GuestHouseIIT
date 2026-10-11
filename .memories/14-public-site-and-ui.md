@@ -104,6 +104,47 @@ What came off, with where the rule still is:
   occupants, Upcoming stays), one short fact where it does not ("Past
   check-out, never marked Vacated - still holding their rooms").
 
+### And a house rule is not stated on the form either (11 Oct 2026)
+
+> "'Pets are not allowed in the guest house premises.' is only required in the
+> guidelines no need to show it here."
+
+The rule above is about what the form **enforces**. The pets notice enforces
+nothing - it is a conduct rule for the stay - and it was the one notice left
+with a card of its own, in amber, on every room booking. It has the same three
+homes as any other rule, two of which it keeps:
+
+- the **Guidelines page**, "During your stay" ("Pets are not allowed");
+- the **"Pets" line in every booking mail** (`PETS_POLICY_NOTICE`, still the
+  one place the sentence is written) - repeated on every message rather than
+  the confirmation alone, because it is the rule a guest can breach before
+  anyone at the desk can stop them.
+
+The constant stays; only the card is gone. A guest who arrives with an animal
+is still turned away at the desk, and the person who booked has been told
+twice.
+
+### The stars on a form explain themselves (11 Oct 2026)
+
+> 'Mention "These field are mandatory for those shown with *" Whenever we are
+> using it [*].'
+
+Mandatory fields have been marked with a star since the first form, and
+nothing said so. `components/required-fields-note.tsx` is the one wording -
+**"Fields marked with * are mandatory."** (`MANDATORY_FIELDS_NOTE`) - drawn by
+`RequiredFieldsNote` **above** the first starred label, so it is read before
+the fields it describes:
+
+| Form | Where it sits |
+| --- | --- |
+| The booking form (`/book`) | Under the "Booking as" line, above the first card |
+| Users & Roles → Add / Edit user | Under the dialog's description |
+| Reject a request (`ReviewQueue`) | Under the dialog's description; "A reason is mandatory." came off the description, which said it twice |
+
+It is **not** repeated per field: a star and a "(mandatory)" beside it is the
+commentary the 8 Oct rule took out. Any new form that stars a field renders
+this component rather than wording it again.
+
 ### The availability panel, redrawn
 
 > "its showing the 10 of 10 rooms available for each day of the week… I want

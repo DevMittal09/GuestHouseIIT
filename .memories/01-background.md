@@ -43,6 +43,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **8 Oct** | The office's **ninth list**, all of it about production: the **nine debitable heads** and the office's own mapping (revision 6), the **funds declaration** (30), one mail thread per booking id including the requester's, **less text on screen**, and **accounts from a spreadsheet**. A new production-requirements file - now [04-production.md](04-production.md). |
 | **9 Oct** | Two answers from the office, and one of our own mistakes: the migration check was replaced by **`npm run check:migrations`** after these notes had claimed 24-30 were missing for weeks when they were applied. That afternoon, **the owner's own list: the portal stops talking** - a rule the form enforces is no longer stated on it. That evening, the office's **tenth list**, a spreadsheet: **each office's own debitable heads**. |
 | **10 Oct** | This folder reorganised: 25 files to 15, each with one job, and a maintenance contract in [README.md](README.md) so a round updates every file it touches, enforced by `npm run check:memories`. `CLAUDE.md` at the repo root rewritten to carry the process - read the memory before planning, update it before finishing. |
+| **11 Oct** | The office's **eleventh list**, three items: an office with **no HOD** is not offered "Requires HOD approval" at all (`asksOfficeApproval`); the **pets notice** comes off every booking form, keeping the Guidelines and the booking mail; and every form that **stars** a field says what the star means (`RequiredFieldsNote`). **No migration.** |
 
 ## The problem
 
@@ -525,6 +526,18 @@ Office, and the whitelisted `registrar@iitpkd.ac.in` is aliased to it. That is
 an inference from the mailbox name.
 
 
+## The office's eleventh list — 11 October 2026
+
+Three items, relayed by the owner. Reasoning in
+[02-decisions.md](02-decisions.md) ("11 Oct 2026"); what changed in
+[99-recent-changes.md](99-recent-changes.md). **No migration.**
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| "For director, its showing **Requires HOD Approval** but since his office doesnt have a HOD it shouldn't show that right [It is showing 'Nobody is set as HOD for your office yet - it would go straight to the manager.' though but i would prefer that **it shouldn't show that button itself**]" | **Done** | `asksOfficeApproval(role, service, hasHodApprover)` (`lib/workflow.ts`) is the one rule: the whole **Approval** card is withheld where the office's HOD unit has no head, the schema demands no choice (`BookingSchemaContext.hasHodApprover`), and `createBooking` records **Direct** whatever the payload carried. The Director's Office has no head; the CSE Department Office still chooses, and the option names Prof. R. Venkatesh |
+| "'Pets are not allowed in the guest house premises.' is only required in **the guidelines** no need to show it here" | **Done** | The amber card is off every booking form. `PETS_POLICY_NOTICE` stays as the **"Pets" line in every booking mail** and the Guidelines item under "During your stay"; the constant is unchanged, so nothing about the rule itself moved |
+| "Mention **'These field are mandatory for those shown with *'** Whenever we are using it [*]" | **Done** | `components/required-fields-note.tsx`: `MANDATORY_FIELDS_NOTE` = "Fields marked with * are mandatory.", drawn by `RequiredFieldsNote` above the first starred label on the **booking form**, in **Users & Roles**' add/edit dialog and in the **rejection** dialog - the three forms that star a field. The reject dialog's own "A reason is mandatory." came off its description, which now said it twice |
+
 ## Branches
 
 - **`main`** — everything above.
@@ -555,8 +568,8 @@ an inference from the mailbox name.
 ## Status
 
 Feature-complete for every workflow the institute has specified, taken through
-the ten-phase production-readiness programme of September 2026 and ten rounds
-of the office's corrections. **Not deployed for real use.**
+the ten-phase production-readiness programme of September 2026 and **eleven
+rounds** of the office's corrections. **Not deployed for real use.**
 
 What is left is [03-roadmap.md](03-roadmap.md); what a production build needs
 is [04-production.md](04-production.md).

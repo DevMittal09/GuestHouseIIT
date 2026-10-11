@@ -331,9 +331,12 @@ export type Booking = {
    */
   meal_guest_count: number | null;
   /**
-   * Whether the requester acknowledged that pets are not allowed. Always true
-   * on a booking made after migration 11 - the schema refuses the submission
-   * otherwise. Bookings made before it are false, meaning "never asked".
+   * Whether the requester ticked the box saying pets are not allowed. **False
+   * on everything booked since the tick box was withdrawn** (19 Sep 2026): the
+   * form stopped sending the field, the schema asks nothing of it, and the
+   * notice it replaced came off the form on 11 Oct 2026 - the rule is on the
+   * Guidelines page and in every booking mail. True only on the rows that
+   * were asked; the history CSV reads false as "Not asked".
    */
   pets_policy_acknowledged: boolean;
   pets_policy_acknowledged_at: string | null;

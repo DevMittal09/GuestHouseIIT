@@ -177,6 +177,21 @@ real deployment and about who may edit the table.
   is one line in `narrowToOffice` and a worse failure mode (a new office
   cannot book at all). Worth asking when they next revise the list.
 
+## 2c. Opened by the 11 Oct 2026 round
+
+- **The Approval card disappears when the console changes.** An office's
+  Direct / Requires HOD approval question is now put only while its HOD unit
+  has a head (`asksOfficeApproval`), so **naming or clearing a head in
+  Departments & Clubs changes which questions that office's form asks**.
+  Nothing warns the person doing it, as `lib/settings-impact.ts` would for a
+  Setting. Low risk - the route is unchanged either way for a booking already
+  waiting (`office_approval` is stored) - but worth a line in the Faculty
+  Advisors / heads grid if the office ever asks why the card came and went.
+- **Nothing states the convention on a form that has no star.** The note is
+  rendered by the three forms that star a field; a fourth that starts starring
+  one has to render it too. There is no lint for that - `AGENTS.md` and
+  [14-public-site-and-ui.md](14-public-site-and-ui.md) carry the rule.
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the
@@ -223,7 +238,7 @@ unmaintained software holding ID data.
 
 ## 5. Tests that are still thin
 
-`npm test` (451 checks) and `npm run test:e2e` (36 journeys) run in CI. What
+`npm test` (462 checks) and `npm run test:e2e` (38 journeys) run in CI. What
 would catch the most next:
 
 1. the mail layer end to end — rendering, outbox claim and retry, recipients
@@ -311,4 +326,5 @@ is written up (all in [02-decisions.md](02-decisions.md) unless noted):
 | The eighth list, in four phases (7 Oct): the text cleanup, a personal booking never asked which budget pays, students and alumni held to one guest house and no meals, the rates on the form, availability as a count, **the institute's records kept in the portal** (migration 28) with a student's parents locked, invoice version 4, cash retired, a personal stay settled at check-out, **Awaiting payment**, and **Missed** (migration 29) | [01-background.md](01-background.md), [99-recent-changes.md](99-recent-changes.md) |
 | The ninth list (8 Oct): the office's nine debitable heads and their mapping, the funds declaration (migration 30), one mail thread per booking, less text on screen, accounts from a spreadsheet | [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |
 | The owner's list (9 Oct): the rules the form **enforces** stop being **stated** on it, the availability counts redrawn, the privacy line quietened, the office's number moved into the portal footer, the log's filters rearranged with **PDF export for every role**, the meal booking's numbers typed again, and a dining booking quoted meal rates only | [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |
+| The eleventh list (11 Oct): an office with no HOD is not asked how its booking is approved, the pets notice off the form, and every starred form explaining its stars | [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |
 | White-on-amber contrast | The 19 Sep redesign |

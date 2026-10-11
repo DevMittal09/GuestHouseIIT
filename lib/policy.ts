@@ -3,10 +3,9 @@
  *
  * Everything here is a rule the office can change without a developer reading
  * the code that enforces it: how long a stay may run and who is exempt, where
- * alumni are put up, the pets notice, and who to ring when the form will not
- * let you do what you need. Each is enforced somewhere else - the booking
- * schema, the form, the server actions - but the *value* lives only here, so
- * changing it changes every place that shows or applies it.
+ * alumni are put up, and the pets notice. Each is enforced somewhere else -
+ * the booking schema, the form, the server actions - but the *value* lives
+ * only here, so changing it changes every place that shows or applies it.
  */
 
 import { DEFAULT_RULES } from "./settings";
@@ -224,8 +223,19 @@ export function mealsPolicyError(bookingType: BookingType, role?: Role | null): 
 
 // ------------------------------------------------------------------ pets
 
+/**
+ * The no-pets rule, in one sentence.
+ *
+ * **Not on the booking form** (11 Oct 2026, the office: "only required in the
+ * guidelines no need to show it here"). A house rule is not a rule the form
+ * enforces, so it has the two homes every other rule has: the Guidelines page
+ * ("During your stay", `lib/site-content.ts`) and the **"Pets" line in every
+ * booking mail** (`lib/mail/templates.ts`), which is the only place this
+ * constant is now read. Don't put it back on a form.
+ */
 export const PETS_POLICY_NOTICE = "Pets are not allowed in the guest house premises.";
 
+/** The withdrawn tick box's label (19 Sep 2026). Nothing renders it. */
 export const PETS_POLICY_ACKNOWLEDGEMENT =
   "I have read and understood that pets are not allowed.";
 

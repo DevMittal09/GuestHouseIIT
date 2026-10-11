@@ -243,6 +243,11 @@ Rules encoded there:
   `developer`** — dignitary visits are arranged on the institute's own notice,
   and the desk books whatever the institute has already committed to. The cap
   applies to check-in, not check-out.
+- An office is asked Direct / Requires HOD approval **only where an HOD is
+  set for it** (`asksOfficeApproval`, 11 Oct 2026). With nobody, both answers
+  entered at the manager anyway, so the form withholds the card, the schema
+  demands no choice (`BookingSchemaContext.hasHodApprover`) and `createBooking`
+  records **Direct** whatever arrived.
 - An intermediate approval forwards to the **next stage of the booking's own
   route** (`nextStatusAfter` over `approvalStagesFor`), else the GH Manager.
 - The manager does **not** approve through the generic review action. Approval
@@ -692,7 +697,7 @@ Rooms are added as individual cards via `useFieldArray`. Each room card holds it
 Several policy rules are applied here as well as in the schema:
 
 - **Service Type & Meals Preference.** The form asks what is being booked: "Room booking", "Room + Meals", or "Meals only" (by role, and only where a guest house serves meals). "Meals only" replaces the stay with a list of dates and a guest count. A meal preference (Vegetarian / Non-Vegetarian) is required whenever meals are booked.
-- **Pets Policy.** A notice only ("Pets are not allowed in the guest house premises"); the tick box was removed at the office's request. `pets_policy_acknowledged` is still parsed for old payloads.
+- **Pets Policy.** **Off the form** since 11 Oct 2026 - the Guidelines page states it and every booking mail carries it as its "Pets" line (`PETS_POLICY_NOTICE`, `lib/policy.ts`). It was a notice only before that (the tick box was removed at the office's request), and `pets_policy_acknowledged` is still parsed for old payloads.
 - **Room capacity.** A room card holds at most 4 people, of whom at most 3 need a bed and at most 3 are infants (all Settings). Both "Add" buttons stop at the limit (`addGuestBlockedReason` / `addInfantBlockedReason`); `roomPartyError` in the schema enforces it server-side, and the `booking_guests` trigger in the database.
 - **Infants.** Infants are added as regular guest rows, and are classified as infants based on the age typed in (under 5 years).
 - **Citizenship.** Asked per guest: Indian or Other. If "Other" is selected, Nationality and Passport Number become mandatory fields.
@@ -1030,7 +1035,7 @@ Guest Houses & Rooms.
 | File | Contents |
 | --- | --- |
 | `lib/types.ts` | Domain shapes and label maps (`ROLE_LABELS`, `STATUS_LABELS`, `REQUESTER_ROLES`, `DEBIT_HEAD_LABELS`…). Declared as `type` aliases, not interfaces, so Supabase's generated `Insert`/`Update` helpers accept them. |
-| `lib/workflow.ts` | `routeFor` (the pipeline), `initialStatusFor`, `approvalStagesFor`, `nextStatusAfter`, `canReview` / `canReviewBooking`, `actsAsRequester`, `ROOM_HOLDING_STATUSES`, `stayPhase`, `occupancyNotStartedError`, `hasLapsed`, `displayStatus`, `LIFECYCLE_ROLES`, `historyScope`, `canExportPdf`, the advance window (`latestCheckIn` / `isAdvanceWindowExempt`). |
+| `lib/workflow.ts` | `routeFor` (the pipeline), `initialStatusFor`, `approvalStagesFor`, `nextStatusAfter`, `canReview` / `canReviewBooking`, `asksOfficeApproval` (whether an office is asked Direct / HOD at all), `actsAsRequester`, `ROOM_HOLDING_STATUSES`, `stayPhase`, `occupancyNotStartedError`, `hasLapsed`, `displayStatus`, `LIFECYCLE_ROLES`, `historyScope`, `canExportPdf`, the advance window (`latestCheckIn` / `isAdvanceWindowExempt`). |
 | `lib/units.ts` | Units and appointments: `approversOf`, `hodUnitIdFor`, `hodApproversFor`, `unitsGovernedBy`, `isHodForAny`, `approvesClubsFor`, `facultyAdvisorOf`, `secretaryEmailOf`, `parentError`. |
 | `lib/club-booking.ts` (+ `-server.ts`) | Clubs booked by their Faculty Advisor: `canBeFacultyAdvisor`, `facultyInChargeOf`, `clubsBookableBy`, `defaultCopyToFor`, `raisedByFacultyInCharge`, `clubBookingNotice`; `clubsBookableByUser` (cached per request). |
 | `lib/access.ts` | Desk powers (`canBookOnBehalf`, `canOverrideGuestHousePolicy`, `canManageAnyBooking`…), `CONSOLE_SECTIONS`, `canUseConsoleSection`, `assignableRoles`, invoice powers. |
@@ -1042,7 +1047,7 @@ Guest Houses & Rooms.
 | `lib/debit-heads.ts` | Categories, `DEFAULT_DEBIT_RULES` (the office's nine heads and their mapping, revision 6, 8 Oct 2026), `FORBIDDEN_DEBIT_HEADS`, `debitCategoryFor`, `debitHeadsByType`, `upgradeDebitRules`, `describeDebit`, `asksForDebitHead`, and the funds declaration - `FUND_DECLARATION`, `requiresFundDeclaration`, `fundDeclarationError`. |
 | `lib/office-debit-heads.ts` | **The offices' own spreadsheet** (9 Oct 2026): `OFFICE_DEBIT_HEADS`, one row per office mailbox with the heads it marked "Y", plus `officeDebitRowFor` / `officeDebitHeads` / `narrowToOffice`. `debitHeadsByType` intersects it with the Settings list, so an office is offered only its own heads. Keyed by the mailbox before the `@`, with aliases for the demo personas. Source kept as `.memories/04-production.md`. |
 | `lib/users-import.ts` | Loading the accounts from a spreadsheet paste (8 Oct 2026): `KNOWN_COLUMNS` and `columnFor` / `headerColumns` (the header may name the columns in any order), `planUserImport` (all or nothing, updates whoever is already on the list, leaves out what the paste does not carry), `describeUserImport`, `changedFields`. Pure - the console previews the plan with it before applying it. |
-| `lib/policy.ts` | Stay cap and its exemptions (`stayLengthError`), the alumni guest house, the pets notice, the manager contact line. |
+| `lib/policy.ts` | Stay cap and its exemptions (`stayLengthError`), the alumni guest house, the pets notice (the Guidelines' and the mail's since 11 Oct 2026, not the form's). |
 | `lib/settings.ts` (+ `-server.ts`, `-impact.ts`) | `DEFAULT_RULES`, the Settings schemas, `getRules` / `getOfficialEmails` / `getHostels`, and what a change would break. |
 | `lib/occupancy.ts` | Capacity per room type, `INFANT_AGE_LIMIT`, `roomPartyError` and the Add-button reasons, `extraBedsFor`, `allocationCapacityError`, `describeCapacity`. |
 | `lib/turnover.ts` | The turnaround buffer and accepted-overlap guard (`holdGuard`), conflict kinds, `TURNOVER_GRACE_HOURS`. |
@@ -1074,6 +1079,11 @@ Guest Houses & Rooms.
   "Infant accompanying" in the booking form.
 - **`time-select.tsx`** — the hour/minute/AM-PM picker. Exports `parseTime` and
   `toTimeValue`, which handle the 12 AM = `00:00` and 12 PM = `12:00` traps.
+
+Beside them, one shared piece of form copy: **`components/required-fields-note.tsx`**
+(11 Oct 2026) - `MANDATORY_FIELDS_NOTE` and the `RequiredFieldsNote` that draws
+it. Every form that stars a field renders it above the first starred label: the
+booking form, Users & Roles, the rejection dialog.
 
 ### Booking type and the IAR pipeline
 
