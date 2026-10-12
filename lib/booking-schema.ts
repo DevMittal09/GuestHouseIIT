@@ -614,7 +614,10 @@ export function bookingPayloadSchema(
       if (isOfficeRole(config.role) && v.service_type !== "meals_only") {
         if (
           !v.office_approval &&
-          asksOfficeApproval(config.role, v.service_type, context.hasHodApprover ?? true)
+          asksOfficeApproval(config.role, v.service_type, context.hasHodApprover ?? true, {
+            rules: rules.approval,
+            bookingType: v.booking_type,
+          })
         ) {
           ctx.addIssue({
             code: "custom",

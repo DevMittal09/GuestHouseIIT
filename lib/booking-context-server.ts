@@ -29,6 +29,14 @@ export type BookingContext = {
   /** Who gives this requester HOD approval, by name - shown on the form. */
   hodApprovers: string[];
   /**
+   * Every account. The approval routes (`rules.approval`) can name a stage's
+   * approver by role or outright, so counting whether a stage has anybody to
+   * decide it needs the profiles as well as the units - see
+   * `stageApproverIds`. Empty where the store could not be read, which reads
+   * as "assume the stage is staffed" rather than as an outage.
+   */
+  profiles: Profile[];
+  /**
    * The rate sheet, for the table of charges on the booking form (7 Oct
    * 2026). Empty where migration 19 has not been applied, which the form
    * reads as "no rates published" rather than as an error.
@@ -61,6 +69,7 @@ export const bookingContextFor = cache(async (user: Profile): Promise<BookingCon
     hodApprovers: hodApproversFor(user, units)
       .map((id) => byId.get(id)?.full_name)
       .filter((name): name is string => Boolean(name)),
+    profiles,
     tariffs,
   };
 });

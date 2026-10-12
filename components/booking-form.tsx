@@ -650,11 +650,15 @@ export function BookingForm({
       : "room";
   /**
    * Whether this office is asked how its booking is approved - only where
-   * somebody other than the requester is set to give HOD approval
-   * (11 Oct 2026). The server reads the same rule from the same function,
-   * with the same list of approvers behind it.
+   * the two answers lead somewhere different under the office's own approval
+   * routes (11 Oct 2026, generalised 12 Oct). The server reads the same rule
+   * from the same function, with the same routes and the same approvers
+   * behind it.
    */
-  const asksApproval = asksOfficeApproval(config.role, serviceType, hodApprovers.length > 0);
+  const asksApproval = asksOfficeApproval(config.role, serviceType, hodApprovers.length > 0, {
+    rules: rules.approval,
+    bookingType,
+  });
   const mealHeadCount = wantsRooms
     ? allGuests.filter((g) => !isInfantEntry(g)).length
     : Number(mealGuestCount) || 0;

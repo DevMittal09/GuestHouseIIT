@@ -64,6 +64,39 @@ export async function signIn(page: Page, account: { uid: string; password: strin
   sessions.set(account.uid, await page.context().cookies());
 }
 
+/**
+ * The console unlock, kept for the rest of the run.
+ *
+ * The same trap the sign-in throttle set, for the same reason. Unlocking the
+ * console is throttled too - 6 attempts per 15 minutes, a row in the
+ * database (`RATE_LIMITS.consoleUnlock`) - and `signIn` clears every cookie,
+ * so the httpOnly unlock cookie (8 hours, signed with the stored password
+ * hash) was thrown away on every persona switch and typed in again. By
+ * 12 Oct 2026 the suite opened the console seven times and the last two
+ * tests met "Too many attempts". An operator at the desk unlocks once a day;
+ * so does the suite now.
+ */
+const ADMIN_UNLOCK_COOKIE = "gh_admin_unlock";
+let unlockCookie: Cookie | null = null;
+
+/**
+ * Unlock the developer console, reusing the cookie from an earlier unlock.
+ * The password is typed only when the lock screen is actually showing.
+ */
+export async function unlockConsole(page: Page, password = "0000"): Promise<void> {
+  if (unlockCookie) {
+    await page.context().addCookies([unlockCookie]);
+    await page.reload();
+  }
+  const field = page.getByLabel("Console password");
+  if (!(await field.isVisible())) return;
+  await field.fill(password);
+  await page.getByRole("button", { name: "Unlock console" }).click();
+  await expect(field).toBeHidden();
+  const cookie = (await page.context().cookies()).find((c) => c.name === ADMIN_UNLOCK_COOKIE);
+  if (cookie) unlockCookie = cookie;
+}
+
 /** The institute's own clock - the one every date on the form is read in. */
 const INSTITUTE_TIME_ZONE = "Asia/Kolkata";
 

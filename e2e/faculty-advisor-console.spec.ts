@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ACCOUNTS, signIn } from "./helpers";
+import { ACCOUNTS, signIn, unlockConsole } from "./helpers";
 
 /**
  * The Faculty Advisor is an appointment in the console, not an account
@@ -16,11 +16,7 @@ const ADVISOR = { uid: "arun.prasad", password: "Arun@2026" };
 async function openUnitsConsole(page: Page) {
   await signIn(page, ACCOUNTS.manager);
   await page.goto("/admin/units");
-  const password = page.getByLabel("Console password");
-  if (await password.isVisible()) {
-    await password.fill("0000");
-    await page.getByRole("button", { name: "Unlock console" }).click();
-  }
+  await unlockConsole(page);
   await expect(page.getByRole("heading", { name: "Faculty Advisors" })).toBeVisible();
 }
 

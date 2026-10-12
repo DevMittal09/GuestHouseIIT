@@ -76,8 +76,11 @@ export function ConfirmDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
+        {/* The list scrolls: a long one - every route a workflow change
+            touches, every account being deleted - used to push the footer
+            buttons off the bottom of the screen, with nothing to click. */}
         {consequences && consequences.length > 0 && (
-          <ul className="space-y-1 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+          <ul className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
             {consequences.map((line) => (
               <li key={line} className="flex gap-2">
                 <span aria-hidden className="text-destructive">

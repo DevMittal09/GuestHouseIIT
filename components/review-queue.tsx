@@ -39,6 +39,7 @@ export function ReviewQueue({
   emptyMessage,
   showAlumniCard = false,
   studentRecords = {},
+  forwardTargets = {},
 }: {
   bookings: BookingWithDetails[];
   emptyMessage: string;
@@ -48,6 +49,14 @@ export function ReviewQueue({
    * academic record, by booking id (25 Sep 2026). Absent on every other queue.
    */
   studentRecords?: Record<string, StudentRecordPanel>;
+  /**
+   * Where Forward sends each request, by booking id (12 Oct 2026) - the next
+   * stage of its **own** route, worked out on the server that has the
+   * routes. The office can insert a stage, so the button cannot name the
+   * manager on every row any more. Absent falls back to the manager, who is
+   * where every route ends.
+   */
+  forwardTargets?: Record<string, string>;
 }) {
   const heading = (
     <SectionHeading
@@ -95,7 +104,13 @@ export function ReviewQueue({
         </TableHeader>
         <TableBody>
           {bookings.map((b) => (
-            <ReviewRow key={b.id} booking={b} showAlumniCard={showAlumniCard} studentRecord={studentRecords[b.id]} />
+            <ReviewRow
+              key={b.id}
+              booking={b}
+              showAlumniCard={showAlumniCard}
+              studentRecord={studentRecords[b.id]}
+              forwardTo={forwardTargets[b.id] ?? "the Guest House Manager"}
+            />
           ))}
         </TableBody>
       </Table>
@@ -108,9 +123,12 @@ function ReviewRow({
   booking,
   showAlumniCard,
   studentRecord,
+  forwardTo,
 }: {
   booking: BookingWithDetails;
   showAlumniCard: boolean;
+  /** Where Forward sends this one - the next stage of its own route. */
+  forwardTo: string;
   studentRecord?: StudentRecordPanel;
 }) {
   const router = useRouter();
@@ -123,15 +141,16 @@ function ReviewRow({
 
   /**
    * A reviewer's only forward move. It is called "forward", not "approve",
-   * because that is what it does: the request goes to the Guest House
-   * Manager, who is the one who actually approves it by allocating a room.
-   * The Assistant Warden has nowhere else to send it.
+   * because that is what it does: the request goes on to the next stage of
+   * its route, and only the Guest House Manager approves it - by allocating
+   * a room. Which stage that is comes from the server (`forwardTargets`),
+   * since the office can insert one.
    */
   const approve = () =>
     startTransition(async () => {
       const result = await reviewBooking(booking.id, "approve");
       if (result.ok) {
-        toast.success(`${booking.booking_reference_id} forwarded to the Guest House Manager`);
+        toast.success(`${booking.booking_reference_id} forwarded to ${forwardTo}`);
         setDetailOpen(false);
         router.refresh();
       } else {
@@ -178,16 +197,14 @@ function ReviewRow({
             <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Review {booking.booking_reference_id}</DialogTitle>
-                <DialogDescription>
-                  Forward to the Guest House Manager for room allocation, or reject.
-                </DialogDescription>
+                <DialogDescription>Forward to {forwardTo}, or reject.</DialogDescription>
               </DialogHeader>
               {studentRecord && <StudentRecordCheck panel={studentRecord} />}
               <BookingDetails booking={booking} showAlumniCard={showAlumniCard} />
               <DialogFooter className="gap-2">
                 <RejectDialog booking={booking} onDone={() => setDetailOpen(false)} />
                 <Button onClick={approve} disabled={isPending || lapsed !== null}>
-                  {isPending ? "Forwarding…" : "Forward to GH Manager"}
+                  {isPending ? "Forwarding…" : `Forward to ${forwardTo}`}
                 </Button>
               </DialogFooter>
             </DialogContent>

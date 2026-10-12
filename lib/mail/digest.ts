@@ -1,3 +1,4 @@
+import { getReviewContext } from "@/lib/approval-routes-server";
 import { isKitchenConfirmed, kitchenHeadCount, MEAL_KEYS } from "@/lib/meals";
 import { getStore } from "@/lib/store";
 import {
@@ -102,10 +103,11 @@ async function holdingBookings(): Promise<BookingWithDetails[]> {
  */
 export async function queueReviewerDigests(now: Date): Promise<number> {
   const day = toInstituteDateValue(now);
-  const [byRole, pending, heads] = await Promise.all([
+  const [byRole, pending, heads, review] = await Promise.all([
     profilesWithRole(...DIGEST_ROLES),
     pendingBookings(),
     unitHeads(),
+    getReviewContext(),
   ]);
   const reviewers = mergeProfiles(byRole, heads.profiles);
   const units = heads.units;
@@ -113,9 +115,10 @@ export async function queueReviewerDigests(now: Date): Promise<number> {
   let queued = 0;
   for (const reviewer of reviewers) {
     // `canReview` again, not a hand-rolled hostel or club match: the digest
-    // must list exactly what this person's buttons can act on.
+    // must list exactly what this person's buttons can act on - including the
+    // stages the office routed to them from the console.
     const mine = pending
-      .filter((booking) => canReviewBooking(reviewer, booking, units))
+      .filter((booking) => canReviewBooking(reviewer, booking, units, review))
       .sort((a, b) => a.check_in.localeCompare(b.check_in));
     // Silence is the right mail for an empty queue.
     if (mine.length === 0) continue;
@@ -267,11 +270,12 @@ export async function queueEscalations(now: Date): Promise<number> {
   const day = toInstituteDateValue(now);
   const cutoff = new Date(now.getTime() - ESCALATION_HOURS * 3_600_000).toISOString();
 
-  const [byRole, managers, pending, heads] = await Promise.all([
+  const [byRole, managers, pending, heads, review] = await Promise.all([
     profilesWithRole("warden", "faculty_advisor", "iar_cell", "gh_manager"),
     managerRecipients(),
     pendingBookings(),
     unitHeads(),
+    getReviewContext(),
   ]);
   const reviewers = mergeProfiles(byRole, heads.profiles);
   const units = heads.units;
@@ -284,7 +288,7 @@ export async function queueEscalations(now: Date): Promise<number> {
   let queued = 0;
   for (const reviewer of reviewers) {
     const mine = stale
-      .filter((booking) => canReviewBooking(reviewer, booking, units))
+      .filter((booking) => canReviewBooking(reviewer, booking, units, review))
       .sort((a, b) => (a.updated_at ?? a.created_at).localeCompare(b.updated_at ?? b.created_at));
     if (mine.length === 0) continue;
 

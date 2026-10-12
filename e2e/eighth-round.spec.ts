@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ACCOUNTS, fillGuest, localDate, REFERENCE, rowFor, setTime, signIn } from "./helpers";
+import { ACCOUNTS, fillGuest, localDate, REFERENCE, rowFor, setTime, signIn, unlockConsole } from "./helpers";
 
 /** The secret `playwright.config.ts` starts the server with. */
 const CRON_SECRET = "e2e-cron-secret-0123456789";
@@ -29,11 +29,7 @@ async function openConsole(
 ) {
   await signIn(page, as);
   await page.goto(path);
-  const password = page.getByLabel("Console password");
-  if (await password.isVisible()) {
-    await password.fill("0000");
-    await page.getByRole("button", { name: "Unlock console" }).click();
-  }
+  await unlockConsole(page);
   await expect(page.getByRole("heading", { name: heading })).toBeVisible();
 }
 

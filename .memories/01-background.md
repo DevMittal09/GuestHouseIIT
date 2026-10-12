@@ -45,6 +45,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **10 Oct** | This folder reorganised: 25 files to 15, each with one job, and a maintenance contract in [README.md](README.md) so a round updates every file it touches, enforced by `npm run check:memories`. `CLAUDE.md` at the repo root rewritten to carry the process - read the memory before planning, update it before finishing. |
 | **11 Oct** | The office's **eleventh list**, three items: an office with **no HOD** is not offered "Requires HOD approval" at all (`asksOfficeApproval`); the **pets notice** comes off every booking form, keeping the Guidelines and the booking mail; and every form that **stars** a field says what the star means (`RequiredFieldsNote`). **No migration.** |
 | **11 Oct**, later | The owner's **design pass**: the interface "looks too ai generated". The palette was checked against iitpkd.ac.in again and kept; what changed was composition. A **named five-step type scale**, the institute's own page-title rule and serif figures, the dashed empty state cut to one line in 22 places, the desk's seven KPI tiles redrawn as a ruled index, the approver queues' constant **Status** column dropped so their action buttons fit the page, the allocation grid moved above the record, and the home page's empty quarter-column recovered. **Presentation only.** |
+| **12 Oct** | **The approval workflow becomes the manager's.** `routeFor`'s `switch` is replaced by `rules.approval` - an ordered list of routes the office edits at Console -> **Approval Workflow**: insert, delete, reorder and rename the stages of any chain, and choose who decides each (the requester's warden or HOD, the head of their unit, everyone holding a role, the head of one named unit, or one named person). The defaults are the old `switch` case for case, proved over 576 combinations. **No migration.** |
 
 ## The problem
 
@@ -563,6 +564,30 @@ Setting, no rule.**
 | Consistent **without forcing every page into one layout** | **Done** | One vocabulary - the scale, the vermilion title rule, serif figures, ruled section openers - used differently per register: the public site keeps its editorial openers and photographs, the desk reads as a ledger, the form as a numbered document |
 | **Preserve** the stack, backend, schema, server actions, authorisation, booking rules, workflows, responsive behaviour and accessibility | **Done** | No migration, no Setting, no server action, no rule. Every public and portal page still measures `scrollWidth` 320 at 320px with exactly one `<h1>`; 462 unit tests and 38 e2e journeys pass |
 
+## The approval workflow becomes the manager's — 12 October 2026
+
+The owner, on the product rather than on a correction. Reasoning in
+[02-decisions.md](02-decisions.md) ("12 Oct 2026"); what changed in
+[99-recent-changes.md](99-recent-changes.md); the routes as configured are
+[10-roles-and-workflows.md](10-roles-and-workflows.md) Part 2. **No
+migration** - the routes are a jsonb row in `app_settings`.
+
+> "We have users like student, faculty, offices and faculty advisors, wardens
+> and all right, I want to make a feature such that the guest house manager
+> can change, insert and delete connections, basically who forwards whose
+> request, who approves whose and all. Like the entire approval workflow
+> should be in the control of the guest house manager such that they can
+> change and update it, like make the feature robust."
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| **Change** a connection - who forwards whose request | **Done** | Console -> **Approval Workflow** (`/admin/workflow`, manager and developer). Each route's stages can be reordered, renamed and re-pointed; each stage names who decides it from six kinds of approver (`ApproverRule`) |
+| **Insert** a connection | **Done** | "Add a route" (inserted at the top, where it can actually fire) and "Add a stage" within one. Four stages before the desk, each waiting status at most once |
+| **Delete** a connection | **Done** | Delete a route, or remove a stage from one. "In use" turns a route off without losing it |
+| The **whole** workflow in the manager's control | **Done**, with one deliberate exception | Every intermediate stage and its approver is theirs. `PENDING_GH_MANAGER` is not configurable: approval at the desk *is* room allocation, so a route that ended elsewhere would be an approved booking holding no room |
+| **Robust** | **Done** | The defaults are the old `switch` case for case (compared over **576** combinations in `tests/approval-routes.test.ts`); a stage nobody can decide is **skipped** and the log names it; a request waiting at a stage the new routes drop stays actionable by whoever that stage used to mean; and a save is **refused**, naming the requests, when it would leave one with nobody to decide it. Every change is audited in the words the dialog showed |
+| Confidence before saving | **Done** (not asked for) | A **Try it** panel runs the routes being edited for one real account and names the people who would decide each stage. A list of conditions is easy to get subtly wrong; a named chain is not |
+
 ## Branches
 
 - **`main`** — everything above.
@@ -594,7 +619,9 @@ Setting, no rule.**
 
 Feature-complete for every workflow the institute has specified, taken through
 the ten-phase production-readiness programme of September 2026 and **eleven
-rounds** of the office's corrections. **Not deployed for real use.**
+rounds** of the office's corrections, plus the owner's design pass and the
+round that made the approval workflow itself configurable. **Not deployed for
+real use.**
 
 What is left is [03-roadmap.md](03-roadmap.md); what a production build needs
 is [04-production.md](04-production.md).

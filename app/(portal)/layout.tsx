@@ -10,8 +10,8 @@ import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { GUEST_HOUSE_CONTACT, INSTITUTE_WEBSITE } from "@/lib/site";
 import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
 import { isRequesterHistory } from "@/lib/workflow";
-import { getStore } from "@/lib/store";
-import { approvesClubsFor, isHodForAny } from "@/lib/units";
+import { configuredStageName, STAGE_QUEUES, type StageStatus } from "@/lib/approval-routes";
+import { getApprovalRules, stageQueuesFor } from "@/lib/approval-routes-server";
 import { mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser } from "@/lib/club-booking-server";
 
@@ -37,22 +37,31 @@ export default async function PortalLayout({ children }: { children: React.React
     (REQUESTER_ROLES.includes(user.role) && !mustBookThroughFacultyInCharge(user.role)) ||
     clubs.length > 0;
   const readsOwnHistory = isRequesterHistory(user.role);
-  // Approvers by appointment - an HOD, a council secretary - hold no reviewer
-  // role, so the nav asks the units rather than the role. A missing units
-  // table (before migration 15) just means nobody is one yet.
-  const units = await getStore()
-    .listUnits()
-    .catch(() => []);
-  const approves = approvesClubsFor(user.id, units) || user.role === "faculty_advisor";
-  const hod = isHodForAny(user.id, units);
+  // An approver holds no reviewer role - an HOD is an employee, a council
+  // secretary a student - and since 12 Oct 2026 the office can point a stage
+  // at a named person or at everyone holding a role. So the nav asks the
+  // **routes** which queues this person decides (`stagesDecidedBy`), not the
+  // role and not the units directly. The two roles whose landing page is a
+  // queue keep their link whatever the routes say, or signing in would
+  // bounce them to a page the nav does not offer.
+  const [queues, approvalRules] = await Promise.all([stageQueuesFor(user), getApprovalRules()]);
+  const stageQueues = new Set<StageStatus>(queues);
+  if (user.role === "warden") stageQueues.add("PENDING_WARDEN");
+  if (user.role === "iar_cell") stageQueues.add("PENDING_IAR");
+  if (user.role === "faculty_advisor") stageQueues.add("PENDING_FA");
+  const queueLinks: NavItem[] = (Object.keys(STAGE_QUEUES) as StageStatus[])
+    .filter((status) => stageQueues.has(status))
+    .map((status) => ({
+      href: STAGE_QUEUES[status].href,
+      // A slot the office renamed is called what they called it, here as
+      // well as on the page itself.
+      label: configuredStageName(status, approvalRules) ?? STAGE_QUEUES[status].label,
+    }));
 
   const nav: NavItem[] = [
     ...(hasBookings ? [{ href: "/dashboard", label: "My Bookings" }] : []),
     ...(canBook ? [{ href: "/book", label: "New Booking" }] : []),
-    ...(user.role === "warden" ? [{ href: "/warden", label: "Assistant Warden Queue" }] : []),
-    ...(hod ? [{ href: "/hod", label: "HOD Queue" }] : []),
-    ...(approves ? [{ href: "/approvals", label: "Club Approvals" }] : []),
-    ...(user.role === "iar_cell" ? [{ href: "/iar", label: "IAR Queue" }] : []),
+    ...queueLinks,
     ...(user.role === "gh_manager"
       ? [
           { href: "/manager", label: "Manager Console" },

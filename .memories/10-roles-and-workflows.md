@@ -5,10 +5,20 @@ step. One file, because the three answers are one story: a role decides what a
 person may raise, the route decides who sees it next, and the mail is what
 happens when it moves.
 
-**Checked against the code on 10 Oct 2026** — `lib/access.ts`, `lib/routes.ts`,
-`lib/workflow.ts`, `lib/units.ts`, `lib/club-booking.ts`, `lib/mail/*`, every
-page's guard and every server action's gate. If this file and the code
-disagree, the code is right and this file is a bug.
+**Checked against the code on 12 Oct 2026** — `lib/access.ts`, `lib/routes.ts`,
+`lib/workflow.ts`, `lib/approval-routes.ts`, `lib/units.ts`,
+`lib/club-booking.ts`, `lib/mail/*`, every page's guard and every server
+action's gate. If this file and the code disagree, the code is right and this
+file is a bug.
+
+> **Every pipeline in Part 2 is now a default, not a fact about the code**
+> (12 Oct 2026). The chain is `rules.approval` - an ordered list of routes the
+> Guest House Manager edits at Console -> **Approval Workflow** - and
+> `DEFAULT_APPROVAL_RULES` (`lib/approval-routes.ts`) is what every install
+> starts with: the pipeline this file describes, case for case. A deployment
+> where nobody has opened that section behaves exactly as written here. One
+> where they have is described by its own routes, and the section's **Try it**
+> panel is how to read them back.
 
 | Looking for | Go to |
 | --- | --- |
@@ -33,9 +43,9 @@ disagree, the code is right and this file is a bug.
 | `iar_student_cell` | IAR Student Cell | `/dashboard` | On behalf of an alumnus only | — | — | — |
 | `iar_cell` | IAR Office | `/iar` | Official or for an alumnus; meals only | The Student Cell's requests | — | — |
 | `warden` | Assistant Warden | `/warden` | — | Students of their hostel | — | — |
-| `gh_manager` | Guest House Manager | `/manager` | At the desk, for a guest (official / alumni) | Final stage of everything | Everything | 10 of 14 sections |
+| `gh_manager` | Guest House Manager | `/manager` | At the desk, for a guest (official / alumni) | Final stage of everything | Everything | 11 of 15 sections |
 | `gh_caretaker` | Guest House Caretaker | `/caretaker` | — | — | Check-in/out, extend, invoices | — |
-| `developer` | Developer (Superadmin) | `/admin` → `/admin/users` | — | — | Invoices | All 14 sections |
+| `developer` | Developer (Superadmin) | `/admin` → `/admin/users` | — | — | Invoices | All 15 sections |
 | `faculty_advisor` | Faculty Advisor | `/approvals` | *Legacy account type* — only if named on a council | Legacy club stage | — | — |
 | `alumni` | Alumni (via IAR, legacy) | `/availability` | **Retired** — kept only because stored bookings carry it | — | — | — |
 
@@ -261,8 +271,9 @@ secretary's mailbox, e.g. `sec_arts@`).
 
 ### Approvers
 
-Every approver: **Forward** (to the next stage of the booking's route) or
-**Reject with a reason** (mandatory, shown to the requester verbatim). A
+Every approver: **Forward** (to the next stage of the booking's route, which
+the button names - 12 Oct 2026) or **Reject with a reason** (mandatory, shown
+to the requester verbatim). A
 request whose check-in passed while it waited has **lapsed** and can only be
 rejected — and since 7 Oct 2026 the **nightly job marks it `MISSED`**, tells
 the requester and takes it out of every queue, so nothing sits unanswered for
@@ -275,7 +286,9 @@ manager) when something has waited over **48 hours**.
 
 - **Queue:** `/warden` — **Pending Assistant Warden Review** for students
   whose profile hostel matches theirs (exact text). Their own academic record
-  card sits below the queue.
+  card sits below the queue. Since 12 Oct 2026 the list is filtered through
+  `canReviewBooking` rather than queried by hostel, so whoever a route puts on
+  this stage sees exactly what they may act on.
 - **The student's record beside each request** (25 Sep 2026): the Review
   dialog shows the student's academic record — roll number, programme,
   phone, **father's, mother's (or guardian's) name**, hostel — and each Father
@@ -291,7 +304,9 @@ manager) when something has waited over **48 hours**.
 #### HOD (by appointment)
 
 - Whoever is the **head or acting head** of a department in Departments &
-  Clubs (or of the unit an office or club answers to — `hod_unit_id`).
+  Clubs (or of the unit an office or club answers to — `hod_unit_id`) — **or
+  whoever a route names at this stage** (12 Oct 2026), which is how somebody
+  who heads nothing gets this queue.
 - **Queue:** **HOD Queue** (`/hod`) — **Pending HOD Approval** for requesters
   in units whose HOD unit they head. Never their own request (an HOD's own
   official booking skips the stage unless an acting HOD is set).
@@ -357,7 +372,8 @@ Faculty Advisor raises.
   pending dining, "Dining to invoice".
 - **Console** ("Settings" in the menu → `/admin/users`), behind the console
   password: Users & Roles (cannot create or edit a developer), Departments &
-  Clubs (incl. Faculty Advisors), Projects, Tariffs & Invoicing (incl. invoice
+  Clubs (incl. Faculty Advisors), **Approval Workflow** (who forwards whose
+  request - 12 Oct 2026), Projects, Tariffs & Invoicing (incl. invoice
   settings), Guest Houses & Rooms (maintenance blocks, bulk rooms, serves
   meals), Form Builder, Email Templates, Mail Outbox, Security (own sessions +
   the office's DPDP data requests).
@@ -392,7 +408,7 @@ A deliberate **subset** of the manager's console — reception.
 - **Developer Console** (`/admin`), behind the console password **and** a TOTP
   second factor; step-up within 10 minutes for role changes, Settings and
   deletes.
-- **All 14 sections** — the manager's ten plus four that are developer-only:
+- **All 15 sections** — the manager's eleven plus four that are developer-only:
   **All Bookings** (force a status — audit-logged, refuses Occupied before
   check-in — and hard delete), **Settings** (the rules, hostels, official
   whitelist), **Audit Log**, **Console Access** (the console password).
@@ -417,6 +433,7 @@ A deliberate **subset** of the manager's console — reception.
 | ↳ Import LDAP usernames — `email, uid` pairs onto existing accounts | same | ✓ | ✓ |
 | ↳ **Tick rows and delete together**, behind a typed confirmation (8 Oct 2026) | same | ✓ (not developer accounts) | ✓ |
 | Departments & Clubs (+ Faculty Advisors) | `/admin/units` | ✓ | ✓ |
+| **Approval Workflow** — who forwards whose request: the ordered routes, their stages, who decides each, and a **Try it** panel that names the people (12 Oct 2026) | `/admin/workflow` | ✓ | ✓ |
 | **Academic records** (the institute's records, pasted in as CSV — migration 28, 7 Oct 2026) | `/admin/academic` | ✓ | ✓ |
 | Projects | `/admin/projects` | ✓ | ✓ |
 | Tariffs & Invoicing | `/admin/billing` | ✓ | ✓ |
@@ -437,6 +454,63 @@ Every section's actions re-check the role and the unlock on the server
 
 ## Part 2 — The pipelines and the states
 
+**The chain is the office's** (12 Oct 2026). `rules.approval` is an **ordered
+list of routes**; a request takes the **first active route whose conditions
+match it**, and that route lists the stages it passes through before the desk.
+The manager edits it at Console → **Approval Workflow** (`/admin/workflow`,
+manager and developer): add a route, delete one, move it up or down, turn it
+off without losing it, and inside it add, remove, reorder and rename the
+stages and choose who decides each.
+
+| What a route can match on | |
+| --- | --- |
+| Requester role | student, employee, official, club, IAR Office, IAR Student Cell, the retired `alumni`, the desk |
+| Booking type | official / personal / on behalf of an alumnus |
+| What is booked | room / room + meals / meals only |
+| Employee category | faculty / non-teaching staff |
+| The office's own choice | Direct / Requires HOD approval |
+| Raised by the club's Faculty Advisor | yes / no / either |
+| The requester's unit | any unit in Departments & Clubs |
+| The requester's hostel | any hostel in Settings |
+
+An omitted condition matches anything, so a route with none is the catch-all.
+
+| Who can decide a stage (`ApproverRule`) | |
+| --- | --- |
+| **The Assistant Warden of the requester's hostel** | needs a hostel on both profiles - the warden scoping, unchanged |
+| **The HOD for the requester's department or office** | `hodApproversFor`, through `hodUnitIdFor` |
+| **The head of the requester's own unit** | `approversOf`, inherited from the unit above |
+| **Everyone holding a role** | how the IAR Office decides the Student Cell's requests |
+| **The head of one named unit** | "every request from Civil also goes to the Dean of Students" |
+| **One named person** | a one-off arrangement; gives a queue to somebody who heads nothing |
+
+**Four stages before the desk, and the desk is always last.** A route is built
+from the four intermediate statuses that exist (`PENDING_WARDEN`,
+`PENDING_FA`, `PENDING_HOD`, `PENDING_IAR`), each at most once, because
+`booking_status` is a Postgres enum and a fifth is a migration. A stage can be
+**renamed** where the status's own name is wrong for its new job - the queue
+page and the navigation link read that name back, unless two routes name one
+status differently, in which case the status's own name is the only honest
+heading for a queue holding both. `PENDING_GH_MANAGER` is **not**
+configurable: approval there is room allocation.
+
+**A stage nobody can decide is skipped**, and the booking's log names it - the
+rule the HOD stage has had since Phase 4, now applied to every stage. So a
+route pointing at an empty unit does less than it says rather than stranding
+every request that matches it.
+
+**A change that would strand a waiting request is refused**, and the requests
+are named - as for any Setting. Beyond that, a request waiting at a stage the
+new routes no longer describe is still actionable by whoever that stage used
+to mean, so editing a route can never leave one with nobody to decide it.
+
+**A queue is "a route points at you"**, not "you hold a reviewer role"
+(12 Oct 2026). The navigation and each queue page's guard ask the routes
+(`stagesDecidedBy`), so a professor a route names gets a queue the moment it
+does and loses it the moment it does not. The Assistant Warden and the IAR
+Office keep their link whatever the routes say, because that page is where
+they land.
+
 **Approval by appointment.** An HOD is whoever heads the unit *now* (Console →
 Departments & Clubs), not whoever holds a particular role: a council secretary
 is a student, an HOD is an employee. Change the head and the waiting requests
@@ -450,7 +524,9 @@ routing skips a stage the requester would be approving themselves.
 
 ---
 
-### The pipelines
+### The pipelines — as every install starts
+
+These are `DEFAULT_APPROVAL_RULES`, in the order the routes are tried.
 
 #### A student's stay
 
@@ -655,7 +731,10 @@ log, as a row whose `previous_status` is MISSED.
 
 | Question | Answer in code |
 | --- | --- |
-| Who reviews this? | `routeFor`, `approvalStagesFor`, `canReview` / `canReviewBooking` (`lib/workflow.ts`) |
+| Who reviews this? | `routeFor`, `approvalStagesFor`, `canReview` / `canReviewBooking` (`lib/workflow.ts`), reading the office's routes |
+| What **are** the routes? | `rules.approval`, modelled in `lib/approval-routes.ts` (`DEFAULT_APPROVAL_RULES`, `matchingRule`, `stagesFor`, `ApproverRule`); read on the server by `lib/approval-routes-server.ts` |
+| Which queues does this person have? | `stagesDecidedBy` / `stageQueuesFor` - what the navigation and each queue page's guard ask |
+| Would this change to the routes break anything? | `approvalRouteBlockers` (`lib/settings-impact.ts`) |
 | Has this request run out of time? | `hasLapsed` / `lapseDeadline`, and `missedSweepable` for the nightly job (`lib/workflow.ts`) |
 | Can this one be put back? | `reinstateMissedError`, `statusBeforeMissed` (`lib/workflow.ts`); the action is `reinstateMissedBooking` |
 | Who may book for a club? | `facultyAdvisorOf` (`lib/units.ts`), `facultyInChargeOf`, `clubsBookableBy` (`lib/club-booking.ts`) |

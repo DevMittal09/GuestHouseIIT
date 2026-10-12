@@ -1,8 +1,15 @@
+import {
+  isStageStatus,
+  stageApproverIds,
+  stageForStatus,
+  type ApprovalRules,
+} from "./approval-routes";
 import { mealPlanError } from "./meals";
 import { countBedGuests, countInfants, ROOM_TYPE_LABELS } from "./occupancy";
 import type { CapacityRules, MealRules } from "./settings";
-import type { BookingWithDetails, Profile } from "./types";
-import { ACTIVE_STATUSES, ROOM_HOLDING_STATUSES } from "./workflow";
+import { ROLE_LABELS, STATUS_LABELS, type BookingWithDetails, type Profile, type Role } from "./types";
+import { approversOf, type Unit } from "./units";
+import { ACTIVE_STATUSES, requestFactsFor, ROOM_HOLDING_STATUSES } from "./workflow";
 
 /**
  * What a proposed Settings change would break, before it is saved.
@@ -114,4 +121,82 @@ export function refusalMessage(what: string, blockers: string[], show = 5): stri
   } or account${blockers.length === 1 ? "" : "s"}: ${listed}${more}. Fix ${
     blockers.length === 1 ? "it" : "them"
   } first.`;
+}
+
+// -------------------------------------------------- the approval routes
+
+/**
+ * What a proposed set of approval routes would break.
+ *
+ * Two different kinds of harm, both of them silent if nobody looks:
+ *
+ * 1. **A request already waiting at a stage the new routes drop.** Its
+ *    status stays `PENDING_HOD` whatever the console says, and the queue it
+ *    is in stops listing it, so it waits until the nightly sweep marks it
+ *    Missed. `canReview` falls back to the stage's built-in meaning for
+ *    exactly this case, which keeps it actionable - but a request whose
+ *    approver has changed under it is still something the office should be
+ *    told about rather than discover.
+ * 2. **A stage nobody can ever decide** - a unit with no head, an account
+ *    that has been deleted, a role nobody holds. New requests skip such a
+ *    stage (`skippedStages`), so the route silently does less than it says.
+ *
+ * Named, refused, nothing saved - the same contract as every other Setting.
+ */
+export function approvalRouteBlockers(
+  proposed: ApprovalRules,
+  bookings: BookingWithDetails[],
+  units: Unit[],
+  profiles: Profile[],
+  now: Date = new Date()
+): string[] {
+  const blockers: string[] = [];
+  const directory = { units, profiles };
+
+  // 1. Requests waiting at a stage their new route no longer has.
+  for (const booking of bookings) {
+    if (!ACTIVE_STATUSES.includes(booking.status)) continue;
+    if (!isStageStatus(booking.status)) continue;
+    if (booking.check_out <= now.toISOString()) continue;
+    const facts = requestFactsFor(booking, booking.requester);
+    const stage = stageForStatus(booking.status, facts, proposed);
+    if (!stage) {
+      blockers.push(
+        `${booking.booking_reference_id} is waiting at ${STATUS_LABELS[booking.status]}, which its new route does not have`
+      );
+      continue;
+    }
+    if (stageApproverIds(stage.approver, booking.requester, directory).length === 0) {
+      blockers.push(
+        `${booking.booking_reference_id} is waiting at ${STATUS_LABELS[booking.status]}, and nobody would be set to decide it`
+      );
+    }
+  }
+
+  // 2. Stages pointing at somebody who is not there. Only the rules that
+  //    name a target outright can be judged without a requester in hand; a
+  //    requester-relative stage is judged per request above.
+  for (const rule of proposed.rules) {
+    if (!rule.active) continue;
+    for (const stage of rule.stages) {
+      const { approver } = stage;
+      if (approver.kind === "unit") {
+        const unit = units.find((u) => u.id === approver.unit_id);
+        if (!unit) {
+          blockers.push(`${rule.name}: the unit it names no longer exists`);
+        } else if (approversOf(unit.id, units).length === 0) {
+          blockers.push(`${rule.name}: nobody heads ${unit.name}, so that stage could never be decided`);
+        }
+      }
+      if (approver.kind === "profile" && !profiles.some((p) => p.id === approver.profile_id)) {
+        blockers.push(`${rule.name}: the account it names no longer exists`);
+      }
+      if (approver.kind === "role" && !profiles.some((p) => p.role === approver.role)) {
+        blockers.push(
+          `${rule.name}: no account holds ${ROLE_LABELS[approver.role as Role] ?? approver.role}, so that stage could never be decided`
+        );
+      }
+    }
+  }
+  return blockers;
 }

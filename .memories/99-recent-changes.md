@@ -7,174 +7,144 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 11 October 2026 (second) - the owner's design pass
+## Round of 12 October 2026 - the approval workflow becomes the manager's
 
-The owner, on the portal and the site as they stood after the eleventh list:
+The owner:
 
-> The current site looks too meh, bland as well as looks too ai generated
-> [give the claude generated look]. The current UI looks generic and
-> recognizably AI-generated. I want a distinctive, aesthetic, professional
-> interface that feels purpose-designed for an IIT campus guest house.
+> We have users like student, faculty, offices and faculty advisors, wardens
+> and all right, I want to make a feature such that the guest house manager
+> can change, insert and delete connections, basically who forwards whose
+> request, who approves whose and all. Like the entire approval workflow
+> should be in the control of the guest house manager such that they can
+> change and update it, like make the feature robust.
 
-With the brief: the institute's own palette, distinctive typography and
-spacing, **no generic AI dashboard patterns, excessive rounded cards,
-gradients, decorative icons, unnecessary badges or repetitive layouts**, a
-welcoming booking journey and dense, efficient approval / reception /
-allocation screens, minimal text, no em dashes, and consistency without
-forcing every page into one layout. Stack, backend, workflows, rules,
-authorisation and responsive behaviour all unchanged.
+**No migration.** The routes are a jsonb row in `app_settings`
+(`rules.approval`), which both stores already read and write through
+`getJsonSetting` / `setJsonSetting`.
 
-**No migration, no Setting, no server action, no rule.** Two copy deletions
-and one e2e selector; everything else is layout and type.
+### What it is
 
-### What was found, before anything was changed
+`routeFor` was a `switch` in `lib/workflow.ts`. Every case in it was the
+institute's instruction at some point, and every case has changed at least
+once - which meant a deploy. It is now **an ordered list of routes the
+manager edits** at Console -> **Approval Workflow** (`/admin/workflow`,
+manager and developer).
 
-The palette was **not** the problem. iitpkd.ac.in's theme CSS was pulled and
-counted again (`themes/iitpkd/css/*`): `#e94c26` 22 times, then `#fff`,
-`#333`, `#ededed`, `#1a1a1a`, with Source Serif Pro headings. The portal
-already matches it. What read as generic was **composition**, and it was
-measurable:
+A request takes the **first active route whose conditions match it**. A route
+holds the stages it passes through before the desk, each with **who decides
+it** and, optionally, **what it is called**.
 
-| Screen | What it actually was |
+| Part | Where |
 | --- | --- |
-| Manager console | Seven tiles 110px tall reading 0, then six near-identical stacked sections, four of them 90px dashed "nothing here" boxes. The one row with work in it sat 1300px down the page |
-| Approval Log | Six status tiles in a five-column grid, leaving Missed alone on a second row |
-| My Bookings | A 1150 x 180 slab of vermilion carrying two lines of type, with a void in the middle of it |
-| Room Availability | Twenty bordered cards, nineteen of them reading "Free all week - available to book", 1100px tall |
-| Home | `lg:ml-[calc(25%+10px)]` left a quarter of every section empty holding a six-word label; the hero broke its headline over three lines in a 371px panel |
-| Approver queues | A **Status** column repeating the one status the queue filters on, which pushed Forward and Reject past the right edge of a 1440px page |
+| The model, the defaults, matching, the approvers, validation | `lib/approval-routes.ts` |
+| Reading them on the server, the review context, the queue list | `lib/approval-routes-server.ts` |
+| Applying them - `routeFor`, `canReview`, `asksOfficeApproval` | `lib/workflow.ts` |
+| The console section | `app/actions/workflow.ts`, `components/admin/workflow-manager.tsx`, `app/(portal)/admin/workflow/page.tsx` |
+| Refusing a change that would strand a request | `approvalRouteBlockers` in `lib/settings-impact.ts` |
 
-### 1. A named type scale, and the institute's own devices
+### The five decisions inside it
 
-`--text-display / title / section / card / meta` in `@theme inline`
-(`app/globals.css`), five steps and nothing between them. Headings used to be
-written as one-off `clamp()` values where they were used, which is how eight
-sizes of heading reached one page.
+1. **The defaults are the old `switch`, case for case.**
+   `DEFAULT_APPROVAL_RULES` has ten routes, in the order the `switch` tested,
+   and `tests/approval-routes.test.ts` compares `routeFor` against a
+   hand-written copy of the old `switch` over **576** combinations of role,
+   service, booking type, office choice, HOD and advisor. An install where
+   nobody opens the new section behaves exactly as it did.
+2. **Four stages, not unlimited.** `booking_status` is a Postgres enum, and
+   migration 29 is the standing lesson that a new value cannot even be *used*
+   in the transaction that adds it. So a route is built from the four
+   intermediate slots that exist (`PENDING_WARDEN`, `PENDING_FA`,
+   `PENDING_HOD`, `PENDING_IAR`), each at most once per route, and a stage
+   carries a `label` for where the slot's own name is wrong for its new job.
+   The deepest chain the institute has ever asked for is two.
+3. **Six kinds of approver.** `warden`, `hod` and `unit_head` are relative to
+   the requester, so they still follow a change of appointment with nobody
+   editing a route; `role`, `unit` and `profile` name somebody outright,
+   which is what "every request from Civil also goes to the Dean of Students"
+   needs and what the old code could not express at all.
+4. **A reconfiguration cannot strand a waiting request.** Three defences:
+   `canReview` falls back to the slot's built-in meaning for a request whose
+   route no longer describes it; a stage nobody can decide is **skipped** at
+   submission and the log names it; and a save is **refused** when a request
+   already waiting would be left with nobody to decide it, or a stage points
+   at a unit with no head, a deleted account or a role nobody holds.
+5. **A queue is "a route points at you"**, not "you hold a reviewer role".
+   `stagesDecidedBy` builds the navigation and guards the four queue pages,
+   so a professor who heads nothing gets a queue the moment a route names
+   them - and loses it the moment it does not. `warden` and `iar_cell` keep
+   their link whatever the routes say, because their landing page *is* that
+   queue and turning them away would be a redirect loop.
 
-Two utilities, both taken from iitpkd.ac.in rather than invented:
+### What changed in the code that was already there
 
-- **`rule-title`** - `h1.node-title { border-bottom: solid 1px #e94c26 }`, with
-  a 3px vermilion stub over the start of the rule. Every portal page title
-  closes on it (`PageHeader`). It replaced a 2px **ink** rule, which was the
-  same mark the tables use for their header row, so a page and a table in it
-  opened identically.
-- **`figure-serif`** - the institute's `.counters` treatment. Every figure
-  meant to be compared (a queue's count, the log's totals, the desk's index)
-  is the serif with tabular numerals.
+- **`/warden` and `/iar` filter through `canReviewBooking`** instead of
+  listing a status outright. `/warden` used to be a store query scoped by
+  `hostelName`, which would silently drop anyone the office routed through
+  that slot who has no hostel.
+- **The Forward button names the next stage of the request's own route**
+  (`forwardTargets`). It said "Forward to GH Manager" on every row, which was
+  already not true for a club request with an HOD after it.
+- **`asksOfficeApproval` is derived, not asserted**: the office is asked
+  Direct vs HOD only where the two answers produce different routes. The
+  11 Oct rule ("an office with no HOD is not asked") falls out of that, and
+  so does taking the HOD stage off an office's route entirely.
+- **`saveRuleGroup` refuses the `approval` group** and names the right
+  section. Two doors to one `app_settings` row means one of them skipping the
+  impact check and the audit wording.
+- **`describeRouteChanges`**, not `describeRuleChanges`, for the confirmation
+  and the audit log. The JSON diff of inserting one stage is a dozen lines of
+  `rules.1.stages.1.approver.kind`, and it made the dialog taller than the
+  screen. `ConfirmDialog`'s consequence list now scrolls as well, which every
+  long list benefits from.
+- **`routeFor` throws for a role that cannot book** off an explicit
+  `BOOKABLE_ROLES` list now that there is no `default:` branch to throw from.
 
-> **The trap this round cost an hour on.** tailwind-merge classifies an
-> unknown `text-<word>` as a **colour**, so `cn("text-title", "text-ink")`
-> dropped `text-title` as the losing half of a colour conflict and three home
-> page headings silently rendered at 16px. `lib/utils.ts` now builds `cn` with
-> `extendTailwindMerge` and the five step names registered under `font-size`.
-> Add any new `--text-*` step to `TYPE_STEPS` there as well.
+### Files
 
-### 2. The primitives, which carried the change to every page
+New: `lib/approval-routes.ts`, `lib/approval-routes-server.ts`,
+`app/actions/workflow.ts`, `components/admin/workflow-manager.tsx`,
+`app/(portal)/admin/workflow/page.tsx`, `tests/approval-routes.test.ts`,
+`e2e/approval-workflow.spec.ts`.
 
-| Primitive | Before | Now |
-| --- | --- | --- |
-| `PageHeader` | 2px ink rule, grey caption sentence | `rule-title`, caption as a tracked vermilion label |
-| `SectionHeading` | Count in a filled square tag | Count as a serif figure, vermilion when it is a list to chase, with a leader rule running to the far edge. The rule, not a box, separates one list from the next |
-| `EmptyState` | A dashed box 90px tall | One quiet line on a left hairline. **22 of them replaced** across 16 files |
-| `Card` | Header in its own band-tinted strip | Title over a hairline on the same white as the body |
-| `DeskSummary` | Seven tiles 110px tall | A ruled index: label, leader rule, figure, on one 44px baseline. A zero is small and grey; a count that is not is the serif at display size. **Order never re-sorts on the count** - it is read all day by the same two people |
-
-### 3. The desk, the queues and the log
-
-- **Approver queues** (`ReviewQueue`, used by `/warden`, `/hod`, `/approvals`,
-  `/iar`) lost the **Status** column - every one of those pages lists exactly
-  one status - and check-in / check-out became one **Stay** cell with both
-  instants, one above the other. The table now measures 1150px inside a 1150px
-  container: **Review, Forward and Reject are all reachable without scrolling
-  sideways.** Nothing was dropped but the repetition.
-- **Approval Log** tiles are one ruled band of six. Six divides into 2, 3 and
-  6, so no breakpoint orphans one, and the active tile is ink-filled.
-- **Room availability**: the twenty room cards are a table. A free room says
-  nothing at all - a dash - so the booked rooms are the only ink on the page.
-  The page lost 600px.
-- **The allocation dialog puts the grid first** and the record under it. The
-  grid already carries the stay's period and "N of M requested", and the
-  description names the requester, so a manager now sees the seats, the
-  summary and **Confirm & Allocate** without scrolling past a meal table, a
-  guest table and the approval trail.
-- **Users & Roles**: name over email in one **Account** cell, role as plain
-  text. The eight-column table was pushing its own actions off the page.
-- **Badges**: `BookingDetails` opened on six - status, role, booking type,
-  service, diet split, foreign national. Only two are states: the status keeps
-  its colour, a **foreign national** keeps a mark (the guest house has to
-  report one), and the rest are a line of plain text. The manager queue's
-  Category column is plain text too; an official request is already marked by
-  the saffron rule and the tinted row.
-
-### 4. The requester's side
-
-- **My Bookings**: the booking door is sized to its content - icon, title,
-  one line, arrow, on one row. It is a little over half as tall. The
-  `caption={user.full_name}` came off, since the masthead already names
-  whoever is signed in.
-- **The booking form**: the pay-at-checkout note is an inset line, not a
-  numbered card. The office asked on 8 Oct for the note itself to be kept, and
-  it is; but a numbered section is a thing to fill in, and a student's form
-  opened on two sections before the first question. **Six sections now, not
-  seven.** The Requester details panel is **sticky from `lg`**: the form runs
-  to about 2800px and the record is what a field is checked against.
-
-### 5. The public home page
-
-Recomposed, with every standing content rule kept (no figures, no role names,
-no captions, photographs contained, promise little):
-
-- `SectionHead` puts the label and any link on one line **above** a full-width
-  hairline, with the serif heading under it. The quarter-column indent is gone
-  from all three sections, so content runs the full width.
-- The hero is **6 + 6**, not 5 + 7, and the headline is on the display step:
-  two lines, not three.
-- The guest-house cards lost the "GUEST HOUSE" strip - the section above is
-  headed "Our guest houses" - keeping only whether the kitchen serves.
-- Amenity cells are roomier now that the grid has the whole page.
-
-### 6. Three page leads deleted
-
-`/manager`, `/caretaker` and the kitchen day view each opened on a sentence
-restating the title under a caption that already carried the scope. The rule
-from 9 Oct 2026 is that a lead carries the scope or nothing.
-
----
-
-### Files changed
-
-34 files. `app/globals.css` (the scale and the two utilities), `lib/utils.ts`
-(the tailwind-merge fix), the five primitives above, `components/
-{manager-queue, review-queue, checkouts-today, availability-grid,
-booking-history, booking-details, booking-form, my-bookings, caretaker-console,
-booking-availability}.tsx`, `components/admin/{users-manager, audit-log,
-bookings-manager, guest-houses-manager, mail-outbox, projects-manager,
-units-manager}.tsx`, `components/site/site-ui.tsx`, `app/(site)/page.tsx`,
-`app/(portal)/{dashboard, book, manager, manager/meals, caretaker,
-history}/page.tsx`, and three e2e specs.
+Changed: `lib/workflow.ts`, `lib/settings.ts`, `lib/settings-impact.ts`,
+`lib/access.ts`, `lib/booking-context-server.ts`, `lib/booking-schema.ts`,
+`lib/mail/recipients.ts`, `lib/mail/digest.ts`, `lib/academic/copy-to.ts`,
+`app/actions/bookings.ts`, `app/actions/settings.ts`,
+`app/api/documents/[...path]/route.ts`, `app/(portal)/layout.tsx`,
+`app/(portal)/{warden,iar,hod,approvals}/page.tsx`,
+`components/booking-form.tsx`, `components/review-queue.tsx`,
+`components/ui/confirm-dialog.tsx`, `e2e/helpers.ts` and the four console
+specs, `AGENTS.md`.
 
 ### How it was checked
 
-`npm run lint`, `npm run typecheck`, **`npm test` (462 checks, 27 files)**,
-`npm run build`, and **`npm run test:e2e` (38 journeys, all passing)** against
-a production build on the mock store.
+`npm run lint`, `npm run typecheck`, **`npm test` (494 checks, 28 files -
+32 of them new)**, `NEXT_PUBLIC_SUPABASE_URL= npm run build`, and
+**`npm run test:e2e` (39 journeys, all passing)** against a production build
+on the mock store.
 
-Visually, on a dev server on the mock store: every main page screenshotted
-before and after at 1440px, and **every public and portal page measured at
-320px** - `scrollWidth` 320 and exactly one `<h1>` on all thirteen. Every
-portal table was measured against its container at 1440px: all of them now sit
-at or inside it, where three were overflowing.
+The new journey is the whole feature in one pass: the manager inserts a stage
+after the Assistant Warden, decided by **Dr Arun Prasad - a professor who
+heads nothing and so had no approval queue at all** - names it "Dean of
+Students", and saves. A student's next request then shows the warden a
+**"Forward to Dean of Students"** button, does **not** appear at the desk when
+they press it, appears in Arun's new **HOD Queue** link, and reaches the desk
+only when he forwards it. Then the routes are restored.
 
-Three e2e selectors moved with the markup, none of them a behaviour change:
-the pay-at-checkout assertions now read the sentence rather than a card
-heading it no longer has, and the user-import assertion matches the merged
-Account cell by its text (matching the address alone also hit the row's tick
-box, whose label names the account).
+### An error worth remembering
+
+The suite hit **"Too many attempts - try again in 831s"** on the console
+password. Unlocking is throttled 6 per 15 minutes
+(`RATE_LIMITS.consoleUnlock`, a row in the database), `signIn()` clears every
+cookie, and the httpOnly unlock cookie was therefore retyped on every persona
+switch - seven console openings in one run. `unlockConsole()` in
+`e2e/helpers.ts` now caches that cookie for the run, exactly as `signIn`
+caches sessions, and the four specs that open the console share it.
 
 ### Left open
 
-In [03-roadmap.md](03-roadmap.md) §2d: the console's other thirteen sections
-were not gone through one by one - they inherit the primitives, the scale and
-the empty state, and Users & Roles was the only one whose table was measured
-and fixed. The booking form's "Type of booking" card still renders for a role
-with one option, which is a numbered section with nothing to answer.
+In [03-roadmap.md](03-roadmap.md) §2e: `PENDING_GH_MANAGER` is deliberately
+not configurable, so a chain cannot end anywhere but the desk; the four queue
+pages keep their own extras rather than being one generated page; and nothing
+yet lets the office *name* a new waiting status, which would need a migration
+per status.

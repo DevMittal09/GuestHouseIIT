@@ -14,10 +14,17 @@ What the office still has to fill in before go-live is at the end of
 ## How Settings work
 
 - **Scalar groups are jsonb rows** in `app_settings` (`rules.capacity`,
-  `rules.booking`, `rules.meals`, `rules.debit`, `rules.invoice`,
-  `rules.privacy`), merged over `DEFAULT_RULES` on read — a row saved before a
-  field existed still reads. **Lists are tables**: `hostels`,
-  `official_email_whitelist`.
+  `rules.booking`, `rules.meals`, `rules.debit`, `rules.approval`,
+  `rules.invoice`, `rules.privacy`), merged over `DEFAULT_RULES` on read — a
+  row saved before a field existed still reads. **Lists are tables**:
+  `hostels`, `official_email_whitelist`.
+- **Three of those groups are not edited on the Settings page.**
+  `rules.invoice` belongs to Tariffs & Invoicing and `rules.approval` to
+  **Approval Workflow** — both manager and developer, because pricing and the
+  approval chain are the office's to run. `saveRuleGroup` **refuses** the
+  `approval` group outright and names the right section: writing it has its
+  own impact check and its own audit wording, and two doors to one row means
+  one of them skipping both.
 - Read with `getRules()` / `getOfficialEmails()` / `getHostels()`
   (`lib/settings-server.ts`, cached per request, **fall back to the defaults
   on any error**). Rule functions take the rules as a parameter.
@@ -222,6 +229,7 @@ edited or deleted — a new price is a new row. Seeded from the tariff sheet:
 | --- | --- | --- |
 | Accounts: role, hostel, department/club, roll number, **LDAP username**, unit, faculty/staff; bulk "Import LDAP usernames" | Users & Roles | Manager (not developer accounts), developer |
 | Departments, councils, clubs, offices: parent, **head**, acting head, office class, whose HOD approves (`hod_unit_id`), **Faculty Advisor**, **secretary's mailbox** | Departments & Clubs | Manager, developer |
+| **The approval workflow** (`rules.approval`, 12 Oct 2026): the ordered routes, what each matches, the stages in it, who decides each, what each is called. Defaults to the institute's own pipeline; a change that would strand a waiting request is refused and the requests are named | Approval Workflow | Manager, developer |
 | Projects (number, title, PI; paste import; deactivate) | Projects | Manager, developer |
 | Guest houses, rooms (single or bulk "B-101 to B-120", max 200), active/inactive, **serves meals**, **maintenance blocks** | Guest Houses & Rooms | Manager, developer |
 | Each requester role's form: guest houses, field modes, relationship options and rules, alumni card, banner, custom fields | Form Builder | Manager, developer |
@@ -237,6 +245,8 @@ edited or deleted — a new price is a new row. Seeded from the tariff sheet:
 | --- | --- | --- |
 | Infant = age **< 5** | `INFANT_AGE_LIMIT`, `lib/occupancy.ts` (and the DB trigger) | No bed, no ID |
 | Rooms per request **10**; meals-only people **1–30** (the Setting above); purpose ≥ **5** chars **on a stay** — Remarks are optional on a meal booking | `lib/booking-schema.ts` | |
+| **Four** waiting stages before the desk, each once per route; at most **60** routes | `STAGE_STATUSES`, `approvalRulesSchema`, `lib/approval-routes.ts` | `booking_status` is an enum, so a fifth stage is a migration |
+| **`PENDING_GH_MANAGER` is not a configurable stage** | `lib/approval-routes.ts` | Approval at the desk *is* room allocation |
 | Copy to ≤ **25** addresses | `MAX_COPY_TO_EMAILS` + migration 24 | |
 | Project sub-head ≤ **120** chars; Special fund name ≤ 300 | `lib/debit-heads.ts`, schema | |
 | Uploads ≤ **5 MB**, JPG/PNG/WEBP/PDF | `lib/uploads.ts` | Server action body limit 25 MB (`next.config.ts`) |

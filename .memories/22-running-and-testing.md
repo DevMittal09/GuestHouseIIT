@@ -932,6 +932,18 @@ sign-in with "Too many attempts — try again in 777s" in the page snapshot.
 `signIn()` now reuses each account's session after its first form sign-in, so
 the count is one per account per run.
 
+*The same trap again, on the console password (12 Oct 2026).* Adding one spec
+that opens the console twice took the run to seven unlocks, and the last two
+journeys met **"Too many attempts - try again in 831s"** on the lock screen -
+which reads as a broken console, not as a throttle. Unlocking is rate-limited
+the same way (`RATE_LIMITS.consoleUnlock`: **6 per 15 minutes**, a row in the
+database), and the unlock is an httpOnly cookie that `signIn()`'s
+`clearCookies()` threw away on every persona switch, so every console-opening
+spec typed the password again. **`unlockConsole()` in `e2e/helpers.ts` caches
+that cookie for the run**, exactly as `signIn` caches sessions, and the four
+specs that open the console share it. Use it rather than filling in "Console
+password" by hand in a new spec.
+
 **2. `reuseExistingServer` serves the previous build.** `playwright.config.ts`
 sets `reuseExistingServer: !process.env.CI`, so a server left listening on 3100
 from an earlier run is reused — and `next start` read `.next` when it *started*.

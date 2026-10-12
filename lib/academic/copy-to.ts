@@ -2,7 +2,9 @@ import { defaultBookingTypeFor } from "@/lib/booking-types";
 import { getStore } from "@/lib/store";
 import type { BookingType, Profile, Role, ServiceType } from "@/lib/types";
 import { approversOf, type Unit } from "@/lib/units";
-import { approvalStagesFor, canReview } from "@/lib/workflow";
+import { getApprovalRules } from "@/lib/approval-routes-server";
+import type { ApprovalRules } from "@/lib/approval-routes";
+import { approvalStagesFor, canReview, requestFactsFor } from "@/lib/workflow";
 import { academicRecordKindFor, COPY_TO_RULE } from "./fields";
 import { academicRecordFor } from "./index";
 
@@ -43,10 +45,16 @@ export function chainApprovers(
   route: CopyToRoute,
   requester: Profile,
   profiles: Profile[],
-  units: Unit[]
+  units: Unit[],
+  rules?: ApprovalRules
 ): Profile[] {
-  const stages = approvalStagesFor(route as Parameters<typeof approvalStagesFor>[0], requester, units);
-  return profiles.filter((p) => stages.some((stage) => canReview(p, stage, requester, units)));
+  const booking = route as Parameters<typeof approvalStagesFor>[0];
+  const options = { rules, profiles };
+  const stages = approvalStagesFor(booking, requester, units, options);
+  const request = requestFactsFor(booking, requester);
+  return profiles.filter((p) =>
+    stages.some((stage) => canReview(p, stage, requester, units, { rules, profiles, request }))
+  );
 }
 
 export async function copyToFor(
@@ -61,11 +69,13 @@ export async function copyToFor(
   let failed = false;
   let profiles: Profile[] = [];
   let units: Unit[] = [];
+  let routes: ApprovalRules | undefined;
   try {
     const store = getStore();
-    [profiles, units] = await Promise.all([
+    [profiles, units, routes] = await Promise.all([
       store.listProfiles(),
       store.listUnits().catch(() => [] as Unit[]),
+      getApprovalRules(),
     ]);
   } catch (e) {
     console.error("[copy-to] could not read profiles:", e instanceof Error ? e.message : e);
@@ -73,7 +83,7 @@ export async function copyToFor(
   }
 
   if (rules.includes("approver")) {
-    for (const p of chainApprovers(route, requester, profiles, units)) {
+    for (const p of chainApprovers(route, requester, profiles, units, routes)) {
       entries.push({ name: p.full_name, email: p.email });
     }
   }

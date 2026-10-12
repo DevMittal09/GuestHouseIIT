@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  approvalRulesSchema,
+  DEFAULT_APPROVAL_RULES,
+  upgradeApprovalRules,
+  type ApprovalRules,
+} from "./approval-routes";
 import { DEFAULT_DEBIT_RULES, debitRulesSchema, upgradeDebitRules, type DebitRules } from "./debit-heads";
 import { GUEST_HOUSE_CONTACT } from "./site";
 import type { MealKey, RoomType } from "./types";
@@ -175,13 +181,29 @@ export type Rules = {
   meals: MealRules;
   /** Which debitable heads each kind of requester may choose (Phase 4). */
   debit: DebitRules;
+  /**
+   * **Who forwards whose request** (11 Oct 2026): the approval chain per kind
+   * of request, as a list of rules the Guest House Manager edits at Console
+   * -> Approval Workflow. `lib/approval-routes.ts` is the model and the
+   * defaults; `lib/workflow.ts` applies them. Not in the developer's Settings
+   * page - it has a console section of its own, and the manager opens it.
+   */
+  approval: ApprovalRules;
   invoice: InvoiceRules;
   privacy: PrivacyRules;
 };
 
 export type RuleGroup = keyof Rules;
 
-export const RULE_GROUPS: RuleGroup[] = ["capacity", "booking", "meals", "debit", "invoice", "privacy"];
+export const RULE_GROUPS: RuleGroup[] = [
+  "capacity",
+  "booking",
+  "meals",
+  "debit",
+  "approval",
+  "invoice",
+  "privacy",
+];
 
 /** The `app_settings` key a group is stored under. */
 export function ruleKey(group: RuleGroup): string {
@@ -222,6 +244,8 @@ export const DEFAULT_RULES: Rules = {
     max_diners_per_meal: 30,
   },
   debit: DEFAULT_DEBIT_RULES,
+  // The pipeline as the `switch` in `lib/workflow.ts` had it, rule for rule.
+  approval: DEFAULT_APPROVAL_RULES,
   // From the office's invoice template (public/GHM_Invoice.docx). Nothing is
   // mailed to Accounts until an address is entered.
   invoice: {
@@ -403,6 +427,7 @@ export const RULE_SCHEMAS = {
   booking: bookingRulesSchema,
   meals: mealRulesSchema,
   debit: debitRulesSchema,
+  approval: approvalRulesSchema,
   invoice: invoiceRulesSchema,
   privacy: privacyRulesSchema,
 } as const satisfies Record<RuleGroup, z.ZodType>;
@@ -453,6 +478,7 @@ function upgradeStoredGroup(
   stored: Record<string, unknown>
 ): Record<string, unknown> {
   if (group === "debit") return upgradeDebitRules(stored);
+  if (group === "approval") return upgradeApprovalRules(stored);
   if (group === "invoice") return upgradeInvoiceRules(stored);
   if (group !== "capacity" || "max_occupants_per_room" in stored) return stored;
   const rest = { ...stored };

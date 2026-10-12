@@ -44,8 +44,9 @@ two guest houses, **Bageshri** (10 rooms, no kitchen) and **Hamsanandi**
 (13 rooms, serves meals), plus the guest house's public website. Requesters —
 students, faculty and staff, institute offices, the two IAR offices, and
 (through their Faculty Advisor) clubs and councils — submit bookings; each goes
-through its own approval chain and ends with the **Guest House Manager**, who
-allocates real rooms on a visual grid. A **caretaker** runs reception. A
+through its own approval chain — **which the Guest House Manager edits from the
+console** — and ends with that manager, who allocates real rooms on a visual
+grid. A **caretaker** runs reception. A
 **developer** console reconfigures almost everything without code.
 
 **Who.** Built by students for the institute's Administration Section and the
@@ -59,16 +60,17 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwright.
 **Node 20** via nvm; the machine default is 18.
 
-**Status, 11 Oct 2026.** Feature-complete for every workflow specified; taken
-through a ten-phase production-readiness programme and eleven rounds of the
-office's corrections. **Not deployed for real use** — everything that first
+**Status, 12 Oct 2026.** Feature-complete for every workflow specified; taken
+through a ten-phase production-readiness programme, eleven rounds of the
+office's corrections, a design pass, and the round that put **the approval
+workflow itself in the manager's hands** (Console -> Approval Workflow). **Not deployed for real use** — everything that first
 deployment needs is in [04-production.md](04-production.md), and the gates are
 [03-roadmap.md](03-roadmap.md) §1.
 
 **Numbers.** 30 migrations · 7 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
-18 demo personas · 6 demo bookings · 23 real rooms · 462 unit tests ·
-38 end-to-end journeys · 14 console sections.
+18 demo personas · 6 demo bookings · 23 real rooms · 494 unit tests ·
+39 end-to-end journeys · 15 console sections.
 
 ---
 
@@ -140,7 +142,7 @@ updated. **Work the table, not your memory.**
 
 | If the round changed… | Update these as well |
 | --- | --- |
-| What a role may do, or an approval route | [10-roles-and-workflows.md](10-roles-and-workflows.md), `AGENTS.md` |
+| What a role may do, or an approval route | [10-roles-and-workflows.md](10-roles-and-workflows.md), `AGENTS.md` — and, if the **routes themselves** change shape, [12-settings-and-defaults.md](12-settings-and-defaults.md), since `rules.approval` is a Setting |
 | A booking-form field, or a submission rule | [11-booking-forms.md](11-booking-forms.md), [12-settings-and-defaults.md](12-settings-and-defaults.md) if it is configurable, `AGENTS.md` |
 | An automatic mail, its recipients or its thread | [10-roles-and-workflows.md](10-roles-and-workflows.md) Part 3 |
 | A tariff, an invoice or a payment rule | [13-billing-and-dining.md](13-billing-and-dining.md) |
@@ -166,7 +168,7 @@ actually lives").
 
 | Question | File |
 | --- | --- |
-| Who approves this, and in what order? | [10-roles-and-workflows.md](10-roles-and-workflows.md) |
+| Who approves this, and in what order? | [10-roles-and-workflows.md](10-roles-and-workflows.md) — a default the manager can change at Console → Approval Workflow |
 | Why is a field mandatory for one role and not another? | [11-booking-forms.md](11-booking-forms.md) |
 | Which budget may this requester charge? | [11-booking-forms.md](11-booking-forms.md), and [04-production.md](04-production.md) §2 for the per-office table |
 | What is this limit, and who can change it? | [12-settings-and-defaults.md](12-settings-and-defaults.md) |
@@ -188,9 +190,9 @@ actually lives").
 | IAR Student Cell | Books **for an alumnus** only → **IAR Office** → manager |
 | IAR Office | Books (official / alumni) **and** approves the Student Cell |
 | Assistant Warden, HOD, council secretary | Approve by queue; an HOD or secretary is **an appointment in the console, not a role**. The warden sees each student's academic record and a check of the parents on the request against it |
-| **Guest House Manager** | Final approval by **allocating rooms**; the whole desk, including an earlier or later check-in; books for guests; invoices with additional charges; reinstates a **Missed** request; 10 console sections |
+| **Guest House Manager** | Final approval by **allocating rooms**; the whole desk, including an earlier or later check-in; books for guests; invoices with additional charges; reinstates a **Missed** request; **edits the approval workflow itself**; 11 console sections |
 | Guest House Caretaker | Reception: check-in and check-out, moving a stay's dates, invoices |
-| Developer | The whole console (14 sections), behind a password and TOTP |
+| Developer | The whole console (15 sections), behind a password and TOTP |
 
 Every booking: a **debitable head** is mandatory **except on a personal
 booking, which is never asked** (the server records Personal Funds) — nine
@@ -270,6 +272,8 @@ The full list is in `AGENTS.md` and
 | **Service type** | *What* is booked: room, room + meals, meals only |
 | **Debitable head** | Which budget pays. Nine since the office's list of 8 Oct 2026: Institute Grant, Professional Development Fund, Project Grant, Department Budget, Special Budget (`special_budget`), Personal Funds, Alumni Fund, Student Fund, Hostel Funds. Any but Personal Funds asks the requester to declare the funds are approved and available |
 | **Unit** | A department, council, club or office in Departments & Clubs; has a head, an acting head, a parent, and (councils and clubs) a Faculty Advisor and a secretary's mailbox |
+| **Route** | One rule in the approval workflow (`rules.approval`, 12 Oct 2026): what it matches and the ordered stages a matching request passes through before the desk. A request takes the **first active route that matches it** |
+| **Stage** | One step of a route: a waiting status (one of four), who decides it (the requester's warden or HOD, the head of their unit, everyone holding a role, the head of a named unit, or a named person) and optionally what it is called |
 | **HOD** | Whoever heads the unit a requester's HOD approval comes from — found when someone looks, never stored on the booking |
 | **Faculty Advisor** | The professor named on a council or club (`units.faculty_advisor_id`); books for it. Not a role — the `faculty_advisor` role is a legacy account type |
 | **Council secretary** | The student heading a council; approved club requests at the old club stage. Their **mailbox** (`sec_arts@…`) is copied on the advisor's bookings |

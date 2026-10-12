@@ -6,7 +6,8 @@ import { recordAudit } from "@/lib/audit-server";
 import { getCurrentUser } from "@/lib/auth";
 import { RATE_LIMITS } from "@/lib/security";
 import { getStore } from "@/lib/store";
-import { actsAsRequester, canReview } from "@/lib/workflow";
+import { getReviewContext } from "@/lib/approval-routes-server";
+import { actsAsRequester, canReviewBooking } from "@/lib/workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -47,12 +48,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pat
   const booking = await store.getBooking(owner.bookingId);
   if (!booking) return new NextResponse("Not found", { status: 404 });
 
-  const units = await store.listUnits().catch(() => []);
+  // The office's approval routes and every account, so a stage the console
+  // points at this person counts here exactly as it does on their queue.
+  const review = await getReviewContext();
   const allowed =
     hasFullBookingAccess(user.role) ||
     // The requester, or the faculty in-charge who raised a club's booking.
     actsAsRequester(booking, user.id) ||
-    canReview(user, booking.status, booking.requester, units);
+    canReviewBooking(user, booking, review.units, review);
   // Not found rather than forbidden: whether a document exists is itself
   // something only the people above should learn.
   if (!allowed) return new NextResponse("Not found", { status: 404 });

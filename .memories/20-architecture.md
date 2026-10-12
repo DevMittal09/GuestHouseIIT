@@ -220,7 +220,12 @@ because the rendered string no longer depends on which machine rendered it.
 
 ### The approval workflow
 
-`lib/workflow.ts` is the single source of truth.
+**`lib/workflow.ts` applies it; `lib/approval-routes.ts` holds it, and the
+Guest House Manager edits it** (12 Oct 2026). `rules.approval` is an ordered
+list of routes, matched first-wins against the request's own facts; each route
+holds the stages before the desk, each stage naming its approver. The table
+below is `DEFAULT_APPROVAL_RULES` - what every install starts with, and what
+the portal did when the pipeline was a `switch`.
 
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
@@ -243,11 +248,22 @@ Rules encoded there:
   `developer`** — dignitary visits are arranged on the institute's own notice,
   and the desk books whatever the institute has already committed to. The cap
   applies to check-in, not check-out.
-- An office is asked Direct / Requires HOD approval **only where an HOD is
-  set for it** (`asksOfficeApproval`, 11 Oct 2026). With nobody, both answers
-  entered at the manager anyway, so the form withholds the card, the schema
-  demands no choice (`BookingSchemaContext.hasHodApprover`) and `createBooking`
-  records **Direct** whatever arrived.
+- An office is asked Direct / Requires HOD approval **only where the two
+  answers lead somewhere different** (`asksOfficeApproval`, 11 Oct 2026,
+  generalised 12 Oct). Under the defaults that is "an HOD is set for it":
+  with nobody, both answers entered at the manager anyway, so the form
+  withholds the card, the schema demands no choice
+  (`BookingSchemaContext.hasHodApprover`) and `createBooking` records
+  **Direct** whatever arrived. Take the HOD stage off an office's route and
+  the question goes with it, by the same computation.
+- A stage **nobody can decide is skipped**, and the submission log names it
+  (`skippedStages`) - the HOD rule of Phase 4, now applied to every stage.
+  Only where the caller passed a `directory` and a `requester`; without them
+  a stage is assumed staffed, which is what the hardcoded pipeline did.
+- `canReview` reads the **configured** stage (`ReviewContext { rules,
+  request, profiles }`) and falls back to `BUILT_IN_STAGE_APPROVERS` for a
+  request whose route no longer describes the stage it is in - so editing a
+  route can never strand one already waiting.
 - An intermediate approval forwards to the **next stage of the booking's own
   route** (`nextStatusAfter` over `approvalStagesFor`), else the GH Manager.
 - The manager does **not** approve through the generic review action. Approval
@@ -744,8 +760,16 @@ One component, four scopings — `components/review-queue.tsx`, rendered by
 details, guest list with ID documents, and Forward / Reject with a mandatory
 reason on rejection. The IAR view embeds the alumni ID card.
 
-Scoping is applied in the store query *and* re-checked in `canReview()` inside
+Scoping is `canReviewBooking()` on the page *and* re-checked inside
 `reviewBooking`, so a crafted request cannot approve another hostel's student.
+Since 12 Oct 2026 it is **not** a store query: `/warden` used to be scoped by
+`hostelName` in the filter, which would have dropped anyone the office routed
+through that stage who has no hostel. Each page's guard is "a route points at
+you at this stage" (`stageQueuesFor`), with the Assistant Warden, the IAR
+Office and the legacy Faculty Advisor keeping their link whatever the routes
+say - that page is `homeForRole` for them, so turning them away is a redirect
+loop. Each page passes `forwardTargets(...)`, so the Forward button names the
+next stage of each request's own route rather than claiming the desk.
 
 **The warden's family check** (25 Sep 2026): `/warden` builds
 `studentRecordPanels(bookings)` (`lib/academic/family-server.ts`) and passes
@@ -1003,12 +1027,22 @@ would only re-run a full scan and churn the table under the reader.
 ### The console (`/admin`)
 
 Layout and tabs in `app/(portal)/admin/layout.tsx`, sections and who may open
-each in `CONSOLE_SECTIONS` (`lib/access.ts`) — the manager nine, the developer
-all thirteen (table in [10-roles-and-workflows.md](10-roles-and-workflows.md#who-can-open-which-console-section)).
+each in `CONSOLE_SECTIONS` (`lib/access.ts`) — **the manager eleven, the
+developer all fifteen** (table in [10-roles-and-workflows.md](10-roles-and-workflows.md#who-can-open-which-console-section)).
 Every action re-checks with `requireConsole(section)` (or its sibling in
-`app/actions/{units,settings,invoices,projects,operations,mail-templates}.ts`):
+`app/actions/{units,settings,workflow,invoices,projects,operations,mail-templates}.ts`):
 the role, the console unlock, and for a developer's dangerous actions the
 second factor.
+
+**Approval Workflow** (`/admin/workflow`, 12 Oct 2026, manager and developer)
+is the section that changed the pipeline from code into data:
+`components/admin/workflow-manager.tsx` edits one draft of the whole ordered
+list and saves it in one action (`saveApprovalRoutes`), because **order is the
+rule** - a narrow route under a broad one never fires, so two half-applied
+saves could reorder it invisibly. New routes are inserted at the **top** for
+the same reason. `previewApprovalRoute` is the **Try it** panel: it runs the
+routes being edited, for one real account, and names the people who would
+decide each stage.
 
 The first four sections, which predate the split:
 
@@ -1021,7 +1055,8 @@ The first four sections, which predate the split:
 
 The later sections: **Departments & Clubs** (`units-manager.tsx` — heads, acting
 heads, office class, whose HOD approves, and the **Faculty Advisors** table
-with each council's advisor and secretary's mailbox), **Projects**
+with each council's advisor and secretary's mailbox), **Approval Workflow**
+(`workflow-manager.tsx`, above), **Projects**
 (`projects-manager.tsx`, paste import), **Tariffs & Invoicing**
 (`billing-manager.tsx`), **Email Templates** (`mail-template-editor.tsx`),
 **Mail Outbox** (`mail-outbox.tsx`), **Settings** (`settings-manager.tsx`,
@@ -1034,6 +1069,8 @@ Guest Houses & Rooms.
 
 | File | Contents |
 | --- | --- |
+| `lib/approval-routes.ts` | **The approval workflow as data** (12 Oct 2026): `ApprovalRules` / `ApprovalRouteRule` / `ApprovalStage` / `ApproverRule`, `DEFAULT_APPROVAL_RULES` (the old `switch`, case for case), `matchingRule` / `stagesFor` / `stageForStatus` (first active match wins), `stageApproverIds` / `decidesStage` / `stagesDecidedBy` (who decides, and who has a queue), `describeChain` / `describeConditions` / `describeRouteChanges` (reading a route back in words), `approvalRulesSchema`. Pure - no store |
+| `lib/approval-routes-server.ts` | `getApprovalRules()`, `getReviewContext()` (the routes plus every account, which a role- or person-named stage needs), `stageQueuesFor()` (a person's queues), `forwardTargets()` (what each Forward button names) |
 | `lib/types.ts` | Domain shapes and label maps (`ROLE_LABELS`, `STATUS_LABELS`, `REQUESTER_ROLES`, `DEBIT_HEAD_LABELS`…). Declared as `type` aliases, not interfaces, so Supabase's generated `Insert`/`Update` helpers accept them. |
 | `lib/workflow.ts` | `routeFor` (the pipeline), `initialStatusFor`, `approvalStagesFor`, `nextStatusAfter`, `canReview` / `canReviewBooking`, `asksOfficeApproval` (whether an office is asked Direct / HOD at all), `actsAsRequester`, `ROOM_HOLDING_STATUSES`, `stayPhase`, `occupancyNotStartedError`, `hasLapsed`, `displayStatus`, `LIFECYCLE_ROLES`, `historyScope`, `canExportPdf`, the advance window (`latestCheckIn` / `isAdvanceWindowExempt`). |
 | `lib/units.ts` | Units and appointments: `approversOf`, `hodUnitIdFor`, `hodApproversFor`, `unitsGovernedBy`, `isHodForAny`, `approvesClubsFor`, `facultyAdvisorOf`, `secretaryEmailOf`, `parentError`. |

@@ -7,7 +7,9 @@ import { ReviewQueue } from "@/components/review-queue";
 import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
-import { approvesClubsFor, UNIT_HEAD_TITLES } from "@/lib/units";
+import { UNIT_HEAD_TITLES } from "@/lib/units";
+import { configuredStageName } from "@/lib/approval-routes";
+import { forwardTargets, getReviewContext, stageQueuesFor } from "@/lib/approval-routes-server";
 import { canReviewBooking } from "@/lib/workflow";
 
 /**
@@ -23,17 +25,21 @@ export default async function ApprovalsPage() {
   const user = await getCurrentUser();
   if (!user) redirect(SIGN_IN_PATH);
 
-  const store = getStore();
-  const units = await store.listUnits().catch(() => []);
-  // A faculty advisor keeps this page even with no unit set up yet: their
-  // club requests still reach them by the old name match.
-  const isApprover = approvesClubsFor(user.id, units) || user.role === "faculty_advisor";
-  if (!isApprover) redirect(homeForRole(user.role));
+  // A faculty advisor keeps this page even with no unit set up yet - it is
+  // `homeForRole("faculty_advisor")`, and their club requests still reach
+  // them by the old name match. Everyone else is here because a route points
+  // at them at this stage.
+  const queues = await stageQueuesFor(user);
+  if (user.role !== "faculty_advisor" && !queues.includes("PENDING_FA")) {
+    redirect(homeForRole(user.role));
+  }
 
-  // The club stage only; HOD approvals have their own queue at /hod.
-  const club = await store.listBookings({ status: "PENDING_FA" });
+  const review = await getReviewContext();
+  const units = review.units;
+  // This stage only; HOD approvals have their own queue at /hod.
+  const club = await getStore().listBookings({ status: "PENDING_FA" });
   const mine = club
-    .filter((b) => canReviewBooking(user, b, units))
+    .filter((b) => canReviewBooking(user, b, units, review))
     .sort((a, b) => a.check_in.localeCompare(b.check_in));
 
   const headed = units.filter(
@@ -54,7 +60,7 @@ export default async function ApprovalsPage() {
     <div className="space-y-6">
       <PageHeader
         caption="Approvals"
-        title="Club Approvals"
+        title={configuredStageName("PENDING_FA", review.rules) ?? "Club Approvals"}
         actions={
           clubs.length > 0 ? (
             <div className="flex flex-wrap gap-2">
@@ -70,14 +76,16 @@ export default async function ApprovalsPage() {
         {roles.length > 0 ? (
           <>
             Requests waiting on you as <span className="font-medium">{roles.join("; ")}</span>.
-            Forwarding sends them on - to the HOD where the club has one, otherwise to the
-            Guest House Manager.
           </>
         ) : (
           <>Club requests waiting on you as faculty advisor.</>
         )}
       </PageHeader>
-      <ReviewQueue bookings={mine} emptyMessage="Nothing is waiting on you." />
+      <ReviewQueue
+        bookings={mine}
+        emptyMessage="Nothing is waiting on you."
+        forwardTargets={forwardTargets(mine, review)}
+      />
     </div>
   );
 }

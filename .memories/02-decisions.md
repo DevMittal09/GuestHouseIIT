@@ -4420,3 +4420,194 @@ between 26 and 30 Sep: no figures, no requester categories, no approval chains
 or role names, no photo captions, photographs contained in the layout, promise
 little. This round moved boxes and type and left the words alone, apart from
 three page leads that restated their own titles.
+
+## 12 Oct 2026 — the approval workflow becomes configuration
+
+The owner:
+
+> I want to make a feature such that the guest house manager can change,
+> insert and delete connections, basically who forwards whose request, who
+> approves whose and all. Like the entire approval workflow should be in the
+> control of the guest house manager such that they can change and update it,
+> like make the feature robust.
+
+### The pipeline is a list of routes, not a `switch`
+
+**Decision.** `rules.approval` - a jsonb row in `app_settings`, edited at
+Console -> **Approval Workflow** - is an **ordered list of routes**. A request
+takes the first active route whose conditions match it; the route holds the
+stages before the desk, each naming who decides it. `lib/approval-routes.ts`
+is the model and the defaults, `lib/workflow.ts` applies them unchanged in
+shape (`routeFor` still returns an ordered list of statuses).
+
+**Why.** `routeFor`'s `switch` had ten cases, and the history of this file is
+the history of those cases changing: the club route was rewritten on 24 Sep
+when advisors started booking, the HOD stage arrived in Phase 4, the office's
+Direct / HOD choice on 11 Oct, the IAR split when alumni lost their logins.
+Each was a deploy for what the office experiences as an administrative
+decision. The office already edits the people (Departments & Clubs), the
+money (debitable heads), the questions (Form Builder) and the wording (Email
+Templates); the chain was the last thing in the product that needed us.
+
+**Why a list of rules rather than one chain per requester category.** A keyed
+record - the shape `DebitRules` uses - would have been less code. It cannot
+express "requests from Civil go to the Dean" or "Malhar's students skip the
+warden", which is half of what "who approves whose" means, and the office has
+asked for narrower routing twice before by other means (`hod_unit_id`,
+`office_class`). An ordered list with optional conditions covers the keyed
+case as a special case: every default route is one of the old `switch`'s arms
+with its conditions written out.
+
+**What it cost.** Order is now a rule, which is a thing a console can get
+wrong invisibly: a narrow route placed under a broad one never fires. So the
+list is explicitly ordered with Up / Down, new routes are inserted at the
+**top**, and the section carries a **Try it** panel that runs the routes being
+edited for one real account and names the people who would decide each stage.
+"I added it and nothing happened" is the one failure this section must not
+have.
+
+**Rejected:** a `workflow_routes` table. It is a list that grows, which is the
+project's own test for a table rather than a jsonb row - but it would have
+been a migration, two store implementations, and a `DataStore` addition, for
+data that is read once per request, is never queried by anything but the
+portal, and is at most a few dozen rows. `parseRuleGroup` already merges a
+saved row over the defaults and self-heals a row saved before a field
+existed. Revisit if the office starts wanting routes per guest house.
+
+### Four waiting statuses, and a name for each stage
+
+**Decision.** A route is built from the four intermediate slots that exist in
+`booking_status` - `PENDING_WARDEN`, `PENDING_FA`, `PENDING_HOD`,
+`PENDING_IAR` - each at most once per route. A stage carries an optional
+`label` for where the slot's own name is wrong for the job it has been given;
+`configuredStageName` reads it back for the queue page and the navigation, and
+returns null where two routes name one slot differently.
+
+**Why not a status per stage the office names.** `booking_status` is a
+Postgres enum. Adding a value is a migration, and migration 29 is the standing
+lesson that Postgres will not let you *use* a new value in the transaction
+that adds it - so a console that could name a stage would need a migration per
+stage, applied by hand, before the stage worked. Four slots before the desk is
+twice the deepest chain the institute has ever asked for, and renaming one is
+the part the office actually wants: "Pending Club Approval" on a slot now used
+for the Dean of Students is what they would complain about.
+
+**Why at most once per route.** `nextStatusAfter` finds the next stage by
+`stages.indexOf(current)`. One status twice has no single successor, so the
+schema refuses it by name.
+
+### The last stage is always the Guest House Manager
+
+**Decision.** `PENDING_GH_MANAGER` is not a configurable slot. Every route
+ends there whether it says so or not, and `canReview` answers that status from
+the role alone.
+
+**Why.** Approval at the desk *is* room allocation (`allocateRooms` assigns
+rooms and sets `APPROVED` in one step, and `reviewBooking` explicitly refuses
+a manager's generic approval of a room booking). A route that ended anywhere
+else would be a request that is approved but holds no room - a state nothing
+downstream can price, allocate or check in.
+
+### Six kinds of approver, three of them relative to the requester
+
+**Decision.** `ApproverRule` is `warden` | `hod` | `unit_head` | `role` |
+`unit` | `profile`.
+
+**Why both kinds.** The first three keep the property the units system was
+built for in the first place (see *Approvers belong to the unit, not to a
+matched string*): they are resolved when somebody looks, so changing an HOD
+moves the waiting requests and nobody edits a route. The last three are what
+the old code could not say at all - a named office, a named person - and are
+how "who approves whose" gets answered for a one-off arrangement. A route that
+names a person is also the only way to give a queue to somebody who heads
+nothing, which the e2e journey uses deliberately.
+
+### A reconfiguration must not strand a request
+
+**Decision.** Three defences, all of them kept:
+
+1. **`canReview` falls back to the slot's built-in meaning**
+   (`BUILT_IN_STAGE_APPROVERS`) for a request waiting at a stage the current
+   routes no longer describe.
+2. **A stage nobody can decide is skipped** at submission, and the log names
+   it (`skippedStages`) - the HOD rule of Phase 4, generalised to every
+   stage. Only where the caller passed both a directory and a requester:
+   without them a stage is assumed staffed, which is exactly what the
+   hardcoded pipeline did, so a mail module with units but no profiles
+   behaves as it always has.
+3. **The save is refused** when a request already waiting would be left with
+   nobody to decide it, or a stage points at a unit with no head, a deleted
+   account or a role nobody holds (`approvalRouteBlockers`). Named, refused,
+   nothing saved - the contract every Setting has.
+
+**Why all three and not one.** They cover different moments. (3) is the only
+one that can tell the office *before* they break something, but it cannot see
+a unit whose head is removed next week. (2) stops a route that says more than
+it does. (1) is the floor: whatever happens to the configuration, a request in
+a queue stays actionable by whoever the stage used to mean.
+
+**Deliberately not built: a manager override on an intermediate stage.** The
+obvious fourth defence is "the desk can always act on anything". It was
+considered and left out: `reviewBooking` refuses a manager's approval of a
+room booking by design, so the override could only ever reject, and giving the
+desk a half-power at every stage is a worse answer than refusing the change
+that would need it. The developer console's force-status override remains the
+escape hatch it has always been.
+
+### A queue is "a route points at you"
+
+**Decision.** `stagesDecidedBy` / `stageQueuesFor` decide the navigation links
+and guard the four queue pages. `/warden` and `/iar` now filter their list
+through `canReviewBooking` instead of listing a status outright.
+
+**Why.** The old gates were role tests (`user.role === "warden"`) and
+appointment tests (`isHodForAny`), which both answer a question the routes
+have taken over. A professor a route names heads no unit and holds no reviewer
+role; without this they would have a stage and nowhere to work it. `/warden`
+was worse than a gate: it was a store query scoped by `hostelName`, so a
+request routed through that slot from somebody with no hostel would have been
+filtered out of the only queue it was in.
+
+**The exception, and why.** `warden`, `iar_cell` and the legacy
+`faculty_advisor` keep their link whatever the routes say, because
+`homeForRole` sends them to that page - turning them away is a redirect loop.
+An empty queue costs nothing; a queue somebody is in and cannot reach costs a
+request.
+
+### What the office is told, in words
+
+**Decision.** `describeRouteChanges`, not `describeRuleChanges`, for the
+confirmation dialog and the audit log. `ConfirmDialog`'s consequence list
+scrolls.
+
+**Why.** `describeRuleChanges` walks the JSON and names every leaf, which is
+right for a handful of numbers. Inserting one stage produced a dozen lines of
+`rules.1.stages.1.approver.kind: undefined -> "profile"` - unreadable, and
+long enough that the dialog's own buttons went off the bottom of the screen
+with nothing to click. A route change is about chains and conditions, so it
+says `"Student - Assistant Warden": Assistant Warden - Guest House Manager ->
+Assistant Warden - Dean of Students - Guest House Manager`.
+
+### One door to the routes
+
+**Decision.** `saveRuleGroup` **refuses** the `approval` group and names
+Console -> Approval Workflow. The section is `workflow`, open to the manager
+and the developer, and is not in the developer-only Settings page.
+
+**Why.** `rules.approval` is a rule group, so the generic settings action
+would have written it - skipping the impact check and the audit wording that
+belong to it. Two doors to one `app_settings` row means one of them skipping
+both. And the section's owner is the point of the round: the office runs the
+approval chain, the developer runs the portal.
+
+### Derived, not asserted: whether an office is asked
+
+**Decision.** `asksOfficeApproval` computes the route twice, once with each
+answer, and asks only when they differ.
+
+**Why.** The 11 Oct rule was "an office with no HOD is not asked", written as
+`hasHodApprover`. That is the right answer for the default routes and the
+wrong shape once the routes are editable: an office whose route has no HOD
+stage at all should not be asked either, and an office the manager routes
+through a named person *should*. One computation answers both, and the
+11 Oct behaviour falls out of it unchanged.

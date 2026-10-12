@@ -1,7 +1,31 @@
 import { addMonths } from "date-fns";
 import type { BookingSearchCriteria } from "./booking-search";
-import type { Booking, BookingLog, BookingStatus, Profile, Role, ServiceType, StaffCategory } from "./types";
-import { approversOf, hodApproversFor, unitsGovernedBy, type Unit } from "./units";
+import {
+  BOOKING_CATEGORY_ROLES,
+  type Booking,
+  type BookingLog,
+  type BookingStatus,
+  type BookingType,
+  type Profile,
+  type Role,
+  type ServiceType,
+  type StaffCategory,
+} from "./types";
+import { hodApproversFor, unitsGovernedBy, type Unit } from "./units";
+import {
+  BUILT_IN_STAGE_APPROVERS,
+  canResolveApprover,
+  decidesStage,
+  DEFAULT_APPROVAL_RULES,
+  isStageStatus,
+  stageApproverIds,
+  stageForStatus,
+  stagesFor,
+  type ApprovalRules,
+  type ApprovalStage,
+  type ApproverDirectory,
+  type RequestFacts,
+} from "./approval-routes";
 import { formatDateTime } from "./format";
 import { raisedByFacultyInCharge } from "./club-booking";
 import { TURNOVER_GRACE_HOURS } from "./turnover";
@@ -72,9 +96,18 @@ export function isOfficeRole(role: Role): boolean {
 export function asksOfficeApproval(
   role: Role,
   service: ServiceType = "room",
-  hasHodApprover = true
+  hasHodApprover = true,
+  context: Omit<RoutingContext, "officeApproval"> = {}
 ): boolean {
-  return isOfficeRole(role) && service !== "meals_only" && hasHodApprover;
+  if (!isOfficeRole(role) || service === "meals_only") return false;
+  // Derived, not asserted: the office is asked only where the two answers
+  // actually lead somewhere different. Under the default routes that means
+  // "an HOD exists"; under a route the office has edited it means whatever
+  // they made it mean - including, if they take the HOD stage off an office
+  // altogether, not asking at all.
+  const route = (officeApproval: OfficeApproval) =>
+    routeFor(role, service, { ...context, hasHodApprover, officeApproval }).join(">");
+  return route("direct") !== route("hod");
 }
 
 /** What routing needs beyond the role and the service. */
@@ -87,6 +120,11 @@ export interface RoutingContext {
    * Whether anyone other than the requester gives HOD approval for them
    * (`hodApproversFor`). With nobody, the HOD stage is skipped - and the
    * submission log says so - rather than waiting forever.
+   *
+   * Superseded in part by `directory` + `requester` below, which count the
+   * approvers of **every** stage rather than only the HOD's. This is still
+   * read when they are absent, so every caller written before 12 Oct 2026
+   * behaves exactly as it did.
    */
   hasHodApprover?: boolean;
   /**
@@ -96,14 +134,79 @@ export interface RoutingContext {
    * asked that nobody else has to.
    */
   raisedByFacultyInCharge?: boolean;
+  /** The requester's own unit, for a route the office narrowed to one unit. */
+  unitId?: string | null;
+  /** The requester's hostel, for a route the office narrowed to one hostel. */
+  hostelName?: string | null;
+  /**
+   * The chains the office configured (`rules.approval`, Console -> Approval
+   * Workflow). Defaults to {@link DEFAULT_APPROVAL_RULES}, which is the
+   * pipeline the portal had before it was configurable.
+   */
+  rules?: ApprovalRules;
+  /**
+   * Units and profiles, when the caller has them. A stage with nobody to
+   * decide it is **skipped**, and the submission log says which - the rule
+   * the HOD stage has had since Phase 4, now applied to every stage, because
+   * a route the office points at an empty unit must not strand every request
+   * that matches it.
+   */
+  directory?: ApproverDirectory;
+  /** Who is asking, needed to count a requester-relative stage's approvers. */
+  requester?: Pick<Profile, "id" | "unit_id" | "hostel_name">;
+}
+
+/**
+ * Roles a booking can be stored under: every requester role, the retired
+ * `alumni` (stored bookings still carry it), and the desk, which books for
+ * guests who never open the portal. Anything else throws out of `routeFor` -
+ * a warden has no route because a warden does not book.
+ */
+export const BOOKABLE_ROLES: Role[] = [...BOOKING_CATEGORY_ROLES, "gh_manager"];
+
+/** The facts a configured route is matched against, from a role and a context. */
+function requestFacts(role: Role, service: ServiceType, context: RoutingContext): RequestFacts {
+  return {
+    role,
+    service,
+    bookingType: (context.bookingType as BookingType | undefined) ?? null,
+    staffCategory: context.staffCategory ?? null,
+    officeApproval: context.officeApproval ?? null,
+    raisedByFacultyInCharge: Boolean(context.raisedByFacultyInCharge),
+    unitId: context.unitId ?? context.requester?.unit_id ?? null,
+    hostelName: context.hostelName ?? context.requester?.hostel_name ?? null,
+  };
+}
+
+/**
+ * Whether anybody can decide this stage - and so whether it stays in the
+ * route at all.
+ *
+ * With a directory, the stage's own approver rule is resolved and counted.
+ * Without one, only an HOD stage is judged, from `hasHodApprover`: that is
+ * precisely what the hardcoded pipeline did, and a caller that cannot count
+ * must not start dropping stages on a guess.
+ */
+function stageIsStaffed(stage: ApprovalStage, context: RoutingContext): boolean {
+  const { directory, requester } = context;
+  if (directory && requester && canResolveApprover(stage.approver, directory)) {
+    return stageApproverIds(stage.approver, requester, directory).length > 0;
+  }
+  if (stage.approver.kind === "hod") return Boolean(context.hasHodApprover);
+  return true;
 }
 
 /**
  * The whole approval chain for a request, in order: every intermediate stage
  * before the Guest House Manager. Empty when it goes straight to the manager.
  * **The single source of the pipeline** - the entry status, the next stage
- * after each approval, the Copy-to chain and the public site's description of
- * the routes are all read from here.
+ * after each approval and the Copy-to chain are all read from here.
+ *
+ * **It is configuration, not code, since 12 Oct 2026.** The chain comes from
+ * `context.rules` - the list of routes the Guest House Manager edits at
+ * Console -> Approval Workflow (`lib/approval-routes.ts`) - and defaults to
+ * {@link DEFAULT_APPROVAL_RULES}, which reproduces the hardcoded pipeline
+ * case for case:
  *
  * - **Student** → Assistant Warden.
  * - **Club** (always official) - since 24 Sep 2026 raised by its Faculty
@@ -121,33 +224,52 @@ export interface RoutingContext {
  * - **Meals only** → straight to the manager: lunch for a visitor is the
  *   kitchen's business; the stages exist to vouch for an overnight stay.
  * - The **manager** booking at the desk → their own queue.
+ *
+ * A stage nobody can decide is dropped - see {@link skippedStages}, which is
+ * what the submission log names.
  */
 export function routeFor(
   role: Role,
   service: ServiceType = "room",
   context: RoutingContext = {}
 ): BookingStatus[] {
-  if (service === "meals_only") return [];
-  const hod: BookingStatus[] = context.hasHodApprover ? ["PENDING_HOD"] : [];
-  switch (role) {
-    case "student":
-      return ["PENDING_WARDEN"];
-    case "club":
-      return context.raisedByFacultyInCharge ? [] : ["PENDING_FA", ...hod];
-    case "employee":
-      return context.bookingType === "official" ? hod : [];
-    case "official":
-    case "iar_cell":
-      return context.officeApproval === "hod" ? hod : [];
-    // `alumni` is retired, kept so a resubmitted legacy booking routes sanely.
-    case "alumni":
-    case "iar_student_cell":
-      return ["PENDING_IAR"];
-    case "gh_manager":
-      return [];
-    default:
-      throw new Error(`Role ${role} cannot create bookings`);
+  return routeStagesFor(role, service, context).map((stage) => stage.status);
+}
+
+/**
+ * As {@link routeFor}, but each stage with the approver rule and the name the
+ * office gave it - what a queue page's heading and the console's preview
+ * read. Throws for a role that cannot book at all.
+ */
+export function routeStagesFor(
+  role: Role,
+  service: ServiceType = "room",
+  context: RoutingContext = {}
+): ApprovalStage[] {
+  if (!BOOKABLE_ROLES.includes(role)) {
+    throw new Error(`Role ${role} cannot create bookings`);
   }
+  const rules = context.rules ?? DEFAULT_APPROVAL_RULES;
+  return stagesFor(requestFacts(role, service, context), rules).filter((stage) =>
+    stageIsStaffed(stage, context)
+  );
+}
+
+/**
+ * The stages this request's route names but which have nobody to decide
+ * them, and so were dropped. The submission log says so - otherwise it looks
+ * as though an approval was skipped on purpose.
+ */
+export function skippedStages(
+  role: Role,
+  service: ServiceType = "room",
+  context: RoutingContext = {}
+): ApprovalStage[] {
+  if (!BOOKABLE_ROLES.includes(role)) return [];
+  const rules = context.rules ?? DEFAULT_APPROVAL_RULES;
+  return stagesFor(requestFacts(role, service, context), rules).filter(
+    (stage) => !stageIsStaffed(stage, context)
+  );
 }
 
 /** Where a fresh booking enters the pipeline: the first stage of its route. */
@@ -161,16 +283,16 @@ export function initialStatusFor(
 
 /**
  * Whether the HOD stage *should* apply to this request but cannot, because
- * nobody other than the requester is set to give it. The booking then skips
- * the stage and its submission log says why.
+ * nobody other than the requester is set to give it. A special case of
+ * {@link skippedStages}, kept because the submission log has worded it that
+ * way since Phase 4.
  */
 export function hodStageMissing(
   role: Role,
   service: ServiceType,
   context: RoutingContext
 ): boolean {
-  if (context.hasHodApprover) return false;
-  return routeFor(role, service, { ...context, hasHodApprover: true }).includes("PENDING_HOD");
+  return skippedStages(role, service, context).some((stage) => stage.approver.kind === "hod");
 }
 
 /** Which intermediate status a reviewer role is responsible for. */
@@ -184,11 +306,17 @@ export const REVIEWER_STAGE: Partial<Record<Role, BookingStatus>> = {
 /** Who a stored booking was raised by, where that matters to its route. */
 type RaisedBy = { user_role?: Role; user_id?: string | null; created_by?: string | null };
 
-/** The routing context of a stored booking, from its requester and the units now. */
+/**
+ * The routing context of a stored booking, from its requester and the units
+ * now. `options.rules` is the office's configured chains - omit it and the
+ * defaults apply; `options.profiles` lets a stage whose approver is a role or
+ * a named account be counted as well as an HOD's.
+ */
 export function routingContextFor(
   booking: { booking_type?: string; office_approval?: OfficeApproval | null } & RaisedBy,
-  requester: Pick<Profile, "id" | "staff_category" | "unit_id">,
-  units: Unit[]
+  requester: Pick<Profile, "id" | "staff_category" | "unit_id" | "hostel_name">,
+  units: Unit[],
+  options: { rules?: ApprovalRules; profiles?: Profile[] } = {}
 ): RoutingContext {
   return {
     bookingType: booking.booking_type,
@@ -202,6 +330,11 @@ export function routingContextFor(
           created_by: booking.created_by ?? null,
         })
       : false,
+    unitId: requester.unit_id ?? null,
+    hostelName: requester.hostel_name ?? null,
+    rules: options.rules,
+    directory: { units, ...(options.profiles ? { profiles: options.profiles } : {}) },
+    requester,
   };
 }
 
@@ -220,17 +353,36 @@ export function approvalStagesFor(
     user_id?: string | null;
     created_by?: string | null;
   },
-  requester: Pick<Profile, "id" | "staff_category" | "unit_id">,
-  units: Unit[] = []
+  requester: Pick<Profile, "id" | "staff_category" | "unit_id" | "hostel_name">,
+  units: Unit[] = [],
+  options: { rules?: ApprovalRules; profiles?: Profile[] } = {}
 ): BookingStatus[] {
   try {
     return routeFor(
       booking.user_role,
       booking.service_type ?? "room",
-      routingContextFor(booking, requester, units)
+      routingContextFor(booking, requester, units, options)
     );
   } catch {
     // A role that cannot book (a stored booking under a role since removed).
+    return [];
+  }
+}
+
+/** As {@link approvalStagesFor}, with each stage's approver rule and name. */
+export function approvalStageDetailsFor(
+  booking: Parameters<typeof approvalStagesFor>[0],
+  requester: Parameters<typeof approvalStagesFor>[1],
+  units: Unit[] = [],
+  options: { rules?: ApprovalRules; profiles?: Profile[] } = {}
+): ApprovalStage[] {
+  try {
+    return routeStagesFor(
+      booking.user_role,
+      booking.service_type ?? "room",
+      routingContextFor(booking, requester, units, options)
+    );
+  } catch {
     return [];
   }
 }
@@ -259,22 +411,78 @@ export function nextStatusOnApprove(current: BookingStatus): BookingStatus {
 }
 
 /**
- * Can `reviewer` act on a booking currently in `status`, submitted by `requester`?
+ * What `canReview` needs beyond the reviewer, the status and the requester.
  *
- * Two kinds of approval live here:
+ * All three are optional, and each one it is given makes the answer more
+ * exact rather than different:
  *
- * - **By unit** - a club's advisor or its council's secretary (`PENDING_FA`),
- *   and the HOD (`PENDING_HOD`) - decided by who heads the unit *now*
- *   (`approversOf`, `hodApproversFor`), so it follows a change of HOD without
- *   anyone touching the waiting requests. That is the HOD's department
- *   scoping: an HOD can act only on requests from units whose HOD they are.
- *   The approver need not hold a reviewer role at all: a council secretary is
- *   a student, an HOD an employee.
- * - **By role** - wardens scoped to their hostel, the IAR Office, the manager.
+ * - **`rules`** - the office's configured chains. Without them the stage's
+ *   built-in meaning applies ({@link BUILT_IN_STAGE_APPROVERS}), which is
+ *   the pipeline as it was before the chains were configurable.
+ * - **`request`** - what the request is, so the *configured* stage governing
+ *   this status can be found. A stage the current rules no longer describe
+ *   falls back to its built-in meaning, so editing a route can never strand
+ *   a request already waiting.
+ * - **`profiles`** - every account, needed to resolve a stage decided by a
+ *   role or a named person. Without it such a stage is answered from the
+ *   reviewer's own profile, which is what the old `REVIEWER_STAGE` map did.
+ */
+export type ReviewContext = {
+  rules?: ApprovalRules;
+  request?: RequestFacts;
+  profiles?: Profile[];
+};
+
+/** The request facts of a stored booking, for {@link canReview}. */
+export function requestFactsFor(
+  booking: {
+    user_role: Role;
+    service_type?: ServiceType;
+    booking_type?: string;
+    office_approval?: OfficeApproval | null;
+    user_id?: string | null;
+    created_by?: string | null;
+  },
+  requester: Pick<Profile, "id" | "staff_category" | "unit_id" | "hostel_name">
+): RequestFacts {
+  return {
+    role: booking.user_role,
+    service: booking.service_type ?? "room",
+    bookingType: (booking.booking_type as BookingType | undefined) ?? null,
+    staffCategory: requester.staff_category ?? null,
+    officeApproval: booking.office_approval ?? null,
+    raisedByFacultyInCharge: raisedByFacultyInCharge({
+      user_role: booking.user_role,
+      user_id: booking.user_id ?? requester.id,
+      created_by: booking.created_by ?? null,
+    }),
+    unitId: requester.unit_id ?? null,
+    hostelName: requester.hostel_name ?? null,
+  };
+}
+
+/**
+ * Can `reviewer` act on a booking currently in `status`, submitted by `requester`? *
+ * **Who decides a stage is configuration** (12 Oct 2026). The stage the
+ * request is waiting in is looked up in the office's route for it, and that
+ * stage names its approver: the Assistant Warden of the requester's hostel,
+ * the HOD of their unit, the head of their own unit, everyone holding a
+ * role, the head of one named unit, or one named person
+ * (`lib/approval-routes.ts`). The two kinds this started as are still the
+ * two that matter:
+ *
+ * - **Relative to the requester** - `warden`, `hod`, `unit_head` - resolved
+ *   from who heads what *now* (`approversOf`, `hodApproversFor`), so a
+ *   change of HOD moves the waiting requests with it and nobody edits a
+ *   booking. The approver need not hold a reviewer role at all: a council
+ *   secretary is a student, an HOD an employee.
+ * - **Named outright** - `role`, `unit`, `profile` - which is how an office
+ *   says "every request from Civil also goes to the Dean of Students".
  *
  * A club whose unit has nobody set falls back to the old advisor rule, so a
- * request cannot be stranded because the console was half filled in; the
- * manager can also always approve past any stage.
+ * request cannot be stranded because the console was half filled in; a stage
+ * the current routes no longer describe falls back to its built-in meaning,
+ * so neither can a reconfiguration strand one.
  *
  * Nobody ever approves their own request.
  */
@@ -282,32 +490,27 @@ export function canReview(
   reviewer: Profile,
   status: BookingStatus,
   requester: Profile,
-  units: Unit[] = []
+  units: Unit[] = [],
+  context: ReviewContext = {}
 ): boolean {
-  // Nobody signs off their own request. The IAR Office both books and reviews,
-  // and an HOD books too - this is the belt-and-braces check behind the
-  // routing that already skips them.
+  // Nobody signs off their own request. The IAR Office both books and
+  // reviews, and an HOD books too - this is the belt-and-braces check behind
+  // the routing that already skips them.
   if (reviewer.id === requester.id) return false;
 
-  if (status === "PENDING_HOD") {
-    return hodApproversFor(requester, units).includes(reviewer.id);
-  }
-  if (status === "PENDING_FA") {
-    const byUnit = approversOf(requester.unit_id, units).filter((id) => id !== requester.id);
-    if (byUnit.length > 0) return byUnit.includes(reviewer.id);
-    // Nobody set for this club: the advisor matched by name, as before.
-    return (
-      reviewer.role === "faculty_advisor" &&
-      Boolean(reviewer.department_or_club) &&
-      reviewer.department_or_club === requester.department_or_club
-    );
-  }
+  // The last stage of every route, and the one stage no configuration moves:
+  // approval there is room allocation.
+  if (status === "PENDING_GH_MANAGER") return reviewer.role === "gh_manager";
+  if (!isStageStatus(status)) return false;
 
-  if (REVIEWER_STAGE[reviewer.role] !== status) return false;
-  if (reviewer.role === "warden") return reviewer.hostel_name === requester.hostel_name;
-  if (reviewer.role === "faculty_advisor")
-    return reviewer.department_or_club === requester.department_or_club;
-  return true;
+  const configured = context.request
+    ? stageForStatus(status, context.request, context.rules ?? DEFAULT_APPROVAL_RULES)
+    : null;
+  const approver = configured?.approver ?? BUILT_IN_STAGE_APPROVERS[status];
+  return decidesStage(reviewer, approver, requester, {
+    units,
+    ...(context.profiles ? { profiles: context.profiles } : {}),
+  });
 }
 
 /**
@@ -318,11 +521,29 @@ export function canReview(
  */
 export function canReviewBooking(
   reviewer: Profile,
-  booking: { status: BookingStatus; requester: Profile; created_by?: string | null },
-  units: Unit[] = []
+  booking: {
+    status: BookingStatus;
+    requester: Profile;
+    created_by?: string | null;
+    user_role?: Role;
+    user_id?: string | null;
+    service_type?: ServiceType;
+    booking_type?: string;
+    office_approval?: OfficeApproval | null;
+  },
+  units: Unit[] = [],
+  context: Omit<ReviewContext, "request"> = {}
 ): boolean {
   if (booking.created_by && booking.created_by === reviewer.id) return false;
-  return canReview(reviewer, booking.status, booking.requester, units);
+  // The booking's own facts, so the stage it waits in is read from the route
+  // the office configured for *this* request and not from the slot's name.
+  const request = booking.user_role
+    ? requestFactsFor(
+        { ...booking, user_role: booking.user_role },
+        booking.requester
+      )
+    : undefined;
+  return canReview(reviewer, booking.status, booking.requester, units, { ...context, request });
 }
 
 /**

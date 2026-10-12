@@ -352,7 +352,11 @@ are in **`.memories/11-booking-forms.md`** (Part 2). Keep that file and
 
 ## Roles, pipelines, and where they are encoded
 
-`lib/workflow.ts` is the single source of truth for the pipeline.
+`lib/workflow.ts` applies the pipeline; **`lib/approval-routes.ts` holds it,
+and the Guest House Manager edits it** (12 Oct 2026, Console -> **Approval
+Workflow**). See "The approval workflow is configuration" below. The table
+here is `DEFAULT_APPROVAL_RULES` - what every install starts with, and what
+the portal did before the chain was configurable.
 
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
@@ -370,8 +374,9 @@ are in **`.memories/11-booking-forms.md`** (Part 2). Keep that file and
 
 **`routeFor(role, service, context)` is the pipeline** (Phase 4): the entry
 status (`initialStatusFor`), the next stage after each approval
-(`nextStatusAfter` over `approvalStagesFor(booking)`), the Copy-to chain and the
-public site's route descriptions are all read from it. `bookings.office_approval`
+(`nextStatusAfter` over `approvalStagesFor(booking)`) and the Copy-to chain are
+all read from it - and since 12 Oct 2026 it reads the office's own routes
+(`rules.approval`). `bookings.office_approval`
 records an office's Direct / HOD choice, so a waiting request's route cannot
 change under it.
 
@@ -385,6 +390,68 @@ choice (`BookingSchemaContext.hasHodApprover`), and `createBooking` records
 personal booking's debitable head. Appoint a head in Departments & Clubs and
 the question comes back. One function, read by the form, the schema and the
 action; don't re-derive it from `hodApprovers.length` anywhere else.
+
+### The approval workflow is configuration - `lib/approval-routes.ts`
+
+**Who forwards whose request is a Setting the manager edits**, not a `switch`
+(12 Oct 2026). `rules.approval` is an **ordered list of routes**; a request
+takes the **first active route whose conditions match it**, and that route
+lists the stages it passes through before the desk. No migration: it is a
+jsonb row in `app_settings`, like `rules.capacity`.
+
+- **`DEFAULT_APPROVAL_RULES` is the old `switch`, case for case**, and
+  `tests/approval-routes.test.ts` compares the two over all **576**
+  combinations of role, service, booking type, office choice, HOD and
+  advisor. Change a default route and that test is what tells you.
+- **The rules are a parameter, never a singleton.** `routeFor(role, service,
+  { rules, directory, requester, ... })`, the way every other rule group
+  works. `getApprovalRules()` / `getReviewContext()`
+  (`lib/approval-routes-server.ts`) are the server readers; a page reads once
+  and hands the same object to the form, the schema and the action.
+- **Four stages, not unlimited.** `booking_status` is a Postgres enum and a
+  new value needs a migration Postgres will not even let you *use* in the
+  same transaction (migration 29), so a route is built from the four
+  intermediate slots that exist (`STAGE_STATUSES`). A slot appears **at most
+  once** per route - `nextStatusAfter` finds the next stage by `indexOf`, so
+  a repeat has no single successor, and the schema refuses it. A stage
+  carries an optional `label` for where the slot's own name is wrong for the
+  job; `configuredStageName` reads it back for the queue page and the nav,
+  and returns null where two routes name one slot differently.
+- **The last stage is always the Guest House Manager.** Approval there *is*
+  room allocation, so `PENDING_GH_MANAGER` is not a configurable slot.
+- **Six kinds of approver** (`ApproverRule`): `warden` / `hod` / `unit_head`
+  are relative to the requester and follow a change of appointment with
+  nobody editing a route; `role` / `unit` / `profile` name somebody outright,
+  which is how "every request from Civil also goes to the Dean" is expressed.
+- **A stage nobody can decide is skipped**, and the submission log names it
+  (`skippedStages`) - the HOD rule of Phase 4, generalised. Only where the
+  caller passed a `directory` *and* a `requester`: without them a stage is
+  assumed staffed, which is exactly what the hardcoded pipeline did, so a
+  mail module with units but no profiles behaves as it always has.
+- **`canReview` reads the configured stage**, through
+  `ReviewContext { rules, request, profiles }`. A stage the current routes no
+  longer describe falls back to `BUILT_IN_STAGE_APPROVERS` - **editing a
+  route can never strand a request already waiting.** Keep that fallback.
+- **A queue is "a route points at you"**, not "you hold a reviewer role":
+  `stagesDecidedBy` / `stageQueuesFor` build the nav and guard the four queue
+  pages. `warden` and `iar_cell` (and the legacy `faculty_advisor`) keep
+  their link whatever the routes say, because their landing page *is* that
+  queue and turning them away is a redirect loop.
+- **`asksOfficeApproval` is derived, not asserted**: the office is asked
+  Direct vs HOD only where the two answers produce different routes. Under
+  the defaults that is "an HOD exists" (the 11 Oct rule); take the HOD stage
+  off an office's route and the question goes with it.
+- **The Forward button names the next stage of the request's own route**
+  (`forwardTargets`), not "GH Manager" on every row.
+- **Refuse, don't adjust**: `approvalRouteBlockers` names any waiting request
+  the new routes would leave with nobody to decide it, and any stage pointing
+  at a unit with no head, a deleted account or a role nobody holds. Nothing
+  is saved. Every save is audited, in the same words the dialog showed
+  (`describeRouteChanges` - **not** `describeRuleChanges`, whose JSON diff
+  made the dialog taller than the screen).
+- Edited at `/admin/workflow` (`workflow` console section, **manager and
+  developer** - the office runs the chain, the developer runs the portal, so
+  it is deliberately *not* in the developer-only Settings page).
 
 **HODs are approvers by appointment**, not a role: `units.head_id` /
 `acting_head_id` of the requester's **HOD unit** (`hodUnitIdFor`: a department
@@ -1366,7 +1433,12 @@ manager + developer). Every value defaults to what the code did before.
 
 - **Scalar groups** are jsonb rows in `app_settings` — `rules.capacity`,
   `rules.booking`, `rules.meals` — merged over `DEFAULT_RULES` by
-  `parseRuleGroup`, so a row saved before a field existed still reads. **Lists**
+  `parseRuleGroup`, so a row saved before a field existed still reads.
+  **`rules.approval` is a group too but is not saved here**: it is the
+  approval workflow, the Guest House Manager owns it (`/admin/workflow`), and
+  writing it has its own impact check and its own audit wording.
+  `saveRuleGroup` **refuses** that group and names the right section - two
+  doors to one `app_settings` row means one of them skipping both. **Lists**
   are tables: `hostels` (with `profiles_hostel_fk`, on update cascade / on
   delete restrict) and `official_email_whitelist`. Departments, clubs and
   offices are `units`, now with `office_class` (officer / department).
@@ -1409,14 +1481,14 @@ console sections as well as the developer's.
 > before role changes, Settings and deletes (`stepUpProblem`). The password is
 > still a shared secret — change it from `0000` before go-live.
 
-## The console (`/admin` — manager 10 sections, developer all 14)
+## The console (`/admin` — manager 11 sections, developer all 15)
 
 `app/(portal)/admin/*` + `components/admin/*`; sections and their roles in
 `CONSOLE_SECTIONS` (`lib/access.ts`). Developer-only: All Bookings, Settings,
 Audit Log, Console Access. Actions in `app/actions/admin.ts` (and
-`units.ts`, `settings.ts`, `invoices.ts`, `projects.ts`, `operations.ts`,
-`mail-templates.ts`, `academic.ts`), each gated by `requireConsole(section)` or
-its sibling.
+`units.ts`, `settings.ts`, `workflow.ts`, `invoices.ts`, `projects.ts`,
+`operations.ts`, `mail-templates.ts`, `academic.ts`), each gated by
+`requireConsole(section)` or its sibling.
 The full who-opens-what table is in `.memories/10-roles-and-workflows.md`.
 
 - **Destructive actions ask properly.** `components/ui/confirm-dialog.tsx`
@@ -1453,6 +1525,10 @@ The full who-opens-what table is in `.memories/10-roles-and-workflows.md`.
   remove-one / clear-a-kind / clear-everything behind a typed confirmation.
   Audited: these rows decide what a student's booking form locks their
   parents' names to.
+- **Approval Workflow** (`/admin/workflow`, 12 Oct 2026) — the ordered list of
+  routes: what each matches, the stages in it, who decides each, and a
+  **Try it** panel that names the actual people for one account. Manager and
+  developer.
 - **Form Builder** — edits `RoleFormConfig` per requester role.
 - **All Bookings** — filter by status, audit-logged force-status override,
   hard delete.

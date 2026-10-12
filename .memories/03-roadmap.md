@@ -219,6 +219,47 @@ Presentation only; nothing here blocks anything.
   GOV.UK tag palette behind it was not revisited. If the office ever asks for
   fewer colours, that is the file.
 
+## 2e. Opened by the 12 Oct 2026 round - the configurable approval workflow
+
+Nothing here blocks anything; the feature works and is tested. These are the
+edges it deliberately did not take.
+
+- **The office cannot name a new waiting status.** A route is built from the
+  four intermediate slots in `booking_status`, each at most once, and a stage
+  renames the slot rather than adding one. A fifth stage is a migration, and
+  Postgres cannot *use* a new enum value in the transaction that adds it
+  (migration 29), so a console that could name one would need a migration per
+  stage applied by hand before the stage worked. Four is twice the deepest
+  chain the institute has asked for. If it is ever asked for, the honest
+  shape is a batch of spare slots added in one migration, not a console that
+  writes DDL.
+- **`PENDING_GH_MANAGER` is not configurable**, so no route can end anywhere
+  but the desk - see [02-decisions.md](02-decisions.md) ("The last stage is
+  always the Guest House Manager"). Deliberate: approval there is room
+  allocation.
+- **The four queue pages are still four pages.** Each has grown something the
+  others do not need - the warden's academic-record panels, the IAR Office's
+  alumni card, the HOD's "HOD for X" caption - so a route pointing somebody
+  at a slot sends them to the page that already exists for it, under that
+  slot's own name unless every route renames it the same way
+  (`configuredStageName`). One generated queue page per configured stage
+  would be tidier and would lose those three things.
+- **Changing a unit's head still changes routing with no warning**, as
+  §2c already noted for the Approval card. The workflow's own impact check
+  (`approvalRouteBlockers`) runs when the **routes** are saved, not when a
+  head is cleared in Departments & Clubs, so a route that reads
+  "the HOD for the requester's department" can quietly become unstaffed
+  later. The booking's log says so at submission, and `canReview` keeps the
+  request actionable, but nothing tells the person clearing the head.
+- **No per-guest-house routes.** A condition can narrow by requester role,
+  booking type, service, employee category, the office's own choice, the
+  requester's unit and the requester's hostel - not by which guest house is
+  asked for. Nobody has asked; the field would be one more entry in
+  `ApprovalRouteWhen` and one more `CheckRow`.
+- **The routes are not in `04-production.md`'s checklist** because the
+  defaults are the institute's own pipeline and need no filling in. If the
+  office decides a different chain before go-live, that becomes a row there.
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the
@@ -265,7 +306,7 @@ unmaintained software holding ID data.
 
 ## 5. Tests that are still thin
 
-`npm test` (462 checks) and `npm run test:e2e` (38 journeys) run in CI. What
+`npm test` (494 checks) and `npm run test:e2e` (39 journeys) run in CI. What
 would catch the most next:
 
 1. the mail layer end to end — rendering, outbox claim and retry, recipients

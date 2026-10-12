@@ -60,6 +60,8 @@ import {
   TURNOVER_GRACE_HOURS,
   type ConflictKind,
 } from "@/lib/turnover";
+import { stageLabel } from "@/lib/approval-routes";
+import { getReviewContext } from "@/lib/approval-routes-server";
 import {
   ACTIVE_STATUSES,
   actsAsRequester,
@@ -68,8 +70,8 @@ import {
   canUpdateLifecycle,
   approvalStagesFor,
   asksOfficeApproval,
-  hodStageMissing,
   initialStatusFor,
+  skippedStages,
   isOfficeRole,
   nextStatusAfter,
   occupancyNotStartedError,
@@ -415,24 +417,35 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     // An office with no HOD is not asked (11 Oct 2026): the question has one
     // answer, so Direct is recorded whatever the payload carried rather than
     // the submission being refused for a choice the form did not offer.
+    //
+    // The chain itself is the office's (12 Oct 2026): `bookingContext.rules
+    // .approval` is the list of routes the manager edits at Console ->
+    // Approval Workflow, and the directory is what lets a stage with nobody
+    // to decide it be skipped rather than stranding the request.
+    const routingBase = {
+      bookingType: payload.booking_type,
+      staffCategory: requester.staff_category ?? null,
+      hasHodApprover,
+      raisedByFacultyInCharge: club !== null,
+      rules: bookingContext.rules.approval,
+      directory: { units: bookingContext.units, profiles: bookingContext.profiles },
+      requester,
+    };
     const officeApproval =
       !isOfficeRole(requester.role) || !wantsRooms
         ? null
-        : asksOfficeApproval(requester.role, payload.service_type, hasHodApprover)
+        : asksOfficeApproval(requester.role, payload.service_type, hasHodApprover, routingBase)
           ? payload.office_approval
           : "direct";
-    const routing = {
-      bookingType: payload.booking_type,
-      staffCategory: requester.staff_category ?? null,
-      officeApproval,
-      hasHodApprover,
-      raisedByFacultyInCharge: club !== null,
-    };
+    const routing = { ...routingBase, officeApproval };
     const status = initialStatusFor(requester.role, payload.service_type, routing);
-    // A request that should have waited for an HOD, but could not because
-    // nobody other than the requester is set to give it, says so in its log -
-    // otherwise it looks as if the approval was skipped on purpose.
-    const hodMissing = hodStageMissing(requester.role, payload.service_type, routing);
+    // A stage the route names but which nobody can decide is dropped, and the
+    // log says which - otherwise it looks as if an approval was skipped on
+    // purpose. The HOD's keeps the wording it has had since Phase 4, because
+    // it is the one the office reads most.
+    const skipped = skippedStages(requester.role, payload.service_type, routing);
+    const hodMissing = skipped.some((stage) => stage.approver.kind === "hod");
+    const otherSkipped = skipped.filter((stage) => stage.approver.kind !== "hod");
     const submissionRemarks =
       [
         club
@@ -441,6 +454,11 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         overrideNote,
         hodMissing
           ? "Booking submitted. Nobody other than the person booking is set to give HOD approval for this unit in the console, so the HOD stage was skipped."
+          : null,
+        otherSkipped.length > 0
+          ? `Nobody is set to decide ${otherSkipped
+              .map((stage) => stageLabel(stage))
+              .join(" or ")}, so ${otherSkipped.length === 1 ? "that stage was" : "those stages were"} skipped.`
           : null,
       ]
         .filter(Boolean)
@@ -530,11 +548,14 @@ export async function reviewBooking(
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
     // Unit approvals (an HOD, a club's advisor or council secretary) are
-    // decided by who heads the requester's unit now, so the units come too.
-    const units = await store.listUnits();
+    // decided by who heads the requester's unit now, so the units come too -
+    // and, since 12 Oct 2026, the office's approval routes and every account,
+    // because a route can name a stage's approver by role or outright.
+    const review = await getReviewContext();
+    const units = review.units;
     // Also refuses whoever raised it - a club's faculty in-charge who is the
     // club's HOD too cannot sign off their own request.
-    if (!canReviewBooking(user, booking, units)) {
+    if (!canReviewBooking(user, booking, units, review)) {
       return { ok: false, error: "You are not authorised to review this booking" };
     }
     if (action === "reject" && !reason?.trim()) {
@@ -574,7 +595,7 @@ export async function reviewBooking(
       // to its HOD when it has one, everyone else to the manager.
       const next = nextStatusAfter(
         booking.status,
-        approvalStagesFor(booking, booking.requester, units)
+        approvalStagesFor(booking, booking.requester, units, review)
       );
       await store.updateBookingStatus(
         bookingId,

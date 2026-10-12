@@ -6,6 +6,7 @@ import {
   localDate,
   REFERENCE,
   signIn,
+  unlockConsole,
 } from "./helpers";
 
 /**
@@ -27,11 +28,7 @@ async function openConsole(
 ) {
   await signIn(page, as);
   await page.goto(path);
-  const password = page.getByLabel("Console password");
-  if (await password.isVisible()) {
-    await password.fill("0000");
-    await page.getByRole("button", { name: "Unlock console" }).click();
-  }
+  await unlockConsole(page);
   await expect(page.getByText(present).first()).toBeVisible();
 }
 

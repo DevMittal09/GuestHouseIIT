@@ -112,6 +112,7 @@ export function canViewAllOccupancy(role: Role): boolean {
 export type ConsoleSection =
   | "users"
   | "units"
+  | "workflow"
   | "academic"
   | "projects"
   | "billing"
@@ -140,6 +141,13 @@ export const CONSOLE_SECTIONS: Record<
     href: "/admin/units",
     roles: ["gh_manager", "developer"],
     blurb: "Departments, clubs, councils and offices, and who approves for each.",
+  },
+  workflow: {
+    label: "Approval Workflow",
+    href: "/admin/workflow",
+    roles: ["gh_manager", "developer"],
+    blurb:
+      "Who forwards whose request: the approval chain for each kind of booking, the stages in it, and who decides each one.",
   },
   academic: {
     label: "Academic records",

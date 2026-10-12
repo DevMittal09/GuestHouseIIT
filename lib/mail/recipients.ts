@@ -1,7 +1,8 @@
 import { copyToFor } from "@/lib/academic/copy-to";
+import { getApprovalRules } from "@/lib/approval-routes-server";
 import { getStore } from "@/lib/store";
 import type { BookingStatus, BookingWithDetails, Profile, Role } from "@/lib/types";
-import { canReview } from "@/lib/workflow";
+import { canReview, requestFactsFor, type ReviewContext } from "@/lib/workflow";
 
 /**
  * Who gets told.
@@ -53,7 +54,14 @@ export async function reviewersForStatus(
   booking: BookingWithDetails,
   status: BookingStatus
 ): Promise<Profile[]> {
-  const reviewers = await reviewersOfRequester(booking.requester, status);
+  // The booking's own facts, so the stage is read from the route the office
+  // configured for *this* request rather than from the slot's default
+  // meaning - the same thing `canReviewBooking` does for the button.
+  const reviewers = await reviewersOfRequester(
+    booking.requester,
+    status,
+    requestFactsFor(booking, booking.requester)
+  );
   return reviewers.filter((p) => !booking.created_by || p.id !== booking.created_by);
 }
 
@@ -90,12 +98,19 @@ export async function requesterCopyTo(booking: BookingWithDetails): Promise<stri
  */
 export async function reviewersOfRequester(
   requester: Profile,
-  status: BookingStatus
+  status: BookingStatus,
+  request?: ReviewContext["request"]
 ): Promise<Profile[]> {
   const store = getStore();
-  const [profiles, units] = await Promise.all([store.listProfiles(), store.listUnits()]);
+  const [profiles, units, rules] = await Promise.all([
+    store.listProfiles(),
+    store.listUnits(),
+    getApprovalRules(),
+  ]);
   return profiles.filter(
-    (profile) => mailable(profile) && canReview(profile, status, requester, units)
+    (profile) =>
+      mailable(profile) &&
+      canReview(profile, status, requester, units, { rules, profiles, request })
   );
 }
 

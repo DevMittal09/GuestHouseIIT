@@ -40,7 +40,8 @@ import type { ActionResult } from "./bookings";
 /**
  * The invoice group is priced and run by the office, so it belongs to the
  * Tariffs & Invoicing section (manager and developer); every other group is
- * Settings (developer only).
+ * Settings (developer only). The `approval` group never reaches here - it has
+ * its own section and its own action (`app/actions/workflow.ts`).
  */
 async function requireConsoleFor(group: RuleGroup): Promise<Profile> {
   if (group !== "invoice") return requireSettingsConsole();
@@ -133,9 +134,21 @@ export async function getSettingsConsoleData(): Promise<
  * Refused, with the bookings named, when the new value would make a live
  * booking invalid: a room no longer holding the party already allocated to
  * it, or meals no longer served during a stay.
+ *
+ * **`approval` is not saved here** (12 Oct 2026). It is a rule group like the
+ * others, but writing it has its own impact check - the requests already
+ * waiting at a stage the new routes would drop - and its own description for
+ * the audit log. Two doors to one `app_settings` row means one of them
+ * skipping both, so this one is closed and names the other.
  */
 export async function saveRuleGroup(group: RuleGroup, proposed: unknown): Promise<ActionResult> {
   try {
+    if (group === "approval") {
+      return {
+        ok: false,
+        error: "The approval workflow is changed in Console - Approval Workflow, not in Settings",
+      };
+    }
     const user = await requireConsoleFor(group);
     // Phase 8: a developer proves their second factor again for a settings change.
     const stepUp = await stepUpProblem();
