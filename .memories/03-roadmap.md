@@ -219,10 +219,12 @@ Presentation only; nothing here blocks anything.
   GOV.UK tag palette behind it was not revisited. If the office ever asks for
   fewer colours, that is the file.
 
-## 2e. Opened by the 12 Oct 2026 round - the configurable approval workflow
+## 2e. Opened by the 12 Oct 2026 rounds - the configurable approval workflow
 
 Nothing here blocks anything; the feature works and is tested. These are the
-edges it deliberately did not take.
+edges it deliberately did not take. The second round of 12 Oct replaced the
+**screen** (one chain per kind of request; the route list behind Advanced) and
+closed none of these, because every one of them is about the engine.
 
 - **The office cannot name a new waiting status.** A route is built from the
   four intermediate slots in `booking_status`, each at most once, and a stage
@@ -255,7 +257,21 @@ edges it deliberately did not take.
   booking type, service, employee category, the office's own choice, the
   requester's unit and the requester's hostel - not by which guest house is
   asked for. Nobody has asked; the field would be one more entry in
-  `ApprovalRouteWhen` and one more `CheckRow`.
+  `ApprovalRouteWhen` and one more `CheckRow` under Advanced. It would not
+  appear on the flow screen, which has no conditions on it at all.
+- **"Try it" is the one part of the screen still shaped like the engine.**
+  It asks for an account, a booking type, a service and an office's choice as
+  four separate selects, which is the vocabulary the rest of the screen stops
+  using. It could ask for one of the eleven kinds of request instead, and show
+  the answer against that kind's own card. Left as it is because it names real
+  people, which is what it is for, and because changing it would change the
+  one control the office has already been shown twice.
+- **A kind of request is a constant, not a Setting.** `REQUEST_CATEGORIES` is
+  eleven entries in code. A twelfth - "faculty from one department", say -
+  is a route under Advanced, and it shows on no card. The honest fix if the
+  office starts wanting them is to derive the cards from the routes rather
+  than the other way round, which needs a name and a representative request
+  stored on each route.
 - **The routes are not in `04-production.md`'s checklist** because the
   defaults are the institute's own pipeline and need no filling in. If the
   office decides a different chain before go-live, that becomes a row there.

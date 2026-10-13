@@ -1035,10 +1035,13 @@ the role, the console unlock, and for a developer's dangerous actions the
 second factor.
 
 **Approval Workflow** (`/admin/workflow`, 12 Oct 2026, manager and developer)
-is the section that changed the pipeline from code into data:
-`components/admin/workflow-manager.tsx` edits one draft of the whole ordered
-list and saves it in one action (`saveApprovalRoutes`), because **order is the
-rule** - a narrow route under a broad one never fires, so two half-applied
+is the section that changed the pipeline from code into data. It is **two
+views over one draft**: `components/admin/workflow-flow.tsx` is the screen it
+opens on - one chain per kind of request, which is what the office works in -
+and `components/admin/workflow-manager.tsx` holds the draft, the save bar, the
+**Try it** panel, and the ordered route list itself under **Advanced**. Both
+edit the same `ApprovalRules` object and it is saved in one action
+(`saveApprovalRoutes`), because **order is the rule** - a narrow route under a broad one never fires, so two half-applied
 saves could reorder it invisibly. New routes are inserted at the **top** for
 the same reason. `previewApprovalRoute` is the **Try it** panel: it runs the
 routes being edited, for one real account, and names the people who would
@@ -1070,6 +1073,7 @@ Guest Houses & Rooms.
 | File | Contents |
 | --- | --- |
 | `lib/approval-routes.ts` | **The approval workflow as data** (12 Oct 2026): `ApprovalRules` / `ApprovalRouteRule` / `ApprovalStage` / `ApproverRule`, `DEFAULT_APPROVAL_RULES` (the old `switch`, case for case), `matchingRule` / `stagesFor` / `stageForStatus` (first active match wins), `stageApproverIds` / `decidesStage` / `stagesDecidedBy` (who decides, and who has a queue), `describeChain` / `describeConditions` / `describeRouteChanges` (reading a route back in words), `approvalRulesSchema`. Pure - no store |
+| `lib/approval-categories.ts` | **The workflow as a kind of request** (12 Oct 2026, second round): `REQUEST_CATEGORIES` (the eleven kinds, each with a representative request and the conditions a route of its own would carry), `categoryChains` (what each kind does now - answered with `matchingRule`, never worked out separately), `setCategoryStages` (**edit in place, or fork a route for this kind alone above the one it shares**), `insertStage` / `moveStage` / `removeStage` / `slotForApprover` / `setStageApprover` (the steps, and the slot the office never sees), `approverValue` / `approverFromValue` (six approver kinds as one select value), `uncoveredRules`. Pure - no store |
 | `lib/approval-routes-server.ts` | `getApprovalRules()`, `getReviewContext()` (the routes plus every account, which a role- or person-named stage needs), `stageQueuesFor()` (a person's queues), `forwardTargets()` (what each Forward button names) |
 | `lib/types.ts` | Domain shapes and label maps (`ROLE_LABELS`, `STATUS_LABELS`, `REQUESTER_ROLES`, `DEBIT_HEAD_LABELS`…). Declared as `type` aliases, not interfaces, so Supabase's generated `Insert`/`Update` helpers accept them. |
 | `lib/workflow.ts` | `routeFor` (the pipeline), `initialStatusFor`, `approvalStagesFor`, `nextStatusAfter`, `canReview` / `canReviewBooking`, `asksOfficeApproval` (whether an office is asked Direct / HOD at all), `actsAsRequester`, `ROOM_HOLDING_STATUSES`, `stayPhase`, `occupancyNotStartedError`, `hasLapsed`, `displayStatus`, `LIFECYCLE_ROLES`, `historyScope`, `canExportPdf`, the advance window (`latestCheckIn` / `isAdvanceWindowExempt`). |

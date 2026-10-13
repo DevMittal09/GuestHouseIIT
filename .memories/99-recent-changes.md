@@ -7,144 +7,153 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 12 October 2026 - the approval workflow becomes the manager's
+## Round of 12 October 2026 (second) - the workflow screen becomes a flow
 
-The owner:
+The owner, on the screen the morning round had just built:
 
-> We have users like student, faculty, offices and faculty advisors, wardens
-> and all right, I want to make a feature such that the guest house manager
-> can change, insert and delete connections, basically who forwards whose
-> request, who approves whose and all. Like the entire approval workflow
-> should be in the control of the guest house manager such that they can
-> change and update it, like make the feature robust.
+> Its all wrong and not at all what i wanted.
 
-**No migration.** The routes are a jsonb row in `app_settings`
-(`rules.approval`), which both stores already read and write through
-`getJsonSetting` / `setJsonSetting`.
+with the original brief repeated, and one clause in it doing all the work:
 
-### What it is
+> The interface should be simple, intuitive, and visual, allowing the manager
+> to understand exactly how requests will flow **without needing technical
+> knowledge**.
 
-`routeFor` was a `switch` in `lib/workflow.ts`. Every case in it was the
-institute's instruction at some point, and every case has changed at least
-once - which meant a deploy. It is now **an ordered list of routes the
-manager edits** at Console -> **Approval Workflow** (`/admin/workflow`,
-manager and developer).
+**No migration, no change to the engine, no change to `rules.approval`.** The
+stored shape, `routeFor`, `canReview`, the queues, mail, allocation and the
+576-combination parity test are all untouched. What changed is the screen.
 
-A request takes the **first active route whose conditions match it**. A route
-holds the stages it passes through before the desk, each with **who decides
-it** and, optionally, **what it is called**.
+### What was wrong with it
 
-| Part | Where |
-| --- | --- |
-| The model, the defaults, matching, the approvers, validation | `lib/approval-routes.ts` |
-| Reading them on the server, the review context, the queue list | `lib/approval-routes-server.ts` |
-| Applying them - `routeFor`, `canReview`, `asksOfficeApproval` | `lib/workflow.ts` |
-| The console section | `app/actions/workflow.ts`, `components/admin/workflow-manager.tsx`, `app/(portal)/admin/workflow/page.tsx` |
-| Refusing a change that would strand a request | `approvalRouteBlockers` in `lib/settings-impact.ts` |
+The console built that morning was the rules engine with a form around it. To
+move one approver the office had to:
 
-### The five decisions inside it
+- read an ordered list of **routes** and know that *the first active route
+  that matches wins*, so a narrow route under a broad one never fires and
+  nothing on the page says so;
+- fill in up to **eight rows of match conditions** ("tick nothing in a row and
+  it matches anything");
+- choose an **approver kind** from six - `warden` / `hod` / `unit_head` /
+  `role` / `unit` / `profile`, a taxonomy that only means anything if you know
+  the data model;
+- pick which of the **four waiting statuses** the stage occupies, and then
+  rename it, because the slot's own name is somebody else's job;
+- and read the chain back as a **sentence**, there being no picture anywhere.
 
-1. **The defaults are the old `switch`, case for case.**
-   `DEFAULT_APPROVAL_RULES` has ten routes, in the order the `switch` tested,
-   and `tests/approval-routes.test.ts` compares `routeFor` against a
-   hand-written copy of the old `switch` over **576** combinations of role,
-   service, booking type, office choice, HOD and advisor. An install where
-   nobody opens the new section behaves exactly as it did.
-2. **Four stages, not unlimited.** `booking_status` is a Postgres enum, and
-   migration 29 is the standing lesson that a new value cannot even be *used*
-   in the transaction that adds it. So a route is built from the four
-   intermediate slots that exist (`PENDING_WARDEN`, `PENDING_FA`,
-   `PENDING_HOD`, `PENDING_IAR`), each at most once per route, and a stage
-   carries a `label` for where the slot's own name is wrong for its new job.
-   The deepest chain the institute has ever asked for is two.
-3. **Six kinds of approver.** `warden`, `hod` and `unit_head` are relative to
-   the requester, so they still follow a change of appointment with nobody
-   editing a route; `role`, `unit` and `profile` name somebody outright,
-   which is what "every request from Civil also goes to the Dean of Students"
-   needs and what the old code could not express at all.
-4. **A reconfiguration cannot strand a waiting request.** Three defences:
-   `canReview` falls back to the slot's built-in meaning for a request whose
-   route no longer describes it; a stage nobody can decide is **skipped** at
-   submission and the log names it; and a save is **refused** when a request
-   already waiting would be left with nobody to decide it, or a stage points
-   at a unit with no head, a deleted account or a role nobody holds.
-5. **A queue is "a route points at you"**, not "you hold a reviewer role".
-   `stagesDecidedBy` builds the navigation and guards the four queue pages,
-   so a professor who heads nothing gets a queue the moment a route names
-   them - and loses it the moment it does not. `warden` and `iar_cell` keep
-   their link whatever the routes say, because their landing page *is* that
-   queue and turning them away would be a redirect loop.
+Every one of those is a question about the implementation, not about the
+institute. The brief asked for the opposite.
 
-### What changed in the code that was already there
+### What it is now
 
-- **`/warden` and `/iar` filter through `canReviewBooking`** instead of
-  listing a status outright. `/warden` used to be a store query scoped by
-  `hostelName`, which would silently drop anyone the office routed through
-  that slot who has no hostel.
-- **The Forward button names the next stage of the request's own route**
-  (`forwardTargets`). It said "Forward to GH Manager" on every row, which was
-  already not true for a club request with an HOD after it.
-- **`asksOfficeApproval` is derived, not asserted**: the office is asked
-  Direct vs HOD only where the two answers produce different routes. The
-  11 Oct rule ("an office with no HOD is not asked") falls out of that, and
-  so does taking the HOD stage off an office's route entirely.
-- **`saveRuleGroup` refuses the `approval` group** and names the right
-  section. Two doors to one `app_settings` row means one of them skipping the
-  impact check and the audit wording.
-- **`describeRouteChanges`**, not `describeRuleChanges`, for the confirmation
-  and the audit log. The JSON diff of inserting one stage is a dozen lines of
-  `rules.1.stages.1.approver.kind`, and it made the dialog taller than the
-  screen. `ConfirmDialog`'s consequence list now scrolls as well, which every
-  long list benefits from.
-- **`routeFor` throws for a role that cannot book** off an explicit
-  `BOOKABLE_ROLES` list now that there is no `default:` branch to throw from.
+**One chain per kind of request, drawn left to right, ending at the desk.**
+
+```
+Student  a personal stay
+[Student submits] -> + -> [Assistant Warden] -> + -> [Guest House Manager]
+```
+
+Eleven kinds, which are the ones the office already names: student, faculty
+official, non-teaching staff official, faculty or staff personal, club via its
+Faculty Advisor, an institute office direct and when it asks for HOD approval,
+the IAR Office, the IAR Student Cell, any dining booking, and the desk's own.
+
+- **Click a step** to open it: *who decides this step* as **one** select in
+  plain language ("Their hostel's Assistant Warden", "Dr. Arun Prasad -
+  arun.prasad@iitpkd.ac.in", "Head of Computer Science"), an optional name for
+  the step, and Earlier / Later / Remove.
+- **The `+` between two boxes inserts a step there.** It disappears at four,
+  and a line says why.
+- **Nothing on the screen mentions** routes, order, conditions, approver kinds
+  or waiting statuses.
+
+The ordered route list is still there, shut, under **Advanced: every route in
+order**, for the condition a chain cannot express ("every request from Civil
+also goes to the Dean"). An active route no card governs - the legacy
+club-own route - is **named above it** rather than left to be found.
+
+### The one real decision: a shared route forks
+
+A card has to write back to a route, and a route can govern several kinds. The
+defaults put **faculty and non-teaching staff on one official-stay route**, and
+both classes of office on one direct route.
+
+So `setCategoryStages` does one of two things:
+
+- the governing route decides **only this kind** - edit it where it is;
+- it decides **others too** - this kind gets **a route of its own, inserted
+  immediately above** the one it is leaving. Above, because the engine takes
+  the first match. Immediately, so no route that used to win for some other
+  request stops winning.
+
+The card says so before anything is saved ("Shares a route with Non-teaching
+staff. A change here applies to Faculty alone."), and a second edit of the same
+kind edits the forked route in place rather than forking again.
+
+This is not a workaround for the list. It is the thing the list could only do
+by hand-writing conditions: **giving faculty a different chain from staff**.
+
+### Two details worth keeping
+
+- **The slot a step waits in is chosen for it** (`slotForApprover`): the slot
+  whose built-in meaning *is* that approver where one is free, so a warden
+  step drives the warden's own queue page; otherwise the first free slot.
+- **A step's slot never moves once it exists.** A waiting request is sitting
+  in that status. So when the approver is changed to somebody the slot does
+  not mean, the step is **named after them** instead
+  (`setStageApprover`), which is what the Forward button and the queue page
+  then read. A name the office typed is never overwritten.
 
 ### Files
 
-New: `lib/approval-routes.ts`, `lib/approval-routes-server.ts`,
-`app/actions/workflow.ts`, `components/admin/workflow-manager.tsx`,
-`app/(portal)/admin/workflow/page.tsx`, `tests/approval-routes.test.ts`,
-`e2e/approval-workflow.spec.ts`.
+New: `lib/approval-categories.ts` (the kinds, the chains, the fork, the step
+operations - pure), `components/admin/workflow-flow.tsx` (the screen),
+`tests/approval-categories.test.ts` (25 checks).
 
-Changed: `lib/workflow.ts`, `lib/settings.ts`, `lib/settings-impact.ts`,
-`lib/access.ts`, `lib/booking-context-server.ts`, `lib/booking-schema.ts`,
-`lib/mail/recipients.ts`, `lib/mail/digest.ts`, `lib/academic/copy-to.ts`,
-`app/actions/bookings.ts`, `app/actions/settings.ts`,
-`app/api/documents/[...path]/route.ts`, `app/(portal)/layout.tsx`,
-`app/(portal)/{warden,iar,hod,approvals}/page.tsx`,
-`components/booking-form.tsx`, `components/review-queue.tsx`,
-`components/ui/confirm-dialog.tsx`, `e2e/helpers.ts` and the four console
-specs, `AGENTS.md`.
+Changed: `components/admin/workflow-manager.tsx` (the flow view is the page;
+the route list moved into Advanced; the intro cut to three lines),
+`e2e/approval-workflow.spec.ts` (rewritten against the new screen, plus a
+second journey for the fork), `AGENTS.md`.
+
+Unchanged, deliberately: `lib/approval-routes.ts`, `lib/workflow.ts`,
+`app/actions/workflow.ts`, `lib/settings-impact.ts` and every call site. The
+new screen is a second way to write the same `rules.approval` row, through the
+same server action, with the same impact check and the same audit wording.
 
 ### How it was checked
 
-`npm run lint`, `npm run typecheck`, **`npm test` (494 checks, 28 files -
-32 of them new)**, `NEXT_PUBLIC_SUPABASE_URL= npm run build`, and
-**`npm run test:e2e` (39 journeys, all passing)** against a production build
-on the mock store.
+`npm run lint`, `npm run typecheck`, **`npm test` (519 checks, 29 files - 25
+of them new)**, `NEXT_PUBLIC_SUPABASE_URL= npm run build`, and **`npm run
+test:e2e` (40 journeys, all passing)** against a production build on the mock
+store.
 
-The new journey is the whole feature in one pass: the manager inserts a stage
-after the Assistant Warden, decided by **Dr Arun Prasad - a professor who
-heads nothing and so had no approval queue at all** - names it "Dean of
-Students", and saves. A student's next request then shows the warden a
-**"Forward to Dean of Students"** button, does **not** appear at the desk when
-they press it, appears in Arun's new **HOD Queue** link, and reaches the desk
-only when he forwards it. Then the routes are restored.
+The rewritten journey is the feature end to end: the manager inserts a step
+before the desk on the **Student** chain, hands it to **Dr Arun Prasad - a
+professor who heads nothing and so had no approval queue at all** - calls it
+"Dean of Students", and saves. A student's next request then shows the warden
+a **"Forward to Dean of Students"** button, does **not** appear at the desk
+when they press it, appears in Arun's new queue, and reaches the desk only
+when he forwards it. The second journey takes the HOD off the **Faculty**
+chain and proves **Non-teaching staff** still has one.
 
-### An error worth remembering
+Checked by hand as well: the screen at **1280px** and at **320px**, where the
+chain wraps onto a second line with no horizontal scroll
+(`scrollWidth === clientWidth === 320`).
 
-The suite hit **"Too many attempts - try again in 831s"** on the console
-password. Unlocking is throttled 6 per 15 minutes
-(`RATE_LIMITS.consoleUnlock`, a row in the database), `signIn()` clears every
-cookie, and the httpOnly unlock cookie was therefore retyped on every persona
-switch - seven console openings in one run. `unlockConsole()` in
-`e2e/helpers.ts` now caches that cookie for the run, exactly as `signIn`
-caches sessions, and the four specs that open the console share it.
+### A thing to know before touching the e2e
+
+A step box and the `+` that inserts before it **share a word**: the box is
+named "Assistant Warden step 1 of 1" and the button beside it "Insert a step
+before Assistant Warden". `getByRole("button", { name: /Assistant Warden/ })`
+matches both and fails Playwright's strict mode. The spec matches a box on its
+caption - `^<name> step \d` - which is why the caption is in every box's
+`aria-label` even though it is only *shown* on a chain with more than one
+step.
 
 ### Left open
 
-In [03-roadmap.md](03-roadmap.md) §2e: `PENDING_GH_MANAGER` is deliberately
-not configurable, so a chain cannot end anywhere but the desk; the four queue
-pages keep their own extras rather than being one generated page; and nothing
-yet lets the office *name* a new waiting status, which would need a migration
-per status.
+In [03-roadmap.md](03-roadmap.md) §2e, unchanged by this round: the office
+still cannot name a new waiting status (a migration per status), the desk is
+still not a configurable stage, and the four queue pages are still four pages.
+New: the **Try it** panel still asks for a booking type, a service and an
+office's choice as separate selects, which is the one place on the screen that
+still reads like the engine; it could ask for a kind of request instead.

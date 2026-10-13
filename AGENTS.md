@@ -453,6 +453,35 @@ jsonb row in `app_settings`, like `rules.capacity`.
   developer** - the office runs the chain, the developer runs the portal, so
   it is deliberately *not* in the developer-only Settings page).
 
+**The screen is not the list** (12 Oct 2026, second round). The ordered routes
+above are the engine; the office never sees them. `/admin/workflow` opens on
+`components/admin/workflow-flow.tsx`: **one chain per kind of request**, drawn
+left to right from who submits to the desk, a `+` between boxes to insert a
+step, one plain-language question per step (*who decides this step*), and
+Earlier / Later / Remove. The eleven kinds and every operation on them are
+`lib/approval-categories.ts`, which is pure and tested. Four rules to keep:
+
+- **A card reads its chain through `matchingRule`** (`categoryChains`), never
+  by working out precedence itself. Two implementations of "which route wins"
+  would disagree the first time somebody wrote a route under Advanced.
+- **Editing a kind whose route is shared forks it** (`setCategoryStages`): a
+  route for that kind alone, inserted **immediately above** the one it is
+  leaving - above because the engine takes the first match, immediately so
+  nothing that used to win stops winning. This is what lets faculty differ
+  from non-teaching staff, which the defaults put on one route.
+- **The slot is chosen for a step and never moves afterwards**
+  (`slotForApprover`). A waiting request sits in that status. Change the
+  approver to somebody the slot does not mean and the step is **named** after
+  them instead (`setStageApprover`); a name the office typed is never
+  overwritten.
+- **An active route no card governs is named on screen** (`uncoveredRules`).
+  The screen may be simpler than the engine; it may not be less true than it.
+
+The ordered list is still there, shut, under **Advanced: every route in
+order** - that is where a condition is written. Don't move the conditions,
+the route order or the waiting statuses back onto the main screen: putting
+them in front of the office is what got the first version rejected.
+
 **HODs are approvers by appointment**, not a role: `units.head_id` /
 `acting_head_id` of the requester's **HOD unit** (`hodUnitIdFor`: a department
 is its own; a department office → its parent department; an officer office →

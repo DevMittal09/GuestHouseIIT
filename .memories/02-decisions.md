@@ -4474,6 +4474,14 @@ portal, and is at most a few dozen rows. `parseRuleGroup` already merges a
 saved row over the defaults and self-heals a row saved before a field
 existed. Revisit if the office starts wanting routes per guest house.
 
+**Refined the same day (second round).** Everything above stands - the stored
+shape, the ordering, the matching, `routeFor`. What did not survive contact
+with the owner was the **screen**: an ordered list of routes with its match
+conditions and approver kinds on show is the engine with a form around it,
+and it was rejected in those words ("Its all wrong"). The list is now behind
+**Advanced**, and the office works in kinds of request. See "12 Oct 2026
+(second)" at the end of this file.
+
 ### Four waiting statuses, and a name for each stage
 
 **Decision.** A route is built from the four intermediate slots that exist in
@@ -4611,3 +4619,92 @@ wrong shape once the routes are editable: an office whose route has no HOD
 stage at all should not be asked either, and an office the manager routes
 through a named person *should*. One computation answers both, and the
 11 Oct behaviour falls out of it unchanged.
+
+## 12 Oct 2026 (second) — the workflow screen is a flow, not a rule table
+
+The owner, on the console built that morning:
+
+> Its all wrong and not at all what i wanted.
+
+with the brief repeated unchanged. The clause it turned on:
+
+> The interface should be simple, intuitive, and visual, allowing the manager
+> to understand exactly how requests will flow without needing technical
+> knowledge.
+
+### The office works in kinds of request, not in routes
+
+**Decision.** Console -> Approval Workflow opens on **one chain per kind of
+request**, drawn left to right and ending at the desk: eleven cards -
+student, faculty official, staff official, employee personal, club via its
+advisor, office direct, office through its HOD, IAR Office, IAR Student Cell,
+dining, the desk's own. `lib/approval-categories.ts` holds them. The ordered
+list of routes is shut, under **Advanced**.
+
+**Why.** The ordered list is the right shape for the thing that runs and the
+wrong shape for the person who maintains it. To move one approver, the office
+had to hold first-match precedence in their head, know that a narrow route
+under a broad one never fires, fill in eight rows of match conditions, choose
+an approver *kind* from a six-way taxonomy that only means something if you
+know the data model, and pick which of four waiting statuses the stage sits
+in - then rename it, because the slot's own name is somebody else's job. Every
+one of those is a question about the implementation. The office's own question
+is "who approves a faculty member's official stay", and there was nowhere on
+the screen that asked it.
+
+**Why not a keyed record after all.** The morning's entry rejected "one chain
+per requester category" as the *stored* shape, and that reasoning is
+untouched: conditions are what express "requests from Civil also go to the
+Dean", and a keyed record cannot. This round changes the *presentation* only.
+`categoryChains` answers with `matchingRule`, so a card shows what the portal
+will actually do; a card that worked its own chain out would be a second
+implementation of precedence, and the two would disagree the first time
+somebody wrote a route by hand under Advanced.
+
+### A card that shares a route forks it
+
+**Decision.** Editing a kind whose governing route governs **only** that kind
+edits it in place. Editing one whose route governs others as well **inserts a
+route for that kind alone, immediately above** the one it is leaving.
+`setCategoryStages` is the whole rule; the card says which will happen before
+anything is saved.
+
+**Why.** The defaults put faculty and non-teaching staff on one official-stay
+route, and both classes of office on one direct route - so "change who
+approves faculty" has no honest answer that is not either "this also changes
+staff" or "faculty gets its own route". Silently changing both would be
+wrong; refusing would make the screen useless for the commonest real request.
+**Above**, because the engine takes the first match. **Immediately** above,
+rather than at the top, because a route further up still matches whatever it
+matched before, so nothing that used to win stops winning.
+
+**What it buys.** The thing the morning's screen could only do by hand-writing
+a condition: a different chain for faculty than for staff. A second edit of
+the same kind finds its own route governing it alone, so it edits in place and
+nothing accumulates.
+
+### The slot is chosen for the step, and never moves after
+
+**Decision.** `slotForApprover` picks the waiting status a new step occupies -
+the slot whose built-in meaning *is* that approver where one is free, else the
+first free one. Changing a step's approver afterwards **never** moves its
+slot; where the new approver is not what the slot means, the step is named
+after them instead (`setStageApprover`), and a name the office typed is never
+overwritten.
+
+**Why.** The slot is an implementation fact - four values in a Postgres enum -
+and asking the office to choose one was asking them to know why there are
+four. But it cannot be hidden *and* mutable: a request already waiting is
+sitting in that status, so moving the slot would move the request. Naming the
+step is the honest alternative, and it is what the Forward button and the
+queue page read anyway (`stageLabel`, `configuredStageName`).
+
+### An active route no card governs is named, not hidden
+
+**Decision.** `uncoveredRules` lists any active route no kind of request maps
+to - today, the legacy club-own route - in one line above Advanced.
+
+**Why.** A workflow screen that silently failed to mention a route which is in
+force would be worse than the list it replaced. The screen is allowed to be
+simpler than the engine; it is not allowed to be less true than it.
+

@@ -9,6 +9,7 @@ import {
   type WorkflowConsoleData,
 } from "@/app/actions/workflow";
 import { useRunner } from "@/components/admin/settings-manager";
+import { WorkflowFlow } from "@/components/admin/workflow-flow";
 import { EmptyState, SectionHeading } from "@/components/section-heading";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -130,56 +131,73 @@ export function WorkflowManager({ data }: { data: WorkflowConsoleData }) {
       <div className="max-w-[80ch] space-y-2">
         <h2 className="text-section font-semibold text-ink">Approval workflow</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          A request takes the first route below that matches it. Each route lists the stages it
-          passes through before the Guest House Manager, and who decides each one. Every route ends
-          at the Guest House Manager, because approval there is room allocation.
+          Who forwards whose request, and in what order.
         </p>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          A stage nobody is set to decide is skipped, and the booking&apos;s log says so. A change
-          that would leave a request already waiting with nobody to decide it is refused, and the
-          request is named. Every change is written to the security audit log.
+          A step nobody is set to decide is skipped, and the booking&apos;s log says so.
+        </p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          A change that would leave a waiting request with nobody to decide it is refused.
         </p>
       </div>
 
-      <div>
-        <SectionHeading
-          title="Routes"
-          count={draft.rules.length}
-          description="In order. The first active route that matches a request decides where it goes."
-          action={
-            <Button size="sm" variant="outline" onClick={insert} disabled={isPending}>
-              Add a route
-            </Button>
-          }
-        />
-        {draft.rules.length === 0 ? (
-          <EmptyState>
-            No routes. Every request would go straight to the Guest House Manager.
-          </EmptyState>
-        ) : (
-          <ol className="divide-y divide-border border-y border-border">
-            {draft.rules.map((rule, index) => (
-              <li key={rule.id} className="py-4">
-                <RouteRow
-                  rule={rule}
-                  index={index}
-                  total={draft.rules.length}
-                  data={data}
-                  directory={directory}
-                  open={editing === rule.id}
-                  onToggle={() => setEditing(editing === rule.id ? null : rule.id)}
-                  onChange={(next) => update(rule.id, next)}
-                  onMove={(by) => move(index, by)}
-                  onRemove={() => remove(rule.id)}
-                  disabled={isPending}
-                />
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
+      <WorkflowFlow
+        rules={draft}
+        data={data}
+        directory={directory}
+        onChange={setDraft}
+        disabled={isPending}
+      />
 
       <TryItPanel data={data} draft={draft} />
+
+      {/* The engine's own shape, for the condition a chain cannot express -
+          "every request from Civil also goes to the Dean". Shut by default:
+          order and conditions are not questions the office has to answer to
+          run the chain above. */}
+      <details className="border-t border-border pt-4">
+        <summary className="cursor-pointer text-sm font-medium text-ink">
+          Advanced: every route in order ({draft.rules.length})
+        </summary>
+        <div className="mt-5">
+          <SectionHeading
+            title="Routes"
+            count={draft.rules.length}
+            description="In order. The first active route that matches a request decides where it goes."
+            action={
+              <Button size="sm" variant="outline" onClick={insert} disabled={isPending}>
+                Add a route
+              </Button>
+            }
+          />
+          {draft.rules.length === 0 ? (
+            <EmptyState>
+              No routes. Every request would go straight to the Guest House Manager.
+            </EmptyState>
+          ) : (
+            <ol className="divide-y divide-border border-y border-border">
+              {draft.rules.map((rule, index) => (
+                <li key={rule.id} className="py-4">
+                  <RouteRow
+                    rule={rule}
+                    index={index}
+                    total={draft.rules.length}
+                    data={data}
+                    directory={directory}
+                    open={editing === rule.id}
+                    onToggle={() => setEditing(editing === rule.id ? null : rule.id)}
+                    onChange={(next) => update(rule.id, next)}
+                    onMove={(by) => move(index, by)}
+                    onRemove={() => remove(rule.id)}
+                    disabled={isPending}
+                  />
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </details>
+
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-strong pt-4">
         <p className="text-sm text-muted-foreground">

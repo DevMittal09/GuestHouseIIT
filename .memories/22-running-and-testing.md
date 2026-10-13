@@ -1074,3 +1074,30 @@ node -e 'import("./node_modules/playwright/index.mjs").then(async ({chromium}) =
 A positive number is a hidden column. Run it against a dev server started
 with `NEXT_PUBLIC_SUPABASE_URL= DEV_LOGIN=true npm run dev`, which is what
 makes the `gh_mock_user` cookie work.
+
+### A Playwright locator matches a button and the one beside it (12 Oct 2026)
+
+The workflow flow screen draws a chain as boxes with a `+` between them. The
+box is named after its approver - "Assistant Warden step 1 of 1" - and the
+button that inserts before it is labelled "Insert a step before Assistant
+Warden". So:
+
+```ts
+card.getByRole("button", { name: /Assistant Warden/ })   // matches both
+```
+
+fails with Playwright's strict-mode violation, naming two elements, and the
+message reads like the page rendered twice.
+
+Match the box on the part only it has, which is the caption:
+
+```ts
+const step = (scope: Locator, name: string) =>
+  scope.getByRole("button", { name: new RegExp(`^${name} step \\d`) });
+```
+
+This is why every step box carries `step N of M` in its `aria-label` even
+though the caption is only **shown** on a chain with more than one step: the
+accessible name has to stay stable whatever the chain looks like. If you
+change that label, `e2e/approval-workflow.spec.ts` is what breaks.
+

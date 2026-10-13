@@ -46,6 +46,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **11 Oct** | The office's **eleventh list**, three items: an office with **no HOD** is not offered "Requires HOD approval" at all (`asksOfficeApproval`); the **pets notice** comes off every booking form, keeping the Guidelines and the booking mail; and every form that **stars** a field says what the star means (`RequiredFieldsNote`). **No migration.** |
 | **11 Oct**, later | The owner's **design pass**: the interface "looks too ai generated". The palette was checked against iitpkd.ac.in again and kept; what changed was composition. A **named five-step type scale**, the institute's own page-title rule and serif figures, the dashed empty state cut to one line in 22 places, the desk's seven KPI tiles redrawn as a ruled index, the approver queues' constant **Status** column dropped so their action buttons fit the page, the allocation grid moved above the record, and the home page's empty quarter-column recovered. **Presentation only.** |
 | **12 Oct** | **The approval workflow becomes the manager's.** `routeFor`'s `switch` is replaced by `rules.approval` - an ordered list of routes the office edits at Console -> **Approval Workflow**: insert, delete, reorder and rename the stages of any chain, and choose who decides each (the requester's warden or HOD, the head of their unit, everyone holding a role, the head of one named unit, or one named person). The defaults are the old `switch` case for case, proved over 576 combinations. **No migration.** |
+| **12 Oct**, later | **The workflow screen rebuilt as a flow.** The ordered list of routes was rejected as "all wrong": it put first-match precedence, eight rows of match conditions, six approver kinds and four waiting statuses in front of the office. The screen now opens on **one chain per kind of request**, drawn left to right, with a `+` between boxes and one plain-language question per step; the route list is behind **Advanced**. A kind whose route is shared **forks** it on edit, which is how faculty can differ from staff. **Engine, stored shape and every call site unchanged.** |
 
 ## The problem
 
@@ -587,6 +588,32 @@ migration** - the routes are a jsonb row in `app_settings`.
 | The **whole** workflow in the manager's control | **Done**, with one deliberate exception | Every intermediate stage and its approver is theirs. `PENDING_GH_MANAGER` is not configurable: approval at the desk *is* room allocation, so a route that ended elsewhere would be an approved booking holding no room |
 | **Robust** | **Done** | The defaults are the old `switch` case for case (compared over **576** combinations in `tests/approval-routes.test.ts`); a stage nobody can decide is **skipped** and the log names it; a request waiting at a stage the new routes drop stays actionable by whoever that stage used to mean; and a save is **refused**, naming the requests, when it would leave one with nobody to decide it. Every change is audited in the words the dialog showed |
 | Confidence before saving | **Done** (not asked for) | A **Try it** panel runs the routes being edited for one real account and names the people who would decide each stage. A list of conditions is easy to get subtly wrong; a named chain is not |
+
+## The workflow screen becomes a flow — 12 October 2026 (second)
+
+The owner, on the console built that morning: **"Its all wrong and not at all
+what i wanted."** The brief was repeated unchanged, and the clause it turned on
+was the one about the interface. Reasoning in
+[02-decisions.md](02-decisions.md) ("12 Oct 2026 (second)"); what changed in
+[99-recent-changes.md](99-recent-changes.md). **No migration, and no change to
+the engine** - `rules.approval`, `routeFor`, `canReview`, the queues, mail and
+allocation are all exactly as the morning left them.
+
+> The interface should be simple, intuitive, and visual, allowing the manager
+> to understand exactly how requests will flow without needing technical
+> knowledge.
+
+| Asked for | Status | Where |
+| --- | --- | --- |
+| **Visual** - see how a request will flow | **Done** | One chain per kind of request, drawn left to right as boxes and arrows, ending at an ink box for the desk. Eleven kinds, which are the ones the office already names |
+| **Simple** - no technical knowledge | **Done** | The screen never mentions routes, their order, match conditions, approver kinds or waiting statuses. One question per step, in plain language: "Their hostel's Assistant Warden", "Dr. Arun Prasad - arun.prasad@iitpkd.ac.in" |
+| **Add, remove, change approvers** | **Done** | `+` between any two boxes; Remove on the step; one select changes who decides it |
+| **Reorder stages** | **Done** | Earlier / Later on the open step |
+| **Which approvers per requester category** | **Done**, and newly possible | Each kind is a card. Where two kinds share a route - faculty and non-teaching staff do - editing one **forks** a route for it alone, which is what lets faculty differ from staff at all |
+| **Direct, or multi-stage** | **Done** | A chain with no steps is the requester and the desk, nothing between |
+| Still controls the real process | **Done** | Same `rules.approval` row, same server action, same impact check, same audit wording. `categoryChains` reads the chains back through `matchingRule`, so a card shows what the portal will do. Proved end to end by `e2e/approval-workflow.spec.ts` |
+| Nothing else breaks | **Done** | 519 unit checks (29 files), 40 e2e journeys, lint, types and a production build all clean. The 576-combination parity test is untouched and still passes |
+| The condition a chain cannot express | **Kept** | The ordered route list is shut under **Advanced**, unchanged. An active route no card governs is named above it |
 
 ## Branches
 

@@ -433,7 +433,7 @@ A deliberate **subset** of the manager's console — reception.
 | ↳ Import LDAP usernames — `email, uid` pairs onto existing accounts | same | ✓ | ✓ |
 | ↳ **Tick rows and delete together**, behind a typed confirmation (8 Oct 2026) | same | ✓ (not developer accounts) | ✓ |
 | Departments & Clubs (+ Faculty Advisors) | `/admin/units` | ✓ | ✓ |
-| **Approval Workflow** — who forwards whose request: the ordered routes, their stages, who decides each, and a **Try it** panel that names the people (12 Oct 2026) | `/admin/workflow` | ✓ | ✓ |
+| **Approval Workflow** — who forwards whose request: **one chain per kind of request**, drawn left to right, with a `+` between boxes, one plain-language question per step, and a **Try it** panel that names the people (12 Oct 2026, rebuilt as a flow the same day). The ordered routes are behind **Advanced** | `/admin/workflow` | ✓ | ✓ |
 | **Academic records** (the institute's records, pasted in as CSV — migration 28, 7 Oct 2026) | `/admin/academic` | ✓ | ✓ |
 | Projects | `/admin/projects` | ✓ | ✓ |
 | Tariffs & Invoicing | `/admin/billing` | ✓ | ✓ |
@@ -458,9 +458,27 @@ Every section's actions re-check the role and the unlock on the server
 list of routes**; a request takes the **first active route whose conditions
 match it**, and that route lists the stages it passes through before the desk.
 The manager edits it at Console → **Approval Workflow** (`/admin/workflow`,
-manager and developer): add a route, delete one, move it up or down, turn it
-off without losing it, and inside it add, remove, reorder and rename the
-stages and choose who decides each.
+manager and developer).
+
+**What the office actually sees is not that list** (12 Oct 2026, second
+round). The screen opens on **one chain per kind of request** - eleven of
+them, in `REQUEST_CATEGORIES` (`lib/approval-categories.ts`) - drawn left to
+right from who submits to the desk. A `+` between two boxes inserts a step;
+clicking a step asks one question, *who decides this step*, in plain language;
+Earlier / Later reorder it; Remove takes it out. Nothing on that screen names
+a route, its order, its conditions, an approver kind or a waiting status.
+
+Where two kinds share one route - faculty and non-teaching staff do, and so do
+the two classes of office - editing one **forks a route for that kind alone**,
+inserted immediately above the one it is leaving (`setCategoryStages`). The
+card says so first. That is what lets faculty have a different chain from
+staff.
+
+The ordered list itself is shut, under **Advanced: every route in order**, for
+the condition a chain cannot express: add a route, delete one, move it up or
+down, turn it off without losing it, and inside it add, remove, reorder and
+rename the stages and choose who decides each. An active route no kind of
+request maps to is **named above it** rather than left to be found.
 
 | What a route can match on | |
 | --- | --- |
