@@ -835,24 +835,36 @@ export class SupabaseStore implements DataStore {
   // ---- developer / admin operations ----------------------------------
   // Requires SUPABASE_SERVICE_ROLE_KEY (auth.admin API for user lifecycle).
 
+  /**
+   * One insert, and **no Supabase Auth user** (migration 31).
+   *
+   * This used to call `auth.admin.createUser` first, with the hardcoded
+   * password `password123` and `email_confirm: true`, because `profiles.id`
+   * referenced `auth.users (id)`. Three things were wrong with that, and
+   * migration 31 removed the foreign key that forced it:
+   *
+   * 1. **It minted a credential nobody needed.** The portal authenticates
+   *    through the institute's LDAP directory or Google and keeps its own
+   *    `sessions` rows (migration 21, `lib/sessions.ts`); a Supabase Auth
+   *    user was never a portal login.
+   * 2. **The credential was real, published and privileged.** The anon key
+   *    ships in the browser by design, so a GoTrue password grant on any
+   *    created address returned an `authenticated` JWT - and `authenticated`
+   *    had 38 policies behind it, including `developer manages profiles`.
+   *    Importing the institute would have multiplied that from 18 accounts to
+   *    a few thousand.
+   * 3. **It made the import twice as slow and non-atomic.** Two sequential
+   *    HTTP round trips per person, and a failure between them left an Auth
+   *    user with no profile - which is why the old code had to delete it
+   *    again on the error path.
+   *
+   * The id now comes from the column's own `gen_random_uuid()` default, so it
+   * is still a uuid and still stable for the lifetime of the account - which
+   * matters, because 19 foreign keys across 11 tables point at it.
+   */
   async createProfile(input: NewProfileInput): Promise<Profile> {
-    const { data: created, error: authError } = await this.db.auth.admin.createUser({
-      email: input.email,
-      password: "password123",
-      email_confirm: true,
-    });
-    if (authError) throw new Error(`Auth user creation failed: ${authError.message}`);
-    const { data, error } = await this.db
-      .from("profiles")
-      .insert({ ...input, id: created.user.id })
-      .select()
-      .single();
-    if (error) {
-      // The profile failed, so the auth user it was for must go too, or the
-      // email is taken by an account nobody can see in the console.
-      await this.db.auth.admin.deleteUser(created.user.id).catch(() => undefined);
-      throw profileWriteError(error);
-    }
+    const { data, error } = await this.db.from("profiles").insert(input).select().single();
+    if (error) throw profileWriteError(error);
     return data;
   }
 
@@ -872,6 +884,11 @@ export class SupabaseStore implements DataStore {
     }
     const { error } = await this.db.from("profiles").delete().eq("id", id);
     if (error) throw error;
+    // Accounts created since migration 31 have no `auth.users` row, so there
+    // is nothing to delete. One created before it does, and removing it is
+    // still right - it is a credential for an account that no longer exists.
+    // Best-effort and last, as before: the profile is the portal account, and
+    // its deletion must not be undone by an Auth error.
     await this.db.auth.admin.deleteUser(id).catch(() => undefined);
   }
 
@@ -1861,6 +1878,27 @@ function profileWriteError(error: { code?: string; message: string }): Error | t
   // Migration 16: `profiles.hostel_name` must name a hostel on the list.
   if (error.code === "23503" && error.message.includes("profiles_hostel_fk")) {
     return new Error("That hostel is not on the list - add it in Settings first");
+  }
+  /**
+   * Migration 31 not applied. `createProfile` inserts without an id and
+   * without a Supabase Auth user, which a database still on migration 30
+   * refuses two ways: `profiles.id` has no default there (23502, not-null),
+   * and it still references `auth.users` (23503, `profiles_id_fkey`).
+   *
+   * Named explicitly because this is the one migration whose absence breaks a
+   * console feature outright rather than degrading it - the code and the
+   * migration ship together - and "null value in column id" would send
+   * somebody looking in the wrong place entirely.
+   */
+  if (
+    (error.code === "23502" && /\bid\b/.test(error.message)) ||
+    (error.code === "23503" && error.message.includes("profiles_id_fkey"))
+  ) {
+    return new Error(
+      "Cannot create an account until migration 31 is applied " +
+        "(supabase/migrations/00000000000031_decouple_auth_and_tighten_rls.sql) - " +
+        "it is what lets a profile exist without a Supabase Auth user"
+    );
   }
   return error;
 }

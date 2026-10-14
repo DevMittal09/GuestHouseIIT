@@ -47,6 +47,8 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **11 Oct**, later | The owner's **design pass**: the interface "looks too ai generated". The palette was checked against iitpkd.ac.in again and kept; what changed was composition. A **named five-step type scale**, the institute's own page-title rule and serif figures, the dashed empty state cut to one line in 22 places, the desk's seven KPI tiles redrawn as a ruled index, the approver queues' constant **Status** column dropped so their action buttons fit the page, the allocation grid moved above the record, and the home page's empty quarter-column recovered. **Presentation only.** |
 | **12 Oct** | **The approval workflow becomes the manager's.** `routeFor`'s `switch` is replaced by `rules.approval` - an ordered list of routes the office edits at Console -> **Approval Workflow**: insert, delete, reorder and rename the stages of any chain, and choose who decides each (the requester's warden or HOD, the head of their unit, everyone holding a role, the head of one named unit, or one named person). The defaults are the old `switch` case for case, proved over 576 combinations. **No migration.** |
 | **12 Oct**, later | **The workflow screen rebuilt as a flow.** The ordered list of routes was rejected as "all wrong": it put first-match precedence, eight rows of match conditions, six approver kinds and four waiting statuses in front of the office. The screen now opens on **one chain per kind of request**, drawn left to right, with a `+` between boxes and one plain-language question per step; the route list is behind **Advanced**. A kind whose route is shared **forks** it on edit, which is how faculty can differ from staff. **Engine, stored shape and every call site unchanged.** |
+| **13 Oct** | **Schema review before the college's user import.** Asked whether students, faculty and staff should be separate tables: **no** - 19 foreign keys point at `profiles.id`, a role is an authorisation level that changes, and the per-category split already exists as `academic_records.kind`. **No migration needed to hold the data.** The review instead found that `password123` on every created account is a working **GoTrue** credential, that the `authenticated` role has **21 write policies** behind it (this folder had said none), and that the import would take that from 18 accounts to a few thousand. Two new gates and an import runbook. |
+| **13 Oct**, later | **The second door closed, the schema left alone.** Migration 31 drops the `profiles -> auth.users` foreign key and all **38** `authenticated` RLS policies, so a portal account no longer implies a database credential; `createProfile` and `seed.sql` mint no Supabase password. The normalization review found **two** real problems worth acting on (`profiles` had almost no indexes and no checks - fixed; `total_rooms` can drift - recorded) and four denormalizations that are correct as they are. **No table split, no column dropped.** Two repair scripts, 16 new tests. Migration 31 deliberately **not** applied to the hosted project. |
 
 ## The problem
 
@@ -614,6 +616,81 @@ allocation are all exactly as the morning left them.
 | Still controls the real process | **Done** | Same `rules.approval` row, same server action, same impact check, same audit wording. `categoryChains` reads the chains back through `matchingRule`, so a card shows what the portal will do. Proved end to end by `e2e/approval-workflow.spec.ts` |
 | Nothing else breaks | **Done** | 519 unit checks (29 files), 40 e2e journeys, lint, types and a production build all clean. The 576-combination parity test is untouched and still passes |
 | The condition a chain cannot express | **Kept** | The ordered route list is shut under **Advanced**, unchanged. An active route no card governs is named above it |
+
+## The schema review before the user import - 13 October 2026
+
+Not a correction list. The owner is preparing to import **user data the
+college has provided as an Excel file**, and asked, before loading it:
+
+> whether our current database schema is appropriate and what changes, if any,
+> are necessary to make the application production-ready [...] whether this
+> design is appropriate or whether we should use separate tables for students,
+> faculty, staff, and other categories
+
+with the analysis to be grounded in the repository rather than assumed, and
+the import to be repeatable for the updated files the college will send later.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Is one table for all categories right, or should they be split? | **Answered: keep one.** 19 FKs across 11 tables point at `profiles.id`; a role is an authorisation level that changes, not a category of person; half the roles are posts, not categories; and the per-category split already exists as `academic_records.kind` (migration 28 decided this once). Reasoning in [02-decisions.md](02-decisions.md) |
+| 2 | What schema changes does the import need? | **None.** The schema holds the college's data as it stands. The prerequisites are hostels and units existing first, because both are `on delete restrict` |
+| 3 | Which columns to keep from the sheet, and how they map | [04-production.md](04-production.md) §1a.3 - two destinations, `profiles` (identity and authorisation) and `academic_records` (per-category reference data), with the keep-list for each and an explicit drop-list |
+| 4 | Duplicate handling and repeatable imports | **Already built and verified, not rebuilt.** Keyed on `lower(email)` and `(kind, lower(email))`; a second paste updates in place so `profiles.id` never changes and all 19 FKs survive; an absent column is left alone; LDAP uniqueness is checked against the post-import state. 15 assertions in `tests/ninth-round.test.ts` |
+| 5 | Validation, rollback, verification | [04-production.md](04-production.md) §1a.5-1a.7. The gap found: **no undo for an import's updates** - new rows can be deleted, updated rows have lost their previous values |
+| 6 | Production-readiness | **Two new gates.** The import is not atomic (validated all-or-nothing, applied row by row, ~4000 round trips at the 2000-row cap, no `maxDuration`) - gate 11. And the security finding below - gate 10 |
+| 7 | *Not asked, found while looking* | **`password123` is not harmless.** This folder said the Supabase Auth password was "not a portal login" and therefore safe, and that RLS has "no `authenticated` write policy - which is what makes the public anon key safe to ship". Both wrong: GoTrue and PostgREST are a second door the portal does not guard, there are **21** `authenticated` write policies including `developer manages profiles / bookings / rooms / …`, and `select` on the **whole `documents` bucket** has no per-user scoping. The seeded `developer@iitpkd.ac.in` carries that password and it is published in this repository |
+
+**Nothing in the code was changed.** The modelling question needed an answer,
+not a migration; the security fix touches `createProfile`, the seed and
+possibly the `profiles.id -> auth.users` foreign key, and the owner commits.
+Both are written up as gates with runbooks.
+
+**One thing could not be verified from here**, and is the first step of gate
+10: whether the hosted project has the email/password provider enabled. It is
+an Auth dashboard setting, not in the repository, and not readable with the
+service-role key. Live production reads were also unavailable in the session
+(blocked by the sandbox), so the schema findings come from the migrations and
+the applied-migration probe (`npm run check:migrations`: **1-30 applied**),
+not from reading live rows. **The Excel file itself was not provided**, so
+§1a.3 lists what the portal can use rather than what the sheet contains.
+
+---
+
+## Implementing the fix, and the normalization review - 13 October 2026 (second)
+
+The owner's brief, after the review that morning: answer the normalization
+question properly, **implement** the security findings with regression tests,
+and prepare the import - without unnecessary architectural change.
+
+> Prioritize correctness, data integrity, security and long-term
+> maintainability over unnecessary architectural changes.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Normalization review to 3NF where appropriate | **Done.** Eight findings, in [21-database.md](21-database.md) *"Normalization - the review of 13 Oct 2026"*. Three fixed in migration 31 (no indexes, no case-insensitive index behind the import's match key, no check constraints); one recorded and not fixed (`total_rooms` drift); four confirmed correct as they are (`academic_records`' shape, its free-text `hostel`, `department_or_club`'s duplication - kept because five modules read it, and `profiles` staying one table) |
+| 2 | Duplicate data, anomalies, missing FKs, reference-data consistency | **Done**, same place. Four denormalizations examined and **kept because they are right**: `bookings.user_role` and `booking_logs.action_by_name` preserve history deliberately, issued invoices are snapshots, and `bookings.search_text` is a `generated always as ... stored` column, so not a denormalization at all |
+| 3 | Security: seeded accounts, `createProfile`, RLS on profiles and documents | **Implemented.** Migration 31; `createProfile` is one insert with no Auth user; `seed.sql` creates none; the private `documents` bucket loses its blanket policies and is forced `public = false` |
+| 4 | Regression tests for the security boundaries | **Done.** `tests/rls-surface.test.ts` (7) asserts the invariant against the SQL and is mutation-verified; `tests/user-import-idempotency.test.ts` (9) asserts that a re-import keeps profile ids, which is what the 19 foreign keys need |
+| 5 | Import prepared for repeatable use | **Verified rather than rebuilt** - it was already keyed on `lower(email)` and leaves absent columns alone. What changed: it is now half the round trips, and the idempotency is a test instead of a claim |
+| 6 | Safe migration and rollback for every change | **Done.** Migration 31 drops a constraint and policies and adds indexes - no table rewrite, no downtime. `supabase/repairs/2026-10-13-rollback-migration-31.sql` recreates all 38 policies, generated from the migrations rather than retyped and round-trip tested (38 -> 0 -> 38 -> 0). The **foreign key** is the one part whose rollback has a time limit, and that is written down |
+| 7 | Excel column mapping | **Cannot be done yet - the file still has not been provided.** [04-production.md](04-production.md) §1a.3 lists the columns the portal can consume and an explicit drop-list; mapping the college's actual headers needs one pass over the real sheet |
+| 8 | Do not import real data or make destructive production changes without approval | **Honoured.** Migration 31 is in the working tree and **not applied**; the Auth users are **not deleted**; nothing was run against the hosted project except the read-only `npm run check:migrations` |
+
+**Verified, not assumed, before dropping 38 policies:** nothing legitimate
+connects as `authenticated`. The server uses the service-role key (which
+bypasses RLS), sign-in is LDAP plus `sessions` (migration 21), and
+`components/live-updates.tsx` - the only client-side Supabase user - connects
+with `persistSession: false`, i.e. as `anon`, for which no policy has ever
+existed. That last one was the single thing that could have made this a
+regression, and it was checked first.
+
+**Still not verifiable from here:** whether the hosted project has the
+email/password provider enabled (a dashboard setting), and live production
+rows (the sandbox blocks production reads). Migration 31 was instead tested
+end to end in a throwaway `postgres:16-alpine`, which is the project's
+standing rule for migrations anyway.
+
+---
 
 ## Branches
 

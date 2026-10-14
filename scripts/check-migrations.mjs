@@ -69,9 +69,23 @@ const MARKERS = [
   { n: 28, kind: "table", table: "academic_records", what: "the institute's academic records" },
   { n: 29, kind: "enum", table: "bookings", column: "status", value: "MISSED", what: "the MISSED status" },
   { n: 30, kind: "column", table: "bookings", column: "fund_declaration_at", what: "the funds declaration" },
+  // Migration 31 drops a foreign key and 38 policies and adds indexes. None of
+  // that is a table or a column, and PostgREST can read neither pg_constraint
+  // nor pg_policies - so, like 17 and 23, it is checked by hand. Both counts
+  // must come back 0.
+  {
+    n: 31,
+    kind: "sql",
+    what: "profiles decoupled from auth.users, and the authenticated RLS surface closed",
+    sql:
+      "select (select count(*) from pg_constraint where conrelid='public.profiles'::regclass " +
+      "and contype='f' and confrelid='auth.users'::regclass) as auth_fk_expect_0, " +
+      "(select count(*) from pg_policies where 'authenticated' = any(roles) " +
+      "and schemaname in ('public','storage')) as authenticated_policies_expect_0;",
+  },
 ];
 
-/** The SQL to paste in the editor for the two this cannot see. */
+/** The SQL to paste in the editor for the two function-only migrations. */
 const FUNCTION_SQL =
   "select proname from pg_proc where proname in ('set_booking_buffer','check_room_occupancy');";
 
@@ -135,9 +149,10 @@ async function main() {
   const missing = [];
   const unknown = [];
   for (const marker of MARKERS) {
-    if (marker.kind === "function") {
+    if (marker.kind === "function" || marker.kind === "sql") {
       unknown.push(marker);
-      console.log(`  ?  ${String(marker.n).padStart(2)}  ${marker.what} - a function; see below`);
+      const why = marker.kind === "function" ? "a function" : "no table or column to probe";
+      console.log(`  ?  ${String(marker.n).padStart(2)}  ${marker.what} - ${why}; see below`);
       continue;
     }
     let line;
@@ -182,12 +197,21 @@ async function main() {
     console.log("Every migration this script can see has been applied.");
   }
   if (unknown.length > 0) {
+    const ns = unknown.map((m) => m.n).join(", ");
     console.log(
-      `\n${unknown.length} could not be checked from here. Migrations 17 and 23 only add or\n` +
-        "replace a function, which PostgREST cannot see; run this in the SQL editor:\n" +
-        `  ${FUNCTION_SQL}\n` +
-        "Both names present means both are applied; either is safe to re-run if in doubt."
+      `\n${unknown.length} could not be checked from here (${ns}). PostgREST can read tables and\n` +
+        "columns, but not pg_proc, pg_constraint or pg_policies. Run these in the SQL editor:\n"
     );
+    if (unknown.some((m) => m.kind === "function")) {
+      console.log(
+        "  -- 17 and 23 (functions). Both names present means both are applied,\n" +
+          "  -- and either is safe to re-run if in doubt.\n" +
+          `  ${FUNCTION_SQL}\n`
+      );
+    }
+    for (const m of unknown.filter((x) => x.kind === "sql")) {
+      console.log(`  -- ${m.n}: ${m.what}\n  ${m.sql}\n`);
+    }
   }
   return missing.length > 0 ? 1 : 0;
 }

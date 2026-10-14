@@ -7,153 +7,181 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 12 October 2026 (second) - the workflow screen becomes a flow
+## Round of 13 October 2026 (second) - the second door is closed, the schema is left alone
 
-The owner, on the screen the morning round had just built:
+The morning round reviewed the schema before the college's user import and
+found that `password123` was not harmless. This round **implements** the fix,
+answers the normalization question with evidence, and prepares the import.
 
-> Its all wrong and not at all what i wanted.
+**One migration, three code changes, two repair scripts, two test files. No
+table split, no column dropped, no feature changed.**
 
-with the original brief repeated, and one clause in it doing all the work:
+### 1. Normalization: three fixes, one recorded, four confirmed correct
 
-> The interface should be simple, intuitive, and visual, allowing the manager
-> to understand exactly how requests will flow **without needing technical
-> knowledge**.
+Full list in [21-database.md](21-database.md), *"Normalization - the review of
+13 Oct 2026"*. The headline is that **the schema is in good shape** and needed
+no restructuring to hold the college's data.
 
-**No migration, no change to the engine, no change to `rules.approval`.** The
-stored shape, `routeFor`, `canReview`, the queues, mail, allocation and the
-576-combination parity test are all untouched. What changed is the screen.
+**Fixed** (migration 31): `profiles` had almost no indexes (nothing on `role`,
+`unit_id` or `hostel_name`), no case-insensitive index behind the very key the
+import matches on, and no check constraints at all.
 
-### What was wrong with it
+**Recorded, not fixed:** `guest_houses.total_rooms` is a stored derived value
+recounted by application code, so a room inserted by SQL leaves it stale - a
+plain update anomaly. The fix is a trigger; it is not what the import needs,
+and it does not belong in a security migration.
 
-The console built that morning was the rules engine with a form around it. To
-move one approver the office had to:
+**Confirmed correct as they are:** `profiles` staying one table (19 foreign
+keys, and a role is an authorisation level, not a category of person);
+`academic_records` staying one table with nullable per-kind columns (migration
+28 decided it, and the sheet feeds it); its `hostel` staying free text (the
+institute's own spelling, display-only - checked, no reader authorises on it);
+and `profiles.department_or_club` staying although it duplicates `unit_id`,
+because **five modules read it** - dropping it is a feature removal, not a
+normalization.
 
-- read an ordered list of **routes** and know that *the first active route
-  that matches wins*, so a narrow route under a broad one never fires and
-  nothing on the page says so;
-- fill in up to **eight rows of match conditions** ("tick nothing in a row and
-  it matches anything");
-- choose an **approver kind** from six - `warden` / `hod` / `unit_head` /
-  `role` / `unit` / `profile`, a taxonomy that only means anything if you know
-  the data model;
-- pick which of the **four waiting statuses** the stage occupies, and then
-  rename it, because the slot's own name is somebody else's job;
-- and read the chain back as a **sentence**, there being no picture anywhere.
+Four denormalizations examined and kept because they are right:
+`bookings.user_role` and `booking_logs.action_by_name` preserve history
+deliberately, issued invoices are snapshots, and `bookings.search_text` turned
+out not to be a denormalization at all - it is `generated always as ... stored`.
 
-Every one of those is a question about the implementation, not about the
-institute. The brief asked for the opposite.
+### 2. The security fix: remove the reason for the credential
 
-### What it is now
+Rotating `password123` to a random password was **rejected**: it would leave
+every imported person with a working GoTrue credential, just an unknown one,
+and `authenticated` would still have 38 policies behind it. The problem was
+never a weak password - it was that **a portal account implied a database
+credential at all**.
 
-**One chain per kind of request, drawn left to right, ending at the desk.**
+**Migration 31** (`00000000000031_decouple_auth_and_tighten_rls.sql`):
 
-```
-Student  a personal stay
-[Student submits] -> + -> [Assistant Warden] -> + -> [Guest House Manager]
-```
+- **drops `profiles.id -> auth.users (id)`** and gives the column its own
+  `gen_random_uuid()` default. The portal has never authenticated with
+  Supabase Auth (LDAP or Google, then a session row - migration 21), so the
+  key was the only reason those users existed. **No id changes**, so all 19
+  foreign keys are untouched;
+- **drops all 38 `authenticated` policies**, 21 of them writes, including
+  `developer manages profiles / bookings / rooms / guest_houses /
+  booking_guests / form_configs`. RLS stays **enabled**, so `authenticated` is
+  denied by default - migration 28's deliberate pattern for
+  `academic_records`, now applied to the rest;
+- **drops the two blanket `documents` bucket policies** and forces
+  `public = false`. Any JWT could previously download every guest's ID
+  document and alumni card;
+- **adds** the three `profiles` indexes, `profiles_email_lower_idx` (not
+  unique - see the migration) and two `not valid` check constraints.
 
-Eleven kinds, which are the ones the office already names: student, faculty
-official, non-teaching staff official, faculty or staff personal, club via its
-Faculty Advisor, an institute office direct and when it asks for HOD approval,
-the IAR Office, the IAR Student Cell, any dining booking, and the desk's own.
+Beside it: `createProfile` is **one insert with no Auth user**; `deleteProfile`
+still removes an Auth user best-effort for accounts that predate the
+migration; `supabase/seed.sql` creates **no Auth users** (it used to create 18
+with that password); `database.types.ts` marks `id` generated.
 
-- **Click a step** to open it: *who decides this step* as **one** select in
-  plain language ("Their hostel's Assistant Warden", "Dr. Arun Prasad -
-  arun.prasad@iitpkd.ac.in", "Head of Computer Science"), an optional name for
-  the step, and Earlier / Later / Remove.
-- **The `+` between two boxes inserts a step there.** It disappears at four,
-  and a line says why.
-- **Nothing on the screen mentions** routes, order, conditions, approver kinds
-  or waiting statuses.
+**Three facts checked, not assumed, before dropping 38 policies:**
 
-The ordered route list is still there, shut, under **Advanced: every route in
-order**, for the condition a chain cannot express ("every request from Civil
-also goes to the Dean"). An active route no card governs - the legacy
-club-own route - is **named above it** rather than left to be found.
+1. nothing legitimate connects as `authenticated` - the server uses the
+   service-role key, which bypasses RLS;
+2. **Realtime connects as `anon`**, not `authenticated`
+   (`components/live-updates.tsx`, `persistSession: false`), and there has
+   never been an `anon` policy - so live updates cannot break. This was the
+   one thing that could have made the change a regression;
+3. RLS stays on, which is **not** the same as dropping every policy - with RLS
+   off, every role reads everything.
 
-### The one real decision: a shared route forks
+### 3. The one coupling, made legible
 
-A card has to write back to a route, and a route can govern several kinds. The
-defaults put **faculty and non-teaching staff on one official-stay route**, and
-both classes of office on one direct route.
+`createProfile` now inserts without an id and without an Auth user, which a
+database still on migration 30 refuses two ways. **So the code and migration
+31 ship together** - there is no version that works on both schemas, because
+the foreign key fundamentally requires an Auth user.
 
-So `setCategoryStages` does one of two things:
+Accepted rather than engineered around (a client-generated id does not help -
+the foreign key still fails), and made legible instead: `profileWriteError`
+catches both error codes and **names the migration**, the way migration 25's
+absence names itself. Verified against a throwaway database on migration 30 -
+the insert fails with `null value in column "id"` (23502), which without the
+handler sends somebody looking at the application code.
 
-- the governing route decides **only this kind** - edit it where it is;
-- it decides **others too** - this kind gets **a route of its own, inserted
-  immediately above** the one it is leaving. Above, because the engine takes
-  the first match. Immediately, so no route that used to win for some other
-  request stops winning.
+This is the **first migration that is not optional once the code is
+deployed**, and [04-production.md](04-production.md) §5 now says so.
 
-The card says so before anything is saved ("Shares a route with Non-teaching
-staff. A change here applies to Faculty alone."), and a second edit of the same
-kind edits the forked route in place rather than forking again.
+### 4. Tests, because the prose was wrong
 
-This is not a workaround for the list. It is the thing the list could only do
-by hand-writing conditions: **giving faculty a different chain from staff**.
+- **`tests/rls-surface.test.ts` (7 checks)** asserts the invariant against the
+  SQL itself: no `authenticated` policy survives, RLS is never disabled, the
+  seed creates no Auth user, the store mints no password. It pins the
+  historical count at 38 so the parser cannot stop matching and pass
+  vacuously. **Mutation-verified**: removing one `drop policy` line from
+  migration 31 fails it with that policy named. It exists because two written
+  claims in this folder were false and had been read forward twice - a
+  regression test is the only form of that claim that cannot rot.
+- **`tests/user-import-idempotency.test.ts` (9 checks)** asserts the property
+  the college's *repeated* sheets depend on and `ninth-round` does not cover:
+  a person imported twice is **one row with one id, for ever**. If a re-import
+  inserted a second row or reassigned an id, everyone's booking history would
+  detach in one press and nothing on screen would say so.
 
-### Two details worth keeping
+### 5. What was deliberately NOT done
 
-- **The slot a step waits in is chosen for it** (`slotForApprover`): the slot
-  whose built-in meaning *is* that approver where one is free, so a warden
-  step drives the warden's own queue page; otherwise the first free slot.
-- **A step's slot never moves once it exists.** A waiting request is sitting
-  in that status. So when the approver is changed to somebody the slot does
-  not mean, the step is **named after them** instead
-  (`setStageApprover`), which is what the Forward button and the queue page
-  then read. A name the office typed is never overwritten.
+- **Migration 31 is not applied to the hosted project**, and the 18 Auth users
+  are **not deleted**. Both are production actions on live data and need the
+  owner's approval. The order matters and is in
+  [04-production.md](04-production.md) §1a.1: the repair **refuses to run
+  before** the migration, because the old key's `on delete cascade` would take
+  every profile with the Auth users it deletes.
+- **The Excel mapping.** The file still has not been provided. §1a.3 lists the
+  columns the portal can consume plus an explicit drop-list; mapping the
+  college's actual headers needs one pass over the real sheet.
+- **No column or table dropped**, and `total_rooms`' trigger left for its own
+  round.
 
 ### Files
 
-New: `lib/approval-categories.ts` (the kinds, the chains, the fork, the step
-operations - pure), `components/admin/workflow-flow.tsx` (the screen),
-`tests/approval-categories.test.ts` (25 checks).
+**New:** `supabase/migrations/00000000000031_decouple_auth_and_tighten_rls.sql`,
+`supabase/repairs/2026-10-13-retire-seeded-auth-users.sql`,
+`supabase/repairs/2026-10-13-rollback-migration-31.sql`,
+`tests/rls-surface.test.ts`, `tests/user-import-idempotency.test.ts`.
 
-Changed: `components/admin/workflow-manager.tsx` (the flow view is the page;
-the route list moved into Advanced; the intro cut to three lines),
-`e2e/approval-workflow.spec.ts` (rewritten against the new screen, plus a
-second journey for the fork), `AGENTS.md`.
+**Changed:** `lib/store/supabase.ts` (`createProfile`, `deleteProfile`,
+`profileWriteError`), `lib/supabase/database.types.ts` (`id` generated),
+`supabase/seed.sql` (no Auth users), `scripts/check-migrations.mjs` (a
+`kind: "sql"` marker for 31, and the closing report generalised).
 
-Unchanged, deliberately: `lib/approval-routes.ts`, `lib/workflow.ts`,
-`app/actions/workflow.ts`, `lib/settings-impact.ts` and every call site. The
-new screen is a second way to write the same `rules.approval` row, through the
-same server action, with the same impact check and the same audit wording.
+**Unchanged, deliberately:** every rule module, both forms, the approval
+engine, `lib/users-import.ts` (already correct - verified, not rebuilt), and
+`public.my_role()` / `public.can_access_booking()` (unused now, but the
+starting point if the app ever moves to per-user Supabase sessions - at which
+point note that **`auth.uid() = profiles.id` stops being true at migration
+31**, so the old policies cannot simply be restored).
 
 ### How it was checked
 
-`npm run lint`, `npm run typecheck`, **`npm test` (519 checks, 29 files - 25
-of them new)**, `NEXT_PUBLIC_SUPABASE_URL= npm run build`, and **`npm run
-test:e2e` (40 journeys, all passing)** against a production build on the mock
-store.
+- `npm run lint`, `npm run typecheck` - clean.
+- **`npm test` - 535 passing, 31 files** (up from 519 / 29; +16 new).
+- `NEXT_PUBLIC_SUPABASE_URL= npm run build` - clean.
+- `npm run check:memories`, and `npm run check:migrations` against the hosted
+  project read-only: **1-30 applied**, with 17, 23 and **31** reported as the
+  three it cannot probe, each printing its SQL.
+- **Migration 31 in a throwaway `postgres:16-alpine`**: 1-31 applied in order;
+  auth foreign key gone; **0** `authenticated` policies; RLS still enabled on
+  six core tables; new indexes present; an insert with **no id** accepted; both
+  check constraints refusing a bad address, an untrimmed address and a
+  one-character name; 31 re-applied with no error; the new seed giving **19
+  profiles and 0 auth users**; the rollback script taking policies 0 -> 38 and
+  31 taking them back to 0 with profiles untouched; and, on a database held at
+  migration 30, the exact failure the new error message is written for.
 
-The rewritten journey is the feature end to end: the manager inserts a step
-before the desk on the **Student** chain, hands it to **Dr Arun Prasad - a
-professor who heads nothing and so had no approval queue at all** - calls it
-"Dean of Students", and saves. A student's next request then shows the warden
-a **"Forward to Dean of Students"** button, does **not** appear at the desk
-when they press it, appears in Arun's new queue, and reaches the desk only
-when he forwards it. The second journey takes the HOD off the **Faculty**
-chain and proves **Non-teaching staff** still has one.
-
-Checked by hand as well: the screen at **1280px** and at **320px**, where the
-chain wraps onto a second line with no horizontal scroll
-(`scrollWidth === clientWidth === 320`).
-
-### A thing to know before touching the e2e
-
-A step box and the `+` that inserts before it **share a word**: the box is
-named "Assistant Warden step 1 of 1" and the button beside it "Insert a step
-before Assistant Warden". `getByRole("button", { name: /Assistant Warden/ })`
-matches both and fails Playwright's strict mode. The spec matches a box on its
-caption - `^<name> step \d` - which is why the caption is in every box's
-`aria-label` even though it is only *shown* on a chain with more than one
-step.
+**Not verifiable from here, and so not claimed:** whether the hosted project
+has the email/password provider enabled (a dashboard setting, not in the
+repository, not readable with the service-role key - **still the control that
+matters most until the repair runs**), and live production rows (the sandbox
+blocks production reads).
 
 ### Left open
 
-In [03-roadmap.md](03-roadmap.md) §2e, unchanged by this round: the office
-still cannot name a new waiting status (a migration per status), the desk is
-still not a configurable stage, and the four queue pages are still four pages.
-New: the **Try it** panel still asks for a booking type, a service and an
-office's choice as separate selects, which is the one place on the screen that
-still reads like the engine; it could ask for a kind of request instead.
+[03-roadmap.md](03-roadmap.md) §1 gate 10 (three production steps) and gate 11
+(the import is still applied row by row - halved, not fixed), and §2f for the
+rest: `total_rooms`' trigger, no undo for an import's *updates*, no
+`is_active` for people who leave, the 2000-row ceiling, and
+`department_or_club`'s duplication - whose practical risk at import time is a
+sheet that fills the free text and leaves `unit` blank, producing people whose
+official bookings have **no HOD**.

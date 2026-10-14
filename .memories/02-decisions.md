@@ -4708,3 +4708,311 @@ to - today, the legacy club-own route - in one line above Advanced.
 force would be worse than the list it replaced. The screen is allowed to be
 simpler than the engine; it is not allowed to be less true than it.
 
+
+---
+
+## 13 Oct 2026 - one `profiles` table, and the second door that the import would have opened
+
+Asked before importing the college's Excel file of users: **is a single table
+for students, faculty, staff and the rest the right design, or should each
+category have its own table?** And: what has to be true before the file is
+loaded?
+
+No code was changed this round. What came out of it is one modelling decision,
+one correction to a documented security claim, and the runbook in
+[04-production.md](04-production.md) §1a.
+
+### The decision: keep one table. The alternative is not cheaper, it is unsafe
+
+`public.profiles` stays as it is. (There is no `users` table and never was -
+`auth.users` is Supabase's, `public.profiles` is ours.) Four pieces of
+evidence, all from the repository rather than from preference:
+
+1. **19 foreign keys across 11 tables point at `profiles.id`** -
+   `bookings.user_id` and `.created_by`, `booking_logs.action_by`,
+   `units.head_id` / `.acting_head_id` / `.faculty_advisor_id`,
+   `room_holds.override_by`, `academic_records.imported_by`,
+   `security_audit.actor_id`, `tariffs.created_by`, `invoices.paid_by` /
+   `.issued_by` / `.cancelled_by` / `.created_by`, `room_closures.created_by`,
+   `sessions.user_id`, `user_totp.user_id`, `security_events.user_id` /
+   `.handled_by`. Splitting the table means either four FKs where there is one,
+   or a polymorphic `(table, id)` pair with **no** database-enforced
+   integrity. The project's whole approach to room clashes was to move an
+   invariant *into* the database (`room_holds`, migration 3); giving up
+   referential integrity on identity would be that decision in reverse.
+
+2. **A role is an authorisation level, not a category of person.** Users &
+   Roles lets a developer change anyone's role (`assignableRoles`,
+   `userEditError`). Under separate tables a student graduating into staff is
+   a DELETE plus an INSERT - a **new primary key** - and every row above
+   breaks. `booking_logs.action_by_name` is denormalised precisely so history
+   survives an account being deleted; separate tables would make that the
+   normal path rather than the exception.
+
+3. **Half the roles are posts, not categories.** `warden`, `gh_manager`,
+   `gh_caretaker`, `iar_cell`, `developer` describe a job someone holds. An
+   Assistant Warden *is* a faculty member. A students / faculty / staff split
+   has nowhere to put them without duplicating a person, and HODs and Faculty
+   Advisors are already modelled the right way - **an appointment on a unit**
+   (`units.head_id`, `units.faculty_advisor_id`, migrations 15 and 25), not a
+   row in a different table.
+
+4. **The per-category split already exists, on the correct axis.** Migration
+   28 faced this exact question for six kinds of academic record and chose one
+   table with a `kind` discriminant, writing the reason into the file: six
+   tables would be "six times the surface for the same six CSV pastes". The
+   useful boundary is not student-vs-faculty, it is **identity and
+   authorisation (`profiles`, readable by the app) vs. per-category reference
+   data (`academic_records`, service-role only)**. The college's sheet feeds
+   both, and that is the mapping question worth spending care on.
+
+The cost of one table is six nullable columns, and three of them are already
+constrained - `hostel_name` to `hostels`, `unit_id` to `units`,
+`staff_category` to a check. Only `department_or_club` and `roll_number` are
+loose free text, and `department_or_club` is already legacy: `unit_id` is what
+routes an approval. **No migration is needed to hold the college's data.**
+
+> **What would change the answer.** A category acquiring a dozen fields of its
+> own that no other category has, or its own lifecycle. Students are the
+> candidate (programme, semester, graduation). If that arrives it is a
+> *satellite* table keyed on `profiles.id` - one-to-one, additive, no FK
+> churn - which is what `academic_records` already is.
+
+### The correction: "the Auth password is harmless" was wrong
+
+[04-production.md](04-production.md) §7 parked the `password123` problem as
+"fine for demo accounts and wrong for six hundred real ones - though
+harmless, because **the Auth password is not a portal login**: everyone signs
+in through LDAP or Google." And
+[05-credentials-and-security.md](05-credentials-and-security.md) Part 4 stated
+that row-level security has "no `authenticated` write policy - which is what
+makes the public anon key safe to ship."
+
+**Both are wrong, and the import is what would have made them expensive.** A
+Supabase project has two doors the portal does not guard - GoTrue
+(`/auth/v1`) and PostgREST (`/rest/v1`) - and they answer to the anon key that
+ships in the browser by design. The portal's LDAP form, session rows, console
+password and TOTP are all on the other door.
+
+- The seed creates 18 **confirmed** email identities with
+  `crypt('password123', ...)`, `developer@iitpkd.ac.in` among them, and the
+  password is published in this repository.
+- `lib/store/supabase.ts:841` gives the same password to **every account the
+  console or an import creates**.
+- There are **21 write policies granted to `authenticated`**, ten of them
+  `for all`, including `developer manages profiles / guest houses / rooms /
+  bookings / booking_guests / form_configs` - gated only on `my_role() =
+  'developer'`, which is read from the JWT's own profile row.
+- `profiles` is readable by any JWT (`using (true)`).
+- `authenticated users read documents` grants `select` on the **entire**
+  private `documents` bucket - `using (bucket_id = 'documents')`, no
+  per-user scoping. That is every uploaded ID document and alumni card.
+
+So the claim should have been the other way round: the anon key is safe to
+ship **only because an `authenticated` JWT is supposed to be unobtainable**,
+and a published password on a confirmed identity is exactly how one is
+obtained. Importing the institute multiplies the reachable accounts from 18 to
+a few thousand, and gives each of them a name and a roll number to disclose.
+
+**One link is unverified and must be checked by hand:** whether the hosted
+project has the email/password provider enabled. That is an Auth dashboard
+setting, not in the repository, and not readable with the service-role key.
+If it is off, every other link still holds and the exposure is one toggle
+away.
+
+**`academic_records` is the counter-example that shows the fix.** Migration 28
+deliberately gave it no `authenticated` policy, so parents' names and phone
+numbers are service-role-only. That is what the other tables need.
+
+### Why this is recorded as a decision and not just a bug
+
+Because the previous reasoning was written down, was plausible, and was read
+and carried forward twice. It failed in a specific way worth naming: **it
+reasoned about one door and concluded about the system.** The portal's own
+controls were all enumerated correctly; what was missing was that they are not
+the only way in. Any future claim of the form "X is not a portal login, so X is
+harmless" needs checking against PostgREST and GoTrue before it is believed.
+
+### Two smaller findings from the same review
+
+- **The import is validated atomically but applied row by row.**
+  `importUsersAction` refuses a plan with any bad line, then loops
+  `await store.createProfile(row)` - two HTTP round trips each in Supabase
+  mode. At `MAX_USER_IMPORT_ROWS` (2000) that is ~4000 sequential round trips
+  in one server action, with no `maxDuration` in `vercel.json`. It will time
+  out part-way and nothing records where. The code comment already admits the
+  shape ("one profile at a time because that is what `DataStore` offers"); the
+  practical answer for now is batches of 100-200 plus a re-paste, which is
+  safe because the upsert is idempotent, and the real answer is a bulk upsert
+  in `SupabaseStore` ([03-roadmap.md](03-roadmap.md) §1 gate 11).
+- **There is no undo for an import's *updates*.** New rows can be ticked and
+  deleted; updated rows have lost their previous values, and the audit row
+  keeps only the counts and the column list. So the plan's **"updated" count
+  is the number to read before pressing Import** - on a first load it should
+  be 0. Worth keeping in mind before adding a before/after to the audit
+  payload, which is the cheap fix if the office ever needs one.
+
+### What was deliberately not done
+
+- **No migration was written.** The schema holds the college's data as it
+  stands; writing one now would imply the modelling question was open.
+- **The security fix was not applied either.** It changes
+  `createProfile`, the seed, and possibly the `profiles.id -> auth.users`
+  foreign key - three things with their own blast radius, and the owner
+  commits. It is written up as [03-roadmap.md](03-roadmap.md) §1 gate 10 and
+  [04-production.md](04-production.md) §1a.1 instead.
+- **No importer was changed.** `planUserImport` is already keyed on
+  `lower(email)`, already leaves absent columns alone, already checks LDAP
+  uniqueness against the state it would leave, and is already covered by 15
+  assertions in `tests/ninth-round.test.ts`. Repeatable imports were the thing
+  to verify, not to build.
+
+---
+
+## 13 Oct 2026 (second) - the second door is closed, and the schema is left alone
+
+The round after the review above. The owner asked for the normalization
+question answered properly, the security findings **implemented** with
+regression tests, and the import prepared - all before the college's
+spreadsheet arrives.
+
+**One migration, three code changes, two repair scripts, two test files. No
+table was split, no column dropped, no feature changed.**
+
+### Normalization: almost nothing to do, and that is the finding
+
+The full list is in [21-database.md](21-database.md) under *"Normalization -
+the review of 13 Oct 2026"*, so it is not repeated here. What matters as a
+decision is **what was deliberately not changed**, because each is a thing a
+later session will be tempted by:
+
+- **`profiles.department_or_club` stays**, although it genuinely duplicates
+  `unit_id` and the two can disagree. Five modules still read it
+  (`approval-routes`, `workflow`, `booking-search`, `invoice`,
+  `mail/templates`). Removing it is a feature removal dressed as a
+  normalization, and the instruction was explicit: establish that nothing
+  depends on a column before dropping it. Something does.
+- **`academic_records` stays one table with nullable per-kind columns.**
+  Migration 28 decided this and wrote the reason down; nothing has changed
+  except that there is now a second reason - the college's sheet feeds it, and
+  six tables would be six importers.
+- **`academic_records.hostel` stays free text** rather than a foreign key to
+  `hostels`. It is the institute's own spelling in a table that records what
+  the office pasted in, and it is **display-only** - checked, no reader scopes
+  or authorises on it. A foreign key here would reject a valid import to
+  enforce a consistency nothing needs.
+- **`guest_houses.total_rooms` stays app-maintained**, although it can drift
+  if a room is inserted by SQL. The fix is a trigger, it is cheap, and it is
+  **not** what the import needs - so it is on the roadmap rather than smuggled
+  into a security migration. Recorded rather than fixed is a decision, not an
+  oversight.
+
+Four denormalizations were examined and kept because they are *correct*:
+`bookings.user_role` and `booking_logs.action_by_name` preserve history on
+purpose, issued invoices are snapshots on purpose, and `bookings.search_text`
+turned out not to be a denormalization at all - it is `generated always as
+... stored`, so Postgres maintains it.
+
+### The security fix: remove the reason for the credential, not the credential
+
+The obvious fix for `password123` was to rotate it - give `createProfile` a
+random password instead. That was rejected. It would leave every imported
+person with a working GoTrue credential, just an unknown one, and the
+`authenticated` role would still have 38 policies behind it. The vulnerability
+was not a weak password; it was **that a portal account implied a database
+credential at all**.
+
+So migration 31 removes the thing that forced it: `profiles.id` no longer
+references `auth.users (id)`. The portal has never authenticated with Supabase
+Auth - it is LDAP or Google, then a session row (migration 21) - so the
+foreign key was the only reason those users existed. With it gone,
+`createProfile` is one insert, the seed creates no Auth users, and all 38
+`authenticated` policies can go because nothing legitimate holds such a JWT.
+
+**The three facts that made this safe to do, each checked rather than
+assumed:**
+
+1. **Nothing connects as `authenticated`.** The server uses the service-role
+   key, which bypasses RLS. Sign-in is LDAP plus `sessions`.
+2. **Realtime connects as `anon`, not `authenticated`.**
+   `components/live-updates.tsx` creates its client with
+   `persistSession: false`, and there has never been an `anon` policy - so
+   dropping the `authenticated` ones cannot break live updates. This was the
+   one thing that could have made the change a regression, and it is why it
+   was checked before anything was written.
+3. **RLS stays enabled.** With RLS on and no policy, `authenticated` is denied
+   by default and service-role still bypasses. That is migration 28's
+   deliberate pattern for `academic_records`, now applied to the rest - as
+   opposed to disabling RLS, which would open the tables to every role.
+
+> **Keeping `my_role()` and `can_access_booking()`** although nothing calls
+> them now. They are the starting point if the app ever moves to per-user
+> Supabase sessions. The important note for whoever does that:
+> **`auth.uid() = profiles.id` stops being true at this migration**, so the
+> old policies cannot simply be restored - they would silently deny
+> everything. That is also why the policies were dropped rather than left in
+> place looking like enforcement.
+
+### The one coupling this creates, and why it was accepted
+
+`createProfile` now inserts without an id and without an Auth user. A database
+still on migration 30 refuses that two ways - no default on `id` (23502) and
+the foreign key (23503). **So the code and migration 31 ship together**; there
+is no version of the code that works on both schemas, because the foreign key
+fundamentally requires an Auth user to exist.
+
+That is a real backward-compatibility cost and it was accepted rather than
+engineered around, because the alternatives are worse: supplying a
+client-generated id does not help (the foreign key still fails), and keeping
+the Auth user is the vulnerability. What was done instead is make the failure
+**legible**: `profileWriteError` catches both error codes and names the
+migration, the way migration 25's absence names itself when an advisor is
+saved. Verified against a throwaway database on migration 30: the insert fails
+with `null value in column "id"`, which without the handler would send
+somebody looking at the application code.
+
+This is the first migration in the project that is **not optional once the
+code is deployed**, and [04-production.md](04-production.md) §5 now says so in
+the table of what a missing migration costs.
+
+### The tests exist because the prose was wrong
+
+`tests/rls-surface.test.ts` asserts the invariant against the SQL itself: no
+`authenticated` policy survives, RLS is never disabled, the seed creates no
+Auth user, the store mints no password. It also pins the historical count at
+38 so the parser cannot silently stop matching and pass vacuously.
+
+It exists because **two written claims in this folder were false** and had
+been read forward twice without being checked (see the entry above). A
+regression test is the only form of that claim that cannot rot. It was
+mutation-checked - removing one `drop policy` line from migration 31 fails it
+with the policy named - because a test that cannot fail is the same problem in
+a new place.
+
+`tests/user-import-idempotency.test.ts` asserts the property the college's
+*repeated* spreadsheets depend on, which `tests/ninth-round.test.ts` does not
+cover: a person imported twice is **one row with one id, for ever**. That
+matters because 19 foreign keys point at `profiles.id`; if a re-import
+inserted a second row or reassigned an id, everyone's booking history would
+detach in one press, and nothing on screen would say so.
+
+> **A trap it found.** The mock store's `loadDb()` self-heals by adding any
+> missing seeded persona, so a test fixture of `profiles: []` is never empty -
+> and three of the sheet's addresses collided with demo personas, which turned
+> "added" into "updated" and looked like a bug in the importer. The test now
+> uses addresses the seed does not have and asserts **deltas**, not totals.
+> Noted in [22-running-and-testing.md](22-running-and-testing.md).
+
+### What was deliberately left for the owner
+
+**Migration 31 is not applied to the hosted project, and the Auth users are
+still there.** Both are production actions on live data. The working tree has
+the migration, the rollback script and the repair; §1a.1 of
+[04-production.md](04-production.md) has the order, and the order matters -
+the repair refuses to run before the migration, because the old foreign key's
+`on delete cascade` would take every profile with the Auth users it deletes.
+
+**The email/password provider is still unverified.** It is a dashboard
+setting, not in the repository, not readable with the service-role key. Until
+the repair runs, it is the control that matters most, because the published
+password is live on those 18 rows right now.

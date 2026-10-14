@@ -145,7 +145,13 @@ export interface Database {
     Tables: {
       profiles: {
         Row: Profile;
-        Insert: Insertable<Profile, "hostel_name" | "department_or_club" | "roll_number" | "ldap_uid">;
+        // `id` is generated since migration 31: the column has its own
+        // `gen_random_uuid()` default now that it no longer references
+        // `auth.users (id)`, so `createProfile` inserts without one.
+        Insert: Insertable<
+          Profile,
+          "id" | "hostel_name" | "department_or_club" | "roll_number" | "ldap_uid"
+        >;
         Update: Partial<Profile>;
         Relationships: [];
       };

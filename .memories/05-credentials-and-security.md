@@ -70,7 +70,7 @@ Authentication** and pick the persona with one click (no password).
 | --- | --- | --- |
 | **Console password** (`/admin`, manager and developer) | `0000` | Default until changed in Console Access; stored as a scrypt hash in `app_settings`. **Must be changed before go-live.** |
 | **Developer second factor** | *enrol your own* | First console use as `developer`: Console → Security → set up an authenticator (TOTP), keep the ten recovery codes. Needed before any role change, Settings change or delete. Stored in the database the portal is using — deleting `.local-db.json` removes it |
-| Supabase **Auth** password for seeded / console-created users | `password123` | Not a portal login — nothing signs in with it; the rows exist because `profiles.id → auth.users` |
+| Supabase **Auth** password for seeded / console-created users | *gone* | **Removed in code on 13 Oct 2026** (migration 31). `createProfile` no longer creates a Supabase Auth user, and `supabase/seed.sql` no longer creates 18 of them with `password123`. Nothing in the repository mints a Supabase password any more, and `tests/rls-surface.test.ts` fails if something starts. **The rows already on the hosted project are still there** until `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql` is run - a production action needing the owner's approval. See Part 4, "The second door" |
 | Sample shown on the sign-in card | `priya` / `Priya@2026` | Only while the dummy directory is in use |
 
 
@@ -332,10 +332,103 @@ never exposed to the browser, never logged, and never committed.
   TOTP (`lib/totp.ts`), with ten recovery codes kept only as scrypt hashes.
   Role changes, Settings and every delete need the code proved again within ten
   minutes (`stepUpProblem`).
-- Row-level security is on for every table, with no `authenticated` write
-  policy — which is what makes the public anon key safe to ship. **The server
-  still uses the service-role key** (see "What is deliberately not done yet"
-  at the foot of this file).
+- Row-level security is on for every table. **The server still uses the
+  service-role key** (see "What is deliberately not done yet" at the foot of
+  this file).
+
+  > **This used to read "with no `authenticated` write policy - which is what
+  > makes the public anon key safe to ship". That was wrong on both halves**
+  > (checked against the migrations, 13 Oct 2026). There are **21 write
+  > policies granted to `authenticated`**, ten of them `for all`, including
+  > `developer manages profiles / guest houses / rooms / bookings /
+  > booking_guests / form_configs` - each gated only on
+  > `my_role() = 'developer'`, which is read from the JWT's own profile row.
+  > What makes the anon key safe to ship is not the absence of those policies
+  > but **the impossibility of obtaining an `authenticated` JWT**, and
+  > `password123` on a confirmed email identity is exactly how one is
+  > obtained. See the next section.
+
+#### The second door: GoTrue and PostgREST
+
+**Found 13 Oct 2026**, reviewing the schema before the institute's user
+import. Not a new bug - a standing one whose consequence had been mis-stated,
+and which **the import would multiply by a thousand**.
+
+The portal has one front door: the LDAP form, then a session row
+(`lib/auth.ts`). A Supabase project has **two more** that answer to the same
+public anon key - `/auth/v1` (GoTrue) and `/rest/v1` (PostgREST) - and neither
+knows the portal exists. The chain, each link verified in the repository:
+
+| # | Link | Where |
+| --- | --- | --- |
+| 1 | The project URL and anon key reach the browser by design | `app/(portal)/layout.tsx:154`; present in the built client chunks |
+| 2 | Every seeded persona is a **confirmed** `auth.users` row with `encrypted_password = crypt('password123', ...)` and `provider: email` | `supabase/seed.sql` lines 13-32, 18 personas including **`developer@iitpkd.ac.in`** |
+| 3 | `createProfile` gives **every account the console or an import creates** the same password, also `email_confirm: true` | `lib/store/supabase.ts:841` |
+| 4 | A GoTrue password grant on any of those returns an `authenticated` JWT | GoTrue's default email provider |
+| 5 | `profiles` is readable by **any** `authenticated` JWT - `using (true)`, no scoping | migration 1 |
+| 6 | `my_role()` reads the role off that JWT's own profile row, and `developer manages …` grants `for all` on six tables on that basis | migration 1 |
+| 7 | `authenticated users read documents` grants `select` on the whole private `documents` bucket - `using (bucket_id = 'documents')`, **no per-user scoping** | migration 1 |
+
+So a GoTrue sign-in as `developer@iitpkd.ac.in` / `password123` yields read
+**and write** on profiles, bookings, guests, rooms, guest houses and form
+configs, plus read of **every uploaded ID document and alumni card**. The
+portal's own protections - the console password, TOTP, `requireConsole`,
+`stepUpProblem`, the session rows - are all on the other door and stop none of
+it.
+
+**The one link not verified from here:** whether the hosted project has the
+email/password provider enabled. That is an Auth dashboard setting, not in the
+repository, and it cannot be read with the service-role key. If it is off,
+every link above still holds and the exposure is **one toggle away** from
+live, with the password published on GitHub. **Check it, and record the
+answer in [04-production.md](04-production.md).**
+
+**`academic_records` is not exposed** - migration 28 deliberately gives it no
+`authenticated` policy, so parents' names and phone numbers stay
+service-role-only. That is the pattern the other tables need.
+
+### What was done about it, 13 Oct 2026
+
+**Closed in code and in the schema.** Migration 31
+(`00000000000031_decouple_auth_and_tighten_rls.sql`) and the changes beside it
+break every link in the table above except the one that is not in the
+repository:
+
+| Link | Then | Now |
+| --- | --- | --- |
+| 2, 3 - a password exists | `createProfile` and `seed.sql` minted `auth.users` rows with `password123` | **Neither creates a Supabase Auth user at all.** `profiles.id` no longer references `auth.users (id)`, so none is needed; the column has its own `gen_random_uuid()` default |
+| 5 - the directory is readable | `profiles` select `using (true)` | **Dropped.** RLS stays enabled, so `authenticated` is denied by default |
+| 6 - a JWT could write | 38 `authenticated` policies, 21 of them writes, incl. `developer manages profiles` | **All 38 dropped.** The pattern migration 28 chose for `academic_records`, now applied to the rest |
+| 7 - every ID document was readable | `select` on the whole `documents` bucket | **Dropped**, and the bucket forced `public = false`. Signed URLs are issued server-side |
+| 1 - the anon key is public | unchanged, and correct | It is only safe because an `authenticated` JWT is now genuinely unobtainable - which is what the rest of this table establishes |
+
+**`tests/rls-surface.test.ts` holds the line.** It parses the migrations and
+fails if any `authenticated` policy survives, if RLS is ever disabled, if the
+seed creates an Auth user, or if `password123` reappears in the store. Both
+claims this file used to make were plausible, written in good faith, and read
+twice without being checked against the SQL - so the invariant is asserted by
+a test now rather than described in prose. Mutation-checked: removing one
+`drop policy` line from migration 31 fails the test with that policy named.
+
+**Three things remain, and two of them need production access:**
+
+1. **Apply migration 31 to the hosted project.** Not done - a production
+   change needing the owner's approval. `npm run check:migrations` prints the
+   SQL that confirms it: both counts must come back 0.
+2. **Then run the repair** -
+   `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql` deletes the
+   `auth.users` rows that already exist. It **refuses to run before migration
+   31**, because the old foreign key's `on delete cascade` would take every
+   profile with them.
+3. **Disable the email/password provider by hand** (Dashboard ->
+   Authentication -> Providers -> Email). Still the one link that cannot be
+   read or changed from the repository, and still unverified. After steps 1
+   and 2 it is belt-and-braces; before them it is the control that matters
+   most, because the published password is still live on those rows.
+
+The import runbook is [04-production.md](04-production.md) §1a.
+
+---
 
 #### Data at rest
 

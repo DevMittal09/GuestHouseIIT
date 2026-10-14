@@ -140,6 +140,251 @@ by domain ([§2](#2-the-debitable-heads-as-the-office-gave-them-8-oct-2026)).
 
 ---
 
+## 1a. Importing the institute's user list (13 Oct 2026)
+
+The college is sending the people as an Excel file. This section is the whole
+procedure. **It was written before the file arrived**, from the schema and the
+importers as they stand; the column list below is what the portal can use, not
+what the sheet happens to have.
+
+### The schema is right as it is - one `profiles` table
+
+Asked and settled on 13 Oct 2026: should students, faculty and staff become
+separate tables? **No.** The reasoning is in
+[02-decisions.md](02-decisions.md) under that date; the short form is that
+**19 foreign keys across 11 tables point at `profiles.id`**, a portal role is
+an authorisation level that changes rather than a category of person, and
+`academic_records` (migration 28) already carries the per-category fields
+behind a `kind` discriminant. **No migration is needed to hold the college's
+data.** What is needed is §1a.1 below, which is a security fix, not a
+modelling one.
+
+### Two destinations, not one
+
+The sheet feeds **two** importers, and which column goes where is the whole
+mapping question:
+
+| | `profiles` | `academic_records` |
+| --- | --- | --- |
+| Holds | identity and **authorisation** | per-category **reference data** |
+| One row per | person | (kind, email) |
+| Console | Users & Roles -> Import from spreadsheet | Academic records |
+| Read by | sign-in, every role check, every queue, mail | the Requester details card, the warden's family check, the booking form's locked parent names |
+| Exposed to a browser? | **yes** - `select using (true)` for any JWT | **no** - service-role only, deliberately |
+
+Because the second is service-role-only and the first is not, **parents' names
+belong only in `academic_records`.** Nothing about a parent goes in `profiles`.
+
+### 1a.1 Before any import - close the second door
+
+**Done in code on 13 Oct 2026. Three steps are left, and they are production
+actions.** The reasoning and the link-by-link chain are in
+[05-credentials-and-security.md](05-credentials-and-security.md) Part 4, "The
+second door: GoTrue and PostgREST"; the migration is documented in
+[21-database.md](21-database.md) under 31.
+
+What is already done, in the working tree:
+
+- **`createProfile` no longer mints a Supabase Auth user.** It is one insert.
+  `profiles.id` has its own `gen_random_uuid()` default.
+- **`supabase/seed.sql` no longer creates Auth users** - it used to create 18
+  with the published password `password123`.
+- **Migration 31 drops all 38 `authenticated` policies**, drops the
+  `profiles -> auth.users` foreign key, drops the blanket `documents` bucket
+  policies, and adds the `profiles` indexes and checks.
+- **`tests/rls-surface.test.ts`** fails if any of that is undone.
+
+What is left:
+
+1. **Apply migration 31 to the hosted project.** Needs approval; it is a
+   schema change on live data. It only drops a constraint and policies and
+   adds indexes, so it takes no table rewrite and no downtime. Verify with
+   `npm run check:migrations`, which prints the SQL - **both counts must come
+   back 0**.
+2. **Then run
+   `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql`**, which deletes
+   the `auth.users` rows that already exist. **Order matters**: it refuses to
+   run before migration 31, because the old foreign key's `on delete cascade`
+   would take every profile with them.
+3. **Disable the email/password provider** - Dashboard -> Authentication ->
+   Providers -> Email -> off. **Still unverified whether it is currently on**;
+   it is not in the repository and cannot be read with the service-role key.
+   Until steps 1 and 2 are done this is the control that matters most, because
+   the published password is live on those 18 rows right now.
+
+Rollback for step 1 is
+`supabase/repairs/2026-10-13-rollback-migration-31.sql` (all 38 policies,
+generated from the migrations rather than retyped, round-trip tested). The
+**foreign key** is the one part whose rollback has a time limit: re-adding it
+needs every profile to still have a matching Auth user, which stops being true
+as soon as one profile is created afterwards - which is to say, as soon as the
+import runs.
+
+### 1a.2 Prerequisites the import will reject without
+
+Both are `on delete restrict` foreign keys, and `planUserImport` refuses an
+unknown name rather than inventing one:
+
+- **Hostels** must exist before any student naming one
+  (`profiles.hostel_name -> hostels(name)`). Settings -> Hostels.
+- **Units** must exist before anyone naming one
+  (`profiles.unit_id -> units(id)`). Departments & Clubs. Note the import
+  matches a unit by **name or id**, case-insensitively.
+
+### 1a.3 Which columns to keep, and which to drop
+
+**Keep, for `profiles`** (`DEFAULT_COLUMNS` / `KNOWN_COLUMNS`,
+`lib/users-import.ts` - the header line may name them in any order and only
+`email` is required):
+
+| Column | Notes |
+| --- | --- |
+| `email` | The match key. Required. Lowercased for matching, stored as typed |
+| `full_name` | Required for a new person |
+| `role` | One of the portal roles, by value or label. "faculty", "staff" and "non-teaching staff" all map to `employee` |
+| `staff_category` | `faculty` / `staff`. Only meaningful for `employee`; forced to null otherwise |
+| `hostel_name` | Students. Must already be a hostel |
+| `department_or_club` | Free text, legacy. `unit` is the one that routes approvals |
+| `roll_number` | Students; the office also uses it for employee id |
+| `ldap_uid` | **Without it the person cannot sign in by LDAP.** Unique on `lower()` |
+| `unit` | Name or id of a department / club / office. **This is what finds their HOD** |
+
+**Keep, for `academic_records`** (`ACADEMIC_RECORD_FIELDS`,
+`lib/academic/types.ts`), per kind:
+
+- **student**: `roll_number`, `name`, `program`, `department`, `email`,
+  `phone`, `father_name`, `mother_name`, `guardian_name`, `hostel`
+- **employee**: `employee_id`, `name`, `department`, `employee_type`, `phone`,
+  `email`, `office_number`
+- **office**: `department`, `email`, `phone`, `head_name`, `head_email`
+- **student_rep**: `representative_type`, `email`, `phone`,
+  `faculty_in_charge_email`
+- **alumni_office**: `department`, `email`, `phone`
+- **warden**: `name`, `phone`, `email`, `hostel`
+
+**Drop everything else, and drop it before the file is copied anywhere.**
+A college student sheet usually carries date of birth, category, blood group,
+permanent address, admission year, fee or CGPA columns, photographs, Aadhaar
+numbers, bank details and **parents' phone numbers**. The portal has nowhere
+to put any of them and asks for none. Parents' *phone numbers* in particular
+are **not** in the student field list - only the student's own `phone` and the
+parents' *names* - so they are dropped, not stored "in case". A column with no
+field is a column that becomes a liability at the first subject-access
+request.
+
+### 1a.4 Duplicates, conflicts, and running it again
+
+**This is already solved and should not be rebuilt.** Both importers are
+plan-then-apply, all-or-nothing on validation, and keyed so that a second
+paste **updates** rather than duplicates:
+
+- **The key is `lower(email)`** for `profiles`, `(kind, lower(email))` for
+  `academic_records`. A person already on the list is updated in place, so
+  their `id` never changes and **every one of the 19 foreign keys survives**.
+- **A column the paste does not carry is left alone**, never cleared - a sheet
+  of email and name must not wipe everyone's hostel.
+- **A duplicate email inside one paste is refused**, naming both lines.
+- **LDAP usernames are checked against the state the import would leave**, so
+  swapping two people's usernames in one paste is allowed and giving two
+  people the same one is not.
+- **A manager cannot import a developer into existence** (`assignableRoles`,
+  checked in the action, not the UI).
+- **Every import is audited** in `security_audit` with the counts and the
+  columns used.
+- **Nothing is deleted.** An import only adds and updates. See 1a.7.
+
+### 1a.5 The procedure
+
+1. Open the sheet, delete every column from 1a.3's drop list, and split it
+   into one sheet per destination (profiles; then one per academic kind).
+2. Put a **header line** on each so the order does not have to match.
+3. **Dry-run against the mock store first**:
+   `NEXT_PUBLIC_SUPABASE_URL= npm run dev`, import there, read the plan. This
+   touches no real data and is the cheapest way to find a bad column.
+4. On the real deployment: Users & Roles -> Import from spreadsheet -> paste
+   -> **Check the paste** -> read the plan -> Import.
+5. **Watch the row count.** `MAX_USER_IMPORT_ROWS` is 2000 and the institute
+   is larger; the paste must be split. See the timeout warning in 1a.6.
+6. Then the academic records, students first.
+7. Then name the people who are **appointments, not accounts**: heads of
+   units, acting heads, Faculty Advisors, the whitelist. An import cannot do
+   this - §1 "Accounts the office must create by hand".
+
+### 1a.6 The one thing that will go wrong: the import is not atomic and does not scale
+
+`importUsersAction` validates all-or-nothing but **applies row by row**:
+
+```
+for (const row of plan.added)   await store.createProfile(row);
+for (const {id, row} of plan.updated) await store.updateProfile(id, row);
+```
+
+In Supabase mode each `createProfile` used to be **two sequential HTTP round
+trips** (`auth.admin.createUser`, then the `profiles` insert). Since 13 Oct
+2026 it is **one** - the Auth call is gone with migration 31 - so the cost is
+halved, but the shape of the problem is unchanged: at 2000 rows that is still
+~2000 sequential round trips inside one server action, and `vercel.json` sets
+no `maxDuration`, so the platform default applies. **It can still time out
+part-way, and nothing records where it stopped** - the plan is atomic, the
+application of it is not.
+
+Mitigations, in order of effort:
+
+- **Import in batches of 100-200** and re-paste the whole sheet afterwards.
+  Re-pasting is safe and is the point of the upsert: already-imported people
+  come back as `unchanged`, so the "unchanged" count is how you confirm a
+  batch landed. `tests/user-import-idempotency.test.ts` is what makes that
+  claim checkable.
+- The real fix is a bulk upsert in `SupabaseStore` (one PostgREST call with
+  `Prefer: resolution=merge-duplicates`) - [03-roadmap.md](03-roadmap.md) §1
+  gate 11. Now a smaller job than it was, since there is no Auth user to
+  create alongside each row.
+
+### 1a.7 Rollback and verification
+
+**Before:** take a snapshot with the documented drill - `supabase db dump`
+(§"Backup and restore"). That is a full `pg_dump` and **does** include
+`profiles`, which is what an import needs to be undoable. There is no
+`npm run backup`; the drill is the backup.
+
+> **Two files that are not backups, and must not be mistaken for one.**
+> `my-guest-house-data-<date>.json` is the DPDP **personal-data export** -
+> one person's own data, `app/actions/privacy.ts`. And the ad-hoc
+> `guesthouse-supabase-backup-2026-09-23.json` kept outside the repo holds
+> only `guest_houses`, `rooms`, `bookings`, `booking_rooms`,
+> `booking_guests`, `booking_logs`, `room_holds`, `email_outbox`, `tariffs`
+> and `invoices` - **no `profiles`** (checked 13 Oct 2026). Restoring it
+> would not bring an account back.
+
+**Rolling back an import:**
+
+- **A wrong batch of new people** - Users & Roles, tick the rows, Delete.
+  `deleteUsersAction` names back whoever it could not remove (anyone with a
+  booking) and removes the rest.
+- **A wrong batch of updates is the dangerous one.** There is no undo: the
+  previous values are not kept, and the audit row records only the counts and
+  the column list, not the old values. So **the "updated" count on the plan is
+  the number to read carefully before pressing Import** - on a first load it
+  should be 0, and anything else means the sheet is overwriting accounts the
+  office has already corrected by hand.
+
+**Verifying afterwards:**
+
+1. Re-paste the same sheet. Everything should come back **unchanged** - that
+   is the idempotency check, and it is free.
+2. `npm run check:migrations` - still 1-30.
+3. Sign one imported person in by LDAP end to end, and check they land on the
+   right page with the right menu.
+4. Open `/book` as an imported student: the Requester details card should show
+   their own record, and Father / Mother should be **locked** to the academic
+   record's names.
+5. Check one imported employee's official booking finds an HOD - if `unit` was
+   left blank there is no HOD and the request routes straight to the desk.
+6. Spot-check that nobody arrived as `developer` (`assignableRoles` should
+   make this impossible; confirm anyway).
+
+---
+
 ## 2. The debitable heads, as the office gave them (8 Oct 2026)
 
 Nine heads, and who may use which. This is `DEFAULT_DEBIT_RULES`
@@ -418,11 +663,15 @@ npm run check:migrations
 ```
 
 It probes one marker per migration, read-only, against the project in
-`.env.local`, and exits 1 if anything is missing. **Migrations 17 and 23 are
-function-only** and it cannot see them; it says so and prints the one-line SQL
-for the editor.
+`.env.local`, and exits 1 if anything is missing. **Three it cannot see:** 17
+and 23 are function-only, and **31** adds no table or column - it drops a
+foreign key and 38 policies. For each it says so and prints the SQL to paste
+in the editor.
 
-> **The current hosted project (`azfd…`) has 1 – 30, verified 9 Oct 2026.**
+> **The current hosted project has 1 – 30, verified 13 Oct 2026** by
+> `npm run check:migrations`. **Migration 31 is written and tested but
+> deliberately NOT applied** - see §1a.1; applying it is a production change
+> needing the owner's approval.
 > This file previously said 24 – 30 were outstanding. They were not: they had
 > been applied in the SQL editor, and the note was wrong because the old check
 > recipe listed markers only up to migration 25, so nothing past it could be
@@ -440,6 +689,7 @@ check at all:
 | 28 | Every academic lookup falls through to the dummy records; the records console names the missing table |
 | 29 | The nightly sweep cannot mark anything Missed (it logs the enum error per booking and carries on) |
 | 30 | A booking on anybody's budget but Personal Funds is refused ("column does not exist"); personal bookings still work |
+| **31** | **The second door stays open**: the 38 `authenticated` policies remain, the whole directory and every ID document stay readable to any GoTrue JWT, and `profiles.id` still demands an `auth.users` row - so `createProfile` **fails outright** against a database without it, because the insert no longer supplies an id and the foreign key has nothing to match. **This one is not optional once the code is deployed:** migration 31 and the `createProfile` change ship together |
 
 Every migration is tested in a throwaway `postgres:16-alpine`, never against
 the hosted project - recipe in
@@ -483,6 +733,22 @@ Recorded here so the next session does not have to rediscover the reasoning.
   or Google. Worth revisiting when the service moves off the service-role key
   ([05-credentials-and-security.md](05-credentials-and-security.md) §6): either stop creating Auth users for
   imported profiles, or create them with a random unusable password.
+
+  > **Superseded 13 Oct 2026 - "harmless" was wrong, and this is now a
+  > blocker, not a parked item.** The reasoning above weighs only the
+  > *portal* door. GoTrue (`/auth/v1`) and PostgREST (`/rest/v1`) are a
+  > second door onto the same project, answering to the anon key that ships
+  > in the browser, and they do not know the portal exists. `password123`
+  > on a confirmed email identity is a working credential there, and the
+  > `authenticated` role it yields has **21 write policies** behind it -
+  > including `developer manages profiles / bookings / rooms / guest houses
+  > / booking_guests / form_configs`, gated only on `my_role() =
+  > 'developer'`, plus `select` on the **whole `documents` bucket** with no
+  > per-user scoping. The seeded `developer@iitpkd.ac.in` has that password
+  > and it is published in this repository. The full chain, link by link, is
+  > [05-credentials-and-security.md](05-credentials-and-security.md) Part 4,
+  > "The second door: GoTrue and PostgREST". **Not a reason to delay the
+  > import - a reason to do §1a first.**
 - **Editing the users table in place, cell by cell** (a spreadsheet in the
   browser). The office asked to "edit the columns", which the header line
   answers for an import; a live editable grid is a different feature, needs its

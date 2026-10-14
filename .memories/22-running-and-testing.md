@@ -911,6 +911,83 @@ dataset there is small — the plan is the evidence, not a timing.
 
 ---
 
+### A store test's fixture is never empty - `loadDb()` self-heals (13 Oct 2026)
+
+Cost a debugging cycle while writing `tests/user-import-idempotency.test.ts`.
+
+A fixture of `profiles: []` handed to `useThrowawayMockDb` comes back holding
+**19** profiles, because `loadDb()` deliberately adds any missing seeded
+persona to the file it loads (so adding a demo persona needs no wipe -
+`AGENTS.md`, "Two backends, one interface"). Two consequences, and the second
+is the one that wastes the time:
+
+1. **Absolute counts are meaningless.** `expect(profiles).toHaveLength(3)`
+   fails with 19.
+2. **The seed's own addresses collide with a test sheet.** The obvious
+   addresses to use in an import test - `112201001@smail.iitpkd.ac.in`,
+   `priya@iitpkd.ac.in` - *are* demo personas. So a first import reports them
+   as **updated, not added**, and the importer looks broken when it is
+   behaving exactly as designed.
+
+So: pick addresses the seed does not use, and assert **deltas** over whatever
+the fixture holds. The test does this with a `mine()` helper that filters to
+its own four addresses.
+
+---
+
+### Migrations: the full set is not re-runnable, only each file (13 Oct 2026)
+
+Piping `supabase/migrations/*.sql` **twice** into a throwaway Postgres fails
+with `ERROR: type "user_role" already exists`. That is migration 1, which
+`create`s its enums without `if not exists`; the note at the foot of
+[21-database.md](21-database.md)'s migration list has always said 1-5 are not
+re-runnable.
+
+It is worth knowing because the obvious way to test idempotency - pipe
+everything twice - tests the wrong thing and fails on the oldest file rather
+than the new one. **Test the new migration twice instead**, on a database that
+already has the rest:
+
+```bash
+{ cat migration-31.sql; cat migration-31.sql; } | docker exec -i gh-mig psql -U postgres -v ON_ERROR_STOP=1 -q -X
+```
+
+Only `NOTICE: ... does not exist, skipping` lines should come back.
+
+---
+
+### Testing a migration that adds no table or column (13 Oct 2026)
+
+Migration 31 drops a foreign key and 38 policies and adds indexes, so there is
+nothing for `npm run check:migrations` to probe - PostgREST reads tables and
+columns, not `pg_constraint` or `pg_policies`. Two things follow:
+
+- **The script needs a `kind: "sql"` marker** rather than a column name. It
+  prints the SQL to paste in the editor, the same treatment as the
+  function-only migrations 17 and 23.
+- **The assertions go in a throwaway container**, as catalogue queries:
+
+```sql
+select count(*) from pg_constraint
+ where conrelid='public.profiles'::regclass and contype='f'
+   and confrelid='auth.users'::regclass;          -- expect 0
+select count(*) from pg_policies
+ where 'authenticated' = any(roles) and schemaname in ('public','storage');  -- expect 0
+select relname, relrowsecurity from pg_class
+ where relname in ('profiles','bookings');        -- expect t, t  (RLS still ON)
+```
+
+The third one matters most: **dropping every policy is not the same as
+disabling RLS**, and only the second-order check tells them apart. With RLS on
+and no policy, `authenticated` is denied and service-role still bypasses; with
+RLS off, every role reads everything. A migration that got that backwards
+would pass a "no policies" check and open the database.
+
+The stand-ins in the recipe above need `auth.users` to have an `email` column
+for the seed, and `pgcrypto` - both already noted there.
+
+---
+
 ### Re-running the Playwright suite bites twice (23 Sep 2026)
 
 Both of these cost a full debugging cycle, and neither announces itself:

@@ -1,54 +1,23 @@
 -- Seed data for local Supabase development (supabase db reset applies this).
--- Creates confirmed auth users (password: "password123") plus their profiles,
--- their dummy LDAP usernames, the two guest houses and their rooms.
+-- Creates the demo personas' profiles, their dummy LDAP usernames, the two
+-- guest houses and their rooms.
 --
--- Signing in to the portal does not use those auth users' passwords: the
--- sign-in page checks LDAP (lib/ldap/) and the mock Google door picks a
--- persona. They exist for `auth.users` foreign keys and a future Supabase Auth.
+-- **No Supabase Auth users, since migration 31.** It used to create 18
+-- confirmed `auth.users` rows with the password "password123", because
+-- `profiles.id` referenced `auth.users (id)`. That foreign key is gone: the
+-- portal authenticates through LDAP (lib/ldap/) or Google and keeps its own
+-- `sessions` rows (migration 21), so a Supabase Auth user was never a portal
+-- login - it only satisfied the key. It did, however, make every persona a
+-- working GoTrue credential on a project whose anon key ships in the browser,
+-- and `authenticated` had 38 policies behind it. See
+-- .memories/02-decisions.md, 13 Oct 2026.
+--
+-- An existing database still holds those rows. They are removed by
+-- supabase/repairs/2026-10-13-retire-seeded-auth-users.sql, which is a
+-- production action and is not applied automatically.
 --
 -- There is no alumni persona: alumni have no institute login, so the IAR
 -- Office and the IAR Student Cell raise those bookings for them (migration 9).
-
--- ---------------------------------------------------------------- auth users
-create or replace function pg_temp.seed_user(uid uuid, user_email text)
-returns void language plpgsql as $$
-begin
-  insert into auth.users (
-    id, instance_id, aud, role, email, encrypted_password,
-    email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
-  ) values (
-    uid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-    user_email, crypt('password123', gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()
-  ) on conflict (id) do nothing;
-
-  insert into auth.identities (
-    id, user_id, provider_id, identity_data, provider, created_at, updated_at
-  ) values (
-    gen_random_uuid(), uid, uid::text,
-    jsonb_build_object('sub', uid::text, 'email', user_email),
-    'email', now(), now()
-  ) on conflict do nothing;
-end $$;
-
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111101', '112201001@smail.iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111102', '142202014@smail.iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111103', 'priya@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111104', 'admin@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111105', 'petrichor@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111107', 'warden.malhar@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111108', 'warden.saveri@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111110', 'iar@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111111', 'guesthouse@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111112', 'developer@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111113', 'alumnicell@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111114', 'gh.reception@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111115', 'hod.cse@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111116', '112301045@smail.iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111117', 'cse.office@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111118', 'ravi.k@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111119', 'arun.prasad@iitpkd.ac.in');
-select pg_temp.seed_user('11111111-1111-1111-1111-111111111120', 'sec_arts@iitpkd.ac.in');
 
 -- ---------------------------------------------------------------- hostels
 -- Migration 16: profiles.hostel_name references hostels(name), so the

@@ -10,7 +10,7 @@ every table in `.local-db.json` and self-heals old files.
 
 | Table | Purpose |
 | --- | --- |
-| `profiles` | One row per user. `id` references `auth.users`. Holds `email`, `full_name`, `role`, `hostel_name`, `department_or_club`, `roll_number`, and `ldap_uid` (migration 12: the LDAP username sign-in matches, unique on `lower(ldap_uid)`, null = no LDAP sign-in). |
+| `profiles` | One row per user - **the only user table; there is no `users` table**, `auth.users` being Supabase's own. `id` references `auth.users (id) on delete cascade`. Holds `email` (unique), `full_name`, `role`, `hostel_name` (-> `hostels(name)`, migration 16, on update cascade / on delete restrict), `department_or_club` (legacy free text - `unit_id` is what routes approvals), `roll_number`, `ldap_uid` (migration 12: the LDAP username sign-in matches, unique on `lower(ldap_uid)`, null = no LDAP sign-in), and from migration 15 `unit_id` (-> `units(id) on delete restrict`) and `staff_category` (`faculty` / `staff`, employees only). **19 foreign keys across 11 tables point at `profiles.id`** - which is why it is one table and not one per category ([02-decisions.md](02-decisions.md), 13 Oct 2026). |
 | `guest_houses` | `name` (free-form, unique), `total_rooms` (recounted from active rooms) and `serves_meals` (migration 8 — whether the booking form offers meals there; Hamsanandi on by default). |
 | `rooms` | `guest_house_id`, `room_number`, `room_type`, `is_active`. Unique per (guest house, room number). |
 | `bookings` | The core record — see below. |
@@ -75,6 +75,66 @@ every table in `.local-db.json` and self-heals old files.
 > **There is no `assigned_room_ids` column.** It was dropped in migration 3.
 > `Booking.assigned_room_ids` still exists in the domain type but is **derived
 > from `room_holds`** during hydration in both stores.
+
+## Normalization - the review of 13 Oct 2026
+
+Done before the institute's user import, targeting 3NF "where appropriate".
+**The schema is in good shape.** What follows is the whole finding list, so a
+later session does not redo it. The one-table question - `profiles` vs. a
+table per user category - is answered in
+[02-decisions.md](02-decisions.md) under 13 Oct 2026 and is **not** repeated
+here.
+
+### Genuine findings
+
+| # | Finding | Status |
+| --- | --- | --- |
+| 1 | **`profiles.department_or_club` duplicates `profiles.unit_id`.** A department is held twice - once as free text, once as a foreign key to `units` - and they can disagree. A real 3NF violation (a non-key attribute determined by the unit, not the person) | **Left alone, deliberately.** Five modules still read it: `lib/approval-routes.ts` (the legacy `faculty_advisor` scoping), `lib/workflow.ts` (the club queue), `lib/booking-search.ts` (the `club` filter), `lib/invoice.ts` (printed on the invoice) and `lib/mail/templates.ts` (the scope line). Dropping it is a feature removal, not a migration. Retire it when every account has a `unit_id` - [03-roadmap.md](03-roadmap.md) §2f |
+| 2 | **`guest_houses.total_rooms` is a stored derived value**, recounted by application code in both stores (`recountRooms`, `lib/store/mock.ts:1119`, `lib/store/supabase.ts:971`). A room inserted by SQL or by a repair script leaves it stale - a textbook update anomaly | **Found, not fixed.** The fix is a trigger on `rooms` so the count cannot drift whatever writes it, which is what `booking_guests`' occupancy trigger already does for a harder invariant. Additive and cheap, but it is not what the import needs, so it is on the roadmap rather than in migration 31 |
+| 3 | **`academic_records` has every kind's fields as nullable columns** - a student's `father_name` is null on an office row. Not 3NF in the strict reading | **Correct as it is**, decided in migration 28's own header: six kinds share an email, a phone, a name and a department, and six tables would be six importers and six console sections for the same six CSV pastes. The discriminant is `kind`, the shape is checked in TypeScript by `ACADEMIC_RECORD_FIELDS`, and a column named in one and not the other is a compile error |
+| 4 | **`academic_records.hostel` is free text** while `profiles.hostel_name` is a foreign key to `hostels` - the same reference data, two representations | **Correct as it is.** The table is *the institute's records as the office pasted them in*. A foreign key would reject a valid import because the institute spells a hostel differently from our list, and the column is **display-only** - `lib/academic/fields.ts` renders it as a row and nothing scopes or authorises on it. Verified: no other reader |
+| 5 | **`profiles` had almost no indexes** - the primary key, unique `email`, unique `lower(ldap_uid)`, and nothing on `role`, `unit_id` or `hostel_name` | **Fixed in migration 31.** Invisible at 18 personas, not at a few thousand |
+| 6 | **No case-insensitive index behind the import's match key.** The import matches on `lower(email)`; `profiles_email_key` is plain and cannot serve it | **Fixed in migration 31** (`profiles_email_lower_idx`, deliberately not unique - see the migration) |
+| 7 | **`profiles` had no check constraints at all** - a blank name or a non-address would store | **Fixed in migration 31**, both `not valid` so the migration cannot refuse to apply |
+| 8 | **`profiles` has no `is_active`.** Someone who leaves can only be deleted, and `deleteProfile` refuses anyone with a booking (correctly - it would orphan the history). So repeated imports only accumulate | **Open**, [03-roadmap.md](03-roadmap.md) §2f. Not urgent until the first graduation after go-live |
+
+### Denormalization that is correct, and why
+
+Each of these stores a value that could be derived. All four are deliberate
+and should not be "fixed":
+
+- **`bookings.user_role`** - the requester's role **as it was when they
+  booked**. Reading it from `profiles` today would rewrite history the moment
+  somebody's role changed, and `BOOKING_CATEGORY_ROLES` still carries
+  `alumni` for exactly this reason.
+- **`booking_logs.action_by_name`** - so the audit trail survives account
+  deletion (`action_by` is `on delete set null`). The whole point is that it
+  does **not** follow the profile.
+- **Issued invoices** (`InvoiceDocument`) - a snapshot, never recomputed. A
+  tariff change must not alter a bill already sent, which is why label changes
+  are a **new `version`** rather than an upgrade.
+- **`bookings.search_text`** - not a denormalization at all on inspection:
+  `generated always as (...) stored`, so Postgres maintains it and it cannot
+  drift. Guest names are deliberately excluded (personal data; matched after
+  loading).
+
+### Relationships and constraints that were already right
+
+Worth recording, because they are the parts most likely to be "improved" by
+mistake:
+
+- **`room_holds`** - a `tstzrange` exclusion constraint on `guard`. The
+  invariant lives in the database, not in a check-then-act.
+- **`booking_rooms_id_booking_idx`** - a composite unique index on
+  `(id, booking_id)` so `booking_guests` can reference the pair, which makes
+  attaching a guest to another booking's room unrepresentable.
+- **`profiles.hostel_name -> hostels(name)`** `on update cascade on delete
+  restrict` - a rename moves everyone, a hostel in use cannot be deleted.
+- **`profiles.unit_id -> units(id)`** `on delete restrict`.
+- **`academic_records (kind, lower(email))`** unique - what makes the
+  academic import idempotent.
+- **19 foreign keys to `profiles.id`**, every one of them `set null` or
+  `cascade` as the history requires.
 
 ## `room_holds` — occupancy the database can enforce
 
@@ -165,7 +225,8 @@ it adds, mostly with no `authenticated` policy at all). The original shape:
   shows every role which rooms are free — while writes follow
   `can_access_booking()` on the parent booking.
 
-- `profiles` are readable by authenticated users; you may update your own.
+- `profiles` are readable by **any** authenticated user - `using (true)`,
+  with no scoping at all; you may update your own.
 - Booking visibility flows through `can_access_booking(b)`, a `security definer`
   helper: the owner, the IAR cell, the manager and the developer always; wardens
   only for students of their hostel; advisors only for their club.
@@ -173,7 +234,27 @@ it adds, mostly with no `authenticated` policy at all). The original shape:
   booking.
 - `form_configs` are readable by any authenticated user (the form needs them) and
   writable only by `developer`.
-- A `developer` full-access policy exists on every table.
+- A `developer` full-access policy exists on every table - `for all to
+  authenticated using (my_role() = 'developer')`, and `my_role()` reads the
+  role off the caller's **own profile row**.
+- `storage.objects`: `authenticated users read documents` grants `select` on
+  the whole private `documents` bucket - `using (bucket_id = 'documents')`,
+  **no per-user scoping**. Every uploaded ID document and alumni card.
+
+> **The `authenticated` surface is larger than this folder used to say**
+> (corrected 13 Oct 2026). There are **21 write policies granted to
+> `authenticated`**, ten of them `for all`.
+> [05-credentials-and-security.md](05-credentials-and-security.md) Part 4 said
+> there were none and drew the conclusion that the public anon key is
+> therefore safe to ship; that is the wrong way round. The anon key is safe
+> only while an `authenticated` JWT cannot be obtained - and
+> `lib/store/supabase.ts:841` gives every created account the published
+> password `password123` on a confirmed email identity, which obtains one.
+> **A gate before the user import**: [03-roadmap.md](03-roadmap.md) §1 gate 10.
+>
+> `academic_records` (migration 28) is the table that got this right:
+> **no `authenticated` policy at all**, so parents' names and phone numbers
+> are service-role-only.
 
 **Important honesty note:** the server currently connects with the
 **service-role key** when it is present (`lib/supabase/client.ts`), which
@@ -680,6 +761,86 @@ Current migrations:
     nullable and `timestamptz`; its comment present; a booking stored **without**
     it (a personal stay) and another **with** it beside a `department_budget`
     head; and MISSED still last on the enum, so 29 and 30 do not interfere.
+
+31. **`00000000000031_decouple_auth_and_tighten_rls.sql`** - *profiles stop
+    being Supabase Auth users, and the `authenticated` RLS surface is closed*
+    (13 Oct 2026).
+
+    Written while reviewing the schema before the institute's user import.
+    The full reasoning is in [02-decisions.md](02-decisions.md) under that
+    date; the chain of links is in
+    [05-credentials-and-security.md](05-credentials-and-security.md) Part 4,
+    "The second door: GoTrue and PostgREST". Four parts:
+
+    **A. `profiles.id` no longer references `auth.users (id)`.** Dropped by
+    name (`profiles_id_fkey`), and the column takes its own
+    `gen_random_uuid()` default. The key was the reason `createProfile` had to
+    mint a Supabase Auth user for every account - with the hardcoded,
+    published password `password123` and `email_confirm: true` - although the
+    portal authenticates through LDAP or Google and keeps its own `sessions`
+    rows (migration 21). **No id changes**, so all 19 foreign keys that point
+    at `profiles.id` are untouched.
+
+    **B. All 38 `authenticated` policies are dropped**, 21 of them writes,
+    including `developer manages profiles / guest_houses / rooms / bookings /
+    booking_guests / form_configs` - each gated only on
+    `my_role() = 'developer'`, read from the caller's own profile row. RLS
+    stays **enabled**, so with no policy `authenticated` is denied by default:
+    the pattern migration 28 chose deliberately for `academic_records`, now
+    applied to the rest. The service-role key bypasses RLS, which is how the
+    server reads and writes.
+
+    **C. The private `documents` bucket loses its two blanket policies.**
+    `using (bucket_id = 'documents')` with no owner check meant any
+    `authenticated` JWT could download every guest's ID document and every
+    alumni card. Signed URLs are issued server-side (`createSignedUrl`), so
+    the browser never needed a policy.
+
+    **D. Hygiene on `profiles`**, which carried only its primary key and two
+    unique indexes: `profiles_role_idx`, `profiles_unit_idx` and
+    `profiles_hostel_idx` (partial, where not null), `profiles_email_lower_idx`
+    for the case-insensitive match the import does - **not unique**, because
+    making it unique would fail on any existing pair of addresses differing
+    only in case, and a migration must not refuse to apply. Plus two `not
+    valid` check constraints (`profiles_email_shape`,
+    `profiles_full_name_present`) so new and updated rows are checked and
+    pre-existing rows are left alone.
+
+    **It deliberately does not** drop `public.my_role()` or
+    `public.can_access_booking()` (unused here, but cheap to keep and the
+    starting point if the app ever moves to per-user Supabase sessions - at
+    which point policies come back written against whatever identity mapping
+    that uses, **not** `auth.uid() = profiles.id`, which stops holding here);
+    does not touch the `auth.users` rows that already exist; and does not drop
+    `profiles.department_or_club`, which five modules still read.
+
+    **Two repairs go with it**, neither applied automatically:
+    `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql` deletes the
+    orphaned Auth users (and refuses to run before this migration, because the
+    old key's `on delete cascade` would take every profile with them), and
+    `supabase/repairs/2026-10-13-rollback-migration-31.sql` recreates all 38
+    policies, generated from the migration files rather than retyped.
+
+    **The foreign key is the one part with a time limit on its rollback:**
+    re-adding it needs every profile to still have a matching `auth.users`
+    row, which stops being true as soon as one profile is created afterwards.
+
+    **`supabase/seed.sql` no longer creates Supabase Auth users at all** - it
+    used to create 18 with that password. Verified in a throwaway
+    `postgres:16-alpine` (13 Oct 2026): 1-31 applied in order; the auth
+    foreign key gone; **0** `authenticated` policies; RLS still enabled on
+    `profiles`, `bookings`, `booking_guests`, `booking_logs`, `room_holds` and
+    `invoices`; the new indexes present; an insert with **no id** accepted (the
+    import path); both check constraints refusing a bad address, an untrimmed
+    address and a one-character name; migration 31 re-applied with no error;
+    the seed applied on top giving **19 profiles and 0 auth users**; and the
+    rollback script taking the policy count 0 -> 38 and migration 31 taking it
+    back to 0 with the profiles untouched.
+
+    **Not applied to the hosted project** - that is a production change and
+    needs the owner's approval. `npm run check:migrations` reports it as one of
+    the three it cannot probe (no table or column to ask about) and prints the
+    SQL: both counts must come back 0.
 
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.

@@ -34,6 +34,8 @@ Each of these is configuration or plumbing, not new design.
 | 7 | **The office's Settings** | Defaults are guesses: extra-bed rate (none), GSTIN, Accounts email (empty), bank details, retention days, heads of units, Faculty Advisors, hostels and wardens, whitelist | [04-production.md](04-production.md#3-data-the-office-has-to-supply) |
 | 8 | **Decide `MAIL_REDIRECT_ALL_TO`** | Unset only in production; set everywhere else | |
 | 9 | **Backups** | Supabase's free plan has none | Confirm the plan; run the restore drill in the runbook |
+| **10** | ~~Close the GoTrue / PostgREST door~~ **- done in code 13 Oct 2026; two production steps left** | Migration 31 drops the `profiles -> auth.users` key and all 38 `authenticated` policies, `createProfile` and `seed.sql` mint no Supabase password, and `tests/rls-surface.test.ts` keeps it that way | **Left to do, in this order:** (1) apply migration 31 to the hosted project - `npm run check:migrations` prints the SQL, both counts must be 0; (2) run `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql`, which refuses to run before (1); (3) **disable the email/password provider by hand** - still unverified whether it is on, and the one link not in the repository. [04-production.md](04-production.md) §1a.1 |
+| **11** | **Make the user import atomic, or batch it** | `importUsersAction` validates all-or-nothing then applies row by row. **Halved on 13 Oct** - migration 31 removed the Auth round trip, so it is ~2000 round trips at the cap rather than ~4000 - but the shape is unchanged: no `maxDuration` in `vercel.json`, so it can still time out part-way with nothing recording where | Batches of 100-200 plus a re-paste work today, and `tests/user-import-idempotency.test.ts` is what makes re-pasting a verified claim rather than a hope. The fix is a bulk upsert in `SupabaseStore` (one PostgREST call with `Prefer: resolution=merge-duplicates`), now a smaller job with no Auth user to create alongside each row |
 
 **Next security phase** (not a gate for a pilot, but the next real step):
 move request-scoped database access off the service-role key so row-level
@@ -275,6 +277,73 @@ closed none of these, because every one of them is about the engine.
 - **The routes are not in `04-production.md`'s checklist** because the
   defaults are the institute's own pipeline and need no filling in. If the
   office decides a different chain before go-live, that becomes a row there.
+
+## 2f. Opened by the 13 Oct 2026 rounds (the schema review and the fix)
+
+The review is in [02-decisions.md](02-decisions.md) under 13 Oct 2026, the fix
+in the entry after it; the normalization findings are in
+[21-database.md](21-database.md); the runbook is
+[04-production.md](04-production.md) §1a. **The schema needs no migration to
+hold the college's data** - migration 31 is a security fix, not a modelling
+one.
+
+**Done in the second round of 13 Oct:**
+
+- ~~Close the GoTrue / PostgREST door~~ - in code; gate 10 above has the two
+  production steps left.
+- ~~No test asserts the RLS surface~~ - `tests/rls-surface.test.ts`, 7 checks,
+  mutation-verified.
+- ~~`profiles` has almost no indexes and no check constraints~~ - migration
+  31.
+- ~~Nothing proves a re-import keeps profile ids~~ -
+  `tests/user-import-idempotency.test.ts`, 9 checks.
+
+**Still open:**
+
+- **Gate 10's three production steps, then gate 11.** Nothing below is a
+  blocker for the import; these two are.
+- **The email/password provider is still unverified.** One dashboard look
+  (Authentication -> Providers -> Email). Not in the repository, not readable
+  with the service-role key. **Until the repair script runs, this is the
+  control that matters most** - the published password is live on those 18
+  `auth.users` rows.
+- **`guest_houses.total_rooms` can drift.** A stored derived value, recounted
+  by application code in both stores, so a room inserted by SQL or a repair
+  script leaves it stale - a plain update anomaly. The fix is a trigger on
+  `rooms`, additive and cheap, the way `booking_guests` already has one for a
+  harder invariant. Found on 13 Oct and deliberately not bundled into a
+  security migration.
+- **Add `profiles` and `academic_records` to whatever is used as a pre-import
+  snapshot.** The documented drill - `supabase db dump` - already covers them;
+  the ad-hoc JSON export kept outside the repo does not, and must not be
+  mistaken for a backup.
+- **No undo for an import's *updates*.** New rows can be ticked and deleted;
+  updated rows have lost their previous values, and the audit row keeps only
+  the counts and the column list. The plan's "updated" count is the only
+  warning, and on a first load it should be 0. Cheap fix: a before/after per
+  changed field in the audit payload.
+- **No deactivation story for people who leave.** `profiles` has no
+  `is_active`, and `deleteProfile` refuses anyone with a booking (correctly -
+  it would orphan the history), so repeated imports only accumulate. Wanted:
+  a flag that hides someone from pickers and refuses them a session without
+  touching their bookings. Not urgent until the first graduation after
+  go-live.
+- **`MAX_USER_IMPORT_ROWS` is 2000 and the institute is larger.** With gate 11
+  open the paste has to be split anyway, so this is a ceiling to remember
+  rather than a bug.
+- **`department_or_club` duplicates `unit_id`** and the two can disagree - a
+  real 3NF violation kept because five modules read it
+  ([21-database.md](21-database.md), finding 1). The practical risk at import
+  time is different: a sheet that fills the free-text column and leaves
+  `unit` blank produces people whose official bookings have **no HOD**. The
+  runbook says to check it; the real fix is to retire the column once every
+  account has a unit.
+- **Migration 31 is the first migration that is not optional once the code is
+  deployed.** `createProfile` cannot work on a database still on 30. If the
+  project ever gains a real deploy pipeline, this is the case that argues for
+  gating a release on the migration having run.
+
+---
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 
