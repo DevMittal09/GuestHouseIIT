@@ -132,7 +132,8 @@ prepared and why. No new personal field is collected.
 
 ### Files
 
-**New:** `lib/users-import-undo.ts`,
+**New:** `IMPORTING-USERS.md` (the operator's runbook for the import - the
+procedure, where §1a stays the reference), `lib/users-import-undo.ts`,
 `supabase/migrations/00000000000032_user_import_batches.sql`,
 `00000000000033_guest_house_room_count.sql`,
 `00000000000034_foreign_key_indexes.sql`,

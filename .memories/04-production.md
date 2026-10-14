@@ -142,6 +142,13 @@ by domain ([§2](#2-the-debitable-heads-as-the-office-gave-them-8-oct-2026)).
 
 ## 1a. Importing the institute's user list (13 Oct 2026)
 
+> **The step-by-step procedure for whoever runs the import is
+> [`IMPORTING-USERS.md`](../IMPORTING-USERS.md) at the repo root** (14 Oct
+> 2026): what to click, in order, with the column tables, the dry run, the
+> verification list and a table of what every refusal means. **This section
+> stays the reference** - the reasoning, the constraints and the decisions. If
+> the two disagree, this one is right and the runbook needs fixing.
+
 The college is sending the people as an Excel file. This section is the whole
 procedure. **It was written before the file arrived**, from the schema and the
 importers as they stand; the column list below is what the portal can use, not

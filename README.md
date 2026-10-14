@@ -85,7 +85,10 @@ between rooms, and a no-show released automatically after a configurable window.
 Sign in as **Portal Developer** (`developer@iitpkd.ac.in`) to open `/admin`:
 
 - **Users & Roles** — add/edit/delete accounts, assign any role to any email, set the hostel
-  (warden/student scoping), department/club (FA/club scoping) and roll number.
+  (warden/student scoping), department/club (FA/club scoping) and roll number. **Import from
+  spreadsheet** loads the institute's people from an Excel paste, and **Recent imports → Undo**
+  puts back what an import changed. Loading real user data is a procedure with prerequisites:
+  see **[IMPORTING-USERS.md](IMPORTING-USERS.md)**.
 - **Guest Houses & Rooms** — create/rename/delete guest houses; add, deactivate or delete rooms
   per guest house. New guest houses appear in the manager console and form permissions instantly.
 - **Form Builder** — per requester role: choose allowed guest houses, set every guest field
