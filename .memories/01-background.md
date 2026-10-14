@@ -48,6 +48,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **12 Oct** | **The approval workflow becomes the manager's.** `routeFor`'s `switch` is replaced by `rules.approval` - an ordered list of routes the office edits at Console -> **Approval Workflow**: insert, delete, reorder and rename the stages of any chain, and choose who decides each (the requester's warden or HOD, the head of their unit, everyone holding a role, the head of one named unit, or one named person). The defaults are the old `switch` case for case, proved over 576 combinations. **No migration.** |
 | **12 Oct**, later | **The workflow screen rebuilt as a flow.** The ordered list of routes was rejected as "all wrong": it put first-match precedence, eight rows of match conditions, six approver kinds and four waiting statuses in front of the office. The screen now opens on **one chain per kind of request**, drawn left to right, with a `+` between boxes and one plain-language question per step; the route list is behind **Advanced**. A kind whose route is shared **forks** it on edit, which is how faculty can differ from staff. **Engine, stored shape and every call site unchanged.** |
 | **13 Oct** | **Schema review before the college's user import.** Asked whether students, faculty and staff should be separate tables: **no** - 19 foreign keys point at `profiles.id`, a role is an authorisation level that changes, and the per-category split already exists as `academic_records.kind`. **No migration needed to hold the data.** The review instead found that `password123` on every created account is a working **GoTrue** credential, that the `authenticated` role has **21 write policies** behind it (this folder had said none), and that the import would take that from 18 accounts to a few thousand. Two new gates and an import runbook. |
+| **14 Oct** | **An import you can undo.** Migration 32 records what every spreadsheet import is about to do **before** it does it, so the previous values of the accounts it changes are kept - the one gap §1a.7 had named outright. Users & Roles -> **Recent imports** -> Undo restores them, deletes the accounts the import added, and leaves alone anything corrected by hand since. Plus migration 33 (`total_rooms` gets the trigger the last round recorded), migration 34 (**20 foreign-key indexes**, measured: a 300-profile delete went 2,580 ms -> 64 ms), a plain-SQL recovery script, and two bugs found in the username-swap path. **The email/password provider was verified from GoTrue's public settings: it is ON, with signup open.** |
 | **13 Oct**, later | **The second door closed, the schema left alone.** Migration 31 drops the `profiles -> auth.users` foreign key and all **38** `authenticated` RLS policies, so a portal account no longer implies a database credential; `createProfile` and `seed.sql` mint no Supabase password. The normalization review found **two** real problems worth acting on (`profiles` had almost no indexes and no checks - fixed; `total_rooms` can drift - recorded) and four denormalizations that are correct as they are. **No table split, no column dropped.** Two repair scripts, 16 new tests. Migration 31 deliberately **not** applied to the hosted project. |
 
 ## The problem
@@ -689,6 +690,41 @@ email/password provider enabled (a dashboard setting), and live production
 rows (the sandbox blocks production reads). Migration 31 was instead tested
 end to end in a throwaway `postgres:16-alpine`, which is the project's
 standing rule for migrations anyway.
+
+---
+
+## The import gets an undo, and the indexes a delete needs - 14 October 2026
+
+The owner's brief: make the project secure, normalized and ready for the real
+user import - **and**, at the top of the list for the importer:
+
+> Most importantly, address recovery from failed or partially completed
+> imports. We need a reliable way to restore previous values for updated
+> records, not just delete newly inserted records.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Security: the exposed credentials, auth configuration, RLS, remaining access paths | **Answered the open question.** GoTrue's public `/auth/v1/settings` (anon key, read-only) reports email/password **enabled** with `disable_signup: false` - so the exposure needs no published password at all: an attacker signs up with an address they control. The `anon` role was checked the same way and returns **zero rows**, which independently confirms that dropping the `authenticated` policies cannot break Realtime. Nothing was changed on the hosted project; the provider toggle is now **step 1** of [04-production.md](04-production.md) §1a.1 |
+| 2 | Migration 31 and its rollback reviewed against schema and code | **Done.** Re-applied 1-31 on a fresh throwaway Postgres, then the rollback round trip **0 -> 38 -> 0** with the profiles untouched, the auth foreign key still gone, 4 indexes and 2 checks present. The "38" is independently confirmed. Dependencies, the time limit on the foreign key's rollback and the deployment order were already right and are unchanged |
+| 3 | Normalization: genuine structural problems only | **Two acted on, from the eight-finding review of 13 Oct.** Finding 2 (`total_rooms` drift) is fixed by migration 33's trigger. A **ninth finding** was added and fixed: 22 foreign keys had no index on the referencing column, 15 of them pointing at `profiles`. `profiles` and `academic_records` are unchanged, as asked; no table split, no column dropped, no foreign key altered |
+| 4 | **Import recovery - restore previous values, not just delete new rows** | **Implemented.** Migration 32 + `lib/users-import-undo.ts` + Users & Roles -> Recent imports -> Undo + `supabase/repairs/2026-10-14-restore-user-import.sql` for when the app cannot run. The record is written **before** the writes, so a **failed or part-way** import is recoverable too - and a batch left reading `applying` is itself the report that one did not finish. 12 new unit tests (two mutation-verified) **and an e2e journey** that runs a stale sheet over a real import and undoes it through the console |
+| 5 | Importer correctness, duplicates, idempotency, performance, error handling | **One bug fixed, performance improved, the rest verified not rebuilt.** The bug: a paste that moves an LDAP username between two accounts failed part-way, because the receiving account was written while the old holder still had it. Inserts are now chunked (250 per request, ~8 requests instead of 2000 for a first load); updates are still one per person, and that is written down rather than hidden |
+| 6 | Production deployment and verification plan | **Updated, not invented.** §1a.1 now has four migrations in order and says which two are **not optional** once the code is deployed (31 and 32); §1a.6 says what is still sequential; §1a.7 is rewritten around the undo; §5's table says what each missing migration costs |
+| 7 | Excel preparation without inventing the file's structure | **Done as a checklist, not a mapping.** New §1a.3a: eight things to check against the real file, what the silent failure looks like (an unrecognised header is read as data), and an explicit statement of what is **not** prepared and why. No column names were invented. No new personal field is collected |
+| 8 | Documentation consistent with the code, nothing claimed that was not done | **Worked the contract.** Three *Superseded* notes added where this round reverses an earlier decision |
+| 9 | Do not import real data; no unverified production changes | **Honoured.** Nothing applied to the hosted project; the only thing sent to it was the read-only `npm run check:migrations` and two unauthenticated GETs (GoTrue's settings, and anon reads that returned nothing) |
+
+**Deliberately not tested:** the ID-document download the policies permit.
+Confirming it would mean creating an account on the production project and
+opening real guests' identity documents. The policy text plus the provider
+state is enough to act on.
+
+**Three bugs in the SQL recovery script, all found by running it** against a
+throwaway Postgres rather than by reading it - a psql variable that does not
+interpolate inside a dollar-quoted block, a cast to an enum that is actually
+`text`, and a temp **view** being re-evaluated mid-restore so the script
+reported success having changed almost nothing. The last is why the plan is now
+a snapshot table, and why `\set ON_ERROR_STOP on` is at the top.
 
 ---
 

@@ -172,3 +172,86 @@ test("the manager loads accounts from a spreadsheet paste and removes them again
   await expect(row("imported.one@iitpkd.ac.in")).toHaveCount(0);
   await expect(row("imported.two@iitpkd.ac.in")).toHaveCount(0);
 });
+
+/**
+ * Undoing an import, through the real console (14 Oct 2026).
+ *
+ * `tests/user-import-undo.test.ts` proves the rules against a store. This
+ * proves the **wiring**: that the batch reaches the page, that Undo asks
+ * properly, and that an account the import *changed* is actually restored -
+ * which is the half that had no undo at all before migration 32.
+ */
+test("the manager undoes an import, and the accounts it changed are restored", async ({
+  page,
+}) => {
+  await openConsole(page, "/admin/users", /\d+ accounts/);
+  const row = (email: string) => page.getByRole("cell").filter({ hasText: email });
+
+  // First import: two new people.
+  await page.getByRole("button", { name: "Import from spreadsheet" }).click();
+  await page.getByLabel("People", { exact: true }).fill(
+    [
+      "email, name, roll_number, role, hostel_name",
+      "undo.one@smail.iitpkd.ac.in, Undo One, EMP9101, student, Malhar",
+      "undo.two@iitpkd.ac.in, Undo Two, EMP9102, employee, ",
+      "undo.three@iitpkd.ac.in, Undo Three, EMP9103, employee, ",
+    ].join("\n")
+  );
+  await page.getByRole("button", { name: "Check the paste" }).click();
+  await expect(page.getByText("3 added, 0 updated, 0 unchanged")).toBeVisible();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(page.getByText(/Users imported - 3 added/)).toBeVisible({ timeout: 30_000 });
+
+  // Second import: the stale sheet. It moves Undo One to the wrong hostel and
+  // renames Undo Two - exactly what a month-old file does to accounts the
+  // office has corrected since.
+  await page.getByRole("button", { name: "Import from spreadsheet" }).click();
+  await page.getByLabel("People", { exact: true }).fill(
+    [
+      "email, name, hostel_name",
+      "undo.one@smail.iitpkd.ac.in, Undo One, Saveri",
+      "undo.two@iitpkd.ac.in, Undo Two Renamed, ",
+    ].join("\n")
+  );
+  await page.getByRole("button", { name: "Check the paste" }).click();
+  await expect(page.getByText("0 added, 2 updated, 0 unchanged")).toBeVisible();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(page.getByText(/Users imported - 2 updated/)).toBeVisible({ timeout: 30_000 });
+  await expect(row("undo.two@iitpkd.ac.in").filter({ hasText: "Undo Two Renamed" })).toBeVisible({
+    timeout: 30_000,
+  });
+
+  /**
+   * Recent imports lists both. Rows are picked by **what they did**, not by
+   * position: the test before this one imported into the same database, so
+   * the oldest row in the list is its batch, not ours. Hence three accounts
+   * above - "3 added" is ours and nobody else's.
+   */
+  const imports = page.getByRole("table").filter({ hasText: "What it did" });
+  const batch = (did: string) => imports.getByRole("row").filter({ hasText: did });
+  await expect(batch("2 updated")).toBeVisible();
+  await expect(batch("3 added")).toBeVisible();
+
+  // Undo the stale one. A typed phrase, because an undo can delete accounts.
+  await batch("2 updated").getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByText(/restored to what they held before the import/)).toBeVisible();
+  await page.locator("#confirm-phrase").fill("UNDO");
+  await page.getByRole("button", { name: "Undo the import" }).click();
+  await expect(page.getByText(/Import undone - 2 restored/)).toBeVisible({ timeout: 30_000 });
+
+  // The rename is gone and the hostel is back. Nothing was deleted: that
+  // import added nobody.
+  await expect(row("undo.two@iitpkd.ac.in").filter({ hasText: "Undo Two Renamed" })).toHaveCount(0);
+  await expect(row("undo.two@iitpkd.ac.in").filter({ hasText: "Undo Two" })).toBeVisible();
+  // And it cannot be undone twice.
+  await expect(batch("2 updated").getByRole("button", { name: "Undo" })).toBeDisabled();
+
+  // Undoing the *first* import deletes the three accounts it created.
+  await batch("3 added").getByRole("button", { name: "Undo" }).click();
+  await page.locator("#confirm-phrase").fill("UNDO");
+  await page.getByRole("button", { name: "Undo the import" }).click();
+  await expect(page.getByText(/Import undone - 3 removed/)).toBeVisible({ timeout: 30_000 });
+  await expect(row("undo.one@smail.iitpkd.ac.in")).toHaveCount(0);
+  await expect(row("undo.two@iitpkd.ac.in")).toHaveCount(0);
+  await expect(row("undo.three@iitpkd.ac.in")).toHaveCount(0);
+});

@@ -2215,7 +2215,8 @@ nothing references and **deactivates** one something does — `room_holds`,
 `booking_rooms` and `room_blocks` all cascade from `rooms`, so deleting a room
 that held a stay would silently erase the history of where those guests slept.
 It then recounts `total_rooms`, which no trigger does: both stores recount it
-in their own room CRUD.
+in their own room CRUD. (**Superseded 14 Oct 2026**: migration 33 adds that
+trigger. Both stores still recount, for the mock store's sake.)
 
 **Bageshri is ₹1,000 a room a day**, up from ₹750. The seed and migration 19
 carry the new figure, so a fresh database is right. A live one gets
@@ -4906,6 +4907,11 @@ later session will be tempted by:
   **not** what the import needs - so it is on the roadmap rather than smuggled
   into a security migration. Recorded rather than fixed is a decision, not an
   oversight.
+  > **Superseded 14 Oct 2026.** The trigger is migration 33, in its own
+  > migration for the reason given here - 32 is required by the code, 33 is
+  > optional, and they must roll back separately. The column stays; dropping
+  > it would change `GuestHouse` in `lib/types.ts` and two console pages.
+  > `recountRooms()` is kept for the mock store, which has no triggers.
 
 Four denormalizations were examined and kept because they are *correct*:
 `bookings.user_role` and `booking_logs.action_by_name` preserve history on
@@ -5016,3 +5022,232 @@ the repair refuses to run before the migration, because the old foreign key's
 setting, not in the repository, not readable with the service-role key. Until
 the repair runs, it is the control that matters most, because the published
 password is live on those 18 rows right now.
+
+> **Superseded 14 Oct 2026 - it is verified, and it is on.** "Not readable with
+> the service-role key" was true and beside the point: GoTrue publishes the
+> provider list at `GET /auth/v1/settings`, which needs only the anon key and
+> writes nothing. Email is **enabled** and `disable_signup` is **false**, so
+> the exposure does not even need the published password - an attacker signs
+> up with an address they control. Turning the provider off is now step 1 of
+> [04-production.md](04-production.md) §1a.1, ahead of the migration.
+
+---
+
+## 14 Oct 2026 - an import you can undo, and the indexes a delete needs
+
+The round before this one prepared the institute's user import and said, in
+[04-production.md](04-production.md) §1a.7, exactly what was missing:
+
+> "A wrong batch of updates is the dangerous one. There is no undo: the
+> previous values are not kept, and the audit row records only the counts and
+> the column list, not the old values."
+
+This round closes that, and two things found while closing it.
+
+### The undo is a record written before the writes, not a reconstruction after
+
+**Decided: one row per import, holding the previous values, written before the
+first profile is touched** (migration 32, `lib/users-import-undo.ts`).
+
+The alternative considered first was **reconstructing** the previous state from
+`security_audit`, which already exists, is append-only by trigger, and already
+records every import. Rejected on three counts:
+
+1. **It does not hold the values.** `recordAudit` was called with the counts
+   and the column list. Reconstruction would need the before-state recorded
+   anyway, so the only question was *where*.
+2. **The audit log is purged** (`purge_security_audit`, never below 180 days).
+   An undo record that expires is not one.
+3. **A 2000-row before-state in one `details` jsonb** is the wrong shape for
+   the table that every other security event shares, and the audit log is read
+   as a list of events by a human.
+
+**Why "before the writes" rather than after** is the part that matters most,
+and it is what makes a *failed* import recoverable rather than a mystery.
+§1a.6 had warned that the import "can still time out part-way, and nothing
+records where it stopped". A record written at the end would be missing for
+exactly the imports that need it. Written first, it is complete whatever
+happens next, and `status` starts at `applying` - so a batch still reading
+`applying` is itself the report that an import did not finish.
+
+**Consequence accepted: the ids are minted by the application.** The record has
+to name the accounts the import is about to create, so it cannot wait for
+`gen_random_uuid()`. Hence `SeededProfileInput` and `createProfiles`. This also
+made the common case fast - a first load is almost all inserts, and those are
+now chunks of 250 rather than one request per person.
+
+### An undo restores what the import did, not the directory as of a date
+
+**Decided: an account changed since the import is left alone and named.**
+
+The tempting behaviour is "put everything back". It is wrong: if the office has
+corrected an account by hand after a bad import, reverting it destroys the
+newer, better value - and the office would have no way of knowing which rows
+the undo had quietly overwritten. So the undo compares each account with what
+the import *gave* it, and skips anything that no longer matches, reporting it.
+
+Same spirit as `deleteUsersAction`, which removes what it can and names back
+whoever it could not: **partial, and explicit about it.** Only the eight fields
+an import may write are restored, for the same reason - a profile holds more
+than that, and the undo has no business touching the rest.
+
+The console's own per-account rule (`userEditError`) is passed in rather than
+imported, so the module stays pure and a manager cannot reach a developer's
+account through an undo.
+
+### Two bugs the implementation found, both in the same place
+
+Both are about `lower(ldap_uid)` being unique, and both existed before this
+round.
+
+**1. A username swap broke the import itself.** `planUserImport` deliberately
+allows one paste to move a username from one account to another, and checks it
+against the state the import would leave. But the writes were applied one row
+at a time, so the account *receiving* the username was written while the
+account *giving it up* still held it - a unique violation, part-way through an
+import. The old holder now releases it first, the same two passes as
+`importLdapUidsAction`, and before the inserts too, because a new account can
+be the one taking it.
+
+**2. An undo could leave an account unable to sign in.** Found by running the
+SQL recovery script against a throwaway Postgres. Two accounts swap usernames;
+somebody then corrects one of them by hand, so the undo must leave that one
+alone - which means the *other* one cannot have its old username back, because
+the corrected account still holds it. The first implementation released the
+username and then failed to write the old one, leaving that account with
+**none**: worse than not undoing it. It is now classified as a conflict before
+anything is written, and skipped whole. `planUserImportRevert` and the SQL
+script's `skip_reason` agree on this deliberately, and
+`tests/user-import-undo.test.ts` pins both.
+
+### The recovery path is plain SQL, and that decided the table's shape
+
+**Decided: `added` and `updated` are jsonb arrays on one row, not child
+tables.**
+
+A batch is written whole, read whole and never queried across - nobody asks
+"which imports touched this person", they ask "undo that import". Child tables
+would add two foreign keys, two indexes and a join for no query that exists.
+
+The deciding reason, though, is that an undo has to work **when the application
+cannot run**: the wrong project, a portal that will not start, a console that
+will not open. `supabase/repairs/2026-10-14-restore-user-import.sql` restores
+from one row, with sections 0-2 read-only so the plan can be read before
+anything is written. A recovery path that needs a join and a working
+application is not a recovery path.
+
+> **Three bugs in that script, all found by running it** rather than by reading
+> it, and all worth recording because each would have failed in production on
+> live data:
+>
+> - **psql does not interpolate `:'batch'` inside a dollar-quoted block**, so
+>   the guard in section 0 was a syntax error. The id is now carried in a
+>   session setting, interpolated once.
+> - **`profiles.staff_category` is plain `text`**, not an enum (migration 15).
+>   The cast to `public.staff_category` failed, and with it the whole restore -
+>   while the later sections went on to mark the batch `reverted`. Hence
+>   `\set ON_ERROR_STOP on`, which the first draft did not have.
+> - **A temp *view* is re-evaluated by every statement that reads it.** The
+>   restore releases usernames first, which made the plan's "still holds what
+>   the import gave it" test false for exactly the rows about to be restored -
+>   so the second statement matched nothing and the script reported success
+>   having changed almost nothing. The plan is now a temp **table**: a snapshot
+>   taken before any of it is applied. This is the one that would have been
+>   worst, because it failed *quietly*.
+
+### `total_rooms` gets its trigger, in its own migration
+
+Finding 2 of the 13 Oct normalization review, which recorded it and left it:
+the column is a stored derived value maintained only by application code, so a
+room inserted or deactivated by SQL leaves it stale.
+
+**Decided: a trigger (migration 33), not dropping the column.** Dropping it
+would be the stricter normalization and was rejected - `GuestHouse.total_rooms`
+is in `lib/types.ts`, both stores hydrate it and two console pages label guest
+houses with it. That is a change to the domain type to fix something a trigger
+closes completely.
+
+**Its own migration, not folded into 32.** The previous round kept it out of 31
+because "a derived-value trigger has nothing to do with closing an
+authentication hole", and the same applies here: 32 is required by the code, 33
+is optional, and they must be able to roll back separately.
+
+`recountRooms()` stays in both stores. The mock store has no triggers and needs
+it; in Supabase mode it now writes the number the trigger already wrote, which
+costs one statement and keeps the console working against a database that has
+not had 33 applied.
+
+### Twenty indexes, because the measurement said so
+
+**Found while building the undo**, and it is the kind of thing that is invisible
+until the operation that needs it exists. Postgres indexes the key being
+*referenced*, never the column *referencing* it. 22 foreign keys had no
+supporting index, 15 of them pointing at `profiles` - so deleting one profile
+scanned 15 child tables in full, and **undoing an import deletes every account
+it created, up to 2000.**
+
+**Measured rather than assumed**, in a throwaway Postgres with 200,000
+`booking_logs` rows and 2,000 bookings:
+
+| | 300 profiles deleted |
+| --- | --- |
+| before | 2,580 ms |
+| after | 64 ms (3 samples: 63.4 / 64.1 / 63.8) |
+
+The before figure grows linearly with the history; the after figure does not.
+Extrapolated to a 2000-row undo it is the difference between a server action
+that finishes and one the platform's request timeout cuts off part-way -
+which would leave the undo half-applied, the single outcome migration 32
+exists to prevent.
+
+**Only the 20 whose parent is actually deleted**, which is why it is 20 and not
+22. `invoices.replaces_invoice_id` earns nothing (an issued invoice is a
+record and is never deleted; a correction is a new document pointing at the
+old one), and `booking_guests (booking_room_id, booking_id)` needs nothing
+because `booking_guests_room_idx` is on the composite key's leading column,
+which the constraint check can use.
+
+### The provider question, answered the cheap way
+
+The 13 Oct round recorded, twice, that whether the hosted project has the
+email/password provider enabled "cannot be read with the service-role key" and
+was therefore unverified. True, and beside the point: **GoTrue publishes it.**
+`GET /auth/v1/settings` needs only the anon key that already ships in the
+browser, writes nothing, and answers in one request.
+
+It is **enabled**, with `disable_signup: false`. So there is a worse path than
+the published `password123`: with signup open, an attacker needs no portal
+account and no leaked password at all - they sign up with an address they
+control and hold an `authenticated` JWT, which until migration 31 is applied
+means the whole directory and every uploaded ID document.
+
+Two things follow:
+
+- **Turning the provider off moves to the front of the queue.** It is a
+  dashboard toggle, needs no migration, and the portal does not use the
+  provider. §1a.1 now has it as step 1.
+- **The `anon` role was checked the same way and is not exposed** - 200 and
+  zero rows on `profiles`, `bookings`, `booking_guests` and
+  `academic_records`. This independently confirms the 13 Oct claim that
+  dropping the `authenticated` policies cannot break Realtime, which connects
+  as `anon`.
+
+**Deliberately not tested further:** the document download. Confirming it would
+mean creating an account on the production project and opening real guests'
+identity documents. The policy text and the provider state are enough to act
+on, and a security check should not be the thing that reads the data it is
+worried about.
+
+### What was deliberately left alone
+
+- **Nothing applied to the hosted project.** 31, 32, 33 and 34 are written,
+  tested in a throwaway Postgres and **not** applied; the Auth users are still
+  there; the provider is still on. All are production actions on live data.
+  §1a.1 has the order, and the order matters.
+- **No real user data imported**, and no guess at the Excel file's columns.
+  §1a.3a is the list to work once it arrives, and says what is deliberately
+  not prepared and why.
+- **`lib/users-import.ts` not rebuilt.** It was verified correct last round and
+  is correct: the only change this round is where its plan is *applied*.
+- **`profiles.department_or_club`, `is_active`, and the 2000-row ceiling** -
+  still open, [03-roadmap.md](03-roadmap.md) §2f.

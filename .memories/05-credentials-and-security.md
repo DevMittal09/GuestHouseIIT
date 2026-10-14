@@ -376,12 +376,40 @@ portal's own protections - the console password, TOTP, `requireConsole`,
 `stepUpProblem`, the session rows - are all on the other door and stop none of
 it.
 
-**The one link not verified from here:** whether the hosted project has the
-email/password provider enabled. That is an Auth dashboard setting, not in the
-repository, and it cannot be read with the service-role key. If it is off,
-every link above still holds and the exposure is **one toggle away** from
-live, with the password published on GitHub. **Check it, and record the
-answer in [04-production.md](04-production.md).**
+**That one unverified link is now verified, and it is open (14 Oct 2026.)**
+This paragraph used to say the provider state "cannot be read with the
+service-role key", which was true and also beside the point: GoTrue publishes
+it. `GET /auth/v1/settings` needs only the anon key that already ships in the
+browser, writes nothing, and reports for the hosted project:
+
+```
+external providers enabled : email
+disable_signup             : false
+mailer_autoconfirm         : false
+```
+
+So link 4 holds today, and **there is a worse path than link 2.** With signup
+open, an attacker does not need a published password or any portal account:
+they sign up with an address they control, confirm it, and hold an
+`authenticated` JWT - which until migration 31 is applied means links 5, 6 and
+7, i.e. the whole directory and **every uploaded ID document and alumni card**.
+`mailer_autoconfirm: false` only means they need a working mailbox.
+
+**The `anon` role is not exposed**, checked the same way: `GET /rest/v1/` on
+`profiles`, `bookings`, `booking_guests` and `academic_records` with the anon
+key returns **HTTP 200 and zero rows**. RLS is on and no `anon` policy has ever
+existed - which is also why dropping the `authenticated` policies cannot break
+Realtime, the one client-side Supabase user, which connects as `anon`.
+
+**Not tested any further, deliberately.** Confirming the document download
+would mean creating an account on the production project and opening real
+guests' identity documents. The policy text plus the provider state is enough
+to act on.
+
+**So the order of work changed.** Turning the provider off is now the *first*
+step, not the third: it is a dashboard toggle, it needs no migration, the
+portal does not use the provider, and it closes the open-signup path on its own.
+[04-production.md](04-production.md) §1a.1 carries the steps.
 
 **`academic_records` is not exposed** - migration 28 deliberately gives it no
 `authenticated` policy, so parents' names and phone numbers stay

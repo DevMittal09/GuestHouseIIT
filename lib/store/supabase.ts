@@ -71,8 +71,17 @@ import type {
   DataStore,
   NewLogInput,
   NewProfileInput,
+  SeededProfileInput,
   StatusUpdate,
 } from "./types";
+import type {
+  ChangedAccount,
+  ImportedAccount,
+  NewUserImportBatch,
+  UserImportBatch,
+  UserImportSettlement,
+  UserImportStatus,
+} from "@/lib/users-import-undo";
 
 const BOOKING_SELECT = `*,
   requester:profiles!bookings_user_id_fkey(*),
@@ -890,6 +899,87 @@ export class SupabaseStore implements DataStore {
     // Best-effort and last, as before: the profile is the portal account, and
     // its deletion must not be undone by an Auth error.
     await this.db.auth.admin.deleteUser(id).catch(() => undefined);
+  }
+
+  /**
+   * One insert for the whole chunk, which is what makes a spreadsheet import
+   * bearable: 500 people in one round trip instead of 500. It is also one
+   * statement, so Postgres applies it all or not at all - a unique email or
+   * LDAP username anywhere in the chunk rejects the chunk rather than leaving
+   * half of it in.
+   *
+   * The ids come from the caller (see `SeededProfileInput`), so the undo
+   * record written before this call already names every row it creates.
+   */
+  async createProfiles(inputs: SeededProfileInput[]): Promise<void> {
+    if (inputs.length === 0) return;
+    const { error } = await this.db.from("profiles").insert(inputs);
+    if (error) throw profileWriteError(error);
+  }
+
+  // ---- user import batches (migration 32) ------------------------------
+
+  async recordUserImport(input: NewUserImportBatch): Promise<UserImportBatch> {
+    const { data, error } = await this.db
+      .from("user_import_batches")
+      .insert({
+        actor_id: input.actor_id,
+        actor_name: input.actor_name,
+        status: input.status,
+        columns_used: input.columns_used,
+        added: input.added as unknown as Json,
+        updated: input.updated as unknown as Json,
+        unchanged_count: input.unchanged_count,
+        error: input.error,
+      })
+      .select()
+      .single();
+    if (error) throw importBatchError(error);
+    return userImportFromRow(data);
+  }
+
+  async settleUserImport(id: string, patch: UserImportSettlement): Promise<void> {
+    const now = new Date().toISOString();
+    const { error } = await this.db
+      .from("user_import_batches")
+      .update({
+        status: patch.status,
+        ...(patch.error !== undefined ? { error: patch.error } : {}),
+        ...(patch.status === "applied" ? { applied_at: now } : {}),
+        ...(patch.status === "reverted"
+          ? {
+              reverted_at: now,
+              reverted_by: patch.reverted_by ?? null,
+              reverted_actor_name: patch.reverted_actor_name ?? null,
+            }
+          : {}),
+      })
+      .eq("id", id);
+    if (error) throw importBatchError(error);
+  }
+
+  async listUserImports(limit = 20): Promise<UserImportBatch[]> {
+    const { data, error } = await this.db
+      .from("user_import_batches")
+      .select("*")
+      .order("at", { ascending: false })
+      .limit(limit);
+    // A missing table reads as "no imports on record" rather than failing the
+    // page: the list is a safety net, and the console must still open on a
+    // database that has not had migration 32 applied. Writing one is what
+    // refuses loudly - see `importBatchError`.
+    if (error) return [];
+    return (data ?? []).map(userImportFromRow);
+  }
+
+  async getUserImport(id: string): Promise<UserImportBatch | null> {
+    const { data, error } = await this.db
+      .from("user_import_batches")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw importBatchError(error);
+    return data ? userImportFromRow(data) : null;
   }
 
   async listUnits(): Promise<Unit[]> {
@@ -1926,4 +2016,67 @@ function parseRange(literal: string): [string, string] {
   const m = /^[[(]"?([^",]+)"?,"?([^")\]]+)"?[)\]]$/.exec(literal.trim());
   if (!m) return ["", ""];
   return [new Date(m[1]).toISOString(), new Date(m[2]).toISOString()];
+}
+
+/**
+ * A stored import batch, as the application reads it.
+ *
+ * `added` and `updated` are jsonb, so they come back as `Json` and are cast
+ * rather than parsed: they were written by `recordUserImport` from typed
+ * values one statement earlier, and a row an operator hand-edited in the SQL
+ * editor would be read by the undo as whatever it says. The undo is written
+ * to survive that - `planUserImportRevert` checks every account against the
+ * profile as it stands now and names anything that does not match.
+ */
+function userImportFromRow(row: {
+  id: string;
+  at: string;
+  actor_id: string | null;
+  actor_name: string;
+  status: string;
+  columns_used: string;
+  added: Json;
+  updated: Json;
+  unchanged_count: number;
+  error: string | null;
+  reverted_at: string | null;
+  reverted_by: string | null;
+  reverted_actor_name: string | null;
+}): UserImportBatch {
+  return {
+    id: row.id,
+    at: row.at,
+    actor_id: row.actor_id,
+    actor_name: row.actor_name,
+    status: row.status as UserImportStatus,
+    columns_used: row.columns_used,
+    added: (row.added ?? []) as unknown as ImportedAccount[],
+    updated: (row.updated ?? []) as unknown as ChangedAccount[],
+    unchanged_count: row.unchanged_count,
+    error: row.error,
+    reverted_at: row.reverted_at,
+    reverted_by: row.reverted_by,
+    reverted_actor_name: row.reverted_actor_name,
+  };
+}
+
+/**
+ * Migration 32 not applied.
+ *
+ * Named the way `profileWriteError` names 31, and for the same reason: the
+ * import deliberately **refuses to run** without somewhere to write its undo
+ * record, so the operator has to be told which migration is missing rather
+ * than reading "relation does not exist" about a table they have never heard
+ * of. 42P01 is an undefined table; PostgREST also reports an unknown relation
+ * as PGRST205.
+ */
+function importBatchError(error: { code?: string; message: string }): Error {
+  if (error.code === "42P01" || error.code === "PGRST205") {
+    return new Error(
+      "Cannot import accounts until migration 32 is applied " +
+        "(supabase/migrations/00000000000032_user_import_batches.sql) - " +
+        "it is the table that records what an import changed, so it can be undone"
+    );
+  }
+  return error instanceof Error ? error : new Error(error.message);
 }

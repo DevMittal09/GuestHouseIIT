@@ -1526,9 +1526,13 @@ The full who-opens-what table is in `.memories/10-roles-and-workflows.md`.
   reference id. A stray Enter must not delete a guest house and its rooms.
 - **Users & Roles** — CRUD profiles, assign any role, set hostel / dept-club /
   roll number (these drive warden and FA scoping). Cannot delete yourself or
-  drop your own developer role. In Supabase mode, creating a user also creates a
-  Supabase Auth user (password `password123`) — needs the service-role key, and
-  is **not** a portal login (everyone signs in through LDAP or Google).
+  drop your own developer role. In Supabase mode, creating a user is **one
+  insert and no Supabase Auth user** (migration 31, 13 Oct 2026): `profiles.id`
+  no longer references `auth.users`, so nothing mints a password. It used to
+  create a confirmed Auth user with the published password `password123`, which
+  was a working GoTrue credential on a project whose anon key ships in the
+  browser — see `.memories/05-credentials-and-security.md` Part 4. Everyone
+  signs in through LDAP or Google.
   The **LDAP username** field and **Import LDAP usernames** (paste
   `email, ldap username` lines) are how real LDAP logins get onto profiles.
   **Import from spreadsheet** (`lib/users-import.ts`, 8 Oct 2026) is how the
@@ -1544,8 +1548,26 @@ The full who-opens-what table is in `.memories/10-roles-and-workflows.md`.
   and the rest still go, unlike the import. Both are gated by
   `assignableRoles` / `userEditError` **in the action**, so a manager cannot
   import a developer into existence.
+  **Every import can be undone** (14 Oct 2026, migration 32,
+  `lib/users-import-undo.ts`). `importUsersAction` writes a record of what it
+  is about to do **before it does it** — the accounts it will create, and what
+  every account it will change holds now — so **Recent imports → Undo**
+  (`revertUserImportAction`) can put the old values back, and a **failed or
+  part-way** import is recoverable rather than a mystery. Three rules not to
+  bend: an account **changed since the import is left alone and named** (the
+  undo takes back what that import did, it does not roll the directory back to
+  a date); only the **eight fields an import may write** are restored; and the
+  accounts it created are deleted **first**, because one of them may hold an
+  LDAP username a restore is about to ask for. The import **refuses to run**
+  without that table rather than importing with no undo (`importBatchError`
+  names the migration), so **32 ships with the code like 31**.
+  `supabase/repairs/2026-10-14-restore-user-import.sql` is the same undo in
+  plain SQL for when the application cannot run — which is why the record is
+  one row with two jsonb arrays rather than child tables.
 - **Guest Houses & Rooms** — CRUD guest houses and rooms; `total_rooms` is
-  recounted automatically from active rooms. Deleting is blocked when bookings
+  recounted automatically from active rooms — by the application in both
+  stores, **and since migration 33 by a trigger**, so a room added or
+  deactivated by SQL cannot leave the count stale. Don't set it by hand. Deleting is blocked when bookings
   reference the guest house, or when a room is assigned to a booking (deactivate
   instead).
 - **Academic records** (`/admin/academic`, migration 28, manager and
@@ -1857,6 +1879,50 @@ Migration files, applied sequentially:
    the declaration was given, so every personal booking still works and only
    a booking on somebody else's budget is refused.
 
+31. `00000000000031_decouple_auth_and_tighten_rls.sql` — **drops
+   `profiles.id -> auth.users (id)`** and gives the column its own
+   `gen_random_uuid()` default, **drops all 38 `authenticated` RLS policies**
+   (RLS stays *enabled*, so that role is denied by default — migration 28's
+   pattern), **drops the two blanket `documents` bucket policies** and forces
+   `public = false`, and adds three `profiles` indexes, a
+   `lower(email)` index and two `not valid` checks. The portal has never
+   authenticated with Supabase Auth (LDAP or Google, then a session row), so
+   the foreign key was the only reason those users existed. **No id changes**,
+   so all 19 foreign keys pointing at `profiles.id` are untouched. **Not
+   optional once the code is deployed** — `createProfile` inserts without an
+   id and without an Auth user, which a database on migration 30 refuses two
+   ways; `profileWriteError` names this file. Two repairs go with it, neither
+   automatic: `2026-10-13-retire-seeded-auth-users.sql` (run it *after* this,
+   or the old key's `on delete cascade` takes every profile) and
+   `2026-10-13-rollback-migration-31.sql` (all 38 policies back, round-trip
+   tested). The **foreign key** is the one part whose rollback has a time
+   limit: re-adding it needs every profile to still have an Auth user.
+32. `00000000000032_user_import_batches.sql` — **the undo record for a
+   spreadsheet import of accounts** (14 Oct 2026). One row per import, written
+   **before** the first profile is touched, holding the accounts it will create
+   and the previous values of every account it will change. `status` goes
+   `applying` → `applied` | `failed` | `reverted`, so a batch left reading
+   `applying` is an import that did not finish. `added` / `updated` are jsonb
+   arrays, not child tables, because the recovery path
+   (`supabase/repairs/2026-10-14-restore-user-import.sql`) has to work from one
+   row in plain SQL. RLS enabled with **no `authenticated` policy**. **Not
+   optional once the code is deployed** — the import refuses to run without it;
+   reads degrade instead (no Recent imports section).
+33. `00000000000033_guest_house_room_count.sql` — `guest_houses.total_rooms`
+   maintained by a trigger on `rooms` (14 Oct 2026), handling `OLD` and `NEW`
+   so a room **moved** between guest houses recounts both ends. The column was
+   a stored derived value kept only by application code. Additive and
+   **optional**.
+34. `00000000000034_foreign_key_indexes.sql` — **20 indexes on the foreign
+   keys a delete has to check** (14 Oct 2026). Postgres indexes the key being
+   *referenced*, never the column referencing it, so deleting a profile scanned
+   15 child tables in full — and undoing an import deletes every account it
+   created, up to 2000. Measured: 300 profiles deleted went **2,580 ms → 64
+   ms** against 200,000 `booking_logs` rows. Additive and **optional**.
+   Deliberately not added: `invoices.replaces_invoice_id` (invoices are never
+   deleted) and `booking_guests (booking_room_id, booking_id)`
+   (`booking_guests_room_idx` is the leading column).
+
 Full notes per migration in `.memories/21-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine
 without it (`.memories/22-running-and-testing.md`) — never the hosted project.
@@ -1865,15 +1931,20 @@ without it (`.memories/22-running-and-testing.md`) — never the hosted project.
 > note.** `npm run check:migrations` (`scripts/check-migrations.mjs`) probes
 > one marker per migration, **read-only**, against the project in `.env.local`
 > and exits 1 if any is missing. Add a row to its `MARKERS` table whenever you
-> add a migration. It cannot see **17 and 23** (function-only — PostgREST
-> cannot read `pg_proc`, and calling them would be a write); it names them and
-> prints the `pg_proc` query for the SQL editor.
+> add a migration. It cannot see **17, 23, 31, 33 and 34** — PostgREST reads
+> tables and columns, but not `pg_proc` (17 and 23 are function-only, and
+> calling them would be a write), `pg_constraint` or `pg_policies` (31),
+> `pg_trigger` (33) or `pg_indexes` (34). It names each and prints the query to
+> paste in the SQL editor.
 >
 > This exists because the notes claimed migrations 24–30 were outstanding on
 > the hosted project for weeks after they had been applied: the old check
 > recipe listed markers only up to 25, so nothing past it could be verified and
-> the claim was copied forward by hand. **Verified 9 Oct 2026: the hosted
-> project has 1–30.**
+> the claim was copied forward by hand. **Re-verified 14 Oct 2026: the hosted
+> project has 1–30.** 31, 32, 33 and 34 are written and tested but
+> **deliberately not applied** — that is a production change, and the order
+> (provider toggle, then the migrations, then the Auth-user repair) is in
+> `.memories/04-production.md` §1a.1.
 
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are
 not applied automatically. Read the header of each before running it.

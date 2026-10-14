@@ -76,9 +76,11 @@ every table in `.local-db.json` and self-heals old files.
 > `Booking.assigned_room_ids` still exists in the domain type but is **derived
 > from `room_holds`** during hydration in both stores.
 
-## Normalization - the review of 13 Oct 2026
+## Normalization - the review of 13 Oct 2026, revisited 14 Oct
 
 Done before the institute's user import, targeting 3NF "where appropriate".
+**Finding 2 was fixed on 14 Oct 2026 (migration 33) and finding 9 was added
+that day** - the rest of the table stands as written.
 **The schema is in good shape.** What follows is the whole finding list, so a
 later session does not redo it. The one-table question - `profiles` vs. a
 table per user category - is answered in
@@ -90,12 +92,13 @@ here.
 | # | Finding | Status |
 | --- | --- | --- |
 | 1 | **`profiles.department_or_club` duplicates `profiles.unit_id`.** A department is held twice - once as free text, once as a foreign key to `units` - and they can disagree. A real 3NF violation (a non-key attribute determined by the unit, not the person) | **Left alone, deliberately.** Five modules still read it: `lib/approval-routes.ts` (the legacy `faculty_advisor` scoping), `lib/workflow.ts` (the club queue), `lib/booking-search.ts` (the `club` filter), `lib/invoice.ts` (printed on the invoice) and `lib/mail/templates.ts` (the scope line). Dropping it is a feature removal, not a migration. Retire it when every account has a `unit_id` - [03-roadmap.md](03-roadmap.md) §2f |
-| 2 | **`guest_houses.total_rooms` is a stored derived value**, recounted by application code in both stores (`recountRooms`, `lib/store/mock.ts:1119`, `lib/store/supabase.ts:971`). A room inserted by SQL or by a repair script leaves it stale - a textbook update anomaly | **Found, not fixed.** The fix is a trigger on `rooms` so the count cannot drift whatever writes it, which is what `booking_guests`' occupancy trigger already does for a harder invariant. Additive and cheap, but it is not what the import needs, so it is on the roadmap rather than in migration 31 |
+| 2 | **`guest_houses.total_rooms` is a stored derived value**, recounted by application code in both stores (`recountRooms`, `lib/store/mock.ts:1119`, `lib/store/supabase.ts:971`). A room inserted by SQL or by a repair script leaves it stale - a textbook update anomaly | **Fixed in migration 33** (14 Oct 2026), by the trigger this row proposed: `recount_guest_house_rooms()` on `rooms`, handling `OLD` and `NEW` so a room **moved** between guest houses recounts both ends. The column stays - dropping it would change `GuestHouse` in `lib/types.ts` and two console pages to fix something a trigger closes. `recountRooms()` is kept: the mock store has no triggers, and in Supabase mode it now writes the number the trigger already wrote |
 | 3 | **`academic_records` has every kind's fields as nullable columns** - a student's `father_name` is null on an office row. Not 3NF in the strict reading | **Correct as it is**, decided in migration 28's own header: six kinds share an email, a phone, a name and a department, and six tables would be six importers and six console sections for the same six CSV pastes. The discriminant is `kind`, the shape is checked in TypeScript by `ACADEMIC_RECORD_FIELDS`, and a column named in one and not the other is a compile error |
 | 4 | **`academic_records.hostel` is free text** while `profiles.hostel_name` is a foreign key to `hostels` - the same reference data, two representations | **Correct as it is.** The table is *the institute's records as the office pasted them in*. A foreign key would reject a valid import because the institute spells a hostel differently from our list, and the column is **display-only** - `lib/academic/fields.ts` renders it as a row and nothing scopes or authorises on it. Verified: no other reader |
 | 5 | **`profiles` had almost no indexes** - the primary key, unique `email`, unique `lower(ldap_uid)`, and nothing on `role`, `unit_id` or `hostel_name` | **Fixed in migration 31.** Invisible at 18 personas, not at a few thousand |
 | 6 | **No case-insensitive index behind the import's match key.** The import matches on `lower(email)`; `profiles_email_key` is plain and cannot serve it | **Fixed in migration 31** (`profiles_email_lower_idx`, deliberately not unique - see the migration) |
 | 7 | **`profiles` had no check constraints at all** - a blank name or a non-address would store | **Fixed in migration 31**, both `not valid` so the migration cannot refuse to apply |
+| 9 | **22 foreign keys had no index on the referencing column**, 15 of them pointing at `profiles`. Postgres indexes the key being referenced, never the column referencing it, so deleting a parent row scans each unindexed child table **in full** | **Fixed in migration 34** (14 Oct 2026), for the 20 whose parent is actually deleted. Found while building the import undo, which is the operation that made it matter: undoing an import deletes every account it created, up to 2000. Measured in a throwaway Postgres with 200,000 `booking_logs` rows - deleting 300 profiles went from **2,580 ms to 64 ms**, and the before figure grows with the history while the after figure does not. Two were left deliberately: `invoices.replaces_invoice_id` (invoices are never deleted) and `booking_guests (booking_room_id, booking_id)` (`booking_guests_room_idx` is on the leading column, which the check can use) |
 | 8 | **`profiles` has no `is_active`.** Someone who leaves can only be deleted, and `deleteProfile` refuses anyone with a booking (correctly - it would orphan the history). So repeated imports only accumulate | **Open**, [03-roadmap.md](03-roadmap.md) §2f. Not urgent until the first graduation after go-live |
 
 ### Denormalization that is correct, and why
@@ -841,6 +844,57 @@ Current migrations:
     needs the owner's approval. `npm run check:migrations` reports it as one of
     the three it cannot probe (no table or column to ask about) and prints the
     SQL: both counts must come back 0.
+
+32. **`00000000000032_user_import_batches.sql`** - *the undo record for a
+    spreadsheet import of accounts* (14 Oct 2026). One row per import, written
+    **before** the first profile is touched, holding every account it is about
+    to create and, for every account it is about to change, the values that
+    account holds now. Closes the gap
+    [04-production.md](04-production.md) §1a.7 had named outright: an import
+    matches on `lower(email)` and updates whoever it finds, and the previous
+    values were kept nowhere, so a sheet a month out of date overwrote every
+    correction the office had made by hand - including the `hostel_name` a
+    warden is scoped to and the `unit_id` an HOD is found through.
+
+    `added` and `updated` are jsonb arrays, not child tables: a batch is
+    written whole, read whole and never queried across, and the deciding
+    reason is that the recovery path
+    (`supabase/repairs/2026-10-14-restore-user-import.sql`) has to work from
+    **one row** with plain SQL when the application cannot run. `status` goes
+    `applying` -> `applied` | `failed` | `reverted`, and a batch left reading
+    `applying` is an import that did not finish - something nothing recorded
+    before. RLS enabled with **no `authenticated` policy**, the pattern of
+    migrations 28 and 31, because these rows are the directory with history.
+
+    **Ships with the code**, like 31: `importUsersAction` refuses to run
+    without somewhere to write its undo record rather than importing with no
+    safety net, and `importBatchError` (`lib/store/supabase.ts`) names this
+    file when the table is missing. Reads degrade instead - the console shows
+    no Recent imports section rather than failing to open.
+
+33. **`00000000000033_guest_house_room_count.sql`** - *`total_rooms` keeps
+    itself* (14 Oct 2026). The trigger finding 2 of the normalization review
+    proposed. Additive and **optional**: no application code requires it, and
+    its only row-changing statement replaces a wrong count with the right one.
+
+34. **`00000000000034_foreign_key_indexes.sql`** - *index the foreign keys a
+    delete has to check* (14 Oct 2026). Finding 9 above: 20 indexes, partial
+    (`where ... is not null`) where the column is usually null, so they stay
+    small. Additive and **optional** - it makes a delete that already works
+    finish in time. `units.head_id` / `acting_head_id` pay for themselves
+    twice, because an HOD is found by reading the head of the requester's unit
+    on every official booking.
+
+    **Verified in a throwaway `postgres:16-alpine` (14 Oct 2026):** 1-34
+    applied in order on a fresh database, then `supabase/seed.sql` - **18
+    profiles, 0 `auth.users`, 0 `authenticated` policies**, and `total_rooms`
+    equal to the active room count for both guest houses. 32, 33 and 34 each
+    re-applied with no error. Migration 33's trigger checked over insert,
+    deactivation, delete and a room **moved** between guest houses. Migration
+    32's constraints checked by refusing a `reverted` batch with no timestamp
+    and a non-array `added`. The 31 rollback re-run on top: policies 0 -> 38 ->
+    0 with the profiles untouched. The unindexed-foreign-key query returns
+    exactly the two rows 34 leaves deliberately.
 
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.

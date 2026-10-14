@@ -10,6 +10,7 @@ import {
   importLdapUidsAction,
   importUsersAction,
   previewUserImport,
+  revertUserImportAction,
   updateUserAction,
   type UserFormInput,
   type UserImportSummary,
@@ -40,6 +41,9 @@ import {
 import { ROLE_LABELS, STAFF_CATEGORY_LABELS, type Profile, type Role } from "@/lib/types";
 import { UNIT_KIND_LABELS, type Unit } from "@/lib/units";
 import { USER_CSV_HEADER } from "@/lib/users-import";
+import { describeBatch, revertBlocker, type UserImportBatch } from "@/lib/users-import-undo";
+import { SectionHeading } from "@/components/section-heading";
+import { formatInstituteDateTime } from "@/lib/tz";
 
 const ALL_ROLES = Object.keys(ROLE_LABELS) as Role[];
 
@@ -66,6 +70,7 @@ export function UsersManager({
   hostels = [],
   roles = ALL_ROLES,
   actorRole = "developer",
+  imports = [],
 }: {
   profiles: Profile[];
   /** Hostels on the Settings list - the only values `hostel_name` may take. */
@@ -75,6 +80,8 @@ export function UsersManager({
   /** The roles this console user may hand out - see `assignableRoles`. */
   roles?: Role[];
   actorRole?: Role;
+  /** The newest spreadsheet imports, each of them undoable (migration 32). */
+  imports?: UserImportBatch[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -97,6 +104,8 @@ export function UsersManager({
   /** Rows ticked for deletion, by id. */
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  /** The import whose undo is being confirmed. */
+  const [toUndo, setToUndo] = useState<UserImportBatch | null>(null);
 
   const deletable = profiles.filter((p) => !isLocked(actorRole, p));
   const selectedProfiles = deletable.filter((p) => selected.has(p.id));
@@ -182,6 +191,25 @@ export function UsersManager({
       if (result.ok) {
         toast.success(`Users imported - ${result.summary}`);
         setUsersOpen(false);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+
+  /**
+   * Undo an import: put back what it changed, remove what it added. Whatever
+   * could not be undone is named, one toast each, the same way a bulk delete
+   * names whoever it could not remove - an account somebody has corrected by
+   * hand since the import is deliberately left as it is.
+   */
+  const undoImport = (batch: UserImportBatch) =>
+    startTransition(async () => {
+      const result = await revertUserImportAction(batch.id);
+      for (const problem of result.conflicts ?? []) toast.error(problem);
+      if (result.ok) {
+        toast.success(`Import undone - ${result.summary}`);
+        setToUndo(null);
         router.refresh();
       } else {
         toast.error(result.error);
@@ -332,6 +360,104 @@ export function UsersManager({
           </TableBody>
         </Table>
       </div>
+
+      {/* Recent imports (14 Oct 2026). An import updates everybody it matches
+          by email, so a stale sheet overwrites corrections the office has made
+          by hand - and until migration 32 the previous values were kept
+          nowhere. Each batch here can be put back. A batch still reading
+          "applying" is an import that did not finish, which nothing used to
+          report. */}
+      {imports.length > 0 && (
+        <section className="space-y-3">
+          <SectionHeading title="Recent imports" count={imports.length} />
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>By</TableHead>
+                  <TableHead>What it did</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {imports.map((batch) => {
+                  const blocked = revertBlocker(batch);
+                  return (
+                    <TableRow key={batch.id}>
+                      <TableCell className="whitespace-nowrap">
+                        {formatInstituteDateTime(batch.at)}
+                      </TableCell>
+                      <TableCell>{batch.actor_name}</TableCell>
+                      <TableCell className="text-meta whitespace-normal">
+                        {describeBatch(batch)}
+                        {batch.status !== "applied" && (
+                          <span className="block text-xs font-medium text-vermilion-deep">
+                            {batch.status === "applying"
+                              ? "Did not finish"
+                              : batch.status === "failed"
+                                ? `Stopped part-way${batch.error ? ` - ${batch.error}` : ""}`
+                                : `Undone${
+                                    batch.reverted_actor_name
+                                      ? ` by ${batch.reverted_actor_name}`
+                                      : ""
+                                  }`}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isPending || blocked !== null}
+                          title={blocked ?? undefined}
+                          onClick={() => setToUndo(batch)}
+                        >
+                          Undo
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
+      )}
+
+      <ConfirmDialog
+        open={toUndo !== null}
+        onOpenChange={(open) => !open && setToUndo(null)}
+        title="Undo this import?"
+        description={
+          toUndo
+            ? `This puts back what the import of ${formatInstituteDateTime(
+                toUndo.at
+              )} changed, and removes the accounts it added.`
+            : ""
+        }
+        consequences={
+          toUndo
+            ? [
+                toUndo.updated.length > 0
+                  ? `${toUndo.updated.length} account${
+                      toUndo.updated.length === 1 ? "" : "s"
+                    } restored to what they held before the import`
+                  : null,
+                toUndo.added.length > 0
+                  ? `${toUndo.added.length} account${
+                      toUndo.added.length === 1 ? "" : "s"
+                    } deleted - anyone with a booking is kept and named`
+                  : null,
+                "An account changed by hand since the import is left as it is",
+              ].filter((line): line is string => line !== null)
+            : []
+        }
+        confirmPhrase="UNDO"
+        confirmLabel="Undo the import"
+        pending={isPending}
+        onConfirm={() => toUndo && undoImport(toUndo)}
+      />
 
       <ConfirmDialog
         open={toDelete !== null}

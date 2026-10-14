@@ -1178,3 +1178,67 @@ though the caption is only **shown** on a chain with more than one step: the
 accessible name has to stay stable whatever the chain looks like. If you
 change that label, `e2e/approval-workflow.spec.ts` is what breaks.
 
+
+---
+
+### A temp **view** in a psql repair script is re-evaluated mid-write (14 Oct 2026)
+
+`supabase/repairs/2026-10-14-restore-user-import.sql` classifies each account
+once - restore it, or skip it and say why - and the first draft kept that
+classification in a `create temp view`. It is read by the two `update`
+statements that do the restore, and the first of those **releases LDAP
+usernames** before the second writes the old values back.
+
+A view is re-evaluated by every statement that reads it. So the release made
+the view's "does this account still hold what the import gave it?" test false
+for exactly the rows about to be restored, the second `update` matched **zero
+rows**, and the script went on to report success having changed almost nothing.
+
+The plan has to be a snapshot taken before any of it is applied:
+
+```sql
+create temp table restore_plan as ...   -- not: create temp view
+```
+
+Two more from the same script, both of which would have failed on live data:
+
+- **`:'batch'` is not interpolated inside a dollar-quoted block.** psql
+  substitutes its variables in the SQL text, and `do $$ ... $$` is a string
+  literal, so the guard in section 0 was a syntax error at `:`. Carry the value
+  in a session setting instead, interpolated once outside the quotes:
+  ```sql
+  select set_config('gh.restore_batch', :'batch', false);
+  -- then, anywhere including inside a do block:
+  current_setting('gh.restore_batch')::uuid
+  ```
+- **`profiles.staff_category` is plain `text`** (migration 15), not an enum.
+  `::public.staff_category` fails. Worth checking a column's real type before
+  casting to what its name suggests:
+  ```bash
+  select column_name, data_type, udt_name from information_schema.columns
+   where table_name = 'profiles';
+  ```
+
+And the lesson that covers all three: **a repair script is tested by running
+it**, against a throwaway `postgres:16-alpine` with a fixture built to be
+awkward - in this case an account corrected by hand after the import, a
+username swap, and an imported account that had since been booked on. Reading
+it found none of the three. Give the file `\set ON_ERROR_STOP on`, too: without
+it the failed restore above was followed by the sections that mark the batch
+`reverted`, which is the worst of both outcomes.
+
+### A shared-state test file needs a reset, not an undo (14 Oct 2026)
+
+`tests/user-import-undo.test.ts` started with each test building on the last,
+the way `tests/user-import-idempotency.test.ts` deliberately does. Three tests
+failed with `restored: 0` because an earlier test had already left the accounts
+in the state the later one was trying to create - the import then planned no
+changes at all, and the undo correctly had nothing to do.
+
+The fix is a `beforeEach` that rewrites the throwaway database file and
+re-imports the baseline. Deliberately **not** "undo what the last test did": a
+test that leans on the undo to clean up after itself cannot then be trusted to
+be testing it.
+
+`loadDb()` self-heals the seeded personas back in, so assertions stay keyed on
+addresses the seed does not use - the same trap noted for the idempotency test.

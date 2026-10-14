@@ -43,8 +43,14 @@ import type {
   DataStore,
   NewLogInput,
   NewProfileInput,
+  SeededProfileInput,
   StatusUpdate,
 } from "./types";
+import type {
+  NewUserImportBatch,
+  UserImportBatch,
+  UserImportSettlement,
+} from "@/lib/users-import-undo";
 import {
   seedBookingRooms,
   seedBookings,
@@ -126,6 +132,8 @@ interface Db {
   units?: Unit[];
   /** Migration 28: the institute's records as the office pasted them in. */
   academic_records?: StoredAcademicRecord[];
+  /** Migration 32: one row per spreadsheet import - what it changed, so it can be undone. */
+  user_import_batches?: UserImportBatch[];
 }
 
 // `MOCK_DB_PATH` lets the test suite run against a throwaway file instead of
@@ -438,6 +446,11 @@ function loadDb(): Db {
     }
     if (!db.privacy_requests) {
       db.privacy_requests = [];
+      dirty = true;
+    }
+    // Migration 32.
+    if (!db.user_import_batches) {
+      db.user_import_batches = [];
       dirty = true;
     }
     if (dirty) saveDb(db);
@@ -1036,6 +1049,24 @@ export class MockStore implements DataStore {
     saveDb(db);
   }
 
+  async createProfiles(inputs: SeededProfileInput[]): Promise<void> {
+    if (inputs.length === 0) return;
+    const db = loadDb();
+    // Checked against the state being built, not just the stored one, so two
+    // lines of one paste cannot both claim an email or a username. The
+    // database does this with its unique indexes; here it is one pass before
+    // a single write, which is also what makes the batch all or nothing.
+    for (const input of inputs) {
+      if (db.profiles.some((p) => p.email.toLowerCase() === input.email.toLowerCase())) {
+        throw new Error(`A user with the email ${input.email} already exists`);
+      }
+      assertLdapUidFree(db, input.ldap_uid, null);
+      assertHostelExists(db, input.hostel_name);
+      db.profiles.push({ ...input });
+    }
+    saveDb(db);
+  }
+
   async deleteProfile(id: string): Promise<void> {
     const db = loadDb();
     if (db.bookings.some((b) => b.user_id === id)) {
@@ -1043,6 +1074,47 @@ export class MockStore implements DataStore {
     }
     db.profiles = db.profiles.filter((p) => p.id !== id);
     saveDb(db);
+  }
+
+  // ---- user import batches (migration 32) ------------------------------
+
+  async recordUserImport(input: NewUserImportBatch): Promise<UserImportBatch> {
+    const db = loadDb();
+    const batch: UserImportBatch = {
+      ...input,
+      id: randomUUID(),
+      at: new Date().toISOString(),
+      reverted_at: null,
+      reverted_by: null,
+      reverted_actor_name: null,
+    };
+    (db.user_import_batches ??= []).push(batch);
+    saveDb(db);
+    return batch;
+  }
+
+  async settleUserImport(id: string, patch: UserImportSettlement): Promise<void> {
+    const db = loadDb();
+    const batch = (db.user_import_batches ?? []).find((b) => b.id === id);
+    if (!batch) throw new Error("That import is no longer on record");
+    batch.status = patch.status;
+    if (patch.error !== undefined) batch.error = patch.error;
+    if (patch.status === "reverted") {
+      batch.reverted_at = new Date().toISOString();
+      batch.reverted_by = patch.reverted_by ?? null;
+      batch.reverted_actor_name = patch.reverted_actor_name ?? null;
+    }
+    saveDb(db);
+  }
+
+  async listUserImports(limit = 20): Promise<UserImportBatch[]> {
+    return [...(loadDb().user_import_batches ?? [])]
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, limit);
+  }
+
+  async getUserImport(id: string): Promise<UserImportBatch | null> {
+    return (loadDb().user_import_batches ?? []).find((b) => b.id === id) ?? null;
   }
 
   async listUnits(): Promise<Unit[]> {

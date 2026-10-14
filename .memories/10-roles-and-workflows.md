@@ -432,6 +432,7 @@ A deliberate **subset** of the manager's console — reception.
 | ↳ **Import from spreadsheet** — paste the office's own columns, check the plan, import; all or nothing (8 Oct 2026) | same | ✓ | ✓ |
 | ↳ Import LDAP usernames — `email, uid` pairs onto existing accounts | same | ✓ | ✓ |
 | ↳ **Tick rows and delete together**, behind a typed confirmation (8 Oct 2026) | same | ✓ (not developer accounts) | ✓ |
+| ↳ **Recent imports -> Undo** — restores the previous values of every account an import changed, deletes the ones it added, and names anything it left alone; type `UNDO` (14 Oct 2026) | same | ✓ (not developer accounts) | ✓ |
 | Departments & Clubs (+ Faculty Advisors) | `/admin/units` | ✓ | ✓ |
 | **Approval Workflow** — who forwards whose request: **one chain per kind of request**, drawn left to right, with a `+` between boxes, one plain-language question per step, and a **Try it** panel that names the people (12 Oct 2026, rebuilt as a flow the same day). The ordered routes are behind **Advanced** | `/admin/workflow` | ✓ | ✓ |
 | **Academic records** (the institute's records, pasted in as CSV — migration 28, 7 Oct 2026) | `/admin/academic` | ✓ | ✓ |

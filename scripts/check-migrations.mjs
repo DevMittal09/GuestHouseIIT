@@ -83,6 +83,36 @@ const MARKERS = [
       "(select count(*) from pg_policies where 'authenticated' = any(roles) " +
       "and schemaname in ('public','storage')) as authenticated_policies_expect_0;",
   },
+  { n: 32, kind: "table", table: "user_import_batches", what: "the undo record for a user import" },
+  // Migration 33 adds a function and a trigger, so like 17, 23 and 31 it
+  // cannot be probed through PostgREST. The count must come back 1.
+  {
+    n: 33,
+    kind: "sql",
+    what: "guest_houses.total_rooms maintained by a trigger",
+    sql:
+      "select count(*) as recount_trigger_expect_1 from pg_trigger " +
+      "where tgname = 'rooms_recount_total' and not tgisinternal;",
+  },
+  // Migration 34 adds 20 indexes and nothing else. PostgREST cannot read
+  // pg_indexes either, so it is checked by hand like 17, 23, 31 and 33. The
+  // count must come back 20.
+  {
+    n: 34,
+    kind: "sql",
+    what: "indexes on the foreign keys a delete has to check",
+    sql:
+      "select count(*) as fk_indexes_expect_20 from pg_indexes " +
+      "where schemaname = 'public' and indexname in ('booking_logs_action_by_idx'," +
+      "'bookings_created_by_idx','invoices_created_by_idx','invoices_issued_by_idx'," +
+      "'invoices_paid_by_idx','invoices_cancelled_by_idx','privacy_requests_user_idx'," +
+      "'privacy_requests_handled_by_idx','room_blocks_created_by_idx'," +
+      "'room_holds_override_by_idx','tariffs_created_by_idx','units_head_idx'," +
+      "'units_acting_head_idx','academic_records_imported_by_idx'," +
+      "'user_import_batches_actor_idx','user_import_batches_reverted_by_idx'," +
+      "'units_parent_idx','units_hod_unit_idx','tariffs_guest_house_idx'," +
+      "'sessions_rotated_from_idx');",
+  },
 ];
 
 /** The SQL to paste in the editor for the two function-only migrations. */

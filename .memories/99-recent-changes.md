@@ -7,181 +7,200 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 13 October 2026 (second) - the second door is closed, the schema is left alone
+## Round of 14 October 2026 - an import you can undo
 
-The morning round reviewed the schema before the college's user import and
-found that `password123` was not harmless. This round **implements** the fix,
-answers the normalization question with evidence, and prepares the import.
+The brief was to make the project secure, normalized and ready for the real
+user import. The item at the top of it was the one gap
+[04-production.md](04-production.md) §1a.7 had named outright:
 
-**One migration, three code changes, two repair scripts, two test files. No
-table split, no column dropped, no feature changed.**
+> "A wrong batch of updates is the dangerous one. There is no undo: the
+> previous values are not kept."
 
-### 1. Normalization: three fixes, one recorded, four confirmed correct
+**Three migrations, one new module, one SQL recovery script, 12 new tests. No
+table split, no column dropped, no feature changed, nothing applied to the
+hosted project.**
 
-Full list in [21-database.md](21-database.md), *"Normalization - the review of
-13 Oct 2026"*. The headline is that **the schema is in good shape** and needed
-no restructuring to hold the college's data.
+### 1. The import can be undone (migration 32)
 
-**Fixed** (migration 31): `profiles` had almost no indexes (nothing on `role`,
-`unit_id` or `hostel_name`), no case-insensitive index behind the very key the
-import matches on, and no check constraints at all.
+An import matches on `lower(email)` and **updates** whoever it finds. That is
+what makes it safe to run twice, and it is what makes a stale sheet dangerous:
+re-importing a file a month old overwrites every correction the office has made
+by hand since - the `hostel_name` a warden is scoped to, the `unit_id` an HOD is
+found through, the `role` itself.
 
-**Recorded, not fixed:** `guest_houses.total_rooms` is a stored derived value
-recounted by application code, so a room inserted by SQL leaves it stale - a
-plain update anomaly. The fix is a trigger; it is not what the import needs,
-and it does not belong in a security migration.
+`importUsersAction` now writes a record of what it is about to do **before it
+does it**: the accounts it will create, and the previous values of every account
+it will change. Then **Users & Roles -> Recent imports -> Undo**
+(`revertUserImportAction`, type `UNDO`, audited, TOTP step-up) puts them back.
 
-**Confirmed correct as they are:** `profiles` staying one table (19 foreign
-keys, and a role is an authorisation level, not a category of person);
-`academic_records` staying one table with nullable per-kind columns (migration
-28 decided it, and the sheet feeds it); its `hostel` staying free text (the
-institute's own spelling, display-only - checked, no reader authorises on it);
-and `profiles.department_or_club` staying although it duplicates `unit_id`,
-because **five modules read it** - dropping it is a feature removal, not a
-normalization.
+**Writing the record first is the whole design.** §1a.6 had warned that the
+import "can still time out part-way, and nothing records where it stopped" - a
+record written at the end would be missing for exactly the imports that need it.
+Written first, it is complete whatever happens next, and `status` starts at
+`applying`, so a batch still reading that **is** the report that an import did
+not finish.
 
-Four denormalizations examined and kept because they are right:
-`bookings.user_role` and `booking_logs.action_by_name` preserve history
-deliberately, issued invoices are snapshots, and `bookings.search_text` turned
-out not to be a denormalization at all - it is `generated always as ... stored`.
+Three rules it does not bend:
 
-### 2. The security fix: remove the reason for the credential
+- **an account changed since the import is left alone and named.** The undo
+  takes back what that import did; it does not roll the directory back to a
+  date. Reverting a hand correction would destroy the newer, better value.
+- only the **eight fields an import may write** are restored.
+- the accounts the import created are deleted **first**, because one of them may
+  hold an LDAP username a restore is about to ask for.
 
-Rotating `password123` to a random password was **rejected**: it would leave
-every imported person with a working GoTrue credential, just an unknown one,
-and `authenticated` would still have 38 policies behind it. The problem was
-never a weak password - it was that **a portal account implied a database
-credential at all**.
+Partial by design, like `deleteUsersAction`: whatever cannot be undone is named
+back and the rest still is.
 
-**Migration 31** (`00000000000031_decouple_auth_and_tighten_rls.sql`):
+### 2. Two bugs in the username-swap path, both pre-existing
 
-- **drops `profiles.id -> auth.users (id)`** and gives the column its own
-  `gen_random_uuid()` default. The portal has never authenticated with
-  Supabase Auth (LDAP or Google, then a session row - migration 21), so the
-  key was the only reason those users existed. **No id changes**, so all 19
-  foreign keys are untouched;
-- **drops all 38 `authenticated` policies**, 21 of them writes, including
-  `developer manages profiles / bookings / rooms / guest_houses /
-  booking_guests / form_configs`. RLS stays **enabled**, so `authenticated` is
-  denied by default - migration 28's deliberate pattern for
-  `academic_records`, now applied to the rest;
-- **drops the two blanket `documents` bucket policies** and forces
-  `public = false`. Any JWT could previously download every guest's ID
-  document and alumni card;
-- **adds** the three `profiles` indexes, `profiles_email_lower_idx` (not
-  unique - see the migration) and two `not valid` check constraints.
+`planUserImport` deliberately allows one paste to move an LDAP username between
+two accounts. `lower(ldap_uid)` is unique, and both bugs come from that.
 
-Beside it: `createProfile` is **one insert with no Auth user**; `deleteProfile`
-still removes an Auth user best-effort for accounts that predate the
-migration; `supabase/seed.sql` creates **no Auth users** (it used to create 18
-with that password); `database.types.ts` marks `id` generated.
+1. **The import failed part-way on a swap.** The account *receiving* the
+   username was written while the account *giving it up* still held it. The old
+   holder now releases it first - the same two passes as `importLdapUidsAction`,
+   and before the inserts too, because a *new* account can be the one taking it.
+2. **An undo could leave an account unable to sign in.** If one half of a swap
+   has since been corrected by hand, the other half cannot have its old username
+   back. The first implementation released the username and then failed to write
+   the old one, leaving that account with **none**. It is now classified as a
+   conflict before anything is written, and skipped whole.
 
-**Three facts checked, not assumed, before dropping 38 policies:**
+### 3. `total_rooms` gets its trigger (migration 33)
 
-1. nothing legitimate connects as `authenticated` - the server uses the
-   service-role key, which bypasses RLS;
-2. **Realtime connects as `anon`**, not `authenticated`
-   (`components/live-updates.tsx`, `persistSession: false`), and there has
-   never been an `anon` policy - so live updates cannot break. This was the
-   one thing that could have made the change a regression;
-3. RLS stays on, which is **not** the same as dropping every policy - with RLS
-   off, every role reads everything.
+Finding 2 of the 13 Oct normalization review, recorded then and fixed now: a
+stored derived value maintained only by application code, so a room inserted or
+deactivated by SQL left the count stale. The column stays - dropping it would
+change `GuestHouse` in `lib/types.ts` and two console pages to fix something a
+trigger closes. Its own migration, because 32 is required by the code and 33 is
+optional.
 
-### 3. The one coupling, made legible
+### 4. Twenty foreign-key indexes, measured (migration 34)
 
-`createProfile` now inserts without an id and without an Auth user, which a
-database still on migration 30 refuses two ways. **So the code and migration
-31 ship together** - there is no version that works on both schemas, because
-the foreign key fundamentally requires an Auth user.
+**A ninth normalization finding, found while building the undo.** Postgres
+indexes the key being *referenced*, never the column *referencing* it. 22
+foreign keys had no supporting index, 15 of them pointing at `profiles` - so
+deleting one profile scanned 15 child tables in full, and **undoing an import
+deletes every account it created, up to 2000.**
 
-Accepted rather than engineered around (a client-generated id does not help -
-the foreign key still fails), and made legible instead: `profileWriteError`
-catches both error codes and **names the migration**, the way migration 25's
-absence names itself. Verified against a throwaway database on migration 30 -
-the insert fails with `null value in column "id"` (23502), which without the
-handler sends somebody looking at the application code.
+Measured in a throwaway Postgres with 200,000 `booking_logs` rows:
 
-This is the **first migration that is not optional once the code is
-deployed**, and [04-production.md](04-production.md) §5 now says so.
+| | 300 profiles deleted |
+| --- | --- |
+| before | 2,580 ms |
+| after | 64 ms (3 samples: 63.4 / 64.1 / 63.8) |
 
-### 4. Tests, because the prose was wrong
+The before figure grows with the history; the after figure does not. Only the 20
+whose parent is actually deleted - `invoices.replaces_invoice_id` earns nothing
+(invoices are never deleted) and `booking_guests` already has an index on the
+composite key's leading column.
 
-- **`tests/rls-surface.test.ts` (7 checks)** asserts the invariant against the
-  SQL itself: no `authenticated` policy survives, RLS is never disabled, the
-  seed creates no Auth user, the store mints no password. It pins the
-  historical count at 38 so the parser cannot stop matching and pass
-  vacuously. **Mutation-verified**: removing one `drop policy` line from
-  migration 31 fails it with that policy named. It exists because two written
-  claims in this folder were false and had been read forward twice - a
-  regression test is the only form of that claim that cannot rot.
-- **`tests/user-import-idempotency.test.ts` (9 checks)** asserts the property
-  the college's *repeated* sheets depend on and `ninth-round` does not cover:
-  a person imported twice is **one row with one id, for ever**. If a re-import
-  inserted a second row or reassigned an id, everyone's booking history would
-  detach in one press and nothing on screen would say so.
+### 5. The provider question, answered
 
-### 5. What was deliberately NOT done
+The last two rounds recorded that whether the hosted project has the
+email/password provider enabled "cannot be read with the service-role key" and
+was therefore unverified. True, and beside the point: **GoTrue publishes it.**
+`GET /auth/v1/settings` needs only the anon key that already ships in the
+browser, writes nothing, and answers in one request.
 
-- **Migration 31 is not applied to the hosted project**, and the 18 Auth users
-  are **not deleted**. Both are production actions on live data and need the
-  owner's approval. The order matters and is in
-  [04-production.md](04-production.md) §1a.1: the repair **refuses to run
-  before** the migration, because the old key's `on delete cascade` would take
-  every profile with the Auth users it deletes.
-- **The Excel mapping.** The file still has not been provided. §1a.3 lists the
-  columns the portal can consume plus an explicit drop-list; mapping the
-  college's actual headers needs one pass over the real sheet.
-- **No column or table dropped**, and `total_rooms`' trigger left for its own
-  round.
+**It is enabled, with `disable_signup: false`.** So there is a worse path than
+the published `password123`: with signup open an attacker needs no portal
+account and no leaked password - they sign up with an address they control and
+hold an `authenticated` JWT, which until migration 31 is applied means the whole
+directory and every uploaded ID document.
+
+So **turning the provider off moves to the front of the queue** - a dashboard
+toggle, no migration, and the portal does not use it. §1a.1 has it as step 1.
+
+**The `anon` role was checked the same way and is not exposed**: 200 and zero
+rows on `profiles`, `bookings`, `booking_guests` and `academic_records`. That
+independently confirms the 13 Oct claim that dropping the `authenticated`
+policies cannot break Realtime, which connects as `anon`.
+
+**Deliberately not tested:** the ID-document download the policies permit.
+Confirming it would mean creating an account on the production project and
+opening real guests' identity documents.
+
+### 6. Excel preparation, without inventing the file
+
+The file still has not been provided. **No column names were invented.** New
+§1a.3a is eight things to check against the real sheet, what the silent failure
+looks like (an unrecognised header line is read as *data*, and reports "line 1
+is not an email address"), and an explicit statement of what is **not**
+prepared and why. No new personal field is collected.
 
 ### Files
 
-**New:** `supabase/migrations/00000000000031_decouple_auth_and_tighten_rls.sql`,
-`supabase/repairs/2026-10-13-retire-seeded-auth-users.sql`,
-`supabase/repairs/2026-10-13-rollback-migration-31.sql`,
-`tests/rls-surface.test.ts`, `tests/user-import-idempotency.test.ts`.
+**New:** `lib/users-import-undo.ts`,
+`supabase/migrations/00000000000032_user_import_batches.sql`,
+`00000000000033_guest_house_room_count.sql`,
+`00000000000034_foreign_key_indexes.sql`,
+`supabase/repairs/2026-10-14-restore-user-import.sql`,
+`tests/user-import-undo.test.ts`.
 
-**Changed:** `lib/store/supabase.ts` (`createProfile`, `deleteProfile`,
-`profileWriteError`), `lib/supabase/database.types.ts` (`id` generated),
-`supabase/seed.sql` (no Auth users), `scripts/check-migrations.mjs` (a
-`kind: "sql"` marker for 31, and the closing report generalised).
+**Changed:** `app/actions/admin.ts` (`importUsersAction` rewritten,
+`revertUserImportAction` and `listUserImportsAction` added),
+`lib/store/types.ts` (`SeededProfileInput`, `createProfiles`, four batch ops),
+`lib/store/mock.ts`, `lib/store/supabase.ts` (`createProfiles`,
+`userImportFromRow`, `importBatchError`), `lib/supabase/database.types.ts`,
+`components/admin/users-manager.tsx` (Recent imports + the Undo dialog),
+`app/(portal)/admin/users/page.tsx`, `e2e/ninth-round.spec.ts` (the undo
+journey), `scripts/check-migrations.mjs` (markers
+32, 33, 34), `AGENTS.md` (migrations 31-34, which it was missing entirely, and
+two stale claims: that creating a user mints an Auth user with `password123`,
+and that `total_rooms` is kept only by application code).
 
-**Unchanged, deliberately:** every rule module, both forms, the approval
-engine, `lib/users-import.ts` (already correct - verified, not rebuilt), and
-`public.my_role()` / `public.can_access_booking()` (unused now, but the
-starting point if the app ever moves to per-user Supabase sessions - at which
-point note that **`auth.uid() = profiles.id` stops being true at migration
-31**, so the old policies cannot simply be restored).
+**Unchanged, deliberately:** `lib/users-import.ts` (verified correct last
+round; only where its plan is *applied* changed), every rule module, both
+forms, the approval engine, `profiles` and `academic_records`.
 
 ### How it was checked
 
 - `npm run lint`, `npm run typecheck` - clean.
-- **`npm test` - 535 passing, 31 files** (up from 519 / 29; +16 new).
+- **`npm test` - 546 passing, 32 files** (up from 535 / 31; +11 new).
 - `NEXT_PUBLIC_SUPABASE_URL= npm run build` - clean.
-- `npm run check:memories`, and `npm run check:migrations` against the hosted
-  project read-only: **1-30 applied**, with 17, 23 and **31** reported as the
-  three it cannot probe, each printing its SQL.
-- **Migration 31 in a throwaway `postgres:16-alpine`**: 1-31 applied in order;
-  auth foreign key gone; **0** `authenticated` policies; RLS still enabled on
-  six core tables; new indexes present; an insert with **no id** accepted; both
-  check constraints refusing a bad address, an untrimmed address and a
-  one-character name; 31 re-applied with no error; the new seed giving **19
-  profiles and 0 auth users**; the rollback script taking policies 0 -> 38 and
-  31 taking them back to 0 with profiles untouched; and, on a database held at
-  migration 30, the exact failure the new error message is written for.
+- `npm run check:memories`; `npm run check:migrations` against the hosted
+  project read-only - **1-30 applied**, 32 correctly reported missing, and 17,
+  23, 31, 33, 34 named as the five it cannot probe, each printing its SQL.
+- **A fresh throwaway `postgres:16-alpine`**: 1-34 applied in order, then
+  `supabase/seed.sql` - **18 profiles, 0 `auth.users`, 0 `authenticated`
+  policies**, and `total_rooms` equal to the active room count for both guest
+  houses. 32, 33, 34 each re-applied with no error. Migration 33's trigger
+  checked over insert, deactivation, delete and a room **moved** between guest
+  houses. Migration 32's constraints checked by refusing a `reverted` batch with
+  no timestamp and a non-array `added`. The 31 rollback re-run on top: policies
+  **0 -> 38 -> 0** with the profiles untouched, the auth foreign key still gone.
+  The unindexed-foreign-key query returns exactly the two rows 34 leaves.
+- **The SQL recovery script run end to end, twice**, on a fixture built to be
+  awkward: an account corrected by hand after the import, a username swap, and
+  an imported account that had since been booked on. Clean case restores
+  everything including the swap; nasty case names both skips, leaves the hand
+  correction untouched, deletes the un-booked account and keeps the booked one.
+  **Three bugs found by running it** - see
+  [22-running-and-testing.md](22-running-and-testing.md).
+- **Mutation-verified**: removing the "changed since the import" guard, and
+  disabling `uidsToRelease`, each fail a named test.
+- **`npm run test:e2e` - 41 passing** (was 40), including a new journey that
+  imports through the real console, runs a **stale sheet** over it, undoes that
+  batch and checks the accounts are restored, then undoes the first batch and
+  checks its accounts are deleted. This is what proves the **wiring** - the
+  unit tests prove the rules. It found one thing nothing else would have: the
+  e2e database is shared across a run, so a batch list is not only this test's,
+  and rows must be picked by what they did rather than by position.
 
-**Not verifiable from here, and so not claimed:** whether the hosted project
-has the email/password provider enabled (a dashboard setting, not in the
-repository, not readable with the service-role key - **still the control that
-matters most until the repair runs**), and live production rows (the sandbox
-blocks production reads).
+**Not verifiable from here, and so not claimed:** live production rows (the
+sandbox blocks production reads), and whether the document download the
+policies permit actually works - deliberately not tested, above.
 
 ### Left open
 
-[03-roadmap.md](03-roadmap.md) §1 gate 10 (three production steps) and gate 11
-(the import is still applied row by row - halved, not fixed), and §2f for the
-rest: `total_rooms`' trigger, no undo for an import's *updates*, no
-`is_active` for people who leave, the 2000-row ceiling, and
+[03-roadmap.md](03-roadmap.md) §1 gate 10 (now **three** production steps: the
+provider toggle, migrations 31-34, the Auth-user repair - in that order) and
+§2f for the rest: an import's **updates** are still one request per person
+(gate 11 is no longer a gate, because a failure is now recoverable), nothing
+purges `user_import_batches`, the academic-records import has no undo of its
+own, no `is_active` for people who leave, the 2000-row ceiling, and
 `department_or_club`'s duplication - whose practical risk at import time is a
 sheet that fills the free text and leaves `unit` blank, producing people whose
 official bookings have **no HOD**.

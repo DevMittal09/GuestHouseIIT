@@ -60,17 +60,23 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwright.
 **Node 20** via nvm; the machine default is 18.
 
-**Status, 12 Oct 2026.** Feature-complete for every workflow specified; taken
+**Status, 14 Oct 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme, eleven rounds of the
-office's corrections, a design pass, and the round that put **the approval
-workflow itself in the manager's hands** (Console -> Approval Workflow). **Not deployed for real use** — everything that first
-deployment needs is in [04-production.md](04-production.md), and the gates are
-[03-roadmap.md](03-roadmap.md) §1.
+office's corrections, a design pass, the round that put **the approval
+workflow itself in the manager's hands** (Console -> Approval Workflow), and
+two rounds preparing the institute's **user import** - which closed a GoTrue
+door the portal had never used and gave the import an **undo**. **Not deployed
+for real use** — everything that first deployment needs is in
+[04-production.md](04-production.md), and the gates are
+[03-roadmap.md](03-roadmap.md) §1. Migrations **31-34 are written and tested
+but deliberately not applied** to the hosted project, and the hosted project's
+email/password provider is **still on**: [04-production.md](04-production.md)
+§1a.1 is the order to do it in.
 
-**Numbers.** 30 migrations · 7 one-off repairs · 12 roles (10 active) ·
+**Numbers.** 34 migrations · 10 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
-18 demo personas · 6 demo bookings · 23 real rooms · 494 unit tests ·
-39 end-to-end journeys · 15 console sections.
+18 demo personas · 6 demo bookings · 23 real rooms · 546 unit tests ·
+41 end-to-end journeys · 15 console sections.
 
 ---
 
@@ -147,7 +153,7 @@ updated. **Work the table, not your memory.**
 | An automatic mail, its recipients or its thread | [10-roles-and-workflows.md](10-roles-and-workflows.md) Part 3 |
 | A tariff, an invoice or a payment rule | [13-billing-and-dining.md](13-billing-and-dining.md) |
 | A Setting, a default, or a floor under a Setting | [12-settings-and-defaults.md](12-settings-and-defaults.md), [04-production.md](04-production.md) §3 if the office must fill it in |
-| A migration | [21-database.md](21-database.md), [04-production.md](04-production.md) §5, **and `scripts/check-migrations.mjs`'s `MARKERS` table** |
+| A migration | [21-database.md](21-database.md), [04-production.md](04-production.md) §5, **and `scripts/check-migrations.mjs`'s `MARKERS` table** - with `kind: "sql"` and the query to run when PostgREST cannot see what it added (a function, a trigger, a policy, an index) |
 | A new persona, password or secret | [05-credentials-and-security.md](05-credentials-and-security.md) **and `lib/ldap/mock-directory.ts`** |
 | An academic-record field or dummy record | [11-booking-forms.md](11-booking-forms.md) Part 2 **and `lib/academic/mock-source.ts`** |
 | Anything on the public site, or a design token | [14-public-site-and-ui.md](14-public-site-and-ui.md) |

@@ -115,6 +115,31 @@ type MailTemplateRow = {
  * `ACADEMIC_RECORD_FIELDS`, so a column here that no record type names (or
  * the other way round) is a compile error rather than a field nothing fills.
  */
+/**
+ * `user_import_batches` (migration 32). One row per spreadsheet import of
+ * accounts: what it added, and what every account it changed held **before**
+ * it ran. `added` and `updated` are jsonb arrays rather than child tables
+ * because a batch is read and written whole, never queried across - and
+ * because the undo has to be restorable from one row with plain SQL if the
+ * application cannot run (`supabase/repairs/2026-10-14-restore-user-import.sql`).
+ */
+type UserImportBatchRow = {
+  id: string;
+  at: string;
+  actor_id: string | null;
+  actor_name: string;
+  status: string;
+  columns_used: string;
+  added: Json;
+  updated: Json;
+  unchanged_count: number;
+  error: string | null;
+  applied_at: string | null;
+  reverted_at: string | null;
+  reverted_by: string | null;
+  reverted_actor_name: string | null;
+};
+
 type AcademicRecordRow = {
   id: string;
   kind: AcademicRecordKind;
@@ -318,6 +343,24 @@ export interface Database {
         Row: AcademicRecordRow;
         Insert: Insertable<AcademicRecordRow, "id" | "created_at" | "updated_at">;
         Update: Partial<AcademicRecordRow>;
+        Relationships: [];
+      };
+      user_import_batches: {
+        Row: UserImportBatchRow;
+        Insert: Insertable<
+          UserImportBatchRow,
+          | "id"
+          | "at"
+          | "status"
+          | "columns_used"
+          | "unchanged_count"
+          | "error"
+          | "applied_at"
+          | "reverted_at"
+          | "reverted_by"
+          | "reverted_actor_name"
+        >;
+        Update: Partial<UserImportBatchRow>;
         Relationships: [];
       };
       hostels: {

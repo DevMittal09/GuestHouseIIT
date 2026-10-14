@@ -29,6 +29,11 @@ import type { Role } from "@/lib/types";
 import type { Unit } from "@/lib/units";
 import type { AuditEvent, AuditFilter, NewAuditEvent } from "@/lib/audit";
 import type { NewProjectInput, Project } from "@/lib/projects";
+import type {
+  NewUserImportBatch,
+  UserImportBatch,
+  UserImportSettlement,
+} from "@/lib/users-import-undo";
 import type { NewAcademicRecordInput, StoredAcademicRecord } from "@/lib/academic/stored";
 import type { AcademicRecord, AcademicRecordKind } from "@/lib/academic/types";
 import type { NewTariffInput, Tariff } from "@/lib/tariffs";
@@ -51,6 +56,17 @@ import type {
 } from "@/lib/invoice";
 
 export type NewProfileInput = Omit<Profile, "id">;
+
+/**
+ * A profile created with an id the caller already knows.
+ *
+ * Only the spreadsheet import uses it: it writes its undo record
+ * (migration 32) **before** inserting anybody, so the record has to name
+ * the accounts it is about to create. Letting the database mint the id
+ * would mean learning it afterwards, and an import that died in between
+ * would leave rows the undo could not find.
+ */
+export type SeededProfileInput = NewProfileInput & { id: string };
 
 export interface StatusUpdate {
   status: BookingStatus;
@@ -199,9 +215,30 @@ export interface DataStore {
 
   // ---- developer / admin operations ----------------------------------
   createProfile(input: NewProfileInput): Promise<Profile>;
+  /**
+   * Create several accounts at once, each with the id the caller minted.
+   *
+   * One write, so a spreadsheet import is one statement rather than one round
+   * trip per person, and either every account in the chunk exists or none
+   * does. The per-account rules (a free email, a free LDAP username, a hostel
+   * on the list) still apply to each.
+   */
+  createProfiles(inputs: SeededProfileInput[]): Promise<void>;
   updateProfile(id: string, patch: Partial<NewProfileInput>): Promise<void>;
   /** Throws if the user still has bookings. */
   deleteProfile(id: string): Promise<void>;
+
+  // ---- user import batches: the undo record (migration 32) -------------
+  /**
+   * Write down what an import is about to do, before it does it. Returns the
+   * stored batch, whose id the import then settles.
+   */
+  recordUserImport(input: NewUserImportBatch): Promise<UserImportBatch>;
+  /** Mark a batch applied, failed, or undone. */
+  settleUserImport(id: string, patch: UserImportSettlement): Promise<void>;
+  /** Newest first. */
+  listUserImports(limit?: number): Promise<UserImportBatch[]>;
+  getUserImport(id: string): Promise<UserImportBatch | null>;
 
   // ---- departments, clubs, councils and offices (migration 15) ----
   listUnits(): Promise<Unit[]>;

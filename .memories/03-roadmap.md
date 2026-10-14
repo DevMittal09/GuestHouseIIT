@@ -34,8 +34,8 @@ Each of these is configuration or plumbing, not new design.
 | 7 | **The office's Settings** | Defaults are guesses: extra-bed rate (none), GSTIN, Accounts email (empty), bank details, retention days, heads of units, Faculty Advisors, hostels and wardens, whitelist | [04-production.md](04-production.md#3-data-the-office-has-to-supply) |
 | 8 | **Decide `MAIL_REDIRECT_ALL_TO`** | Unset only in production; set everywhere else | |
 | 9 | **Backups** | Supabase's free plan has none | Confirm the plan; run the restore drill in the runbook |
-| **10** | ~~Close the GoTrue / PostgREST door~~ **- done in code 13 Oct 2026; two production steps left** | Migration 31 drops the `profiles -> auth.users` key and all 38 `authenticated` policies, `createProfile` and `seed.sql` mint no Supabase password, and `tests/rls-surface.test.ts` keeps it that way | **Left to do, in this order:** (1) apply migration 31 to the hosted project - `npm run check:migrations` prints the SQL, both counts must be 0; (2) run `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql`, which refuses to run before (1); (3) **disable the email/password provider by hand** - still unverified whether it is on, and the one link not in the repository. [04-production.md](04-production.md) §1a.1 |
-| **11** | **Make the user import atomic, or batch it** | `importUsersAction` validates all-or-nothing then applies row by row. **Halved on 13 Oct** - migration 31 removed the Auth round trip, so it is ~2000 round trips at the cap rather than ~4000 - but the shape is unchanged: no `maxDuration` in `vercel.json`, so it can still time out part-way with nothing recording where | Batches of 100-200 plus a re-paste work today, and `tests/user-import-idempotency.test.ts` is what makes re-pasting a verified claim rather than a hope. The fix is a bulk upsert in `SupabaseStore` (one PostgREST call with `Prefer: resolution=merge-duplicates`), now a smaller job with no Auth user to create alongside each row |
+| **10** | ~~Close the GoTrue / PostgREST door~~ **- done in code; three production steps left** | Migration 31 drops the `profiles -> auth.users` key and all 38 `authenticated` policies, `createProfile` and `seed.sql` mint no Supabase password, and `tests/rls-surface.test.ts` keeps it that way | **Left to do, in this order:** (1) **disable the email/password provider** - Dashboard -> Authentication -> Providers -> Email. **Confirmed ON with signup open, 14 Oct 2026**, so this is now first: it is a toggle, needs no migration, and the portal does not use the provider; (2) apply migrations **31, 32, 33, 34** to the hosted project - `npm run check:migrations` prints the SQL for the ones it cannot probe; (3) run `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql`, which refuses to run before 31. **31 and 32 are not optional once the code is deployed.** [04-production.md](04-production.md) §1a.1 |
+| **11** | ~~Make the user import atomic, or batch it~~ **- no longer a gate, 14 Oct 2026** | Two of the three problems are closed: the **inserts** are chunked (250 a request, so a first load is ~8 requests instead of ~2000), and a failure now **records where it stopped** - migration 32's undo record is written before the writes, so a part-way import is recoverable instead of a mystery. A username moving between two accounts in one paste used to fail part-way; fixed | What remains is that the **updates** are still one request per person, which cannot be chunked (each row has different values). Mitigation in [04-production.md](04-production.md) §1a.6: read the plan's "updated" count, import in pieces when it is large, and undo if it times out. The remaining fix is a single upsert, which needs the `ldap_uid` swap handled inside it - [03-roadmap.md](03-roadmap.md) §2f |
 
 **Next security phase** (not a gate for a pilot, but the next real step):
 move request-scoped database access off the service-role key so row-level
@@ -278,7 +278,7 @@ closed none of these, because every one of them is about the engine.
   defaults are the institute's own pipeline and need no filling in. If the
   office decides a different chain before go-live, that becomes a row there.
 
-## 2f. Opened by the 13 Oct 2026 rounds (the schema review and the fix)
+## 2f. Opened by the 13 Oct 2026 rounds (the schema review and the fix), worked again on 14 Oct
 
 The review is in [02-decisions.md](02-decisions.md) under 13 Oct 2026, the fix
 in the entry after it; the normalization findings are in
@@ -298,39 +298,57 @@ one.
 - ~~Nothing proves a re-import keeps profile ids~~ -
   `tests/user-import-idempotency.test.ts`, 9 checks.
 
+**Done in the round of 14 Oct 2026:**
+
+- ~~The email/password provider is unverified~~ - verified from GoTrue's public
+  `/auth/v1/settings`: **enabled, with signup open**. It is now step 1 of
+  [04-production.md](04-production.md) §1a.1, ahead of the migration, because
+  it is a toggle and the portal does not use the provider.
+- ~~`guest_houses.total_rooms` can drift~~ - migration 33's trigger.
+- ~~No undo for an import's *updates*~~ - migration 32 and
+  `lib/users-import-undo.ts`. Not the "before/after in the audit payload"
+  suggested here: the audit log is purged, and the record has to be written
+  **before** the writes so a failed import is recoverable too. §1a.7 has the
+  procedure.
+- ~~Foreign keys with no index~~ - migration 34, 20 of them, measured.
+
 **Still open:**
 
-- **Gate 10's three production steps, then gate 11.** Nothing below is a
-  blocker for the import; these two are.
-- **The email/password provider is still unverified.** One dashboard look
-  (Authentication -> Providers -> Email). Not in the repository, not readable
-  with the service-role key. **Until the repair script runs, this is the
-  control that matters most** - the published password is live on those 18
-  `auth.users` rows.
-- **`guest_houses.total_rooms` can drift.** A stored derived value, recounted
-  by application code in both stores, so a room inserted by SQL or a repair
-  script leaves it stale - a plain update anomaly. The fix is a trigger on
-  `rooms`, additive and cheap, the way `booking_guests` already has one for a
-  harder invariant. Found on 13 Oct and deliberately not bundled into a
-  security migration.
+- **Gate 10's production steps, then gate 11.** Nothing below is a blocker for
+  the import; these are. Gate 10 is now four migrations plus the provider
+  toggle and the Auth-user repair, in the order §1a.1 gives.
+- **An import's *updates* are still one request per person.** The inserts are
+  chunked (250 a request); the updates cannot be, since each row has different
+  values. A sheet that mostly changes existing people can still exceed the
+  platform's request timeout at ~2000 rows. The undo makes that recoverable
+  rather than a mystery, which is why this is no longer a gate - but the real
+  fix is a single upsert, which needs the `ldap_uid` swap handled inside it
+  (the unique index is checked per row unless the constraint is deferred).
+- **Nothing purges `user_import_batches`.** Each row holds the before-state of
+  the accounts one import touched, so a year of monthly imports is a slowly
+  growing copy of parts of the directory. It is service-role-only and small,
+  but it is personal data with no retention rule - unlike `security_audit`,
+  which has `purge_security_audit`. Wanted: the same, never below whatever
+  period the office wants an undo for.
+- **The undo is not offered for the academic-records import.** That importer is
+  all-or-nothing and keyed on `(kind, lower(email))` the same way, and it
+  overwrites a student's parents' names - which is what the booking form locks
+  a guest to. Migration 32's table is deliberately shaped to take a `kind`
+  column if this is wanted.
 - **Add `profiles` and `academic_records` to whatever is used as a pre-import
   snapshot.** The documented drill - `supabase db dump` - already covers them;
   the ad-hoc JSON export kept outside the repo does not, and must not be
-  mistaken for a backup.
-- **No undo for an import's *updates*.** New rows can be ticked and deleted;
-  updated rows have lost their previous values, and the audit row keeps only
-  the counts and the column list. The plan's "updated" count is the only
-  warning, and on a first load it should be 0. Cheap fix: a before/after per
-  changed field in the audit payload.
+  mistaken for a backup. The undo record is a safety net for one import, **not**
+  a substitute for this.
 - **No deactivation story for people who leave.** `profiles` has no
   `is_active`, and `deleteProfile` refuses anyone with a booking (correctly -
   it would orphan the history), so repeated imports only accumulate. Wanted:
   a flag that hides someone from pickers and refuses them a session without
   touching their bookings. Not urgent until the first graduation after
   go-live.
-- **`MAX_USER_IMPORT_ROWS` is 2000 and the institute is larger.** With gate 11
-  open the paste has to be split anyway, so this is a ceiling to remember
-  rather than a bug.
+- **`MAX_USER_IMPORT_ROWS` is 2000 and the institute is larger.** The paste has
+  to be split anyway while the updates are sequential, so this is a ceiling to
+  remember rather than a bug.
 - **`department_or_club` duplicates `unit_id`** and the two can disagree - a
   real 3NF violation kept because five modules read it
   ([21-database.md](21-database.md), finding 1). The practical risk at import

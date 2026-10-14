@@ -194,23 +194,66 @@ What is already done, in the working tree:
   policies, and adds the `profiles` indexes and checks.
 - **`tests/rls-surface.test.ts`** fails if any of that is undone.
 
-What is left:
+> **The provider question is answered, and the answer is bad (14 Oct 2026).**
+> GoTrue's own public settings endpoint - `GET /auth/v1/settings`, read-only,
+> no password, only the anon key that already ships in the browser - reports
+> for the hosted project:
+>
+> ```
+> external providers enabled : email
+> disable_signup             : false
+> mailer_autoconfirm         : false
+> ```
+>
+> So **email/password is enabled and signup is open.** With migration 31 still
+> unapplied, anyone who confirms an address they control gets an
+> `authenticated` JWT, and that role still has 38 policies behind it -
+> including `profiles` readable `using (true)` (the whole directory) and
+> `select` on the entire private `documents` bucket (every guest's ID document
+> and every alumni card). No portal account and no published password is
+> needed for that path; `password123` on the 18 seeded rows is a second,
+> easier one.
+>
+> `mailer_autoconfirm: false` is the only thing narrowing it: an unconfirmed
+> signup gets no session, so the attacker needs a working mailbox. That is not
+> a control.
+>
+> **Verified not exposed:** the `anon` role. `GET /rest/v1/profiles`,
+> `bookings`, `booking_guests` and `academic_records` with the anon key return
+> **HTTP 200 and zero rows** - RLS is on and no `anon` policy has ever
+> existed. This is also what makes dropping the `authenticated` policies safe
+> for Realtime, which connects as `anon`.
+>
+> **This was not tested any further on purpose.** Confirming the document
+> download would mean creating an account on the production project and
+> opening real guests' identity documents. The policy text and the provider
+> state are enough to act on.
 
-1. **Apply migration 31 to the hosted project.** Needs approval; it is a
-   schema change on live data. It only drops a constraint and policies and
-   adds indexes, so it takes no table rewrite and no downtime. Verify with
-   `npm run check:migrations`, which prints the SQL - **both counts must come
-   back 0**.
-2. **Then run
+What is left. **Steps 1 and 2 are the urgent ones**, and step 3 is the one that
+can be done in thirty seconds right now, before any migration:
+
+1. **Disable the email/password provider** - Dashboard -> Authentication ->
+   Providers -> Email -> off. Confirmed enabled, above. The portal does not use
+   it: sign-in is LDAP or Google plus the `sessions` table. This closes the
+   open-signup path immediately and needs no schema change, so do it first
+   even though the migration is the real fix.
+2. **Apply migrations 31, 32, 33 and 34 to the hosted project, in order.**
+   Needs approval; it is a schema change on live data. None rewrites a table
+   or needs downtime: 31 drops a constraint and policies and adds indexes, 32
+   creates one empty table, 33 adds a trigger and corrects two counts, 34
+   adds 20 indexes. Verify with `npm run check:migrations` - **31's two counts
+   must come back 0, 33's must be 1, 34's must be 20**, and 32 must stop being
+   reported as missing.
+3. **Then run
    `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql`**, which deletes
    the `auth.users` rows that already exist. **Order matters**: it refuses to
    run before migration 31, because the old foreign key's `on delete cascade`
    would take every profile with them.
-3. **Disable the email/password provider** - Dashboard -> Authentication ->
-   Providers -> Email -> off. **Still unverified whether it is currently on**;
-   it is not in the repository and cannot be read with the service-role key.
-   Until steps 1 and 2 are done this is the control that matters most, because
-   the published password is live on those 18 rows right now.
+
+**31 and 32 are not optional once the code is deployed** - `createProfile`
+inserts without an Auth user, and `importUsersAction` will not import without
+somewhere to record its undo. 33 and 34 are optional and can follow. Deploy the
+code and 31 + 32 together; see §5.
 
 Rollback for step 1 is
 `supabase/repairs/2026-10-13-rollback-migration-31.sql` (all 38 policies,
@@ -272,6 +315,57 @@ parents' *names* - so they are dropped, not stored "in case". A column with no
 field is a column that becomes a liability at the first subject-access
 request.
 
+### 1a.3a When the real file arrives - what to check, before anything is pasted
+
+**The file has still not been provided (14 Oct 2026), and nothing in this
+repository assumes its column names.** The importer reads a header line and
+maps it through `KNOWN_COLUMNS`, so the sheet does not have to be rearranged -
+but a header it does not recognise is simply *not read*, and that failure is
+silent in one specific way worth knowing: an unrecognised header line is
+treated as **data**, and the import then reports "line 1: ... is not an email
+address". If the first paste says that, the header is the problem, not the
+data.
+
+Work this list once, against the real file, before the first import:
+
+1. **Does the first row name the columns?** If not, add one. Without a header
+   the paste is read in `DEFAULT_COLUMNS` order - `email, full_name, role,
+   hostel_name, department_or_club, roll_number, ldap_uid` - which almost no
+   institute sheet matches.
+2. **Is every header recognised?** Compare against `KNOWN_COLUMNS`
+   (`lib/users-import.ts`) and rename in the sheet, or add the institute's
+   spelling as an alias there. Paste five rows first and read the plan: it
+   prints *"Read as ... (from your header line)"*, which is the check.
+3. **Is there an `ldap_uid` column at all, and is it the institute's real
+   username?** Without it an imported person **cannot sign in** - everything
+   else about the account is correct and they are simply locked out. If the
+   sheet has no username column, the accounts still import and
+   `Import LDAP usernames` loads them later from a two-column paste.
+4. **Does `unit` name a unit that exists**, spelled as Departments & Clubs
+   spells it? This is the column that finds somebody's HOD. A sheet that fills
+   `department_or_club` (free text) and leaves `unit` blank imports cleanly and
+   produces employees whose official bookings reach the desk **with no HOD
+   stage at all** - see §1a.2 and the note in [03-roadmap.md](03-roadmap.md)
+   §2f.
+5. **Do the hostel spellings match the `hostels` list?** `planUserImport`
+   refuses an unknown hostel rather than inventing it, so this shows up as a
+   refusal, not as bad data. Fix the list or the sheet.
+6. **What does the role column actually say?** "faculty", "staff" and
+   "non-teaching staff" all map to `employee`, and the category column decides
+   which. Anything else is refused by name.
+7. **Delete every column on the drop list in §1a.3 before the file is copied
+   anywhere** - including off the laptop it was downloaded to. The portal has
+   nowhere to put a date of birth, a category, a blood group, an address, an
+   Aadhaar number, bank details or a parent's phone number, and asks for none
+   of them.
+8. **Split it per destination** - one sheet for `profiles`, one per academic
+   kind - and dry-run both against the mock store first (§1a.5 step 3).
+
+**What is deliberately not prepared:** a mapping from the institute's column
+names to ours, a template file, and any guess at which sheet is which. All
+three need one pass over the real file, and inventing them now would mean
+writing something that has to be checked against the file anyway.
+
 ### 1a.4 Duplicates, conflicts, and running it again
 
 **This is already solved and should not be rebuilt.** Both importers are
@@ -291,7 +385,10 @@ paste **updates** rather than duplicates:
   checked in the action, not the UI).
 - **Every import is audited** in `security_audit` with the counts and the
   columns used.
-- **Nothing is deleted.** An import only adds and updates. See 1a.7.
+- **Nothing is deleted.** An import only adds and updates. See 1a.7 for the
+  undo, which is the only thing that deletes an account an import created.
+- **Every import keeps its own undo record** (migration 32): what it added,
+  and what every account it changed held before it ran.
 
 ### 1a.5 The procedure
 
@@ -310,35 +407,53 @@ paste **updates** rather than duplicates:
    units, acting heads, Faculty Advisors, the whitelist. An import cannot do
    this - §1 "Accounts the office must create by hand".
 
-### 1a.6 The one thing that will go wrong: the import is not atomic and does not scale
+### 1a.6 How the import is applied, and what is still sequential
 
-`importUsersAction` validates all-or-nothing but **applies row by row**:
+**Changed on 14 Oct 2026.** This section used to open "the one thing that will
+go wrong"; two of the three problems it described are now closed.
 
-```
-for (const row of plan.added)   await store.createProfile(row);
-for (const {id, row} of plan.updated) await store.updateProfile(id, row);
-```
+What the import does, in order (`importUsersAction`):
 
-In Supabase mode each `createProfile` used to be **two sequential HTTP round
-trips** (`auth.admin.createUser`, then the `profiles` insert). Since 13 Oct
-2026 it is **one** - the Auth call is gone with migration 31 - so the cost is
-halved, but the shape of the problem is unchanged: at 2000 rows that is still
-~2000 sequential round trips inside one server action, and `vercel.json` sets
-no `maxDuration`, so the platform default applies. **It can still time out
-part-way, and nothing records where it stopped** - the plan is atomic, the
-application of it is not.
+1. plans the paste - all or nothing on validation, as before;
+2. **mints an id for every account it will create**, so the undo record can
+   name rows that do not exist yet;
+3. **writes the undo record** (`recordUserImport`, migration 32) **before
+   touching anybody**;
+4. releases any LDAP username that is moving between two accounts in this
+   paste - see below;
+5. **inserts the new accounts in chunks of 250** (`createProfiles`, one
+   PostgREST insert per chunk, each chunk one statement and therefore atomic);
+6. updates the matched accounts **one at a time** - unavoidable, each has
+   different values;
+7. settles the batch `applied`, or `failed` with the error.
 
-Mitigations, in order of effort:
+**Closed: nothing records where it stopped.** A failure now settles the batch
+as `failed`, with the error, and the undo record was written in step 3 - so a
+part-way import is recoverable rather than a mystery. A batch left reading
+`applying` means the process died without even reaching the error handler, and
+is undoable too.
 
-- **Import in batches of 100-200** and re-paste the whole sheet afterwards.
-  Re-pasting is safe and is the point of the upsert: already-imported people
-  come back as `unchanged`, so the "unchanged" count is how you confirm a
-  batch landed. `tests/user-import-idempotency.test.ts` is what makes that
-  claim checkable.
-- The real fix is a bulk upsert in `SupabaseStore` (one PostgREST call with
-  `Prefer: resolution=merge-duplicates`) - [03-roadmap.md](03-roadmap.md) §1
-  gate 11. Now a smaller job than it was, since there is no Auth user to
-  create alongside each row.
+**Closed: 2000 round trips for the common case.** A first load is almost all
+inserts, and those are now ~8 requests instead of 2000.
+
+**Closed, and it was a bug:** an LDAP username moving from one account to
+another in one paste. `planUserImport` deliberately allows a swap, but applied
+one row at a time the write collided with the account still holding the
+username, failing the import part-way. The old holder now releases it first -
+the same two passes as `importLdapUidsAction`, and before the inserts too,
+because a *new* account can be the one taking it.
+
+**Still sequential: the updates.** A sheet that mostly *changes* existing
+people is still one request per person. At 2000 that can still exceed the
+platform's request timeout (`vercel.json` sets no `maxDuration`). So:
+
+- **the "updated" count on the plan is the number to read before pressing
+  Import.** On a first load it should be 0.
+- **Import in batches of 200-500 when the plan shows many updates**, and
+  re-paste the whole sheet afterwards to confirm: already-imported people come
+  back as `unchanged`. `tests/user-import-idempotency.test.ts` is what makes
+  that claim checkable.
+- If it does time out, undo the batch (§1a.7) and import in smaller pieces.
 
 ### 1a.7 Rollback and verification
 
@@ -356,31 +471,67 @@ Mitigations, in order of effort:
 > and `invoices` - **no `profiles`** (checked 13 Oct 2026). Restoring it
 > would not bring an account back.
 
-**Rolling back an import:**
+**Rolling back an import - there is an Undo (14 Oct 2026).**
 
-- **A wrong batch of new people** - Users & Roles, tick the rows, Delete.
-  `deleteUsersAction` names back whoever it could not remove (anyone with a
-  booking) and removes the rest.
-- **A wrong batch of updates is the dangerous one.** There is no undo: the
-  previous values are not kept, and the audit row records only the counts and
-  the column list, not the old values. So **the "updated" count on the plan is
-  the number to read carefully before pressing Import** - on a first load it
-  should be 0, and anything else means the sheet is overwriting accounts the
-  office has already corrected by hand.
+This section used to say "a wrong batch of updates is the dangerous one. There
+is no undo." That is the gap migration 32 closes.
+
+**Users & Roles -> Recent imports -> Undo.** The ten newest imports are listed
+with who ran them, what they did, and their status. Undo:
+
+- **puts back the previous values** of every account the import changed, from
+  the record written before the import ran;
+- **deletes the accounts it created**, naming back anyone it cannot remove
+  (the store refuses an account with a booking - a booking made on an imported
+  account is real);
+- **leaves alone, and names, any account changed since the import.** The undo
+  takes back what that import did; it does not roll the directory back to a
+  date. If the office has corrected an account by hand since, reverting it
+  would throw the newer value away.
+- is **partial by design** and asks the operator to type `UNDO`. It needs the
+  console password and a fresh TOTP step-up, like every other write here, and
+  it is audited.
+
+Two consequences worth knowing before relying on it:
+
+- **An undo cannot always restore an LDAP username.** If two accounts swapped
+  usernames in one import and one of them has since been corrected by hand,
+  the other cannot have its old username back - the corrected account still
+  holds it and `lower(ldap_uid)` is unique. That row is **named and skipped
+  whole** rather than left with no username at all.
+- **A second undo is refused.** The batch is marked `reverted` with who did it
+  and when.
+
+**When the application cannot be relied on**, the same undo is
+`supabase/repairs/2026-10-14-restore-user-import.sql`: plain SQL against one
+batch row, sections 0-2 read-only so the plan can be read before anything is
+written, sections 3 and 5 the writes, section 6 verifying against the live rows
+that every account it claimed to restore actually holds its old values. It is
+why migration 32 keeps the whole record in one row. **Take a `supabase db dump`
+first** - it writes to `profiles`.
+
+> **It is a safety net, not a substitute for the backup.** The record covers
+> the eight fields an import may write, for the accounts that one import
+> touched. It is not a copy of `profiles`, and it cannot undo anything else.
+> The dump above remains the thing to take before the first real import.
 
 **Verifying afterwards:**
 
 1. Re-paste the same sheet. Everything should come back **unchanged** - that
    is the idempotency check, and it is free.
-2. `npm run check:migrations` - still 1-30.
-3. Sign one imported person in by LDAP end to end, and check they land on the
+2. **Open Users & Roles -> Recent imports.** The batch should read `applied`
+   with the counts the plan showed. `applying` or `failed` means it did not
+   finish - undo it and import again in smaller pieces.
+3. `npm run check:migrations` - 1-32 with no missing, and 17, 23, 31, 33, 34
+   reported as unprobeable with their SQL.
+4. Sign one imported person in by LDAP end to end, and check they land on the
    right page with the right menu.
-4. Open `/book` as an imported student: the Requester details card should show
+5. Open `/book` as an imported student: the Requester details card should show
    their own record, and Father / Mother should be **locked** to the academic
    record's names.
-5. Check one imported employee's official booking finds an HOD - if `unit` was
+6. Check one imported employee's official booking finds an HOD - if `unit` was
    left blank there is no HOD and the request routes straight to the desk.
-6. Spot-check that nobody arrived as `developer` (`assignableRoles` should
+7. Spot-check that nobody arrived as `developer` (`assignableRoles` should
    make this impossible; confirm anyway).
 
 ---
@@ -663,15 +814,18 @@ npm run check:migrations
 ```
 
 It probes one marker per migration, read-only, against the project in
-`.env.local`, and exits 1 if anything is missing. **Three it cannot see:** 17
-and 23 are function-only, and **31** adds no table or column - it drops a
-foreign key and 38 policies. For each it says so and prints the SQL to paste
+`.env.local`, and exits 1 if anything is missing. **Five it cannot see:** 17
+and 23 are function-only, **31** drops a foreign key and 38 policies, **33**
+adds a function and a trigger, and **34** adds only indexes - PostgREST can
+read tables and columns but not `pg_proc`, `pg_constraint`, `pg_policies`,
+`pg_trigger` or `pg_indexes`. For each it says so and prints the SQL to paste
 in the editor.
 
-> **The current hosted project has 1 – 30, verified 13 Oct 2026** by
-> `npm run check:migrations`. **Migration 31 is written and tested but
-> deliberately NOT applied** - see §1a.1; applying it is a production change
-> needing the owner's approval.
+> **The current hosted project has 1 – 30, re-verified 14 Oct 2026** by
+> `npm run check:migrations`, which reports **32 as missing** and names 17, 23,
+> 31, 33 and 34 as the five it cannot probe. **Migrations 31, 32, 33 and 34 are
+> written and tested but deliberately NOT applied** - see §1a.1; applying them
+> is a production change needing the owner's approval.
 > This file previously said 24 – 30 were outstanding. They were not: they had
 > been applied in the SQL editor, and the note was wrong because the old check
 > recipe listed markers only up to migration 25, so nothing past it could be
@@ -690,6 +844,9 @@ check at all:
 | 29 | The nightly sweep cannot mark anything Missed (it logs the enum error per booking and carries on) |
 | 30 | A booking on anybody's budget but Personal Funds is refused ("column does not exist"); personal bookings still work |
 | **31** | **The second door stays open**: the 38 `authenticated` policies remain, the whole directory and every ID document stay readable to any GoTrue JWT, and `profiles.id` still demands an `auth.users` row - so `createProfile` **fails outright** against a database without it, because the insert no longer supplies an id and the foreign key has nothing to match. **This one is not optional once the code is deployed:** migration 31 and the `createProfile` change ship together |
+| **32** | **An import cannot run at all.** `importUsersAction` writes its undo record before it writes anybody, and refuses rather than importing with no way back; `importBatchError` names this file. Reads degrade instead - the console simply shows no Recent imports section. **Not optional once the code is deployed**, for the same reason as 31 |
+| 33 | `guest_houses.total_rooms` goes stale whenever a room is added or deactivated by SQL rather than through the console. Optional - the console path still maintains it |
+| 34 | Deleting accounts in bulk - a bulk delete, or **undoing an import** - scans every unindexed child table per row. Measured at 2,580 ms for 300 profiles against 200,000 `booking_logs` rows, growing with the history, so a 2000-row undo risks the platform's request timeout. Optional, but it is what makes the recovery path in §1a.7 finish |
 
 Every migration is tested in a throwaway `postgres:16-alpine`, never against
 the hosted project - recipe in

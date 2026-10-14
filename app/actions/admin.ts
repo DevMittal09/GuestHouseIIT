@@ -21,6 +21,15 @@ import {
   planUserImport,
   type UserImportPlan,
 } from "@/lib/users-import";
+import {
+  describeRevert,
+  importFieldsOf,
+  planUserImportRevert,
+  revertBlocker,
+  uidsToRelease,
+  type UserImportBatch,
+} from "@/lib/users-import-undo";
+import { randomUUID } from "crypto";
 import { getHostels } from "@/lib/settings-server";
 import { isValidLdapUid, LDAP_UID_ERROR, normalizeLdapUid } from "@/lib/ldap/uid";
 import { mailConfig } from "@/lib/mail/config";
@@ -504,9 +513,12 @@ export async function previewUserImport(text: string): Promise<UserImportSummary
   return summarise(planUserImport(text, await userImportContext(actor)));
 }
 
+/** Accounts created per insert. Keeps one chunk's payload well inside any body limit. */
+const IMPORT_CHUNK = 250;
+
 export async function importUsersAction(
   text: string
-): Promise<ActionResult & { summary?: string }> {
+): Promise<ActionResult & { summary?: string; batchId?: string }> {
   try {
     const actor = await requireConsole("users", { stepUp: true });
     const store = getStore();
@@ -514,26 +526,202 @@ export async function importUsersAction(
     if (plan.problems.length > 0) {
       return { ok: false, error: `Nothing was changed - ${plan.problems[0]}` };
     }
-    // All or nothing in intent: the plan is refused outright if any line is
-    // wrong, so what is left here cannot be half-valid. The writes themselves
-    // are one profile at a time because that is what `DataStore` offers, and
-    // a store error surfaces with what had already been written named in the
-    // message rather than silently rolled back.
-    for (const row of plan.added) await store.createProfile(row);
-    for (const { id, row } of plan.updated) await store.updateProfile(id, row);
+    // Nothing to write, so nothing to record and nothing that could need
+    // undoing. Re-pasting a sheet that is already loaded lands here, which is
+    // the idempotency check §1a.7 asks the office to run.
+    if (plan.added.length === 0 && plan.updated.length === 0) {
+      return { ok: true, summary: describeUserImport(plan) };
+    }
+
+    /**
+     * The ids are minted here rather than by the database, so the undo record
+     * written on the next line already names every account this import is
+     * about to create. Learning them afterwards would mean an import that died
+     * in between left rows the undo could not find.
+     */
+    const added = plan.added.map((row) => ({ ...row, id: randomUUID() }));
+
+    /**
+     * Written **before** the first profile is touched (migration 32). This is
+     * the whole safety net: an import updates people matched on their email,
+     * and until this record existed their previous values were kept nowhere -
+     * so a stale sheet silently overwrote every correction the office had made
+     * by hand, with no way back. It is also what makes a **failed** import
+     * recoverable: the record does not depend on the import finishing.
+     */
+    const batch = await store.recordUserImport({
+      actor_id: actor.id,
+      actor_name: actor.full_name,
+      status: "applying",
+      columns_used: plan.columns.join(", "),
+      added: added.map(({ id, email }) => ({ id, email })),
+      updated: plan.updated.map(({ id, before, row }) => ({
+        id,
+        email: row.email,
+        before: importFieldsOf(before),
+        after: importFieldsOf(row),
+      })),
+      unchanged_count: plan.unchanged,
+      error: null,
+    });
+
+    try {
+      /**
+       * An LDAP username is unique on `lower()`, and `planUserImport`
+       * deliberately allows one paste to move a username from one account to
+       * another (a swap, or a correction). Applied one row at a time that
+       * collides with itself: the account being given the username is written
+       * before the account giving it up. So the old holder releases it first -
+       * the same two passes as `importLdapUidsAction`, over the rows whose
+       * username actually moves, and before the inserts as well as the updates
+       * because a *new* account can be the one taking it.
+       */
+      for (const { id, before, row } of plan.updated) {
+        if (before.ldap_uid && (before.ldap_uid ?? null) !== row.ldap_uid) {
+          await store.updateProfile(id, { ldap_uid: null });
+        }
+      }
+      // Chunked, so the common case - a sheet of people none of whom have an
+      // account yet - is a handful of round trips instead of one per person.
+      for (let at = 0; at < added.length; at += IMPORT_CHUNK) {
+        await store.createProfiles(added.slice(at, at + IMPORT_CHUNK));
+      }
+      for (const { id, row } of plan.updated) await store.updateProfile(id, row);
+    } catch (e) {
+      const why = e instanceof Error ? e.message : "the import stopped part-way";
+      // The batch is left on record as `failed`, which is what the console's
+      // Undo acts on. Settling must not throw over the real error.
+      await store
+        .settleUserImport(batch.id, { status: "failed", error: why })
+        .catch(() => undefined);
+      await recordAudit(actor, "settings.changed", "profiles", {
+        what: "user import failed",
+        batch: batch.id,
+        error: why,
+      });
+      revalidateConsole();
+      return {
+        ok: false,
+        error: `The import stopped part-way - ${why}. It is on record under Recent imports and can be undone from there.`,
+        batchId: batch.id,
+      };
+    }
+
+    await store.settleUserImport(batch.id, { status: "applied" });
     const summary = describeUserImport(plan);
     await recordAudit(actor, "settings.changed", "profiles", {
       what: "user import",
+      batch: batch.id,
       added: plan.added.length,
       updated: plan.updated.length,
       unchanged: plan.unchanged,
       columns: plan.columns.join(", "),
     });
     revalidateConsole();
-    return { ok: true, summary };
+    return { ok: true, summary, batchId: batch.id };
   } catch (e) {
     return fail(e);
   }
+}
+
+/**
+ * Undo a spreadsheet import (14 Oct 2026).
+ *
+ * The office asked for "the option to delete data" and got it a row at a time;
+ * what was missing was putting back what an import **changed**. This restores
+ * the previous values from the batch written before the import ran, and
+ * deletes the accounts it created.
+ *
+ * Two rules it does not bend, both in `planUserImportRevert`:
+ *
+ *   * **an account changed since the import is left alone and named.** The
+ *     undo takes back what this import did; it does not roll the directory
+ *     back to a date. If somebody has corrected an account by hand since,
+ *     reverting it would throw away the newer, better value;
+ *   * **the console's own per-account rule still applies** (`userEditError`),
+ *     so a manager cannot reach a developer's account through an undo.
+ *
+ * Partial by design, like `deleteUsersAction`: whatever cannot be undone is
+ * named back and the rest still is.
+ */
+export async function revertUserImportAction(
+  batchId: string
+): Promise<ActionResult & { summary?: string; conflicts?: string[] }> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    const store = getStore();
+    const batch = await store.getUserImport(batchId);
+    if (!batch) return { ok: false, error: "That import is no longer on record" };
+    const blocked = revertBlocker(batch);
+    if (blocked) return { ok: false, error: blocked };
+
+    const profiles = await store.listProfiles();
+    const plan = planUserImportRevert(batch, profiles, (target) =>
+      userEditError(actor, target)
+    );
+    const conflicts = [...plan.conflicts];
+    let restored = 0;
+    let removed = 0;
+
+    /**
+     * The accounts the import created go first. One of them may hold an LDAP
+     * username that a restore is about to ask for - the import gave a new
+     * person the username an existing account was giving up - and the unique
+     * index would refuse the restore while that row is still there.
+     */
+    for (const account of plan.remove) {
+      try {
+        await store.deleteProfile(account.id);
+        removed += 1;
+      } catch (e) {
+        conflicts.push(
+          `${account.email} - ${e instanceof Error ? e.message : "could not be removed"}`
+        );
+      }
+    }
+
+    // Then the same two passes the import itself needs, for the same unique
+    // index: two accounts that swapped usernames cannot be restored one at a
+    // time unless the current holder releases it first.
+    const fresh = await store.listProfiles();
+    for (const id of uidsToRelease(plan.restore, fresh)) {
+      await store.updateProfile(id, { ldap_uid: null }).catch(() => undefined);
+    }
+    for (const row of plan.restore) {
+      try {
+        await store.updateProfile(row.id, row.to);
+        restored += 1;
+      } catch (e) {
+        conflicts.push(
+          `${row.email} - ${e instanceof Error ? e.message : "could not be restored"}`
+        );
+      }
+    }
+
+    await store.settleUserImport(batchId, {
+      status: "reverted",
+      reverted_by: actor.id,
+      reverted_actor_name: actor.full_name,
+    });
+    const summary = describeRevert({ restored, removed });
+    await recordAudit(actor, "settings.changed", "profiles", {
+      what: "user import undone",
+      batch: batchId,
+      restored,
+      removed,
+      conflicts: conflicts.length,
+    });
+    revalidateConsole();
+    return { ok: true, summary, conflicts };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** The newest imports, for the console's Recent imports list. */
+export async function listUserImportsAction(): Promise<UserImportBatch[]> {
+  await requireConsole("users");
+  return getStore().listUserImports(10);
 }
 
 /**
