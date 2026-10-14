@@ -932,18 +932,34 @@ When you change the schema you must update, in the same commit:
 Not migrations, never applied automatically, each with a header explaining what
 it is for and how to check it applies to your data.
 
-| File | What it fixes |
-| --- | --- |
-| `2026-09-10-utc-parsed-bookings.sql` | Shifts bookings stored 5h30m late by the pre-`lib/tz.ts` `toIso()` on a UTC host, and rebuilds their `room_holds` through `set_room_holds()` in one transaction (a shift that would collide aborts the lot). **Not idempotent** — never run twice |
-| `2026-09-17-retire-alumni-persona.sql` | Deletes the demo alumnus persona from a project seeded before migration 9 and seats the IAR Student Cell |
-| `2026-09-17-add-caretaker-persona.sql` | Seats the GH Caretaker persona (run after the one above) |
-| `2026-09-21-clear-test-bookings.sql` | **Destroys data**: clears the test bookings made while the portal was built |
-| `2026-09-23-all-rooms-double-sharing.sql` | Converts every room to double sharing |
-| `2026-09-23-real-room-numbers.sql` | Creates the office's real rooms; deletes a dummy room nothing references and deactivates one something does; recounts `total_rooms` |
-| `2026-09-23-bageshri-rate-1000.sql` | Adds a ₹1,000 Bageshri rate row with a later `effective_from` (the ₹750 row in force cannot be edited) |
+**Three kinds, and the difference matters.** A *deployment step* is run once,
+in order, as part of going live. An *escape hatch* is run only if something has
+gone wrong - running one as part of a deployment undoes the thing you just
+deployed. *On demand* means it answers a specific event.
+
+| File | When | What it fixes |
+| --- | --- | --- |
+| `2026-10-13-retire-seeded-auth-users.sql` | **Deployment step** | Deletes the `auth.users` rows that already exist - orphaned credentials once migration 31 removes the foreign key, including the 18 seeded with the published `password123`. **Run it after migration 31, never before**: section 0 refuses otherwise, because the old key's `on delete cascade` would take every profile with them. Touches no `public` table |
+| `2026-10-13-rollback-migration-31.sql` | **Escape hatch - do NOT run when deploying** | Recreates all 38 `authenticated` policies migration 31 dropped, verbatim. Only for the case where something that legitimately connects as `authenticated` turns out to be broken - nothing does today. **Running it after migration 31 as though it were a deployment step reopens the hole the migration closes.** It does not re-add the foreign key (and cannot, once any profile has been created since 31) |
+| `2026-10-14-restore-user-import.sql` | **On demand** | Undoes one spreadsheet import of accounts from its `user_import_batches` row (migration 32), in plain SQL, for when the console cannot be used. Sections 0-2 are read-only; 3 and 5 write. Prefer Users & Roles -> Recent imports -> Undo, which checks the same rules and audits the result |
+| `2026-09-10-utc-parsed-bookings.sql` | On demand | Shifts bookings stored 5h30m late by the pre-`lib/tz.ts` `toIso()` on a UTC host, and rebuilds their `room_holds` through `set_room_holds()` in one transaction (a shift that would collide aborts the lot). **Not idempotent** — never run twice |
+| `2026-09-17-retire-alumni-persona.sql` | On demand | Deletes the demo alumnus persona from a project seeded before migration 9 and seats the IAR Student Cell |
+| `2026-09-17-add-caretaker-persona.sql` | On demand | Seats the GH Caretaker persona (run after the one above) |
+| `2026-09-21-clear-test-bookings.sql` | Deployment step | **Destroys data**: clears the test bookings made while the portal was built |
+| `2026-09-23-all-rooms-double-sharing.sql` | On demand | Converts every room to double sharing |
+| `2026-09-23-real-room-numbers.sql` | On demand | Creates the office's real rooms; deletes a dummy room nothing references and deactivates one something does; recounts `total_rooms` |
+| `2026-09-23-bageshri-rate-1000.sql` | On demand | Adds a ₹1,000 Bageshri rate row with a later `effective_from` (the ₹750 row in force cannot be edited) |
 
 Whether the hosted project still needs any of them is not recorded — each
 header says how to check.
+
+> **The two files dated 13 Oct are not a pair to be run together.** One is a
+> deployment step and the other is its undo; they sit side by side only because
+> they were written the same day. "Apply migrations 31-34, then run the 13 Oct
+> repairs" is a natural reading and the wrong one - it would apply the fix and
+> immediately revert it, and `check:migrations` would then report 31's policy
+> count as 38 rather than 0. [04-production.md](04-production.md) §1a.1 names
+> the steps individually for this reason.
 
 ## Resetting data
 

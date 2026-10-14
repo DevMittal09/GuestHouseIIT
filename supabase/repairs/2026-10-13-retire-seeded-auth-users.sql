@@ -1,105 +1,134 @@
 -- ============================================================================
--- Repair, 13 Oct 2026 - retire the Supabase Auth users and their passwords
+-- Repair, 13 Oct 2026 - retire Supabase Auth users and their passwords
+-- Compatible with the Supabase SQL Editor
+--
+-- IMPORTANT:
+-- 1. Back up the database before running this script.
+-- 2. Apply migration 31 first.
+-- 3. Verify that public.profiles no longer references auth.users.
+-- 4. This deletes ALL rows from auth.users, not just seeded accounts.
+-- 5. Verify that no other application or integration depends on these users.
+-- 6. Disable the Email/password provider separately in the Supabase Dashboard.
 -- ============================================================================
+
+-- ------------------------------------------------------------
+-- Stop at the first error.
 --
--- NOT A MIGRATION. Read this whole header before running it. It deletes rows
--- from `auth.users` on the project you point it at.
---
--- WHY
---
--- Until migration 31, `profiles.id` referenced `auth.users (id)`, so every
--- portal account needed a Supabase Auth user. `supabase/seed.sql` created 18
--- of them - including `developer@iitpkd.ac.in` - as **confirmed** email
--- identities with `encrypted_password = crypt('password123', ...)`, and
--- `lib/store/supabase.ts` gave the same password to every account created from
--- the console.
---
--- That password is published in this repository. The project's anon key ships
--- in the browser by design, and until migration 31 the `authenticated` role
--- had 38 policies behind it - 21 of them writes, including `developer manages
--- profiles / bookings / rooms / guest_houses / booking_guests / form_configs`,
--- plus `select` on the whole private `documents` bucket. So anyone could
--- obtain an `authenticated` JWT through GoTrue, without going near the
--- portal's LDAP sign-in, and read or write the database with it.
---
--- Migration 31 removed the policies and the foreign key, which closes the
--- door. **This script removes the keys that were left in it.** Run it after
--- migration 31, not before: before, the foreign key's `on delete cascade`
--- would take every profile with it.
---
--- ORDER MATTERS
---
---   1. Apply migration 31 (drops `profiles_id_fkey`).
---   2. Confirm the key is gone - section 0 below refuses to run otherwise.
---   3. Run this.
---
--- WHAT IT DOES NOT TOUCH
---
--- `public.profiles`. Portal accounts, their ids and every foreign key that
--- points at them are untouched, so bookings, approvals, logs, invoices and
--- sessions are unaffected. Deleting an `auth.users` row has no effect on the
--- portal: nothing signs in with it.
---
--- RECOVERY
---
--- There is nothing to recover - these rows have no portal function once
--- migration 31 has run. If something unexpected does depend on an Auth user,
--- recreate it from the Supabase dashboard with a password nobody publishes.
--- Take a `supabase db dump` first anyway; §"Backup and restore" in
--- .memories/04-production.md has the drill.
---
--- SEPARATELY, AND BY HAND: disable the email/password provider
---
--- Dashboard -> Authentication -> Providers -> Email -> off. This script cannot
--- do it (it is not in the database) and it is the control that stops a *new*
--- password being usable. Whether it is currently on could not be verified from
--- the repository and must be checked.
--- ============================================================================
+-- Without this, psql runs on after a failure: section 0's safety check is
+-- raised, the transaction in section 2 aborts, every statement in it is
+-- "ignored until end of transaction block", and the script still prints
+-- section 3's verification block underneath - which reads like a result.
+-- Verified 14 Oct 2026 in a throwaway Postgres, against a database held at
+-- migration 30.
+-- ------------------------------------------------------------
 
 \set ON_ERROR_STOP on
 
--- ---------------------------------------------------- 0. refuse to run early
-do $$
-begin
-  if exists (
-    select 1 from pg_constraint
-    where conrelid = 'public.profiles'::regclass
-      and contype = 'f'
-      and confrelid = 'auth.users'::regclass
-  ) then
-    raise exception
-      'profiles still references auth.users - apply migration 31 first, or deleting these rows would cascade and remove every profile.';
-  end if;
-end $$;
+-- ------------------------------------------------------------
+-- 0. Safety check: refuse to continue if profiles still
+--    references auth.users.
+-- ------------------------------------------------------------
 
--- ------------------------------------------------- 1. what is about to go
-\echo ''
-\echo 'Auth users that will be deleted:'
-select u.id, u.email,
-       (select count(*) from public.profiles p where p.id = u.id) as has_portal_profile
-from auth.users u
-order by u.email;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'public.profiles'::regclass
+          AND contype = 'f'
+          AND confrelid = 'auth.users'::regclass
+    ) THEN
+        RAISE EXCEPTION
+            'SAFETY CHECK FAILED: public.profiles still references auth.users. Apply migration 31 and verify the foreign key before proceeding.';
+    END IF;
+END;
+$$;
 
--- ------------------------------------------------- 2. the deletion
+-- ------------------------------------------------------------
+-- 1. Inspect the Auth users that would be deleted.
+--    Review these results before proceeding to Section 2.
+-- ------------------------------------------------------------
+
+SELECT
+    u.id,
+    u.email,
+    EXISTS (
+        SELECT 1
+        FROM public.profiles p
+        WHERE p.id = u.id
+    ) AS has_portal_profile
+FROM auth.users u
+ORDER BY u.email;
+
+-- ------------------------------------------------------------
+-- 2. DELETE ALL AUTH USERS.
 --
--- Every Auth user, not only the seeded ones: after migration 31 the portal
--- has no use for any of them, and the console-created accounts carry the same
--- password as the seeded personas. `auth.identities` is removed by its own
--- cascade from `auth.users`; it is named here as well for a project whose
--- version does not cascade it.
-delete from auth.identities
-where user_id in (select id from auth.users);
+-- IMPORTANT:
+-- This is destructive. Run this section only after reviewing
+-- Section 1 and confirming your backup and dependencies.
+--
+-- The transaction ensures that if a deletion statement fails,
+-- the changes in this section are rolled back.
+-- ------------------------------------------------------------
 
-delete from auth.users;
+BEGIN;
 
--- ------------------------------------------------- 3. prove it
-\echo ''
-\echo 'After - auth users should be 0, profiles unchanged:'
-select (select count(*) from auth.users)       as auth_users,
-       (select count(*) from public.profiles)  as profiles,
-       (select count(*) from public.bookings)  as bookings;
+DO $$
+BEGIN
+    -- Recheck the foreign-key condition immediately before deletion.
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'public.profiles'::regclass
+          AND contype = 'f'
+          AND confrelid = 'auth.users'::regclass
+    ) THEN
+        RAISE EXCEPTION
+            'SAFETY CHECK FAILED: public.profiles still references auth.users. No Auth users will be deleted.';
+    END IF;
+END;
+$$;
 
-\echo ''
-\echo 'Remaining authenticated RLS policies (should be 0 after migration 31):'
-select count(*) from pg_policies
-where 'authenticated' = any(roles) and schemaname in ('public', 'storage');
+-- Delete identities explicitly for compatibility with schemas
+-- where auth.identities does not cascade on auth.users deletion.
+DELETE FROM auth.identities
+WHERE user_id IN (
+    SELECT id
+    FROM auth.users
+);
+
+-- Delete every remaining Supabase Auth user.
+DELETE FROM auth.users;
+
+COMMIT;
+
+-- ------------------------------------------------------------
+-- 3. Verify the resulting state.
+-- ------------------------------------------------------------
+
+SELECT
+    (SELECT COUNT(*) FROM auth.users) AS remaining_auth_users,
+    (SELECT COUNT(*) FROM public.profiles) AS remaining_profiles,
+    (SELECT COUNT(*) FROM public.bookings) AS remaining_bookings;
+
+-- ------------------------------------------------------------
+-- 4. Check authenticated RLS policies.
+--    Expected: 0 after migration 31, according to the audit.
+-- ------------------------------------------------------------
+
+SELECT
+    schemaname,
+    tablename,
+    policyname,
+    roles,
+    cmd
+FROM pg_policies
+WHERE 'authenticated' = ANY(roles)
+  AND schemaname IN ('public', 'storage')
+ORDER BY schemaname, tablename, policyname;
+
+-- Count of remaining authenticated policies:
+SELECT COUNT(*) AS remaining_authenticated_policies
+FROM pg_policies
+WHERE 'authenticated' = ANY(roles)
+  AND schemaname IN ('public', 'storage');

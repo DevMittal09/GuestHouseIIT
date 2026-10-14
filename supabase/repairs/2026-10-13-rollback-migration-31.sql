@@ -2,10 +2,17 @@
 -- Repair, 13 Oct 2026 - roll back migration 31's RLS changes
 -- ============================================================================
 --
--- NOT A MIGRATION. This recreates every row-level-security policy that
--- migration 31 dropped, verbatim from the migration that first created each
--- one. Generated from the migration files themselves rather than retyped, so
--- what comes back is exactly what was there.
+-- NOT A MIGRATION, AND NOT A DEPLOYMENT STEP.
+--
+-- >>> Do NOT run this as part of applying migration 31. It is migration 31's
+-- >>> UNDO. Running the two together reopens the hole the migration closes.
+-- >>> The repair that *does* belong after migration 31 is the other file
+-- >>> dated 13 Oct: `2026-10-13-retire-seeded-auth-users.sql`.
+--
+-- This recreates every row-level-security policy that migration 31 dropped,
+-- verbatim from the migration that first created each one. Generated from the
+-- migration files themselves rather than retyped, so what comes back is
+-- exactly what was there.
 --
 -- WHEN YOU WOULD RUN THIS
 --

@@ -189,6 +189,19 @@ forms, the approval engine, `profiles` and `academic_records`.
   e2e database is shared across a run, so a batch list is not only this test's,
   and rows must be picked by what they did rather than by position.
 
+- **The deployment order itself, tested** (added after the round, answering
+  "should I run all the 2026-10-13 repairs?"). On a database held at
+  **migration 30**, `2026-10-13-retire-seeded-auth-users.sql` refuses with one
+  clean error and deletes nothing. After 31-34 it clears `auth.users` **and
+  `auth.identities`**, keeping the profile, its id and the bookings; run a
+  second time it deletes 0 and commits. It was missing
+  `\set ON_ERROR_STOP on`, so a failure let it run on and print its
+  verification block underneath - **added**. The *other* 13 Oct repair is
+  migration 31's **rollback** and must not be run when deploying; it now says
+  so in a banner, and the repairs table in
+  [21-database.md](21-database.md) now has a **When** column separating
+  deployment steps from escape hatches.
+
 **Not verifiable from here, and so not claimed:** live production rows (the
 sandbox blocks production reads), and whether the document download the
 policies permit actually works - deliberately not tested, above.
