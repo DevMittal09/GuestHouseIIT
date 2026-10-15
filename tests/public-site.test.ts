@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { mealBookingDeadline } from "@/lib/meals";
 import { DEFAULT_RULES, type Rules } from "@/lib/settings";
-import { GUEST_HOUSE_LOCATIONS, guestHouseMapPins, INSTITUTE_MAP, SITE_LINKS } from "@/lib/site";
+import {
+  GALLERY_SECTIONS,
+  GUEST_HOUSE_LOCATIONS,
+  GUEST_HOUSE_PHOTOS,
+  guestHouseMapPins,
+  guestHousePhoto,
+  HOME_PHOTOS,
+  INSTITUTE_MAP,
+  PHOTOS,
+  SITE_LINKS,
+} from "@/lib/site";
 import { amenities, BOOKING_STEPS, guidelineSections, houseSummary, MEAL_NOTICE_RULE } from "@/lib/site-content";
 import type { SiteGuestHouse } from "@/lib/site-data";
 import { ROLE_LABELS, type Role } from "@/lib/types";
@@ -91,6 +101,52 @@ describe("guest house cards", () => {
     expect(houseSummary({ ...BAGESHRI, roomsByType: { double_sharing: 4, single: 2 } })).toBe(
       "Double-sharing and single rooms."
     );
+  });
+});
+
+describe("guest house photographs (15 Oct 2026)", () => {
+  /**
+   * The owner named the main photograph of each guest house. Nothing else on
+   * the site says which house a photograph shows, and the point of these
+   * tests is that it stays that way: an attribution is a statement of fact,
+   * so a wrong one is worse than none.
+   */
+  it("gives each named guest house its own photograph", () => {
+    expect(guestHousePhoto("Hamsanandi")).toBe(PHOTOS.hamsanandiCourtyard);
+    expect(guestHousePhoto("Bageshri")).toBe(PHOTOS.bageshriFront);
+  });
+
+  it("matches on the slug, so casing does not matter but a different name is a different house", () => {
+    expect(guestHousePhoto("HAMSANANDI")).toBe(PHOTOS.hamsanandiCourtyard);
+    // Renaming a guest house in the console takes its photograph off the
+    // card until the registry is taught the new name - the same way its map
+    // pin goes, and deliberately: the office renamed it, we did not.
+    expect(guestHousePhoto("Bageshri Guest House")).toBeNull();
+  });
+
+  it("returns nothing for a guest house it does not know, rather than another house's photograph", () => {
+    // The card renders its placeholder instead. Borrowing would put the
+    // wrong building under a name somebody reads as a fact.
+    expect(guestHousePhoto("Kalyani")).toBeNull();
+    expect(Object.values(GUEST_HOUSE_PHOTOS)).toHaveLength(2);
+  });
+
+  it("keeps the home page's six photographs distinct", () => {
+    const home = [...Object.values(GUEST_HOUSE_PHOTOS), ...HOME_PHOTOS.preview];
+    expect(new Set(home.map((p) => p.src)).size).toBe(home.length);
+  });
+
+  it("keeps every photograph the site holds in the Gallery", () => {
+    const inGallery = new Set(GALLERY_SECTIONS.flatMap((s) => s.photos).map((p) => p.src));
+    for (const photo of Object.values(PHOTOS)) {
+      expect(inGallery, `${photo.src} is served but reachable from nowhere`).toContain(photo.src);
+    }
+  });
+
+  it("describes what is visible, and never names a guest house in alt text the page does not attribute", () => {
+    for (const photo of HOME_PHOTOS.preview) {
+      expect(photo.alt).not.toMatch(/Hamsanandi|Bageshri/);
+    }
   });
 });
 

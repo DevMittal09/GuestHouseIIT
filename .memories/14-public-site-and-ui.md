@@ -3,7 +3,7 @@
 Read this before changing anything visual, adding a public page, or touching
 the sign-in pages.
 
-**Six passes so far:**
+**Seven passes so far:**
 
 | Date | Where | What |
 | --- | --- | --- |
@@ -13,7 +13,63 @@ the sign-in pages.
 | 26 Sep 2026, afternoon | `main` | The owner on the morning's version: header "should look more aesthetic", site "too plain", "too mehh"; **no figures** ("23 rooms… 1 month… 14 nights…"), **no "see them on the map"**, **no photo captions**, **"How booking works" moved to the guidelines and vaguer**, **"do not display the backend logic like who are the users, who approves who"**, no instruction text or meal timings on the landing page. Rebuilt photo-led and quiet — full-screen hero, photo banners |
 | 26 Sep 2026, evening | `main` | The owner: "it looks so weird… the image filling the page this much looks so weird"; make it **clean and professional**, researched online. Rebuilt **institutional**: photos contained in the layout — see "The evening brief" below |
 | 30 Sep 2026 | `main` | A written revamp brief: TGH structure, Aman / Standard editorial rules, **GOV.UK** tables and tags; 4px inputs, 6px buttons, 8px cards, never a pill, shadow, gradient or glass. Primitives rebuilt (see "The 30 Sep revamp" below); the evening's content rules all kept. **Afternoon:** the supervisor's review — see "Promise less" below |
-| **11 Oct 2026 (current)** | `main` | The owner: the interface "looks too ai generated"; wanted it distinctive, professional and purpose-designed, with no generic dashboard patterns, excessive cards, decorative icons, unnecessary badges or repetitive layouts. **The palette was checked against iitpkd.ac.in again and kept** - what changed was composition, type and density. See "The 11 Oct design pass" below |
+| 11 Oct 2026 | `main` | The owner: the interface "looks too ai generated"; wanted it distinctive, professional and purpose-designed, with no generic dashboard patterns, excessive cards, decorative icons, unnecessary badges or repetitive layouts. **The palette was checked against iitpkd.ac.in again and kept** - what changed was composition, type and density. See "The 11 Oct design pass" below |
+| **15 Oct 2026 (current)** | `main` | The office's eleven new photographs, and **the first two the site is allowed to name**: the owner said which guest house each of two shows and asked for a landing page that showcases them, "similar but not exact copy" of iitpkd.ac.in. The home page's hero and its "Our guest houses" section became **one block** - the ink masthead across the top, a guest house under each half of it, photograph first and the name under it. **No colour, token or primitive changed.** See "The guest houses become the hero" below |
+
+## The guest houses become the hero (15 Oct 2026)
+
+The fifth rework of the home page, and the first driven by photographs rather
+than by a brief about the look. The office sent eleven; the owner named two of
+them as **the main photograph of Hamsanandi and of Bageshri** and asked for a
+layout that showcases them.
+
+### What changed
+
+**One block instead of two sections.** The hero used to be a 5 + 7 split - an
+ink panel beside one contained 4:3 photograph - and the guest houses were
+text-only cards in a section headed *Our guest houses* further down. They are
+now a single bordered block:
+
+- the **ink masthead** across the top: the `<h1>` and its vermilion stub in
+  seven columns, the lead and the two doors in five, the Guest House Manager's
+  number on a hairline under them;
+- beneath it, **one panel per guest house**: its own photograph at 3:2 across
+  half the page, then `Rooms & dining` / `Rooms`, the name as an `<h2>`,
+  `houseSummary(house)`, and *Book a room* on a ruled foot.
+
+**Gone:** `HOME_PHOTOS.hero` - the page has no decorative hero photograph any
+more - and the heading *Our guest houses*, which repeated an `<h1>` reading
+"Guest houses of IIT Palakkad". The rest of the page is unchanged: amenities,
+the four-photograph mosaic under *A look inside*, the closing ruled links.
+
+**Nothing in `app/globals.css`, `site-ui.tsx` or the type scale was touched.**
+
+### What was taken from iitpkd.ac.in, and what was not
+
+| Theirs | Taken? |
+| --- | --- |
+| The **card idiom**: the image above, its title printed **underneath**, never laid over it (their facilities, gallery and three-up rows all do this) | **Yes** - it is the house panels. It needs no dark wash over the architecture to stay legible, and it keeps the ban on photo captions intact: the name is a **heading**, and the thing it heads is the guest house, not the picture |
+| The **rhythm**: a banner, then cards, then a row of thumbnails | **Yes** - masthead, house panels, mosaic |
+| The **five-slide hero slider** | **No.** It needs a client component, hides half of what it was asked to showcase behind a control, and reads as a template - the owner has twice asked for the site not to look generated |
+| The **counters strip** (years, students, faculty) | **No.** Figures are banned on the home page (26 Sep 2026). `figure-serif` exists for the portal's own figures |
+| **Titles under the mosaic photographs** | **No.** The owner's ban on photo captions wins over copying the pattern |
+
+### Two rules this pass added
+
+- **A photograph may name a guest house - on the two house panels and nowhere
+  else.** `GUEST_HOUSE_PHOTOS` / `guestHousePhoto(name)` in `lib/site.ts`, keyed
+  by `guestHouseSlug(name)` exactly as `GUEST_HOUSE_LOCATIONS` is. A house the
+  registry does not name draws `SitePhotoFrame`'s placeholder rather than
+  borrowing another house's photograph, so **renaming a guest house in the
+  console takes its photograph off the card** until the registry learns the new
+  name - the same way it takes its map pin off `/contact`. See "Photographs"
+  below for what stays unattributed.
+- **Hairlines between repeated panels are each panel's own borders when the
+  count is not fixed.** The amenities grid may use `gap-px` over a
+  border-coloured ground because `amenities()` always returns six; the guest
+  houses come from the store, and with an odd number that ground shows through
+  the empty cell. The house panels carry `border-t ... md:border-l
+  md:odd:border-l-0` instead, which rules correctly for any count.
 
 ## The 11 Oct design pass
 
@@ -608,10 +664,12 @@ the role's form allows), **Meal booking** (ink, names the kitchen; only for
 
 ## The pages
 
-- **Home** — see "The 30 Sep revamp" above: a 5 + 7 split hero with one
-  contained 4:3 photo, guest-house cards, a ruled amenity grid, a four-photo
-  mosaic, a closing row of ruled links. No figures, meal times, rules or
-  captions.
+- **Home** — see "The guest houses become the hero" above (15 Oct 2026): one
+  bordered block holding the ink masthead **and** a panel per guest house,
+  each led by its own photograph with the name under it; then a ruled amenity
+  grid, a four-photo mosaic, a closing row of ruled links. The 5 + 7 hero with
+  one contained 4:3 photo, and the separate *Our guest houses* section, were
+  merged into that block. No figures, meal times, rules or captions.
 - **Guidelines** — light masthead with a **Provisional edition** note while
   `GUIDELINES_PROVISIONAL` is true; **How booking works** as five small
   numbered cards (`BOOKING_STEPS`); a sticky **Contents** list; eight numbered
@@ -673,10 +731,15 @@ website, the guest
 house page on iitpkd.ac.in, How to reach, Telephone directory — all checked to
 resolve on 26 Sep 2026; there is no Bageshri page on iitpkd.ac.in),
 `GUEST_HOUSE_CONTACT`, **`GUEST_HOUSE_LOCATIONS`**,
-**`INSTITUTE_MAP`**, `guestHouseMapPins()`, the photo registry (`PHOTOS`,
-`HOME_PHOTOS` — `hero` and a four-photo `preview`; **`SIGN_IN_PHOTOS`** —
-the photo beside each sign-in page's form;
-`GALLERY_SECTIONS`). `GUEST_HOUSE_PHOTOS` (a per-house cover) was removed: the home page no longer shows per-house photos. `grep -rn "TODO(site)"` lists everything awaiting the
+**`INSTITUTE_MAP`**, `guestHouseMapPins()`, the photo registry (`PHOTOS`;
+`HOME_PHOTOS` — now only the four-photo `preview`, `hero` having gone with the
+15 Oct hero; **`SIGN_IN_PHOTOS`** — the photo beside each sign-in page's form;
+`GALLERY_SECTIONS`; and **`GUEST_HOUSE_PHOTOS` / `guestHousePhoto(name)`** —
+the photograph that stands for one guest house, slug-keyed like the map pins,
+read only by the home page's house panels). `GUEST_HOUSE_PHOTOS` existed
+before, was **removed** when the home page's guest-house cards lost their
+photographs, and came **back** on 15 Oct 2026 when the owner attributed two
+photographs — this time with the attribution, not just the slot. `grep -rn "TODO(site)"` lists everything awaiting the
 office.
 
 Contact details are the ones on the foot of the office's own invoice template:
@@ -711,12 +774,20 @@ Contact details are the ones on the foot of the office's own invoice template:
 
 ## Photographs
 
-- **Originals:** `Images/` in the repo root — 14 Sony A7 III JPEGs, 6000×4000,
-  10–18 MB each (~180 MB). **Gitignored** (`/Images/`); never serve them.
-- **Served copies:** `public/site/photos/*.jpg`, 2000px long edge, quality 80,
-  progressive, EXIF orientation applied and **metadata stripped** — 3.5 MB for
-  all 14. `next/image` then serves per-width variants (a 168 KB file goes out
-  at ~18 KB for a 640px slot).
+**Two sets, 25 photographs.**
+
+- **19 Sep 2026 originals:** `Images/` in the repo root — 14 Sony A7 III
+  JPEGs, 6000×4000, 10–18 MB each (~180 MB). **Gitignored** (`/Images/`);
+  never serve them.
+- **15 Oct 2026 originals:** `Photos/` in the repo root — 11 JPEGs, already
+  1600px and 180–570 KB (3.4 MB in all), so **not gitignored**: the folder is
+  small enough to keep beside the served copies, unlike `Images/`.
+- **Served copies:** `public/site/photos/*.jpg` — **at most** 2000px long edge
+  (the 15 Oct set came in at 1600 and `thumbnail()` never upscales), quality
+  80, progressive, EXIF orientation applied and **metadata stripped**. 3.5 MB
+  for the 19 Sep fourteen, 1.9 MB for the 15 Oct eleven. `next/image` then
+  serves per-width variants (a 168 KB file goes out at ~18 KB for a 640px
+  slot).
 - **Recipe for new photos** (PIL is installed; ImageMagick too):
 
   ```bash
@@ -733,15 +804,25 @@ Contact details are the ones on the foot of the office's own invoice template:
   Python process was OOM-killed (exit 137); `draft()` plus a process per file
   keeps memory small. Then add a `photo("<name>.jpg", "<alt>")` entry to
   `PHOTOS` and place it.
-- **Attribution is unknown.** Nothing in the files says which guest house each
-  shows, so the Gallery is grouped by subject (Exterior and grounds, Rooms and
-  suites, Common spaces), and the home page never places a photograph where
-  it would read as one particular guest house (the guest-house cards carry
-  no photos).
-  They match the iitpkd.ac.in description of Hamsanandi (blocks A–D, suites
-  with hall and kitchen, a 50-seat meeting room) but that is an inference, not
-  a fact — **do not attribute them without the office confirming**. When they
-  do, the Gallery can be grouped by guest house (`GALLERY_SECTIONS`).
+- **Two photographs are attributed; twenty-three are not** (15 Oct 2026). The
+  owner named `hamsanandi-courtyard.jpg` and `bageshri-front.jpg` as the main
+  photograph of each guest house, and **those two only** are tied to a name,
+  in `GUEST_HOUSE_PHOTOS`, read by the home page's two house panels. The
+  mosaic, the Gallery, the sign-in photographs and every alt text stay
+  unattributed; `GALLERY_SECTIONS` is still grouped by **subject** (Exterior
+  and grounds, Rooms and suites, Common spaces).
+  **The rule was never "photographs may not be named"** — it was *do not
+  publish a guess*. The 19 Sep set arrived with nothing saying which building
+  it showed; the 15 Oct set came with the owner saying so for two of them. So
+  the rule moved for those two and stands for the rest: **do not attribute a
+  photograph without the office confirming it**. When they confirm the whole
+  set, the Gallery can be grouped by guest house (`GALLERY_SECTIONS` carries
+  the `TODO(site)`).
+  **Noted, not acted on:** the 19 Sep exteriors are plainly the same ochre
+  blocks and paved courtyard as `hamsanandi-courtyard.jpg`, and the set matches
+  the iitpkd.ac.in description of Hamsanandi (blocks A–D, units with hall and
+  kitchen, a 50-seat meeting room). That is still an inference, so it lives in
+  this paragraph and not in the code.
 - Gallery grids use `auto-fill`, not the design's `auto-fit`: with only two
   Common-spaces photos, `auto-fit` stretched each to half the page width.
 - Alt text describes what is visible, not marketing ("Bedroom with double bed,

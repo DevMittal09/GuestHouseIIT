@@ -51,6 +51,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **14 Oct** | **An import you can undo.** Migration 32 records what every spreadsheet import is about to do **before** it does it, so the previous values of the accounts it changes are kept - the one gap §1a.7 had named outright. Users & Roles -> **Recent imports** -> Undo restores them, deletes the accounts the import added, and leaves alone anything corrected by hand since. Plus migration 33 (`total_rooms` gets the trigger the last round recorded), migration 34 (**20 foreign-key indexes**, measured: a 300-profile delete went 2,580 ms -> 64 ms), a plain-SQL recovery script, and two bugs found in the username-swap path. **The email/password provider was verified from GoTrue's public settings: it is ON, with signup open.** |
 | **14 Oct**, later | **The office's twelfth list**, five items of screen and policy: the number on the contact page is **the Guest House Manager's**, not "the front office"; the count of free rooms is **green** and the "N of M rooms at Bageshri free all month" sentence comes off the booking form; the week and month views **grey out dates that have gone** instead of printing a free-room count against them (`isPastDay`, one rule for the form and `/availability`); the **privacy consent tick and its paragraph** come off the request, so no consent is recorded either; and **bookings open six months ahead** rather than one. **No migration.** |
 | **14 Oct**, later still | **The privacy notice withdrawn and archived.** Hours after the consent tick came off the form, the owner asked for the privacy policy feature to go completely - but to stay in the repository so it can be reverted. The `/privacy` page, `PRIVACY_NOTICE_VERSION` and its three links are now **`archive/privacy-notice/`** at the repo root, with a numbered restore; `/privacy` is a 404 and an e2e test keeps it one. The narrowest of three scopes was chosen with the owner: **Download my data, Ask for erasure and the nightly ID-retention job stay live**. No migration, no column dropped. The restore was **run** before the tree was put back. |
+| **15 Oct** | **The office's photographs, and a landing page built around them.** Eleven new photographs, two of them named by the owner as the main photograph of each guest house - the **first attribution the site has ever made**. The home page's hero and its "Our guest houses" section become **one block**: the ink masthead across the top, a guest house under each half of it, photograph first and the name under it, the way iitpkd.ac.in prints a card. Four more photographs follow in the mosaic; the other five, and all fourteen of the 19 Sep set, are in the Gallery - now 25. **No migration.** |
 | **13 Oct**, later | **The second door closed, the schema left alone.** Migration 31 drops the `profiles -> auth.users` foreign key and all **38** `authenticated` RLS policies, so a portal account no longer implies a database credential; `createProfile` and `seed.sql` mint no Supabase password. The normalization review found **two** real problems worth acting on (`profiles` had almost no indexes and no checks - fixed; `total_rooms` can drift - recorded) and four denormalizations that are correct as they are. **No table split, no column dropped.** Two repair scripts, 16 new tests. Migration 31 deliberately **not** applied to the hosted project. |
 
 ## The problem
@@ -784,6 +785,52 @@ restore needs no database work.
 publishes no privacy notice while holding ID scans, parents' names and phone
 numbers. [04-production.md](04-production.md) "DPDP Act, 2023" states it as a
 question to answer before go-live.
+
+---
+
+## The office's photographs, and the landing page built around them - 15 October 2026
+
+The owner, with eleven photographs in **`Photos/`** at the repo root:
+
+> Please add/replace the images in Photos folder in the project root to the
+> website. In that 8.jpeg and 10.jpeg are the two images i want to see in the
+> landing pages, as they are the main photos of hamsanandi and bageshri
+> respectively. PLese make the landing page UI in a way taht we can showcase
+> these images. Also Maybe we could try showcasing images in the landing page
+> similar to how we have it in the iitpkd.ac.in website. Also showcase the
+> images 4.jpeg, 6.jpeg, 7.jpeg, 1.jpeg in the landing page after the first two
+> images i mentioned, and make it similar but not exact copy of UI of
+> iitpkd.ac.in website. [...] Please make sure to make it look professional,
+> aesthetic and not look too ai generated. Rest of the images in the folder
+> should be kept in the gallery.
+
+**Two things were the owner's to decide and were put to them first**, because
+one meant deleting files and the other reopens a standing rule:
+
+| Question | Answer taken |
+| --- | --- |
+| The 14 photographs the site already served - replace or keep? | **Keep**, in the Gallery. They cover the bathroom, meeting hall, lounge and gazebo, which the new set has no equivalent of |
+| May a photograph say which guest house it shows? | **Yes - on the two home-page cards only.** The Gallery stays grouped by subject and nothing else is attributed |
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Add the `Photos/` set to the website | **Done.** All eleven converted into `public/site/photos/` by the recipe in [14-public-site-and-ui.md](14-public-site-and-ui.md) - metadata stripped, EXIF orientation applied, nothing upscaled (they arrived at 1600px), 1.9 MB for the set |
+| 2 | `8.jpeg` and `10.jpeg` on the landing page as the main photograph of each house | **Done.** `GUEST_HOUSE_PHOTOS` keys them by `guestHouseSlug(name)`, as the map pins are keyed, and each is the lead of its guest house's panel in the hero. This is the first time the site says which house a photograph shows |
+| 3 | A landing page UI that showcases them | **Done.** The hero and the old "Our guest houses" section are one bordered block: the ink masthead across the top, a guest house under each half of it. Each photograph is half the page wide and above the fold; the heading "Our guest houses", which repeated the `<h1>`, went with the merge |
+| 4 | Similar to iitpkd.ac.in, not a copy | **Done.** Taken: its card idiom - the image above, its title printed **underneath**, never laid over it - and its banner / cards / thumbnail-row rhythm. Not taken: the five-slide hero slider, which would hide half of what it was asked to showcase behind a control |
+| 5 | `4`, `6`, `7`, `1` after those two | **Done.** They are `HOME_PHOTOS.preview`, the four-photograph mosaic under *A look inside*, still caption-free and still unattributed |
+| 6 | The rest in the gallery | **Done.** `9`, `2`, `3`, `5` and `11` are Gallery-only. With the 19 Sep set kept, the Gallery is **25 photographs**, grouped by subject as before |
+| 7 | Professional, aesthetic, not AI-generated | **Done as far as a check can say.** No new pattern was introduced: the same palette, the five-step type scale, borders without shadows or gradients, and the asymmetric 7/5 masthead the rest of the site uses. The judgement is the owner's |
+
+**No migration, no store operation, no schema change.** The portal is
+untouched; so are the sign-in photographs.
+
+**What it reopens.** "Nothing on the site may say which guest house a
+photograph shows" was never about photographs - it was about not publishing a
+guess, because the 19 Sep set arrived with no attribution. The owner has now
+named two, so the rule moves rather than being repealed:
+[02-decisions.md](02-decisions.md) carries the *Partly superseded* note and the
+reasoning.
 
 ---
 

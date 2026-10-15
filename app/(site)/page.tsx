@@ -12,9 +12,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ArrowLink, Container, Label, SectionHead, SitePhotoFrame, siteButton } from "@/components/site/site-ui";
-import { GUEST_HOUSE_CONTACT, HOME_PHOTOS } from "@/lib/site";
+import { GUEST_HOUSE_CONTACT, HOME_PHOTOS, guestHousePhoto } from "@/lib/site";
 import { amenities, houseSummary, joinNames } from "@/lib/site-content";
-import { getSiteGuestHouses } from "@/lib/site-data";
+import { getSiteGuestHouses, type SiteGuestHouse } from "@/lib/site-data";
 
 /**
  * The page itself is rendered per request - the header greets whoever is
@@ -24,16 +24,30 @@ import { getSiteGuestHouses } from "@/lib/site-data";
  *
  * Clean and institutional, the way peer guest houses (IIT Madras's Taramani
  * Guest House) and well-kept hotel sites present themselves (26 Sep 2026;
- * refined 30 Sep 2026 on a 12-column grid): a headline in five columns beside
- * one contained 4:3 photograph in seven, a card per guest house, a ruled grid
- * of amenities, a mosaic of photographs, and a closing row of links.
- * Sections open on a hairline ink rule with the label in the left quarter,
- * the editorial habit of hotel sites, rather than on floating boxes.
- * Photographs stay inside the layout - a full-screen photo read as "weird"
- * to the owner. No figures,
- * meal times, rules, approval routes or requester categories: rules live on
- * /guidelines, in general terms, and the portal's internals stay in the
- * portal. The guest-house names come from the store.
+ * refined 30 Sep 2026 on a 12-column grid). Sections open on a hairline ink
+ * rule with the label above it, the editorial habit of hotel sites, rather
+ * than on floating boxes. Photographs stay inside the layout - a full-screen
+ * photo read as "weird" to the owner. No figures, meal times, rules,
+ * approval routes or requester categories: rules live on /guidelines, in
+ * general terms, and the portal's internals stay in the portal. The
+ * guest-house names come from the store.
+ *
+ * **15 Oct 2026 - the guest houses are the hero.** The office sent a set of
+ * photographs and the owner named two of them as the main photograph of each
+ * guest house, asking for a layout that showcases them. So the page no longer
+ * opens on a headline beside one decorative photograph and then repeats
+ * itself in a section headed "Our guest houses": the masthead and the two
+ * houses are **one block**, the ink panel across the top and a house under
+ * each half of it, photograph first and the name under it. That is
+ * iitpkd.ac.in's own card idiom - the image above, its title printed
+ * underneath, never laid over it - and it is why the separate "Our guest
+ * houses" heading went: the `<h1>` already reads "Guest houses of IIT
+ * Palakkad".
+ *
+ * These are the first photographs on the site tied to a named guest house.
+ * The attribution is the owner's, held in `GUEST_HOUSE_PHOTOS`, and it does
+ * not extend past these two cards - the mosaic below and the Gallery stay
+ * unattributed, and no photograph anywhere carries a visible caption.
  */
 
 const AMENITY_ICONS: Record<string, LucideIcon> = {
@@ -60,34 +74,41 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* ------------------------------------------------------------ hero */}
-      {/* One contained block on the 12-column grid: an ink panel in five
-          columns carrying the headline, joined to a 4:3 photograph in the
-          other seven. Authoritative without going full-bleed. */}
+      {/* -------------------------------------------- hero: the guest houses */}
+      {/* One contained block: the ink masthead across the top - the headline
+          in seven columns, the lead and the two doors in five - and under it
+          a panel per guest house, each led by its own photograph. Two
+          photographs at half the page width are the largest thing on the
+          page, which is what "showcase them" asks for, and neither is
+          full-bleed. */}
       <section aria-labelledby="hero-title" className="pt-[clamp(16px,3vw,40px)]">
         <Container>
-          <div className="grid overflow-hidden rounded-lg border border-ink lg:grid-cols-12">
-            <div className="flex min-w-0 flex-col justify-between bg-ink px-[clamp(22px,4vw,56px)] py-[clamp(32px,5vw,64px)] lg:col-span-6">
-              <div>
-                <Label className="text-saffron">IIT Palakkad</Label>
-                <h1
-                  id="hero-title"
-                  className="mt-5 text-[clamp(2.375rem,1.5rem+2.6vw,3.5rem)] leading-[1.04] font-semibold tracking-[-0.024em] text-white"
-                >
-                  Guest houses of IIT&nbsp;Palakkad
-                </h1>
-                <div aria-hidden className="mt-7 h-1 w-12 bg-vermilion" />
-                <p className="mt-7 max-w-[40ch] text-[17.5px] leading-[1.6] text-on-ink">{lead}</p>
-                <div className="mt-9 flex flex-wrap gap-3">
-                  <Link href="/book-room" className={siteButton.brand}>
-                    Book a room
-                  </Link>
-                  <Link href="/book-meal" className={siteButton.outlineLight}>
-                    Book meals
-                  </Link>
+          <div className="overflow-hidden rounded-lg border border-ink">
+            <div className="bg-ink px-[clamp(22px,4vw,56px)] pt-[clamp(32px,5vw,60px)] pb-[clamp(28px,4vw,48px)]">
+              <div className="grid gap-x-10 gap-y-9 lg:grid-cols-12">
+                <div className="min-w-0 lg:col-span-7">
+                  <Label className="text-saffron">IIT Palakkad</Label>
+                  <h1
+                    id="hero-title"
+                    className="mt-5 text-[clamp(2.375rem,1.5rem+2.6vw,3.5rem)] leading-[1.04] font-semibold tracking-[-0.024em] text-white"
+                  >
+                    Guest houses of IIT&nbsp;Palakkad
+                  </h1>
+                  <div aria-hidden className="mt-7 h-1 w-12 bg-vermilion" />
+                </div>
+                <div className="flex min-w-0 flex-col lg:col-span-5 lg:self-end">
+                  <p className="max-w-[42ch] text-[17.5px] leading-[1.6] text-on-ink">{lead}</p>
+                  <div className="mt-7 flex flex-wrap gap-3">
+                    <Link href="/book-room" className={siteButton.brand}>
+                      Book a room
+                    </Link>
+                    <Link href="/book-meal" className={siteButton.outlineLight}>
+                      Book meals
+                    </Link>
+                  </div>
                 </div>
               </div>
-              <p className="mt-12 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-white/15 pt-5 text-[14.5px] text-on-ink-muted">
+              <p className="mt-10 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-white/15 pt-5 text-[14.5px] text-on-ink-muted">
                 <Phone aria-hidden className="size-4 text-saffron" />
                 {GUEST_HOUSE_CONTACT.phoneLabel}
                 <a href={GUEST_HOUSE_CONTACT.phoneHref} className="font-semibold text-white tabular-nums hover:text-saffron">
@@ -95,52 +116,20 @@ export default async function HomePage() {
                 </a>
               </p>
             </div>
-            <div className="min-w-0 lg:col-span-6">
-              <SitePhotoFrame
-                photo={HOME_PHOTOS.hero}
-                sizes="(min-width: 1024px) 620px, 100vw"
-                priority
-                className="aspect-[4/3] rounded-none lg:aspect-auto lg:h-full lg:min-h-[500px]"
-              />
-            </div>
+            {houses.length > 0 && (
+              // Hairlines are each panel's own borders, not a `gap-px` over a
+              // coloured ground: with an odd number of guest houses the ground
+              // would show through the empty cell. `odd:` clears the left
+              // border at the start of every row.
+              <div className={houses.length > 1 ? "grid md:grid-cols-2" : "grid"}>
+                {houses.map((house, i) => (
+                  <HousePanel key={house.id} house={house} wide={houses.length === 1} priority={i < 2} />
+                ))}
+              </div>
+            )}
           </div>
         </Container>
       </section>
-
-      {/* ------------------------------------------------ the guest houses */}
-      {houses.length > 0 && (
-        <section aria-labelledby="houses-title" className={SECTION}>
-          <Container>
-            <SectionHead id="houses-title" label="Accommodation" title="Our guest houses" />
-            <div className="mt-9 grid gap-6 md:grid-cols-2">
-              {houses.map((house) => (
-                <article
-                  key={house.id}
-                  className="flex flex-col overflow-hidden rounded-lg border border-border-strong bg-white"
-                >
-                  {/* No "GUEST HOUSE" strip (11 Oct 2026): the section above
-                      is headed "Our guest houses", so a label on each card
-                      saying so again was a tinted bar carrying nothing. What
-                      the card does have to say is whether the kitchen serves,
-                      and that is one line of type. */}
-                  <div className="px-[clamp(20px,2.6vw,32px)] pt-7 pb-8">
-                    <p className="mb-3 text-[12px] font-semibold tracking-[0.18em] text-vermilion-deep uppercase">
-                      {house.serves_meals ? "Rooms & dining" : "Rooms"}
-                    </p>
-                    <h3 className="text-title font-semibold text-ink">
-                      {house.name}
-                    </h3>
-                    <p className="mt-3 text-[15.5px] leading-[1.65] text-body">{houseSummary(house)}</p>
-                  </div>
-                  <div className="mt-auto border-t border-border px-[clamp(20px,2.6vw,32px)] py-4">
-                    <ArrowLink href="/book-room">Book a room</ArrowLink>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </Container>
-        </section>
-      )}
 
       {/* ------------------------------------------------------- amenities */}
       <section aria-labelledby="amenities-title" className={`bg-band ${SECTION}`}>
@@ -174,7 +163,10 @@ export default async function HomePage() {
             link={{ href: "/gallery", label: "View all photographs" }}
           />
           {/* Contained in the grid: one photograph across half the width and
-              two rows, the rest beside it - no captions (the owner). */}
+              two rows, the rest beside it - no captions (the owner), and
+              nothing here is attributed to a guest house. The four are
+              `HOME_PHOTOS.preview`, the set the owner asked to follow the two
+              house photographs above. */}
           <ul className="mt-9 grid grid-cols-2 gap-3 sm:gap-4 lg:h-[clamp(420px,40vw,540px)] lg:grid-cols-12 lg:grid-rows-2">
             {feature && (
               <li className="col-span-2 lg:col-span-6 lg:row-span-2">
@@ -239,5 +231,52 @@ export default async function HomePage() {
         </Container>
       </section>
     </>
+  );
+}
+
+/**
+ * One guest house in the hero block: its photograph, then its name under it.
+ *
+ * **The photograph is the house's own** (`guestHousePhoto`), and a house the
+ * registry does not name renders the frame's placeholder rather than
+ * borrowing another house's photograph - the card says "this is Bageshri",
+ * so the wrong picture there would be a false statement, not a dull one.
+ *
+ * The name sits **under** the photograph, never over it: that is how
+ * iitpkd.ac.in prints the title of a card, it needs no wash over the
+ * architecture to stay legible, and it keeps the site's rule that no
+ * photograph carries a visible caption - this is a heading, and the thing it
+ * heads is the guest house, not the picture.
+ */
+function HousePanel({
+  house,
+  wide,
+  priority,
+}: {
+  house: SiteGuestHouse;
+  /** The only guest house, so it has the full width and a shallower crop. */
+  wide: boolean;
+  priority: boolean;
+}) {
+  const photo = guestHousePhoto(house.name);
+  return (
+    <article className="flex min-w-0 flex-col border-t border-border-strong bg-white md:border-l md:odd:border-l-0">
+      <SitePhotoFrame
+        photo={photo ?? { src: null, alt: house.name }}
+        sizes={wide ? "(min-width: 1280px) 1160px, 100vw" : "(min-width: 1280px) 580px, (min-width: 768px) 50vw, 100vw"}
+        priority={priority}
+        className={wide ? "aspect-[3/2] rounded-none md:aspect-[5/2]" : "aspect-[3/2] rounded-none"}
+      />
+      <div className="px-[clamp(20px,2.6vw,36px)] pt-7 pb-8">
+        <p className="mb-3 text-[12px] font-semibold tracking-[0.18em] text-vermilion-deep uppercase">
+          {house.serves_meals ? "Rooms & dining" : "Rooms"}
+        </p>
+        <h2 className="text-title font-semibold text-ink">{house.name}</h2>
+        <p className="mt-3 text-[15.5px] leading-[1.65] text-body">{houseSummary(house)}</p>
+      </div>
+      <div className="mt-auto border-t border-border px-[clamp(20px,2.6vw,36px)] py-4">
+        <ArrowLink href="/book-room">Book a room</ArrowLink>
+      </div>
+    </article>
   );
 }

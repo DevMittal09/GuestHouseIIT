@@ -412,6 +412,37 @@ Four of the five items closed outright. What they opened:
 
 ---
 
+## 2h. Opened by the 15 Oct 2026 round - the office's photographs
+
+All seven items closed. What they opened:
+
+- **The home page lists the guest houses in the store's order, which is
+  Bageshri first; `/contact` lists Hamsanandi first.** The map tabs follow
+  `GUEST_HOUSE_LOCATIONS`, whose order is "as the owner listed them"; the home
+  page follows `listGuestHouses()`, which seeds Bageshri first. The two have
+  always disagreed, and it did not show while the houses were text-only cards
+  low on the page. Now they are the hero and it does. Fixing it is either
+  reordering the seed (touches `supabase/seed.sql` too) or sorting the cards by
+  the registry - **the owner's call**, and not worth guessing at.
+- **`GUEST_HOUSE_PHOTOS` is not editable from the console**, exactly like
+  `GUEST_HOUSE_LOCATIONS` beside it. A guest house created in Guest Houses &
+  Rooms gets the "photograph to follow" placeholder until someone adds a line
+  to `lib/site.ts`. That is deliberate while there are two guest houses and no
+  upload path; a console control for it needs somewhere to put the file, which
+  is a Storage bucket decision, not a UI one.
+- **Nothing checks that a served photograph is the building it claims.** The
+  tests check that the registry has two entries, that they are distinct, that
+  an unknown house gets `null` rather than another house's picture, and that
+  no home-page alt text names a guest house. They cannot check the attribution
+  itself - that rests entirely on the owner's message of 15 Oct 2026, which is
+  quoted in [01-background.md](01-background.md).
+- **The hero is taller than it was**, because it now carries two photographs
+  instead of one. Verified at 320px (no sideways scroll, one `<h1>`), but
+  nothing measures how far down the page the amenities now start. §5's missing
+  visual regression test would cover this and the green figures both.
+
+---
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the
@@ -503,8 +534,16 @@ Everything tagged `TODO(site)` in `lib/site.ts` and `lib/site-content.ts`:
 - the **amenities** list (six since 30 Sep 2026 - the meeting room and
   exercise room came off), the guidelines PDF URL, front-office hours;
 - the guest house contact details and a map pin per guest house;
-- which guest house each **photograph** shows, and photo attribution; AM's new
-  photographs (asked for by the supervisor on 30 Sep 2026, not code).
+- ~~AM's new photographs~~ **(done, 15 Oct 2026)** - the office sent eleven,
+  and they are served from `public/site/photos/`;
+- **which guest house each photograph shows.** Two of the twenty-five now have
+  an answer: the owner named `hamsanandi-courtyard.jpg` and
+  `bageshri-front.jpg`, and `GUEST_HOUSE_PHOTOS` holds them. The other
+  twenty-three do not, which is why `GALLERY_SECTIONS` is still grouped by
+  **subject**. When the office attributes the whole set it can be grouped by
+  guest house instead - the `TODO(site)` on it says so. The 19 Sep exteriors
+  are plainly the same blocks as `hamsanandi-courtyard.jpg`, but that is an
+  inference and the code does not act on it.
 
 Copy stays plain and unpromising (the owner, 30 Sep 2026). Detail in
 [14-public-site-and-ui.md](14-public-site-and-ui.md).

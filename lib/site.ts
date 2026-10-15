@@ -183,17 +183,41 @@ export function guestHouseMapPins(houseNames: string[]): MapPin[] {
 export type SitePhoto = { src: string | null; alt: string };
 
 /**
- * The photographs supplied by the guest house office (`Images/` in the repo
- * root, 6000×4000 camera originals, not committed). The site serves 2000px
- * copies from `public/site/photos/`, made with EXIF orientation applied and
- * metadata stripped - see .memories/14-public-site-and-ui.md for the recipe when adding
- * more.
+ * The photographs supplied by the guest house office, in two sets: `Images/`
+ * (19 Sep 2026, 6000×4000 camera originals) and `Photos/` (15 Oct 2026,
+ * already 1600px, and the first set whose guest house the owner named).
+ * Neither folder is served. The site serves copies from
+ * `public/site/photos/`, at most 2000px on the long edge, with EXIF
+ * orientation applied and metadata stripped - see
+ * .memories/14-public-site-and-ui.md for the recipe when adding more.
  */
 function photo(file: string, alt: string): SitePhoto {
   return { src: `/site/photos/${file}`, alt };
 }
 
 export const PHOTOS = {
+  // ---------------------------------------------------------------------
+  // Supplied by the office on 15 Oct 2026, and **the first photographs whose
+  // guest house is known**: the owner named `hamsanandiCourtyard` and
+  // `bageshriFront` as the main photograph of each house. Everything above
+  // that line in this registry is the 19 Sep set, whose attribution the
+  // office has still never confirmed - see `GUEST_HOUSE_PHOTOS`.
+  // ---------------------------------------------------------------------
+  hamsanandiCourtyard: photo(
+    "hamsanandi-courtyard.jpg",
+    "Hamsanandi guest house: two-storey blocks along a paved courtyard"
+  ),
+  bageshriFront: photo("bageshri-front.jpg", "Bageshri guest house seen from the approach road"),
+  hamsanandiBlock: photo("hamsanandi-block.jpg", "Front of a guest house block, with lawn and flowering trees"),
+  hamsanandiEntrance: photo("hamsanandi-block-entrance.jpg", "Entrance to a guest house block, between the lawns"),
+  bageshriCorridor: photo("bageshri-corridor.jpg", "Open corridor and staircase around a planted courtyard"),
+  doubleBedroom: photo("double-bedroom.jpg", "Bedroom with a double bed, air conditioning and a writing desk"),
+  twinRoom: photo("twin-room.jpg", "Twin-bedded room with armchairs and a bedside table"),
+  studyDesks: photo("room-study-desks.jpg", "Room with a wardrobe, two writing desks and a refrigerator"),
+  kitchenCorner: photo("kitchenette.jpg", "Kitchen corner with a refrigerator, kettle and sink"),
+  sittingRoom: photo("sitting-room.jpg", "Sitting room with a sofa, television and low table"),
+  livingArea: photo("living-dining.jpg", "Living area with a sofa, armchairs and a dining table"),
+
   courtyard: photo("exterior-courtyard.jpg", "Two-storey guest house blocks around a paved courtyard"),
   block: photo("exterior-block.jpg", "Front of a guest house block, with lawn and garden lights"),
   gazebo: photo("exterior-gazebo.jpg", "Lawn and gazebo between the guest house blocks"),
@@ -210,11 +234,39 @@ export const PHOTOS = {
   meetingHall: photo("meeting-hall.jpg", "Meeting hall with projector screen and seating"),
 } as const;
 
+/**
+ * **The photograph that stands for one guest house**, keyed by
+ * `guestHouseSlug(name)` exactly as `GUEST_HOUSE_LOCATIONS` is.
+ *
+ * This is the first thing on the site that says *which* guest house a
+ * photograph shows. Until 15 Oct 2026 nothing did, and the rule was that
+ * nothing may: the 19 Sep photographs arrived with no attribution, so placing
+ * one where it would read as a named house would have been a guess. On
+ * 15 Oct 2026 the office sent a new set and the owner named two of them -
+ * "the main photos of hamsanandi and bageshri respectively". So these two,
+ * and only these two, are attributed.
+ *
+ * A guest house with no entry here renders its card **without a photograph**
+ * rather than borrowing another house's - the registry answers "which
+ * photograph is this house's", and silence is the honest answer.
+ */
+export const GUEST_HOUSE_PHOTOS: Record<string, SitePhoto> = {
+  hamsanandi: PHOTOS.hamsanandiCourtyard,
+  bageshri: PHOTOS.bageshriFront,
+};
+
+/** The photograph for a guest house as the store names it, or null. */
+export function guestHousePhoto(name: string): SitePhoto | null {
+  return GUEST_HOUSE_PHOTOS[guestHouseSlug(name)] ?? null;
+}
+
 export const HOME_PHOTOS = {
-  /** Beside the headline - contained in the layout, never full-width. */
-  hero: PHOTOS.courtyard,
-  /** The row of thumbnails above "View all photographs". */
-  preview: [PHOTOS.bedroom, PHOTOS.livingDining, PHOTOS.bathroom, PHOTOS.meetingHall],
+  /**
+   * "A look inside" - the four photographs under the guest houses, in the
+   * order the owner listed them on 15 Oct 2026 (4, 6, 7 and 1 of the set).
+   * The first is set at double size by the page.
+   */
+  preview: [PHOTOS.hamsanandiBlock, PHOTOS.doubleBedroom, PHOTOS.kitchenCorner, PHOTOS.twinRoom],
 };
 
 /** The photograph beside each sign-in page's form. Decorative (empty alt). */
@@ -225,21 +277,45 @@ export const SIGN_IN_PHOTOS = {
 };
 
 /**
- * The Gallery page, grouped by subject. The supplied photos are not labelled
- * by guest house, so they are not attributed to one here.
- * TODO(site): once the office confirms which guest house each shows, give
- * that guest house a section instead.
+ * The Gallery page, **grouped by subject, not by guest house**. Two
+ * photographs now have a house against their name (`GUEST_HOUSE_PHOTOS`); the
+ * other twenty-three still do not, and a section headed "Hamsanandi" would
+ * put every unattributed photograph under a claim nobody has made. The
+ * attribution the owner gave on 15 Oct 2026 was for the two cards on the home
+ * page, and it is used there and nowhere else.
+ *
+ * Every photograph the site holds is here - the 15 Oct set first within each
+ * group, the 19 Sep set after it. The home page shows six of them; this page
+ * is where the rest live.
+ *
+ * TODO(site): when the office attributes the whole set, group by guest house.
  */
 export const GALLERY_SECTIONS: { title: string; qualifier: string; photos: SitePhoto[] }[] = [
   {
     title: "Exterior and grounds",
     qualifier: "Guest house",
-    photos: [PHOTOS.courtyard, PHOTOS.block, PHOTOS.gazebo, PHOTOS.walkway],
+    photos: [
+      PHOTOS.hamsanandiCourtyard,
+      PHOTOS.bageshriFront,
+      PHOTOS.hamsanandiBlock,
+      PHOTOS.hamsanandiEntrance,
+      PHOTOS.bageshriCorridor,
+      PHOTOS.courtyard,
+      PHOTOS.block,
+      PHOTOS.gazebo,
+      PHOTOS.walkway,
+    ],
   },
   {
     title: "Rooms and suites",
     qualifier: "Inside",
     photos: [
+      PHOTOS.doubleBedroom,
+      PHOTOS.twinRoom,
+      PHOTOS.studyDesks,
+      PHOTOS.livingArea,
+      PHOTOS.sittingRoom,
+      PHOTOS.kitchenCorner,
       PHOTOS.bedroom,
       PHOTOS.bedroomWardrobe,
       PHOTOS.livingDining,

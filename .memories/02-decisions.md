@@ -1204,6 +1204,14 @@ in the most-used screens. **Side effect accepted:** the availability chart's
 
 ### Photos: resized copies served, originals ignored, no attribution
 
+> **Partly superseded (15 Oct 2026).** The resizing and the gitignored
+> originals stand, and the Gallery is **still grouped by subject**. What
+> changed is the "no attribution" half, and only for two photographs: the
+> office sent a second set and the owner named one photograph as the main
+> photograph of each guest house, so `GUEST_HOUSE_PHOTOS` attributes those two
+> and the home page's house cards carry them. The twenty-three others remain
+> unattributed. See "The guest houses become the hero" below.
+
 **Decision.** Serve 2000px, metadata-stripped copies from
 `public/site/photos/`; gitignore the 180 MB of originals in `Images/`; group the
 Gallery by subject, not by guest house.
@@ -5501,3 +5509,114 @@ and it is the institute's to decide: [04-production.md](04-production.md)
 [03-roadmap.md](03-roadmap.md) §2g carries it. If the institute publishes a
 notice of its own that covers the portal, linking to that is a one-line change
 in the footer and the archive can be dropped.
+
+---
+
+## 15 October 2026 — the guest houses become the hero, and two photographs get a name
+
+The owner sent eleven photographs in `Photos/` at the repo root:
+
+> Please add/replace the images in Photos folder in the project root to the
+> website. In that 8.jpeg and 10.jpeg are the two images i want to see in the
+> landing pages, as they are the main photos of hamsanandi and bageshri
+> respectively. PLese make the landing page UI in a way taht we can showcase
+> these images. Also Maybe we could try showcasing images in the landing page
+> similar to how we have it in the iitpkd.ac.in website. Also showcase the
+> images 4.jpeg, 6.jpeg, 7.jpeg, 1.jpeg in the landing page after the first
+> two images i mentioned, and make it similar but not exact copy of UI of
+> iitpkd.ac.in website. [...] make sure to make it look professional,
+> aesthetic and not look too ai generated. Rest of the images in the folder
+> should be kept in the gallery.
+
+### A photograph may now name a guest house — these two, and no others
+
+**Decision.** `GUEST_HOUSE_PHOTOS` in `lib/site.ts` maps a guest house's slug
+to its photograph, keyed by `guestHouseSlug(name)` exactly as
+`GUEST_HOUSE_LOCATIONS` is, and read through `guestHousePhoto(name)`. Only the
+two cards on the home page use it. The mosaic below them, the Gallery, the
+sign-in photographs and every alt text stay unattributed, and nothing carries a
+visible caption.
+
+**Why.** The old rule — *never place a photograph where it would read as one
+particular guest house* — was never about photographs. It was about **not
+publishing a guess**: the 19 Sep set arrived with nothing saying which building
+it showed. The owner has now said, in as many words, which house two of the new
+photographs show. The reason for the rule is spent for those two and intact for
+the rest, so the rule moves with it rather than being repealed.
+
+**Why a registry rather than a field on the guest house.** A photograph is a
+property of the website, not of the booking system; `guest_houses` has no
+column for one and adding one would be a migration, a console control and an
+upload path for a value that changes once a year. The map pins solved the same
+problem the same way, and keying both on `guestHouseSlug` means a house either
+has both or neither.
+
+**Why a house with no entry renders the placeholder.** `guestHousePhoto`
+returns `null` and the card draws `SitePhotoFrame`'s "photograph to follow"
+frame. The alternative — fall back to any photograph — puts the wrong building
+under a name a reader takes as a fact. Renaming a guest house in the console
+therefore takes its photograph off the card until the registry learns the new
+name, exactly as it takes its map pin off `/contact`; a unit test says so.
+
+**Cost.** Two photographs are now a claim the code makes on the office's
+behalf. If the owner mixed them up, the home page is confidently wrong. That is
+why the attribution is one object in one file with a test naming both, rather
+than a filename convention spread over the page.
+
+### The masthead and the guest houses are one block
+
+**Decision.** The home page's hero is a single bordered block: the ink panel
+across the top (headline in seven columns, the lead and the two doors in five,
+the manager's number on a rule under them), and beneath it one panel per guest
+house — its photograph at 3:2, then its name, what it offers, and *Book a
+room*. The separate **"Our guest houses"** section is gone, and with it
+`HOME_PHOTOS.hero`.
+
+**Why.** "Showcase these images" means they have to be the largest thing on the
+page, and the page had no room for them: a decorative photograph sat beside the
+headline and the houses were text-only cards further down. Merging the two
+sections gives each photograph half the page width above the fold and removes a
+heading — *Our guest houses* — that repeated the `<h1>`, which the house rule
+about page leads had been pointing at for weeks.
+
+**Why the name sits under the photograph, not over it.** That is iitpkd.ac.in's
+own card idiom (its facilities, gallery and three-up rows all print the title
+beneath the image, never laid over it), it needs no dark wash over the
+architecture to stay legible, and it keeps the owner's ban on photo captions
+intact: this is a **heading**, and the thing it heads is the guest house, not
+the picture.
+
+**Why not a carousel.** iitpkd.ac.in opens on a five-slide hero slider. A
+slider here would be a client component, would hide half of what it was asked
+to showcase behind a control, and reads as a template — the owner has twice
+asked for the site not to look generated. Two photographs side by side show
+both at once.
+
+**Rejected:** keeping the hero photograph *and* giving each card its own. The
+owner named six photographs for the landing page and that layout needs seven
+slots, so one photograph would have had to appear twice or be borrowed from the
+Gallery set.
+
+**Hairlines are each panel's own borders**, not the `gap-px` over a coloured
+ground used by the amenities grid: with an odd number of guest houses that
+ground shows through the empty cell. `md:odd:border-l-0` clears the left border
+at the start of each row, so one, two or five guest houses all rule correctly —
+`AGENTS.md`'s standing rule that assuming exactly two is a bug.
+
+### The 19 Sep photographs stay in the Gallery
+
+**Decision.** All fourteen remain served and all fourteen are in
+`GALLERY_SECTIONS`, after the new set within each subject group. The Gallery
+now holds **25 photographs**; the home page shows six of them.
+
+**Why.** The owner asked for the rest of the *new* folder to go to the Gallery,
+which says nothing about the old set, and chose to keep it when asked. The old
+photographs cover the bathroom, the meeting hall, the lounge and the gazebo —
+subjects the new set has no equivalent of — so dropping them would have made
+the Gallery smaller in exchange for nothing. A unit test now fails if any
+photograph in `PHOTOS` is served but reachable from nowhere.
+
+**Noted, not acted on:** the old exteriors are plainly the same ochre blocks and
+paved courtyard as the new `hamsanandi-courtyard.jpg`, so that set is almost
+certainly Hamsanandi. That is still an inference, so it is written here and not
+in the code.
