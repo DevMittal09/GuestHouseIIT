@@ -42,20 +42,27 @@ export function PageTitle({
   children,
   intro,
   kicker,
+  center,
   className,
 }: {
   children: React.ReactNode;
   intro?: React.ReactNode;
   kicker?: string;
+  /** Centre the block - the booking doors, which have no photograph beside them. */
+  center?: boolean;
   className?: string;
 }) {
   return (
-    <div className={className}>
+    <div className={cn(center && "text-center", className)}>
       {kicker && <Label className="mb-4">{kicker}</Label>}
       <h1 className="text-[clamp(36px,4.8vw,56px)] leading-[1.03] font-semibold tracking-[-0.022em] text-ink">
         {children}
       </h1>
-      {intro && <p className="mt-5 max-w-[52ch] text-[17px] leading-[1.65] text-body">{intro}</p>}
+      {intro && (
+        <p className={cn("mt-5 max-w-[52ch] text-[17px] leading-[1.65] text-body", center && "mx-auto")}>
+          {intro}
+        </p>
+      )}
     </div>
   );
 }

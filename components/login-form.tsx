@@ -37,20 +37,20 @@ function GoogleMark() {
  * is worse than none.
  */
 export function LoginForm({
-  sampleAccount,
   next,
   submitLabel = "Sign in",
   footnote,
+  center,
   googleSignIn = "none",
   notice,
   domainNote,
 }: {
-  /** A dummy LDAP login to show, while sign-in checks the dummy directory. */
-  sampleAccount: { uid: string; password: string } | null;
   /** Where to land after signing in, when the page wants somewhere specific. */
   next?: string;
   submitLabel?: string;
   footnote?: React.ReactNode;
+  /** Centre the prose around the fields. The labels stay left - see `SignInPanel`. */
+  center?: boolean;
   /** Real Google sign-in, the mock account picker, or neither. */
   googleSignIn?: "google" | "mock" | "none";
   /** A message from a failed sign-in (`?error=` on the way back from Google). */
@@ -139,7 +139,11 @@ export function LoginForm({
             {isPending ? "Signing in…" : submitLabel}
           </button>
           {domainNote && (
-            <p className="mt-3 text-[13.5px] leading-[1.5] text-muted-foreground">{domainNote}</p>
+            <p
+              className={`mt-3 text-[13.5px] leading-[1.5] text-muted-foreground${center ? " text-center" : ""}`}
+            >
+              {domainNote}
+            </p>
           )}
         </form>
 
@@ -165,32 +169,12 @@ export function LoginForm({
         )}
 
         {footnote && (
-          <p className="mt-4 text-sm leading-normal text-muted-foreground">{footnote}</p>
+          <p className={`mt-4 text-sm leading-normal text-muted-foreground${center ? " text-center" : ""}`}>
+            {footnote}
+          </p>
         )}
       </div>
 
-      {/*
-        Everything below is for development and demos, and goes when real
-        authentication lands - see .memories/03-roadmap.md item 1.
-      */}
-      <div className="mt-8 rounded-[6px] border border-dashed border-border-strong px-4 py-3 text-center text-meta leading-normal text-muted-foreground">
-        Demo build -{" "}
-        {sampleAccount ? (
-          <>
-            LDAP accounts are dummy ones, e.g.{" "}
-            <code className="rounded-[2px] bg-band px-1 py-0.5 font-mono text-ink">
-              {sampleAccount.uid}
-            </code>{" "}
-            /{" "}
-            <code className="rounded-[2px] bg-band px-1 py-0.5 font-mono text-ink">
-              {sampleAccount.password}
-            </code>
-            .{" "}
-          </>
-        ) : null}
-&ldquo;Mock Authentication&rdquo; opens a persona picker; it is replaced by
-        &ldquo;Sign in with Google&rdquo; once Google sign-in is connected.
-      </div>
     </div>
   );
 }

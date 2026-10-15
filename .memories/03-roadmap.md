@@ -432,6 +432,22 @@ Every item of both rounds closed. What they opened:
 - **The slideshow's photographs are a hardcoded list** (`HOME_PHOTOS.slides`), like everything else in
   `lib/site.ts`. Changing which ones appear, or their order, is a code change.
 
+**From the ink panel and the booking doors (later the same day):**
+
+- **`/sign-in` still has its photograph while `/book-room` and `/book-meal` do not.** The owner named the two
+  booking doors, so that is what changed, and `SignInPanel` takes an optional `photo` either way. If the
+  owner wants `/sign-in` to match, it is deleting one prop.
+- **`SIGN_IN_PHOTOS.bookRoom` and `.bookMeal` are unplaced.** Both photographs are still in the Gallery, so
+  nothing is orphaned and no test fails; they are kept because restoring either image is one prop. Drop them
+  from the registry if the decision settles.
+- **The home page's masthead is the only centred block on the site.** It reads as a title page under the
+  slideshow. Centring the sections below would mean rebuilding `SectionHead`, whose construction *is* a
+  left-hand label over a full-width hairline. Recorded so a later pass does not "make it consistent" by
+  accident - in either direction.
+- **Nothing tests that the credentials box stays gone.** It is the kind of thing a demo-friendly change puts
+  back. A one-line unit or e2e assertion that no public page contains a password field's example value would
+  hold it; `AGENTS.md` carries the rule in the meantime.
+
 **From the photographs (first round):**
 
 - **The home page lists the guest houses in the store's order, which is

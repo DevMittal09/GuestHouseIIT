@@ -15,7 +15,7 @@ the sign-in pages.
 | 30 Sep 2026 | `main` | A written revamp brief: TGH structure, Aman / Standard editorial rules, **GOV.UK** tables and tags; 4px inputs, 6px buttons, 8px cards, never a pill, shadow, gradient or glass. Primitives rebuilt (see "The 30 Sep revamp" below); the evening's content rules all kept. **Afternoon:** the supervisor's review — see "Promise less" below |
 | 11 Oct 2026 | `main` | The owner: the interface "looks too ai generated"; wanted it distinctive, professional and purpose-designed, with no generic dashboard patterns, excessive cards, decorative icons, unnecessary badges or repetitive layouts. **The palette was checked against iitpkd.ac.in again and kept** - what changed was composition, type and density. See "The 11 Oct design pass" below |
 | 15 Oct 2026, morning | `main` | The office's eleven new photographs, and **the first two the site is allowed to name**: the owner said which guest house each of two shows and asked for a landing page that showcases them, "similar but not exact copy" of iitpkd.ac.in. The home page's hero and its "Our guest houses" section became **one block** - the ink masthead across the top, a guest house under each half of it, photograph first and the name under it. **No colour, token or primitive changed.** See "The guest houses become the hero" below |
-| **15 Oct 2026, later (current)** | `main` | The owner: "i need images which change evry few seconds and has the option of arrows to move to next image... just go to iitpkd.ac.in website and see what i mean". A **hero slideshow** - the one client component on the public site - with iitpkd.ac.in's own Previous / Pause / Next and numbered indicators. The masthead moved **under** it; the guest houses went back to a section of their own. **No colour, token or primitive changed.** See "The hero becomes a slideshow" below |
+| **15 Oct 2026, later (current)** | `main` | The owner: "i need images which change evry few seconds and has the option of arrows to move to next image... just go to iitpkd.ac.in website and see what i mean". A **hero slideshow** - the one client component on the public site - with iitpkd.ac.in's own Previous / Pause / Next and numbered indicators. The masthead moved **under** it, then lost its ink panel and its phone line and was **centred** ("the black box... looks unnecessary"); the guest houses went back to a section of their own. **No colour, token or primitive changed.** See "The hero becomes a slideshow" below |
 
 ## The hero becomes a slideshow (15 Oct 2026, later)
 
@@ -29,14 +29,43 @@ been argued against that morning and was asked for anyway**, which settles it
 **Slideshow -> ink masthead -> Our guest houses -> amenities -> "A look
 inside" mosaic -> closing links.**
 
-The masthead - the `<h1>`, the lead, *Book a room* / *Book meals* and the
-Guest House Manager's number - sits **under** the photographs. That is the
-order the owner described and the order iitpkd.ac.in uses; the `<h1>` is
-still the page's only one and still the first heading in the document.
+The masthead - the `<h1>`, the lead and *Book a room* / *Book meals* - sits
+**under** the photographs. That is the order the owner described and the
+order iitpkd.ac.in uses; the `<h1>` is still the page's only one and still
+the first heading in the document.
 
 This reversed that morning's merge. The guest houses are **a section of their
 own** again with ordinary bordered cards, so `HousePanel` no longer needs the
 `md:odd:border-l-0` arithmetic or a `priority` flag.
+
+### Then the ink panel came off it, and it was centred
+
+Minutes later the owner: *"Remove the black box of guest house of IIT
+Palakkad as it looks unnecessary"*, then *"remove the guest hpuse manager
+number and all and also center align everything. Left aligned looks kinda
+off."*
+
+- **No ink panel.** The headline, lead and buttons are plain type on the
+  page's own ground. The panel earned its weight while it *was* the hero; the
+  moment the photographs took that job, a second full-width ink slab sat
+  directly beneath a photograph carrying nothing the type could not.
+- **What it held stayed.** The block is still the page's **only `<h1>`** -
+  an e2e test keeps one visible on every public page - and still carries both
+  doors into the portal, which the owner asked to make *more* prominent on
+  26 Sep 2026. "Remove the black box" names the container, and the second
+  message confirms it ("If you are keeping the content...").
+- **Centred, and the only centred block on the site.** `text-center` on a
+  `max-w-[780px]` column. Said of this block and taken that way: centring the
+  sections below would mean rebuilding `SectionHead`, whose construction *is*
+  a left-hand label over a full-width hairline, plus the guest-house cards
+  and the amenity grid. Read down the page it works as a **title page** under
+  the slideshow; read as a site-wide rule it would be wrong. **Don't "make it
+  consistent".**
+- **The office's number is off the home page.** See "Configurable values"
+  below - `GUEST_HOUSE_CONTACT` now has four readers, and the site footer is
+  on this page as on every other.
+- **The vermilion stub survived** (`h-1 w-12 bg-vermilion`, now `mx-auto`).
+  It is the one mark left from the ink panel, and it is the site's own.
 
 ### `components/site/hero-carousel.tsx`
 
@@ -630,12 +659,34 @@ would go stale until the next build.
 
 ## Sign-in: what changed and what did not
 
-> **Current state (23–24 Sep 2026):** the card asks for an **LDAP username +
+> **Current state (15 Oct 2026):** the card asks for an **LDAP username +
 > password**; the second button reads **"Mock Authentication"** (no Google
 > "G" mark) and opens `/mock-login?next=…` while Google is unconfigured, and
 > reads **"Sign in with Google"** (real OpenID Connect) once
-> `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL` are set. The notes
-> below are the history of how it got there.
+> `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL` are set.
+>
+> **Two things changed on 15 Oct 2026**, both at the owner's request:
+>
+> - **`SignInPanel` has two shapes, chosen by whether a `photo` is passed.**
+>   `/sign-in` keeps the split-screen panel (form in five columns, photograph
+>   in seven from `lg`). The booking doors **`/book-room` and `/book-meal`
+>   pass none** and get a narrow `max-w-[560px]` panel **centred** in the
+>   page, with the kicker, title, lead, domain note and footnote centred too
+>   (`PageTitle center`, `LoginForm center`). **The form's own labels stay
+>   left-aligned in both** - a centred label over a full-width input
+>   separates the two and reads as a rendering mistake. Don't "finish" the
+>   centring.
+> - **The dashed "Demo build" box under the form is deleted**, with the
+>   `sampleAccount` prop. It printed a **working dummy LDAP login** -
+>   `uid` / `password` in two `<code>` tags - on three public,
+>   unauthenticated pages. The accounts are in
+>   [05-credentials-and-security.md](05-credentials-and-security.md) and
+>   `lib/ldap/mock-directory.ts`; **don't put them back on a page.** The
+>   sentence it also carried, that "Mock Authentication" is a persona picker
+>   standing in for Google, is in `AGENTS.md` - and the button has said so
+>   itself since 23 Sep 2026.
+>
+> The notes below are the history of how it got there.
 
 > **Superseded in part (19 Sep 2026, later the same day):** the card now asks
 > for an **LDAP username + password** (`signInWithLdap`) and has a **"Sign in
@@ -720,11 +771,11 @@ Mail templates (`lib/mail/render.ts`) still carry the old amber header.
 | `components/site/site-header.tsx` | **`SiteHeader`** and `SITE_NAV`: a white bar, sticky from `lg`; links inside the header, a sideways-scrolling row below `lg`; Sign in / My portal |
 | `components/site/site-chrome.tsx` | **`SiteFooter({ pins })`** — the lockup and address, the number under `GUEST_HOUSE_CONTACT.phoneLabel` (**Guest House Manager** since 14 Oct 2026), **Find us** (each guest house's Map and Directions, How to reach the campus), **Institute** (`SITE_LINKS`), and a bottom line (Guidelines, Contact - the **Privacy notice** link went with the notice on 14 Oct 2026). The **MRBS line** that opened it ("Booking a lecture hall or meeting room?") was removed on **7 Oct 2026** at the office's request, with every other mention of the Meeting Room Booking System |
 | `components/site/site-nav.tsx` | `NavBar` — `tone="dark"` (portal: charcoal bar, uppercase, vermilion bar under the current page) or `"light"` (the white site header, a short vermilion underline); `scroll` for the phone row |
-| `components/site/site-ui.tsx` | `Container` (1240px), `Label` (tracked capitals), `PageTitle` (the sign-in pages' `<h1>`, optional `kicker`), **`PageMasthead`** (a light band: breadcrumb, `<h1>`, lead, `note`, `aside`), `SectionHead` (label + `<h2>` + optional link), `ArrowLink`, `BulletList`, `siteButton.{brand,ink,outline,light,outlineLight}`, `SitePhotoFrame` (8px corners; `zoom` eases on hover) |
+| `components/site/site-ui.tsx` | `Container` (1240px), `Label` (tracked capitals), `PageTitle` (the sign-in pages' `<h1>`, optional `kicker`, optional `center`), **`PageMasthead`** (a light band: breadcrumb, `<h1>`, lead, `note`, `aside`), `SectionHead` (label + `<h2>` + optional link), `ArrowLink`, `BulletList`, `siteButton.{brand,ink,outline,light,outlineLight}`, `SitePhotoFrame` (8px corners; `zoom` eases on hover) |
 | `components/site/hero-carousel.tsx` | **`HeroCarousel({ photos })`** (client, 15 Oct 2026) — the home page's six-slide hero: Previous / Pause / Next and **numbered** indicators (iitpkd.ac.in's own set), 6s a slide on one translating track, `aspect-[4/3]` to `sm:aspect-[16/9]`. Holds on hover and on focus-within; `prefers-reduced-motion` stops the **rotation**, not just the transition; `aria-live` is `off` while rotating and `polite` once paused. Takes `SitePhoto[]` and nothing else — it knows no domain at all |
 | `components/site/guest-house-map.tsx` | **`GuestHouseMap`** (client): WAI-ARIA tabs, one per pin, the chosen embed, "Open in Google Maps" / "Get directions" |
-| `components/site/sign-in-panel.tsx` | `PageTitle` + the form (or "You are signed in") in five columns on the left, a contained 4:3 photograph in seven on the right from `lg` |
-| `components/login-form.tsx` | The form — no card, no second heading; submit is vermilion-deep; `domainNote` under it; the second door is **Mock Authentication** (→ `/mock-login?next=`) or **Sign in with Google** once configured. Labels "LDAP username" / "LDAP password" and the button name "Sign in" are what the e2e helpers use — keep them |
+| `components/site/sign-in-panel.tsx` | `PageTitle` + the form (or "You are signed in"). **Two shapes** (15 Oct 2026): with a `photo`, five columns on the left and a contained photograph in seven on the right from `lg` (`/sign-in`); **without one, a narrow `max-w-[560px]` panel centred in the page** with its prose centred (`/book-room`, `/book-meal`). The form's labels stay left-aligned in both |
+| `components/login-form.tsx` | The form — no card, no second heading; submit is vermilion-deep; `domainNote` under it (centred with the rest when `center` is passed); **no demo-credentials box** since 15 Oct 2026; the second door is **Mock Authentication** (→ `/mock-login?next=`) or **Sign in with Google** once configured. Labels "LDAP username" / "LDAP password" and the button name "Sign in" are what the e2e helpers use — keep them |
 | `components/page-header.tsx` | Portal page title: a short vermilion rule, serif `h1`, description, optional `actions`, a closing hairline |
 | `components/section-heading.tsx` | `SectionHeading` (serif `<h2>`, a count tag — red with `tone="alert"` — description, action) and `EmptyState` |
 | `components/link-tabs.tsx` | `LinkTabs` — page-level tabs that are links, vermilion bar under the current one, `aria-current` (the desk's guest-house switcher) |
@@ -745,8 +796,9 @@ the role's form allows), **Meal booking** (ink, names the kitchen; only for
 ## The pages
 
 - **Home** — see "The hero becomes a slideshow" above (15 Oct 2026, later):
-  a **six-slide hero slideshow**, then the ink masthead (`<h1>`, lead, the two
-  doors, the manager's number), then *Our guest houses* as two cards each led
+  a **six-slide hero slideshow**, then a **centred** masthead in plain type
+  (`<h1>`, a vermilion stub, the lead, the two doors - **no ink panel and no
+  phone line**), then *Our guest houses* as two cards each led
   by its own photograph with the name under it, a ruled amenity grid, a
   four-photo mosaic of what the slideshow did **not** show, and a closing row
   of ruled links. No figures, meal times, rules or captions.
@@ -768,9 +820,10 @@ the role's form allows), **Meal booking** (ink, names the kitchen; only for
   note (online only — the lecture-hall sentence came off on 7 Oct 2026);
   **Finding the guest houses**
   with the map tabs in a rounded card.
-- **Book a room / Book meals / Sign in** — the form beside a contained
-  photo, one line of lead each. Book meals points to the guidelines for meal
-  times.
+- **Sign in** — the form beside a contained photo, one line of lead.
+- **Book a room / Book meals** — **no photograph** (15 Oct 2026): the same
+  `SignInPanel` in its narrow **centred** shape, one line of lead each. Book
+  meals points to the guidelines for meal times.
 - **Privacy, Mock Authentication** — content unchanged.
 
 ## Content comes from the backend — and what stays off the site
@@ -811,7 +864,10 @@ website, the guest
 house page on iitpkd.ac.in, How to reach, Telephone directory — all checked to
 resolve on 26 Sep 2026; there is no Bageshri page on iitpkd.ac.in),
 `GUEST_HOUSE_CONTACT`, **`GUEST_HOUSE_LOCATIONS`**,
-**`INSTITUTE_MAP`**, `guestHouseMapPins()`, the photo registry (`PHOTOS`;
+**`GUEST_HOUSE_CONTACT`** - read by `/contact`, the Guidelines, the site
+footer and the portal footer. **Not by the home page**, whose masthead
+carried the number until 15 Oct 2026. **`INSTITUTE_MAP`**,
+`guestHouseMapPins()`, the photo registry (`PHOTOS`;
 `HOME_PHOTOS` — now only the four-photo `preview`, `hero` having gone with the
 15 Oct hero; **`SIGN_IN_PHOTOS`** — the photo beside each sign-in page's form;
 `GALLERY_SECTIONS`; and **`GUEST_HOUSE_PHOTOS` / `guestHousePhoto(name)`** —

@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   ArrowRight,
   ConciergeBell,
-  Phone,
   Refrigerator,
   ShowerHead,
   Snowflake,
@@ -13,7 +12,7 @@ import {
 } from "lucide-react";
 import { HeroCarousel } from "@/components/site/hero-carousel";
 import { ArrowLink, Container, Label, SectionHead, SitePhotoFrame, siteButton } from "@/components/site/site-ui";
-import { GUEST_HOUSE_CONTACT, HOME_PHOTOS, guestHousePhoto } from "@/lib/site";
+import { HOME_PHOTOS, guestHousePhoto } from "@/lib/site";
 import { amenities, houseSummary, joinNames } from "@/lib/site-content";
 import { getSiteGuestHouses, type SiteGuestHouse } from "@/lib/site-data";
 
@@ -32,6 +31,17 @@ import { getSiteGuestHouses, type SiteGuestHouse } from "@/lib/site-data";
  * approval routes or requester categories: rules live on /guidelines, in
  * general terms, and the portal's internals stay in the portal. The
  * guest-house names come from the store.
+ *
+ * **15 Oct 2026, third pass - no ink panel, and the masthead centred.** The
+ * owner: "Remove the black box of guest house of IIT Palakkad as it looks
+ * unnecessary", then "remove the guest house manager number and all and also
+ * center align everything. Left aligned looks kinda off." So the headline,
+ * the lead and the two doors are centred plain type on the page's own
+ * ground, and the office's number is **off this page** - nothing is lost,
+ * because the site footer carries it on every page, and /contact, the
+ * Guidelines and the portal footer each read the same
+ * `GUEST_HOUSE_CONTACT`. The home page is simply no longer one of its
+ * readers.
  *
  * **15 Oct 2026 - the guest houses are the hero.** The office sent a set of
  * photographs and the owner named two of them as the main photograph of each
@@ -89,39 +99,40 @@ export default async function HomePage() {
       </section>
 
       {/* ----------------------------------------------------------- masthead */}
-      <section aria-labelledby="hero-title" className="pt-[clamp(24px,3vw,40px)]">
+      {/* **No ink panel** (15 Oct 2026, the owner: "Remove the black box of
+          guest house of IIT Palakkad as it looks unnecessary"). The box is
+          gone; what it carried is not, because it is the page's only `<h1>`,
+          the two doors into the portal and the office's number. It is set as
+          plain type on the page's own ground, in `PageMasthead`'s idiom -
+          the title in seven columns, the lead under a vermilion rule in five
+          - so the home page opens the way every inner page does. A second
+          black slab directly under a photograph was carrying nothing the
+          type could not. */}
+      <section aria-labelledby="hero-title" className="pt-[clamp(40px,5vw,72px)]">
         <Container>
-          <div className="rounded-lg border border-ink bg-ink px-[clamp(22px,4vw,56px)] pt-[clamp(32px,5vw,56px)] pb-[clamp(28px,4vw,44px)]">
-            <div className="grid gap-x-10 gap-y-9 lg:grid-cols-12">
-              <div className="min-w-0 lg:col-span-7">
-                <Label className="text-saffron">IIT Palakkad</Label>
-                <h1
-                  id="hero-title"
-                  className="mt-5 text-[clamp(2.375rem,1.5rem+2.6vw,3.5rem)] leading-[1.04] font-semibold tracking-[-0.024em] text-white"
-                >
-                  Guest houses of IIT&nbsp;Palakkad
-                </h1>
-                <div aria-hidden className="mt-7 h-1 w-12 bg-vermilion" />
-              </div>
-              <div className="flex min-w-0 flex-col lg:col-span-5 lg:self-end">
-                <p className="max-w-[42ch] text-[17.5px] leading-[1.6] text-on-ink">{lead}</p>
-                <div className="mt-7 flex flex-wrap gap-3">
-                  <Link href="/book-room" className={siteButton.brand}>
-                    Book a room
-                  </Link>
-                  <Link href="/book-meal" className={siteButton.outlineLight}>
-                    Book meals
-                  </Link>
-                </div>
-              </div>
+          {/* Centred, and the only centred block on the site (the owner:
+              "center align everything. Left aligned looks kinda off"). It
+              reads as a title page under the slideshow rather than as the
+              first of the left-ruled sections below it, which all keep
+              their alignment. */}
+          <div className="mx-auto max-w-[780px] text-center">
+            <Label>IIT Palakkad</Label>
+            <h1
+              id="hero-title"
+              className="mt-4 text-[clamp(2.25rem,1.4rem+2.6vw,3.25rem)] leading-[1.04] font-semibold tracking-[-0.024em] text-ink"
+            >
+              Guest houses of IIT&nbsp;Palakkad
+            </h1>
+            <div aria-hidden className="mx-auto mt-7 h-1 w-12 bg-vermilion" />
+            <p className="mx-auto mt-7 max-w-[54ch] text-[17px] leading-[1.6] text-body">{lead}</p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <Link href="/book-room" className={siteButton.brand}>
+                Book a room
+              </Link>
+              <Link href="/book-meal" className={siteButton.outline}>
+                Book meals
+              </Link>
             </div>
-            <p className="mt-10 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-white/15 pt-5 text-[14.5px] text-on-ink-muted">
-              <Phone aria-hidden className="size-4 text-saffron" />
-              {GUEST_HOUSE_CONTACT.phoneLabel}
-              <a href={GUEST_HOUSE_CONTACT.phoneHref} className="font-semibold text-white tabular-nums hover:text-saffron">
-                {GUEST_HOUSE_CONTACT.phone}
-              </a>
-            </p>
           </div>
         </Container>
       </section>

@@ -172,10 +172,13 @@ port 3000 before launching your own.
   `GUEST_HOUSE_CONTACT` (`lib/site.ts`) is the one place either is written
   down - **including the label**: `phoneLabel` reads **"Guest House Manager"**
   (14 Oct 2026, the office; it was "Front office"), and the contact page, the
-  home page's hero line and the site footer all read it rather than writing
-  the words again. It is the one deliberate exception to "no role names on the
-  public site"; don't widen it to the approver roles, which a unit test still
-  guards.
+  Guidelines, the site footer and the portal footer all read it rather than
+  writing the words again. **The home page is not one of them** (15 Oct 2026,
+  the owner: "remove the guest house manager number and all"): its masthead
+  carried the number until the ink panel came off, and the site footer
+  carries it on that page as on every other. It is the one deliberate
+  exception to "no role names on the public site"; don't widen it to the
+  approver roles, which a unit test still guards.
 
 - **Headings come off the five-step scale** (11 Oct 2026): `text-display` for
   a page's `<h1>`, `text-title` for a public section, `text-section` for a
@@ -1697,9 +1700,25 @@ full-screen (the owner called a full-screen hero "so weird").
   exercise room, 30 Sep 2026), a four-photo
   mosaic, a closing row of ruled links. Sections open on a hairline ink rule
   with the label in the left quarter (`SectionHead`). Inner pages open on a
-  plain light band (`PageMasthead`); sign-in pages put the form beside a
-  photo in one split-screen panel (`SIGN_IN_PHOTOS`); inner mastheads put
-  the title in seven columns and the lead under a vermilion rule in five.
+  plain light band (`PageMasthead`). **`SignInPanel` has two shapes, chosen
+  by whether a `photo` is passed** (15 Oct 2026): `/sign-in` keeps the
+  split-screen panel, the form beside a photograph (`SIGN_IN_PHOTOS`); the
+  two booking doors `/book-room` and `/book-meal` pass **no photo** and get a
+  narrow centred panel - the owner asked for the image off those two. The
+  form's own labels stay left-aligned in both; centring a label over a
+  full-width input reads as a mistake. Inner mastheads put the title in seven
+  columns and the lead under a vermilion rule in five.
+- **The home page's masthead carries no ink panel and no phone line**
+  (15 Oct 2026, the owner: the black box "looks unnecessary"). It is centred
+  plain type under the slideshow - and it is **the only centred block on the
+  site**; the sections below it keep `SectionHead`'s left-hand label over a
+  full-width hairline. Don't "make it consistent" in either direction.
+- **The sign-in card publishes no credentials.** The dashed "Demo build -
+  LDAP accounts are dummy ones, e.g. `uid` / `password`" box under the form
+  is **deleted** (15 Oct 2026, the owner). It printed a working dummy login
+  on three public pages. The dummy accounts are in
+  `.memories/05-credentials-and-security.md` and `lib/ldap/mock-directory.ts`;
+  don't put them back on a page.
 - **The portal is laid out as a GOV.UK service**: an ink masthead closed by
   a vermilion rule, a white service nav (`NavBar tone="service"`, keep
   `aria-current`), pages on `bg-canvas`. `/book` is two columns (form +

@@ -53,6 +53,8 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **14 Oct**, later still | **The privacy notice withdrawn and archived.** Hours after the consent tick came off the form, the owner asked for the privacy policy feature to go completely - but to stay in the repository so it can be reverted. The `/privacy` page, `PRIVACY_NOTICE_VERSION` and its three links are now **`archive/privacy-notice/`** at the repo root, with a numbered restore; `/privacy` is a 404 and an e2e test keeps it one. The narrowest of three scopes was chosen with the owner: **Download my data, Ask for erasure and the nightly ID-retention job stay live**. No migration, no column dropped. The restore was **run** before the tree was put back. |
 | **15 Oct** | **The office's photographs, and a landing page built around them.** Eleven new photographs, two of them named by the owner as the main photograph of each guest house - the **first attribution the site has ever made**. The home page's hero and its "Our guest houses" section become **one block**: the ink masthead across the top, a guest house under each half of it, photograph first and the name under it, the way iitpkd.ac.in prints a card. Four more photographs follow in the mosaic; the other five, and all fourteen of the 19 Sep set, are in the Gallery - now 25. **No migration.** |
 | **15 Oct**, later | **The hero becomes a slideshow.** The owner asked for iitpkd.ac.in's own hero - "images which change evry few seconds and has the option of arrows" - then the details below it. A carousel had been argued against in the round hours earlier and was asked for anyway. Built as the **one client component on the public site**: six slides, Previous / Pause / Next and numbered indicators, 6s a slide, stopping on hover, on focus and for `prefers-reduced-motion`. The masthead moved **under** the photographs and the guest houses went back to a section of their own. |
+| **15 Oct**, later still | **The ink panel off the home page.** The owner: "Remove the black box of guest house of IIT Palakkad as it looks unnecessary", then "remove the guest hpuse manager number and all and also center align everything". The masthead is now **centred plain type** on the page's own ground - still the page's only `<h1>` and still carrying both booking doors - and the Guest House Manager's number is **off the home page**, leaving `GUEST_HOUSE_CONTACT` four readers instead of five. |
+| **15 Oct**, last | **The booking doors, and the credentials box.** The owner: "For room and meal booking remove the image and center align the login page. Remove the 'Demo build - LDAP accounts'". `SignInPanel`'s `photo` is now optional - without one it is a **narrow centred panel**, which is what `/book-room` and `/book-meal` use; `/sign-in` keeps its photograph. The dashed box that printed **a working dummy LDAP login on three public pages** is deleted. |
 | **13 Oct**, later | **The second door closed, the schema left alone.** Migration 31 drops the `profiles -> auth.users` foreign key and all **38** `authenticated` RLS policies, so a portal account no longer implies a database credential; `createProfile` and `seed.sql` mint no Supabase password. The normalization review found **two** real problems worth acting on (`profiles` had almost no indexes and no checks - fixed; `total_rooms` can drift - recorded) and four denormalizations that are correct as they are. **No table split, no column dropped.** Two repair scripts, 16 new tests. Migration 31 deliberately **not** applied to the hosted project. |
 
 ## The problem
@@ -873,6 +875,37 @@ new photographs rather than the same six again. A unit test fails if the two
 sets ever overlap.
 
 **No migration, no store operation, no photograph added or removed.**
+
+### The follow-up, minutes later - the ink panel off
+
+> Remove the black box of guest house of IIT Palakkad as it looks
+> unnecessary.
+
+> If you are keeping the content, remove the guest hpuse manager number and
+> all and also center align everything. Left aligned looks kinda off.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Remove the black box | **Done.** The ink panel is gone. What it held stayed: it is the page's **only `<h1>`** - an e2e test keeps one visible on every public page - and the two doors into the portal, which the owner asked to make *more* prominent on 26 Sep 2026. The slideshow had taken the hero's job hours earlier, so a second ink slab under a photograph was carrying nothing the type could not |
+| 2 | Remove the Guest House Manager's number | **Done.** Off the home page entirely. Nothing is lost: the **site footer carries it on this page as on every other**, and `/contact`, the Guidelines and the portal footer each read the same `GUEST_HOUSE_CONTACT`. This tightens an existing rule - `AGENTS.md` already put the number in the footer "not in a notice on a page", and the home page was its one exception |
+| 3 | Centre-align everything | **Done for that block, and only that block.** Label, headline, vermilion stub, lead and buttons centred in a 780px column. The sections below keep their alignment: centring them would mean rebuilding `SectionHead`, whose construction *is* a left-hand label over a full-width hairline, plus the guest-house cards and the amenity grid - a redesign of five sections nobody asked for. It reads as a title page under the slideshow |
+
+**`AGENTS.md` was corrected**, because it named "the home page's hero line"
+as one of the places that read `GUEST_HOUSE_CONTACT`.
+
+### And the booking doors, last
+
+> For room and meal booking remove the image and center align the login page.
+> Remove the "Demo build - LDAP accounts* "
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Remove the image from room and meal booking | **Done.** `SignInPanel`'s `photo` is **optional** now: with one it is the split-screen panel of 30 Sep 2026, without one a narrow centred panel. `/book-room` and `/book-meal` pass none. **`/sign-in` keeps its photograph** - the owner named the two booking doors and only those |
+| 2 | Centre-align the login page | **Done for the panel and the prose.** The panel is `max-w-[560px]` centred; the kicker, title, lead, domain note and footnote are centred with it. **The form's own labels stay left-aligned**: a centred label over a full-width input separates the two and reads as a rendering mistake |
+| 3 | Remove the "Demo build - LDAP accounts" box | **Done**, with the `sampleAccount` prop that fed it. More than cosmetic: it printed **a working login** on three public, unauthenticated pages. Nothing was exposed that [05-credentials-and-security.md](05-credentials-and-security.md) does not also hold, but it is a bad habit to carry into the institute's real LDAP. The sentence it also carried - that "Mock Authentication" is a persona picker standing in for Google - is in `AGENTS.md`, and the button already says so rather than promising Google |
+
+`SIGN_IN_PHOTOS.bookRoom` and `.bookMeal` are **kept but unplaced**: both
+photographs are still in the Gallery, and putting either back is one prop.
 
 ---
 

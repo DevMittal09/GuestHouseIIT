@@ -283,7 +283,14 @@ export const HOME_PHOTOS = {
   preview: [PHOTOS.hamsanandiEntrance, PHOTOS.bageshriCorridor, PHOTOS.sittingRoom, PHOTOS.livingArea],
 };
 
-/** The photograph beside each sign-in page's form. Decorative (empty alt). */
+/**
+ * The photograph beside a sign-in page's form. Decorative (empty alt).
+ *
+ * **Only `signIn` is placed at present** (15 Oct 2026, the owner: "For room
+ * and meal booking remove the image and center align the login page").
+ * `bookRoom` and `bookMeal` are kept because putting either back is one prop
+ * on `SignInPanel`, and both photographs are in the Gallery regardless.
+ */
 export const SIGN_IN_PHOTOS = {
   signIn: PHOTOS.livingRoom,
   bookRoom: PHOTOS.bedroomWardrobe,

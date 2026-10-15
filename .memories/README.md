@@ -67,9 +67,11 @@ workflow itself in the manager's hands** (Console -> Approval Workflow), and
 two rounds preparing the institute's **user import** - which closed a GoTrue
 door the portal had never used and gave the import an **undo**. The last round
 is the office's photographs: eleven new ones, the **first two the site is
-allowed to name**, and - asked for hours later - a **hero slideshow** in
-iitpkd.ac.in's style, with its Previous / Pause / Next controls, above a page
-whose details now sit beneath it. The round before it was the
+allowed to name**, and - asked for over the rest of the day - a **hero
+slideshow** in iitpkd.ac.in's style with its Previous / Pause / Next
+controls, a home page stripped back to centred plain type beneath it, and the
+two booking doors reduced to a centred card with **no photograph and no demo
+credentials printed on them**. The round before it was the
 office's twelfth list (the contact number is the manager's, free rooms are
 counted in green, past dates are greyed out of the week and month views, the
 privacy consent tick is gone, and **bookings open six months ahead**). **Not

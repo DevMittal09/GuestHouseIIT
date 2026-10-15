@@ -5707,3 +5707,119 @@ again is the thing that makes a long page feel padded, and a unit test now
 fails if the two sets overlap. The two guest-house photographs are the one
 deliberate repeat: the slideshow is a reel, the cards are where they are
 named.
+
+
+---
+
+## 15 October 2026, third pass — the ink panel off the home page
+
+Two short asks, minutes apart, both about the same block:
+
+> Remove the black box of guest house of IIT Palakkad as it looks
+> unnecessary.
+
+> If you are keeping the content, remove the guest hpuse manager number and
+> all and also center align everything. Left aligned looks kinda off.
+
+### The box went; what it carried did not
+
+**Decision.** The ink panel is gone. The headline, the lead and the two doors
+are **centred plain type on the page's own ground**; the Guest House
+Manager's number is **off the home page entirely**.
+
+**Why the content stayed.** "Remove the black box" names the container, and
+the owner's second message confirms it ("If you are keeping the content...").
+What the box held is not decorative: it is the page's **only `<h1>`** - an
+e2e test keeps one visible on every public page, and the page would otherwise
+have no accessible name - and the two doors into the portal, which the owner
+asked to make *more* prominent on 26 Sep 2026.
+
+**Why it was the right thing to remove.** The slideshow now fills the top of
+the page, so a second full-width slab in solid ink sat directly beneath a
+photograph, competing with it and carrying nothing the type could not. The
+panel earned its weight when it *was* the hero; it stopped earning it the
+moment the photographs took that job the same day.
+
+### Centred, and the only centred block on the site
+
+**Decision.** `text-center` on a `max-w-[780px]` column - label, headline,
+the vermilion stub, lead and buttons - and nothing else on the site changes
+alignment.
+
+**Why it is contained to this one block.** "Center align everything" was said
+of the block under discussion, and taken that way. Centring the sections
+below it would mean centring `SectionHead`, whose whole construction is a
+left-hand label over a full-width hairline, and the guest-house cards and the
+amenity grid with it - a redesign of five sections nobody asked for. Read
+down the page it works as a **title page** under the slideshow: centred
+introduction, then the left-ruled sections. Read as a rule it would be
+wrong, which is why it is written down here rather than left for the next
+person to "make consistent".
+
+### The number is off the page, not out of the product
+
+**`GUEST_HOUSE_CONTACT` keeps its four readers** - `/contact`, the
+Guidelines, the site footer and the portal footer. The site footer is on
+**this page too**, so a visitor who wants the number still finds it without
+leaving; what went is a second printing of it two hundred pixels higher.
+
+This tightens an existing rule rather than bending one. `AGENTS.md` already
+says the office's phone and email belong in the footer, "not in a notice on a
+page" - the home page's hero line was the exception to that, and it is now
+gone. `AGENTS.md` has been corrected, since it named the home page as a
+reader.
+
+
+---
+
+## 15 October 2026, fourth pass — the booking doors lose their photograph, and the sign-in card its credentials
+
+> For room and meal booking remove the image and center align the login page.
+> Remove the "Demo build - LDAP accounts* "
+
+### `SignInPanel` gets two shapes rather than a second component
+
+**Decision.** `photo` is now **optional**. With one, the panel is the
+split-screen it has been since 30 Sep 2026 - form in five columns, photograph
+in seven. Without one, the same panel is narrow (`max-w-[560px]`) and centred
+in the page. `/book-room` and `/book-meal` pass no photo; **`/sign-in` keeps
+its photograph**, because the owner named the two booking doors and only
+those.
+
+**Why one component with two shapes.** The three pages share the signed-in
+branch, the domain note, the second door, the error notice and the `next`
+plumbing. A second component would have to be kept in step with all of it,
+and the difference between them is one photograph.
+
+**Why the form's labels stay left-aligned in both.** "Center align the login
+page" is about the page, not the fields: a centred label floating over a
+full-width input separates the two and reads as a rendering mistake. What
+centres is the panel, the title block, the domain note and the footnote - the
+prose. This is written down because it is the kind of thing a later pass
+"finishes" by centring the labels too.
+
+### The demo credentials box is deleted
+
+**Decision.** The dashed box under the form - *"Demo build - LDAP accounts
+are dummy ones, e.g. `<uid>` / `<password>`. 'Mock Authentication' opens a
+persona picker..."* - is gone, with the `sampleAccount` prop that fed it.
+
+**Why it is more than cosmetic.** It printed **a working login** on three
+public, unauthenticated pages. The accounts are dummies and the directory is
+the mock one, so nothing was exposed that
+`.memories/05-credentials-and-security.md` does not also hold - but a page
+that prints a username and password next to the box they go in is a habit
+worth not having when the institute's real LDAP is connected and that box
+stops being a dummy.
+
+**What went with it, and where it lives now.** The box also explained that
+"Mock Authentication" is a persona picker standing in for Google. That
+sentence is gone from the page. It is not lost: the button says *Mock
+Authentication* rather than promising Google (a deliberate choice of
+23 Sep 2026 - the Google mark is kept off the placeholder), and the mechanism
+is in `AGENTS.md` and
+[05-credentials-and-security.md](05-credentials-and-security.md).
+
+**`SIGN_IN_PHOTOS.bookRoom` and `.bookMeal` are kept**, unplaced. Both
+photographs are still in the Gallery, so nothing is orphaned, and putting
+either back is one prop.
