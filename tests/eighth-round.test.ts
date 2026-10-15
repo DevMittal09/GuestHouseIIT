@@ -206,7 +206,6 @@ describe("a personal booking is not asked which budget pays", () => {
         },
       ],
       meals: [],
-      privacy_consent: true,
     };
     const bare = schema.safeParse(base);
     if (!bare.success) throw new Error(JSON.stringify(bare.error.issues));

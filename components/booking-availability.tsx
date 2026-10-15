@@ -72,12 +72,10 @@ const NO_COUNTS: AvailabilityCounts = {
 export function BookingAvailability({
   guestHouseId,
   date,
-  guestHouseName,
 }: {
   guestHouseId: string;
   /** The check-in date chosen on the form - where the chart starts. */
   date: string;
-  guestHouseName?: string;
 }) {
   const [view, setView] = useState<AvailabilityView>("week");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -239,6 +237,15 @@ export function BookingAvailability({
         </Button>
       </div>
 
+      {/* The period shown, and nothing else (14 Oct 2026, the office: "remove
+          the top sentence stating how many rooms at Bageshri are available
+          throughout the month"). It read "10 of 10 rooms at Bageshri free all
+          month", which is `freeThroughout` - rooms with nothing booked
+          anywhere in the window - and so says less the longer the window is,
+          while the panel below it answers the actual question day by day. The
+          guest house is named a few lines above on the form; the window is
+          not, and the browsing note has to stay, so this line keeps those
+          two and the loading and failure states. */}
       <p className="text-sm text-body">
         {loading ? (
           <span className="text-muted-foreground">Loading availability…</span>
@@ -248,9 +255,7 @@ export function BookingAvailability({
           </span>
         ) : range ? (
           <>
-            <span className="font-semibold text-ink">{counts.freeThroughout}</span> of {roomCount}{" "}
-            rooms{guestHouseName ? ` at ${guestHouseName}` : ""} free all {period}
-            <span className="text-muted-foreground"> · {describeRange(range)}</span>
+            <span className="text-muted-foreground">{describeRange(range)}</span>
             {browsing && (
               <span className="text-muted-foreground"> · your booking is unchanged</span>
             )}

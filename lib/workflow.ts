@@ -39,9 +39,12 @@ import { DEFAULT_RULES } from "./settings";
 export const ADVANCE_BOOKING_WINDOW_MONTHS = DEFAULT_RULES.booking.advance_booking_months;
 
 /**
- * Who may book outside the one-month advance window.
+ * Who may book outside the advance window.
  *
  * Official / dignitary visits are arranged by the institute on its own notice.
+ * They are exempt whatever the window is set to - it was one month until
+ * 14 Oct 2026 and is six now, and neither is a horizon the institute's own
+ * notice respects.
  * The Guest House Manager is exempt because they take bookings at the desk for
  * whatever the institute has already committed to - a window they could not
  * reach past would simply move those bookings off the portal - and the

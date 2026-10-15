@@ -229,7 +229,22 @@ export const DEFAULT_RULES: Rules = {
     max_occupants_per_room: 4,
   },
   booking: {
-    advance_booking_months: 1,
+    /**
+     * **Six months** (14 Oct 2026, the office: "allow users to make bookings
+     * more than 30 days in advance"). It was **one month**, which refused a
+     * parent booking for convocation, a conference guest invited a term
+     * ahead, and anyone whose own travel is booked before the guest house
+     * will take them - and left the office entering those by hand, which is
+     * the thing the portal exists to stop.
+     *
+     * Six rather than no limit at all: the office can still set anything from
+     * 1 to 24 months here without code (`bookingRulesSchema`), and a window
+     * of zero is deliberately refused, so the figure is always a figure the
+     * Guidelines page can print. Official / dignitary bookings, the manager
+     * and the developer remain exempt from it entirely
+     * (`isAdvanceWindowExempt`).
+     */
+    advance_booking_months: 6,
     max_stay_nights: 14,
     buffer_minutes: 240,
     no_show_release_hours: 0,

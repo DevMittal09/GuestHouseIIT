@@ -44,7 +44,6 @@ test("a student can book two guests and two infants in one room", async ({ page 
   await expect(addGuest).toBeDisabled();
   await expect(addInfant).toBeDisabled();
 
-  await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
   const toast = page.getByText(REFERENCE).first();

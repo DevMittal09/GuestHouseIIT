@@ -72,7 +72,6 @@ test("a faculty booking asks for the declaration, and will not go without it", a
   await page.locator('[name="check_out_date"]').fill(localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("A collaborator's visit");
   await fillGuest(page, 0, 0, { name: "Declaration Guest", age: "44" });
-  await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
   await expect(page.getByText(/Tick the declaration to confirm the funds are approved/)).toBeVisible();
 
@@ -101,7 +100,6 @@ test("Special Budget asks which fund, and the approval can be attached", async (
   await page.locator('[name="purpose_of_visit"]').fill("A fund-backed visit");
   await fillGuest(page, 0, 0, { name: "Special Guest", age: "40" });
   await page.locator('[name="fund_declaration"]').check();
-  await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
   await expect(page.getByText(/Which special fund.*is required/i)).toBeVisible();
 

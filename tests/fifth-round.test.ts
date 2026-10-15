@@ -504,7 +504,6 @@ describe("the infant card", () => {
     booking_type: "official",
     debit_head: "department_budget",
     fund_declaration: true,
-    privacy_consent: true,
     purpose_of_visit: "Visiting collaborator",
     check_in: `${checkIn}T12:00`,
     check_out: `${addDaysToDateValue(checkIn, 2)}T10:00`,

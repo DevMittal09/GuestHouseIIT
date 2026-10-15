@@ -57,7 +57,7 @@ aged under 5 (code constant). Both guest houses are all double sharing.
 
 | Setting | Default | Notes |
 | --- | --- | --- |
-| Advance booking window (`advance_booking_months`) | **1 month** | Check-in only. Official, GH Manager, developer exempt |
+| Advance booking window (`advance_booking_months`) | **6 months** | Check-in only. Official, GH Manager, developer exempt. **1 month until 14 Oct 2026**, when the office asked for more than 30 days; 1-24 months, zero refused. A deployment that saved this card before then keeps its own figure - a saved row beats a changed default |
 | Longest stay (`max_stay_nights`) | **14 nights** | 0 = no limit. Official, GH Manager, developer, `director.office@` exempt |
 | Turnaround buffer (`buffer_minutes`) | **240 (4 h)** | Least gap between one stay's check-out and the next check-in on a room; 0 = off. Changing it rebuilds every hold, refused if two stays would clash |
 | No-show release (`no_show_release_hours`) | **0 (off)** | Hours after check-in at which an unclaimed approved stay is released by the daily cron (mail to the requester) |

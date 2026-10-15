@@ -155,7 +155,6 @@ describe("the funds declaration", () => {
       { room_type: null, guests: [{ name: "Guest", age: "40", gender: "male", citizenship: "indian" }] },
     ],
     meals: [],
-    privacy_consent: true,
     ...patch,
   });
   const schema = bookingPayloadSchema(config, {

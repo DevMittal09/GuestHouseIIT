@@ -12,7 +12,7 @@ test("the public site reads on a 320 px phone", async ({ page }) => {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 
-  for (const path of ["/guidelines", "/gallery", "/contact", "/privacy", "/book-room", "/book-meal", "/sign-in", "/mock-login"]) {
+  for (const path of ["/guidelines", "/gallery", "/contact", "/book-room", "/book-meal", "/sign-in", "/mock-login"]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -20,10 +20,22 @@ test("the public site reads on a 320 px phone", async ({ page }) => {
   }
 });
 
-test("the privacy notice is published and versioned", async ({ page }) => {
-  await page.goto("/privacy");
-  await expect(page.getByText(/Version \d{4}-\d{2}-\d{2}/)).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Your rights" })).toBeVisible();
+/**
+ * **The privacy notice is withdrawn** (14 Oct 2026, the owner). The test that
+ * checked it was published and versioned is in `archive/privacy-notice/` with
+ * the page itself. This is the other half of that removal: the route is gone
+ * and nothing links it, so neither can come back by accident - a restored page
+ * that nobody can reach, or a link to a page that 404s, would both pass every
+ * other test in this file.
+ */
+test("the privacy notice is not published", async ({ page }) => {
+  const response = await page.goto("/privacy");
+  expect(response?.status()).toBe(404);
+
+  for (const path of ["/", "/guidelines", "/contact"]) {
+    await page.goto(path);
+    await expect(page.getByRole("link", { name: /privacy/i })).toHaveCount(0);
+  }
 });
 
 test("the booking doors ask for a sign-in rather than failing silently", async ({ page }) => {

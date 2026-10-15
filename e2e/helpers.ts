@@ -321,7 +321,6 @@ export async function submitRoomBooking(
 
   await fillGuest(page, 0, 0, options.guest ?? { name: "Test Guest", age: "44" });
 
-  await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
   // The confirmation carries the reference; the form then lands on the

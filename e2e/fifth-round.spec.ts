@@ -49,7 +49,6 @@ async function facultyStayStartingNow(page: Page): Promise<string> {
   await page.locator('[name="check_out_date"]').fill(localDate(2));
   await page.locator('[name="purpose_of_visit"]').fill("Family visit");
   await fillGuest(page, 0, 0, { name: "Meera Sharma", age: "60", gender: "female", relationship: "Mother" });
-  await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
   const toast = page.getByText(REFERENCE).first();
   await expect(toast).toBeVisible({ timeout: 30_000 });
@@ -106,7 +105,6 @@ test("a student's father is filled in on request, an infant gets an infant card,
   await expect(page.locator('[name="rooms.0.guests.1.id_number"]')).toHaveCount(0);
   await fillGuest(page, 0, 1, { name: "Diya Menon", age: "2", gender: "female", relationship: "Niece" });
 
-  await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
   const toast = page.getByText(REFERENCE).first();
   await expect(toast).toBeVisible({ timeout: 30_000 });

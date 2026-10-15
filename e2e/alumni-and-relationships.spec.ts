@@ -55,7 +55,6 @@ test("the IAR Student Cell is never asked to choose a guest house", async ({ pag
   const aadhaar = page.locator('[name="rooms.0.guests.0.id_number"]');
   if (await aadhaar.count()) await aadhaar.fill("432112345678");
 
-  await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
   // It went through - no "Select a guest house" on a form that never asked.

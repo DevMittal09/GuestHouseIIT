@@ -61,11 +61,14 @@ JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwri
 **Node 20** via nvm; the machine default is 18.
 
 **Status, 14 Oct 2026.** Feature-complete for every workflow specified; taken
-through a ten-phase production-readiness programme, eleven rounds of the
+through a ten-phase production-readiness programme, **twelve** rounds of the
 office's corrections, a design pass, the round that put **the approval
 workflow itself in the manager's hands** (Console -> Approval Workflow), and
 two rounds preparing the institute's **user import** - which closed a GoTrue
-door the portal had never used and gave the import an **undo**. **Not deployed
+door the portal had never used and gave the import an **undo**. The last round
+is the office's twelfth list: the contact number is the manager's, free rooms
+are counted in green, past dates are greyed out of the week and month views,
+the privacy consent tick is gone, and **bookings open six months ahead**. **Not deployed
 for real use** — everything that first deployment needs is in
 [04-production.md](04-production.md), and the gates are
 [03-roadmap.md](03-roadmap.md) §1. Migrations **31-34 are written and tested
@@ -75,7 +78,7 @@ email/password provider is **still on**: [04-production.md](04-production.md)
 
 **Numbers.** 34 migrations · 10 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
-18 demo personas · 6 demo bookings · 23 real rooms · 546 unit tests ·
+18 demo personas · 6 demo bookings · 23 real rooms · 555 unit tests ·
 41 end-to-end journeys · 15 console sections.
 
 ---
@@ -206,8 +209,9 @@ heads, mapped per requester by the office's list of 8 Oct 2026 and, for an
 **office**, narrowed again to that office's own row on the spreadsheet of
 9 Oct 2026; **any head but Personal Funds asks the requester to declare that
 the funds are approved and available**. **Copy to** is optional (≤ 25, CC on
-every mail to the requester); **privacy consent** is mandatory; check-in within
-**1 month**, at most **14 nights**; a room card holds **4 people, at most 3
+every mail to the requester); **there is no privacy notice and no consent**
+(14 Oct 2026 - the whole feature is withdrawn and kept in
+`archive/privacy-notice/`, which is also the restore); check-in within **6 months**, at most **14 nights**; a room card holds **4 people, at most 3
 needing a bed, at most 3 infants** (under 5); meals only at a guest house that
 serves them and **never for a student or an alumni booking**, booked **before
 the previous meal finishes being served**, with **each person's own veg /

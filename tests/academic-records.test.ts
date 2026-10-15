@@ -171,7 +171,6 @@ describe("the schema applies the record on both sides", () => {
     check_out: `${addDaysToDateValue(today, 2)}T10:00`,
     rooms: [{ room_type: null, guests }],
     meals: [],
-    privacy_consent: true,
   });
 
   const father = {

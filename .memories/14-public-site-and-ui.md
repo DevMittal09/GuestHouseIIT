@@ -153,6 +153,13 @@ prose was cut back wherever it explained itself:
 sitting, the room capacity, the Aadhaar length, the pay-at-checkout note, the
 privacy consent, "nothing is held until the Guest House Manager allocates a
 room", and anything the office asked for by name.
+> **One of them has since gone, 14 Oct 2026.** The **privacy consent** -
+> paragraph, tick and stored record - came off the request at the office's
+> request, and later the same day the owner withdrew the **whole notice**: the
+> page, its version and its three links (the footer's bottom line, the
+> Guidelines' closing sentence, the first item of the My Bookings row). It is
+> all in `archive/privacy-notice/`, with the restore. `/privacy` is a 404 and
+> an e2e test keeps it one.
 
 ## A rule has three homes, and the form is one of them (9 Oct 2026)
 
@@ -256,6 +263,31 @@ with the current hour outlined. **Every cell keeps the full sentence as its
 `aria-label`** - the repetition was visual, and a screen reader lost nothing.
 The panel's toolbar is one row (view, date, back to check-in, Refresh) with the
 field labels `sr-only`.
+
+**Then two changes on 14 Oct 2026, both about what a figure is saying:**
+
+- **The count of free rooms is green** - `--occupy` / #00703c, the deep green
+  of the desk's *Mark as Occupied* button, reused rather than a second green
+  added. It is the figure in each day column, the headline figure, the hour
+  chips, the 3px meter, and the "N free" in the desk chart's date column. The
+  vermilion **Full** state is unchanged, so the panel's two ends now both
+  carry a colour. Green text on white is 5.3:1.
+- **A day that has gone carries no figure at all**: greyed (`opacity-55`), a
+  plain border, the word **Past**, no meter, and an `aria-label` reading "a
+  past date, not available to book". A one-day window on a past date says
+  **Past date** and drops the hour strip. `isPastDay(day, today)`
+  (`lib/availability.ts`) is the one rule, shared with the desk's week and
+  month chart, where a past row is shaded `bg-band/60`, its label dimmed and
+  its figure replaced by "past" - the bars stay, because they are the record.
+  Why: a week runs Monday to Sunday and a month is whole, so the range
+  containing today contains days the schema has always refused, and the panel
+  was printing "10 free" against them.
+- **The sentence above the booking form's panel is gone** with them - "10 of
+  10 rooms at Bageshri free all month", the `freeThroughout` figure. The line
+  keeps the period shown and the "your booking is unchanged" note that has to
+  stay while the chart is browsable. The equivalent figures in
+  `/availability`'s own header line were **not** touched: the office asked
+  about the form.
 
 ### Two more things moved rather than cut
 
@@ -440,7 +472,7 @@ app/
     contact/            /contact     one map tab per guest house
     sign-in/            /sign-in     general sign-in; where every portal guard redirects
     mock-login/         /mock-login  Mock Authentication persona picker (open while Google is unconfigured)
-    privacy/            /privacy     the versioned DPDP privacy notice
+                                     (privacy/ withdrawn 14 Oct 2026 - archive/privacy-notice/)
   (portal)/             SIGNED-IN portal — unchanged routes, restyled shell
     layout.tsx          ink masthead + service nav + ink footer: copyright, the
                         guest house office's phone and email (9 Oct 2026), links
@@ -551,7 +583,7 @@ Mail templates (`lib/mail/render.ts`) still carry the old amber header.
 | --- | --- |
 | `components/site/brand.tsx` | **`BrandBlock`** — the lockup: `iitpkd-logo.png` (emblem only) + "Guest House" (serif) + a tracked tagline (`tagline`, default "IIT Palakkad"); `tone="light"` over photos and on ink; `compact` for the portal. Used by the site header, the footer and the portal header |
 | `components/site/site-header.tsx` | **`SiteHeader`** and `SITE_NAV`: a white bar, sticky from `lg`; links inside the header, a sideways-scrolling row below `lg`; Sign in / My portal |
-| `components/site/site-chrome.tsx` | **`SiteFooter({ pins })`** — the lockup and address, front office, **Find us** (each guest house's Map and Directions, How to reach the campus), **Institute** (`SITE_LINKS`), and a bottom line (Guidelines, Contact, Privacy notice). The **MRBS line** that opened it ("Booking a lecture hall or meeting room?") was removed on **7 Oct 2026** at the office's request, with every other mention of the Meeting Room Booking System |
+| `components/site/site-chrome.tsx` | **`SiteFooter({ pins })`** — the lockup and address, the number under `GUEST_HOUSE_CONTACT.phoneLabel` (**Guest House Manager** since 14 Oct 2026), **Find us** (each guest house's Map and Directions, How to reach the campus), **Institute** (`SITE_LINKS`), and a bottom line (Guidelines, Contact, Privacy notice). The **MRBS line** that opened it ("Booking a lecture hall or meeting room?") was removed on **7 Oct 2026** at the office's request, with every other mention of the Meeting Room Booking System |
 | `components/site/site-nav.tsx` | `NavBar` — `tone="dark"` (portal: charcoal bar, uppercase, vermilion bar under the current page) or `"light"` (the white site header, a short vermilion underline); `scroll` for the phone row |
 | `components/site/site-ui.tsx` | `Container` (1240px), `Label` (tracked capitals), `PageTitle` (the sign-in pages' `<h1>`, optional `kicker`), **`PageMasthead`** (a light band: breadcrumb, `<h1>`, lead, `note`, `aside`), `SectionHead` (label + `<h2>` + optional link), `ArrowLink`, `BulletList`, `siteButton.{brand,ink,outline,light,outlineLight}`, `SitePhotoFrame` (8px corners; `zoom` eases on hover) |
 | `components/site/guest-house-map.tsx` | **`GuestHouseMap`** (client): WAI-ARIA tabs, one per pin, the chosen embed, "Open in Google Maps" / "Get directions" |
@@ -591,7 +623,10 @@ the role's form allows), **Meal booking** (ink, names the kitchen; only for
 - **Gallery** — light masthead; sections by subject; a section of four or
   more leads with one photo at double size; **no visible captions** (alt text
   kept); each opens full size.
-- **Contact** — light masthead; front office, email, address and a Bookings
+- **Contact** — light masthead; the number labelled **Guest House Manager**
+  (14 Oct 2026, the office; it read "Front office", and
+  `GUEST_HOUSE_CONTACT.phoneLabel` is now the one wording, shared with the
+  home page's hero line and the footer), email, address and a Bookings
   note (online only — the lecture-hall sentence came off on 7 Oct 2026);
   **Finding the guest houses**
   with the map tabs in a rounded card.
@@ -618,6 +653,12 @@ wording of `isMealBookable`), `servingHouses`, `joinNames`.
    `getSitePolicies()` loader that computed them for the site (and
    `homeFacts`, `openTo`, the route tables) was deleted for this reason; don't
    bring it back. A unit test checks the copy for role labels.
+   **One named exception, 14 Oct 2026:** the phone number on the contact page,
+   the home page and the footer is labelled **Guest House Manager**, because
+   the office asked for it - a post a guest telephones, not a stage in a
+   pipeline, and the address beside it was already `ghm@`. Assistant Warden,
+   HOD, IAR and Faculty Advisor stay off every public page, and the test still
+   fails if one reaches `BOOKING_STEPS` or `guidelineSections`.
 2. **If a sentence states a rule the portal enforces, render it from `lib/`**
    — the advance window, stay cap, capacity, meals, charges. Only facts the
    backend does not model (amenities, house rules) are literal copy, marked
@@ -713,7 +754,7 @@ Contact details are the ones on the foot of the office's own invoice template:
 | "Keep me signed in", "Forgot password" | The mock session has neither; a control that does nothing is worse than none. Real auth brings both |
 | The prototype's meal-only flow ("Meal requests close the previous evening", "attach to your room booking automatically") | Built differently since: **Meals only** is a service type inside `/book` (Phase 6, reworked 23 Sep 2026 as a set of dates with the kitchen's notice period — a meal must be booked before the previous one finishes being served). `/book-meal` explains it and signs in to `/book?service=meals_only`. Nothing is "attached" to a room booking automatically |
 | A rate card on the public site | Rates live in Tariffs & Invoicing and change by date. The Guidelines page has a **"Charges and settlement"** card (Phase 10) built from the invoice Settings: the day basis, the grace hours, and that **the tariff includes GST** |
-| "Requests at least seven days in advance", "Check-in from 12:00 noon / check-out by 11:00" | Contradict the backend: the window is one month *maximum*, and times are chosen per booking |
+| "Requests at least seven days in advance", "Check-in from 12:00 noon / check-out by 11:00" | Contradict the backend: the window is a *maximum* (six months since 14 Oct 2026, one before), not a minimum, and times are chosen per booking |
 | "24-hour front office", "Doctor on call", front-office hours | Unconfirmed; the facilities cards use the iitpkd.ac.in amenity list (TODO-marked) and backend-true service lines |
 | `image-slot.js` | Prototype-only, per the handoff. `design_handoff/**` is excluded from ESLint |
 

@@ -43,7 +43,6 @@ test("a faculty official stay waits for the HOD before the manager", async ({ pa
   const upload = page.locator('input[type="file"]');
   if (await upload.count()) await upload.first().setInputFiles("e2e/fixtures/id-document.png");
 
-  await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
   const toast = page.getByText(REFERENCE).first();
@@ -137,7 +136,6 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   const summary = page.getByText(/4 vegetarian, 2 non-vegetarian/).first();
   await expect(summary).toBeVisible();
 
-  await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
   const toast = page.getByText(REFERENCE).first();
@@ -195,7 +193,6 @@ test("the kitchen refuses a sitting that is already full", async ({ page }) => {
     await page.locator("#meal_guest_count").fill(people);
     await page.locator("#meal_veg_count").fill(people);
     await page.locator("#meal_non_veg_count").fill("0");
-    await page.locator('[name="privacy_consent"]').check();
     await page.getByRole("button", { name: "Submit booking request" }).click();
   };
 
@@ -242,6 +239,32 @@ test("the availability console counts rooms for a requester and charts them for 
   await expect(page.getByText("Vacant", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Turnaround \(housekeeping/)).toHaveCount(0);
   await expect(page.getByText("Room details", { exact: true })).toHaveCount(0);
+
+  /**
+   * The count of free rooms is **green** (14 Oct 2026, the office) - the
+   * desk's own check-in green, `--occupy` / #00703c. The computed colour
+   * rather than the class, so a missing theme token fails here too.
+   */
+  const colour = await page
+    .locator('li[aria-label*="rooms free"] span.tabular-nums')
+    .first()
+    .evaluate((el) => getComputedStyle(el).color);
+  expect(colour).toBe("rgb(0, 112, 60)");
+
+  /**
+   * And a date that has gone is not offered at all: no figure, the word Past,
+   * and an `aria-label` that says why. The console opens on the week
+   * containing today, which holds past days on every weekday but Monday, so
+   * this steps to the week before - where all seven have gone - rather than
+   * depending on the day the suite runs.
+   */
+  await page.getByRole("button", { name: "Previous week" }).click();
+  await expect(page.locator('li[aria-label*="not available to book"]')).toHaveCount(7);
+  await expect(page.getByText("Past", { exact: true }).first()).toBeVisible();
+  // Next week has none of them.
+  await page.getByRole("button", { name: "Today" }).click();
+  await page.getByRole("button", { name: "Next week" }).click();
+  await expect(page.locator('li[aria-label*="not available to book"]')).toHaveCount(0);
 
   await signIn(page, ACCOUNTS.manager);
   await page.goto("/availability");

@@ -363,6 +363,55 @@ one.
 
 ---
 
+## 2g. Opened by the 14 Oct 2026 (later) round - the office's twelfth list
+
+Four of the five items closed outright. What they opened:
+
+- **The portal publishes no privacy notice and collects no consent, and that
+  is the institute's call to make.** Updated the same evening: the tick and
+  its paragraph came off the request at the office's request (and the stored
+  consent with them, rather than being fabricated - `createBooking` writes
+  neither `privacy_notice_version` nor `privacy_consent_at`), and then the
+  owner asked for the whole feature to be withdrawn. The page, its version and
+  its three links are in **`archive/privacy-notice/`**, which is also the
+  restore ([02-decisions.md](02-decisions.md), two entries).
+  **To settle with the institute** (and so also listed in
+  [04-production.md](04-production.md) §4 and its "DPDP Act, 2023" section):
+  whether the portal must publish a notice at all, and whether a booking must
+  carry a recorded consent. If the institute has a notice of its own that
+  covers the portal, linking to it is a line in the footer; if not, the
+  archive's README restores this one in four steps with no migration.
+- **The archive is now a thing to maintain.** `archive/README.md` holds the
+  rule that keeps it undeployed - excluded from `tsconfig.json` and
+  `eslint.config.mjs`, collected by neither test runner, imported by nothing.
+  A second archived feature goes in beside it with its own restore and a row
+  in that table; an archived feature that is restored is **deleted** from
+  there in the same change, or the live copy and the archived copy start to
+  drift and the wrong one gets edited.
+- **A deployment that has saved the Booking window Setting keeps one month.**
+  The default is now six, and a saved `rules.booking` row beats it. Nothing
+  reads as broken - the form, the Guidelines and the error all quote the
+  stored figure - so the only way to notice is to look. Open Settings once on
+  any deployment that has pressed Save there. There is deliberately no
+  `revision` upgrade for this group ([02-decisions.md](02-decisions.md)).
+- **The header line on `/availability` still says "N free all month".** The
+  office asked for the equivalent sentence to come off the **booking form**
+  and said nothing about this one, so it stands. It is the same
+  `freeThroughout` figure, and it answers less the longer the window - if the
+  office asks again, it is the same removal.
+- **Past days are greyed, not clipped, and the navigation is not blocked.**
+  A requester can still step back a week and will see seven greyed cells. If
+  the office would rather they could not, the cheap version is to disable
+  *Previous* for a non-desk reader when the whole previous range has gone -
+  but the desk shares those controls, so it has to stay a role question, not
+  a date question.
+- **Nothing tests the colour of a figure but one e2e assertion.** The green is
+  checked by computed style in `e2e/official-and-dining.spec.ts`; the vermilion
+  "Full" state and the meter are not. A visual regression test would cover the
+  lot, and there is still none ([03-roadmap.md](03-roadmap.md) §5).
+
+---
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the

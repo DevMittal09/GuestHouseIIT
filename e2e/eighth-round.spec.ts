@@ -218,7 +218,6 @@ test("a missed request reaches the manager's console and can be reinstated", asy
   await page.locator('[name="check_out_date"]').fill(localDate(1));
   await page.locator('[name="purpose_of_visit"]').fill("Parents visiting - nobody decides this one");
   await fillGuest(page, 0, 0, { name: "Sreeja Menon", age: "50", gender: "female", relationship: "Mother" });
-  await page.locator('[name="privacy_consent"]').check();
   await page.getByRole("button", { name: "Submit booking request" }).click();
   const toast = page.getByText(REFERENCE).first();
   await expect(toast).toBeVisible({ timeout: 30_000 });

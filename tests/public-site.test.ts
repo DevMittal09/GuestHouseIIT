@@ -154,7 +154,7 @@ describe("guidelines", () => {
 
   it("states the portal's rules from Settings", () => {
     const booking = byId.booking.items.join(" ");
-    expect(booking).toContain("within 1 month");
+    expect(booking).toContain("within 6 months");
     expect(booking).toContain("up to 14 nights");
 
     const rules: Rules = {

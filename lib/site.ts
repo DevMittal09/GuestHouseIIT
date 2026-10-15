@@ -75,6 +75,14 @@ export const SITE_LINKS = [
  * TODO(site): whether front-office hours should be published.
  */
 export const GUEST_HOUSE_CONTACT = {
+  /**
+   * Whose number this is, wherever it is printed - the contact page, the home
+   * page and the site footer (14 Oct 2026, the office: the label read "Front
+   * office"). It is the Guest House Manager's line, and `ghm@iitpkd.ac.in`
+   * beside it was already saying so. Written here rather than in three
+   * components so the three cannot disagree about the same number.
+   */
+  phoneLabel: "Guest House Manager",
   phone: "+91 491 209 2016",
   phoneHref: "tel:+914912092016",
   email: "ghm@iitpkd.ac.in",

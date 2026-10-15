@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { toast } from "sonner";
 import { exportMyData, requestDataDeletion } from "@/app/actions/privacy";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -18,8 +17,13 @@ import { formatDate } from "@/lib/format";
  * band with a rule down its left edge and a sentence about how details are
  * held, which made a standing legal right look like something that had just
  * happened to this booking. The rights are the same; what is left on screen
- * is the privacy notice and the two things a person can actually do. An open
- * erasure request still says so - that *is* news about their data.
+ * is the two things a person can actually do. An open erasure request still
+ * says so - that *is* news about their data.
+ *
+ * **The "Privacy notice" link that opened this row is gone** (14 Oct 2026):
+ * the notice itself was withdrawn, and `archive/privacy-notice/` holds it and
+ * the restore. These two actions are deliberately **kept** - they are what a
+ * person can do about their data, not a document about it.
  */
 export function MyData({ openRequest }: { openRequest: { created_at: string } | null }) {
   const router = useRouter();
@@ -48,9 +52,6 @@ export function MyData({ openRequest }: { openRequest: { created_at: string } | 
 
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-border pt-4 text-[13.5px] text-muted-foreground">
-      <Link href="/privacy" className="underline underline-offset-4 hover:text-ink">
-        Privacy notice
-      </Link>
       <button
         type="button"
         disabled={isPending}

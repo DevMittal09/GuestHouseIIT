@@ -33,7 +33,7 @@ const FOOTER_LABEL = "mb-4 text-[11px] font-semibold tracking-[0.22em] text-saff
 const FOOTER_LINK = "text-on-ink transition-colors duration-200 hover:text-white";
 
 /**
- * The charcoal footer: the lockup and address, the front office, each guest
+ * The charcoal footer: the lockup and address, the manager's line, each guest
  * house's map and directions, and the institute's links.
  *
  * It used to open on a banner pointing people booking a lecture hall or a
@@ -58,7 +58,7 @@ export function SiteFooter({ pins }: { pins: MapPin[] }) {
         </div>
 
         <div>
-          <p className={FOOTER_LABEL}>Front office</p>
+          <p className={FOOTER_LABEL}>{GUEST_HOUSE_CONTACT.phoneLabel}</p>
           <p className="text-[15px] leading-[1.9]">
             <a
               href={GUEST_HOUSE_CONTACT.phoneHref}
@@ -122,9 +122,6 @@ export function SiteFooter({ pins }: { pins: MapPin[] }) {
             </Link>
             <Link href="/contact" className="text-on-ink-muted hover:text-white">
               Contact
-            </Link>
-            <Link href="/privacy" className="text-on-ink-muted hover:text-white">
-              Privacy notice
             </Link>
           </span>
         </Container>

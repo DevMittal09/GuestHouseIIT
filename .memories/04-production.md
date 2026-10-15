@@ -772,7 +772,7 @@ left alone.
 **Defaults that are policy choices, not guesses — the office should review each
 once.** The value, the meaning and who may change it are in
 [12-settings-and-defaults.md](12-settings-and-defaults.md): the advance-booking
-window (1 month), the longest stay (14 nights), the turnaround buffer (4 h), the
+window (6 months), the longest stay (14 nights), the turnaround buffer (4 h), the
 no-show release (off), the day basis and grace hours, "rates include GST" (yes),
 the GST percentages and SAC codes, the meal serving windows, the kitchen's 30 per
 sitting, room capacity, the debitable heads per category, ID retention (365 days)
@@ -1271,6 +1271,14 @@ Send one email listing all of it, not one ask at a time.
   that damage or loss recovered from a guest ("Other" charges) carries no GST.
 - **The guest house phone, email, house rules and photo attribution** -
   everything tagged `TODO(site)` in `lib/site.ts` and `lib/site-content.ts`.
+  The number on the contact page, the home page and the footer is labelled
+  **Guest House Manager** since 14 Oct 2026; confirm it is the right line to
+  publish for a guest with a question about a booking.
+- **Whether the portal must publish a privacy notice, and whether a booking
+  must carry a recorded consent** - the tick came off the form on 14 Oct 2026
+  and the notice itself was withdrawn the same day (`archive/privacy-notice/`).
+  If the institute publishes its own notice covering the portal, link to that
+  instead. See "DPDP Act, 2023" below.
 - **Who owns this after us.** The current developers graduate in 2027. If no
   institute staff member is named as owner, the portal becomes unmaintained
   software holding ID data. Name someone now and build for the handover.
@@ -1326,9 +1334,30 @@ by **13 May 2027** — inside this system's operating life.
 
 **Built** (Phase 8, 22 Sep 2026 — see
 [05-credentials-and-security.md](05-credentials-and-security.md)): a versioned
-consent notice at the point of collection, purpose limitation, a nightly
-retention and deletion job, access / correction / erasure requests handled from
-the dashboard and Console → Security, and an audit trail of each.
+notice, purpose limitation, a nightly retention and deletion job, access /
+correction / erasure requests handled from the dashboard and Console →
+Security, and an audit trail of each.
+
+> **Changed on 14 Oct 2026, and this one needs an answer before go-live.**
+> **The portal no longer publishes a privacy notice at all**, and records no
+> consent. It went in two steps that day: the office asked for the privacy
+> policy text to come off the request (so the form carries no paragraph and no
+> tick, and `createBooking` records no consent rather than inventing one),
+> then the owner asked for the feature to be removed completely but kept so it
+> can be reverted - so the `/privacy` page, its version constant and all three
+> links to it are now in **`archive/privacy-notice/`**, which also holds the
+> restore. `/privacy` is a 404.
+>
+> What is **still built and running**: purpose limitation, the nightly
+> retention and deletion job, access / correction / erasure requests from the
+> dashboard and Console → Security, and the audit trail of each.
+>
+> So of the DPDP pieces, what is missing is the **notice** - the document that
+> says what is collected, who sees it, how long it is kept and what rights a
+> person has - and the **consent record**. Ask the institute whether it
+> publishes one of its own that covers the guest house portal, or whether this
+> one goes back. Restoring it is `archive/privacy-notice/README.md`, four
+> steps, no migration.
 
 **Still needs a person, not code:**
 

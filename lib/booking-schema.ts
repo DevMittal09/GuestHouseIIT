@@ -477,15 +477,15 @@ export function bookingPayloadSchema(
          .boolean()
          .optional()
          .transform((v) => v === true),
-      /**
-       * DPDP (Phase 8): the requester agrees to how the details on this form
-       * are handled, and the booking records which version of the notice they
-       * were shown. Unlike the pets notice this is a tick, because consent has
-       * to be given, not merely displayed.
+      /*
+       * **`privacy_consent` is gone from the payload** (14 Oct 2026). The tick
+       * came off the form earlier the same day; the whole privacy notice went
+       * with it, and the field had nothing left to carry. The object is not
+       * `.strict()`, so a payload that still names it is **stripped, not
+       * refused** - which is what a stored or in-flight payload needs. The
+       * field, the refinement that demanded it and the notice it pointed at
+       * are kept in `archive/privacy-notice/`.
        */
-      privacy_consent: z.boolean().refine((v) => v === true, {
-        message: "Tick the box to confirm you have read how these details are used",
-      }),
       custom: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
     })
     .superRefine((v, ctx) => {

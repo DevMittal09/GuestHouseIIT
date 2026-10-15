@@ -35,7 +35,7 @@ export default async function ContactPage() {
       <Container className="grid gap-x-14 gap-y-12 pt-[clamp(56px,7vw,96px)] pb-24 lg:grid-cols-12">
         <div className="flex min-w-0 flex-col lg:col-span-4">
           <div className="border-t border-ink pt-4">
-            <Label>Front office</Label>
+            <Label>{GUEST_HOUSE_CONTACT.phoneLabel}</Label>
             <a
               href={GUEST_HOUSE_CONTACT.phoneHref}
               className="mt-2 block font-heading text-[clamp(26px,3vw,32px)] font-semibold text-ink tabular-nums hover:text-vermilion-deep"

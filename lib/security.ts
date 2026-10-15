@@ -40,8 +40,15 @@ export type PrivacyRequest = {
 
 export type NewPrivacyRequest = { user_id: string; kind: PrivacyRequest["kind"]; note: string | null };
 
-/** The privacy notice a booking consented to. Bump when the notice changes. */
-export const PRIVACY_NOTICE_VERSION = "2026-09-22";
+/*
+ * **`PRIVACY_NOTICE_VERSION` is gone with the notice** (14 Oct 2026). The
+ * privacy notice, its page and every link to it were withdrawn at the owner's
+ * request and are kept, with the one-line restore, in
+ * `archive/privacy-notice/`. `bookings.privacy_notice_version` and
+ * `privacy_consent_at` are **not** dropped: rows written before 14 Oct 2026
+ * carry real values, and the data export (`app/actions/privacy.ts`) reads
+ * them. Nothing writes either column now.
+ */
 
 /**
  * The throttles, in one place so the numbers can be read at a glance. Counted

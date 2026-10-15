@@ -3,6 +3,7 @@
 import {
   hourLabel,
   HOURS_IN_DAY,
+  isPastDay,
   type AvailabilityRange,
   type RoomDayOccupancy,
   type RoomRangeOccupancy,
@@ -216,19 +217,35 @@ export function RangeOccupancyChart({
 
         {range.days.map((day, row) => {
           const free = freeByDay[row] ?? 0;
+          // A day that has gone is not an availability: the bookings on it
+          // are history, and "5 free" beside them reads as an offer
+          // (14 Oct 2026). The bars stay - that is the record - and the
+          // figure goes. Same rule as the requester's counts panel,
+          // `isPastDay`.
+          const past = isPastDay(day, today);
           return (
             <div
               key={day}
-              title={`${formatDateValue(day, { year: true })} - ${free} of ${rooms.length} rooms free all day`}
+              title={`${formatDateValue(day, { year: true })} - ${
+                past ? "a past date" : `${free} of ${rooms.length} rooms free all day`
+              }`}
               className={cn(
                 "sticky left-0 z-10 flex border-b bg-background pr-2 tabular-nums",
                 isWeek ? "flex-col items-end justify-center" : "items-center justify-end gap-2",
-                day === today ? "font-semibold text-primary" : "text-muted-foreground"
+                day === today ? "font-semibold text-primary" : "text-muted-foreground",
+                past && "opacity-60"
               )}
               style={{ gridColumn: 1, gridRow: row + 2 }}
             >
               <span className="text-[11px]">{formatDateValue(day, { month: isWeek })}</span>
-              <span className="text-[10px] font-normal text-muted-foreground">{free} free</span>
+              <span
+                className={cn(
+                  "text-[10px] font-normal",
+                  past || free === 0 ? "text-muted-foreground" : "text-occupy"
+                )}
+              >
+                {past ? "past" : `${free} free`}
+              </span>
             </div>
           );
         })}
@@ -242,7 +259,13 @@ export function RangeOccupancyChart({
             {range.days.map((day) => (
               <div
                 key={day}
-                className={cn("border-b", day === today && "bg-primary/10")}
+                className={cn(
+                  "border-b",
+                  day === today && "bg-primary/10",
+                  // Greyed, not hidden: the stays drawn over it are the
+                  // record of what happened (14 Oct 2026).
+                  isPastDay(day, today) && "bg-band/60"
+                )}
                 style={{ height: rowHeight }}
               />
             ))}

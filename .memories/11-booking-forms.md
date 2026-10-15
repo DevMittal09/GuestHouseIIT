@@ -169,8 +169,9 @@ its form is not in the Form Builder and every guest field is required.
 
 - Check-in in the **future** (skipped for meals only — its "check-in" is
   midnight on the first meal day).
-- Check-in within **1 month** of today (`advance_booking_months`).
-  **Exempt:** Official, GH Manager, developer. Applies to check-in only.
+- Check-in within **6 months** of today (`advance_booking_months`; one month
+  until 14 Oct 2026). **Exempt:** Official, GH Manager, developer. Applies to
+  check-in only.
 - Check-out after check-in — the message names both times as read, and points
   at the AM/PM dropdowns when they are on the same day.
 - At most **14 nights** (`max_stay_nights`, 0 = no cap), counted in institute

@@ -90,7 +90,7 @@ console names them — change the name there and the queue or option moves.
 | --- | --- | --- |
 | **Room Availability** | `/availability` (nav, every role) | **Two different answers since 7 Oct 2026.** The **manager, caretaker and developer** (`SEES_ROOMS`) get the Day / Week / Month chart per guest house, the turnaround, accepted overlaps, maintenance and the room-by-room list — and the manager and developer alone see who and why (`CAN_SEE_OCCUPANT`). **Everyone else is sent a count and no rooms at all**: **how many rooms are free**, as a labelled strip of figures per day — redrawn 9 Oct 2026 — or a headline figure plus hour chips on a single day, with the full sentence on each cell's `aria-label`. The booking form's panel is the same component. Max 62 days per request. |
 | **Booking History / Approval Log** | `/history` (nav, every role) | Requesters: their own bookings ("Booking History"). Staff: their jurisdiction ("Approval Log"), with "Handled by me / Everything in scope". Keyword search with `ref:`, `guest:`, `room:`, `by:`, `purpose:`, `gh:`, `status:` prefixes; date presets as one grouped `<select>`, and the thirteen stage / three meal tick boxes behind a **"Stages and meals"** disclosure that names what it is holding (9 Oct 2026); **CSV and PDF export for every role** — both re-derive the user, the scope and the filters server-side from the query string alone. |
-| Public website | `/`, `/guidelines`, `/gallery`, `/contact`, `/privacy` | Open to anyone, signed in or not. |
+| Public website | `/`, `/guidelines`, `/gallery`, `/contact` | Open to anyone, signed in or not. `/privacy` was withdrawn on 14 Oct 2026 and is a 404 - `archive/privacy-notice/`. |
 
 ---
 
@@ -137,7 +137,8 @@ Everything a requester can do with a booking they own (or raised for a club):
 - **Special rules:** relationship dropdown with the parent rule (siblings and
   grandparents only alongside Mother / Father / Guardian) and one-of-each
   (one Mother, one Father…); the banner "Double shared rooms will get first
-  preference"; booking window 1 month; at most 14 nights.
+  preference"; booking window 6 months (1 until 14 Oct 2026); at most
+  14 nights.
 - **Menu:** My Bookings · New Booking · Room Availability · Booking History.
 
 #### Employee — faculty

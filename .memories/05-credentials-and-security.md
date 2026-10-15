@@ -502,10 +502,23 @@ The import runbook is [04-production.md](04-production.md) §1a.
 
 #### Retention and privacy (DPDP)
 
-- A versioned privacy notice at `/privacy`, a consent tick on the booking form
-  stored with the notice's version, "Download my data" and "Ask for erasure"
-  on the dashboard, and the office answering each request from Console →
-  Security.
+- **"Download my data" and "Ask for erasure"** at the foot of My Bookings,
+  with the office answering each request from Console → Security. These are
+  live and unchanged.
+- **There is no privacy notice in the portal, and no consent is recorded**
+  (14 Oct 2026, in two steps: the office asked for the privacy policy text to
+  come off the request, then the owner asked for the feature to be removed
+  completely but kept so it can be reverted). The tick and its paragraph went
+  from the booking form, then the `/privacy` page, the
+  `PRIVACY_NOTICE_VERSION` constant and all three links to it. `createBooking`
+  writes neither `bookings.privacy_notice_version` nor `privacy_consent_at` -
+  recording a consent nobody was asked for would record something that did not
+  happen - and bookings made before that date keep both.
+  **Everything removed, and the step-by-step restore, is in
+  `archive/privacy-notice/`**; `/privacy` is a 404 and an e2e test keeps it
+  one. **Whether the institute needs a published notice and a recorded consent
+  is a question for it to answer** ([03-roadmap.md](03-roadmap.md) §2g,
+  [04-production.md](04-production.md) "DPDP Act, 2023").
 - `lib/retention-server.ts` runs nightly: identity fields and their documents
   are erased `id_retention_days` (Setting, default 365) after a stay ends, and
   the audit log is trimmed to `audit_retention_days` — which the database will

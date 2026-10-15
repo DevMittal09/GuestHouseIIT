@@ -391,6 +391,25 @@ export function roomRangeStatus(
   return booked >= total - 0.5 ? "booked" : "partial";
 }
 
+/**
+ * Whether an institute calendar date has already gone (14 Oct 2026, the
+ * office: the week and month views "should not display past dates as
+ * available options").
+ *
+ * A week runs Monday to Sunday and a month is a whole calendar month, so a
+ * range containing today contains days nobody can book - and the panel was
+ * printing a free-room count against each of them, which reads as an offer.
+ * The days are institute calendar dates ("yyyy-MM-dd"), so a string compare
+ * is the whole comparison and needs no zone of its own; `today` comes from
+ * `toDateInputValue(new Date())`, which is institute time.
+ *
+ * Both views are drawn from this one function, in the booking form and on
+ * `/availability`, so the two cannot disagree about which days have gone.
+ */
+export function isPastDay(day: string, today: string): boolean {
+  return day < today;
+}
+
 /** Where `now` falls in the range as a fraction (0–1), or null when outside it. */
 export function rangeProgress(range: AvailabilityRange, now: Date = new Date()): number | null {
   const at = now.getTime();

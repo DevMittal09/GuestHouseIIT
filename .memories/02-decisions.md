@@ -356,6 +356,14 @@ client-only check — the same reasoning that made the field modes server-enforc
 > `developer` — the desk books what the institute has already committed to —
 > and the window is a Setting (Phase 1).
 
+> **Superseded in its figure, 14 Oct 2026.** The office asked to "allow users
+> to make bookings more than 30 days in advance", so the default window is
+> **six months**, not one. Everything else here stands: it is still a cap on
+> check-in only, still `addMonths`, still exempt for official / dignitary
+> bookings, the manager and the developer, and still a Setting the office can
+> take to 24 months. See "Bookings open six months ahead, not one" at the end
+> of this file.
+
 **Decision.** Cap check-in at one month ahead for every requester category
 except `official`.
 
@@ -1729,7 +1737,16 @@ stay, and adds:
 - **DPDP**: a versioned privacy notice at `/privacy` that reads its retention
   period from Settings, a consent tick on the booking form stored with the
   notice's version, "Download my data" and "Ask for erasure" on the dashboard,
-  and the office answering each request from Console → Security. Erasure is a
+  and the office answering each request from Console → Security.
+  > **Superseded in part, 14 Oct 2026, twice in one day.** First the
+  > **consent tick** went at the office's request, and with it the stored
+  > consent: `createBooking` writes neither `privacy_notice_version` nor
+  > `privacy_consent_at`, because recording a consent nobody was asked for
+  > would record something that did not happen. Then the **notice itself**
+  > went at the owner's: the `/privacy` page, its version and every link to it
+  > are in `archive/privacy-notice/`. What remains of this bullet is the
+  > retention period, the export, the erasure request and the audit trail -
+  > all unchanged and live. See the two entries at the end of this file. Erasure is a
   request, not a switch: records the guest house must keep for audit cannot be
   erased, and the answer says so.
 - **Audit**: sign-ins (success and failure), console unlocks, role and settings
@@ -3707,7 +3724,11 @@ comes first" before a question titled "Type of booking" is work, not help.
 **What was kept.** Anything that is a rule or a figure (the kitchen's limit,
 the room capacity, the Aadhaar length, the pay-at-checkout note, the privacy
 consent, the "nothing is held until a room is allocated" line), and anything
-the office asked for by name. **What went** is the second clause: the
+the office asked for by name.
+> **Superseded for one of them, 14 Oct 2026.** The **privacy consent** was
+> kept here as a rule and has since been removed outright, at the office's
+> request - the paragraph, the tick and the stored consent. Everything else on
+> this list stands. **What went** is the second clause: the
 "so that…", the "which is what…", the restatement of what the heading already
 says.
 
@@ -5251,3 +5272,232 @@ worried about.
   is correct: the only change this round is where its plan is *applied*.
 - **`profiles.department_or_club`, `is_active`, and the 2000-row ceiling** -
   still open, [03-roadmap.md](03-roadmap.md) §2f.
+
+---
+
+# The office's twelfth list - 14 October 2026
+
+Five items. Two of them reverse earlier decisions of ours, and both reversals
+are recorded as *Superseded* notes above: the one-month booking window and the
+privacy consent tick.
+
+## The number on the contact page is the Guest House Manager's
+
+**Decision.** The label on `GUEST_HOUSE_CONTACT.phone` reads **Guest House
+Manager** instead of "Front office", and the label is written **once**, in
+`lib/site.ts`, for the three places that print that number: the contact page,
+the home page's hero line and the site footer.
+
+**Why one place.** It is one number. The label was written out three times, so
+the office's correction would have been applied to the page they happened to
+be looking at and left the other two reading "Front office" - exactly the
+drift that put the guest house's phone number in `GUEST_HOUSE_CONTACT` in the
+first place (9 Oct 2026). The address beside it has been `ghm@iitpkd.ac.in`
+since 24 Sep, so the page was already naming the manager in one half of the
+card and not the other.
+
+**This is a deliberate exception to "no role names on the public site"**
+(26 Sep 2026, above). That rule is about the portal's *internals* - who
+forwards whose request - and the unit test that enforces it guards the copy
+that states process: `BOOKING_STEPS` and `guidelineSections`. The Guest House
+Manager is a post a guest telephones, not a stage in a pipeline, and the
+office asked for it by name. **Don't widen it**: Assistant Warden, HOD, IAR
+and Faculty Advisor stay off every public page, and the test still fails if any
+of them reaches that copy.
+
+## Green means "free", and a date that has gone says nothing
+
+**Decision.** The count of free rooms is drawn in **green** - `--occupy`,
+#00703c, the deep green of the desk's own *Mark as Occupied* button - in the
+counts panel (`/availability` and the booking form), in its hour strip and
+meter, and in the desk chart's date column. And a day that has **already
+gone** carries no figure at all: it is greyed, labelled *Past*, and its
+`aria-label` says "a past date, not available to book". `isPastDay(day,
+today)` in `lib/availability.ts` is the one rule, read by the requester's
+panel and the desk's week/month chart.
+
+**Why green at all.** The office asked for it. It is also the only colour the
+panel was missing: a full day has been vermilion since 9 Oct, and the figure
+beside it was ink - so the two states that matter most to a reader were a
+colour and an absence of one. **No new token:** `--occupy` already exists for
+the check-in button, and adding a second green is how a palette stops being a
+palette. White on it is 6:1; ink-on-white green text is 5.3:1, above AA.
+
+**Why the past days needed a rule rather than a tidy-up.** A week runs Monday
+to Sunday and a month is a whole calendar month (`availabilityRange`), so the
+range containing today almost always contains days nobody can book - and each
+of them printed "10 free", which reads as an offer. The schema has always
+refused them (`earliestBookableCheckIn` is midnight this morning); the panel
+was contradicting the form.
+
+**Why greyed and not removed.** Three reasons, in order. The **desk** reads
+the same chart for history: the bars on a past day are the record of what
+happened, and the office browses backwards deliberately. **Clipping the
+range** instead would mean the week view sometimes shows four days and
+sometimes seven, and a range wholly in the past would show nothing at all.
+And the days have to stay in place for the **figures** below them to line up
+with the dates above them. The office's own words allowed it: "hiding or
+blurring previous dates where appropriate".
+
+**What was deliberately left alone.** The navigation: *Previous week* still
+works for everyone, because the desk needs it and a requester who presses it
+now sees seven greyed cells, which is a clearer answer than a disabled button.
+And the header line on `/availability` ("23 rooms · 2 booked during this month
+· 21 free all month") keeps its figures - the office asked about the booking
+form's sentence, not this one. If they want that gone too it is the same
+removal.
+
+## The privacy consent tick is gone, and so is the consent record
+
+**Decision.** The tick and its paragraph come off the booking form.
+`privacy_consent` stays in `bookingPayloadSchema` as **optional**, so a stored
+payload still parses, exactly like `pets_policy_acknowledged` beside it. And
+`createBooking` writes **neither** `bookings.privacy_notice_version` nor
+`privacy_consent_at`.
+
+**Why the record went with the tick.** This is the part worth arguing about.
+The two columns mean "the notice the requester agreed to" and "when they
+agreed to it"; with nothing on screen to agree to, filling them in would
+record something that did not happen - the same rule as
+`fund_declaration_at`, which is never invented for a booking that was never
+asked, and as the 7 Oct refusal to backfill. A consent trail an auditor would
+rely on is the worst thing to fabricate. Null reads as "not asked", which is
+true, and bookings made before today keep both values.
+
+**Why it is not simply a loss.** The notice has three other homes and keeps
+them all: `/privacy`, versioned, with the retention period read from Settings;
+a link in the footer of every public page; the closing paragraph of the
+Guidelines; and "Privacy notice · Download my data · Ask for erasure" on the
+dashboard. This is the same shape as the pets notice (19 Sep, 11 Oct): the
+rule is *told*, not signed for.
+
+> **Superseded the same day, 14 Oct 2026.** None of those homes survived: the
+> owner asked for the privacy policy feature to be removed completely, kept so
+> it can be reverted. The page, the version and all three links are in
+> `archive/privacy-notice/`. See "The privacy notice is withdrawn, not
+> deleted" at the end of this file. What this entry decided about the
+> **record** still stands, and is the reason there is nothing to restore in
+> the database.
+
+**The concern, stated plainly, since the office may not have meant this far.**
+Phase 8 built the tick for DPDP, which wants notice given at or before
+consent. After this round the portal gives notice everywhere except at the
+moment of submission, and holds no consent record for new bookings. That is a
+judgement for the institute, not for us, and it is **two edits to reverse**:
+the block in `components/booking-form.tsx` and the refinement in
+`lib/booking-schema.ts`, plus the one line in `app/actions/bookings.ts` that
+records the version. Each of the three names the other two in a comment.
+[03-roadmap.md](03-roadmap.md) §2g carries it as an open question for the
+institute.
+
+## Bookings open six months ahead, not one
+
+**Decision.** `DEFAULT_RULES.booking.advance_booking_months` is **6**. The
+Setting's range (1-24) and the exempt roles are unchanged.
+
+**Why six and not "no limit".** The office asked to allow bookings "more than
+30 days in advance", not to remove the window: the original reasoning - a
+guest house cannot commit rooms a year out, and an unbounded window fills the
+calendar with speculative bookings nobody cancels - is still sound at twelve
+months and plainly wrong at one, which refused a parent booking for
+convocation and a conference guest invited a term ahead. Six months is a
+semester. A window of **zero** remains refused by `bookingRulesSchema`, and
+deliberately: every figure the Guidelines page prints has to be a figure, and
+`advanceWindowMessage` has to be able to name the last bookable date.
+
+**Why the default rather than a new rule.** It has been a Setting since
+Phase 1, so this is a one-line change to what a fresh install starts with, and
+the office can take it to 24 months from the console without us. **The cost,
+written down because it will bite:** a deployment that has already pressed
+Save on the Booking window card keeps its own stored value - a saved row beats
+a changed default, the same trap as a Form Builder row. There is no
+`revision` upgrade for `rules.booking`, and one would be heavier than the
+problem: the fix is to open Settings once. The local mock database has no
+`app_settings` row at all, and the hosted project's was never saved from the
+console.
+
+## The privacy notice is withdrawn, not deleted
+
+**Decision** (14 Oct 2026, the owner, hours after the consent tick came off:
+*"Remove privacy policy feature completely, but keep it saved in the repo as
+an archive... keep it saved here somewhere in the project root but do not
+deploy it"*). The `/privacy` page and route, `PRIVACY_NOTICE_VERSION` and all
+three links to it (the site footer's bottom line, the Guidelines' closing
+sentence, the first item of the My Bookings row) are **removed from the
+application** and kept in **`archive/privacy-notice/`** at the repo root, with
+a `README.md` that is the restore. The now-dead `privacy_consent` field came
+off the payload schema with them.
+
+**What was kept live, and why that is the whole scope of this decision.** The
+owner was asked which of three layers to take, and chose the narrowest: the
+notice itself. So **"Download my data" and "Ask for erasure"** stay, with the
+office's answers in Console -> Security, and so does the nightly
+**retention job**. The reasoning the owner was given: those are what a person
+can *do* about their data rather than a document about it, and
+`lib/retention-server.ts` is the control that erases Aadhaar numbers and ID
+scans after a stay - removing it would mean keeping identity documents for
+ever. `rules.privacy`, `privacy_requests` and both booking columns are
+untouched for the same reason.
+
+**No migration, and no column dropped.**
+`bookings.privacy_notice_version` and `privacy_consent_at` hold real values
+for every booking made before today, and the data export prints them. Nothing
+writes either now. That is also why a restore needs no database work at all.
+
+### Why an archive folder rather than git history
+
+Git history already holds it - `8a6ebe5` is the last commit with the whole
+feature, and the archive's README says so and gives the `git show` lines. The
+folder exists because **"revert it later" and "find it later" are different
+problems**. Six months on, nobody will know which commit to look in, that the
+removal came in two steps the same day, that the consent half was the office's
+decision and the notice half the owner's, or which four files have to change
+together for a tick to mean anything. A folder with the files and a numbered
+restore answers all of that without archaeology.
+
+**Why not a patch file.** `git apply -R` was the obvious mechanism and was
+rejected: the removal landed in the same uncommitted change as four unrelated
+items of the office's twelfth list, several of them in the same files, so a
+patch of those paths would carry the green availability figures and the
+six-month booking window along with the notice. A patch also rots - it stops
+applying the first time somebody edits a neighbouring line - whereas copied
+files and written-out snippets degrade into something a reader can still
+follow.
+
+### The rule that makes "do not deploy it" true
+
+The folder is **outside the application** and nothing imports it, so Turbopack
+never compiles it and `next build` never routes it. Three config facts hold it
+there, and `archive/README.md` states them because the next person to add an
+archived feature has to keep them:
+
+- **`tsconfig.json` excludes `archive`.** `include` is `**/*.ts` / `**/*.tsx`,
+  so without it `tsc --noEmit` - and `next build`, which type-checks with the
+  same config - would compile an archived component whose imports no longer
+  exist and fail. This was not theoretical: the archived page imports
+  `PRIVACY_NOTICE_VERSION`, which this round deleted.
+- **`eslint.config.mjs` ignores `archive/**`**, exactly as it ignores
+  `design_handoff/**` - the prototype that has sat in this repo unbuilt since
+  September. Archived code records what was there; holding it to today's lint
+  rules would make it rot on purpose.
+- **`vitest.config.ts` collects only `tests/**/*.test.ts`** and Playwright only
+  `e2e/`, so an archived test never runs.
+- **Never `import` from it.** The moment application code does, the archive is
+  in the bundle and all three are void. A restore is a **copy back**.
+
+**Verified, not assumed.** The build's route list has no `/privacy`, no build
+output contains the notice's text, and an e2e test asserts `/privacy` **404s**
+and that no public page links the word - because a restored page nobody can
+reach, and a link to a page that 404s, would each pass every other test in the
+suite. Then the restore itself was run: steps 1-3 of the archive's README
+applied to the working tree, `npm run lint`, `npm run typecheck` and
+`npm run build` clean with `/privacy` back as a route, and the tree put back.
+**An archive whose restore has never been run is a folder of hope.**
+
+**Cost.** The portal now publishes no privacy notice while holding Aadhaar
+numbers, ID scans, parents' names and phone numbers. That is a real exposure
+and it is the institute's to decide: [04-production.md](04-production.md)
+"DPDP Act, 2023" states it as a question to answer before go-live, and
+[03-roadmap.md](03-roadmap.md) §2g carries it. If the institute publishes a
+notice of its own that covers the portal, linking to that is a one-line change
+in the footer and the archive can be dropped.

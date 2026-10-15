@@ -1,6 +1,6 @@
 "use client";
 
-import { hourLabel, type AvailabilityCounts } from "@/lib/availability";
+import { hourLabel, isPastDay, type AvailabilityCounts } from "@/lib/availability";
 import { formatDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,17 @@ import { cn } from "@/lib/utils";
  * the proportion, and the sentence moved into each cell's `aria-label` so a
  * screen reader still hears it in full. A day with nothing free is a
  * vermilion rule and the word Full.
+ *
+ * **14 Oct 2026, the office.** Two changes, both about what the figures are
+ * saying. The count of free rooms is **green** - the desk's own check-in
+ * green (`--occupy`), the one green the portal already has, so nothing new
+ * was added to the palette - against the vermilion a full day carries. And a
+ * day that has **already gone** carries no figure at all: a week runs Monday
+ * to Sunday and a month is a whole calendar month, so a range containing
+ * today contains days nobody can book, and printing "10 free" against them
+ * read as an offer. They are greyed, labelled Past, and `isPastDay`
+ * (`lib/availability.ts`) is the one rule - the same one the desk's week and
+ * month chart uses.
  */
 export function AvailabilityCountsPanel({
   counts,
@@ -37,6 +48,8 @@ export function AvailabilityCountsPanel({
   compact?: boolean;
 }) {
   const oneDay = counts.days.length === 1;
+  /** A one-day window on a date that has gone: there is nothing to choose. */
+  const singleDayPast = oneDay && isPastDay(counts.days[0], today);
 
   return (
     <div className={cn("space-y-5", compact && "space-y-4")}>
@@ -48,6 +61,7 @@ export function AvailabilityCountsPanel({
           free={counts.freeByDay[0] ?? 0}
           total={counts.total}
           isToday={counts.days[0] === today}
+          isPast={isPastDay(counts.days[0], today)}
         />
       ) : (
         <div>
@@ -62,6 +76,7 @@ export function AvailabilityCountsPanel({
                 free={counts.freeByDay[i] ?? 0}
                 total={counts.total}
                 isToday={day === today}
+                isPast={isPastDay(day, today)}
               />
             ))}
           </ul>
@@ -70,8 +85,9 @@ export function AvailabilityCountsPanel({
 
       {/* The hours of a single day. A day with nothing free all day may still
           have rooms free for part of it, and that is what a requester
-          choosing a check-in time actually needs. */}
-      {counts.freeByHour && (
+          choosing a check-in time actually needs - on a date that has gone,
+          nothing at all. */}
+      {counts.freeByHour && !singleDayPast && (
         <div>
           <p className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
             Hour by hour
@@ -98,7 +114,7 @@ export function AvailabilityCountsPanel({
                   <span
                     className={cn(
                       "mt-1 block text-[0.9375rem] leading-none font-semibold tabular-nums",
-                      full ? "text-muted-foreground" : "text-ink"
+                      full ? "text-muted-foreground" : "text-occupy"
                     )}
                   >
                     {full ? "Full" : free}
@@ -119,21 +135,34 @@ function DayCell({
   free,
   total,
   isToday,
+  isPast,
 }: {
   day: string;
   free: number;
   total: number;
   isToday: boolean;
+  /** The day has gone: no figure, because it cannot be booked. */
+  isPast: boolean;
 }) {
   const full = free === 0;
   return (
     <li
       aria-label={`${formatDateValue(day)}: ${
-        full ? "no rooms free all day" : `${free} of ${total} rooms free`
+        isPast
+          ? "a past date, not available to book"
+          : full
+            ? "no rooms free all day"
+            : `${free} of ${total} rooms free`
       }`}
       className={cn(
         "border-t-2 pt-2",
-        full ? "border-vermilion" : isToday ? "border-ink" : "border-border-strong"
+        isPast
+          ? "border-border opacity-55"
+          : full
+            ? "border-vermilion"
+            : isToday
+              ? "border-ink"
+              : "border-border-strong"
       )}
     >
       <p
@@ -145,13 +174,15 @@ function DayCell({
         {formatDateValue(day)}
       </p>
       <p className="mt-1.5 flex items-baseline gap-1">
-        {full ? (
+        {isPast ? (
+          <span className="text-[13px] leading-none text-muted-foreground">Past</span>
+        ) : full ? (
           <span className="font-heading text-[1.0625rem] leading-none font-semibold text-vermilion-deep">
             Full
           </span>
         ) : (
           <>
-            <span className="font-heading text-[1.5rem] leading-none font-semibold text-ink tabular-nums">
+            <span className="font-heading text-[1.5rem] leading-none font-semibold text-occupy tabular-nums">
               {free}
             </span>
             <span className="text-[12px] leading-none text-muted-foreground tabular-nums">
@@ -160,7 +191,7 @@ function DayCell({
           </>
         )}
       </p>
-      <Meter free={free} total={total} className="mt-2" />
+      {!isPast && <Meter free={free} total={total} className="mt-2" />}
     </li>
   );
 }
@@ -171,33 +202,45 @@ function DayHeadline({
   free,
   total,
   isToday,
+  isPast,
 }: {
   day: string;
   free: number;
   total: number;
   isToday: boolean;
+  /** The day has gone - see `DayCell`. */
+  isPast: boolean;
 }) {
   return (
-    <div className={cn("border-t-2 pt-3", free === 0 ? "border-vermilion" : "border-ink")}>
+    <div
+      className={cn(
+        "border-t-2 pt-3",
+        isPast ? "border-border" : free === 0 ? "border-vermilion" : "border-ink"
+      )}
+    >
       <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
         {formatDateValue(day, { year: true })}
         {isToday && " · today"}
       </p>
       <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
-        {free === 0 ? (
+        {isPast ? (
+          <span className="font-heading text-[1.5rem] leading-none font-semibold text-muted-foreground">
+            Past date
+          </span>
+        ) : free === 0 ? (
           <span className="font-heading text-[1.5rem] leading-none font-semibold text-vermilion-deep">
             Fully booked
           </span>
         ) : (
           <>
-            <span className="font-heading text-[2.25rem] leading-none font-semibold text-ink tabular-nums">
+            <span className="font-heading text-[2.25rem] leading-none font-semibold text-occupy tabular-nums">
               {free}
             </span>
             <span className="text-sm text-body">of {total} rooms free all day</span>
           </>
         )}
       </p>
-      <Meter free={free} total={total} className="mt-3 max-w-[22rem]" />
+      {!isPast && <Meter free={free} total={total} className="mt-3 max-w-[22rem]" />}
     </div>
   );
 }
@@ -208,7 +251,7 @@ function Meter({ free, total, className }: { free: number; total: number; classN
   return (
     <span aria-hidden className={cn("block h-[3px] w-full bg-band", className)}>
       <span
-        className={cn("block h-full", free === 0 ? "bg-vermilion" : "bg-ink")}
+        className={cn("block h-full", free === 0 ? "bg-vermilion" : "bg-occupy")}
         style={{ width: `${pct}%` }}
       />
     </span>

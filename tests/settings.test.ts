@@ -54,7 +54,7 @@ describe("reading stored settings", () => {
 
   it("ignores keys it does not know", () => {
     const parsed = parseRuleGroup("booking", { max_stay_nights: 7, surprise: true });
-    expect(parsed).toEqual({ advance_booking_months: 1, max_stay_nights: 7, buffer_minutes: 240, no_show_release_hours: 0 });
+    expect(parsed).toEqual({ advance_booking_months: 6, max_stay_nights: 7, buffer_minutes: 240, no_show_release_hours: 0 });
   });
 
   /**
@@ -198,8 +198,12 @@ describe("rule functions follow the settings", () => {
 
   it("advance window in months", () => {
     const from = new Date("2026-01-31T06:30:00Z");
-    expect(latestCheckIn("employee", from)?.toISOString().slice(0, 10)).toBe("2026-02-28");
+    // The default - six months since 14 Oct 2026, one before that.
+    expect(latestCheckIn("employee", from)?.toISOString().slice(0, 10)).toBe("2026-07-31");
     expect(latestCheckIn("employee", from, 3)?.toISOString().slice(0, 10)).toBe("2026-04-30");
+    // `addMonths` clamps the day of the month: 31 January plus one month is
+    // 28 February, not 3 March. `setMonth` would roll it over.
+    expect(latestCheckIn("employee", from, 1)?.toISOString().slice(0, 10)).toBe("2026-02-28");
     expect(latestCheckIn("official", from, 3)).toBeNull();
   });
 
@@ -248,7 +252,6 @@ describe("the booking schema uses the settings on both sides", () => {
   const payload = (guests: number) => ({
     guest_house_id: GH.id,
     service_type: "room",
-    privacy_consent: true,
     booking_type: "personal",
     debit_head: "personal_funds",
     purpose_of_visit: "Family visit",

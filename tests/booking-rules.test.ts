@@ -44,7 +44,6 @@ function studentBooking(rooms: Person[][]) {
     service_type: "room",
     booking_type: "personal",
     debit_head: "personal_funds",
-    privacy_consent: true,
     purpose_of_visit: "Family visiting the institute",
     check_in: `${checkInDate}T12:00`,
     check_out: `${checkOutDate}T10:00`,

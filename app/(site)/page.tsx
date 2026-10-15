@@ -89,7 +89,7 @@ export default async function HomePage() {
               </div>
               <p className="mt-12 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-white/15 pt-5 text-[14.5px] text-on-ink-muted">
                 <Phone aria-hidden className="size-4 text-saffron" />
-                Front office
+                {GUEST_HOUSE_CONTACT.phoneLabel}
                 <a href={GUEST_HOUSE_CONTACT.phoneHref} className="font-semibold text-white tabular-nums hover:text-saffron">
                   {GUEST_HOUSE_CONTACT.phone}
                 </a>
@@ -215,7 +215,7 @@ export default async function HomePage() {
           <ul className="min-w-0 border-t border-ink lg:col-span-6 lg:col-start-7">
             {[
               { href: "/guidelines", label: "Guidelines", detail: "How booking works, and the house rules" },
-              { href: "/contact", label: "Contact us", detail: "The front office, and each guest house on the map" },
+              { href: "/contact", label: "Contact us", detail: "The guest house office, and each guest house on the map" },
             ].map((item) => (
               <li key={item.href} className="border-b border-border-strong">
                 <Link

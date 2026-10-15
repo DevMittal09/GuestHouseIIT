@@ -49,6 +49,8 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **12 Oct**, later | **The workflow screen rebuilt as a flow.** The ordered list of routes was rejected as "all wrong": it put first-match precedence, eight rows of match conditions, six approver kinds and four waiting statuses in front of the office. The screen now opens on **one chain per kind of request**, drawn left to right, with a `+` between boxes and one plain-language question per step; the route list is behind **Advanced**. A kind whose route is shared **forks** it on edit, which is how faculty can differ from staff. **Engine, stored shape and every call site unchanged.** |
 | **13 Oct** | **Schema review before the college's user import.** Asked whether students, faculty and staff should be separate tables: **no** - 19 foreign keys point at `profiles.id`, a role is an authorisation level that changes, and the per-category split already exists as `academic_records.kind`. **No migration needed to hold the data.** The review instead found that `password123` on every created account is a working **GoTrue** credential, that the `authenticated` role has **21 write policies** behind it (this folder had said none), and that the import would take that from 18 accounts to a few thousand. Two new gates and an import runbook. |
 | **14 Oct** | **An import you can undo.** Migration 32 records what every spreadsheet import is about to do **before** it does it, so the previous values of the accounts it changes are kept - the one gap §1a.7 had named outright. Users & Roles -> **Recent imports** -> Undo restores them, deletes the accounts the import added, and leaves alone anything corrected by hand since. Plus migration 33 (`total_rooms` gets the trigger the last round recorded), migration 34 (**20 foreign-key indexes**, measured: a 300-profile delete went 2,580 ms -> 64 ms), a plain-SQL recovery script, and two bugs found in the username-swap path. **The email/password provider was verified from GoTrue's public settings: it is ON, with signup open.** |
+| **14 Oct**, later | **The office's twelfth list**, five items of screen and policy: the number on the contact page is **the Guest House Manager's**, not "the front office"; the count of free rooms is **green** and the "N of M rooms at Bageshri free all month" sentence comes off the booking form; the week and month views **grey out dates that have gone** instead of printing a free-room count against them (`isPastDay`, one rule for the form and `/availability`); the **privacy consent tick and its paragraph** come off the request, so no consent is recorded either; and **bookings open six months ahead** rather than one. **No migration.** |
+| **14 Oct**, later still | **The privacy notice withdrawn and archived.** Hours after the consent tick came off the form, the owner asked for the privacy policy feature to go completely - but to stay in the repository so it can be reverted. The `/privacy` page, `PRIVACY_NOTICE_VERSION` and its three links are now **`archive/privacy-notice/`** at the repo root, with a numbered restore; `/privacy` is a 404 and an e2e test keeps it one. The narrowest of three scopes was chosen with the owner: **Download my data, Ask for erasure and the nightly ID-retention job stay live**. No migration, no column dropped. The restore was **run** before the tree was put back. |
 | **13 Oct**, later | **The second door closed, the schema left alone.** Migration 31 drops the `profiles -> auth.users` foreign key and all **38** `authenticated` RLS policies, so a portal account no longer implies a database credential; `createProfile` and `seed.sql` mint no Supabase password. The normalization review found **two** real problems worth acting on (`profiles` had almost no indexes and no checks - fixed; `total_rooms` can drift - recorded) and four denormalizations that are correct as they are. **No table split, no column dropped.** Two repair scripts, 16 new tests. Migration 31 deliberately **not** applied to the hosted project. |
 
 ## The problem
@@ -728,6 +730,63 @@ a snapshot table, and why `\set ON_ERROR_STOP on` is at the top.
 
 ---
 
+## The office's twelfth list - 14 October 2026
+
+Five items, relayed by the owner. Two are about what a figure on screen is
+saying, one is a rule, one is text to remove, one is a policy limit.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | **Contact Us**: change the phone number's label from "Front Office" to "Guest House Manager" | **Done.** The label is now `GUEST_HOUSE_CONTACT.phoneLabel` (`lib/site.ts`), read by the contact page, the home page's hero line and the site footer - the three places that print the same number, which could otherwise disagree. The address beside it was already `ghm@iitpkd.ac.in` |
+| 2 | **Room Availability**: show the number of available rooms **in green**; remove the top sentence saying how many rooms at Bageshri are free throughout the month | **Done.** The free-room count is the desk's own check-in green (`--occupy`, #00703c), in the counts panel on `/availability` and in the booking form, in the hour strip, in the meter and in the desk chart's date column. The sentence was the booking form's panel heading - "10 of 10 rooms at Bageshri free all month", the `freeThroughout` figure - and is gone; the line keeps the period shown and the "your booking is unchanged" note |
+| 3 | **Calendar logic**: in New Booking and Room Availability, the weekly and monthly views must not show past dates as available options; hide or blur them, consistently in both | **Done.** `isPastDay` (`lib/availability.ts`) is the one rule, used by the requester's counts panel and the desk's week/month chart, so the two cannot disagree. A day that has gone carries **no figure**: greyed, labelled Past, with an `aria-label` that says "not available to book"; a one-day window on a past date says Past date and drops the hour strip; the desk keeps the bars, because they are the record of what happened. Navigation back is deliberately **not** blocked - the desk browses history there |
+| 4 | **Request submission**: remove the privacy policy text shown while submitting | **Done, and the consent record went with it.** The tick and its paragraph are off the form; `privacy_consent` is kept in the schema as optional so a stored payload still parses, like `pets_policy_acknowledged`. `createBooking` now writes **neither** `privacy_notice_version` nor `privacy_consent_at`: with nothing on screen to agree to, recording a consent would record something that did not happen. The notice itself is unchanged and still linked from the footer of every public page, the Guidelines and the dashboard. **Flagged to the owner** - see [02-decisions.md](02-decisions.md) |
+| 5 | **Booking window**: allow bookings more than 30 days in advance | **Done.** `rules.booking.advance_booking_months` defaults to **6** instead of 1. It is a Setting, so the office can take it anywhere from 1 to 24 months without code, and the exempt roles (official, manager, developer) are unchanged. A deployment that has already pressed Save on that Settings card keeps its own value - a saved row beats a changed default |
+
+**No migration, no new table, no store operation.** 9 new unit tests
+(`tests/twelfth-round.test.ts`) and the availability journey extended to check
+the green and the greyed-out days in the running app.
+
+---
+
+## The privacy notice withdrawn and archived - 14 October 2026 (later still)
+
+The owner, the same evening as the twelfth list:
+
+> Remove privacy policy feature completely, but keep it saved in the repo as a
+> archive or something, basically i should be able to revert it back later on
+> if i need it. So keep it saved here somewhere in the project root but do not
+> deploy it.
+
+**"Completely" needed a boundary**, because the privacy code is three layers
+and the wrong guess deletes a working feature. The owner was offered them and
+chose the first:
+
+| Layer | Asked | Taken |
+| --- | --- | --- |
+| The **notice**: the `/privacy` page and route, `PRIVACY_NOTICE_VERSION`, its three links, the dead `privacy_consent` payload field, the tests | chosen | **Removed, archived** |
+| The **data rights**: Download my data, Ask for erasure, the office's answers in Console -> Security, the three store operations | offered | Kept live |
+| **Retention**: `rules.privacy` and `lib/retention-server.ts` - what erases Aadhaar numbers and ID scans after a stay | offered, advised against | Kept live |
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Remove the privacy policy feature | **Done.** `/privacy` is a 404, nothing links it, `PRIVACY_NOTICE_VERSION` is gone, and `privacy_consent` is off the payload schema - a payload that still names it is **stripped, not refused**, because the object is not `.strict()` |
+| 2 | Keep it in the repo so it can be reverted | **Done.** `archive/privacy-notice/` holds the page verbatim and a `README.md` that is the restore: four numbered steps with the exact snippets, which commit holds the complete before-state (`8a6ebe5`), and why the consent half should not be restored alone |
+| 3 | In the project root, but not deployed | **Done and verified.** Nothing imports it, `tsconfig.json` excludes `archive`, `eslint.config.mjs` ignores it as it does `design_handoff/**`, and neither test runner collects it. The build's route list has no `/privacy` and no build output contains the notice's text |
+| 4 | Revertible in practice, not just on paper | **Verified by doing it.** Steps 1-3 of the restore were applied to the working tree: lint, typecheck and build clean with `/privacy` back as a route. Then the tree was put back and every check re-run |
+
+**No migration, and no column dropped.** `bookings.privacy_notice_version` and
+`privacy_consent_at` still hold real values for bookings made before this day,
+and the data export still prints them; nothing writes them now. That is why a
+restore needs no database work.
+
+**The cost is on the institute's desk, not in the code.** The portal now
+publishes no privacy notice while holding ID scans, parents' names and phone
+numbers. [04-production.md](04-production.md) "DPDP Act, 2023" states it as a
+question to answer before go-live.
+
+---
+
 ## Branches
 
 - **`main`** — everything above.
@@ -758,10 +817,10 @@ a snapshot table, and why `\set ON_ERROR_STOP on` is at the top.
 ## Status
 
 Feature-complete for every workflow the institute has specified, taken through
-the ten-phase production-readiness programme of September 2026 and **eleven
-rounds** of the office's corrections, plus the owner's design pass and the
-round that made the approval workflow itself configurable. **Not deployed for
-real use.**
+the ten-phase production-readiness programme of September 2026 and **twelve
+rounds** of the office's corrections, plus the owner's design pass, the round
+that made the approval workflow itself configurable, and the withdrawal of the
+privacy notice into `archive/privacy-notice/`. **Not deployed for real use.**
 
 What is left is [03-roadmap.md](03-roadmap.md); what a production build needs
 is [04-production.md](04-production.md).

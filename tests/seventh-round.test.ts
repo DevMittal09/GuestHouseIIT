@@ -205,7 +205,6 @@ describe("the kitchen's limit per sitting", () => {
       meal_guest_count: String(people),
       meal_diet_counts: { veg: people, non_veg: 0 },
       meals: [{ date: addDaysToDateValue(today, 1), breakfast: false, lunch: true, dinner: false }],
-      privacy_consent: true,
     });
     expect(schema.safeParse(dining(30)).success).toBe(true);
     const over = schema.safeParse(dining(31));
@@ -310,7 +309,6 @@ describe("a late check-in", () => {
         },
       ],
       meals: [],
-      privacy_consent: true,
     });
     // 00:01 today is in the past for all but one minute of the day, and is
     // exactly the entry the desk has to make for a guest already at the desk.
@@ -369,7 +367,6 @@ describe("a project is typed, not picked", () => {
         },
       ],
       meals: [],
-      privacy_consent: true,
       ...patch,
     });
     const bare = schema.safeParse(payload({}));
@@ -605,7 +602,6 @@ describe("Remarks on a dining booking, Purpose on a stay", () => {
     meal_guest_count: "4",
     meal_diet_counts: { veg: 4, non_veg: 0 },
     meals: [{ date: addDaysToDateValue(today, 1), breakfast: false, lunch: true, dinner: false }],
-    privacy_consent: true,
   });
 
   const stay = (purpose: string) => ({
@@ -621,7 +617,6 @@ describe("Remarks on a dining booking, Purpose on a stay", () => {
       { room_type: null, guests: [{ name: "Guest", age: "40", gender: "male", citizenship: "indian" }] },
     ],
     meals: [],
-    privacy_consent: true,
   });
 
   it("takes a meal booking with nothing typed, and keeps what is typed", () => {

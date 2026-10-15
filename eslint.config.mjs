@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Design prototype (reference only, never shipped) — see design_handoff/README.md.
     "design_handoff/**",
+    // Withdrawn features, kept so they can be restored — see archive/README.md.
+    // Never built, never deployed, and deliberately not kept compiling.
+    "archive/**",
   ]),
 ]);
 

@@ -33,9 +33,10 @@ and verify: [22-running-and-testing.md](22-running-and-testing.md).
 ```
 app/
   (site)/                  PUBLIC website (19 Sep 2026): / home, book-room, book-meal,
-                           guidelines, gallery, contact, privacy, sign-in,
+                           guidelines, gallery, contact, sign-in,
                            mock-login (Mock Authentication — open while Google is
                            unconfigured) — see 14-public-site-and-ui.md
+                           (privacy/ withdrawn 14 Oct 2026 → archive/privacy-notice/)
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
     dashboard/             requester's own bookings
@@ -243,8 +244,8 @@ the portal did when the pipeline was a `switch`.
 
 Rules encoded there:
 
-- Check-in must fall within **one month** of today (`latestCheckIn`, a
-  Setting). `isAdvanceWindowExempt()` exempts **`official`, `gh_manager` and
+- Check-in must fall within **six months** of today (`latestCheckIn`, a
+  Setting; one month until 14 Oct 2026). `isAdvanceWindowExempt()` exempts **`official`, `gh_manager` and
   `developer`** — dignitary visits are arranged on the institute's own notice,
   and the desk books whatever the institute has already committed to. The cap
   applies to check-in, not check-out.
@@ -430,7 +431,11 @@ Three things are worth knowing:
   each booking holds; `availabilityRange()` and `shiftAnchor()` decide which
   days a week or month view covers (Monday–Sunday weeks, calendar months, a
   month step that clamps 31 January to 28 February); `bucketOccupancyByDay()`
-  clips each booking to the range as a bar and counts booked minutes per day.
+  clips each booking to the range as a bar and counts booked minutes per day;
+  `isPastDay(day, today)` (14 Oct 2026) says whether a calendar date has gone,
+  which is what the counts panel and the week/month chart grey out instead of
+  printing a free-room count against it - one rule, so the booking form and
+  `/availability` cannot disagree.
   Putting it in `lib/` follows the same reasoning as `lib/booking-search.ts`:
   the boundary behaviour is where the bugs are, so it has to be reachable by a
   test. A stay checking out at 11:00 releases the 11 AM hour — the same

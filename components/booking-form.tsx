@@ -162,8 +162,6 @@ interface RoomFields {
 }
 
 interface FormValues {
-  /** DPDP consent (Phase 8): ticked before the request can be submitted. */
-  privacy_consent: boolean;
   /** Asked first: whether a room is involved changes the rest of the form. */
   /** Asked next: it decides the approval route and how the stay is settled. */
   booking_type: BookingType;
@@ -410,7 +408,6 @@ export function BookingForm({
 
   const form = useForm<FormValues>({
     defaultValues: {
-      privacy_consent: false,
       // "Official" for staff, because that is the common case; a role with one
       // option is never shown the question at all.
       booking_type: defaultBookingTypeFor(config.role) ?? "official",
@@ -888,8 +885,6 @@ export function BookingForm({
           }))
         : [],
       custom: values.custom,
-      // DPDP (Phase 8): the tick below, recorded with the notice's version.
-      privacy_consent: values.privacy_consent,
     };
 
     const parsed = bookingPayloadSchema(config, {
@@ -1565,11 +1560,7 @@ export function BookingForm({
             <CardTitle>Room availability</CardTitle>
           </CardHeader>
           <CardContent>
-            <BookingAvailability
-              guestHouseId={selectedGuestHouseId}
-              date={checkInDate}
-              guestHouseName={guestHouses.find((g) => g.id === selectedGuestHouseId)?.name}
-            />
+            <BookingAvailability guestHouseId={selectedGuestHouseId} date={checkInDate} />
           </CardContent>
         </Card>
       )}
@@ -1926,23 +1917,29 @@ export function BookingForm({
         </Card>
       )}
 
-      <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border-strong bg-background px-4 py-3.5 text-sm leading-relaxed">
-        <input
-          type="checkbox"
-          className="mt-0.5 size-[18px] shrink-0 cursor-pointer accent-vermilion-deep"
-          {...register("privacy_consent")}
-        />
-        <span>
-          I have read how these details are used, who can see them and how long they are kept, and I
-          agree to the guest house holding them.{" "}
-          <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-ink underline decoration-vermilion decoration-2 underline-offset-4">
-            Privacy notice
-          </a>
-          .
-          <FieldError message={err("privacy_consent")} />
-        </span>
-      </label>
-
+      {/*
+        * **The privacy consent tick is gone** (14 Oct 2026, the office: remove
+        * the privacy policy text shown while submitting a request). It was the
+        * last block before Submit - a paragraph and a tick on a form that
+        * already refuses submission for eight other reasons. Later the same
+        * day the owner withdrew the **whole privacy notice**: the `/privacy`
+        * page, its version and every link to it are now in
+        * `archive/privacy-notice/`, which is also the restore.
+        *
+        * So nothing on this form mentions a privacy notice, and no consent is
+        * recorded either - `createBooking` writes neither
+        * `privacy_notice_version` nor `privacy_consent_at`, because inventing
+        * a consent nobody was asked for is worse than holding none. What a
+        * person can still *do* about their data is unchanged: Download my data
+        * and Ask for erasure, at the foot of My Bookings
+        * (`components/my-data.tsx`).
+        *
+        * Don't put the paragraph back on its own: a tick pointing at a page
+        * that 404s is worse than no tick. The archive's README restores the
+        * page, the version, the links, this block, the refinement in
+        * `lib/booking-schema.ts` and the one line in
+        * `app/actions/bookings.ts`, in that order.
+        */}
       <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-6">
         <Button type="button" variant="outline" size="lg" onClick={() => router.push("/dashboard")}>
           Cancel

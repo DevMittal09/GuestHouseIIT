@@ -135,6 +135,25 @@ port 3000 before launching your own.
   booking mail and a Guidelines item ("During your stay"), and the amber card
   that carried it on every room booking is **gone**. Don't put a conduct rule
   back on the form.
+- **There is no privacy notice in the portal at all** (14 Oct 2026, in two
+  steps: the office asked for the privacy policy text to come off the request,
+  then the owner asked for the feature to be removed completely but kept so it
+  can be reverted). **`archive/privacy-notice/` is where it lives now**, with
+  the page, the version and a step-by-step restore; `/privacy` is a 404 and an
+  e2e test keeps it one. What went: the tick and its paragraph on the booking
+  form, the `privacy_consent` payload field (a payload that still names it is
+  **stripped, not refused** - the object is not `.strict()`), the
+  `PRIVACY_NOTICE_VERSION` constant, and the three links (site footer,
+  Guidelines closing paragraph, the My Bookings row). **Nothing is recorded
+  either**: `createBooking` writes neither `privacy_notice_version` nor
+  `privacy_consent_at`, because a consent nobody was asked for must not be
+  written down - the same rule as `fund_declaration_at`. Don't reintroduce any
+  of it piecemeal: a tick pointing at a page that 404s is worse than no tick.
+  **What is deliberately still live** is what a person can *do* about their
+  data - Download my data and Ask for erasure at the foot of My Bookings, the
+  office's answers in Console -> Security - and the nightly retention job that
+  erases ID documents. Whether the institute needs the notice back is
+  `.memories/04-production.md` "DPDP Act, 2023".
 - **Every form that stars a field says what the star means** (11 Oct 2026, the
   owner: *'Mention "These field are mandatory for those shown with *"
   whenever we are using it [*]'*). `RequiredFieldsNote`
@@ -151,7 +170,12 @@ port 3000 before launching your own.
   (`app/(portal)/layout.tsx`), not in a notice on a page.
   `MANAGER_HELP_LINE` and `GUEST_HOUSE_MANAGER_CONTACT` are deleted;
   `GUEST_HOUSE_CONTACT` (`lib/site.ts`) is the one place either is written
-  down.
+  down - **including the label**: `phoneLabel` reads **"Guest House Manager"**
+  (14 Oct 2026, the office; it was "Front office"), and the contact page, the
+  home page's hero line and the site footer all read it rather than writing
+  the words again. It is the one deliberate exception to "no role names on the
+  public site"; don't widen it to the approver roles, which a unit test still
+  guards.
 
 - **Headings come off the five-step scale** (11 Oct 2026): `text-display` for
   a page's `<h1>`, `text-title` for a public section, `text-section` for a
@@ -186,7 +210,8 @@ port 3000 before launching your own.
   and bookings made before 7 Oct hold an em dash there, so
   `projectFromDetails` splits on **either**. Markdown docs and SQL comments
   are prose and were left alone.
-- **The state is Keralam.** `lib/site.ts`, the privacy page and
+- **The state is Keralam.** `lib/site.ts` (the privacy page carried it too,
+  until that page was withdrawn on 14 Oct 2026) and
   `DEFAULT_RULES.invoice.contact.address`. A saved Settings row is rewritten
   **once** by `upgradeInvoiceRules` revision 3, matching the whole word -
   "Keralam" contains "Kerala", and a plain replace would make it "Keralamm".
@@ -696,9 +721,10 @@ user typed and rendering it back are zoned.
 
 ### Advance-booking window
 
-Check-in must be within **one month** of today by default — a Setting
-(`rules.booking.advance_booking_months`), passed as `latestCheckIn(role, from,
-months)`; the 14-night maximum stay is `rules.booking.max_stay_nights` (0 = no
+Check-in must be within **six months** of today by default (14 Oct 2026, the
+office: "allow users to make bookings more than 30 days in advance"; it was
+one month) — a Setting (`rules.booking.advance_booking_months`, 1-24, zero
+refused), passed as `latestCheckIn(role, from, months)`; the 14-night maximum stay is `rules.booking.max_stay_nights` (0 = no
 limit). `latestCheckIn` in `lib/workflow.ts` is the single source of truth; `isAdvanceWindowExempt()`
 exempts **`official`, `gh_manager` and `developer`**, because dignitary visits
 are arranged on the institute's own notice and the desk books what the
@@ -709,6 +735,12 @@ starts inside the window may run past it.
 `bookingPayloadSchema` applies it on client *and* server, so the `max` on the
 date input is convenience, not enforcement. Use `addMonths` (date-fns), never
 `setMonth`, or 31 Jan + 1 month lands on 3 March.
+
+> **A saved Settings row beats the changed default.** A deployment that has
+> pressed Save on the Booking window card still has whatever it saved, and
+> nothing reads as broken because the form, the Guidelines and the error all
+> quote the stored figure. Open Settings once; there is deliberately no
+> `revision` upgrade for `rules.booking`.
 
 **The earliest check-in a booking may name is midnight this morning**
 (`earliestBookableCheckIn`), not "later than now". It was strict until 1 Oct
@@ -1036,7 +1068,18 @@ date is full needs to see what *is* free without losing a half-filled form. The
 browsing is transient: `browsed` is tagged with the check-in date it was chosen
 against, so picking a new check-in makes it stale and the chart snaps back with
 no effect and no setState-during-render. Moving the chart never moves the
-booking; a banner says so. Same action, chart and bucketing as `/availability`.
+booking; a banner says so - that note stays whatever else comes off this
+panel. Same action, chart and bucketing as `/availability`, **and the same
+past-day rule** (`isPastDay`).
+
+> **The panel states the period shown and nothing else** (14 Oct 2026, the
+> office: "remove the top sentence stating how many rooms at Bageshri are
+> available throughout the month"). It read "10 of 10 rooms at Bageshri free
+> all month" - `counts.freeThroughout`, rooms with nothing booked anywhere in
+> the window, which says less the longer the window is while the strip below
+> answers day by day. The guest house is named a few lines above on the form,
+> so `guestHouseName` went with the sentence. The equivalent figures in
+> `/availability`'s own header line were **not** touched.
 
 > **The allocation grid refetches when holds change.** `/manager` builds an
 > `occupancyVersion` fingerprint of every booking's room holds and passes it to
@@ -1344,6 +1387,23 @@ booked / Booked badge for the whole period shown.
   was a card per day each reading "10 of 10 rooms available". **Every cell
   carries the full sentence as its `aria-label`** - the repetition was visual,
   so don't take it out of the labels.
+  **The count of free rooms is green** (14 Oct 2026, the office): `--occupy` /
+  #00703c, the desk's own check-in green, reused rather than a second green
+  added - the day figures, the headline figure, the hour chips, the meter and
+  the "N free" in the desk chart's date column. Vermilion **Full** is
+  unchanged.
+  **A date that has gone carries no figure at all** (14 Oct 2026, the office:
+  the week and month views "should not display past dates as available
+  options"). `isPastDay(day, today)` in `lib/availability.ts` is the **one
+  rule**, read by the counts panel *and* `RangeOccupancyChart`, so the booking
+  form and `/availability` cannot disagree: a past day is greyed, says
+  **Past**, drops its meter and reads "a past date, not available to book" to
+  a screen reader; a one-day window on a past date says **Past date** and
+  drops the hour strip; the desk's row is shaded and its figure replaced by
+  "past" while **the bars stay**, because they are the record. Don't clip the
+  range instead (a week would sometimes show four days, and a range wholly in
+  the past nothing at all) and don't disable Previous - the desk browses
+  backwards deliberately.
 
 - `listRoomOccupancy(guestHouseId, from, to)` (both stores) returns one segment
   per **(room, booking)** using the same `ROOM_HOLDING_STATUSES` + strict
@@ -1621,7 +1681,8 @@ full-screen (the owner called a full-screen hero "so weird").
   (the approval-route loader for the site was deleted); it swallows store
   errors so the public site cannot 500.
 - **`app/(site)/`**: `/` home, `/book-room`, `/book-meal`, `/guidelines`,
-  `/gallery`, `/contact`, `/privacy`, `/sign-in`, `/mock-login`. Chrome:
+  `/gallery`, `/contact`, `/sign-in`, `/mock-login` (**no `/privacy`** since
+  14 Oct 2026 - `archive/privacy-notice/`). Chrome:
   `components/site/brand.tsx` (**`BrandBlock`** — the emblem-only
   `iitpkd-logo.png` beside "Guest House" in the serif and a tracked tagline;
   shared with the portal header), `site-header.tsx` (a white bar, sticky from
@@ -1689,6 +1750,23 @@ full-screen (the owner called a full-screen hero "so weird").
   (`e2e/public-site.spec.ts` checks every public page on a 320px phone). Keep
   grids as `repeat(auto-fit|auto-fill, minmax(min(Npx,100%),1fr))`. Never
   bleed an element with `100vw` — it overflows by the scrollbar's width.
+
+## `archive/` is withdrawn features, not code (14 Oct 2026)
+
+One folder per feature the owner or the office asked to **remove but not
+lose**, each with the deleted files verbatim and a `README.md` that is the
+restore. First and so far only: **`archive/privacy-notice/`**.
+
+- **Nothing in it is built or deployed.** `tsconfig.json` excludes `archive`
+  (without that, `tsc --noEmit` and `next build` would compile an archived
+  component whose imports are gone and fail), `eslint.config.mjs` ignores
+  `archive/**` as it does `design_handoff/**`, and the two test runners only
+  collect `tests/` and `e2e/`.
+- **Never `import` from it.** That puts it in the bundle and voids all three.
+  Restoring means **copying files back** into `app/`, `components/` or `lib/`.
+- **Deleting a route leaves `.next/dev/types` stale**, exactly as moving one
+  does: `rm -rf .next/dev/types` or the next `typecheck` fails on a module it
+  cannot find. See the traps below.
 
 ## Traps that already cost time
 
@@ -1872,7 +1950,10 @@ Migration files, applied sequentially:
    timestamptz`: **when the requester declared that the funds are approved and
    available** (the office's ninth list, 8 Oct 2026). An instant, like
    `privacy_consent_at` beside it, because an approver months later wants to
-   know when. Asked for by every head except Personal Funds
+   know when. (That column is no longer written on a new booking - the consent
+   tick came off the form on 14 Oct 2026 - but the reasoning is the same, and
+   it is the same reasoning that stops a consent being recorded now that
+   nobody is asked for one.) Asked for by every head except Personal Funds
    (`requiresFundDeclaration`); **nothing is backfilled**, so null means
    either "personal booking" or "made before 8 Oct". Additive, nullable and
    safe to re-run. Until it is applied the store names the column only when

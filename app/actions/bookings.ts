@@ -3,7 +3,6 @@
 import { revalidateBookings } from "@/lib/revalidate";
 import { blockOverlaps } from "@/lib/operations";
 import { prepareUpload } from "@/lib/uploads";
-import { PRIVACY_NOTICE_VERSION } from "@/lib/security";
 import {
   canAssignRooms,
   canBookOnBehalf,
@@ -492,7 +491,23 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       meal_diet_counts: payload.meals.length > 0 ? payload.meal_diet_counts : null,
       meal_guest_count: wantsRooms ? null : payload.meal_guest_count,
       pets_policy_acknowledged: payload.pets_policy_acknowledged,
-      privacy_notice_version: PRIVACY_NOTICE_VERSION,
+      /*
+       * **No privacy consent is recorded any more** (14 Oct 2026). The tick
+       * and its paragraph came off the form at the office's request, and then
+       * the notice itself was withdrawn - page, version and every link - and
+       * archived in `archive/privacy-notice/`.
+       *
+       * `privacy_notice_version` is the notice the requester *agreed to*, and
+       * both stores set `privacy_consent_at` from it. With nothing to agree
+       * to, writing either would record something that did not happen - the
+       * same rule as `fund_declaration_at`, which is never invented for a
+       * booking that was never asked. Bookings made before that day keep
+       * their consent and its version; new ones carry null, which reads as
+       * "not asked". Neither column is dropped: the data export reads them.
+       *
+       * `archive/privacy-notice/README.md` is the restore, and it names this
+       * line as one of its four steps.
+       */
       // Recorded only where the head asked for it, so a personal booking -
       // which is never asked - cannot carry a declaration it did not make
       // (migration 30).

@@ -87,7 +87,6 @@ describe("Requires HOD approval is only offered where there is an HOD", () => {
     check_out: `${addDaysToDateValue(today, 2)}T10:00`,
     rooms: [{ room_type: null, guests: [{ name: "Guest", gender: "male", citizenship: "indian" }] }],
     meals: [],
-    privacy_consent: true,
     ...patch,
   });
   const schema = (hasHodApprover: boolean) =>

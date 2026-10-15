@@ -50,7 +50,7 @@ form, all approval tiers, the room grid, invoices, the desk and the console.
 | `npm run lint` | ESLint incl. the strict React Compiler rules | must stay clean |
 | `npm run typecheck` | `next typegen && tsc --noEmit` | `npm run build` also typechecks |
 | `npm test` | Vitest, `tests/` — 24 files, 431 checks (8 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
-| `npm run test:e2e` | Playwright, `e2e/` — 36 journeys (about 70 s) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
+| `npm run test:e2e` | Playwright, `e2e/` — 41 journeys (about 85 s) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
 | `npm run check:migrations` | Which migrations the project in `.env.local` actually has | **Read-only** (`GET`, one row, shape only). Exits 1 if any marker is missing. Migrations 17 and 23 are function-only and cannot be seen — it says so and gives the SQL. **Not a CI step** — CI runs with no secrets, where it prints "no project configured" and exits 0. Run it against a deployment, before relying on one |
 | `npm run check:lockfile` | The npm optional-dependency bug that breaks `npm ci` | Runs in CI |
 
@@ -804,6 +804,14 @@ type-checks it but does not regenerate the dev copy.
 **Fix.** `rm -rf .next/dev/types` and build again; `next dev` recreates it. It
 is generated output, nothing is lost.
 
+> **`npm run typecheck` fails the same way, and that is where it was met the
+> second time** (14 Oct 2026, deleting `app/(site)/privacy/` when the privacy
+> notice was withdrawn): `next typegen && tsc --noEmit` type-checks the same
+> stale `validator.ts`, and the error names the route you deleted - which
+> reads as "my deletion broke the build" rather than "a generated file is one
+> route behind". `rm -rf .next/dev/types` first, then re-run. Lint and the
+> unit tests pass throughout, so the only symptom is the typecheck.
+
 ### A production build on the mock store redirects every persona to `/sign-in`
 
 **Cause.** `NEXT_PUBLIC_SUPABASE_URL` is inlined at **build** time. A build
@@ -1031,11 +1039,21 @@ compound shell command matches that command's own shell and kills it, exit
 144.) (This is the `next start` cousin of the "`npm run build` kills a
 running `next dev`" warning in `AGENTS.md`.)
 
+> **And `pkill -f "[n]ext start"` does not always kill it** (14 Oct 2026).
+> Once it is up, the process has renamed itself **`next-server (v16.3.6)`**,
+> so the pattern that started it no longer matches it: the kill reports
+> success, the port stays held, and the next `npm run test:e2e` fails on
+> `listen EADDRINUSE :::3100` with Playwright reporting only
+> "Process from config.webServer was not able to start. Exit code: 1".
+> **`pkill -f "[n]ext-server"`** is what frees the port; `ss -ltnp | grep 3100`
+> names the holder either way. Do both, in that order, and check.
+
 A clean loop, then:
 
 ```bash
 export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 20
-pkill -f "[n]ext start"                   # the database is wiped by global-setup
+pkill -f "[n]ext start"; pkill -f "[n]ext-server"   # once up it renames itself
+ss -ltnp | grep 3100 || true              # must print nothing; the database is wiped by global-setup
 NEXT_PUBLIC_SUPABASE_URL= npm run build   # empty, or the bundle talks to hosted Supabase
 npm run test:e2e
 npm run build                             # rebuild normally afterwards

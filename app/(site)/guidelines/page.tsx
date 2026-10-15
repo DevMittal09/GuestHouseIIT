@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { ArrowDown } from "lucide-react";
 import { Container, PageMasthead, SectionHead, siteButton } from "@/components/site/site-ui";
 import { GUEST_HOUSE_CONTACT, GUIDELINES_PDF_URL, GUIDELINES_PROVISIONAL } from "@/lib/site";
@@ -118,13 +117,6 @@ export default async function GuidelinesPage() {
             >
               {GUEST_HOUSE_CONTACT.email}
             </a>
-            . How your details are handled is set out in the{" "}
-            <Link
-              href="/privacy"
-              className="font-semibold text-ink underline decoration-vermilion decoration-2 underline-offset-[5px]"
-            >
-              privacy notice
-            </Link>
             .
           </p>
         </div>
