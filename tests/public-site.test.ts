@@ -131,9 +131,25 @@ describe("guest house photographs (15 Oct 2026)", () => {
     expect(Object.values(GUEST_HOUSE_PHOTOS)).toHaveLength(2);
   });
 
-  it("keeps the home page's six photographs distinct", () => {
-    const home = [...Object.values(GUEST_HOUSE_PHOTOS), ...HOME_PHOTOS.preview];
-    expect(new Set(home.map((p) => p.src)).size).toBe(home.length);
+  it("leads the slideshow with the main photograph of each guest house", () => {
+    // The owner's order: "8.jpeg and 10.jpeg are the two images i want to
+    // see in the landing pages", then the other four after them.
+    expect(HOME_PHOTOS.slides.slice(0, 2)).toEqual([
+      PHOTOS.hamsanandiCourtyard,
+      PHOTOS.bageshriFront,
+    ]);
+    expect(HOME_PHOTOS.slides).toHaveLength(6);
+    expect(new Set(HOME_PHOTOS.slides.map((p) => p.src)).size).toBe(6);
+  });
+
+  it("shows nothing in the mosaic that the slideshow already showed", () => {
+    // Scrolling past the hero has to find new photographs, or the page
+    // repeats itself twice over within two screens.
+    const slides = new Set(HOME_PHOTOS.slides.map((p) => p.src));
+    for (const photo of HOME_PHOTOS.preview) {
+      expect(slides, `${photo.src} is in both the slideshow and the mosaic`).not.toContain(photo.src);
+    }
+    expect(new Set(HOME_PHOTOS.preview.map((p) => p.src)).size).toBe(HOME_PHOTOS.preview.length);
   });
 
   it("keeps every photograph the site holds in the Gallery", () => {

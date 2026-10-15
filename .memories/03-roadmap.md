@@ -412,9 +412,27 @@ Four of the five items closed outright. What they opened:
 
 ---
 
-## 2h. Opened by the 15 Oct 2026 round - the office's photographs
+## 2h. Opened by the 15 Oct 2026 rounds - the photographs, and the slideshow
 
-All seven items closed. What they opened:
+Every item of both rounds closed. What they opened:
+
+**From the slideshow (second round):**
+
+- **Nothing drives the slideshow with a keyboard in the suite.** The controls are real `<button>`s with
+  labels and visible focus rings, and the e2e journey clicks them, but no test tabs to them, and none
+  checks that focus inside the carousel holds the rotation - which is the behaviour a keyboard reader
+  actually depends on. Nor is `prefers-reduced-motion` exercised; Playwright can emulate it in one line
+  (`test.use({ reducedMotion: "reduce" })`) and that is the cheap version of this item.
+- **The e2e journey costs ~14s per project, so ~28s of the suite**, waiting on real timers. It is the only
+  honest way to test "it moves by itself". If the suite gets slow, look here first - the fix is to make
+  `ADVANCE_MS` injectable rather than to delete the assertion.
+- **No swipe.** A phone reader uses the arrows (44px targets at the photograph's edges). Touch-dragging is
+  the obvious next ask and is not built; it would need pointer handlers on the track and care not to eat
+  vertical scrolling.
+- **The slideshow's photographs are a hardcoded list** (`HOME_PHOTOS.slides`), like everything else in
+  `lib/site.ts`. Changing which ones appear, or their order, is a code change.
+
+**From the photographs (first round):**
 
 - **The home page lists the guest houses in the store's order, which is
   Bageshri first; `/contact` lists Hamsanandi first.** The map tabs follow

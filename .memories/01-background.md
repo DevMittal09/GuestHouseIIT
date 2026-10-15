@@ -52,6 +52,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **14 Oct**, later | **The office's twelfth list**, five items of screen and policy: the number on the contact page is **the Guest House Manager's**, not "the front office"; the count of free rooms is **green** and the "N of M rooms at Bageshri free all month" sentence comes off the booking form; the week and month views **grey out dates that have gone** instead of printing a free-room count against them (`isPastDay`, one rule for the form and `/availability`); the **privacy consent tick and its paragraph** come off the request, so no consent is recorded either; and **bookings open six months ahead** rather than one. **No migration.** |
 | **14 Oct**, later still | **The privacy notice withdrawn and archived.** Hours after the consent tick came off the form, the owner asked for the privacy policy feature to go completely - but to stay in the repository so it can be reverted. The `/privacy` page, `PRIVACY_NOTICE_VERSION` and its three links are now **`archive/privacy-notice/`** at the repo root, with a numbered restore; `/privacy` is a 404 and an e2e test keeps it one. The narrowest of three scopes was chosen with the owner: **Download my data, Ask for erasure and the nightly ID-retention job stay live**. No migration, no column dropped. The restore was **run** before the tree was put back. |
 | **15 Oct** | **The office's photographs, and a landing page built around them.** Eleven new photographs, two of them named by the owner as the main photograph of each guest house - the **first attribution the site has ever made**. The home page's hero and its "Our guest houses" section become **one block**: the ink masthead across the top, a guest house under each half of it, photograph first and the name under it, the way iitpkd.ac.in prints a card. Four more photographs follow in the mosaic; the other five, and all fourteen of the 19 Sep set, are in the Gallery - now 25. **No migration.** |
+| **15 Oct**, later | **The hero becomes a slideshow.** The owner asked for iitpkd.ac.in's own hero - "images which change evry few seconds and has the option of arrows" - then the details below it. A carousel had been argued against in the round hours earlier and was asked for anyway. Built as the **one client component on the public site**: six slides, Previous / Pause / Next and numbered indicators, 6s a slide, stopping on hover, on focus and for `prefers-reduced-motion`. The masthead moved **under** the photographs and the guest houses went back to a section of their own. |
 | **13 Oct**, later | **The second door closed, the schema left alone.** Migration 31 drops the `profiles -> auth.users` foreign key and all **38** `authenticated` RLS policies, so a portal account no longer implies a database credential; `createProfile` and `seed.sql` mint no Supabase password. The normalization review found **two** real problems worth acting on (`profiles` had almost no indexes and no checks - fixed; `total_rooms` can drift - recorded) and four denormalizations that are correct as they are. **No table split, no column dropped.** Two repair scripts, 16 new tests. Migration 31 deliberately **not** applied to the hosted project. |
 
 ## The problem
@@ -831,6 +832,47 @@ guess, because the 19 Sep set arrived with no attribution. The owner has now
 named two, so the rule moves rather than being repealed:
 [02-decisions.md](02-decisions.md) carries the *Partly superseded* note and the
 reasoning.
+
+---
+
+## The hero becomes a slideshow - 15 October 2026 (second)
+
+The owner, after the round above:
+
+> See basically i want to change the landing page UI to the iitpkd.ac.in
+> website style. Basically in the landing page. i need images which change
+> evry few seconds and has the option of arrows to move to next image. Then
+> we should be able to go down and see the details and other stuff in the
+> landing page. Just go to iitpkd.ac.in website and see what i mean.
+
+**A carousel had been argued against in the round hours earlier** - as a
+client component that hides half of what it was asked to showcase and reads
+as a template - **and was asked for anyway.** The objection was put once, in
+the open, and not taken, which settles it.
+[02-decisions.md](02-decisions.md) carries the *Superseded* note and records
+which of those objections the build answers rather than ignores.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Images that change every few seconds | **Done.** Six slides, **6 seconds** each, one translating track. It holds while a pointer is over it or the focus is inside it, and `prefers-reduced-motion` stops the rotation itself rather than only the animation |
+| 2 | Arrows to move to the next image | **Done.** Previous / Next at the photograph's edges as 44px square bordered buttons, wrapping past either end, plus **numbered indicators** and a **Pause** button - iitpkd.ac.in's own set of controls |
+| 3 | iitpkd.ac.in's style | **Done, in this site's vocabulary.** Their controls and their banner-then-content rhythm; not their dots (pills are banned here), not their slide-as-link, and no caption or wash over a photograph |
+| 4 | Then scroll down for the details | **Done.** The ink masthead - the `<h1>`, the lead, *Book a room* / *Book meals* and the manager's number - now sits **under** the slideshow, then Our guest houses, amenities, the mosaic and the closing links |
+
+**What it reversed from the round that morning.** That round had merged the
+masthead and the guest houses into one block with a house photograph under
+each half. The slideshow holds the top of the page now, so the guest houses
+are **a section of their own** again with ordinary bordered cards. The
+attribution is untouched: those two cards remain the only place on the site
+that names the guest house in a photograph.
+
+**The mosaic was repointed** at four photographs the slideshow does not carry
+(`hamsanandi-block-entrance`, `bageshri-corridor`, `sitting-room`,
+`living-dining`, all Gallery-only until now), so scrolling past the hero finds
+new photographs rather than the same six again. A unit test fails if the two
+sets ever overlap.
+
+**No migration, no store operation, no photograph added or removed.**
 
 ---
 

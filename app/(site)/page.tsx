@@ -11,6 +11,7 @@ import {
   Wifi,
   type LucideIcon,
 } from "lucide-react";
+import { HeroCarousel } from "@/components/site/hero-carousel";
 import { ArrowLink, Container, Label, SectionHead, SitePhotoFrame, siteButton } from "@/components/site/site-ui";
 import { GUEST_HOUSE_CONTACT, HOME_PHOTOS, guestHousePhoto } from "@/lib/site";
 import { amenities, houseSummary, joinNames } from "@/lib/site-content";
@@ -74,62 +75,75 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* -------------------------------------------- hero: the guest houses */}
-      {/* One contained block: the ink masthead across the top - the headline
-          in seven columns, the lead and the two doors in five - and under it
-          a panel per guest house, each led by its own photograph. Two
-          photographs at half the page width are the largest thing on the
-          page, which is what "showcase them" asks for, and neither is
-          full-bleed. */}
-      <section aria-labelledby="hero-title" className="pt-[clamp(16px,3vw,40px)]">
+      {/* --------------------------------------------------- hero slideshow */}
+      {/* The owner asked for iitpkd.ac.in's hero: photographs that change by
+          themselves, with arrows to move between them, and the details
+          further down the page. So the page opens on the slideshow and the
+          masthead follows it - photographs first, then who we are and the
+          two doors. Contained in the grid like every other photograph on
+          this site; a full-bleed one read as "so weird" to the owner. */}
+      <section aria-label="Guest house photographs" className="pt-[clamp(16px,3vw,40px)]">
         <Container>
-          <div className="overflow-hidden rounded-lg border border-ink">
-            <div className="bg-ink px-[clamp(22px,4vw,56px)] pt-[clamp(32px,5vw,60px)] pb-[clamp(28px,4vw,48px)]">
-              <div className="grid gap-x-10 gap-y-9 lg:grid-cols-12">
-                <div className="min-w-0 lg:col-span-7">
-                  <Label className="text-saffron">IIT Palakkad</Label>
-                  <h1
-                    id="hero-title"
-                    className="mt-5 text-[clamp(2.375rem,1.5rem+2.6vw,3.5rem)] leading-[1.04] font-semibold tracking-[-0.024em] text-white"
-                  >
-                    Guest houses of IIT&nbsp;Palakkad
-                  </h1>
-                  <div aria-hidden className="mt-7 h-1 w-12 bg-vermilion" />
-                </div>
-                <div className="flex min-w-0 flex-col lg:col-span-5 lg:self-end">
-                  <p className="max-w-[42ch] text-[17.5px] leading-[1.6] text-on-ink">{lead}</p>
-                  <div className="mt-7 flex flex-wrap gap-3">
-                    <Link href="/book-room" className={siteButton.brand}>
-                      Book a room
-                    </Link>
-                    <Link href="/book-meal" className={siteButton.outlineLight}>
-                      Book meals
-                    </Link>
-                  </div>
+          <HeroCarousel photos={HOME_PHOTOS.slides} />
+        </Container>
+      </section>
+
+      {/* ----------------------------------------------------------- masthead */}
+      <section aria-labelledby="hero-title" className="pt-[clamp(24px,3vw,40px)]">
+        <Container>
+          <div className="rounded-lg border border-ink bg-ink px-[clamp(22px,4vw,56px)] pt-[clamp(32px,5vw,56px)] pb-[clamp(28px,4vw,44px)]">
+            <div className="grid gap-x-10 gap-y-9 lg:grid-cols-12">
+              <div className="min-w-0 lg:col-span-7">
+                <Label className="text-saffron">IIT Palakkad</Label>
+                <h1
+                  id="hero-title"
+                  className="mt-5 text-[clamp(2.375rem,1.5rem+2.6vw,3.5rem)] leading-[1.04] font-semibold tracking-[-0.024em] text-white"
+                >
+                  Guest houses of IIT&nbsp;Palakkad
+                </h1>
+                <div aria-hidden className="mt-7 h-1 w-12 bg-vermilion" />
+              </div>
+              <div className="flex min-w-0 flex-col lg:col-span-5 lg:self-end">
+                <p className="max-w-[42ch] text-[17.5px] leading-[1.6] text-on-ink">{lead}</p>
+                <div className="mt-7 flex flex-wrap gap-3">
+                  <Link href="/book-room" className={siteButton.brand}>
+                    Book a room
+                  </Link>
+                  <Link href="/book-meal" className={siteButton.outlineLight}>
+                    Book meals
+                  </Link>
                 </div>
               </div>
-              <p className="mt-10 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-white/15 pt-5 text-[14.5px] text-on-ink-muted">
-                <Phone aria-hidden className="size-4 text-saffron" />
-                {GUEST_HOUSE_CONTACT.phoneLabel}
-                <a href={GUEST_HOUSE_CONTACT.phoneHref} className="font-semibold text-white tabular-nums hover:text-saffron">
-                  {GUEST_HOUSE_CONTACT.phone}
-                </a>
-              </p>
             </div>
-            {houses.length > 0 && (
-              // Hairlines are each panel's own borders, not a `gap-px` over a
-              // coloured ground: with an odd number of guest houses the ground
-              // would show through the empty cell. `odd:` clears the left
-              // border at the start of every row.
-              <div className={houses.length > 1 ? "grid md:grid-cols-2" : "grid"}>
-                {houses.map((house, i) => (
-                  <HousePanel key={house.id} house={house} wide={houses.length === 1} priority={i < 2} />
-                ))}
-              </div>
-            )}
+            <p className="mt-10 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-white/15 pt-5 text-[14.5px] text-on-ink-muted">
+              <Phone aria-hidden className="size-4 text-saffron" />
+              {GUEST_HOUSE_CONTACT.phoneLabel}
+              <a href={GUEST_HOUSE_CONTACT.phoneHref} className="font-semibold text-white tabular-nums hover:text-saffron">
+                {GUEST_HOUSE_CONTACT.phone}
+              </a>
+            </p>
           </div>
         </Container>
       </section>
+
+      {/* ------------------------------------------------ the guest houses */}
+      {/* Back to a section of its own now that the slideshow holds the top of
+          the page. The two photographs lead the slideshow *and* their cards:
+          the slideshow is a reel, and these are where each house is named -
+          which is the only place on the site that says which guest house a
+          photograph shows. */}
+      {houses.length > 0 && (
+        <section aria-labelledby="houses-title" className={SECTION}>
+          <Container>
+            <SectionHead id="houses-title" label="Accommodation" title="Our guest houses" />
+            <div className="mt-9 grid gap-6 md:grid-cols-2">
+              {houses.map((house) => (
+                <HousePanel key={house.id} house={house} wide={houses.length === 1} />
+              ))}
+            </div>
+          </Container>
+        </section>
+      )}
 
       {/* ------------------------------------------------------- amenities */}
       <section aria-labelledby="amenities-title" className={`bg-band ${SECTION}`}>
@@ -235,46 +249,45 @@ export default async function HomePage() {
 }
 
 /**
- * One guest house in the hero block: its photograph, then its name under it.
+ * One guest house: its photograph, then its name under it.
  *
  * **The photograph is the house's own** (`guestHousePhoto`), and a house the
  * registry does not name renders the frame's placeholder rather than
- * borrowing another house's photograph - the card says "this is Bageshri",
- * so the wrong picture there would be a false statement, not a dull one.
+ * borrowing another house's - the card says "this is Bageshri", so the wrong
+ * picture there would be a false statement, not a dull one.
  *
  * The name sits **under** the photograph, never over it: that is how
  * iitpkd.ac.in prints the title of a card, it needs no wash over the
  * architecture to stay legible, and it keeps the site's rule that no
  * photograph carries a visible caption - this is a heading, and the thing it
- * heads is the guest house, not the picture.
+ * heads is the guest house, not the picture. These two cards are the only
+ * place on the site that says which guest house a photograph shows; the
+ * slideshow above and the Gallery say nothing.
  */
 function HousePanel({
   house,
   wide,
-  priority,
 }: {
   house: SiteGuestHouse;
   /** The only guest house, so it has the full width and a shallower crop. */
   wide: boolean;
-  priority: boolean;
 }) {
   const photo = guestHousePhoto(house.name);
   return (
-    <article className="flex min-w-0 flex-col border-t border-border-strong bg-white md:border-l md:odd:border-l-0">
+    <article className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border-strong bg-white">
       <SitePhotoFrame
         photo={photo ?? { src: null, alt: house.name }}
         sizes={wide ? "(min-width: 1280px) 1160px, 100vw" : "(min-width: 1280px) 580px, (min-width: 768px) 50vw, 100vw"}
-        priority={priority}
         className={wide ? "aspect-[3/2] rounded-none md:aspect-[5/2]" : "aspect-[3/2] rounded-none"}
       />
-      <div className="px-[clamp(20px,2.6vw,36px)] pt-7 pb-8">
+      <div className="px-[clamp(20px,2.6vw,32px)] pt-7 pb-8">
         <p className="mb-3 text-[12px] font-semibold tracking-[0.18em] text-vermilion-deep uppercase">
           {house.serves_meals ? "Rooms & dining" : "Rooms"}
         </p>
         <h2 className="text-title font-semibold text-ink">{house.name}</h2>
         <p className="mt-3 text-[15.5px] leading-[1.65] text-body">{houseSummary(house)}</p>
       </div>
-      <div className="mt-auto border-t border-border px-[clamp(20px,2.6vw,36px)] py-4">
+      <div className="mt-auto border-t border-border px-[clamp(20px,2.6vw,32px)] py-4">
         <ArrowLink href="/book-room">Book a room</ArrowLink>
       </div>
     </article>

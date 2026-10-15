@@ -72,3 +72,52 @@ test("the contact page shows each guest house on the map, and the footer links t
   await expect(page.getByText(/MRBS/i)).toHaveCount(0);
   await expect(footer.getByText(/Meeting Room Booking System/i)).toHaveCount(0);
 });
+
+/**
+ * The home page's slideshow (15 Oct 2026, the owner: "i need images which
+ * change evry few seconds and has the option of arrows to move to next
+ * image"). Three things have to hold, and each of them has been the bug in
+ * somebody's carousel: it moves on its own, the arrows move it, and it can
+ * be stopped - a photograph that slides away while you are looking at it is
+ * what the Pause button is for.
+ */
+test("the home page's slideshow advances, takes the arrows, and stops", async ({ page }) => {
+  await page.goto("/");
+  const carousel = page.getByRole("group", { name: "Photographs of the guest houses" });
+  await expect(carousel).toBeVisible();
+
+  // `getByRole` has no `current` option, so the indicator is matched on the
+  // attribute itself - which is the thing a screen reader reads anyway.
+  const slideNumber = async () =>
+    (await carousel.locator('button[aria-current="true"]').getAttribute("aria-label")) ?? "";
+
+  // The guest houses lead it, in the owner's order.
+  expect(await slideNumber()).toContain("Photograph 1 of 6");
+
+  // The arrows move it, and it wraps rather than dead-ending.
+  await carousel.getByRole("button", { name: "Next photograph" }).click();
+  expect(await slideNumber()).toContain("Photograph 2 of 6");
+  await carousel.getByRole("button", { name: "Previous photograph" }).click();
+  expect(await slideNumber()).toContain("Photograph 1 of 6");
+  await carousel.getByRole("button", { name: "Previous photograph" }).click();
+  expect(await slideNumber()).toContain("Photograph 6 of 6");
+
+  // A number jumps straight to its photograph.
+  await carousel.getByRole("button", { name: "Photograph 3 of 6" }).click();
+  expect(await slideNumber()).toContain("Photograph 3 of 6");
+
+  // It advances by itself - 6s a slide, so one tick inside 10s. The pointer
+  // has to be off it, because hovering holds it deliberately.
+  await page.mouse.move(0, 0);
+  await expect
+    .poll(slideNumber, { timeout: 10_000, message: "the slideshow never advanced on its own" })
+    .toContain("Photograph 4 of 6");
+
+  // And it stops when asked, for as long as it is asked.
+  await carousel.getByRole("button", { name: "Pause the slideshow" }).click();
+  await page.mouse.move(0, 0);
+  const held = await slideNumber();
+  await page.waitForTimeout(7_000);
+  expect(await slideNumber(), "a paused slideshow moved anyway").toBe(held);
+  await expect(carousel.getByRole("button", { name: "Play the slideshow" })).toBeVisible();
+});

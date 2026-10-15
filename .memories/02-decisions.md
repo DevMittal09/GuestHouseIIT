@@ -5592,6 +5592,13 @@ to showcase behind a control, and reads as a template — the owner has twice
 asked for the site not to look generated. Two photographs side by side show
 both at once.
 
+> **Superseded the same day.** The owner asked for the slider outright - "i
+> need images which change evry few seconds and has the option of arrows to
+> move to next image... just go to iitpkd.ac.in website and see what i mean".
+> The reasoning above was put to them once and not taken, which settles it.
+> See "The hero becomes a slideshow" below for what was built and which of
+> these objections were answered rather than ignored.
+
 **Rejected:** keeping the hero photograph *and* giving each card its own. The
 owner named six photographs for the landing page and that layout needs seven
 slots, so one photograph would have had to appear twice or be borrowed from the
@@ -5620,3 +5627,83 @@ photograph in `PHOTOS` is served but reachable from nowhere.
 paved courtyard as the new `hamsanandi-courtyard.jpg`, so that set is almost
 certainly Hamsanandi. That is still an inference, so it is written here and not
 in the code.
+
+
+---
+
+## 15 October 2026, second round — the hero becomes a slideshow
+
+The owner, after the round above:
+
+> See basically i want to change the landing page UI to the iitpkd.ac.in
+> website style. Basically in the landing page. i need images which change
+> evry few seconds and has the option of arrows to move to next image. Then
+> we should be able to go down and see the details and other stuff in the
+> landing page. Just go to iitpkd.ac.in website and see what i mean.
+
+**The carousel was argued against hours earlier and asked for anyway**, which
+settles it - the objection was made once, in the open, and not taken. What
+follows is therefore not a defence of the decision but a record of which of
+those objections were *answered* in the build and which were simply accepted.
+
+### What was answered
+
+| The objection | How the build answers it |
+| --- | --- |
+| "It hides half of what it was asked to showcase behind a control" | The slideshow is **not the only place** the photographs appear. Its first two slides are also the guest-house cards further down, where they are named, and the four it does not carry are the mosaic. Nothing is reachable only by waiting |
+| "It reads as a template" | No stock carousel library and no dots. The controls are iitpkd.ac.in's own - **Previous / Pause / Next and numbered indicators** - drawn in this site's vocabulary: square bordered buttons at 6px, a vermilion hairline under the active number, no pills, no shadow, no wash over the photograph |
+| "It needs a client component" | **Accepted, and contained.** `components/site/hero-carousel.tsx` is the only `"use client"` file on the public site. It takes `SitePhoto[]` and renders them; it knows nothing about guest houses, the store or the booking rules, so the public site is still server-rendered apart from one timer |
+
+### The accessibility rules a rotating carousel has to keep
+
+An auto-advancing carousel is the control most often shipped broken, so these
+are written down rather than left to the component:
+
+- **It stops.** A visible Pause button, *and* it holds while a pointer is over
+  it or the keyboard focus is inside it. Without the second, a reader loses
+  the photograph they were looking at, or the arrow they were tabbing towards
+  moves out from under them.
+- **`prefers-reduced-motion` stops the rotation, not just the transition.**
+  Turning off the slide animation while still swapping the image every six
+  seconds would miss the point of the setting entirely.
+- **`aria-live` follows the rotation:** `off` while it advances by itself - a
+  screen reader must not narrate a timer - and `polite` the moment it is
+  paused and the reader is driving.
+- **Every slide stays mounted**, with the inactive ones `aria-hidden`, so one
+  track can translate and nothing off-screen is announced. There is nothing
+  focusable inside a slide, so no `inert` is needed.
+
+**The non-active slides load `eager`, deliberately.** They sit inside
+`overflow-hidden` translated off to the side, where lazy loading cannot be
+relied on to have fetched them before the timer brings them round; a blank
+frame mid-rotation is worse than the bytes. Only the first carries `priority`.
+
+### The page order, and why the masthead moved under the photographs
+
+**Decision.** The page is now: **slideshow → ink masthead (`<h1>`, the lead,
+the two doors, the manager's number) → Our guest houses → amenities → the
+mosaic → closing links.**
+
+**Why the masthead is second.** The owner described the page in that order -
+images first, "then we should be able to go down and see the details and
+other stuff". It also matches iitpkd.ac.in, whose hero slider sits above the
+first text section. The `<h1>` being below the hero photograph costs nothing:
+it is still the page's only `<h1>`, still the first heading in the document,
+and an e2e test at 320px keeps it visible.
+
+**What this reversed from the round hours earlier.** That round had merged the
+masthead and the guest houses into one block, with a house photograph under
+each half of it. The slideshow now holds the top of the page, so the guest
+houses go back to being **a section of their own** with ordinary bordered
+cards - which is also why `HousePanel` lost its `odd:` border arithmetic and
+its `priority` flag. The attribution itself (`GUEST_HOUSE_PHOTOS`) is
+untouched: those two cards are still the only place on the site that says
+which guest house a photograph shows.
+
+**The mosaic now shows what the slideshow does not** - `hamsanandi-entrance`,
+`bageshri-corridor`, `sitting-room`, `living-dining`, four that were
+Gallery-only before. Scrolling past a hero to meet the same six photographs
+again is the thing that makes a long page feel padded, and a unit test now
+fails if the two sets overlap. The two guest-house photographs are the one
+deliberate repeat: the slideshow is a reel, the cards are where they are
+named.

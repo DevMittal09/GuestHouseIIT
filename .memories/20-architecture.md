@@ -1112,6 +1112,7 @@ Guest Houses & Rooms.
 | `lib/format.ts`, `lib/tz.ts` | Formatting, all delegating to `lib/tz.ts` — the institute timezone (`Asia/Kolkata`): `instituteIso` to parse, `formatInstitute*` / `instituteHour` / `instituteDayBounds` to read back, and UTC-safe helpers for `"yyyy-MM-dd"` calendar dates. |
 | `lib/report-pdf.ts` | Client-side PDF rendering for the history report (dynamically imported). |
 | `lib/revalidate.ts` | The three cache sets actions invalidate. |
+| `components/site/hero-carousel.tsx` | **The one client component on the public site** (15 Oct 2026): the home page's hero slideshow. Everything else under `app/(site)/` is server-rendered, and this is kept that way by taking `SitePhoto[]` and nothing else - no store, no domain, no rules. |
 | `lib/site.ts`, `lib/site-data.ts`, `lib/site-content.ts` | The public website's editable values and its content rendered from `lib/`. Two slug-keyed registries live in `site.ts` and are read the same way - `GUEST_HOUSE_LOCATIONS` / `guestHouseMapPins()` for the map, and `GUEST_HOUSE_PHOTOS` / `guestHousePhoto()` for the one photograph that names a guest house (15 Oct 2026). Both key on `guestHouseSlug(name)`, so a guest house renamed in the console loses both until the registry learns the new name. |
 
 ### UI primitives

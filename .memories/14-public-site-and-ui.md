@@ -3,7 +3,7 @@
 Read this before changing anything visual, adding a public page, or touching
 the sign-in pages.
 
-**Seven passes so far:**
+**Eight passes so far:**
 
 | Date | Where | What |
 | --- | --- | --- |
@@ -14,7 +14,86 @@ the sign-in pages.
 | 26 Sep 2026, evening | `main` | The owner: "it looks so weird… the image filling the page this much looks so weird"; make it **clean and professional**, researched online. Rebuilt **institutional**: photos contained in the layout — see "The evening brief" below |
 | 30 Sep 2026 | `main` | A written revamp brief: TGH structure, Aman / Standard editorial rules, **GOV.UK** tables and tags; 4px inputs, 6px buttons, 8px cards, never a pill, shadow, gradient or glass. Primitives rebuilt (see "The 30 Sep revamp" below); the evening's content rules all kept. **Afternoon:** the supervisor's review — see "Promise less" below |
 | 11 Oct 2026 | `main` | The owner: the interface "looks too ai generated"; wanted it distinctive, professional and purpose-designed, with no generic dashboard patterns, excessive cards, decorative icons, unnecessary badges or repetitive layouts. **The palette was checked against iitpkd.ac.in again and kept** - what changed was composition, type and density. See "The 11 Oct design pass" below |
-| **15 Oct 2026 (current)** | `main` | The office's eleven new photographs, and **the first two the site is allowed to name**: the owner said which guest house each of two shows and asked for a landing page that showcases them, "similar but not exact copy" of iitpkd.ac.in. The home page's hero and its "Our guest houses" section became **one block** - the ink masthead across the top, a guest house under each half of it, photograph first and the name under it. **No colour, token or primitive changed.** See "The guest houses become the hero" below |
+| 15 Oct 2026, morning | `main` | The office's eleven new photographs, and **the first two the site is allowed to name**: the owner said which guest house each of two shows and asked for a landing page that showcases them, "similar but not exact copy" of iitpkd.ac.in. The home page's hero and its "Our guest houses" section became **one block** - the ink masthead across the top, a guest house under each half of it, photograph first and the name under it. **No colour, token or primitive changed.** See "The guest houses become the hero" below |
+| **15 Oct 2026, later (current)** | `main` | The owner: "i need images which change evry few seconds and has the option of arrows to move to next image... just go to iitpkd.ac.in website and see what i mean". A **hero slideshow** - the one client component on the public site - with iitpkd.ac.in's own Previous / Pause / Next and numbered indicators. The masthead moved **under** it; the guest houses went back to a section of their own. **No colour, token or primitive changed.** See "The hero becomes a slideshow" below |
+
+## The hero becomes a slideshow (15 Oct 2026, later)
+
+The owner asked for iitpkd.ac.in's hero outright - photographs that change by
+themselves, arrows to move between them, the details below. **A carousel had
+been argued against that morning and was asked for anyway**, which settles it
+([02-decisions.md](02-decisions.md) has the *Superseded* note).
+
+### The page order now
+
+**Slideshow -> ink masthead -> Our guest houses -> amenities -> "A look
+inside" mosaic -> closing links.**
+
+The masthead - the `<h1>`, the lead, *Book a room* / *Book meals* and the
+Guest House Manager's number - sits **under** the photographs. That is the
+order the owner described and the order iitpkd.ac.in uses; the `<h1>` is
+still the page's only one and still the first heading in the document.
+
+This reversed that morning's merge. The guest houses are **a section of their
+own** again with ordinary bordered cards, so `HousePanel` no longer needs the
+`md:odd:border-l-0` arithmetic or a `priority` flag.
+
+### `components/site/hero-carousel.tsx`
+
+**The only `"use client"` file on the public site.** It takes `SitePhoto[]`
+and renders them; it knows nothing about guest houses, the store or any
+booking rule, so the rest of the site stays server-rendered. All six slides
+are in the **server-rendered HTML**, so the hero works before hydration.
+
+| | |
+| --- | --- |
+| Slides | 6 (`HOME_PHOTOS.slides`), where iitpkd.ac.in's hero has 5 |
+| Timing | 6s a slide, one translating track, 700ms ease-out |
+| Controls | **Previous / Pause / Next and numbered indicators** - theirs. Square bordered buttons at 6px, 44px targets; the active number carries a 3px vermilion hairline |
+| Shape | `aspect-[4/3]` on a phone (more of a building), `sm:aspect-[16/9]` - the banner shape |
+| Contained | Inside the 1240px `Container`, like every photograph here. A full-bleed one read as "so weird" to the owner |
+
+**Numbers, not dots.** A row of round dots would be the pills the design
+rules ban, and a number says how far through you are without a legend. It is
+also what iitpkd.ac.in does.
+
+**No caption, no wash, no link.** Their slides wrap each image in a link to
+another page; these do not. The site's rule that no photograph carries a
+visible caption holds inside the slideshow too - the guest houses are named
+in the cards below it, and nowhere else.
+
+### The four rules a rotating carousel has to keep
+
+Written down because this is the control most often shipped broken:
+
+- **It stops.** A visible Pause button, **and** it holds while a pointer is
+  over it or the keyboard focus is inside it - otherwise a reader loses the
+  photograph they were looking at, or the arrow they were tabbing towards
+  moves out from under them.
+- **`prefers-reduced-motion` stops the rotation itself**, not just the
+  transition. Swapping the image every six seconds without animating it would
+  miss the point of the setting.
+- **`aria-live` follows the rotation**: `off` while it advances by itself (a
+  screen reader must not narrate a timer), `polite` once paused and the
+  reader is driving.
+- **Every slide stays mounted**, inactive ones `aria-hidden`, so one track can
+  translate and nothing off-screen is announced. Nothing inside a slide is
+  focusable, so no `inert` is needed.
+
+**Non-active slides load `eager` on purpose.** They sit inside
+`overflow-hidden` translated off to the side, where lazy loading cannot be
+relied on to have fetched them before the timer brings them round; a blank
+frame mid-rotation is worse than the bytes. Only the first carries `priority`.
+
+### What the mosaic shows now
+
+`HOME_PHOTOS.preview` was repointed at **four photographs the slideshow does
+not carry** - `hamsanandi-block-entrance`, `bageshri-corridor`,
+`sitting-room`, `living-dining`, all Gallery-only until now. Scrolling past a
+hero to meet the same six photographs again is what makes a long page feel
+padded. **A unit test fails if the two sets overlap.** The two guest-house
+photographs are the one deliberate repeat: the slideshow is a reel, the cards
+are where they are named.
 
 ## The guest houses become the hero (15 Oct 2026)
 
@@ -639,9 +718,10 @@ Mail templates (`lib/mail/render.ts`) still carry the old amber header.
 | --- | --- |
 | `components/site/brand.tsx` | **`BrandBlock`** — the lockup: `iitpkd-logo.png` (emblem only) + "Guest House" (serif) + a tracked tagline (`tagline`, default "IIT Palakkad"); `tone="light"` over photos and on ink; `compact` for the portal. Used by the site header, the footer and the portal header |
 | `components/site/site-header.tsx` | **`SiteHeader`** and `SITE_NAV`: a white bar, sticky from `lg`; links inside the header, a sideways-scrolling row below `lg`; Sign in / My portal |
-| `components/site/site-chrome.tsx` | **`SiteFooter({ pins })`** — the lockup and address, the number under `GUEST_HOUSE_CONTACT.phoneLabel` (**Guest House Manager** since 14 Oct 2026), **Find us** (each guest house's Map and Directions, How to reach the campus), **Institute** (`SITE_LINKS`), and a bottom line (Guidelines, Contact, Privacy notice). The **MRBS line** that opened it ("Booking a lecture hall or meeting room?") was removed on **7 Oct 2026** at the office's request, with every other mention of the Meeting Room Booking System |
+| `components/site/site-chrome.tsx` | **`SiteFooter({ pins })`** — the lockup and address, the number under `GUEST_HOUSE_CONTACT.phoneLabel` (**Guest House Manager** since 14 Oct 2026), **Find us** (each guest house's Map and Directions, How to reach the campus), **Institute** (`SITE_LINKS`), and a bottom line (Guidelines, Contact - the **Privacy notice** link went with the notice on 14 Oct 2026). The **MRBS line** that opened it ("Booking a lecture hall or meeting room?") was removed on **7 Oct 2026** at the office's request, with every other mention of the Meeting Room Booking System |
 | `components/site/site-nav.tsx` | `NavBar` — `tone="dark"` (portal: charcoal bar, uppercase, vermilion bar under the current page) or `"light"` (the white site header, a short vermilion underline); `scroll` for the phone row |
 | `components/site/site-ui.tsx` | `Container` (1240px), `Label` (tracked capitals), `PageTitle` (the sign-in pages' `<h1>`, optional `kicker`), **`PageMasthead`** (a light band: breadcrumb, `<h1>`, lead, `note`, `aside`), `SectionHead` (label + `<h2>` + optional link), `ArrowLink`, `BulletList`, `siteButton.{brand,ink,outline,light,outlineLight}`, `SitePhotoFrame` (8px corners; `zoom` eases on hover) |
+| `components/site/hero-carousel.tsx` | **`HeroCarousel({ photos })`** (client, 15 Oct 2026) — the home page's six-slide hero: Previous / Pause / Next and **numbered** indicators (iitpkd.ac.in's own set), 6s a slide on one translating track, `aspect-[4/3]` to `sm:aspect-[16/9]`. Holds on hover and on focus-within; `prefers-reduced-motion` stops the **rotation**, not just the transition; `aria-live` is `off` while rotating and `polite` once paused. Takes `SitePhoto[]` and nothing else — it knows no domain at all |
 | `components/site/guest-house-map.tsx` | **`GuestHouseMap`** (client): WAI-ARIA tabs, one per pin, the chosen embed, "Open in Google Maps" / "Get directions" |
 | `components/site/sign-in-panel.tsx` | `PageTitle` + the form (or "You are signed in") in five columns on the left, a contained 4:3 photograph in seven on the right from `lg` |
 | `components/login-form.tsx` | The form — no card, no second heading; submit is vermilion-deep; `domainNote` under it; the second door is **Mock Authentication** (→ `/mock-login?next=`) or **Sign in with Google** once configured. Labels "LDAP username" / "LDAP password" and the button name "Sign in" are what the e2e helpers use — keep them |
@@ -664,12 +744,12 @@ the role's form allows), **Meal booking** (ink, names the kitchen; only for
 
 ## The pages
 
-- **Home** — see "The guest houses become the hero" above (15 Oct 2026): one
-  bordered block holding the ink masthead **and** a panel per guest house,
-  each led by its own photograph with the name under it; then a ruled amenity
-  grid, a four-photo mosaic, a closing row of ruled links. The 5 + 7 hero with
-  one contained 4:3 photo, and the separate *Our guest houses* section, were
-  merged into that block. No figures, meal times, rules or captions.
+- **Home** — see "The hero becomes a slideshow" above (15 Oct 2026, later):
+  a **six-slide hero slideshow**, then the ink masthead (`<h1>`, lead, the two
+  doors, the manager's number), then *Our guest houses* as two cards each led
+  by its own photograph with the name under it, a ruled amenity grid, a
+  four-photo mosaic of what the slideshow did **not** show, and a closing row
+  of ruled links. No figures, meal times, rules or captions.
 - **Guidelines** — light masthead with a **Provisional edition** note while
   `GUIDELINES_PROVISIONAL` is true; **How booking works** as five small
   numbered cards (`BOOKING_STEPS`); a sticky **Contents** list; eight numbered

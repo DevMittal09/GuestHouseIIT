@@ -262,11 +262,25 @@ export function guestHousePhoto(name: string): SitePhoto | null {
 
 export const HOME_PHOTOS = {
   /**
-   * "A look inside" - the four photographs under the guest houses, in the
-   * order the owner listed them on 15 Oct 2026 (4, 6, 7 and 1 of the set).
-   * The first is set at double size by the page.
+   * **The hero slideshow**, in the order the owner listed them on 15 Oct
+   * 2026: the main photograph of each guest house first, then the four asked
+   * for "after the first two" (7, 6, 4 and 1 of the set). Six, where
+   * iitpkd.ac.in's own hero has five.
    */
-  preview: [PHOTOS.hamsanandiBlock, PHOTOS.doubleBedroom, PHOTOS.kitchenCorner, PHOTOS.twinRoom],
+  slides: [
+    PHOTOS.hamsanandiCourtyard,
+    PHOTOS.bageshriFront,
+    PHOTOS.hamsanandiBlock,
+    PHOTOS.doubleBedroom,
+    PHOTOS.kitchenCorner,
+    PHOTOS.twinRoom,
+  ],
+  /**
+   * "A look inside" - four the slideshow does **not** show, so that scrolling
+   * down finds new photographs rather than the hero again. The first is set
+   * at double size by the page.
+   */
+  preview: [PHOTOS.hamsanandiEntrance, PHOTOS.bageshriCorridor, PHOTOS.sittingRoom, PHOTOS.livingArea],
 };
 
 /** The photograph beside each sign-in page's form. Decorative (empty alt). */

@@ -66,9 +66,10 @@ office's corrections, two design passes, the round that put **the approval
 workflow itself in the manager's hands** (Console -> Approval Workflow), and
 two rounds preparing the institute's **user import** - which closed a GoTrue
 door the portal had never used and gave the import an **undo**. The last round
-is the office's photographs: eleven new ones, and the **first two the site is
-allowed to name** - the home page's hero and its guest-house cards are now one
-block, a photograph of each house above its name. The round before it was the
+is the office's photographs: eleven new ones, the **first two the site is
+allowed to name**, and - asked for hours later - a **hero slideshow** in
+iitpkd.ac.in's style, with its Previous / Pause / Next controls, above a page
+whose details now sit beneath it. The round before it was the
 office's twelfth list (the contact number is the manager's, free rooms are
 counted in green, past dates are greyed out of the week and month views, the
 privacy consent tick is gone, and **bookings open six months ahead**). **Not
@@ -82,7 +83,7 @@ email/password provider is **still on**: [04-production.md](04-production.md)
 **Numbers.** 34 migrations · 10 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
 18 demo personas · 6 demo bookings · 23 real rooms · **25 photographs** ·
-561 unit tests · 41 end-to-end journeys · 15 console sections.
+562 unit tests · 43 end-to-end journeys · 15 console sections.
 
 ---
 
