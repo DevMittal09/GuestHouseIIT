@@ -4,11 +4,10 @@ import { ArrowRight, BedDouble, UsersRound, UtensilsCrossed, type LucideIcon } f
 import { MyBookings, type MyInvoice } from "@/components/my-bookings";
 import { MyData } from "@/components/my-data";
 import { PageHeader } from "@/components/page-header";
-import { SectionHeading } from "@/components/section-heading";
 import { getCurrentUser } from "@/lib/auth";
 import { serviceTypesFor } from "@/lib/booking-types";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
-import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
+import { homeForRole, MEAL_BOOKING_PATH, ROOM_BOOKING_PATH, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { REQUESTER_ROLES } from "@/lib/types";
 import { clubBookingNotice, mustBookThroughFacultyInCharge } from "@/lib/club-booking";
@@ -75,7 +74,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-4">
           {booksForSelf && (
             <BookingDoor
-              href="/book"
+              href={ROOM_BOOKING_PATH}
               icon={BedDouble}
               tone="brand"
               title="New room booking"
@@ -84,7 +83,7 @@ export default async function DashboardPage() {
           )}
           {booksForSelf && canBookMeals && (
             <BookingDoor
-              href="/book?service=meals_only"
+              href={MEAL_BOOKING_PATH}
               icon={UtensilsCrossed}
               tone="ink"
               title="Meal booking"
@@ -110,10 +109,10 @@ export default async function DashboardPage() {
           {clubBookingNotice(await facultyInChargeForClub(user))}
         </p>
       )}
-      <section>
-        <SectionHeading title="Your requests" count={bookings.length} />
-        <MyBookings bookings={bookings} invoices={invoices} />
-      </section>
+      {/* Three sections of its own since 17 Oct 2026 - current, upcoming and
+          previous - so the single "Your requests" heading that used to stand
+          over one long table has gone with it. */}
+      <MyBookings bookings={bookings} invoices={invoices} />
       {/* DPDP (Phase 8): take a copy, or ask the office to erase it. A quiet
           line at the foot of the page, not a notice (9 Oct 2026).
 

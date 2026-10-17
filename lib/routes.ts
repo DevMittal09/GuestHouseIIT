@@ -6,6 +6,25 @@ import { REQUESTER_ROLES, type Role } from "./types";
  */
 export const SIGN_IN_PATH = "/sign-in";
 
+/**
+ * **The two booking doors** (17 Oct 2026, the owner: Room Booking and Meal
+ * Booking as separate entries in the portal nav, rather than one New Booking
+ * that always opened on a room).
+ *
+ * One page behind both (`components/booking-request-page.tsx`); the meal door
+ * is a route rather than `?service=meals_only` so the nav can tell which of
+ * the two is open - `usePathname()` does not see a query string. The query
+ * form still works, for links and bookmarks made before this.
+ *
+ * Written down here because four places link to them: the nav, the My
+ * Bookings tiles, the public `/book-meal` card and the meal route itself.
+ */
+export const ROOM_BOOKING_PATH = "/book";
+export const MEAL_BOOKING_PATH = "/book/meals";
+
+/** The service type the meal door opens on - `ServiceType["meals_only"]`. */
+export const MEALS_ONLY_SERVICE = "meals_only";
+
 /** Landing page for each role after sign-in. */
 export function homeForRole(role: Role): string {
   switch (role) {

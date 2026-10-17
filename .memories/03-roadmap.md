@@ -475,6 +475,86 @@ Every item of both rounds closed. What they opened:
   nothing measures how far down the page the amenities now start. §5's missing
   visual regression test would cover this and the green figures both.
 
+## 2i. Opened by the 16 Oct 2026 round - the owner's thirteenth list
+
+All three items closed. What they opened:
+
+- **"Future bookings only" was read as "a future effective date", which is
+  narrower.** A new rate must now start later than today
+  (`tariffStartError`), so nothing already quoted, approved or slept in is
+  repriced. But `resolveTariff` still prices a stay **night by night**, so a
+  rate starting tomorrow does price the later nights of a stay booked last
+  week. Whether the office wants a booking to keep the figure it was quoted
+  **at the moment it was made** is **a question for them** - and it is a much
+  larger change: the rates would have to be snapshotted onto the booking, and
+  a stay could then be invoiced at a price no longer in any tariff row. Ask
+  before building it.
+- **A tariff can still be back-dated through the stores**, and so by a repair
+  script or a direct SQL insert. Deliberate - the rule is policy, in
+  `createTariffAction`, and the first extra-bed rate had to be able to cover
+  stays in progress - but there is no database guard the way `tariffs_guard`
+  guards an *edit*. If the office ever reports a rate that appeared in the
+  past, this is the door.
+- **No end-to-end journey types a meal count any more.** The only one that
+  did was the Bageshri invoice, where the boxes no longer exist; the live
+  repricing of typed counts is covered by `tests/fifth-round.test.ts` and the
+  journey still proves it through an additional charge. A Hamsanandi invoice
+  journey would close it - and would be the only e2e cover for the dining
+  section's own letters, (C) and (D). See §5.
+- **`serves_meals` is now in the invoice snapshot, and a guest house can be
+  edited.** Ticking "Serves meals" on Bageshri in Guest Houses & Rooms makes
+  **new** invoices print a dining section; invoices already issued keep what
+  they recorded, which is right. Nothing warns the developer that the tick
+  changes what future invoices print, and `lib/settings-impact.ts` has no
+  entry for it.
+- **The guest house is on the desk's lists as a muted line under the rooms.**
+  If the office asks to sort or filter a desk list by guest house, the
+  consoles already take `?gh=`; what they do not have is a visible control on
+  the Checked out - to bill and Awaiting payment sections themselves.
+
+## 2j. Opened by the 17 Oct 2026 round - the owner's fourteenth list
+
+All nine items closed. What they opened:
+
+- **A *named* tariff category on the booking is a question for the office.**
+  The panel offers the pair the rate is resolved from - the guest house and
+  the kind of booking - because that is what a requester can honestly choose
+  and what `resolveTariff` reads. If the office wants the requester to pick
+  from the sheet's own wording ("parents", "government officer", "Hamsanandi
+  type 3"), that is a **column on `tariffs` and a column on `bookings`**, a
+  new dimension in `resolveTariff` and in `specificity()`, and a Form Builder
+  or Settings control for which categories a role may claim. Ask before
+  building it: the sheet currently expresses those categories as scope, which
+  needs nothing stored.
+- **The office cannot edit the categories, because there is nothing to
+  edit.** They are derived. The only way to change what a requester is
+  offered is to change the rate sheet, the Form Builder's allowed guest
+  houses, or `bookingTypesFor` - which is the same list of levers as before,
+  stated in one more place.
+- **The caretaker sentence is on the form only.** Not in the booking mail and
+  not on `BookingDetails`, where reviewers and the desk would read it too.
+  `lib/mail/templates.ts` is where it would go if the office asks - beside
+  the "Pets" line, which is the precedent for a sentence that lives in the
+  mail and the Guidelines rather than on the form.
+- **Nothing tests the booking page at 320px.** The two columns collapse to
+  one below `lg` and the panel has no fixed widths, but only
+  `e2e/public-site.spec.ts` runs on the phone project; the portal's pages have
+  never been in it. Adding `/book` would need a signed-in phone project, which
+  is a config change rather than a test.
+- **`PREVIOUS_BOOKINGS_SHOWN` is a constant, not a Setting.** Five is a
+  guess. It is one line in `lib/my-bookings.ts` and a prop on `MyBookings`, so
+  the office can be given a different number without a migration; a *Setting*
+  would want a group of its own.
+- **My Bookings groups on the client, from `new Date()` at render.** A page
+  left open overnight keeps yesterday's sections until something refreshes it
+  (live updates do, within 30 seconds on the mock store). Server-side grouping
+  would need the sections to be a prop, and would move with the server's clock
+  instead - which is the same problem one layer down.
+- **`/book/meals` and `/book?service=meals_only` are two addresses for one
+  page.** The query form is kept for links and bookmarks made before today.
+  If it is ever dropped, the redirect belongs in the route, not in the shared
+  component.
+
 ---
 
 ## 3. Found in the documentation audit (24 Sep 2026)
@@ -523,17 +603,21 @@ unmaintained software holding ID data.
 
 ## 5. Tests that are still thin
 
-`npm test` (494 checks) and `npm run test:e2e` (39 journeys) run in CI. What
-would catch the most next:
+`npm test` (574 checks, 34 files) and `npm run test:e2e` (43 journeys) run in
+CI. What would catch the most next:
 
 1. the mail layer end to end — rendering, outbox claim and retry, recipients
    following `canReview`;
 2. the availability grid's overlap arithmetic beyond the store tests;
-3. end-to-end passes for more of the console — Settings, tariffs (only Faculty
-   Advisors has one);
-4. accessibility assertions (axe) inside the Playwright run;
-5. an RLS test with real user JWTs, once RLS becomes the boundary;
-6. a store-parity suite (same operations on `MockStore` and `SupabaseStore`).
+3. end-to-end passes for more of the console — Settings, tariffs (Change rate
+   and Faculty Advisors have one each);
+4. **a Hamsanandi invoice journey** — since 16 Oct 2026 the only invoice
+   journey is at Bageshri, which has no dining section, so nothing drives a
+   meal-count box, the (C) and (D) letters or a dining additional charge
+   through the UI (§2i);
+5. accessibility assertions (axe) inside the Playwright run;
+6. an RLS test with real user JWTs, once RLS becomes the boundary;
+7. a store-parity suite (same operations on `MockStore` and `SupabaseStore`).
 
 ## 6. Accessibility
 

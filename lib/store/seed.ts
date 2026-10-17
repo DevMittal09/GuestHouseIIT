@@ -69,6 +69,15 @@ export const seedProfiles: Profile[] = [
   // ----- Requesters -----
   { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112201001", ldap_uid: "112201001" },
   { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student", hostel_name: "Saveri", department_or_club: null, roll_number: "142202014", ldap_uid: "142202014" },
+  /**
+   * A day scholar: `hostel_name` is **genuinely null**, which is what makes
+   * this persona the test of the 17 Oct 2026 rule - a student with no hostel
+   * has no Assistant Warden, so their request enters at the Guest House
+   * Manager (`approverNotApplicable`). Named so the condition is visible in
+   * every queue and list it appears in; the booking's own log says why it
+   * skipped the warden.
+   */
+  { id: "student-day-scholar", email: "122203099@smail.iitpkd.ac.in", full_name: "Devika Iyer (day scholar - no hostel)", role: "student", hostel_name: null, department_or_club: null, roll_number: "122203099", ldap_uid: "122203099" },
   // Faculty in CSE: her official bookings go to the CSE HOD first.
   { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "priya", unit_id: "unit-cse", staff_category: "faculty" },
   // An officer office: its bookings are debited to the Institute Grant.

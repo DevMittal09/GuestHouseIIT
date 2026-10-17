@@ -95,6 +95,20 @@ export const DEFAULT_MEALS_ON: MealPreferences = {
 };
 
 /**
+ * What the meal section says about changing an order afterwards (17 Oct
+ * 2026, the owner's own wording, to be kept exactly as given).
+ *
+ * The one deliberate exception to "a rule the form enforces is not stated on
+ * the form" (9 Oct 2026) and its companion about house rules (11 Oct 2026):
+ * this is neither. The form cannot change a meal booking once it is in -
+ * that happens at the desk - so the sentence tells the requester where to go
+ * for something the portal does not offer them. It is rendered **in the meal
+ * section only**, and nowhere else.
+ */
+export const MEAL_CHANGE_NOTICE =
+  "In any case talk with caretaker for any change in meal booking";
+
+/**
  * The most days a meal plan may cover. A guard against a runaway loop on a
  * nonsense check-out date, not a policy - no real stay comes close.
  */

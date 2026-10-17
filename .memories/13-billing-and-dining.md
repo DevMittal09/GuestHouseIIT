@@ -2,11 +2,14 @@
 
 Phases 5 and 6 (22 Sep 2026), the 24 Sep corrections, the 25 Sep ones (GST per
 section, additional charges, live repricing), the **7 Oct** ones (version 4,
-cash retired, a personal stay settled at check-out, Awaiting payment) and the
-**9 Oct** one (a dining booking is quoted meal rates only).
-**Checked against the code on 7 Oct 2026** — `lib/invoice.ts`,
+cash retired, a personal stay settled at check-out, Awaiting payment), the
+**9 Oct** one (a dining booking is quoted meal rates only) and the **16 Oct**
+ones (**a new rate starts in the future**, the guest house named in every desk
+list, and **version 5 — no dining section where there is no kitchen**).
+**Checked against the code on 16 Oct 2026** — `lib/invoice.ts`,
 `lib/tariffs.ts`, `lib/invoice-pdf.ts`, `app/actions/invoices.ts`,
 `components/invoice-dialog.tsx`, `components/awaiting-payment.tsx`,
+`components/stays-table.tsx`, `components/checkouts-today.tsx`,
 `lib/access.ts`.
 
 ## Who does what
@@ -18,7 +21,7 @@ cash retired, a personal stay settled at check-out, Awaiting payment) and the
 | **Check out a personal stay** — issue, pay, then Mark as Vacated, in one dialog (7 Oct 2026) | ✓ | ✓ | ✓ | — |
 | **Close a personal stay off unpaid**, with a reason that goes in the log | ✓ | — | ✓ | — |
 | **Cancel** an issued invoice (reason; a correction is cancel + reissue) | ✓ | — | ✓ | — |
-| Tariffs & invoice settings (console) | ✓ | — | ✓ | — |
+| Tariffs & invoice settings (console) — **a new rate starts tomorrow at the earliest** | ✓ | — | ✓ | — |
 | Monthly collections CSV (`/history`) | ✓ | ✓ | ✓ | — |
 | Download own issued invoice (`/dashboard`) | — | — | — | ✓ |
 
@@ -38,6 +41,19 @@ cash retired, a personal stay settled at check-out, Awaiting payment) and the
   stay and approved dining booking, however old (`invoiceableFromArchive`).
 - Dining: "Dining to invoice" on the kitchen page (`/manager/meals`).
 
+**Every one of those lists names the guest house** (16 Oct 2026, the owner:
+"add the guest house name while differentiating the invoices in the dashboard
+where we are showing the previous bookings for GHM/GHC"). `StaysTable` and
+`CheckoutsToday` print it under the room numbers, in a column now headed
+**Guest house & rooms**; `AwaitingPaymentTable` leads its second line with it
+(`Bageshri · 201, 202`, or `Hamsanandi · Meals only · 4 people`, since a
+dining booking has no room number to tell the houses apart by). The invoice
+dialog opens on **the heading the PDF draws**, `INVOICE_TITLE` - "INVOICE -
+IIT Palakkad Bageshri Guest House". A line under the rooms rather than a
+column of its own: these tables already carry eight columns and three
+buttons, and width is what pushed the Status column off the approver queues
+on 11 Oct 2026.
+
 Rates and invoice settings with their defaults are in
 [12-settings-and-defaults.md](12-settings-and-defaults.md#console--tariffs--invoicing-manager-and-developer).
 
@@ -52,7 +68,35 @@ occupied or vacated stay, `components/invoice-dialog.tsx`): **preview →
 correct the meal counts and add any additional charges (the figures reprice
 as you type) → Save draft (optional) → Issue & print → Mark paid**.
 
-### The layout as printed now (7 Oct 2026) — `version: 4`
+### The layout as printed now (16 Oct 2026) — `version: 5`
+
+**A guest house with no kitchen prints no Dining Charges section at all** (the
+owner: "for bageshri meals should not come in invoice"). Everything else is
+version 4.
+
+- `InvoiceDocument.serves_meals` records `guest_houses.serves_meals` as it was
+  when the invoice was priced, and **`invoicePrintsDining(doc)`**
+  (`doc.serves_meals !== false`) is the one reader. A snapshot issued before
+  the flag existed has no `serves_meals`, so it reads as printing the section
+  and **reprints exactly as it was issued**.
+- At Bageshri that means: no Breakfast / Lunch / Dinner rows, no Dining
+  Charges Subtotal, no GST row on it, **no meal-count boxes** in the desk's
+  dialog, no "Dining charges" option under *Charged under*, and no "Dining
+  charges" row in the mail to Accounts. The letters are **A, B, Grand Total
+  (A+B)**.
+- `buildInvoiceDocument` **zeroes the meal counts** where there is no kitchen,
+  whatever arrived, and drops any charge filed under dining - overwritten,
+  not refused, like a personal booking's debitable head. A charge the desk
+  *types* is named instead: `parseExtraCharges` refuses it, because that is a
+  typed input. **`extraChargeSectionsFor(shape)`** is the one list of
+  sections, read by the dialog and by the parser.
+- **A guest house that serves meals is untouched**, a stay there that ordered
+  none included: those meals were offered and declined, which is a fact about
+  the stay. Only *no kitchen* removes the section - the same reasoning that
+  took the Meals column off `StaysTable` and the per-day table off
+  `BookingDetails` on 7 Oct 2026.
+
+### The layout as printed before that (7 Oct 2026) — `version: 4`
 
 Three changes on top of version 3's lettering, which is unchanged:
 
@@ -120,8 +164,10 @@ cover. In the Invoice dialog, **Additional charges → Add a charge**: what it
 was, **Charged under** (Room charges (A) at the room GST, Dining charges (C) — (B) before 30 Sep —
 at the food GST, or Other — no GST, for damage or loss), quantity, **₹ each**
 (including GST when the tariffs are), and a **comment** printed under it on
-the invoice. At most 20; the amount has at most two decimals; a dining invoice
-has no room section to charge to (`parseExtraCharges`). They are kept as typed
+the invoice. At most 20; the amount has at most two decimals; and the sections
+offered are the ones the invoice prints (`extraChargeSectionsFor`) — a dining
+invoice has no room section to charge to, and a stay at a guest house with no
+kitchen has no dining section (16 Oct 2026). They are kept as typed
 on the draft (`invoices.extra_charges`, **migration 26**) and frozen priced in
 the snapshot (`extra_lines`). A stay with only an additional charge can be
 invoiced. Until migration 26 is applied on Supabase, invoices without charges
@@ -181,7 +227,15 @@ total, and issuing uses exactly those figures. **Preview PDF** prints the
   role. `resolveTariff()` takes the most specific row in force (guest house >
   requester > booking type > room type), then the latest. A rate in force is
   never edited or deleted (trigger `tariffs_guard`, `tariffLockedError`); a new
-  price is a new row. A charge no rate covers is a *problem* on the document
+  price is a new row, **and it must start later than today**
+  (`tariffStartError`, 16 Oct 2026) - so the office prices the bookings still
+  to come and never a night it has already quoted on the form. The two rules
+  meet at tomorrow: the earliest a rate may start is the earliest one that can
+  still be removed. The start rule is in `createTariffAction` and the console
+  form, **not** in the stores, which still take any date - that is what
+  `supabase/repairs/` needs. What it does *not* do: a stay booked last week is
+  still priced night by night, so a rate starting tomorrow does reach its later
+  nights ([03-roadmap.md](03-roadmap.md) §2). A charge no rate covers is a *problem* on the document
   and blocks issuing (`invoiceBlocker`) — nothing is ever priced at ₹0 by
   omission.
 - **The rates on the booking form** are the same resolution
@@ -194,6 +248,26 @@ total, and issuing uses exactly those figures. **Preview PDF** prints the
   stands on its own now: the paragraph under it about rates in force, GST
   percentages and night-by-night pricing came off the same day, and those facts
   are on the Guidelines page.
+- **And since 17 Oct 2026 they are a panel beside the form, with the
+  category chosen in it** (the owner: keep the categories and their rates on
+  the right-hand side and let the user select the one that applies).
+  **A category is one (guest house, booking type) pair** the requester is
+  eligible for, labelled ("Hamsanandi - Official booking") and carrying the
+  room rate those two resolve to; choosing it writes `guest_house_id` and
+  `booking_type`, which is what `resolveTariff` reads - so the selection
+  changes what will be charged and **cannot drift from the invoice**. One
+  category is stated rather than asked. `lib/tariff-categories.ts` builds the
+  list (eligibility from `bookingTypesFor`, `guestHousesForBookingType`, the
+  Form Builder's allowed houses, kitchens only on a dining booking and
+  `mealsAllowedFor`); `components/tariff-panel.tsx` draws it and keeps
+  `TariffTable` underneath, unchanged, for the chosen one. The rates card is
+  **gone from the form**.
+  > **A *named* category stored on the booking is not built**, deliberately:
+  > the office's sheet already expresses "parents" and "government officers"
+  > as scope (`requester_role: official` on the ₹4,000 Hamsanandi row), and a
+  > name on the booking would be a second source of truth for money unless
+  > `tariffs` carried the same column and `resolveTariff` a new dimension.
+  > [03-roadmap.md](03-roadmap.md) §2j.
 - **Issuing** (`app/actions/invoices.ts` → `store.issueInvoice` →
   `issue_invoice()`) takes the financial year's next serial
   (`GH/2026-27/0001`, prefix and width are Settings) and stores the whole
@@ -255,8 +329,13 @@ total, and issuing uses exactly those figures. **Preview PDF** prints the
 ## Dining (Phase 6)
 
 Meals without a room (`service_type: "meals_only"`) for faculty, staff and
-offices (`MEALS_ONLY_ROLES`) at guest houses that serve meals; `/book-meal`
-and the **Meal booking** tile on My Bookings open `/book?service=meals_only`. `/manager/meals` is the kitchen's day
+offices (`MEALS_ONLY_ROLES`) at guest houses that serve meals. Three doors,
+all onto the same form: the portal nav's **Meal Booking**, the **Meal
+booking** tile on My Bookings and the public `/book-meal` card, all pointing
+at **`/book/meals`** (`MEAL_BOOKING_PATH`, 17 Oct 2026; `?service=meals_only`
+still works). **Meals on a stay** are a separate thing and are asked for with
+a **Yes / No** on the room form, No by default, with the caretaker line
+(`MEAL_CHANGE_NOTICE`) at the foot of the section. `/manager/meals` is the kitchen's day
 (manager and caretaker): plates per meal from `kitchenHeadCount`, confirmed and
 pending bookings, and **Dining to invoice** — approved dining bookings whose
 meals have begun and have no invoice. The daily desk report carries the same

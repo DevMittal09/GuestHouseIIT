@@ -16,9 +16,11 @@ import {
   financialYear,
   invoiceBlocker,
   invoiceKind,
+  invoicePrintsDining,
   InvoiceStateError,
   mealCovers,
   parseExtraCharges,
+  type InvoiceShape,
   paymentModeError,
   paymentReferenceError,
   type ExtraCharge,
@@ -30,7 +32,7 @@ import {
 import { notifyInvoiceIssued } from "@/lib/mail/notify";
 import { getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
-import { tariffInputSchema, tariffLockedError, type Tariff } from "@/lib/tariffs";
+import { tariffInputSchema, tariffLockedError, tariffStartError, type Tariff } from "@/lib/tariffs";
 import { toInstituteDateValue } from "@/lib/tz";
 import type { BookingWithDetails, Profile } from "@/lib/types";
 import type { ActionResult } from "./bookings";
@@ -81,9 +83,17 @@ function cleanCounts(counts: MealCounts | null | undefined): MealCounts | null {
   return { breakfast: n(counts.breakfast), lunch: n(counts.lunch), dinner: n(counts.dinner) };
 }
 
+/** What this booking's invoice charges under: its kind, and whether there is a kitchen. */
+function shapeOf(booking: BookingWithDetails): InvoiceShape {
+  return {
+    kind: booking.service_type === "meals_only" ? "dining" : "stay",
+    servesMeals: booking.guest_house?.serves_meals !== false,
+  };
+}
+
 /** The desk's additional charges, checked for this booking - or why they cannot be used. */
 function cleanCharges(booking: BookingWithDetails, input: unknown): ExtraCharge[] {
-  const parsed = parseExtraCharges(input, booking.service_type === "meals_only" ? "dining" : "stay");
+  const parsed = parseExtraCharges(input, shapeOf(booking));
   if (!parsed.ok) throw new InvoiceStateError(parsed.error);
   return parsed.charges;
 }
@@ -121,6 +131,12 @@ export type InvoicePanel = {
   gstRoomPercent: number;
   gstMealPercent: number;
   kind: "stay" | "dining";
+  /**
+   * Whether this invoice has a dining section at all: a stay at a guest house
+   * with no kitchen has none (16 Oct 2026), so the charge editor does not
+   * offer "Dining charges" either.
+   */
+  servesMeals: boolean;
   /** Why it cannot be issued now, or null. */
   blocker: string | null;
   /** Earlier invoices, cancelled. */
@@ -155,6 +171,7 @@ export async function getInvoicePanel(
         gstRoomPercent: rules.gst_room_percent,
         gstMealPercent: rules.gst_meal_percent,
         kind: invoiceKind(document),
+        servesMeals: invoicePrintsDining(document),
         blocker: live && live.status !== "draft" ? null : invoiceBlocker(booking, document),
         history: invoices.filter((i) => i.status === "cancelled"),
         canCancel: canCancelInvoices(user.role),
@@ -346,12 +363,19 @@ export async function listTariffsForConsole(): Promise<{ ok: true; tariffs: Tari
   }
 }
 
-/** A new rate. Rates already in force are never edited - this is how a price changes. */
+/**
+ * A new rate. Rates already in force are never edited - this is how a price
+ * changes - and a new one starts **in the future** (`tariffStartError`,
+ * 16 Oct 2026), so the office prices the bookings still to come and never a
+ * night it has already quoted or charged for.
+ */
 export async function createTariffAction(input: unknown): Promise<ActionResult> {
   try {
     const user = await requireBillingConsole();
     const parsed = tariffInputSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid rate" };
+    const starts = tariffStartError(parsed.data.effective_from, toInstituteDateValue(new Date()));
+    if (starts) return { ok: false, error: starts };
     const store = getStore();
     if (parsed.data.guest_house_id && !(await store.getGuestHouse(parsed.data.guest_house_id))) {
       return { ok: false, error: "That guest house no longer exists" };

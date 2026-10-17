@@ -88,7 +88,7 @@ export function StaysTable({
             <TableHead>Requester</TableHead>
             <TableHead>Check-in</TableHead>
             <TableHead>Check-out</TableHead>
-            <TableHead>Assigned rooms</TableHead>
+            <TableHead>Guest house &amp; rooms</TableHead>
             {showMeals && <TableHead>Meals</TableHead>}
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -186,7 +186,17 @@ function StayRow({
           </Badge>
         )}
       </TableCell>
-      <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "-"}</TableCell>
+      {/* The guest house under the room numbers (16 Oct 2026, the owner: "add
+          the guest house name while differentiating the invoices in the
+          dashboard"). The desk works both houses from one list, and an
+          invoice is headed with one of them - "201, 202" alone does not say
+          which, and a dining booking has no room number at all. A line under
+          the rooms rather than a column of its own, which on a 1440px page is
+          what pushes the action buttons off it. */}
+      <TableCell>
+        {booking.assigned_rooms.map((r) => r.room_number).join(", ") || "-"}
+        <span className="block text-xs text-muted-foreground">{booking.guest_house.name}</span>
+      </TableCell>
       {showMeals && (
         <TableCell
           className="text-xs"

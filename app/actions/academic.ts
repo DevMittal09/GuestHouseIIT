@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { MEAL_BOOKING_PATH, ROOM_BOOKING_PATH } from "@/lib/routes";
 import { canUseConsoleSection } from "@/lib/access";
 import {
   describeImport,
@@ -57,9 +58,10 @@ function done(): void {
   // locking a student's parent to the old name.
   forgetAcademicRecords();
   revalidatePath("/admin/academic");
-  // The card at the top of New Booking, the warden's family check and the
-  // locked parent names all read these rows.
-  revalidatePath("/book");
+  // The card at the top of New Booking - on both its doors - the warden's
+  // family check and the locked parent names all read these rows.
+  revalidatePath(ROOM_BOOKING_PATH);
+  revalidatePath(MEAL_BOOKING_PATH);
   revalidatePath("/warden");
 }
 

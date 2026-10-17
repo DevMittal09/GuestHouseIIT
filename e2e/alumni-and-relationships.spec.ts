@@ -3,11 +3,11 @@ import {
   ACCOUNTS,
   ID_DOCUMENT,
   localDate,
-  REFERENCE,
   rowFor,
   selectedGuestHouseName,
   settleDebitHead,
   signIn,
+  submittedReference,
 } from "./helpers";
 
 /**
@@ -58,9 +58,7 @@ test("the IAR Student Cell is never asked to choose a guest house", async ({ pag
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
   // It went through - no "Select a guest house" on a form that never asked.
-  const toast = page.getByText(REFERENCE).first();
-  await expect(toast).toBeVisible({ timeout: 30_000 });
-  const reference = (await toast.innerText()).match(REFERENCE)![0];
+  const reference = await submittedReference(page);
   await page.waitForURL("**/dashboard", { timeout: 30_000 });
 
   // And it is waiting with the IAR Office, which is its first approver.

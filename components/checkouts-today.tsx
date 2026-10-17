@@ -58,7 +58,7 @@ export function CheckoutsToday({
                 <TableHead>Check-out</TableHead>
                 <TableHead>Reference</TableHead>
                 <TableHead>Guest</TableHead>
-                <TableHead>Rooms</TableHead>
+                <TableHead>Guest house &amp; rooms</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -124,7 +124,12 @@ function CheckoutRow({
           Head: {describeDebit(booking)}
         </span>
       </TableCell>
-      <TableCell>{booking.assigned_rooms.map((r) => r.room_number).join(", ") || "-"}</TableCell>
+      {/* The guest house with the rooms, as in every other desk list
+          (16 Oct 2026): the invoice raised from this row is headed with it. */}
+      <TableCell>
+        {booking.assigned_rooms.map((r) => r.room_number).join(", ") || "-"}
+        <span className="block text-xs text-muted-foreground">{booking.guest_house.name}</span>
+      </TableCell>
       <TableCell>
         <StatusBadge status={displayStatus(booking)} />
       </TableCell>

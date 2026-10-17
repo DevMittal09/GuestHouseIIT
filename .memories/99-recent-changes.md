@@ -7,203 +7,231 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 15 October 2026 (second) - the slideshow, and the page stripped back
+## Round of 17 October 2026 - the owner's fourteenth list
 
-> **The round immediately before this one, the same day**, brought the
-> office's eleven photographs onto the site, named two of them
-> (`GUEST_HOUSE_PHOTOS`) and rebuilt the home page around them. This round
-> changes how the top of that page presents them. The photographs, the
-> conversion, the attribution and the Gallery are **unchanged**.
+Nine items about the booking page, the meal booking, the nav, My Bookings and
+the approval route for a student with no hostel. **All nine are built.** Each
+was checked against the code first; item 8 turned out to be half there already
+and for the wrong reason, which is the only interesting part of the round.
 
-The owner:
+> 1. Keep the tariff categories and their rates (₹1,000 for parents, ₹2,000
+>    for official guests) on the **right-hand side** of the booking page, let
+>    the user **select** the category, and remove the rates from where they
+>    are now.
+> 2. **Guest Details before Meal Booking.**
+> 3. Ask **whether meals are required**; show the meal section only on Yes.
+> 4. Put "In any case talk with caretaker for any change in meal booking" in
+>    the meal section.
+> 5. Replace **New Booking** in the nav with **Room Booking** and **Meal
+>    Booking**.
+> 6. Show fewer bookings on My Bookings.
+> 7. Split it into **Upcoming, Current and Previous**.
+> 8. A student with a hostel keeps the warden; a student whose **hostel is
+>    NULL** goes **straight to the Guest House Manager**.
+> 9. Add a test student with a genuinely null hostel.
 
-> See basically i want to change the landing page UI to the iitpkd.ac.in
-> website style. Basically in the landing page. i need images which change
-> evry few seconds and has the option of arrows to move to next image. Then
-> we should be able to go down and see the details and other stuff in the
-> landing page. Just go to iitpkd.ac.in website and see what i mean.
+### 1. The tariff is a panel beside the form, and the category is a question
 
-**A carousel was argued against in the previous round and asked for anyway**,
-which settles it. [02-decisions.md](02-decisions.md) carries a *Superseded*
-note on that paragraph and records which of its objections the build
-*answers* rather than ignores.
+**What a category is.** A tariff row is not something anybody picks: it is a
+rate scoped by guest house, room type, booking type and requester role, and
+`resolveTariff` takes the most specific row in force on the night it charges
+for. So a **category is the pair the requester actually decides** - the guest
+house and the kind of booking - shown with the rate those two resolve to.
+Choosing one writes `guest_house_id` and `booking_type`, which is what the
+rate is read from, so the selection is real and **cannot drift from the
+invoice**: both ask one function.
 
-### 1. `components/site/hero-carousel.tsx` - the one client component on the public site
+- **`lib/tariff-categories.ts`** (new, pure): `tariffCategories` builds the
+  eligible pairs from the previews the page already resolved, labelling each
+  ("Hamsanandi - Official booking"), and naming the kind **only where the role
+  has more than one**. Eligibility is the booking form's own rules -
+  `bookingTypesFor`, `guestHousesForBookingType`, the Form Builder's allowed
+  houses, kitchens only on a dining booking, and `mealsAllowedFor`. Nobody is
+  shown a rate they cannot be charged. `tariffCategoriesFrom` is the same from
+  a rate sheet, for a caller holding `tariffs`.
+- **`components/tariff-panel.tsx`** (new): the heading, the categories as
+  radios with each one's room rate, and `TariffTable` underneath for the
+  chosen one - **unchanged**, caption and all. One category is **stated, not
+  asked**, like the guest house and the booking type.
+- **The Rates card is gone from the form.** It was a numbered section between
+  the stay and the meals that answered nothing.
+- **`BookingForm` lays out the two columns now** (they were the page's since
+  30 Sep): the panel is a question, so it has to share the form's state.
+  `BookingForm` takes the requester-details card as `aside`, and the `<form>`
+  element is the **left column** - so the panels sit beside it rather than
+  inside it, nothing in them is a registered field, and `numbered-sections`
+  still counts the questions and nothing else.
 
-Everything else on the public site is a server component. This one needs a
-timer, so it is marked `"use client"` and kept deliberately ignorant: it takes
-`SitePhoto[]` and renders them, and knows nothing about guest houses, the
-store or any booking rule.
+**Not built, deliberately:** a *named* category stored on the booking
+("parents", "government officer"). That is a second source of truth for
+pricing unless `tariffs` carries the same column - a migration on both tables
+and a new dimension in `resolveTariff`. The office's sheet already expresses
+those categories as scope (its ₹4,000 Hamsanandi row is
+`requester_role: official`), and that is what a requester's own role resolves
+to. [03-roadmap.md](03-roadmap.md) §2j carries it as a question for the
+office.
 
-Modelled on iitpkd.ac.in's own hero - **Previous / Pause / Next and numbered
-indicators**, not dots (a row of dots would be the pills this codebase's
-design rules ban, and a number says how far through you are without a
-legend). Six slides where theirs has five. Drawn in the site's own vocabulary:
-square bordered buttons at 6px, a vermilion hairline under the active number,
-**no wash over the photograph** and no caption - theirs wrap each slide in a
-link, and these do not.
+### 2, 3, 4. Guests, then "Do you require meals?", then the caretaker line
 
-- **6 seconds a slide**, one translating track, 700ms ease-out.
-- **It stops**: a Pause button, *and* it holds while a pointer is over it or
-  the keyboard focus is inside it.
-- **`prefers-reduced-motion` stops the rotation itself**, not merely the
-  transition.
-- **`aria-live`** is `off` while it advances by itself and `polite` once
-  paused; slides are `role="group" aria-roledescription="slide"` and the
-  inactive ones `aria-hidden`.
-- **Non-active slides load `eager`** on purpose: translated off inside
-  `overflow-hidden`, lazy loading cannot be relied on to have fetched them
-  before the timer arrives. Only the first carries `priority`.
+- **Guests, room by room** now stands **above** the meal card. The kitchen's
+  head count *is* the guests entered above, and the two diet counts have to
+  add up to it, so the old order asked about a number the requester had not
+  given yet.
+- **`wantsMeals`** is a Yes/No, **No** by default - which is what the form
+  already did (`NO_MEALS`; meals on a stay are an extra). One gate,
+  `mealsRequested`, feeds `mealPlan`, so **everything** follows from the one
+  answer: the service type stays `room`, no diet split is sent, no meal rule
+  can fire, and a hidden grid cannot submit a meal. The ticks stay in
+  `mealChoices` while it is off, so Yes again restores them. A **dining
+  booking is never asked** - the meals are the booking.
+- **`MEAL_CHANGE_NOTICE`** (`lib/meals.ts`) is the owner's sentence, word for
+  word, rendered at the foot of the meal section on both doors and **nowhere
+  else**. It is the one deliberate exception to "a rule the form enforces is
+  not stated on the form" (9 Oct) and to the house-rule version of it
+  (11 Oct): it is neither - the form cannot change a meal order, the desk
+  can, so it says who to ask.
 
-### 2. The page order
+### 5. Two doors in the nav: Room Booking and Meal Booking
 
-**Slideshow -> ink masthead -> Our guest houses -> amenities -> mosaic ->
-closing links.**
+`/book` and **`/book/meals`**, two routes over one page
+(`components/booking-request-page.tsx`, extracted from the page). A route
+rather than `?service=meals_only` because `usePathname()` cannot see a query,
+and a nav that lights the wrong item lies about where you are; `/book` is
+matched **exactly** in the nav, since the meal door is nested under it.
+`?service=meals_only` still works for older links. The My Bookings tile and
+the public `/book-meal` card now point at `MEAL_BOOKING_PATH`, so four places
+read two constants (`lib/routes.ts`). **Meal Booking is offered only where
+the account could submit one** - the same `serviceTypesFor` question the tile
+asks, with the kitchens the role's form allows, so a student sees one door.
 
-The masthead (`<h1>`, the lead, *Book a room* / *Book meals*, the Guest House
-Manager's number) now sits **under** the photographs, which is the order the
-owner described and the order iitpkd.ac.in uses. It is still the page's only
-`<h1>` and still the first heading in the document.
+### 6, 7. My Bookings is three sections
 
-This **reverses the previous round's merge**: the masthead and the guest
-houses were one block with a house photograph under each half. The slideshow
-holds the top of the page now, so the guest houses are a section of their own
-again with ordinary bordered cards - which is why `HousePanel` lost its
-`md:odd:border-l-0` arithmetic and its `priority` flag. `GUEST_HOUSE_PHOTOS`
-is untouched, and those two cards are still the only place on the site that
-says which guest house a photograph shows.
+`lib/my-bookings.ts` (new, pure) places each booking: **status first, dates
+second**.
 
-### 3. Which photographs go where
+- **`OCCUPIED` is always current** - the desk recorded the guest walking in.
+- **A finished request is always previous** - rejected, cancelled, vacated,
+  missed.
+- **Anything still open** is placed by `stayPhase`, the function the
+  manager's console groups by, so the requester and the desk cannot disagree
+  about "current". An open request whose dates have passed is previous:
+  nobody can approve it now.
 
-| Slot | Photographs |
-| --- | --- |
-| **Slideshow** (`HOME_PHOTOS.slides`) | `hamsanandi-courtyard`, `bageshri-front`, `hamsanandi-block`, `double-bedroom`, `kitchenette`, `twin-room` - the owner's six, in the owner's order |
-| **Guest house cards** | `hamsanandi-courtyard`, `bageshri-front` - the one deliberate repeat: the slideshow is a reel, the cards are where they are named |
-| **"A look inside"** (`HOME_PHOTOS.preview`) | `hamsanandi-block-entrance`, `bageshri-corridor`, `sitting-room`, `living-dining` - **four the slideshow does not show**, so scrolling past the hero finds something new. All four were Gallery-only before |
-| **Gallery** | All 25, unchanged |
+Order: next arrival first in Upcoming, earliest departure first in Current,
+**most recently touched** first in Previous (`updated_at`) - what that section
+holds is things that have happened. Previous draws **five**
+(`PREVIOUS_BOOKINGS_SHOWN`) with **Show all N** beside it and **All booking
+history** linking the archive; the figure by the heading is the whole section,
+not the slice. Finished rows are **compact**: one Stay column, no Rooms.
+Nothing is deleted and nothing is unreachable.
 
-A unit test fails if the slideshow and the mosaic ever overlap.
+### 8. A student with no hostel has no Assistant Warden
 
-### 4. Then the ink panel came off (the same conversation, minutes later)
+**It already routed to the desk - for the wrong reason.** The generic rule of
+12 Oct 2026 drops a stage nobody can decide, and no warden matches a null
+hostel, so the request did enter at `PENDING_GH_MANAGER`. Two things were
+wrong with that:
 
-> Remove the black box of guest house of IIT Palakkad as it looks
-> unnecessary.
+1. The booking's log read "Nobody is set to decide Pending Assistant Warden
+   Review, so that stage was skipped" - a day scholar reported as a console
+   somebody forgot to fill in.
+2. It only held **where the caller had every profile**. `routeFor` with units
+   but no profiles - the mail module, the Copy-to chain - cannot count a
+   warden stage, so it assumed the stage was staffed and **would have copied
+   a warden who does not exist** on every mail about the request.
 
-> If you are keeping the content, remove the guest hpuse manager number and
-> all and also center align everything. Left aligned looks kinda off.
+So the condition is now explicit and answered from the requester's own
+account:
 
-The masthead is now **centred plain type** on the page's own ground - label,
-`<h1>`, the vermilion stub, the lead and the two doors in a 780px column - and
-the **Guest House Manager's number is off the home page**.
+- **`hasHostel(profile)`** - NULL *and* a blank string are both "no hostel".
+- **`approverNotApplicable(approver, requester)`** - why an approver rule
+  cannot apply at all, in the words the log prints
+  (`NO_HOSTEL_REASON`). Only the `warden` kind: for every other kind "nobody
+  is appointed" is the honest reading.
+- **`stageDropped`** (`lib/workflow.ts`) now answers in three states, and
+  **`droppedStages`** carries the reason. `createBooking` words the log
+  accordingly: *"The Pending Assistant Warden Review stage does not apply to
+  this request: no hostel is recorded on the requester's account."*
+  `skippedStages` keeps its old signature and behaviour.
+- **`decidesStage`** refuses an inapplicable stage before it looks at the
+  directory, so no warden can act on such a request either way.
+- `stageApproverIds` and `couldDecide` read `hasHostel` instead of
+  `Boolean(...)`, which is the same answer stated once.
 
-- **The box went, the content stayed.** It holds the page's only `<h1>` (an
-  e2e test keeps one visible on every public page) and both booking doors,
-  which the owner asked to make *more* prominent on 26 Sep 2026. With the
-  slideshow holding the top of the page, a second full-width ink slab sat
-  directly under a photograph carrying nothing the type could not.
-- **The number is off the page, not out of the product.** The **site footer
-  carries it on this page as on every other**, and `/contact`, the Guidelines
-  and the portal footer each read the same `GUEST_HOUSE_CONTACT`, which now
-  has four readers instead of five. This tightens an existing rule rather than
-  bending one: `AGENTS.md` already put the office's number in the footer "not
-  in a notice on a page", and the home page's hero line was its exception.
-  **`AGENTS.md` was corrected**, because it named the home page as a reader.
-- **Centred is contained to that one block**, deliberately. Centring the
-  sections below would mean rebuilding `SectionHead`, whose construction *is*
-  a left-hand label over a full-width hairline, and the guest-house cards and
-  amenity grid with it. Read down the page it works as a title page under the
-  slideshow; read as a site-wide rule it would be wrong, which is why
-  [02-decisions.md](02-decisions.md) says so.
+**Nothing else changed.** A student *with* a hostel keeps the warden; faculty,
+staff, offices, clubs and the IAR cells have no warden stage and no hostel, so
+the exception cannot widen to them - a test covers each. The database already
+agreed: `profiles.hostel_name` is nullable, migration 16 normalizes a blank to
+NULL, and the console's Hostel dropdown has a **None** option whose "" the
+action already turned into null.
 
-### 5. The booking doors, and the credentials box
+### 9. The day scholar - a test account with a null hostel
 
-> For room and meal booking remove the image and center align the login page.
-> Remove the "Demo build - LDAP accounts* "
-
-- **`SignInPanel`'s `photo` is optional now.** With one it is the
-  split-screen panel of 30 Sep 2026 (form in five columns, photograph in
-  seven); without one it is a narrow `max-w-[560px]` panel centred in the
-  page. `/book-room` and `/book-meal` pass none. **`/sign-in` keeps its
-  photograph** - the owner named the two booking doors and only those. One
-  component with two shapes rather than a second component, because the three
-  pages share the signed-in branch, the domain note, the second door, the
-  error notice and the `next` plumbing.
-- **The form's labels stay left-aligned.** What centres is the panel and the
-  prose around it - kicker, title, lead, domain note, footnote. A centred
-  label over a full-width input separates the two and reads as a rendering
-  mistake. Written down because this is exactly what a later pass would
-  "finish".
-- **The "Demo build" box is deleted**, with the `sampleAccount` prop that fed
-  it. **More than cosmetic:** it printed *a working login* -
-  `uid` / `password` in two `<code>` tags - on three public,
-  unauthenticated pages. Nothing was exposed that
-  [05-credentials-and-security.md](05-credentials-and-security.md) does not
-  also hold, but it is not a habit to carry into the institute's real LDAP.
-  The sentence it also carried, that "Mock Authentication" stands in for
-  Google, is in `AGENTS.md`; the button has said so itself since
-  23 Sep 2026.
-- `SIGN_IN_PHOTOS.bookRoom` and `.bookMeal` are **kept but unplaced** - both
-  are still in the Gallery, and putting either back is one prop.
+`student-day-scholar`, **Devika Iyer (day scholar - no hostel)**,
+`122203099@smail.iitpkd.ac.in`, in `lib/store/seed.ts`, `supabase/seed.sql`
+(`…121`, with `null` in the hostel column) and the dummy directory
+(`122203099`). The login is in
+[05-credentials-and-security.md](05-credentials-and-security.md). No academic
+record behind it, so the booking form asks for the parents' names rather than
+locking them - which is also the path a student the office has not imported
+takes.
 
 ### Files
 
-**New:** `components/site/hero-carousel.tsx`.
+**New:** `lib/tariff-categories.ts`, `lib/my-bookings.ts`,
+`components/tariff-panel.tsx`, `components/booking-request-page.tsx`,
+`app/(portal)/book/meals/page.tsx`, `tests/fourteenth-round.test.ts`
+(29 tests), `e2e/fourteenth-round.spec.ts` (5 journeys).
 
-**Changed:** `app/(site)/page.tsx` (slideshow section; the masthead stripped
-of its ink panel, centred and shorn of the phone line; the guest houses back
-to their own section; `HousePanel` simplified), `components/login-form.tsx`
-(the demo-credentials box and its prop deleted; an optional `center`),
-`components/site/sign-in-panel.tsx` (`photo` optional, two shapes),
-`components/site/site-ui.tsx` (`PageTitle` takes `center`),
-`app/(site)/book-room/page.tsx` and `app/(site)/book-meal/page.tsx` (no
-photo), `AGENTS.md` (the home page is no longer a reader of
-`GUEST_HOUSE_CONTACT`; the two `SignInPanel` shapes; no credentials on a
-page),
-`lib/site.ts` (`HOME_PHOTOS.slides` added, `preview` repointed),
-`tests/public-site.test.ts` (two tests replace one),
-`e2e/public-site.spec.ts` (+1 journey).
+**Changed:** `components/booking-form.tsx` (the two columns, the `aside` prop,
+the Rates card deleted, guests before meals, the Yes/No, the notice, the
+categories and `chooseCategory`), `app/(portal)/book/page.tsx` (a wrapper),
+`app/(portal)/layout.tsx` (the two doors, `exact`, `offersMealBooking`),
+`app/(portal)/dashboard/page.tsx` (the tile's href, no "Your requests"
+heading), `components/my-bookings.tsx` (three sections, the compact row),
+`app/(site)/book-meal/page.tsx` (one constant), `lib/routes.ts`
+(`ROOM_BOOKING_PATH`, `MEAL_BOOKING_PATH`, `MEALS_ONLY_SERVICE`),
+`lib/meals.ts` (`MEAL_CHANGE_NOTICE`), `lib/approval-routes.ts` (`hasHostel`,
+`approverNotApplicable`, `NO_HOSTEL_REASON`), `lib/workflow.ts`
+(`stageDropped`, `droppedStages`), `app/actions/bookings.ts` (the log's
+wording), `app/actions/academic.ts` and `app/actions/projects.ts` (revalidate
+both doors), `lib/store/seed.ts`, `lib/ldap/mock-directory.ts`,
+`supabase/seed.sql` (the day scholar), `e2e/helpers.ts`
+(**`submittedReference`**, `latestReference` deleted, the day scholar in
+`ACCOUNTS`), `e2e/booking-doors.spec.ts` (the tile's new URL), and six
+journeys that read a reference.
 
-**Unchanged:** `GUEST_HOUSE_CONTACT` itself and its four other readers,
-every photograph file, `GUEST_HOUSE_PHOTOS`,
-`GALLERY_SECTIONS`, `SIGN_IN_PHOTOS`, `lib/site-content.ts`,
-`components/site/site-ui.tsx`, `app/globals.css`, every store, the portal.
+**Unchanged:** every store, `resolveTariff` and the rest of the tariff
+resolution, `components/tariff-table.tsx`, the invoice, `rules.approval`'s
+shape, the four waiting statuses - **no migration in this round**.
 
 ### How it was checked
 
 - `npm run lint`, `npm run typecheck` - clean.
-- **`npm test` - 562 passing, 33 files.**
-- `NEXT_PUBLIC_SUPABASE_URL= npm run build` - clean; rebuilt normally after.
-- **`npm run test:e2e` - 43 passing** (the whole suite, since the sign-in
-  card is what every journey signs in through), including a new journey that drives the
-  slideshow on desktop *and* the 320px phone: it starts on photograph 1 of 6,
-  the arrows move it and **wrap** past either end, a number jumps straight to
-  its photograph, it **advances on its own** inside ten seconds with the
-  pointer off it, and once paused it has not moved seven seconds later.
-- **`curl` against a mock-store dev server:** all six slides are in the
-  **server-rendered** HTML, so the hero works before hydration and for a
-  crawler; one `<h1>`; the ten photographs appear in the intended order; and
-  **every occurrence of the phone number falls after `<footer>`**, which is
-  the check that the masthead really stopped printing it rather than merely
-  looking as though it had. Then `/book-room`, `/book-meal` and `/sign-in`:
-  the first two serve **no photograph** and the centred panel, the third
-  still serves its photograph, and **none of the three contains the string
-  "Demo build"**.
+- **`npm test` - 603 passing, 35 files** (574 + 29).
+- `NEXT_PUBLIC_SUPABASE_URL= npm run build` - clean; `/book/meals` is in the
+  route list.
+- **`npm run test:e2e` - 48 passing**, the whole suite (43 + 5). The new
+  journeys drive the tariff panel setting the form's own fields, the guests
+  card standing above the meals card, Yes then No with nothing left behind,
+  the two nav doors and which one is current, the three sections, and a day
+  scholar's request reaching the desk while a hostelled student's still
+  reaches the warden.
+- A dev server on the mock store, by `curl`, for every role's booking page:
+  the panel's categories and rates per role (a student one, faculty four, the
+  Director's Office two at ₹750 and ₹4,000), both doors, and the nav's
+  `aria-current`.
 - `npm run check:memories`.
 
 ### Left open
 
-- **Nothing drives the slideshow with a keyboard in the suite.** The buttons
-  are real `<button>`s with labels and visible focus rings, and the e2e
-  journey clicks them, but no test tabs to them or checks that focus holds
-  the rotation. [03-roadmap.md](03-roadmap.md) §2h.
-- **The e2e journey spends ~14s a run** waiting for real timers, on each of
-  two projects. That is most of a minute of the suite. It is the only honest
-  way to test "it moves by itself"; if the suite gets slow, this is where to
-  look first.
-- **The slideshow has no swipe.** A phone reader uses the arrows, which are
-  44px targets at the photograph's edges. Touch-dragging is the obvious next
-  ask and is not built.
-- The two items the previous round left open stand: **the guest houses are
-  listed in the store's order** (Bageshri first, while `/contact` lists
-  Hamsanandi first), and **`GUEST_HOUSE_PHOTOS` is not editable from the
-  console**.
+- **A named tariff category** stored on the booking is a question for the
+  office, not a thing half-built - [03-roadmap.md](03-roadmap.md) §2j.
+- **The meal notice is on the form only.** It is not in the booking mail or on
+  `BookingDetails`, where it would also be read by reviewers and the desk. If
+  the office asks, the mail templates are the place.
+- **A trap the round found**: a journey that read a reference with
+  `page.getByText(REFERENCE).first()` was reading **the dashboard behind the
+  toast**, which the three sections reordered. Fixed by
+  `submittedReference(page)`, which reads the toast; see
+  [22-running-and-testing.md](22-running-and-testing.md) Part 2.

@@ -372,6 +372,51 @@ export type ApproverDirectory = {
 };
 
 /**
+ * Whether a profile names a hostel. **NULL and a blank string are both "no
+ * hostel"** - a day scholar's account, not a broken one.
+ *
+ * One reader for the question, because the answer decides a route: a student
+ * with no hostel has no Assistant Warden, and the request goes straight to
+ * the desk (17 Oct 2026, {@link approverNotApplicable}).
+ */
+export function hasHostel(profile: Pick<Profile, "hostel_name">): boolean {
+  return typeof profile.hostel_name === "string" && profile.hostel_name.trim() !== "";
+}
+
+/** Why a `warden` stage cannot apply, in the words the booking's log uses. */
+export const NO_HOSTEL_REASON = "no hostel is recorded on the requester's account";
+
+/**
+ * Why this approver rule cannot apply to this requester **at all**, or null
+ * when it can.
+ *
+ * A fact about the requester's own account, not about who the console has
+ * appointed - which is exactly what distinguishes it from
+ * {@link stageApproverIds} returning nothing. **A student with no hostel has
+ * no Assistant Warden** (17 Oct 2026, the owner): a day scholar is a real
+ * kind of student, so the stage is dropped and the request enters at the
+ * Guest House Manager, as it does for any stage nobody can decide - but the
+ * booking's log says *why* in these words rather than reporting a console
+ * somebody forgot to fill in.
+ *
+ * Answered from the requester alone, so a caller with no directory at all -
+ * a mail module, the Copy-to chain - reaches the same answer as
+ * `createBooking`. Relying on `stageApproverIds` returning nothing would have
+ * left those callers assuming the stage was staffed, and copying a warden who
+ * does not exist.
+ *
+ * Only the `warden` kind: every other kind is relative to a unit or names
+ * somebody outright, where "nobody is appointed" is the honest reading.
+ */
+export function approverNotApplicable(
+  approver: ApproverRule,
+  requester: Pick<Profile, "hostel_name">
+): string | null {
+  if (approver.kind !== "warden") return null;
+  return hasHostel(requester) ? null : NO_HOSTEL_REASON;
+}
+
+/**
  * The accounts that may decide a stage, **never the requester themselves**.
  *
  * Returns an empty list both for "nobody is set" and for "we were not given
@@ -390,15 +435,16 @@ export function stageApproverIds(
   const notRequester = (id: string) => id !== requester.id;
   switch (approver.kind) {
     case "warden":
-      return profiles
-        .filter(
-          (p) =>
-            p.role === "warden" &&
-            Boolean(p.hostel_name) &&
-            p.hostel_name === requester.hostel_name
-        )
-        .map((p) => p.id)
-        .filter(notRequester);
+      // Neither side may be hostel-less: a student with no hostel has no
+      // warden (`approverNotApplicable`), and a warden with none is nobody's.
+      return hasHostel(requester)
+        ? profiles
+            .filter(
+              (p) => p.role === "warden" && hasHostel(p) && p.hostel_name === requester.hostel_name
+            )
+            .map((p) => p.id)
+            .filter(notRequester)
+        : [];
     case "hod":
       return hodApproversFor(requester, units);
     case "unit_head":
@@ -456,6 +502,9 @@ export function decidesStage(
   directory: ApproverDirectory = {}
 ): boolean {
   if (reviewer.id === requester.id) return false;
+  // A stage that cannot apply to this requester is decided by nobody, whether
+  // or not the caller handed us a directory to count in.
+  if (approverNotApplicable(approver, requester)) return false;
   if (canResolveApprover(approver, directory)) {
     const ids = stageApproverIds(approver, requester, directory);
     if (ids.includes(reviewer.id)) return true;
@@ -468,7 +517,7 @@ export function decidesStage(
     case "warden":
       return (
         reviewer.role === "warden" &&
-        Boolean(reviewer.hostel_name) &&
+        hasHostel(reviewer) &&
         reviewer.hostel_name === requester.hostel_name
       );
     case "role":
@@ -823,7 +872,7 @@ function couldDecide(
   void rule;
   switch (approver.kind) {
     case "warden":
-      return reviewer.role === "warden" && Boolean(reviewer.hostel_name);
+      return reviewer.role === "warden" && hasHostel(reviewer);
     case "hod":
       return units.some(
         (u) => u.head_id === reviewer.id || u.acting_head_id === reviewer.id

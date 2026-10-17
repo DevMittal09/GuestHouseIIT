@@ -1,5 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ACCOUNTS, fillGuest, localDate, REFERENCE, rowFor, setTime, signIn, unlockConsole } from "./helpers";
+import {
+  ACCOUNTS,
+  fillGuest,
+  localDate,
+  rowFor,
+  setTime,
+  signIn,
+  submittedReference,
+  unlockConsole,
+} from "./helpers";
 
 /** The secret `playwright.config.ts` starts the server with. */
 const CRON_SECRET = "e2e-cron-secret-0123456789";
@@ -93,11 +102,13 @@ test("a faculty member sees the meal rates at the kitchen and is still asked on 
 
 /**
  * A rate in force is never edited - stays have been priced with it - so
- * **Change rate** adds a new row with the same scope from today. The office
- * asked for the button because repeating four dropdowns by hand is how a new
- * rate ends up applying to something slightly different from the old one.
+ * **Change rate** adds a new row with the same scope from **tomorrow**, the
+ * earliest a new rate may start (16 Oct 2026; it was today until then). The
+ * office asked for the button because repeating four dropdowns by hand is how
+ * a new rate ends up applying to something slightly different from the old
+ * one.
  */
-test("Change rate copies an in-force rate's scope into a new rate from today", async ({ page }) => {
+test("Change rate copies an in-force rate's scope into a new rate from tomorrow", async ({ page }) => {
   await openConsole(page, "/admin/billing", "Rates");
 
   const rows = page.locator("tr", { hasText: "Room, per day" });
@@ -110,11 +121,29 @@ test("Change rate copies an in-force rate's scope into a new rate from today", a
   await inForce.getByRole("button", { name: "Change rate" }).click();
   await expect(page.getByText("Change this rate", { exact: true })).toBeVisible();
   await expect(page.getByText(/this adds a new one with the same scope/)).toBeVisible();
-  // Same scope, dated today, with the rate left blank for the new figure.
+  // Same scope, dated tomorrow, with the rate left blank for the new figure.
   await expect(page.locator("#t-item")).toHaveValue("room");
   await expect(page.locator("#t-gh")).not.toHaveValue("");
-  await expect(page.locator("#t-from")).toHaveValue(localDate(0));
+  await expect(page.locator("#t-from")).toHaveValue(localDate(1));
+  await expect(page.locator("#t-from")).toHaveAttribute("min", localDate(1));
   await expect(page.locator("#t-rate")).toHaveValue("");
+
+  /**
+   * And a date that is not in the future is refused on the control itself
+   * (16 Oct 2026, the owner: "only for future booking GHM can change the
+   * rates ... currently even past and todays rate apparently we can change
+   * rates"). Today is the case the office actually hits: it used to be the
+   * default.
+   */
+  const add = page.getByRole("button", { name: "Add the new rate" });
+  await page.locator("#t-rate").fill("2500");
+  await expect(add).toBeEnabled();
+  await page.locator("#t-from").fill(localDate(0));
+  await expect(page.getByText(/A new rate applies from a future date/)).toBeVisible();
+  await expect(add).toBeDisabled();
+  await page.locator("#t-from").fill(localDate(1));
+  await expect(page.getByText(/A new rate applies from a future date/)).toHaveCount(0);
+  await expect(add).toBeEnabled();
 
   // Cancel puts the form back to an ordinary, empty "Add a rate" - and
   // nothing was saved, so the table is as it was.
@@ -219,9 +248,7 @@ test("a missed request reaches the manager's console and can be reinstated", asy
   await page.locator('[name="purpose_of_visit"]').fill("Parents visiting - nobody decides this one");
   await fillGuest(page, 0, 0, { name: "Sreeja Menon", age: "50", gender: "female", relationship: "Mother" });
   await page.getByRole("button", { name: "Submit booking request" }).click();
-  const toast = page.getByText(REFERENCE).first();
-  await expect(toast).toBeVisible({ timeout: 30_000 });
-  const reference = (await toast.innerText()).match(REFERENCE)![0];
+  const reference = await submittedReference(page);
   await page.waitForURL("**/dashboard", { timeout: 30_000 });
   await expect(rowFor(page, reference)).toContainText(/Warden/i);
 

@@ -5,6 +5,12 @@ import { ACCOUNTS, signIn } from "./helpers";
  * My Bookings leads with two large ways in - a room, and meals without a
  * room - because the header buttons they replaced were being missed
  * (26 Sep 2026). Each has to land on the right door of the booking form.
+ *
+ * Since 17 Oct 2026 those doors are also the portal nav's two entries, and
+ * both the tile and the nav point at the same pair of routes
+ * (`ROOM_BOOKING_PATH` / `MEAL_BOOKING_PATH`): the meal door is `/book/meals`
+ * rather than `/book?service=meals_only`, so the nav can light the one that
+ * is open. The nav itself is checked in `fourteenth-round.spec.ts`.
  */
 
 test("My Bookings leads with the room and meal booking doors", async ({ page }) => {
@@ -18,7 +24,7 @@ test("My Bookings leads with the room and meal booking doors", async ({ page }) 
   await expect(meals).toContainText("Hamsanandi");
 
   await meals.click();
-  await expect(page).toHaveURL(/\/book\?service=meals_only/);
+  await expect(page).toHaveURL(/\/book\/meals$/);
 
   await page.goto("/dashboard");
   await page.getByRole("link", { name: /New room booking/ }).click();

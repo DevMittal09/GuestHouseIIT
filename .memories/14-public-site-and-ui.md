@@ -513,7 +513,10 @@ invisibly. The six tiles above remain the everyday status filter.
   `--input` edge of `#8C857D` (3:1+); `/book` in two columns with the
   Requester details (a summary list, container-query rows) and a sticky
   "What happens next" (**the panel was removed on 9 Oct 2026**; the column is
-  the Requester details card alone); the booking form's cards numbered by
+  the Requester details card and, since 17 Oct 2026, the **tariff panel** -
+  and the grid itself moved into `BookingForm`, because choosing a tariff
+  category writes two of the form's fields. The `<form>` element is the left
+  column; the panels are its grid siblings, holding no registered field); the booking form's cards numbered by
   `.numbered-sections` (the counter increments on the **card**, since values
   pass between siblings); `DeskSummary` strip on `/manager` and
   `/caretaker`; the home hero an ink panel joined to the 4:3 photo; inner
@@ -630,7 +633,7 @@ app/
     layout.tsx          white header (sticky from lg), footer (address, directions)
     page.tsx            /            Home
     book-room/          /book-room   gated entry → sign in → /book
-    book-meal/          /book-meal   gated entry → sign in → /book (meals live in the room form)
+    book-meal/          /book-meal   gated entry → sign in → /book/meals
     guidelines/         /guidelines  How booking works, then numbered rules; §7–8 provisional
     gallery/            /gallery
     contact/            /contact     one map tab per guest house
@@ -640,7 +643,20 @@ app/
   (portal)/             SIGNED-IN portal — unchanged routes, restyled shell
     layout.tsx          ink masthead + service nav + ink footer: copyright, the
                         guest house office's phone and email (9 Oct 2026), links
+    book/page.tsx       /book        Room Booking (and ?service=meals_only)
+    book/meals/page.tsx /book/meals  Meal Booking - the same page, dining flow
 ```
+
+**Two booking doors in the service nav** (17 Oct 2026): **Room Booking**
+(`/book`) and **Meal Booking** (`/book/meals`) in place of one New Booking.
+One page behind both (`components/booking-request-page.tsx`); the meal door is
+a **route** rather than `?service=meals_only` because `usePathname()` cannot
+see a query string, so two items on one path would both light up. `/book` is
+therefore matched **exactly** in the nav (`exact={[ROOM_BOOKING_PATH]}`), since
+the meal door is nested under it. Meal Booking is offered only where the
+account could submit one - the same `serviceTypesFor` question the My Bookings
+tile asks. The paths are `ROOM_BOOKING_PATH` / `MEAL_BOOKING_PATH` in
+`lib/routes.ts`, read by the nav, the tiles and `/book-meal`.
 
 **`/` used to be the sign-in form. It is now the public home page.** So:
 
@@ -791,7 +807,17 @@ Guidelines, Contact and iitpkd.ac.in (**MRBS removed 7 Oct 2026**).
 `BookingDoor` tiles — **New room booking** (vermilion, names the guest houses
 the role's form allows), **Meal booking** (ink, names the kitchen; only for
 `MEALS_ONLY_ROLES` where a guest house serves meals), and one **Book for
-<club>** per club a Faculty Advisor books for.
+<club>** per club a Faculty Advisor books for. Both tiles read the same paths
+the nav does (`ROOM_BOOKING_PATH` / `MEAL_BOOKING_PATH`).
+
+**Then three sections, not one table** (17 Oct 2026, the owner): **Current
+bookings**, **Upcoming bookings** and **Previous bookings**, each a
+`SectionHeading` with its own count and a one-line `EmptyState` when empty.
+Which section a booking falls in is `lib/my-bookings.ts` - status first, dates
+second. Previous draws **five** rows, compact (one **Stay** column, no Rooms),
+with **Show all N** under it and **All booking history** as the heading's
+`action`; its count is the whole section, not the slice. The single "Your
+requests" heading that used to stand over the one table is gone with it.
 
 ## The pages
 
@@ -969,7 +995,7 @@ Contact details are the ones on the foot of the office's own invoice template:
 | From the prototype | Why not |
 | --- | --- |
 | "Keep me signed in", "Forgot password" | The mock session has neither; a control that does nothing is worse than none. Real auth brings both |
-| The prototype's meal-only flow ("Meal requests close the previous evening", "attach to your room booking automatically") | Built differently since: **Meals only** is a service type inside `/book` (Phase 6, reworked 23 Sep 2026 as a set of dates with the kitchen's notice period — a meal must be booked before the previous one finishes being served). `/book-meal` explains it and signs in to `/book?service=meals_only`. Nothing is "attached" to a room booking automatically |
+| The prototype's meal-only flow ("Meal requests close the previous evening", "attach to your room booking automatically") | Built differently since: **Meals only** is a service type inside `/book` (Phase 6, reworked 23 Sep 2026 as a set of dates with the kitchen's notice period — a meal must be booked before the previous one finishes being served). `/book-meal` explains it and signs in to `/book/meals` (17 Oct 2026; `?service=meals_only` still works). Nothing is "attached" to a room booking automatically |
 | A rate card on the public site | Rates live in Tariffs & Invoicing and change by date. The Guidelines page has a **"Charges and settlement"** card (Phase 10) built from the invoice Settings: the day basis, the grace hours, and that **the tariff includes GST** |
 | "Requests at least seven days in advance", "Check-in from 12:00 noon / check-out by 11:00" | Contradict the backend: the window is a *maximum* (six months since 14 Oct 2026, one before), not a minimum, and times are chosen per booking |
 | "24-hour front office", "Doctor on call", front-office hours | Unconfirmed; the facilities cards use the iitpkd.ac.in amenity list (TODO-marked) and backend-true service lines |

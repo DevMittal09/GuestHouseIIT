@@ -135,6 +135,33 @@ port 3000 before launching your own.
   booking mail and a Guidelines item ("During your stay"), and the amber card
   that carried it on every room booking is **gone**. Don't put a conduct rule
   back on the form.
+- **The one sentence the meal section does say is the caretaker's**
+  (17 Oct 2026, the owner, verbatim and to be kept verbatim):
+  `MEAL_CHANGE_NOTICE` = "In any case talk with caretaker for any change in
+  meal booking" (`lib/meals.ts`), at the foot of the meal section on both
+  doors and **nowhere else**. It is the one deliberate exception to the two
+  rules above, and it is not really one: a requester **cannot** change a meal
+  order from the portal - the desk does it - so this says who to ask about
+  something the form does not offer. Don't move it to a page, and don't add a
+  second sentence beside it.
+- **The rates are not a section of the form** (17 Oct 2026, the owner: keep
+  the tariff categories and their rates on the right-hand side). They are
+  `components/tariff-panel.tsx` in the right-hand column, where the
+  **category** is also chosen - a category being one (guest house, booking
+  type) pair (`lib/tariff-categories.ts`), so picking one writes the two
+  fields the rate is resolved from and the quote cannot drift from the
+  invoice. One category is **stated, not asked**. A *named* category stored on
+  the booking is deliberately not built: it would be a second source of truth
+  for money unless `tariffs` carried the same column
+  (`.memories/03-roadmap.md` §2j). Don't put a Rates card back on the form.
+- **The guests are asked before the meals, and the meals behind a Yes / No**
+  (17 Oct 2026). The head count the kitchen cooks for *is* the guests entered
+  above and the diet split has to add up to it, so the old order asked about a
+  number nobody had given yet. "Do you require meals?" starts at **No** -
+  which is what the form already did (`NO_MEALS`) - and `mealsRequested` gates
+  `mealPlan`, so on No the service type stays `room`, no split is sent and no
+  meal rule can fire. One gate; don't add a second condition to any of the
+  derived readings. A dining booking is never asked.
 - **There is no privacy notice in the portal at all** (14 Oct 2026, in two
   steps: the office asked for the privacy policy text to come off the request,
   then the owner asked for the feature to be removed completely but kept so it
@@ -388,7 +415,7 @@ the portal did before the chain was configurable.
 
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
-| student | personal | Assistant Warden → GH Manager | Personal |
+| student | personal | Assistant Warden → GH Manager (**no hostel on the profile: direct → GH Manager**) | Personal |
 | club / council / fest — **raised by its Faculty Advisor** | official | **Direct → GH Manager** — nobody forwards it, HOD included | Student Fund / Special Budget |
 | employee — faculty | official | **HOD** → GH Manager | PDF / Project / Department / Special Budget / Personal |
 | employee — staff | official | **HOD** → GH Manager | Personal |
@@ -456,6 +483,21 @@ jsonb row in `app_settings`, like `rules.capacity`.
   caller passed a `directory` *and* a `requester`: without them a stage is
   assumed staffed, which is exactly what the hardcoded pipeline did, so a
   mail module with units but no profiles behaves as it always has.
+- **A stage that cannot apply to the requester at all is a different fact**
+  (17 Oct 2026): `approverNotApplicable(approver, requester)` - today, a
+  `warden` stage where the requester's `hostel_name` is NULL **or blank**
+  (`hasHostel`). **A student with no hostel has no Assistant Warden**, so the
+  request enters at the desk and the log says *"The Pending Assistant Warden
+  Review stage does not apply to this request: no hostel is recorded on the
+  requester's account"* rather than reporting a console nobody filled in.
+  Answered **from the requester alone**, so a caller with no directory - the
+  mail module, `chainApprovers` for the Copy-to line - reaches the same answer
+  instead of copying a warden who does not exist; `droppedStages` carries the
+  reason and `decidesStage` refuses the stage before it looks at a directory.
+  Only the `warden` kind has such a condition: everywhere else "nobody is
+  appointed" is the honest reading. Don't re-derive it from
+  `profile.hostel_name` anywhere else, and don't attach it to the *role* - the
+  other requester roles have no hostel either.
 - **`canReview` reads the configured stage**, through
   `ReviewContext { rules, request, profiles }`. A stage the current routes no
   longer describe falls back to `BUILT_IN_STAGE_APPROVERS` - **editing a
@@ -1185,6 +1227,16 @@ Checked server-side via triggers on `booking_guests` (the per-card limits from S
 > `choicesFromMealSlots`) — not the opt-outs it held until 1 Oct, which cannot
 > express "breakfast on" once breakfast is off by default.
 >
+> **And on a stay the question is put before the grid is drawn** (17 Oct
+> 2026): "Do you require meals?", **No** by default, the section rendered
+> only on Yes. One gate - `mealsRequested` feeds `mealPlan`, and every other
+> reading is already derived from `mealPlan`, so No needs no special case
+> anywhere and a hidden grid cannot submit a meal. The ticks stay in
+> `mealChoices` while it is off, so Yes restores them rather than making the
+> requester fill the grid in again. **A dining booking is never asked** - the
+> meals are the booking. The section is asked **after the guests**, because
+> the head count is the guests.
+>
 > On a meal booking: the number of people and the two diet counts are
 > **typed boxes with − / + steppers** (`QuantityInput`, 9 Oct 2026 - they were
 > dropdowns from 1 Oct; the owner asked for "a text box with up and down
@@ -1472,6 +1524,39 @@ Issued invoices are **snapshots** (`InvoiceDocument`), drawn by
   Project head; a dining invoice (`invoiceKind()` — `kind` is absent on older
   snapshots, so read it through the function) prints meal dates and head count
   and no room table, check-in/out, rooms or infants.
+- **A guest house with no kitchen prints no dining section at all** (16 Oct
+  2026, the owner: "for bageshri meals should not come in invoice").
+  `InvoiceDocument.serves_meals` holds `guest_houses.serves_meals` as priced,
+  and **`invoicePrintsDining(doc)`** (`serves_meals !== false`, so a snapshot
+  issued earlier still prints it) is the only reader: the three meal rows, the
+  subtotal, the GST row, the dialog's **meal-count boxes**, the *Charged
+  under* "Dining charges" option and the Accounts mail's Dining row all follow
+  it, and the letters become **Grand Total (A+B)**. Bageshri used to print
+  three zeros, a (C) and a (D) that could be nothing else, and a box the desk
+  could charge food to that the guest house does not sell — the same reasoning
+  that took the Meals column off `StaysTable`. `buildInvoiceDocument`
+  **zeroes the counts and drops dining extras** whatever arrived (overwritten,
+  not refused, like a personal booking's debit head); `parseExtraCharges`
+  *names* it for a charge the desk typed. **`extraChargeSectionsFor(shape)` is
+  the one list of sections** — don't derive it again in the dialog. A stay at
+  a kitchen that simply ordered no meals is **unchanged**: that question was
+  asked and declined.
+- **A new tariff row must start later than today** (`tariffStartError`,
+  16 Oct 2026, the owner: "only for future booking GHM can change the
+  rates... currently even past and todays rate apparently we can change
+  rates"). The console seeds **tomorrow**, sets `min` on the date box and
+  **disables Add with the reason on screen**; the note that used to *explain*
+  what back-dating would do is deleted, and don't write another. It is applied
+  in `createTariffAction` and the form, **not** in either store — it is policy
+  about the future, where `tariffLockedError` (action + mock store + the
+  `tariffs_guard` trigger) protects history, and `supabase/repairs/` needs the
+  back door. The two meet at tomorrow: the earliest a rate may start is the
+  earliest one that can still be removed.
+- **The desk's lists name the guest house** (16 Oct 2026): `StaysTable` and
+  `checkouts-today.tsx` under the room numbers, `awaiting-payment.tsx` leading
+  its second line, and the dialog opens on `INVOICE_TITLE(doc.guest_house)`.
+  A **line, not a column** — these tables are already at the width that cost
+  the approver queues their Status column.
 - **After check-out**: `awaitingSettlement()` is the "Checked out — to bill"
   list on **both** `/manager` and `/caretaker` — the **daily** list, bounded to
   30 days; the Approval Log gives the desk an Invoice button on any
@@ -1495,8 +1580,9 @@ Issued invoices are **snapshots** (`InvoiceDocument`), drawn by
 - **GST is per section** (25 Sep 2026, the office's revised template): 18% on
   rooms, 5% on dining, Other Charges none, one Grand Total. **`invoiceTable(doc)`
   is the one layout** for the PDF and the preview; **nothing fills the
-  .docx** — the PDF redraws it. New documents are **`version: 4`** (7 Oct
-  2026): the lettering of version 3 — Room Charges Subtotal (A), GST @ 18% on
+  .docx** — the PDF redraws it. New documents are **`version: 5`** (16 Oct
+  2026 — version 4 plus "no dining section where there is no kitchen", above),
+  and version 4 (7 Oct 2026) is the lettering of version 3 — Room Charges Subtotal (A), GST @ 18% on
   A (B), Dining Charges Subtotal (C), GST @ 5% on C (D), Other (E), **Grand
   Total (A+B+C+D)**, a Round off row only when rupee rounding needs one
   (`totalLabels`) — plus three changes the office asked for: **no blank ruled
@@ -1511,7 +1597,8 @@ Issued invoices are **snapshots** (`InvoiceDocument`), drawn by
   labels are computed at print time, so a change is a **new version**, never
   an "upgrade" of an issued invoice.
 - **Additional charges** (`parseExtraCharges`, ≤ 20): each is charged under
-  `room` / `dining` / `other`, which decides its GST; typed on the draft
+  `room` / `dining` / `other` — whichever sections this invoice prints
+  (`extraChargeSectionsFor`) — which decides its GST; typed on the draft
   (`invoices.extra_charges`, migration 26), priced into `extra_lines` on the
   snapshot. The Supabase store writes the draft before `issue_invoice()`.
 - **What the desk types is repriced live** (`priceInvoiceDraft`, 350 ms after
@@ -1721,9 +1808,16 @@ full-screen (the owner called a full-screen hero "so weird").
   don't put them back on a page.
 - **The portal is laid out as a GOV.UK service**: an ink masthead closed by
   a vermilion rule, a white service nav (`NavBar tone="service"`, keep
-  `aria-current`), pages on `bg-canvas`. `/book` is two columns (form +
-  Requester details and "What happens next"); its cards are numbered by
-  `.numbered-sections` in `globals.css` — no numbers in the markup.
+  `aria-current`), pages on `bg-canvas`. **`/book` is two columns and
+  `BookingForm` lays out the grid** (17 Oct 2026; it was the page's): the
+  `<form>` element is the left column, and beside it - its grid siblings, not
+  its children - the Requester details card (passed in as `aside`, because it
+  is server-rendered) above the **tariff panel**. The panel moved into this
+  component because choosing a tariff category writes two of the form's
+  fields, and into the aside rather than the form because nothing in it is a
+  registered field. Its cards are numbered by `.numbered-sections` in
+  `globals.css` — no numbers in the markup, and the class stays **on the
+  form**, or the panels beside it are counted as steps.
 - **Corners are a fixed scale** (`@theme inline`): `rounded` 4px inputs,
   `rounded-md` 6px buttons, `rounded-lg` 8px cards / dialogs / photos,
   nothing rounder (`xl`–`4xl` are capped at 8px). No shadows, gradients,
@@ -1743,10 +1837,20 @@ full-screen (the owner called a full-screen hero "so weird").
   embed searches the place's Google Maps name with its coordinates
   (`q=…&ll=…&output=embed`, no API key); the CSP's `frame-src` allows it.
   `/contact` shows them as WAI-ARIA tabs (`components/site/guest-house-map.tsx`).
-- **Book Meal has no page of its own** — meals are chosen per day inside the
-  booking request (`/book`), only where `serves_meals`; `MEALS_ONLY_ROLES`
-  can pick service type `meals_only` there. `/book-meal` signs in to
-  `/book?service=meals_only` and points to the guidelines for meal times.
+- **Book Meal is a door onto the booking form, not a form of its own** —
+  meals are chosen per day inside the booking request, only where
+  `serves_meals`; `MEALS_ONLY_ROLES` can pick service type `meals_only`.
+  **Two routes, one page** (17 Oct 2026): `/book` and **`/book/meals`**, both
+  rendering `components/booking-request-page.tsx`, and the portal nav offers
+  them as **Room Booking** and **Meal Booking** in place of one New Booking.
+  The meal door is a **route** rather than `?service=meals_only` because
+  `usePathname()` cannot see a query, so two nav items on one path would both
+  light up - which is why `/book` is matched **exactly** in the nav. The query
+  form still works. `ROOM_BOOKING_PATH` / `MEAL_BOOKING_PATH` (`lib/routes.ts`)
+  are the one place either is written down: the nav, the My Bookings tiles and
+  `/book-meal` all read them. **Meal Booking is offered only where the account
+  could submit one** (`serviceTypesFor` with the kitchens the role's form
+  allows - the same question the tile asks).
 - **Palette — iitpkd.ac.in's own**: ink `#1A1A1A`, vermilion `#E94C26`, the
   emblem's saffron `#F5A300`, band `#F3F1EB`, body `#4A4541`. **White text
   only on `vermilion-deep` `#C43C1C`** (5.2:1), never on bright vermilion
@@ -1756,7 +1860,16 @@ full-screen (the owner called a full-screen hero "so weird").
   Serif 4 (optical sizes) / Source Sans 3 via `next/font`. Tokens in
   `app/globals.css`; the portal is restyled **through the shadcn tokens**.
 - **My Bookings leads with two large doors**, "New room booking" (vermilion)
-  and "Meal booking" (ink).
+  and "Meal booking" (ink), both reading `ROOM_BOOKING_PATH` /
+  `MEAL_BOOKING_PATH`. **Then three sections** (17 Oct 2026): **Current**,
+  **Upcoming**, **Previous**, placed by `lib/my-bookings.ts` - **status
+  first, dates second**: `OCCUPIED` is always current (the desk recorded the
+  arrival), a finished request always previous, anything still open placed by
+  `stayPhase`, the same function the desk's console groups by. Previous draws
+  `PREVIOUS_BOOKINGS_SHOWN` (5) compact rows, newest by `updated_at`, with
+  **Show all N** and a link to the archive; **the count beside the heading is
+  the whole section, not the slice**. Don't classify by date alone, and don't
+  make the reduced list the only way to reach a record.
 - **Photos:** originals in `Images/` (gitignored, ~180 MB); the site serves
   2000px, metadata-stripped copies from `public/site/photos/`. Resize one photo
   per process with PIL `draft()` or it gets OOM-killed. Their guest house is

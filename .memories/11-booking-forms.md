@@ -131,6 +131,18 @@ its form is not in the Form Builder and every guest field is required.
 
 ### What every booking is asked, top to bottom
 
+> **The page is two columns, laid out by `BookingForm`** (17 Oct 2026). The
+> questions run down the left - they *are* the `<form>` element - and in the
+> right-hand column, sticky from `lg`, stand the **requester's details** and
+> the **tariff panel**, which is where the rates now live and where the
+> **tariff category is chosen**. The numbers below are the questions' own:
+> `numbered-sections` is on the form, so nothing beside it is counted as a
+> step. On a phone both panels come first, as the record always did.
+>
+> **Order changed in the same round:** the guests are asked **before** the
+> meals, because the kitchen's head count on a stay *is* the guests entered
+> above and the diet split has to add up to it.
+
 | # | Section | Who sees it | Mandatory? |
 | --- | --- | --- | --- |
 | — | **"Fields marked with * are mandatory."** (`RequiredFieldsNote`, 11 Oct 2026) — above the first starred label, and in every other form that stars a field: Users & Roles, the rejection dialog | Everyone | — |
@@ -151,14 +163,16 @@ its form is not in the Form Builder and every guest field is required.
 | 10 | **Check-in** date + time, **check-out** date + time (hour / minute / AM-PM dropdowns, with a "Your stay" read-back) | Room bookings | **Yes** |
 | 11 | **Purpose of visit** — labelled **Remarks** on a meal booking | Everyone | **Yes**, ≥ 5 characters, on a stay; **optional** on a meal booking (1 Oct 2026) |
 | 12 | **Rooms** — room cards, each with its guests | Room bookings | **At least 1 room, at most 10** |
-| 13 | **Meals** — days × breakfast / lunch / dinner grid, **nothing ticked by default on a stay** (they are charged), plus **how many vegetarian and how many not** | Room + Meals | **At least one meal**, and a split adding up to the guests needing a bed |
+| 12a | **"Do you require meals?"** — Yes / No, **No by default** (17 Oct 2026). The meal section below is rendered **only on Yes**; on No nothing is submitted at all - the service type stays `room`, no diet split is sent and no meal rule can fire. The ticks are kept while it is off, so Yes restores them. **Not asked on a dining booking**, where the meals are the booking | A stay at a guest house that serves meals, where the booking may have meals at all (never a student or an alumni booking) | It is answered by its default |
+| 13 | **Meals** — days × breakfast / lunch / dinner grid, **nothing ticked by default on a stay** (they are charged), plus **how many vegetarian and how many not**. Asked **after the guests** (17 Oct 2026). Closed by the caretaker line below | Room + Meals, on Yes | **At least one meal**, and a split adding up to the guests needing a bed |
 | 14 | **Meals only** — a list of dates, each with its meals ("Add another date", **lunch ticked**), the number of people as a **typed box with − / + steppers** (`QuantityInput`, 9 Oct 2026 — it was a 1…30 dropdown from 1 Oct), and the vegetarian / non-vegetarian split in two boxes of the same kind | Meals only | Count **1–30** (the kitchen's limit per sitting, a Setting — the stepper's max, the schema's max, and `createBooking`'s check of the sitting), at least one meal, a split adding up to the count |
+| 14a | **"In any case talk with caretaker for any change in meal booking"** (`MEAL_CHANGE_NOTICE`, 17 Oct 2026, the owner's words exactly) — at the foot of the meal section, on both doors | Wherever the meal section is shown | Read-only |
 | 15 | **Additional information** (custom fields) | Whatever the Form Builder added for the role | As configured |
 | 16 | **Copy to** — email rows, "Add another email" | Everyone | Optional, **at most 25**; pre-filled with the council secretary's mailbox when a Faculty Advisor books |
 | 17 | ~~Pets notice~~ — **off the form** (11 Oct 2026, the office: "only required in the guidelines no need to show it here"). It is a house rule, not a rule the form enforces, so it keeps its other two homes: the Guidelines page ("During your stay") and the **"Pets" line in every booking mail**. It was a room-booking-only card from 1 Oct 2026, and displayed-only (no tick box) before that | — | — |
 | 18 | **Privacy consent** tick | Everyone | **Yes** |
 | 18a | **Confirm your meal booking** — kitchen, people, preferences, each day and its sittings, who pays, remarks | Meals only | Read-only, live |
-| 18b | **Rates** — what this guest house charges, from the office's own rate sheet (7 Oct 2026): room per day, extra bed per day, and each meal where the kitchen serves them — **the meals alone on a dining booking** (9 Oct 2026, `previewItemsFor(servesMeals, service)`: there is no room on one to charge for). Resolved through the **same function the invoice prices from**, so the figure quoted is the figure charged; an unpriced charge reads "Not published". **The table and nothing beside it** — the paragraph about rates in force, GST and night-by-night pricing is on the Guidelines page | Everyone | Read-only |
+| — | **Tariff** — **in the right-hand panel, not the form** (17 Oct 2026, the owner). The **categories** this requester may book, each labelled and carrying its room rate ("Hamsanandi - Official booking", ₹2,000 per room per day), and **one of them is chosen**: a category is one (guest house, booking type) pair, so choosing it writes those two fields and the rate follows. Then the full table of charges for it - room per day, extra bed per day, and each meal where the kitchen serves them, **the meals alone on a dining booking** (9 Oct 2026, `previewItemsFor`). One category is **stated, not asked**. Resolved through the **same function the invoice prices from** (`resolveTariff`), so the figure quoted is the figure charged; an unpriced charge reads "Not published". `lib/tariff-categories.ts`, `components/tariff-panel.tsx` | Everyone | The category, where there is more than one |
 | — | Room availability panel — **how many rooms are free**, as a labelled strip of figures per day (redrawn 9 Oct 2026), or a headline figure and hour chips on a single day. The room-by-room chart is the **desk's** only | Room bookings | Read-only |
 
 ---
@@ -272,6 +286,12 @@ and **Special Budget must name the fund**.
 **A meals-only booking** skips every approval stage and goes straight to the
 GH Manager, whoever raises it.
 
+**A student whose profile names no hostel** has no Assistant Warden stage
+either (17 Oct 2026): the request enters at the GH Manager and the submission
+log says the stage does not apply and why. NULL and a blank string read alike
+(`hasHostel`). A student *with* a hostel is unchanged -
+[10-roles-and-workflows.md](10-roles-and-workflows.md).
+
 **An HOD stage with nobody to give it** (no head, or the requester is the only
 head) is skipped, and the submission log says so.
 
@@ -293,6 +313,9 @@ head) is skipped, and the submission log says so.
 | Whether a booking type is asked which budget pays | `asksForDebitHead` (`lib/debit-heads.ts`) |
 | A student's locked parent names | Console → **Academic records** (migration 28); the rule is `guestNameRule` (`lib/academic/guest-names.ts`) |
 | Copy-to cap (25) | `MAX_COPY_TO_EMAILS` (`lib/booking-schema.ts`) and migration 24's check |
+| Which **tariff categories** a requester is offered | Nothing of its own: they are derived (`tariffCategories`, `lib/tariff-categories.ts`) from the rate sheet (Console → Tariffs & Invoicing), the Form Builder's allowed guest houses, `bookingTypesFor` and `mealsAllowedFor` |
+| The **caretaker line** in the meal section | `MEAL_CHANGE_NOTICE` (`lib/meals.ts`) |
+| Whether the meal section is **offered** at all on a stay | `mealsAllowedFor` + the guest house's "Serves meals" tick; whether it is **shown** is the requester's own Yes / No, which starts at No |
 
 ---
 

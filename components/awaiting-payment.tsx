@@ -96,8 +96,15 @@ export function AwaitingPaymentTable({
 /**
  * The one column that has to read for either kind: a stay's dates and rooms,
  * or the days the kitchen cooked and how many it cooked for.
+ *
+ * **The guest house leads the second line** (16 Oct 2026, the owner: "add the
+ * guest house name while differentiating the invoices in the dashboard where
+ * we are showing the previous bookings"). This list holds outstanding bills
+ * from both houses at once, for months, and an invoice is headed with one of
+ * them; a dining booking has no room number to tell them apart by at all.
  */
 function Booked({ booking }: { booking: BookingWithDetails }) {
+  const house = booking.guest_house.name;
   if (booking.service_type === "meals_only") {
     const guests = booking.meal_guest_count ?? 0;
     return (
@@ -106,7 +113,7 @@ function Booked({ booking }: { booking: BookingWithDetails }) {
           {describeMeals(booking.meals)}
         </span>
         <span className="block text-xs text-muted-foreground">
-          Meals only · {guests} {guests === 1 ? "person" : "people"}
+          {house} · Meals only · {guests} {guests === 1 ? "person" : "people"}
         </span>
       </>
     );
@@ -117,7 +124,7 @@ function Booked({ booking }: { booking: BookingWithDetails }) {
         {formatDateTime(booking.check_in)} → {formatDateTime(booking.check_out)}
       </span>
       <span className="block text-xs text-muted-foreground">
-        {booking.assigned_rooms.map((r) => r.room_number).join(", ") || "No rooms allocated"}
+        {house} · {booking.assigned_rooms.map((r) => r.room_number).join(", ") || "No rooms allocated"}
       </span>
     </>
   );

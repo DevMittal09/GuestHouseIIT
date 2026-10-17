@@ -60,22 +60,34 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwright.
 **Node 20** via nvm; the machine default is 18.
 
-**Status, 15 Oct 2026.** Feature-complete for every workflow specified; taken
+**Status, 17 Oct 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme, **twelve** rounds of the
-office's corrections, two design passes, the round that put **the approval
-workflow itself in the manager's hands** (Console -> Approval Workflow), and
-two rounds preparing the institute's **user import** - which closed a GoTrue
-door the portal had never used and gave the import an **undo**. The last round
-is the office's photographs: eleven new ones, the **first two the site is
-allowed to name**, and - asked for over the rest of the day - a **hero
-slideshow** in iitpkd.ac.in's style with its Previous / Pause / Next
-controls, a home page stripped back to centred plain type beneath it, and the
-two booking doors reduced to a centred card with **no photograph and no demo
-credentials printed on them**. The round before it was the
-office's twelfth list (the contact number is the manager's, free rooms are
-counted in green, past dates are greyed out of the week and month views, the
-privacy consent tick is gone, and **bookings open six months ahead**). **Not
-deployed for real use** — everything that first deployment needs is in
+office's corrections and the owner's **thirteenth and fourteenth lists**, two
+design passes,
+the round that put **the approval workflow itself in the manager's hands**
+(Console -> Approval Workflow), and two rounds preparing the institute's
+**user import** - which closed a GoTrue door the portal had never used and
+gave the import an **undo**. The last round is nine items about the booking page: the
+**tariff categories move to a panel on the right and become a question**
+(choosing one writes the guest house and the booking type, which is what the
+rate is resolved from), **Guest Details stands above Meal Booking**, meals are
+asked as **Yes / No**, the nav offers **Room Booking** and **Meal Booking**
+separately, My Bookings is **Current, Upcoming and Previous**, and a student
+whose **hostel is NULL** goes straight to the Guest House Manager - explicitly,
+with a **day scholar** persona to test it. The round before it was three
+things the office had asked for and found missing: the manager's **rates may
+only start in the future** (the form had defaulted to today), every desk list
+and the invoice dialog **name the guest house** they are billing for, and **a
+guest house with no kitchen prints no dining section** on its invoice
+(version 5). Before those came the office's photographs - eleven new ones, the **first two the site is
+allowed to name** - and, over the rest of that day, a **hero slideshow** in
+iitpkd.ac.in's style with its Previous / Pause / Next controls, a home page
+stripped back to centred plain type beneath it, and the two booking doors
+reduced to a centred card with **no photograph and no demo credentials printed
+on them**. The round before those was the office's twelfth list (the contact
+number is the manager's, free rooms are counted in green, past dates are
+greyed out of the week and month views, the privacy consent tick is gone, and
+**bookings open six months ahead**). **Not deployed for real use** — everything that first deployment needs is in
 [04-production.md](04-production.md), and the gates are
 [03-roadmap.md](03-roadmap.md) §1. Migrations **31-34 are written and tested
 but deliberately not applied** to the hosted project, and the hosted project's
@@ -84,8 +96,9 @@ email/password provider is **still on**: [04-production.md](04-production.md)
 
 **Numbers.** 34 migrations · 10 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
-18 demo personas · 6 demo bookings · 23 real rooms · **25 photographs** ·
-562 unit tests · 43 end-to-end journeys · 15 console sections.
+19 demo personas · 6 demo bookings · 23 real rooms · **25 photographs** ·
+603 unit tests · 48 end-to-end journeys · 15 console sections ·
+**5 invoice layout versions**.
 
 ---
 
@@ -198,7 +211,7 @@ actually lives").
 
 | Role | Does |
 | --- | --- |
-| Student | Books family (personal), **Bageshri only and no meals**, parents taken from their academic record → **Assistant Warden** of their hostel → manager |
+| Student | Books family (personal), **Bageshri only and no meals**, parents taken from their academic record → **Assistant Warden** of their hostel → manager. **No hostel on the profile → straight to the manager** (17 Oct 2026): a day scholar has no warden, and the booking's log says so |
 | Faculty / staff (`employee`) | Official → **HOD** → manager; personal → manager; meals only; **as Faculty Advisor** of a council or club when named in the console → straight to the manager |
 | Official (whitelisted office) | Direct → manager, or **Requires HOD approval** - asked only where an HOD is set for the office; exempt from the booking window and the stay cap |
 | Club / fest / council account | **Cannot book** — its Faculty Advisor books for it; it sees the bookings and gets the mail |
@@ -224,15 +237,19 @@ the previous meal finishes being served**, with **each person's own veg /
 non-veg preference** and at most **30 people at one sitting** counting who is
 already booked. A **turnaround buffer** of 4 h separates stays. A student's
 **father and mother come from their academic record and are locked**, and need
-no ID. The form shows **the rates** and **how many rooms are free** — the
-room-by-room chart is the desk's. **The form does not state the rules it
+no ID. The form shows **how many rooms are free** - the room-by-room chart is the
+desk's - and **the tariff is a panel beside it, where the requester picks the
+category that applies** (17 Oct 2026: a category is the guest house and the
+kind of booking, which is what the rate is resolved from). **The form does not state the rules it
 enforces** (9 Oct 2026): those belong on the Guidelines page, in the error when
 it fires, or in the control itself - **nor the house rules it does not**
 (11 Oct 2026: the pets notice is the Guidelines' and the mail's). What it does
 say is that **"Fields marked with * are mandatory."** Invoices charge **GST 18% on rooms, 5% on
-food**, each on its own subtotal, lettered up to **Grand Total (A+B+C+D)**,
-settled by **UPI or account transfer**; a **personal stay is paid before the
-guest leaves**. A request nobody decides before its check-in is marked
+food**, each on its own subtotal, lettered up to **Grand Total (A+B+C+D)** -
+or **(A+B)** at a guest house with no kitchen, whose invoice prints **no
+dining section at all** (16 Oct 2026) - settled by **UPI or account
+transfer**; a **personal stay is paid before the guest leaves**. A rate the
+manager adds **starts tomorrow at the earliest**. A request nobody decides before its check-in is marked
 **Missed** overnight and the requester told. All times are **Asia/Kolkata** and
 every date reads **DD/MM/YYYY**.
 

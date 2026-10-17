@@ -29,6 +29,11 @@ on conflict (name) do nothing;
 insert into public.profiles (id, email, full_name, role, hostel_name, department_or_club, roll_number) values
   ('11111111-1111-1111-1111-111111111101', '112201001@smail.iitpkd.ac.in', 'Anjali Menon', 'student', 'Malhar', null, '112201001'),
   ('11111111-1111-1111-1111-111111111102', '142202014@smail.iitpkd.ac.in', 'Rahul Nair', 'student', 'Saveri', null, '142202014'),
+  -- A day scholar (17 Oct 2026): hostel_name is genuinely NULL, which is what
+  -- routes their request straight to the Guest House Manager - there is no
+  -- Assistant Warden for a student who lives at home. The test account for
+  -- that rule; see .memories/05-credentials-and-security.md.
+  ('11111111-1111-1111-1111-111111111121', '122203099@smail.iitpkd.ac.in', 'Devika Iyer (day scholar - no hostel)', 'student', null, null, '122203099'),
   ('11111111-1111-1111-1111-111111111103', 'priya@iitpkd.ac.in', 'Dr. Priya Sharma', 'employee', null, 'Computer Science & Engineering', null),
   ('11111111-1111-1111-1111-111111111104', 'admin@iitpkd.ac.in', 'Director''s Office', 'official', null, 'Administration', null),
   ('11111111-1111-1111-1111-111111111105', 'petrichor@iitpkd.ac.in', 'Petrichor Fest Council', 'club', null, 'Petrichor', null),
@@ -101,6 +106,7 @@ update public.profiles p set ldap_uid = v.uid
 from (values
   ('112201001@smail.iitpkd.ac.in', '112201001'),
   ('142202014@smail.iitpkd.ac.in', '142202014'),
+  ('122203099@smail.iitpkd.ac.in', '122203099'),
   ('priya@iitpkd.ac.in', 'priya'),
   ('admin@iitpkd.ac.in', 'admin'),
   ('petrichor@iitpkd.ac.in', 'petrichor'),

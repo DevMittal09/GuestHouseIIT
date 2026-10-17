@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { MEAL_BOOKING_PATH, ROOM_BOOKING_PATH } from "@/lib/routes";
 import { canUseConsoleSection } from "@/lib/access";
 import { isAdminUnlocked } from "@/lib/admin-lock";
 import { recordAudit } from "@/lib/audit-server";
@@ -39,7 +40,8 @@ function fail(e: unknown): ActionResult {
 
 function done(): ActionResult {
   revalidatePath("/admin/projects");
-  revalidatePath("/book");
+  revalidatePath(ROOM_BOOKING_PATH);
+  revalidatePath(MEAL_BOOKING_PATH);
   return { ok: true };
 }
 

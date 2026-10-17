@@ -225,9 +225,10 @@ describe("the invoice, per-section GST and additional charges", () => {
   });
 
   it("taxes rooms at 18% and food at 5% on their own subtotals; other charges carry none", () => {
-    // Version 4 since 7 Oct 2026 - the lettering is unchanged, so the rest of
-    // this test is too; see eighth-round.test.ts for what version 4 added.
-    expect(doc.version).toBe(4);
+    // Version 4 since 7 Oct 2026 and 5 since 16 Oct 2026 - the lettering is
+    // unchanged for a guest house with a kitchen, so the rest of this test is
+    // too; see eighth-round.test.ts for version 4 and thirteenth-round for 5.
+    expect(doc.version).toBe(5);
     // Inclusive: each section's subtotal and GST add back to its prices.
     expect(doc.subtotal_rooms + (doc.gst_rooms ?? 0)).toBe(2 * 200_000 + 50_000);
     expect(doc.subtotal_dining + (doc.gst_dining ?? 0)).toBe(2 * 8_000 + 2 * 10_000 + 30_000);
@@ -346,7 +347,7 @@ describe("the invoice, per-section GST and additional charges", () => {
       "Dining Charges Subtotal:",
       "GST @ 5% on Subtotal:",
     ]);
-    expect(parseExtraCharges([{ section: "room", description: "Extra bed", quantity: 1, amount: "500" }], "dining")).toMatchObject({ ok: false });
+    expect(parseExtraCharges([{ section: "room", description: "Extra bed", quantity: 1, amount: "500" }], { kind: "dining", servesMeals: true })).toMatchObject({ ok: false });
   });
 
   it("draws a table longer than a page onto the next, footer on each", () => {
@@ -369,22 +370,22 @@ describe("the invoice, per-section GST and additional charges", () => {
 
 describe("additional charges as typed", () => {
   it("keeps rupees as paise and says what is wrong, row by row", () => {
-    expect(parseExtraCharges([{ section: "other", description: " Broken vase ", comment: " ", quantity: "2", amount: "1,500" }], "stay")).toMatchObject({
+    expect(parseExtraCharges([{ section: "other", description: " Broken vase ", comment: " ", quantity: "2", amount: "1,500" }], { kind: "stay", servesMeals: true })).toMatchObject({
       ok: false,
     });
-    expect(parseExtraCharges([{ section: "other", description: "Broken vase", comment: " ", quantity: "2", amount: "1500.50" }], "stay")).toEqual({
+    expect(parseExtraCharges([{ section: "other", description: "Broken vase", comment: " ", quantity: "2", amount: "1500.50" }], { kind: "stay", servesMeals: true })).toEqual({
       ok: true,
       charges: [{ section: "other", description: "Broken vase", comment: null, quantity: 2, unit_price: 150_050 }],
     });
-    const bad = (row: Record<string, unknown>) => parseExtraCharges([{ section: "room", description: "Extra bed", quantity: 1, amount: "500", ...row }], "stay");
+    const bad = (row: Record<string, unknown>) => parseExtraCharges([{ section: "room", description: "Extra bed", quantity: 1, amount: "500", ...row }], { kind: "stay", servesMeals: true });
     expect(bad({ description: "x" })).toMatchObject({ ok: false, error: expect.stringMatching(/say what it is for/) });
     expect(bad({ quantity: "0" })).toMatchObject({ ok: false, error: expect.stringMatching(/quantity/) });
     expect(bad({ amount: "" })).toMatchObject({ ok: false, error: expect.stringMatching(/amount/) });
     expect(bad({ amount: "-5" })).toMatchObject({ ok: false, error: expect.stringMatching(/amount/) });
     expect(bad({ amount: "10.555" })).toMatchObject({ ok: false, error: expect.stringMatching(/two decimals/) });
     expect(bad({ section: "free" })).toMatchObject({ ok: false, error: expect.stringMatching(/charged under/) });
-    expect(parseExtraCharges(Array.from({ length: 21 }, () => ({})), "stay")).toMatchObject({ ok: false, error: expect.stringMatching(/At most 20/) });
-    expect(parseExtraCharges(null, "stay")).toEqual({ ok: true, charges: [] });
+    expect(parseExtraCharges(Array.from({ length: 21 }, () => ({})), { kind: "stay", servesMeals: true })).toMatchObject({ ok: false, error: expect.stringMatching(/At most 20/) });
+    expect(parseExtraCharges(null, { kind: "stay", servesMeals: true })).toEqual({ ok: true, charges: [] });
   });
 });
 

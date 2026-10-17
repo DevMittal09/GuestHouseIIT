@@ -49,8 +49,8 @@ form, all approval tiers, the room grid, invoices, the desk and the console.
 | --- | --- | --- |
 | `npm run lint` | ESLint incl. the strict React Compiler rules | must stay clean |
 | `npm run typecheck` | `next typegen && tsc --noEmit` | `npm run build` also typechecks |
-| `npm test` | Vitest, `tests/` — 24 files, 431 checks (8 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
-| `npm run test:e2e` | Playwright, `e2e/` — 41 journeys (about 85 s) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
+| `npm test` | Vitest, `tests/` — 35 files, 603 checks (17 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
+| `npm run test:e2e` | Playwright, `e2e/` — 48 journeys (about 2 min) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
 | `npm run check:migrations` | Which migrations the project in `.env.local` actually has | **Read-only** (`GET`, one row, shape only). Exits 1 if any marker is missing. Migrations 17 and 23 are function-only and cannot be seen — it says so and gives the SQL. **Not a CI step** — CI runs with no secrets, where it prints "no project configured" and exits 0. Run it against a deployment, before relying on one |
 | `npm run check:lockfile` | The npm optional-dependency bug that breaks `npm ci` | Runs in CI |
 
@@ -64,14 +64,24 @@ moves who can book), `room-party` (2 guests + 2 infants in a room),
 `sign-in` (Mock Authentication on a production build), `desk-links`
 (Reception → kitchen → back; the developer turned away from New Booking; the
 help line's number), `public-site` (320 px, desktop and phone), and
-`fifth-round` (25 Sep 2026, rewritten 7 Oct: a student's Father **taken from
-the record and locked**, the infant card, the warden's "✓ Matches record";
-reception moving a check-in both ways; an invoice whose grand total follows
-typed breakfasts and a "Broken vase" additional charge, then issued, then the
-manager closing the stay off unpaid with a reason and finding it under
-Awaiting payment), and `eighth-round` (7 Oct 2026: a student's form — one
-guest house, no meals, no debitable head, the rates; the faculty rates and the
-head question; **Change rate**; a record pasted into the console locking that
+`fourteenth-round` (17 Oct 2026: the tariff panel's categories setting the
+form's own guest house and booking type; the guests card above the meals card;
+the meal Yes/No with nothing left behind on No; the two nav doors and which
+one is current; the three sections of My Bookings; a **day scholar's** request
+reaching the desk with no warden stage while a hostelled student's still
+reaches the warden), and
+`fifth-round` (25 Sep 2026, rewritten 7 and 16 Oct: a student's Father **taken
+from the record and locked**, the infant card, the warden's "✓ Matches
+record"; reception moving a check-in both ways; a **Bageshri** invoice with
+**no dining section at all** — no meal-count box, no Dining Charges heading,
+two options under Charged under and Grand Total (A+B) — whose grand total
+follows a typed "Broken vase" additional charge, then issued, then the manager
+closing the stay off unpaid with a reason and finding it under Awaiting
+payment, in a desk row that names the guest house), and `eighth-round`
+(7 Oct 2026: a student's form — one guest house, no meals, no debitable head,
+the rates; the faculty rates and the head question; **Change rate**, which
+dates the new rate **tomorrow** and refuses today on the control itself
+(16 Oct 2026); a record pasted into the console locking that
 student's parents; and the whole **Missed** journey — a stay booked from
 midnight this morning, the cron route POSTed as the runner does, the requester
 told, the manager reinstating it, and the next two runs marking nothing).
@@ -1260,3 +1270,35 @@ be testing it.
 
 `loadDb()` self-heals the seeded personas back in, so assertions stay keyed on
 addresses the seed does not use - the same trap noted for the idempotency test.
+
+### A journey read the page behind the toast, and drove somebody else's booking (17 Oct 2026)
+
+Six journeys captured a new booking's reference like this:
+
+```ts
+const toast = page.getByText(REFERENCE).first();
+await expect(toast).toBeVisible({ timeout: 30_000 });
+const reference = (await toast.innerText()).match(REFERENCE)![0];
+```
+
+That is not the toast. It is **the first reference anywhere on the page**, and
+it worked only because the form lands on My Bookings and the newest request
+used to be its first row - a comment in `e2e/helpers.ts` even said so ("the
+newest row either way").
+
+My Bookings became three sections on 17 Oct 2026 - Current, Upcoming, then
+Previous - so the first reference on the page belongs to whichever stay is
+happening now. `fifth-round` then captured a **different booking's** reference,
+found that booking's row in the warden's queue, opened its Review dialog, and
+failed on an assertion about guests it had never entered. The failure named the
+assertion, not the cause, and the dialog in the trace was somebody else's
+request entirely.
+
+Two lessons:
+
+- **Scope a locator to the thing you mean.** `submittedReference(page)` reads
+  `[data-sonner-toast]`, which is the only element that is about *this*
+  submission. `latestReference()`, which read the dashboard's first row on
+  purpose, is deleted rather than left to be believed.
+- **A test that depends on the order of a list is depending on a layout.**
+  Nothing about the booking flow changed in that round; a heading did.

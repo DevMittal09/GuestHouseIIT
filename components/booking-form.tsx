@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { createBooking } from "@/app/actions/bookings";
 import { BookingAvailability } from "@/components/booking-availability";
 import { MealDatesPicker } from "@/components/meal-dates-picker";
-import { TariffTable } from "@/components/tariff-table";
+import { TariffPanel } from "@/components/tariff-panel";
 import { MealPlanGrid } from "@/components/meal-plan-grid";
 import { Button } from "@/components/ui/button";
 import {
@@ -91,6 +91,7 @@ import {
   firstBookableMealDate,
   MEAL_KEYS,
   mealPlanFromSlots,
+  MEAL_CHANGE_NOTICE,
   mealSlot,
   mealSlotsFromChoices,
   NO_MEALS,
@@ -98,6 +99,7 @@ import {
   totalMeals,
 } from "@/lib/meals";
 import type { TariffPreview } from "@/lib/tariffs";
+import { tariffCategories, type TariffCategory } from "@/lib/tariff-categories";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { asksOfficeApproval, isOfficeRole, latestCheckIn } from "@/lib/workflow";
@@ -250,6 +252,7 @@ export function BookingForm({
   defaultCopyTo = [],
   tariffPreviews = [],
   guestNames = NO_GUEST_NAME_RULE,
+  aside = null,
 }: {
   /**
    * What the requester's academic record fixes about their guests (7 Oct
@@ -262,10 +265,21 @@ export function BookingForm({
   /**
    * The rates for each guest house and booking type the requester may pick,
    * resolved on the server with the same function the invoice uses
-   * (`tariffPreviews`). Shown as a small table beside the stay, so what the
+   * (`tariffPreviews`). Shown in the panel beside the form, so what the
    * requester is quoted and what the desk charges cannot drift.
    */
   tariffPreviews?: TariffPreview[];
+  /**
+   * What stands above the tariff in the right-hand column - the requester's
+   * own details card, rendered on the server because nothing in it is
+   * editable.
+   *
+   * The form owns the two columns since 17 Oct 2026: the tariff panel is a
+   * question now (which category applies), so it has to share the form's
+   * state, and it belongs on the right. The page passes the server-rendered
+   * card in rather than laying the grid out itself.
+   */
+  aside?: React.ReactNode;
   /**
    * Set when a club's Faculty Advisor is booking for the club (24 Sep 2026).
    * `user` and `config` are then the club's, so the form is exactly the
@@ -602,7 +616,26 @@ export function BookingForm({
    * still do it, and the server logs the exception.
    */
   const mealsAllowedHere = canOverrideHouse || mealsAllowedFor(bookingType, config.role);
-  const offerMeals = Boolean(selectedGuestHouse) && servesMeals && mealsAllowedHere;
+  const mealsPossible = Boolean(selectedGuestHouse) && servesMeals && mealsAllowedHere;
+  /**
+   * **Whether meals are wanted at all is a question now** (17 Oct 2026, the
+   * owner: ask yes or no, and show the meal section only on yes).
+   *
+   * Only on a stay. A dining booking *is* the meals, so it is never asked -
+   * `mealsRequested` is simply true there.
+   *
+   * It starts at **no**, which is what the form already did: meals on a stay
+   * are an extra the requester opts into (`NO_MEALS`), and defaulting them on
+   * would put dining charges on every stay at a guest house with a kitchen.
+   * Saying no hides the section and submits no plan at all - `mealPlan` below
+   * is empty, so `service_type` stays "room", no diet split is sent, and no
+   * meal rule can fire on a question nobody was asked. The ticks are kept in
+   * `mealChoices` while it is off, so turning it back on restores them rather
+   * than making the requester fill the grid in again.
+   */
+  const [wantsMeals, setWantsMeals] = useState(false);
+  const mealsRequested = mealsOnly || wantsMeals;
+  const offerMeals = mealsPossible && mealsRequested;
   const mealCheckIn = stay && !stay.problem ? stay.fromAt : null;
   /**
    * The rows of the meal grid. For a stay they are the days it touches; for a
@@ -634,7 +667,15 @@ export function BookingForm({
     mealChoices,
     mealsOnly ? DEFAULT_MEALS_ON : NO_MEALS
   );
-  const mealPlan = servesMeals ? mealPlanFromSlots(mealSlots, mealDays) : [];
+  /**
+   * Nothing is ordered where the kitchen cannot serve it, and nothing where
+   * the requester answered **no** to meals (17 Oct 2026). One gate, so every
+   * reading that follows - the service type, the diet split, the summary, the
+   * payload - follows from the one answer and a hidden grid can never submit
+   * a meal.
+   */
+  const mealPlan =
+    servesMeals && mealsRequested ? mealPlanFromSlots(mealSlots, mealDays) : [];
   /**
    * What is actually being booked, derived rather than asked. A room booking
    * becomes a room-and-meals booking exactly when meals were picked, so the
@@ -707,6 +748,34 @@ export function BookingForm({
   /** The grid hands back the full set of ticks; what gets stored is the answers. */
   const onMealSlotsChange = (next: Set<string>) => {
     setMealChoices((prev) => choicesFromMealSlots(mealDays, next, prev));
+  };
+
+  /**
+   * The tariff categories this requester may book, each with the rate it
+   * resolves to (17 Oct 2026). One category is one (guest house, booking
+   * type) pair - the two answers the rate is resolved from - so choosing one
+   * in the panel writes exactly those two fields, and the figure quoted
+   * cannot drift from the one the invoice prices.
+   *
+   * Computed from the same `guestHousesForBookingType` the guest house
+   * dropdown narrows itself with, so neither can offer what the other
+   * refuses.
+   */
+  const categories: TariffCategory[] = tariffCategories({
+    guestHouses,
+    bookingTypes: bookingTypeOptions,
+    role: config.role,
+    previews: tariffPreviews,
+    service: mealsOnly ? "meals_only" : "room",
+    allowAnyGuestHouse: canOverrideHouse,
+  });
+  const chooseCategory = (category: TariffCategory) => {
+    if (category.booking_type !== bookingType) {
+      setValue("booking_type", category.booking_type, { shouldValidate: false });
+    }
+    if (category.guest_house_id !== selectedGuestHouseId) {
+      setValue("guest_house_id", category.guest_house_id, { shouldValidate: false });
+    }
   };
 
   // The kitchen's limit per sitting (Settings). One booking cannot be larger
@@ -1034,7 +1103,45 @@ export function BookingForm({
   };
 
   return (
-    <form onSubmit={onSubmit} className="numbered-sections space-y-6">
+    /**
+     * Two columns from `lg` (the page's own layout until 17 Oct 2026, now
+     * this component's): the questions in eight, and in the other four the
+     * requester's record and the tariff.
+     *
+     * It moved here because the tariff panel is a **question** - picking a
+     * category writes the guest house and the booking type - so it has to
+     * share this component's form state. It does **not** have to be inside
+     * the `<form>` element: nothing in either panel is a registered field,
+     * and leaving them out keeps the form the same element it always was,
+     * with `numbered-sections` counting the questions and nothing else.
+     *
+     * On a phone the record and the tariff come first, as the record always
+     * did: they are what the requester checks before filling anything in.
+     */
+    <div className="grid gap-x-10 gap-y-6 lg:grid-cols-12">
+      {/* Sticky from `lg`: the questions run to about 2800px, and both panels
+          are things a requester checks a field against rather than reads once.
+          **Outside the `<form>` element on purpose** - neither panel holds a
+          registered field (the tariff radios are controlled and write through
+          `setValue`), so keeping them out leaves the form exactly the element
+          it was: `numbered-sections` counts its own cards, and nothing beside
+          the questions is numbered as a step. */}
+      <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 lg:col-span-4 lg:col-start-9 lg:row-start-1 lg:self-start">
+        {aside}
+        <TariffPanel
+          categories={categories}
+          previews={tariffPreviews}
+          guestHouseId={selectedGuestHouseId}
+          bookingType={bookingType}
+          pricesIncludeGst={rules.invoice.prices_include_gst}
+          onSelect={chooseCategory}
+          mealsOnly={mealsOnly}
+        />
+      </aside>
+      <form
+        onSubmit={onSubmit}
+        className="numbered-sections min-w-0 space-y-6 lg:col-span-8 lg:row-start-1"
+      >
       {/* `numbered-sections` (globals.css) numbers each card's title 1, 2, 3…
           in the order they are shown, so the numbers follow whichever
           sections this role's form actually has. */}
@@ -1534,25 +1641,14 @@ export function BookingForm({
           "During your stay") and the "Pets" line in every booking mail. It
           was a card of its own here, in amber, on every room booking. */}
 
-      {/* What it costs, from the office's own rate sheet (7 Oct 2026). Beside
-          the stay rather than at the end: the requester is choosing a guest
-          house and a number of rooms a few lines above, and the rates are
-          part of that choice. The same resolution the invoice uses, so the
-          figure quoted here is the figure charged. */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{mealsOnly ? "Meal rates" : "Rates"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <TariffTable
-            previews={tariffPreviews}
-            guestHouseId={selectedGuestHouseId}
-            bookingType={bookingType}
-            guestHouseName={selectedGuestHouse?.name}
-            pricesIncludeGst={rules.invoice.prices_include_gst}
-          />
-        </CardContent>
-      </Card>
+      {/* **The rates are not a section of the form** (17 Oct 2026, the
+          owner: keep the tariff categories and their rates on the right-hand
+          side). They were a numbered card here, between the stay and the
+          meals, which read as a step with nothing to answer - the rate was
+          already settled by the guest house and the kind of booking chosen
+          above it. They are now the panel in the right-hand column, where
+          choosing a category *is* that choice (`components/tariff-panel.tsx`).
+          Don't put a second copy back on the form. */}
 
       {wantsRooms && (
         <Card>
@@ -1561,129 +1657,6 @@ export function BookingForm({
           </CardHeader>
           <CardContent>
             <BookingAvailability guestHouseId={selectedGuestHouseId} date={checkInDate} />
-          </CardContent>
-        </Card>
-      )}
-
-      {offerMeals && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{mealsOnly ? "Days and meals" : "Meals (optional)"}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Each person's own preference (1 Oct 2026). It used to be one
-                radio for the whole party, so a group of thirty with two
-                vegetarians was booked as non-vegetarian and the kitchen
-                cooked thirty non-vegetarian plates. Counts rather than a row
-                per person: a dining booking has no guest list at all, only a
-                head count, and the kitchen cooks to numbers. */}
-            {mealPlan.length > 0 && (
-              <fieldset className="space-y-2 rounded-md border border-border-strong bg-band/40 p-3">
-                <legend className="px-1.5 text-sm font-medium">Meal preferences *</legend>
-                {/* Answering one box fills the other with the rest (7 Oct
-                    2026, the office's eighth list). The two always have to
-                    add up to the head count, so the second question only
-                    ever has one right answer - asking it twice was asking
-                    the requester to do the subtraction, and the commonest
-                    way to get "the two have to add up to N" was to answer
-                    one box and stop. Either box fills the other, so a
-                    correction to the first still works. */}
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="meal_veg_count">{MEAL_PREFERENCE_LABELS.veg}</Label>
-                    <QuantityInput
-                      id="meal_veg_count"
-                      aria-label={MEAL_PREFERENCE_LABELS.veg}
-                      min={0}
-                      max={Math.max(mealHeadCount, 1)}
-                      value={vegCountRaw}
-                      onChange={(raw) => {
-                        setValue("meal_veg_count", raw, { shouldValidate: false });
-                        fillOtherDietCount("meal_non_veg_count", raw);
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="meal_non_veg_count">{MEAL_PREFERENCE_LABELS.non_veg}</Label>
-                    <QuantityInput
-                      id="meal_non_veg_count"
-                      aria-label={MEAL_PREFERENCE_LABELS.non_veg}
-                      min={0}
-                      max={Math.max(mealHeadCount, 1)}
-                      value={nonVegCountRaw}
-                      onChange={(raw) => {
-                        setValue("meal_non_veg_count", raw, { shouldValidate: false });
-                        fillOtherDietCount("meal_veg_count", raw);
-                      }}
-                    />
-                  </div>
-                </div>
-                {dietChosen && (
-                  <p className={cn("text-xs", dietProblem ? "text-destructive" : "text-muted-foreground")}>
-                    {dietProblem ?? `${describeDietCounts(dietCounts)} - ${dietTotal(dietCounts)} of ${mealHeadCount}.`}
-                  </p>
-                )}
-              </fieldset>
-            )}
-
-            {mealsOnly ? (
-              <>
-                <MealDatesPicker
-                  dates={mealDates}
-                  slots={mealSlots}
-                  onSlotsChange={onMealSlotsChange}
-                  onDatesChange={setMealDates}
-                  now={now}
-                  windows={rules.meals.windows}
-                  minDate={checkInLimits.min}
-                  maxDate={checkInLimits.max}
-                />
-                <p className="text-sm text-muted-foreground">{mealSummary}</p>
-              </>
-            ) : !mealCheckIn ? (
-              <EmptyNote>Choose your dates to pick meals for each day.</EmptyNote>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      onMealSlotsChange(
-                        new Set(
-                          mealDays.flatMap((day) =>
-                            MEAL_KEYS.filter((meal) => day.available[meal]).map((meal) =>
-                              mealSlot(day.date, meal)
-                            )
-                          )
-                        )
-                      )
-                    }
-                  >
-                    Select all
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onMealSlotsChange(new Set())}
-                  >
-                    Clear all
-                  </Button>
-                </div>
-                <MealPlanGrid
-                  days={mealDays}
-                  checkIn={mealCheckIn}
-                  slots={mealSlots}
-                  onChange={onMealSlotsChange}
-                  windows={rules.meals.windows}
-                  now={now}
-                />
-                <p className="text-sm text-muted-foreground">{mealSummary}</p>
-              </>
-            )}
-            <FieldError message={mealsError ?? undefined} />
           </CardContent>
         </Card>
       )}
@@ -1728,6 +1701,181 @@ export function BookingForm({
                 Add room
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Meals come **after** the guests (17 Oct 2026, the owner): the head
+          count the kitchen cooks to is the guests entered above, and the two
+          diet counts have to add up to it, so asking for the meals first was
+          asking about a number the requester had not given yet. */}
+      {mealsPossible && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{mealsOnly ? "Days and meals" : "Meals"}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* **Yes or no, before anything else** (17 Oct 2026). A stay at a
+                guest house with a kitchen used to open on an empty meal grid
+                headed "Meals (optional)", which a requester had to read and
+                ignore. A dining booking is not asked: the meals are the
+                booking. */}
+            {!mealsOnly && (
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Do you require meals?</legend>
+                <div className="flex flex-wrap gap-4">
+                  {[
+                    { value: true, label: "Yes" },
+                    { value: false, label: "No" },
+                  ].map((option) => (
+                    <label
+                      key={option.label}
+                      className="flex cursor-pointer items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="radio"
+                        name="wants_meals"
+                        value={option.label}
+                        checked={wantsMeals === option.value}
+                        onChange={() => {
+                          setWantsMeals(option.value);
+                          // Nothing is wrong with a section that is no longer
+                          // on screen: a message left from the last attempt
+                          // would sit under a question nobody is being asked.
+                          if (!option.value) setMealsError(null);
+                        }}
+                        className="size-4 accent-[var(--ink)]"
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+
+            {offerMeals && (
+              <>
+              {/* Each person's own preference (1 Oct 2026). It used to be one
+                  radio for the whole party, so a group of thirty with two
+                  vegetarians was booked as non-vegetarian and the kitchen
+                  cooked thirty non-vegetarian plates. Counts rather than a row
+                  per person: a dining booking has no guest list at all, only a
+                  head count, and the kitchen cooks to numbers. */}
+              {mealPlan.length > 0 && (
+                <fieldset className="space-y-2 rounded-md border border-border-strong bg-band/40 p-3">
+                  <legend className="px-1.5 text-sm font-medium">Meal preferences *</legend>
+                  {/* Answering one box fills the other with the rest (7 Oct
+                      2026, the office's eighth list). The two always have to
+                      add up to the head count, so the second question only
+                      ever has one right answer - asking it twice was asking
+                      the requester to do the subtraction, and the commonest
+                      way to get "the two have to add up to N" was to answer
+                      one box and stop. Either box fills the other, so a
+                      correction to the first still works. */}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="meal_veg_count">{MEAL_PREFERENCE_LABELS.veg}</Label>
+                      <QuantityInput
+                        id="meal_veg_count"
+                        aria-label={MEAL_PREFERENCE_LABELS.veg}
+                        min={0}
+                        max={Math.max(mealHeadCount, 1)}
+                        value={vegCountRaw}
+                        onChange={(raw) => {
+                          setValue("meal_veg_count", raw, { shouldValidate: false });
+                          fillOtherDietCount("meal_non_veg_count", raw);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="meal_non_veg_count">{MEAL_PREFERENCE_LABELS.non_veg}</Label>
+                      <QuantityInput
+                        id="meal_non_veg_count"
+                        aria-label={MEAL_PREFERENCE_LABELS.non_veg}
+                        min={0}
+                        max={Math.max(mealHeadCount, 1)}
+                        value={nonVegCountRaw}
+                        onChange={(raw) => {
+                          setValue("meal_non_veg_count", raw, { shouldValidate: false });
+                          fillOtherDietCount("meal_veg_count", raw);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {dietChosen && (
+                    <p className={cn("text-xs", dietProblem ? "text-destructive" : "text-muted-foreground")}>
+                      {dietProblem ?? `${describeDietCounts(dietCounts)} - ${dietTotal(dietCounts)} of ${mealHeadCount}.`}
+                    </p>
+                  )}
+                </fieldset>
+              )}
+
+              {mealsOnly ? (
+                <>
+                  <MealDatesPicker
+                    dates={mealDates}
+                    slots={mealSlots}
+                    onSlotsChange={onMealSlotsChange}
+                    onDatesChange={setMealDates}
+                    now={now}
+                    windows={rules.meals.windows}
+                    minDate={checkInLimits.min}
+                    maxDate={checkInLimits.max}
+                  />
+                  <p className="text-sm text-muted-foreground">{mealSummary}</p>
+                </>
+              ) : !mealCheckIn ? (
+                <EmptyNote>Choose your dates to pick meals for each day.</EmptyNote>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        onMealSlotsChange(
+                          new Set(
+                            mealDays.flatMap((day) =>
+                              MEAL_KEYS.filter((meal) => day.available[meal]).map((meal) =>
+                                mealSlot(day.date, meal)
+                              )
+                            )
+                          )
+                        )
+                      }
+                    >
+                      Select all
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onMealSlotsChange(new Set())}
+                    >
+                      Clear all
+                    </Button>
+                  </div>
+                  <MealPlanGrid
+                    days={mealDays}
+                    checkIn={mealCheckIn}
+                    slots={mealSlots}
+                    onChange={onMealSlotsChange}
+                    windows={rules.meals.windows}
+                    now={now}
+                  />
+                  <p className="text-sm text-muted-foreground">{mealSummary}</p>
+                </>
+              )}
+              <FieldError message={mealsError ?? undefined} />
+              {/* The owner's sentence, word for word (17 Oct 2026). The form
+                  cannot change a meal order once it is in - the desk does - so
+                  this is where the requester is told who can. */}
+              <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
+                {MEAL_CHANGE_NOTICE}
+              </p>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
@@ -2002,7 +2150,8 @@ export function BookingForm({
         confirmLabel="Remove room"
         onConfirm={confirmRemoveRoom}
       />
-    </form>
+      </form>
+    </div>
   );
 }
 

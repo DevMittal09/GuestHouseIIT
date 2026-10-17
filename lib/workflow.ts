@@ -13,6 +13,7 @@ import {
 } from "./types";
 import { hodApproversFor, unitsGovernedBy, type Unit } from "./units";
 import {
+  approverNotApplicable,
   BUILT_IN_STAGE_APPROVERS,
   canResolveApprover,
   decidesStage,
@@ -182,21 +183,43 @@ function requestFacts(role: Role, service: ServiceType, context: RoutingContext)
 }
 
 /**
- * Whether anybody can decide this stage - and so whether it stays in the
- * route at all.
+ * Why this stage is dropped from the route, or null when it stays.
  *
- * With a directory, the stage's own approver rule is resolved and counted.
- * Without one, only an HOD stage is judged, from `hasHodApprover`: that is
- * precisely what the hardcoded pipeline did, and a caller that cannot count
- * must not start dropping stages on a guess.
+ * Three answers, not two, because the booking's log has to say which:
+ *
+ * - **`null`** - the stage stays.
+ * - **a reason** - the stage **cannot apply** to this requester at all: a
+ *   student with no hostel has no Assistant Warden (17 Oct 2026). Judged from
+ *   the requester's own account, so a caller with no directory reaches the
+ *   same answer as `createBooking`, and the reason is the one the log prints.
+ * - **`{ reason: null }`** - the stage applies, but nobody is appointed to
+ *   decide it. With a directory the approver rule is resolved and counted;
+ *   without one, only an HOD stage is judged, from `hasHodApprover`, which is
+ *   precisely what the hardcoded pipeline did. A caller that cannot count
+ *   must not start dropping stages on a guess.
  */
-function stageIsStaffed(stage: ApprovalStage, context: RoutingContext): boolean {
+function stageDropped(
+  stage: ApprovalStage,
+  context: RoutingContext
+): Pick<DroppedStage, "reason"> | null {
   const { directory, requester } = context;
-  if (directory && requester && canResolveApprover(stage.approver, directory)) {
-    return stageApproverIds(stage.approver, requester, directory).length > 0;
+  if (requester) {
+    const reason = approverNotApplicable(stage.approver, requester);
+    if (reason) return { reason };
   }
-  if (stage.approver.kind === "hod") return Boolean(context.hasHodApprover);
-  return true;
+  if (directory && requester && canResolveApprover(stage.approver, directory)) {
+    return stageApproverIds(stage.approver, requester, directory).length > 0
+      ? null
+      : { reason: null };
+  }
+  if (stage.approver.kind === "hod" && !context.hasHodApprover) {
+    return { reason: null };
+  }
+  return null;
+}
+
+function stageIsStaffed(stage: ApprovalStage, context: RoutingContext): boolean {
+  return stageDropped(stage, context) === null;
 }
 
 /**
@@ -268,11 +291,31 @@ export function skippedStages(
   service: ServiceType = "room",
   context: RoutingContext = {}
 ): ApprovalStage[] {
+  return droppedStages(role, service, context).map((dropped) => dropped.stage);
+}
+
+/**
+ * One dropped stage, with why - what {@link skippedStages} leaves out.
+ *
+ * `reason` is set only where the stage **cannot apply** to this requester (a
+ * student with no hostel has no Assistant Warden); it is null where the stage
+ * applies but nobody is appointed to decide it. `createBooking` words the
+ * submission log from this, so a day scholar's request does not read as a
+ * console somebody forgot to fill in.
+ */
+export type DroppedStage = { stage: ApprovalStage; reason: string | null };
+
+export function droppedStages(
+  role: Role,
+  service: ServiceType = "room",
+  context: RoutingContext = {}
+): DroppedStage[] {
   if (!BOOKABLE_ROLES.includes(role)) return [];
   const rules = context.rules ?? DEFAULT_APPROVAL_RULES;
-  return stagesFor(requestFacts(role, service, context), rules).filter(
-    (stage) => !stageIsStaffed(stage, context)
-  );
+  return stagesFor(requestFacts(role, service, context), rules).flatMap((stage) => {
+    const dropped = stageDropped(stage, context);
+    return dropped ? [{ stage, reason: dropped.reason }] : [];
+  });
 }
 
 /** Where a fresh booking enters the pipeline: the first stage of its route. */

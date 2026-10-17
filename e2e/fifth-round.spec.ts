@@ -3,11 +3,11 @@ import {
   ACCOUNTS,
   fillGuest,
   localDate,
-  REFERENCE,
   rowFor,
   setTime,
   signIn,
   soonCheckIn,
+  submittedReference,
 } from "./helpers";
 
 /**
@@ -50,9 +50,7 @@ async function facultyStayStartingNow(page: Page): Promise<string> {
   await page.locator('[name="purpose_of_visit"]').fill("Family visit");
   await fillGuest(page, 0, 0, { name: "Meera Sharma", age: "60", gender: "female", relationship: "Mother" });
   await page.getByRole("button", { name: "Submit booking request" }).click();
-  const toast = page.getByText(REFERENCE).first();
-  await expect(toast).toBeVisible({ timeout: 30_000 });
-  const reference = (await toast.innerText()).match(REFERENCE)![0];
+  const reference = await submittedReference(page);
   await page.waitForURL("**/dashboard", { timeout: 30_000 });
 
   // The manager allocates the first room that is simply free - not one inside
@@ -106,9 +104,7 @@ test("a student's father is filled in on request, an infant gets an infant card,
   await fillGuest(page, 0, 1, { name: "Diya Menon", age: "2", gender: "female", relationship: "Niece" });
 
   await page.getByRole("button", { name: "Submit booking request" }).click();
-  const toast = page.getByText(REFERENCE).first();
-  await expect(toast).toBeVisible({ timeout: 30_000 });
-  const reference = (await toast.innerText()).match(REFERENCE)![0];
+  const reference = await submittedReference(page);
   await page.waitForURL("**/dashboard", { timeout: 30_000 });
 
   // The Assistant Warden sees the father checked against the record.
@@ -156,11 +152,15 @@ test("reception moves a stay's check-in, earlier and later", async ({ page }) =>
   await expect(page.getByRole("dialog").getByText(/^Now /).first()).not.toHaveText(moved);
 });
 
-test("the invoice bills the meals and the charge the desk adds, as they are typed", async ({ page }) => {
+test("a Bageshri invoice has no dining section, and bills the charge the desk adds as it is typed", async ({ page }) => {
   const reference = await facultyStayStartingNow(page);
 
   await signIn(page, ACCOUNTS.caretaker);
   await page.goto("/caretaker?gh=bageshri");
+  // Every desk list names the guest house with the rooms (16 Oct 2026): the
+  // desk works both houses from one console and an invoice is headed with one
+  // of them.
+  await expect(rowFor(page, reference)).toContainText("Bageshri");
   await rowFor(page, reference).getByRole("button", { name: /Mark as Occupied|Early check-in/ }).click();
   // A personal stay checks out through its invoice (7 Oct 2026), so that is
   // the one button on the row.
@@ -176,12 +176,18 @@ test("the invoice bills the meals and the charge the desk adds, as they are type
   await expect(invoice.getByText(/SAC 996311/)).toHaveCount(0);
   // One room was booked, so the room section prints one row and no blank one.
   await expect(invoice.locator("tbody tr").filter({ hasText: /^$/ })).toHaveCount(0);
+  /**
+   * **Bageshri has no kitchen, so the invoice has no dining section at all**
+   * (16 Oct 2026, the owner: "for bageshri meals should not come in
+   * invoice"). It used to print Breakfast, Lunch and Dinner at zero with a
+   * subtotal (C) and GST (D) of nothing, and a meal-count box the desk could
+   * type a charge into that the guest house does not sell. So the grand total
+   * is the rooms and their GST, and nothing else.
+   */
+  await expect(invoice.getByRole("columnheader", { name: "Dining Charges" })).toHaveCount(0);
+  await expect(invoice.getByLabel("Breakfast served")).toHaveCount(0);
+  await expect(invoice.getByText("Grand Total (A+B)")).toBeVisible();
   const start = await grandTotal(invoice);
-
-  // Two breakfasts the kitchen served: ₹80 each, GST included - the total
-  // follows without saving anything.
-  await invoice.getByLabel("Breakfast served").fill("2");
-  await expect.poll(() => grandTotal(invoice), { timeout: 15_000 }).toBe(start + 160);
 
   // A broken vase: no GST, printed under Other Charges with its comment.
   await invoice.getByRole("button", { name: "Add a charge" }).click();
@@ -189,14 +195,18 @@ test("the invoice bills the meals and the charge the desk adds, as they are type
   await invoice.getByLabel("Charged under").selectOption("other");
   await invoice.getByLabel("₹ each").fill("1500");
   await invoice.getByLabel("Comment (printed under the charge)").fill("Vase in the room broken on departure");
-  await expect.poll(() => grandTotal(invoice), { timeout: 15_000 }).toBe(start + 160 + 1500);
+  await expect.poll(() => grandTotal(invoice), { timeout: 15_000 }).toBe(start + 1500);
   await expect(invoice.getByText("Other Charges (no GST)")).toBeVisible();
+  // The letters follow the sections that print: rooms, their GST, and this.
+  await expect(invoice.getByText("Grand Total (A+B+C)")).toBeVisible();
+  // "Charged under" offers no dining section either - there is none to print.
+  await expect(invoice.getByLabel("Charged under").locator("option")).toHaveCount(2);
 
   await invoice.getByRole("button", { name: /Issue & print/ }).click();
   await page.getByRole("button", { name: "Issue & print", exact: true }).last().click();
   await expect(invoice.getByText(/Issued/)).toBeVisible({ timeout: 30_000 });
-  // The issued snapshot holds both.
-  expect(await grandTotal(invoice)).toBe(start + 160 + 1500);
+  // The issued snapshot holds the charge.
+  expect(await grandTotal(invoice)).toBe(start + 1500);
   await expect(invoice.getByText("Vase in the room broken on departure")).toBeVisible();
 
   /**

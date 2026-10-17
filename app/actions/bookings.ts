@@ -70,7 +70,7 @@ import {
   approvalStagesFor,
   asksOfficeApproval,
   initialStatusFor,
-  skippedStages,
+  droppedStages,
   isOfficeRole,
   nextStatusAfter,
   occupancyNotStartedError,
@@ -442,9 +442,19 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     // log says which - otherwise it looks as if an approval was skipped on
     // purpose. The HOD's keeps the wording it has had since Phase 4, because
     // it is the one the office reads most.
-    const skipped = skippedStages(requester.role, payload.service_type, routing);
-    const hodMissing = skipped.some((stage) => stage.approver.kind === "hod");
-    const otherSkipped = skipped.filter((stage) => stage.approver.kind !== "hod");
+    //
+    // A stage that cannot apply to this requester at all is worded
+    // differently (17 Oct 2026): a student with no hostel has no Assistant
+    // Warden, which is a fact about a day scholar's account and not a console
+    // nobody filled in.
+    const dropped = droppedStages(requester.role, payload.service_type, routing);
+    const hodMissing = dropped.some(
+      (d) => d.stage.approver.kind === "hod" && d.reason === null
+    );
+    const inapplicable = dropped.filter((d) => d.reason !== null);
+    const otherSkipped = dropped.filter(
+      (d) => d.reason === null && d.stage.approver.kind !== "hod"
+    );
     const submissionRemarks =
       [
         club
@@ -454,9 +464,12 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         hodMissing
           ? "Booking submitted. Nobody other than the person booking is set to give HOD approval for this unit in the console, so the HOD stage was skipped."
           : null,
+        ...inapplicable.map(
+          (d) => `The ${stageLabel(d.stage)} stage does not apply to this request: ${d.reason}.`
+        ),
         otherSkipped.length > 0
           ? `Nobody is set to decide ${otherSkipped
-              .map((stage) => stageLabel(stage))
+              .map((d) => stageLabel(d.stage))
               .join(" or ")}, so ${otherSkipped.length === 1 ? "that stage was" : "those stages were"} skipped.`
           : null,
       ]

@@ -33,6 +33,7 @@ Authentication** and pick the persona with one click (no password).
 | --- | --- | --- | --- | --- | --- | --- |
 | Anjali Menon (Malhar) | Student | `112201001` | `Anjali@2026` | `112201001@smail.iitpkd.ac.in` | `student-anjali` | Student → Malhar warden; demo booking 1 |
 | Rahul Nair (Saveri) | Student | `142202014` | `Rahul@2026` | `142202014@smail.iitpkd.ac.in` | `student-rahul` | Another hostel; no parents on record → guardian |
+| Devika Iyer (day scholar - no hostel) | Student | `122203099` | `Devika@2026` | `122203099@smail.iitpkd.ac.in` | `student-day-scholar` | **`hostel_name` is NULL**, so there is no Assistant Warden stage: the request goes straight to the GH Manager and the log says why (17 Oct 2026). No academic record either, so the form asks for the parents' names rather than locking them |
 | Dr. Priya Sharma | Employee (faculty, CSE) | `priya` | `Priya@2026` | `priya@iitpkd.ac.in` | `employee-priya` | Official → CSE HOD; personal; meals only. Shown as the sample on the sign-in card |
 | Dr. Arun Prasad | Employee (faculty, CSE) — **Faculty Advisor** of the Cultural Affairs Council and Petrichor | `arun.prasad` | `Arun@2026` | `arun.prasad@iitpkd.ac.in` | `faculty-arun` | "Booking as: Faculty Advisor — …", straight to the manager |
 | Prof. R. Venkatesh | Employee (faculty) — **HOD, CSE** by appointment | `hod.cse` | `HodCse@2026` | `hod.cse@iitpkd.ac.in` | `hod-cse` | HOD Queue (`/hod`) |

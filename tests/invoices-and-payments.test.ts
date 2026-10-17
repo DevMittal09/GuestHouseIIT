@@ -79,8 +79,11 @@ const oneRoomStay = booking(
 describe("the invoice's layout", () => {
   const doc = buildInvoiceDocument(oneRoomStay, { tariffs: TARIFFS, rules: RULES, capacity: CAP });
 
-  it("is version 4", () => {
-    expect(doc.version).toBe(4);
+  // 5 since 16 Oct 2026: version 4's figures and labels, with no dining
+  // section where the guest house has no kitchen. This stay's does serve
+  // meals, so everything below is as version 4 printed it.
+  it("is version 5", () => {
+    expect(doc.version).toBe(5);
   });
 
   /**

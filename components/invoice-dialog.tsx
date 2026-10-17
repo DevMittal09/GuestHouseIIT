@@ -29,6 +29,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   extraChargeFormRows,
+  extraChargeSectionsFor,
   formatINR,
   gstBreakdownLines,
   GST_INCLUDED_NOTE,
@@ -36,7 +37,9 @@ import {
   settlesAtCheckOut,
   vacateBlocker,
   INVOICE_STATUS_LABELS,
+  INVOICE_TITLE,
   invoiceFacts,
+  invoicePrintsDining,
   invoiceTable,
   MAX_EXTRA_CHARGES,
   PAYMENT_MODE_LABELS,
@@ -587,13 +590,21 @@ function ExtraChargesEditor({
   onRemove: (key: string) => void;
 }) {
   const dining = panel.kind === "dining";
-  const sectionLabels: [ExtraChargeSection, string][] = [
+  // The sections the invoice actually prints (`extraChargeSectionsFor`), so
+  // the desk is never offered one the charge could not appear in: a dining
+  // invoice has no room section, and a stay at a guest house with no kitchen
+  // has no dining section (16 Oct 2026).
+  const labels: Record<ExtraChargeSection, string> = {
     // The letters of the subtotals as the invoice prints them (version 3):
-    // A stay's dining subtotal is (C), after the rooms' (A) and their GST (B).
-    ...(dining ? [] : ([["room", `Room charges (A) - GST ${panel.gstRoomPercent}%`]] as [ExtraChargeSection, string][])),
-    ["dining", `Dining charges (${dining ? "A" : "C"}) - GST ${panel.gstMealPercent}%`],
-    ["other", "Other - no GST (damage, loss)"],
-  ];
+    // a stay's dining subtotal is (C), after the rooms' (A) and their GST (B).
+    room: `Room charges (A) - GST ${panel.gstRoomPercent}%`,
+    dining: `Dining charges (${dining ? "A" : "C"}) - GST ${panel.gstMealPercent}%`,
+    other: "Other - no GST (damage, loss)",
+  };
+  const sectionLabels: [ExtraChargeSection, string][] = extraChargeSectionsFor({
+    kind: panel.kind,
+    servesMeals: panel.servesMeals,
+  }).map((section) => [section, labels[section]]);
   return (
     <section className="space-y-3 rounded-lg border p-3">
       <div>
@@ -710,6 +721,13 @@ function InvoicePreview({
   const figure = pricing ? "opacity-60 transition-opacity" : "transition-opacity";
   return (
     <div className="space-y-3 text-sm">
+      {/* The heading the PDF draws, so the desk can see which guest house this
+          invoice is headed with before issuing it (16 Oct 2026). The dialog
+          opened on the facts grid, which names everything about the bill
+          except the house it comes from. */}
+      <p className="text-center text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        {INVOICE_TITLE(doc.guest_house)}
+      </p>
       <dl className="grid gap-x-4 gap-y-1 rounded-lg border p-3 sm:grid-cols-2">
         {facts.map(([k, v]) => (
           <div key={k} className="min-w-0">
@@ -763,7 +781,7 @@ function InvoicePreview({
           {doc.prices_include_gst && <li>{GST_INCLUDED_NOTE}</li>}
         </ul>
       )}
-      {counts && (
+      {counts && invoicePrintsDining(doc) && (
         <p className="text-xs text-muted-foreground">
           Meal counts are covers - meals ticked × guests eating (infants excluded). Amounts and the grand total
           update as you type{pricing ? " - updating…" : "."}

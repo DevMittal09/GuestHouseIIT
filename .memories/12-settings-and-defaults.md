@@ -196,7 +196,11 @@ place the narrowing happens, so adding it later is local.
 
 Effective-dated; the most specific row in force wins (guest house > requester
 role > booking type > room type, then the latest). A rate in force cannot be
-edited or deleted — a new price is a new row. Seeded from the tariff sheet:
+edited or deleted — a new price is a new row, and **that row must start later
+than today**: the console seeds the date with tomorrow, puts `min` on the box
+and disables Add with the reason on screen (`tariffStartError`,
+16 Oct 2026 — the owner: "only for future booking GHM can change the rates").
+`createTariffAction` applies the same rule. Seeded from the tariff sheet:
 
 | Item | Rate | Scope |
 | --- | --- | --- |

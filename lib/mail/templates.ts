@@ -3,6 +3,7 @@ import {
   formatINR,
   formatInvoiceDate,
   invoiceKind,
+  invoicePrintsDining,
   type InvoiceDocument,
 } from "@/lib/invoice";
 import { formatDateTime, formatDate } from "@/lib/format";
@@ -779,7 +780,11 @@ export function invoiceToAccounts(booking: BookingWithDetails, invoice: InvoiceD
             : ([
                 ["Primary guest", invoice.primary_guest],
                 ["Room charges", formatINR(invoice.subtotal_rooms)],
-                ["Dining charges", formatINR(invoice.subtotal_dining)],
+                // No kitchen, no dining row - the invoice itself prints none
+                // (16 Oct 2026, `invoicePrintsDining`).
+                ...(invoicePrintsDining(invoice)
+                  ? ([["Dining charges", formatINR(invoice.subtotal_dining)]] as [string, string][])
+                  : []),
               ] as [string, string][])),
           // The desk's additional charges with no GST (25 Sep 2026); those
           // charged under rooms or dining are inside the figures above.

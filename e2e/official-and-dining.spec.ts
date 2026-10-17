@@ -9,6 +9,7 @@ import {
   rowFor,
   settleDebitHead,
   signIn,
+  submittedReference,
 } from "./helpers";
 
 /**
@@ -45,9 +46,7 @@ test("a faculty official stay waits for the HOD before the manager", async ({ pa
 
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
-  const toast = page.getByText(REFERENCE).first();
-  await expect(toast).toBeVisible({ timeout: 30_000 });
-  const reference = (await toast.innerText()).match(REFERENCE)![0];
+  const reference = await submittedReference(page);
   await page.waitForURL("**/dashboard", { timeout: 30_000 });
 
   // It is with the HOD, and the manager cannot see it yet.
@@ -138,9 +137,7 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
 
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
-  const toast = page.getByText(REFERENCE).first();
-  await expect(toast).toBeVisible({ timeout: 30_000 });
-  const reference = (await toast.innerText()).match(REFERENCE)![0];
+  const reference = await submittedReference(page);
 
   // Straight to the manager, who approves it without allocating anything.
   await signIn(page, ACCOUNTS.manager);

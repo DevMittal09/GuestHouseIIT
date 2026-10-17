@@ -1547,6 +1547,14 @@ template was in `public/`. The header images are `word/media/image1.jpg` and
   a back-dated rate is allowed (the console warns) because the first extra-bed
   rate has to cover stays already in progress — invoices already issued keep
   their rates regardless.
+  > **Superseded, 16 Oct 2026 (the back-dating half only):** a new rate must
+  > start **later than today** (`tariffStartError`), and the warning is a
+  > refusal. The owner: "only for future booking GHM can change the rates...
+  > currently even past and todays rate apparently we can change rates, which
+  > is not right." The first extra-bed rate is covered by a repair script or
+  > by `createTariff` in the store, neither of which applies the rule. The
+  > *most specific wins* half, and the immutability of a row in force, are
+  > unchanged.
 - **No extra-bed rate is seeded** — the tariff sheet has none. A stay with an
   extra bed cannot be invoiced until the office adds one; the console and the
   invoice say so. Nothing is priced at ₹0 by omission.
@@ -3392,6 +3400,10 @@ a price means adding a row with the same scope from a later date. That is four
 dropdowns to repeat by hand, and repeating them by hand is how a new rate ends
 up applying to something slightly different from the old one. The button
 copies the scope and leaves the rate blank, dated today.
+
+> **Superseded, 16 Oct 2026:** it is dated **tomorrow** — the earliest a new
+> rate may start (`tariffStartError`). Everything else about the button is
+> unchanged.
 
 ### Availability: a count, not a simplified chart
 
@@ -5823,3 +5835,332 @@ is in `AGENTS.md` and
 **`SIGN_IN_PHOTOS.bookRoom` and `.bookMeal` are kept**, unplaced. Both
 photographs are still in the Gallery, so nothing is orphaned, and putting
 either back is one prop.
+
+
+---
+
+## 16 October 2026 — the owner's thirteenth list: future rates, the guest house named, no dining at Bageshri
+
+Three items, asked at the end of 15 October:
+
+> - Only for future booking GHM can change the rates. Like in the GHM settings
+>   they can change rates of rooms right, as a admin role. FOr that only future
+>   bookings they can change rates, currently even past and todays rate
+>   apparently we can change rates, which is not right.
+> - Add the guest house name while differentiating the invoices in the
+>   dashboard where we are showing the previous bookings for GHM/GHC.
+> - For bageshri meals should not come in invoice.
+
+None of the three was built. All three are now.
+
+### 1. A new rate starts in the future — `tariffStartError`
+
+**Decision.** `effective_from` on a **new** tariff row must be **later than
+today**: tomorrow at the earliest. `tariffStartError(effectiveFrom, today)`
+(`lib/tariffs.ts`) is the one rule, read by `createTariffAction` on the server
+and by the console form, which seeds the date with **tomorrow**, puts
+`min=tomorrow` on the box and **disables Add with the reason on screen** when
+the date is not in the future.
+
+**What it replaces.** The form accepted any date, defaulted to **today**, and
+when the date was earlier it printed a note *explaining what back-dating would
+do*: "A back-dated rate applies to invoices issued from now on for stays on
+those dates." That is a rule stated instead of enforced - exactly what the
+9 Oct 2026 rule forbids - and the figure it moved was a price the requester
+had already been quoted on the booking form, approved at, and in some cases
+slept at. The note is gone; the refusal is in its place.
+
+**Why the action and not the store.** `tariffLockedError` is checked in the
+action *and* in the mock store, with a Postgres trigger (`tariffs_guard`,
+migration 19) behind it, because that rule protects **history**: an in-force
+row is part of how past stays were priced and must be immutable at every
+layer. This rule is a **policy about the future** - who may price what, and
+when - and policy lives where every other one does, in the server action that
+re-checks authorisation. No migration, and `createTariff` in either store
+still takes any date, which is what the repair scripts in
+`supabase/repairs/` need.
+
+**What this does *not* do, deliberately.** A rate that starts tomorrow still
+prices **tomorrow's night of a stay booked last week**: `resolveTariff` is
+per night, and the invoice charges each night at the rate in force on it.
+Freezing a figure at the moment of booking would mean snapshotting the rates
+onto the booking, which is a different and much larger feature - and would
+mean a stay could be invoiced at a price no longer in any tariff row. The
+owner's words describe the date control ("even past and todays rate... we can
+change"), so the date control is what was fixed.
+[03-roadmap.md](03-roadmap.md) §2 carries the larger reading as a question
+for the office.
+
+### 2. The guest house is named wherever the desk picks a booking to bill
+
+**Decision.** Every desk list names the guest house beside the rooms:
+`StaysTable` and `CheckoutsToday` print it under the room numbers (and the
+column is now **Guest house & rooms**), `AwaitingPaymentTable` leads its
+second line with it - `Bageshri · 201, 202`, or `Hamsanandi · Meals only ·
+4 people` for a dining booking, which has no room number at all. The invoice
+dialog's preview opens on **the heading the PDF draws**,
+`INVOICE_TITLE(doc.guest_house)` - "INVOICE - IIT Palakkad Bageshri Guest
+House".
+
+**Why a line and not a column.** The house rule of 11 Oct 2026: a wide table
+is measured against its container before a column is added, and the Status
+column was dropped from the approver queues because it pushed the action
+buttons off a 1440px page. These tables already carry eight columns and two
+or three buttons. A line under the rooms costs no width.
+
+**Why it was missing and why it matters.** The desk works both houses from one
+console, the room numbers only *nearly* tell them apart (Bageshri is 201-307,
+Hamsanandi A4-D4), **Awaiting payment holds bills from both houses for months
+with no date window**, and the dialog the desk issues from named everything
+about the bill except the guest house it comes from.
+
+### 3. A guest house with no kitchen prints no dining section — invoice `version: 5`
+
+**Decision.** `InvoiceDocument` carries **`serves_meals`**, and
+`invoicePrintsDining(doc)` (`doc.serves_meals !== false`) decides whether the
+**Dining Charges** section is printed at all. At Bageshri it is not: no
+Breakfast / Lunch / Dinner rows, no subtotal, no GST row, no meal-count boxes
+in the dialog, no "Dining charges" option under *Charged under*, and no
+"Dining charges" row in the mail to Accounts. The grand total letters are
+**A, B, Grand Total (A+B)**.
+
+`buildInvoiceDocument` **zeroes the meal counts** where there is no kitchen,
+whatever arrived, and leaves out any charge filed under dining - overwritten,
+not refused, the same rule as a personal booking's debitable head - while
+`parseExtraCharges` *names* the problem for a charge the desk types, because
+that one is a typed input. `extraChargeSectionsFor(shape)` is the one list of
+sections, read by the dialog and the parser, so the desk is never offered a
+section the invoice does not print.
+
+**Why a new version rather than a fix.** Sections and labels are computed at
+print time from the snapshot, so changing them changes every **reprint**. A
+snapshot issued before today has no `serves_meals`, reads as printing dining,
+and reprints exactly as it was handed over - three zero rows, (C), (D) and
+all. That is the rule every invoice version since 25 Sep 2026 turns on.
+
+**Why this is the same reasoning as the Meals column.** `StaysTable` drops its
+Meals column and `BookingDetails` its per-day table at a guest house with no
+kitchen (7 Oct 2026): a figure of nothing reads as a refusal rather than as a
+question never asked. The invoice was the last place still printing the
+question - and worse, printing a box the desk could type a charge into for
+food the guest house does not sell.
+
+**A guest house that serves meals is untouched**, including a stay there that
+ordered none: the meals were offered and declined, which is a fact about the
+stay. Only *no kitchen* removes the section.
+
+## 17 October 2026 — the owner's fourteenth list: the tariff beside the form, meals on a Yes, two doors, three sections, and the day scholar
+
+Nine items ([01-background.md](01-background.md)). Six are about the booking
+page and My Bookings; one is an approval route. Each was read against the code
+first, which is why item 8 is written up as a *correction of a reason* rather
+than a new rule.
+
+### A tariff category is the pair the requester decides, not a field on the booking
+
+**Decision.** The categories and their rates live in a panel on the
+**right-hand side** of the booking page, under the requester's own details,
+and **one of them is chosen**. A category is one (guest house, booking type)
+pair the requester is eligible for; choosing it writes `guest_house_id` and
+`booking_type`. `lib/tariff-categories.ts` builds the list, labels it, and
+hands each one the lines `tariffPreviews` already resolved; the rates card
+that stood in the middle of the form is **deleted**.
+
+**Why not a named category stored on the booking.** The owner's examples -
+"₹1,000 for parents and ₹2,000 for official guests" - are the office's own
+tariff sheet, and the sheet already expresses them **as scope**: its ₹4,000
+Hamsanandi row is `requester_role: official`, its Bageshri row is per guest
+house. `resolveTariff` takes the most specific row in force on the night it
+charges for, and the invoice prices from the same function. A category
+*stored on the booking* would therefore be a **second source of truth for
+money** unless `tariffs` carried the same column too - a migration on both
+tables, a new dimension in `resolveTariff`, and a way for the quoted figure
+and the charged figure to disagree. The thing a requester can honestly choose
+is the pair the rate is already read from, so that is what the panel offers,
+and the selection is real: it changes what will be charged.
+[03-roadmap.md](03-roadmap.md) §2j carries the named version as a question for
+the office.
+
+**Why `BookingForm` lays out the two columns now.** They were the page's grid
+from 30 Sep 2026, with the requester's record in the right-hand four. A panel
+that only *displays* can be rendered by the page; one that **asks** cannot -
+it has to share the form's state. So `BookingForm` lays out the grid and takes
+the server-rendered record as `aside`.
+
+The `<form>` **element** is the left column, not the grid: nothing in either
+panel is a registered field (the tariff radios are controlled and write
+through `setValue`), so there is nothing to gain by wrapping them, and
+`numbered-sections` stays exactly where it was - on the form, counting the
+questions. Putting the grid on the form instead would have numbered the
+Requester details card as step 1.
+
+**Cost.** On a phone the record *and* the tariff now come before the first
+question, where only the record did. That is the same ordering the record has
+always had and the panel is the first thing the owner asked to be visible, so
+it was accepted rather than designed around.
+
+> **Superseded (17 Oct 2026):** the entry "The rates on the form come from the
+> invoice's own function" (7 Oct 2026) - the *resolution* is unchanged and
+> still `tariffPreviews` → `resolveTariff`, but the table is no longer a
+> numbered section of the form. It is the panel's, and the panel asks which
+> category applies.
+
+### Guests before meals, because the meal section asks about the guests
+
+**Decision.** **Guests, room by room** stands above the meal card.
+
+**Why.** The kitchen's head count on a stay *is* the bed-occupying guests
+entered above (`mealHeadCount`), and the veg / non-veg counts have to add up
+to it (`dietCountsError`). The old order asked for a split of a number the
+requester had not given yet, and the box that reports it could only say
+"0 of 0".
+
+### Meals are a Yes or No, and No submits nothing
+
+**Decision.** A stay at a guest house with a kitchen asks **"Do you require
+meals?"**. The grid, the preferences and the notice are rendered only on Yes.
+The default is **No**.
+
+**Why No by default.** It is what the form already did - a stay passes
+`NO_MEALS`, because meals on a stay are an extra the requester opts into, and
+defaulting them on would put dining charges on every stay at Hamsanandi
+without anyone asking. What was wrong was not the default but the silence:
+the form opened on an empty grid headed "Meals (optional)" that a requester
+had to read and ignore.
+
+**Why one gate.** `mealsRequested` feeds `mealPlan`, and everything downstream
+is derived from `mealPlan` already - the service type, the diet split, the
+summary, the payload. So "No" is not a special case anywhere: the service type
+stays `room`, no split is sent, no meal rule can fire, and a hidden grid
+cannot submit a meal. The ticks stay in `mealChoices` while it is off, so Yes
+restores what was chosen rather than making the requester fill the grid in
+again. A **dining booking is never asked**, because the meals are the booking.
+
+### The caretaker sentence is the one thing the form says about meals it cannot do
+
+**Decision.** `MEAL_CHANGE_NOTICE` - "In any case talk with caretaker for any
+change in meal booking", the owner's words exactly - at the foot of the meal
+section, on both doors, and nowhere else.
+
+**Why this does not break the rule about notices on forms.** The rule of
+9 Oct 2026 is that a rule the form *enforces* belongs in the Guidelines, in
+the error when it fires, or in the control itself; the rule of 11 Oct 2026 is
+that a **house rule** belongs in the Guidelines and the mail. This is
+neither. It is what to do about something **the portal does not offer at
+all**: a requester cannot change a meal order after submitting, and the only
+route is the desk. A form that leaves that unsaid sends people to look for a
+button that is not there.
+
+### Two doors in the nav, so the meal door is a route
+
+**Decision.** **Room Booking** (`/book`) and **Meal Booking**
+(`/book/meals`) replace **New Booking**. One page behind both
+(`components/booking-request-page.tsx`); `?service=meals_only` still works.
+Meal Booking appears only where the account could submit one.
+
+**Why a route rather than `?service=meals_only`.** `usePathname()` does not
+see a query string, so two nav items on `/book` would both light up, or the
+wrong one would. A nav that says you are somewhere you are not is worse than
+one entry fewer. `/book` is matched **exactly** in the nav, because the meal
+door is nested under it. It is also an address a requester can keep.
+
+**Why `serviceTypesFor` and not a role list.** The My Bookings tile has asked
+that question since 26 Sep 2026 - the role, plus a kitchen among the guest
+houses the role's form allows. Writing the roles out again in the layout is
+how the nav and the tile would start disagreeing; a student would be offered a
+door the server refuses.
+
+### My Bookings: status decides the section, dates decide within it
+
+**Decision.** Three sections - **Current**, **Upcoming**, **Previous** -
+built by `lib/my-bookings.ts`. `OCCUPIED` is always current; a finished
+request (rejected, cancelled, vacated, missed) is always previous; anything
+still open is placed by `stayPhase`. Previous draws five rows, newest first by
+`updated_at`, with **Show all N** and **All booking history** beside the
+heading, and its rows are compact - one Stay column, no Rooms.
+
+**Why status first.** A date alone files a rejected request for next month
+under "upcoming", where there is nothing upcoming about it, and moves a guest
+who is still in the building out of "current" the moment their booked
+check-out passes - which is exactly the case the desk calls *Awaiting
+check-out*. An open request whose dates have passed is previous: nobody can
+approve it now, and the nightly sweep will mark it Missed.
+
+**Why `stayPhase` and not a second reading of the dates.** It is the function
+the manager's and the caretaker's consoles group stays by. Two readings of
+"current" would disagree the first time somebody touched one of them, and the
+requester would be told something different from the desk.
+
+**Why five, and why nothing is hidden.** The owner asked for fewer bookings,
+not for fewer records. The figure beside the heading is the whole section, the
+button shows the rest in place, and the archive - with its filters, its tiles
+and both exports - is one link away. A count that moved with a "Show all"
+button would be no count at all.
+
+### A student with no hostel has no Assistant Warden — and the log now says so
+
+**Decision.** `hasHostel()` reads NULL and a blank string alike as "no
+hostel"; `approverNotApplicable()` says why a `warden` stage cannot apply to
+such a requester; `stageDropped` answers in three states and `droppedStages`
+carries the reason, which `createBooking` writes into the submission log:
+*"The Pending Assistant Warden Review stage does not apply to this request: no
+hostel is recorded on the requester's account."* `decidesStage` refuses the
+stage before it looks at a directory.
+
+**Why this was not already right, although the request did reach the desk.**
+The generalised rule of 12 Oct 2026 drops a stage nobody can decide, and no
+warden matches a null hostel, so `initialStatusFor` already answered
+`PENDING_GH_MANAGER`. Two things were wrong underneath that:
+
+1. **The reason was false.** The log said nobody was *set* to decide the
+   stage - a day scholar reported as a console somebody had forgotten to fill
+   in. A warden the office has not appointed and a student who has no warden
+   are different facts, and only one of them is somebody's job to fix.
+2. **It only held where the caller had every profile.** `canResolveApprover`
+   needs `profiles` to count a warden stage; `routeFor` with units but no
+   profiles - the mail module, `chainApprovers` for the Copy-to line -
+   assumes a stage it cannot count is staffed, which is what the hardcoded
+   pipeline did. So those callers kept the warden stage in the chain and
+   **would have copied a warden who does not exist** on every mail about the
+   request.
+
+A hostel is a fact about the requester's **own account**, so it is answered
+from the requester and needs no directory at all. That is the whole shape of
+the fix.
+
+**Why only the `warden` kind.** Every other kind of approver is relative to a
+unit or names somebody outright, where "nobody is appointed" is the honest
+reading and the stage is skipped with that reason. A warden is the one
+approver whose very existence depends on a field on the requester.
+
+**Why the exception cannot widen.** It is attached to the approver kind, and
+the only default route with a warden stage is the student's. Faculty, staff,
+offices, clubs and the IAR cells have no hostel either - if the rule were
+written against the *role* it would have sent half the institute straight to
+the desk. A test asserts each of those routes is unchanged.
+
+**The database already agreed.** `profiles.hostel_name` is nullable,
+migration 16 normalizes a blank to NULL before adding `profiles_hostel_fk`,
+the console's Hostel dropdown offers **None** and the action turns its "" into
+null, and the (unapplied, service-role-irrelevant) warden RLS policy compares
+`r.hostel_name = me.hostel_name`, which a NULL makes neither true nor
+readable. Nothing needed a migration.
+
+### The day scholar is a persona, not a fixture
+
+**Decision.** `student-day-scholar` - **Devika Iyer (day scholar - no
+hostel)** - is seeded in `lib/store/seed.ts`, `supabase/seed.sql` and the
+dummy directory, like every other demo account, and its login is in
+[05-credentials-and-security.md](05-credentials-and-security.md).
+
+**Why a persona and not a row inserted by a test.** The mock store self-heals
+missing seeded profiles into an existing `.local-db.json`, the e2e suite
+starts from an empty database and signs in through the form, and the office
+demonstrates the portal from these accounts. A fixture that only existed
+inside one test could not be shown to anybody, and a row inserted by hand
+would have to be re-inserted after every reset. Its name says what it is for,
+in every queue and list it can appear in.
+
+**No academic record behind it**, deliberately: the booking form then asks for
+the parents' names instead of locking them, which is also the path a student
+the office has not imported takes.

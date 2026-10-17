@@ -6,9 +6,17 @@ import { BrandBlock } from "@/components/site/brand";
 import { NavBar, type NavItem } from "@/components/site/site-nav";
 import { logout } from "@/app/actions/auth";
 import { getCurrentUser } from "@/lib/auth";
-import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
+import {
+  homeForRole,
+  MEAL_BOOKING_PATH,
+  ROOM_BOOKING_PATH,
+  SIGN_IN_PATH,
+} from "@/lib/routes";
 import { GUEST_HOUSE_CONTACT, INSTITUTE_WEBSITE } from "@/lib/site";
-import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
+import { REQUESTER_ROLES, ROLE_LABELS, type Role } from "@/lib/types";
+import { serviceTypesFor } from "@/lib/booking-types";
+import { getEffectiveFormConfig } from "@/lib/form-config-server";
+import { getStore } from "@/lib/store";
 import { isRequesterHistory } from "@/lib/workflow";
 import { configuredStageName, STAGE_QUEUES, type StageStatus } from "@/lib/approval-routes";
 import { getApprovalRules, stageQueuesFor } from "@/lib/approval-routes-server";
@@ -45,6 +53,11 @@ export default async function PortalLayout({ children }: { children: React.React
   // queue keep their link whatever the routes say, or signing in would
   // bounce them to a page the nav does not offer.
   const [queues, approvalRules] = await Promise.all([stageQueuesFor(user), getApprovalRules()]);
+  // Whether this account may book meals without a room: its role, and a
+  // kitchen among the guest houses its form offers. Read here rather than
+  // assumed, because "Serves meals" is a tick in the developer console and
+  // the Form Builder decides which guest houses a role may book at all.
+  const canBookMeals = canBook && (await offersMealBooking(user));
   const stageQueues = new Set<StageStatus>(queues);
   if (user.role === "warden") stageQueues.add("PENDING_WARDEN");
   if (user.role === "iar_cell") stageQueues.add("PENDING_IAR");
@@ -60,7 +73,13 @@ export default async function PortalLayout({ children }: { children: React.React
 
   const nav: NavItem[] = [
     ...(hasBookings ? [{ href: "/dashboard", label: "My Bookings" }] : []),
-    ...(canBook ? [{ href: "/book", label: "New Booking" }] : []),
+    // **Two doors, not one** (17 Oct 2026, the owner): "New Booking" always
+    // opened on a room, so booking meals meant going to My Bookings and
+    // finding the tile. Meal Booking is offered only where this account could
+    // actually submit one - the same rule the My Bookings tile uses
+    // (`serviceTypesFor`), so the nav cannot offer a form the server refuses.
+    ...(canBook ? [{ href: ROOM_BOOKING_PATH, label: "Room Booking" }] : []),
+    ...(canBook && canBookMeals ? [{ href: MEAL_BOOKING_PATH, label: "Meal Booking" }] : []),
     ...queueLinks,
     ...(user.role === "gh_manager"
       ? [
@@ -103,7 +122,15 @@ export default async function PortalLayout({ children }: { children: React.React
           </div>
         </div>
       </header>
-      <NavBar items={nav} label="Portal" exact={[]} tone="service" className="sticky top-0 z-40" />
+      {/* `/book` is matched exactly: the meal door is `/book/meals`, and
+          without this the Room Booking item would light up on it too. */}
+      <NavBar
+        items={nav}
+        label="Portal"
+        exact={[ROOM_BOOKING_PATH]}
+        tone="service"
+        className="sticky top-0 z-40"
+      />
       {/* A warm off-white working canvas: cards, tables, inputs and dialogs
           are white on it, so structure comes from tint and hairline, not
           shadow. */}
@@ -155,4 +182,28 @@ export default async function PortalLayout({ children }: { children: React.React
       />
     </div>
   );
+}
+
+/**
+ * Whether this account is offered the Meal Booking door: a role that may book
+ * meals without a room (`serviceTypesFor`), and a guest house with a kitchen
+ * among the ones its form allows.
+ *
+ * The same two questions My Bookings asks before drawing its meal tile. It
+ * degrades to "no door" if the store cannot be read - a nav entry that leads
+ * to a form the server would refuse is worse than one missing entry.
+ */
+async function offersMealBooking(user: { id: string; role: Role }): Promise<boolean> {
+  try {
+    const [config, guestHouses] = await Promise.all([
+      getEffectiveFormConfig(user.role),
+      getStore().listGuestHouses(),
+    ]);
+    const kitchens = guestHouses.filter(
+      (g) => g.serves_meals && config.allowed_guest_house_ids.includes(g.id)
+    );
+    return serviceTypesFor(user.role, kitchens.length > 0).includes("meals_only");
+  } catch {
+    return false;
+  }
 }

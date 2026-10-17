@@ -133,13 +133,21 @@ Everything a requester can do with a booking they own (or raised for a club):
   **No Aadhaar and no ID document** is demanded for a guest the record named.
   ("Fill in from saved details" and "Yourself" were withdrawn for every role
   on 7 Oct.)
-- **Route:** Assistant Warden of the hostel on their profile → GH Manager.
+- **Route:** Assistant Warden of the hostel on their profile → GH Manager -
+  **unless their profile names no hostel**, in which case there is no warden
+  stage at all and the request enters at the **GH Manager** (17 Oct 2026,
+  `hasHostel` / `approverNotApplicable`). A day scholar is a real kind of
+  student, so a null hostel is a condition and not a broken record; the
+  booking's own log says the stage does not apply and why. **NULL and a blank
+  string read alike.** Nobody can act on such a request as a warden either,
+  with or without the directory loaded.
 - **Special rules:** relationship dropdown with the parent rule (siblings and
   grandparents only alongside Mother / Father / Guardian) and one-of-each
   (one Mother, one Father…); the banner "Double shared rooms will get first
   preference"; booking window 6 months (1 until 14 Oct 2026); at most
   14 nights.
-- **Menu:** My Bookings · New Booking · Room Availability · Booking History.
+- **Menu:** My Bookings · Room Booking · Room Availability · Booking History.
+  (No Meal Booking: a student's booking can never include meals.)
 
 #### Employee — faculty
 
@@ -160,7 +168,7 @@ Everything a requester can do with a booking they own (or raised for a club):
   Club Approvals if they head a club/council; **Booking as: Faculty Advisor —
   X** on New Booking if named Faculty Advisor of a council or club (next
   section).
-- **Menu:** My Bookings · New Booking · (HOD Queue) · (Club Approvals) ·
+- **Menu:** My Bookings · Room Booking · Meal Booking · (HOD Queue) · (Club Approvals) ·
   Room Availability · Booking History.
 
 #### Employee — non-teaching staff
@@ -233,7 +241,7 @@ contract. A club with none of its own takes its council's.
 The shared mailbox of a club, a fest or a council (a council's account *is* its
 secretary's mailbox, e.g. `sec_arts@`).
 
-- **Cannot book.** New Booking is not in its menu; `/book` explains who its
+- **Cannot book.** Neither booking door is in its menu; `/book` explains who its
   Faculty Advisor is ("Ask your Faculty Advisor to book"); the server refuses a
   submission.
 - **Sees** every booking raised for it on My Bookings, **gets every requester
@@ -250,7 +258,8 @@ secretary's mailbox, e.g. `sec_arts@`).
 - **Route:** IAR Office → GH Manager.
 - **Debitable heads:** **Alumni Fund / Special Budget** - the alumni category
   since the office's list of 8 Oct 2026.
-- **Menu:** My Bookings · New Booking · Room Availability · Booking History.
+- **Menu:** My Bookings · Room Booking · Room Availability · Booking History.
+  (No Meal Booking: an alumni booking can never include meals.)
 
 #### IAR Office (books *and* approves)
 
@@ -265,7 +274,7 @@ secretary's mailbox, e.g. `sec_arts@`).
   spreadsheet (9 Oct 2026); alumni → **Alumni Fund / Special Budget** (8 Oct
   2026). The two come out the same, by different routes.
 - **Approval Log:** alumni requests, the Student Cell's, and its own.
-- **Menu:** My Bookings · New Booking · IAR Queue · Room Availability ·
+- **Menu:** My Bookings · Room Booking · Meal Booking · IAR Queue · Room Availability ·
   Approval Log.
 
 ---
@@ -497,7 +506,7 @@ An omitted condition matches anything, so a route with none is the catch-all.
 
 | Who can decide a stage (`ApproverRule`) | |
 | --- | --- |
-| **The Assistant Warden of the requester's hostel** | needs a hostel on both profiles - the warden scoping, unchanged |
+| **The Assistant Warden of the requester's hostel** | needs a hostel on **both** profiles. Where the requester's is NULL or blank the stage **cannot apply** and is dropped with that reason (17 Oct 2026, `approverNotApplicable`) - which is a different fact from "nobody is appointed", and the log words it differently. Answered from the requester's own account, so a caller with no directory (the mail module, the Copy-to chain) reaches the same answer |
 | **The HOD for the requester's department or office** | `hodApproversFor`, through `hodUnitIdFor` |
 | **The head of the requester's own unit** | `approversOf`, inherited from the unit above |
 | **Everyone holding a role** | how the IAR Office decides the Student Cell's requests |
@@ -518,6 +527,14 @@ configurable: approval there is room allocation.
 rule the HOD stage has had since Phase 4, now applied to every stage. So a
 route pointing at an empty unit does less than it says rather than stranding
 every request that matches it.
+
+**A stage that cannot apply at all is a third answer** (17 Oct 2026). A
+student with no hostel has no Assistant Warden, which is a fact about their
+account rather than a gap in the console, so `droppedStages` carries the
+reason and the log reads *"The Pending Assistant Warden Review stage does not
+apply to this request: no hostel is recorded on the requester's account."*
+Only the warden rule has such a condition; for every other kind of approver
+"nobody is appointed" is the honest reading.
 
 **A change that would strand a waiting request is refused**, and the requests
 are named - as for any Setting. Beyond that, a request waiting at a stage the
@@ -796,7 +813,7 @@ are the rules the form applies.
 | `queue.digest.reviewer` | Daily digest of waiting requests | Each reviewer with a non-empty queue | — |
 | `queue.escalation.reviewer` | Waiting over 48 h | Reviewer | Manager |
 | `desk.daily_report` | Day-wise log per guest house (arrivals, departures, in house, awaiting check-out, pending allocation, kitchen plates) | Manager + caretaker | — |
-| `invoice.issued.accounts` | Official invoice, PDF attached; the summary lists Room charges, Dining charges (unlettered since 30 Sep 2026 — the invoice's letters changed with its version) and — since 25 Sep 2026 — Other charges (no GST) when there are any | Accounts email (Setting) | Requester's HOD, the requester (+ Copy to) |
+| `invoice.issued.accounts` | Official invoice, PDF attached; the summary lists Room charges, Dining charges (unlettered since 30 Sep 2026 — the invoice's letters changed with its version; **and no Dining row at all where the guest house has no kitchen**, 16 Oct 2026, `invoicePrintsDining`) and — since 25 Sep 2026 — Other charges (no GST) when there are any | Accounts email (Setting) | Requester's HOD, the requester (+ Copy to) |
 | `booking.cancellation_requested.reviewer` | *Retired* — reviewers are CC on the manager's mail now | — | — |
 
 **Two different "Copy to" lists — keep them apart.** The **approval chain**

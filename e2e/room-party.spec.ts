@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { ACCOUNTS, fillGuest, localDate, REFERENCE, signIn } from "./helpers";
+import { ACCOUNTS, fillGuest, localDate, signIn, submittedReference } from "./helpers";
 
 /**
  * What one room may hold, driven through the real form.
@@ -46,9 +46,7 @@ test("a student can book two guests and two infants in one room", async ({ page 
 
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
-  const toast = page.getByText(REFERENCE).first();
-  await expect(toast).toBeVisible({ timeout: 30_000 });
-  const reference = (await toast.innerText()).match(REFERENCE)![0];
+  const reference = await submittedReference(page);
   await page.waitForURL("**/dashboard", { timeout: 30_000 });
 
   // The warden sees the party as two guests and two infants.

@@ -22,6 +22,8 @@ const ACCOUNTS: MockAccount[] = [
   // ----- Requesters -----
   { uid: "112201001", password: "Anjali@2026", mail: "112201001@smail.iitpkd.ac.in", name: "Anjali Menon" },
   { uid: "142202014", password: "Rahul@2026", mail: "142202014@smail.iitpkd.ac.in", name: "Rahul Nair" },
+  // A day scholar - no hostel on the profile, so no Assistant Warden stage.
+  { uid: "122203099", password: "Devika@2026", mail: "122203099@smail.iitpkd.ac.in", name: "Devika Iyer" },
   { uid: "priya", password: "Priya@2026", mail: "priya@iitpkd.ac.in", name: "Dr. Priya Sharma" },
   // Faculty, and Faculty Advisor of the Cultural Affairs Council and Petrichor.
   { uid: "arun.prasad", password: "Arun@2026", mail: "arun.prasad@iitpkd.ac.in", name: "Dr. Arun Prasad" },

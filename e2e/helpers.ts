@@ -16,6 +16,9 @@ import path from "node:path";
 /** The dummy directory's accounts (`lib/ldap/mock-directory.ts`). */
 export const ACCOUNTS = {
   student: { uid: "112201001", password: "Anjali@2026", name: "Anjali Menon" },
+  // A day scholar: no hostel on the profile, so no Assistant Warden stage
+  // (17 Oct 2026). The test account for that route.
+  dayScholar: { uid: "122203099", password: "Devika@2026", name: "Devika Iyer" },
   faculty: { uid: "priya", password: "Priya@2026", name: "Dr. Priya Sharma" },
   hod: { uid: "hod.cse", password: "HodCse@2026", name: "Prof. R. Venkatesh" },
   warden: { uid: "warden.malhar", password: "Malhar@2026", name: "Dr. Suresh Kumar" },
@@ -323,11 +326,9 @@ export async function submitRoomBooking(
 
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
-  // The confirmation carries the reference; the form then lands on the
-  // dashboard, where it is the newest row either way.
-  const toast = page.getByText(REFERENCE).first();
-  await expect(toast).toBeVisible({ timeout: 30_000 });
-  const reference = (await toast.innerText()).match(REFERENCE)![0];
+  // The confirmation carries the reference - read from the toast, never from
+  // the page behind it (see `submittedReference`).
+  const reference = await submittedReference(page);
   await page.waitForURL("**/dashboard", { timeout: 30_000 });
   return reference;
 }
@@ -335,11 +336,22 @@ export async function submitRoomBooking(
 /** `IITPKD-GH-2026-K7P2M`, as `makeReference()` builds it. */
 export const REFERENCE = /IITPKD-GH-\d{4}-[A-Z0-9]{5}/;
 
-/** The reference of the newest booking on the requester's dashboard. */
-export async function latestReference(page: Page): Promise<string> {
-  const cell = page.getByText(REFERENCE).first();
-  await expect(cell).toBeVisible({ timeout: 15_000 });
-  return (await cell.innerText()).match(REFERENCE)![0];
+/**
+ * The reference the portal just gave a submitted request, read **from the
+ * confirmation toast**.
+ *
+ * Not from the page: `page.getByText(REFERENCE).first()` used to be the same
+ * thing, because the form lands on My Bookings and the newest request was its
+ * first row. Since 17 Oct 2026 that page is three sections - current,
+ * upcoming, then previous - so the first reference on it belongs to whichever
+ * stay is happening now, and a journey that read it went on to drive somebody
+ * else's booking. The toast is the only element that is about *this*
+ * submission.
+ */
+export async function submittedReference(page: Page): Promise<string> {
+  const toast = page.locator("[data-sonner-toast]").getByText(REFERENCE).first();
+  await expect(toast).toBeVisible({ timeout: 30_000 });
+  return (await toast.innerText()).match(REFERENCE)![0];
 }
 
 /** The row of a queue table holding this reference. */

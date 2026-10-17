@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseDateValue } from "./tz";
+import { addDaysToDateValue, formatDateValue, parseDateValue } from "./tz";
 import type { BookingType, MealKey, Role, RoomType, ServiceType } from "./types";
 
 /**
@@ -13,6 +13,10 @@ import type { BookingType, MealKey, Role, RoomType, ServiceType } from "./types"
  * console refuses to change or delete it (`tariffLockedError`). Invoices keep
  * the rates they printed in their snapshot anyway, so even that is belt and
  * braces.
+ *
+ * And a new row starts **in the future**: `effective_from` must be later than
+ * today (`tariffStartError`, 16 Oct 2026). The office changes a price for the
+ * bookings still to come, not for the nights it has already quoted.
  *
  * A row may narrow itself by guest house, room type, booking type and the
  * requester's role; a blank qualifier means "any". The rate for a night is the
@@ -124,6 +128,28 @@ export function tariffLockedError(t: Pick<Tariff, "effective_from">, today: stri
   return t.effective_from <= today
     ? "This rate is already in force, so stays have been priced with it. Add a new rate from a later date instead."
     : null;
+}
+
+/**
+ * Whether a rate may start on this date: a new rate applies **from a future
+ * date only** (16 Oct 2026, the owner: "only for future booking GHM can
+ * change the rates ... currently even past and todays rate apparently we can
+ * change rates, which is not right").
+ *
+ * The console used to take any date. A rate dated today or earlier re-priced
+ * nights that had already been quoted on the form, approved, and in some
+ * cases slept in - the guest was told one figure and invoiced another. A rate
+ * that starts tomorrow cannot reach a night anybody has stayed.
+ *
+ * The companion of `tariffLockedError`, which refuses an **edit** of a row
+ * once it is in force. Together: a rate in force is never changed, and a new
+ * rate never starts in the past.
+ */
+export function tariffStartError(effectiveFrom: string, today: string): string | null {
+  if (parseDateValue(effectiveFrom) === null) return "The date the rate applies from is required";
+  if (effectiveFrom > today) return null;
+  const earliest = formatDateValue(addDaysToDateValue(today, 1), { weekday: false, year: true });
+  return `A new rate applies from a future date, so stays already booked keep the rate they were quoted. The earliest is ${earliest}.`;
 }
 
 const money = z.coerce

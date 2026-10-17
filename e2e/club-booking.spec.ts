@@ -5,11 +5,11 @@ import {
   chooseGuestHouse,
   fillGuest,
   localDate,
-  REFERENCE,
   rowFor,
   selectedGuestHouseName,
   settleDebitHead,
   signIn,
+  submittedReference,
 } from "./helpers";
 
 /**
@@ -59,9 +59,7 @@ test("a club's Faculty Advisor books for it from their faculty login; the club's
   await fillGuest(page, 0, 0, { name: "Visiting Artist", age: "31", gender: "male" });
   await page.getByRole("button", { name: "Submit booking request" }).click();
 
-  const toast = page.getByText(REFERENCE).first();
-  await expect(toast).toBeVisible({ timeout: 30_000 });
-  const reference = (await toast.innerText()).match(REFERENCE)![0];
+  const reference = await submittedReference(page);
   await page.waitForURL("**/dashboard", { timeout: 30_000 });
   await expect(rowFor(page, reference)).toContainText("For Petrichor");
 

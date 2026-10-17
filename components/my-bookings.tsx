@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cancelBooking } from "@/app/actions/bookings";
@@ -26,9 +27,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDateTime, toDatetimeLocal } from "@/lib/format";
+import { formatDate, formatDateTime, toDatetimeLocal } from "@/lib/format";
 import type { BookingStatus, BookingWithDetails } from "@/lib/types";
-import { EmptyState } from "@/components/section-heading";
+import { EmptyState, SectionHeading } from "@/components/section-heading";
+import { groupMyBookings, PREVIOUS_BOOKINGS_SHOWN } from "@/lib/my-bookings";
 
 /** Statuses where the requester can initiate cancellation. */
 const CANCELLABLE: BookingStatus[] = [
@@ -39,19 +41,114 @@ const CANCELLABLE: BookingStatus[] = [
 /** An issued invoice the requester can download (Phase 5). */
 export type MyInvoice = { id: string; number: string; paid: boolean };
 
+/**
+ * **Three sections, not one table** (17 Oct 2026, the owner): upcoming,
+ * current and previous bookings, with the finished ones shown a handful at a
+ * time.
+ *
+ * Which section a booking falls in is `lib/my-bookings.ts` - status first,
+ * then dates, the same `stayPhase` the manager's console groups by. Every
+ * action a requester has stays where it was: View opens the same dialog, with
+ * the same Cancel, the same extension request and the same Invoice button, in
+ * whichever section the booking sits.
+ */
 export function MyBookings({
   bookings,
   invoices = {},
+  previousShown = PREVIOUS_BOOKINGS_SHOWN,
 }: {
   bookings: BookingWithDetails[];
   /** By booking id: the live issued invoice, if any. */
   invoices?: Record<string, MyInvoice>;
+  /** How many finished bookings to draw before "Show all". */
+  previousShown?: number;
 }) {
+  const [allPrevious, setAllPrevious] = useState(false);
+  // Grouped on the client so the sections follow the clock without a reload;
+  // `now` is taken once per render, which is all the precision a day-level
+  // reading needs.
+  const sections = groupMyBookings(bookings, new Date());
+
   if (bookings.length === 0) {
     return (
-      <EmptyState>No bookings yet - create your first request from the &ldquo;New Booking&rdquo; tab.</EmptyState>
+      <EmptyState>
+        No bookings yet - create your first request from the &ldquo;Room Booking&rdquo; tab.
+      </EmptyState>
     );
   }
+
+  const hiddenPrevious = Math.max(sections.previous.length - previousShown, 0);
+  const previous = allPrevious ? sections.previous : sections.previous.slice(0, previousShown);
+
+  return (
+    <div className="space-y-8">
+      <section>
+        <SectionHeading title="Current bookings" count={sections.current.length} />
+        {sections.current.length === 0 ? (
+          <EmptyState>Nothing in progress today.</EmptyState>
+        ) : (
+          <BookingTable bookings={sections.current} invoices={invoices} />
+        )}
+      </section>
+
+      <section>
+        <SectionHeading title="Upcoming bookings" count={sections.upcoming.length} />
+        {sections.upcoming.length === 0 ? (
+          <EmptyState>No bookings ahead.</EmptyState>
+        ) : (
+          <BookingTable bookings={sections.upcoming} invoices={invoices} />
+        )}
+      </section>
+
+      <section>
+        {/* The count is the whole section, not what is drawn - a figure that
+            moved with a "Show all" button would be no figure at all. */}
+        <SectionHeading
+          title="Previous bookings"
+          count={sections.previous.length}
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Link href="/history">All booking history</Link>
+            </Button>
+          }
+        />
+        {sections.previous.length === 0 ? (
+          <EmptyState>Nothing has finished yet.</EmptyState>
+        ) : (
+          <>
+            {/* Compact: a finished booking is read for what it was, so the
+                two date columns become one and the rooms come off. */}
+            <BookingTable bookings={previous} invoices={invoices} compact />
+            {hiddenPrevious > 0 && (
+              <div className="mt-2.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAllPrevious(!allPrevious)}
+                >
+                  {allPrevious
+                    ? `Show the last ${previousShown}`
+                    : `Show all ${sections.previous.length}`}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function BookingTable({
+  bookings,
+  invoices,
+  compact = false,
+}: {
+  bookings: BookingWithDetails[];
+  invoices: Record<string, MyInvoice>;
+  compact?: boolean;
+}) {
   return (
     <div className="overflow-x-auto rounded-lg border">
       <Table>
@@ -59,16 +156,27 @@ export function MyBookings({
           <TableRow>
             <TableHead>Reference</TableHead>
             <TableHead>Guest House</TableHead>
-            <TableHead>Check-in</TableHead>
-            <TableHead>Check-out</TableHead>
-            <TableHead>Rooms</TableHead>
+            {compact ? (
+              <TableHead>Stay</TableHead>
+            ) : (
+              <>
+                <TableHead>Check-in</TableHead>
+                <TableHead>Check-out</TableHead>
+                <TableHead>Rooms</TableHead>
+              </>
+            )}
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Details</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {bookings.map((b) => (
-            <BookingRow key={b.id} booking={b} invoice={invoices[b.id] ?? null} />
+            <BookingRow
+              key={b.id}
+              booking={b}
+              invoice={invoices[b.id] ?? null}
+              compact={compact}
+            />
           ))}
         </TableBody>
       </Table>
@@ -76,7 +184,15 @@ export function MyBookings({
   );
 }
 
-function BookingRow({ booking, invoice }: { booking: BookingWithDetails; invoice: MyInvoice | null }) {
+function BookingRow({
+  booking,
+  invoice,
+  compact = false,
+}: {
+  booking: BookingWithDetails;
+  invoice: MyInvoice | null;
+  compact?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -118,19 +234,29 @@ function BookingRow({ booking, invoice }: { booking: BookingWithDetails; invoice
         )}
       </TableCell>
       <TableCell>{booking.guest_house.name}</TableCell>
-      <TableCell>{formatDateTime(booking.check_in)}</TableCell>
-      <TableCell>{formatDateTime(booking.check_out)}</TableCell>
-      <TableCell>
-        {/* A meals-only booking holds no room, so "0" would read as a room
-            request that came to nothing. */}
-        {booking.service_type === "meals_only" ? (
-          <span className="text-muted-foreground">Meals only</span>
-        ) : booking.assigned_rooms.length > 0 ? (
-          booking.assigned_rooms.map((r) => r.room_number).join(", ")
-        ) : (
-          booking.rooms_requested
-        )}
-      </TableCell>
+      {compact ? (
+        <TableCell className="whitespace-nowrap">
+          {formatDate(booking.check_in)}
+          <span className="text-muted-foreground"> to </span>
+          {formatDate(booking.check_out)}
+        </TableCell>
+      ) : (
+        <>
+          <TableCell>{formatDateTime(booking.check_in)}</TableCell>
+          <TableCell>{formatDateTime(booking.check_out)}</TableCell>
+          <TableCell>
+            {/* A meals-only booking holds no room, so "0" would read as a room
+                request that came to nothing. */}
+            {booking.service_type === "meals_only" ? (
+              <span className="text-muted-foreground">Meals only</span>
+            ) : booking.assigned_rooms.length > 0 ? (
+              booking.assigned_rooms.map((r) => r.room_number).join(", ")
+            ) : (
+              booking.rooms_requested
+            )}
+          </TableCell>
+        </>
+      )}
       <TableCell>
         <StatusBadge status={booking.status} />
       </TableCell>

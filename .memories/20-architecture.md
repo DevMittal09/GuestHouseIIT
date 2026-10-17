@@ -41,6 +41,8 @@ app/
     layout.tsx             authenticated shell + role-aware nav
     dashboard/             requester's own bookings
     book/                  the booking form (and "Booking as" for Faculty Advisors)
+      meals/               the same form on the dining flow - the nav's Meal Booking
+                           (both routes render components/booking-request-page.tsx)
     warden/ hod/ approvals/ iar/   reviewer queues (one ReviewQueue component);
                            fa/ only redirects to approvals/
     availability/          read-only room availability grid (every role)
@@ -662,11 +664,24 @@ Two panels sit between the stay details and the guest list:
   a requester `AvailabilityCounts` with no rooms and no segments at all, drawn
   by `components/availability-counts.tsx`. The desk gets the chart
   (`components/occupancy-chart.tsx`, shared with `/availability`).
-- **Rates** (`components/tariff-table.tsx`, 7 Oct 2026) — what this guest
-  house charges, resolved on the server by `tariffPreviews()`
+- **The tariff** (`components/tariff-panel.tsx`, `lib/tariff-categories.ts`,
+  17 Oct 2026; the table inside it is `components/tariff-table.tsx` from
+  7 Oct 2026, unchanged) — **in the right-hand column, and a question**. The
+  categories are the (guest house, booking type) pairs this requester may
+  book; choosing one writes those two fields, which is what the rate is
+  resolved from. Resolved on the server by `tariffPreviews()`
   (`lib/tariffs.ts`) through the **same `resolveTariff` the invoice prices
-  from**, so the figure quoted and the figure charged cannot drift.
-- **Meals** — shown only when a guest house the role may book serves meals
+  from**, so the figure quoted and the figure charged cannot drift. Because
+  the panel *asks*, `BookingForm` lays out the page's two-column grid and
+  takes the Requester details card as its `aside`; the `<form>` element is the
+  left column, so `numbered-sections` still counts the questions alone.
+- **Meals** — asked **after the guests** (17 Oct 2026: the head count is the
+  guests, and the diet split has to add up to it), and behind a **Yes / No**
+  that starts at No - the grid and the preferences are rendered only on Yes,
+  and `mealsRequested` gates `mealPlan`, so everything downstream (the service
+  type, the split, the summary, the payload) follows from the one answer. The
+  section closes on `MEAL_CHANGE_NOTICE`, the caretaker line. Shown only when
+  a guest house the role may book serves meals
   (`serves_meals`). A days × breakfast / lunch / dinner table
   (`components/meal-plan-grid.tsx`) for the stay being entered: one row per IST
   date from check-in to check-out, a checkbox wherever that meal is served
@@ -749,7 +764,10 @@ banned.
 `app/(portal)/dashboard/page.tsx` + `components/my-bookings.tsx`: the user's own
 bookings (and, for a Faculty Advisor, the club bookings they raised), current
 status, assigned rooms once approved, rejection reason when rejected, the full
-status history, and the invoice once issued. **Cancel** (`cancelBooking` in
+status history, and the invoice once issued. **In three sections since
+17 Oct 2026** - Current, Upcoming, Previous - placed by `lib/my-bookings.ts`
+(status first, then `stayPhase`), with the finished ones five at a time behind
+**Show all** and the archive one link away. **Cancel** (`cancelBooking` in
 `app/actions/bookings.ts`, reason required) always files a
 **cancellation request** — pending or approved alike — which sets
 `CANCELLATION_REQUESTED`; the GH Manager approves or declines it. An Occupied
@@ -1077,11 +1095,11 @@ Guest Houses & Rooms.
 
 | File | Contents |
 | --- | --- |
-| `lib/approval-routes.ts` | **The approval workflow as data** (12 Oct 2026): `ApprovalRules` / `ApprovalRouteRule` / `ApprovalStage` / `ApproverRule`, `DEFAULT_APPROVAL_RULES` (the old `switch`, case for case), `matchingRule` / `stagesFor` / `stageForStatus` (first active match wins), `stageApproverIds` / `decidesStage` / `stagesDecidedBy` (who decides, and who has a queue), `describeChain` / `describeConditions` / `describeRouteChanges` (reading a route back in words), `approvalRulesSchema`. Pure - no store |
+| `lib/approval-routes.ts` | **The approval workflow as data** (12 Oct 2026): `ApprovalRules` / `ApprovalRouteRule` / `ApprovalStage` / `ApproverRule`, `DEFAULT_APPROVAL_RULES` (the old `switch`, case for case), `matchingRule` / `stagesFor` / `stageForStatus` (first active match wins), `stageApproverIds` / `decidesStage` / `stagesDecidedBy` (who decides, and who has a queue), `hasHostel` / `approverNotApplicable` / `NO_HOSTEL_REASON` (a stage that **cannot apply** to this requester - a student with no hostel has no Assistant Warden, 17 Oct 2026), `describeChain` / `describeConditions` / `describeRouteChanges` (reading a route back in words), `approvalRulesSchema`. Pure - no store |
 | `lib/approval-categories.ts` | **The workflow as a kind of request** (12 Oct 2026, second round): `REQUEST_CATEGORIES` (the eleven kinds, each with a representative request and the conditions a route of its own would carry), `categoryChains` (what each kind does now - answered with `matchingRule`, never worked out separately), `setCategoryStages` (**edit in place, or fork a route for this kind alone above the one it shares**), `insertStage` / `moveStage` / `removeStage` / `slotForApprover` / `setStageApprover` (the steps, and the slot the office never sees), `approverValue` / `approverFromValue` (six approver kinds as one select value), `uncoveredRules`. Pure - no store |
 | `lib/approval-routes-server.ts` | `getApprovalRules()`, `getReviewContext()` (the routes plus every account, which a role- or person-named stage needs), `stageQueuesFor()` (a person's queues), `forwardTargets()` (what each Forward button names) |
 | `lib/types.ts` | Domain shapes and label maps (`ROLE_LABELS`, `STATUS_LABELS`, `REQUESTER_ROLES`, `DEBIT_HEAD_LABELS`…). Declared as `type` aliases, not interfaces, so Supabase's generated `Insert`/`Update` helpers accept them. |
-| `lib/workflow.ts` | `routeFor` (the pipeline), `initialStatusFor`, `approvalStagesFor`, `nextStatusAfter`, `canReview` / `canReviewBooking`, `asksOfficeApproval` (whether an office is asked Direct / HOD at all), `actsAsRequester`, `ROOM_HOLDING_STATUSES`, `stayPhase`, `occupancyNotStartedError`, `hasLapsed`, `displayStatus`, `LIFECYCLE_ROLES`, `historyScope`, `canExportPdf`, the advance window (`latestCheckIn` / `isAdvanceWindowExempt`). |
+| `lib/workflow.ts` | `routeFor` (the pipeline), `initialStatusFor`, `approvalStagesFor`, `droppedStages` / `skippedStages` (a stage dropped, and **why** - unstaffed, or inapplicable to this requester), `nextStatusAfter`, `canReview` / `canReviewBooking`, `asksOfficeApproval` (whether an office is asked Direct / HOD at all), `actsAsRequester`, `ROOM_HOLDING_STATUSES`, `stayPhase`, `occupancyNotStartedError`, `hasLapsed`, `displayStatus`, `LIFECYCLE_ROLES`, `historyScope`, `canExportPdf`, the advance window (`latestCheckIn` / `isAdvanceWindowExempt`). |
 | `lib/units.ts` | Units and appointments: `approversOf`, `hodUnitIdFor`, `hodApproversFor`, `unitsGovernedBy`, `isHodForAny`, `approvesClubsFor`, `facultyAdvisorOf`, `secretaryEmailOf`, `parentError`. |
 | `lib/club-booking.ts` (+ `-server.ts`) | Clubs booked by their Faculty Advisor: `canBeFacultyAdvisor`, `facultyInChargeOf`, `clubsBookableBy`, `defaultCopyToFor`, `raisedByFacultyInCharge`, `clubBookingNotice`; `clubsBookableByUser` (cached per request). |
 | `lib/access.ts` | Desk powers (`canBookOnBehalf`, `canOverrideGuestHousePolicy`, `canManageAnyBooking`…), `CONSOLE_SECTIONS`, `canUseConsoleSection`, `assignableRoles`, invoice powers. |
@@ -1103,12 +1121,14 @@ Guest Houses & Rooms.
 | `lib/academic/stored.ts` | The CSV import: columns per kind, spreadsheet-quoting-aware splitting, `planAcademicImport` (all or nothing), `describeImport`. |
 | `lib/academic/store-source.ts` | `StoreAcademicSource` — the office's own imported records, with the published dummies behind them. |
 | `lib/missed-server.ts` | `runMissedSweep` — the nightly job that marks a request nobody decided in time as MISSED, logs it and mails the requester (migration 29). |
-| `lib/meals.ts` | Meal keys and windows, `stayMealDays`, the notice period (`isMealBookable`, `mealLeadTimeError`, `firstBookableMealDate`), `normalizeMeals` (the only reader), the form's slot helpers, `kitchenHeadCount`. |
+| `lib/meals.ts` | Meal keys and windows, `stayMealDays`, the notice period (`isMealBookable`, `mealLeadTimeError`, `firstBookableMealDate`), `normalizeMeals` (the only reader), the form's slot helpers, `kitchenHeadCount`, `MEAL_CHANGE_NOTICE` (the caretaker line in the meal section, 17 Oct 2026). |
 | `lib/invoice.ts`, `lib/tariffs.ts`, `lib/invoice-pdf.ts` | Invoices (see [13-billing-and-dining.md](13-billing-and-dining.md)). |
+| `lib/tariff-categories.ts` | **The tariff categories the booking page offers** (17 Oct 2026): `tariffCategories` (one per eligible guest house × booking type, labelled, carrying the lines the page already resolved), `tariffCategoriesFrom` (the same from a rate sheet), `selectedCategory`, `tariffCategoryKey`. Pure. Eligibility is the form's own rules - `bookingTypesFor`, `guestHousesForBookingType`, `mealsAllowedFor` - so the panel cannot offer what the server refuses, and the **rate is never computed here**: it comes from `resolveTariff` by way of `tariffPreviews`. |
+| `lib/my-bookings.ts` | **Which section of My Bookings a booking belongs to** (17 Oct 2026): `myBookingSection` (status first, then `stayPhase`), `isFinishedBooking`, `groupMyBookings` (the three lists, each in its reading order), `PREVIOUS_BOOKINGS_SHOWN`. Pure. |
 | `lib/operations.ts` | Extensions, no-shows, room ranges ("B-101 to B-120"), maintenance blocks. |
 | `lib/booking-search.ts` | Archive search: criteria, tokenizer, pure matchers, faceting, sorting, paging, date presets. Shared by both stores. |
 | `lib/sessions.ts`, `lib/auth.ts`, `lib/oidc.ts`, `lib/totp.ts`, `lib/security.ts`, `lib/admin-lock.ts`, `lib/crypto.ts`, `lib/uploads.ts`, `lib/env.ts` | Security (see [05-credentials-and-security.md](05-credentials-and-security.md)). |
-| `lib/routes.ts` | `SIGN_IN_PATH` and `homeForRole`. (The official whitelist moved to Settings in migration 16.) |
+| `lib/routes.ts` | `SIGN_IN_PATH`, `homeForRole`, and the two booking doors - `ROOM_BOOKING_PATH` (`/book`), `MEAL_BOOKING_PATH` (`/book/meals`) and `MEALS_ONLY_SERVICE` (17 Oct 2026), read by the portal nav, the My Bookings tiles, the public `/book-meal` card and the meal route itself. (The official whitelist moved to Settings in migration 16.) |
 | `lib/format.ts`, `lib/tz.ts` | Formatting, all delegating to `lib/tz.ts` — the institute timezone (`Asia/Kolkata`): `instituteIso` to parse, `formatInstitute*` / `instituteHour` / `instituteDayBounds` to read back, and UTC-safe helpers for `"yyyy-MM-dd"` calendar dates. |
 | `lib/report-pdf.ts` | Client-side PDF rendering for the history report (dynamically imported). |
 | `lib/revalidate.ts` | The three cache sets actions invalidate. |

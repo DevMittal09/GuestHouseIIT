@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SignInPanel } from "@/components/site/sign-in-panel";
 import { getCurrentUser } from "@/lib/auth";
-import { homeForRole } from "@/lib/routes";
+import { homeForRole, MEAL_BOOKING_PATH } from "@/lib/routes";
 import { joinNames, servingHouses } from "@/lib/site-content";
 import { getSiteGuestHouses } from "@/lib/site-data";
 import { canBookOnBehalf } from "@/lib/access";
@@ -10,14 +10,11 @@ import { REQUESTER_ROLES } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Book meals" };
 
-/** The booking form's meals door - see `app/(portal)/book/page.tsx`. */
-const MEAL_BOOKING_PATH = "/book?service=meals_only";
-
 /**
  * Public entry point for meals.
  *
- * It opens the booking form on `?service=meals_only`, which is the same door
- * the portal home offers. The form falls back to the ordinary room flow for a
+ * It opens the booking form's meal door (`MEAL_BOOKING_PATH`), the same one
+ * the portal nav and the My Bookings tile offer. The form falls back to the ordinary room flow for a
  * requester whose role cannot book meals without a room - for them meals are
  * part of a room booking, chosen day by day. Meal times and the kitchen's
  * notice are on the Guidelines page, not here (the owner, 26 Sep 2026).

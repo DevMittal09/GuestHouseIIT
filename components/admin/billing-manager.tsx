@@ -16,10 +16,11 @@ import {
   describeTariffScope,
   TARIFF_ITEM_LABELS,
   TARIFF_ITEMS,
+  tariffStartError,
   type Tariff,
   type TariffItem,
 } from "@/lib/tariffs";
-import { formatDateValue } from "@/lib/tz";
+import { addDaysToDateValue, formatDateValue } from "@/lib/tz";
 import { BOOKING_TYPE_LABELS, ROLE_LABELS, type BookingType, type Role, type RoomType } from "@/lib/types";
 
 /**
@@ -84,10 +85,11 @@ function TariffsSection({
    * a later date. That is three or four dropdowns to repeat by hand, and
    * repeating them by hand is how a new rate ends up applying to something
    * slightly different from the old one. The button copies the scope and
-   * leaves the rate blank, dated **today**, which is what the office asked
-   * for: the new price applies from now on.
+   * leaves the rate blank, dated **tomorrow** - the earliest a new rate may
+   * start (16 Oct 2026, `tariffStartError`; it was today until then).
    */
-  const [draft, setDraft] = useState(() => blankTariffDraft(today));
+  const tomorrow = addDaysToDateValue(today, 1);
+  const [draft, setDraft] = useState(() => blankTariffDraft(tomorrow));
   const [changing, setChanging] = useState<Tariff | null>(null);
   const changeRate = (t: Tariff) => {
     setChanging(t);
@@ -98,7 +100,7 @@ function TariffsSection({
       booking_type: t.booking_type ?? "",
       requester_role: t.requester_role ?? "",
       rate: "",
-      effective_from: today,
+      effective_from: tomorrow,
       note: t.note ?? "",
     });
   };
@@ -119,7 +121,7 @@ function TariffsSection({
   return (
     <SettingCard
       title="Rates"
-      description="Each rate applies from its date until a later one replaces it. A blank qualifier means “any”; the most specific rate that fits a charge is used (guest house, then requester, then booking type, then room type). A rate in force cannot be edited or deleted, because stays have been priced with it - press Change rate to add the new price with the same scope, applying from today or any later date."
+      description="Each rate applies from its date until a later one replaces it. A blank qualifier means “any”; the most specific rate that fits a charge is used (guest house, then requester, then booking type, then room type). A rate in force cannot be edited or deleted, and a new rate starts tomorrow at the earliest - press Change rate to add the new price with the same scope."
     >
       {!hasExtraBed && (
         <p
@@ -171,7 +173,7 @@ function TariffsSection({
                         variant="outline"
                         disabled={isPending}
                         onClick={() => changeRate(t)}
-                        title="In force, so it cannot be edited - this starts a new rate from today with the same scope"
+                        title="In force, so it cannot be edited - this starts a new rate from tomorrow with the same scope"
                       >
                         Change rate
                       </Button>
@@ -186,6 +188,7 @@ function TariffsSection({
       <NewTariffForm
         guestHouses={guestHouses}
         today={today}
+        earliest={tomorrow}
         gstNote={gstNote}
         draft={draft}
         setDraft={setDraft}
@@ -209,8 +212,8 @@ function TariffsSection({
   );
 }
 
-/** A blank Add-a-rate draft, dated today. */
-export function blankTariffDraft(today: string): TariffDraft {
+/** A blank Add-a-rate draft, dated the earliest a new rate may start (tomorrow). */
+export function blankTariffDraft(earliest: string): TariffDraft {
   return {
     item: "room",
     guest_house_id: "",
@@ -218,7 +221,7 @@ export function blankTariffDraft(today: string): TariffDraft {
     booking_type: "",
     requester_role: "",
     rate: "",
-    effective_from: today,
+    effective_from: earliest,
     note: "",
   };
 }
@@ -237,6 +240,7 @@ type TariffDraft = {
 function NewTariffForm({
   guestHouses,
   today,
+  earliest,
   gstNote,
   draft,
   setDraft,
@@ -245,6 +249,8 @@ function NewTariffForm({
 }: {
   guestHouses: { id: string; name: string }[];
   today: string;
+  /** The earliest date a new rate may start: tomorrow (`tariffStartError`). */
+  earliest: string;
   gstNote: string;
   draft: TariffDraft;
   setDraft: React.Dispatch<React.SetStateAction<TariffDraft>>;
@@ -256,6 +262,9 @@ function NewTariffForm({
   const set = (k: keyof TariffDraft) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, [k]: e.target.value }));
   const roomish = draft.item === "room" || draft.item === "extra_bed";
+  // The rule the server applies, applied here too - so the reason is on the
+  // control rather than in a note about what back-dating would do.
+  const startsTooEarly = tariffStartError(draft.effective_from, today);
 
   return (
     <div className="space-y-3 rounded-md border border-dashed p-3">
@@ -264,8 +273,8 @@ function NewTariffForm({
         <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
           {TARIFF_ITEM_LABELS[changing.item]} is {formatINR(toPaise(changing.rate))} today. A rate
           in force cannot be edited, because stays have already been priced with it - this adds a
-          new one with the same scope, applying from the date below. Invoices already issued keep
-          their rates.
+          new one with the same scope, from the date below. Bookings already made keep the rate
+          they were quoted up to that date, and invoices already issued keep their rates.
         </p>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -322,22 +331,28 @@ function NewTariffForm({
           <Input id="t-rate" inputMode="decimal" value={draft.rate} onChange={set("rate")} placeholder="2000" />
         </Field>
         <Field label="Applies from" id="t-from">
-          <Input id="t-from" type="date" value={draft.effective_from} onChange={set("effective_from")} />
+          <Input
+            id="t-from"
+            type="date"
+            min={earliest}
+            value={draft.effective_from}
+            onChange={set("effective_from")}
+            aria-invalid={startsTooEarly ? true : undefined}
+          />
         </Field>
         <Field label="Note (optional)" id="t-note">
           <Input id="t-note" value={draft.note} onChange={set("note")} maxLength={200} />
         </Field>
       </div>
-      {draft.effective_from < today && (
-        <p className="text-xs text-amber-700 dark:text-amber-300">
-          A back-dated rate applies to invoices issued from now on for stays on those dates; invoices
-          already issued keep their rates.
+      {startsTooEarly && (
+        <p role="alert" className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
+          {startsTooEarly}
         </p>
       )}
       <div className="flex flex-wrap justify-end gap-2">
         <Button
           size="sm"
-          disabled={isPending || draft.rate.trim() === ""}
+          disabled={isPending || draft.rate.trim() === "" || startsTooEarly !== null}
           onClick={() =>
             run(
               () =>
@@ -353,7 +368,7 @@ function NewTariffForm({
                 }),
               changing ? "New rate added, applying from the date you set" : "Rate added",
               () => {
-                setDraft(blankTariffDraft(today));
+                setDraft(blankTariffDraft(earliest));
                 onDone();
               }
             )
@@ -367,7 +382,7 @@ function NewTariffForm({
             variant="outline"
             disabled={isPending}
             onClick={() => {
-              setDraft(blankTariffDraft(today));
+              setDraft(blankTariffDraft(earliest));
               onDone();
             }}
           >

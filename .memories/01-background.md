@@ -55,6 +55,8 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **15 Oct**, later | **The hero becomes a slideshow.** The owner asked for iitpkd.ac.in's own hero - "images which change evry few seconds and has the option of arrows" - then the details below it. A carousel had been argued against in the round hours earlier and was asked for anyway. Built as the **one client component on the public site**: six slides, Previous / Pause / Next and numbered indicators, 6s a slide, stopping on hover, on focus and for `prefers-reduced-motion`. The masthead moved **under** the photographs and the guest houses went back to a section of their own. |
 | **15 Oct**, later still | **The ink panel off the home page.** The owner: "Remove the black box of guest house of IIT Palakkad as it looks unnecessary", then "remove the guest hpuse manager number and all and also center align everything". The masthead is now **centred plain type** on the page's own ground - still the page's only `<h1>` and still carrying both booking doors - and the Guest House Manager's number is **off the home page**, leaving `GUEST_HOUSE_CONTACT` four readers instead of five. |
 | **15 Oct**, last | **The booking doors, and the credentials box.** The owner: "For room and meal booking remove the image and center align the login page. Remove the 'Demo build - LDAP accounts'". `SignInPanel`'s `photo` is now optional - without one it is a **narrow centred panel**, which is what `/book-room` and `/book-meal` use; `/sign-in` keeps its photograph. The dashed box that printed **a working dummy LDAP login on three public pages** is deleted. |
+| **16 Oct** | **The owner's thirteenth list.** Three items, none of them built before: the GHM's rates may now only start **in the future** (`tariffStartError`; the form had defaulted to today and merely described what back-dating would do), every desk list and the invoice dialog **name the guest house** they are billing for, and a guest house with **no kitchen prints no dining section** on its invoice - invoice **version 5**, with the meal counts zeroed server-side and the letters down to Grand Total (A+B). **No migration.** |
+| **17 Oct** | **The owner's fourteenth list**, nine items about the booking page and one approval route. The **tariff categories move to a panel on the right of the booking page and become a question** - choosing one writes the guest house and the booking type, which is what the rate is resolved from, so nothing is quoted that the invoice would not charge; the rates card is deleted from the form. **Guest Details now stands above Meal Booking**, meals are asked as **Yes / No** (No by default, the section hidden on No), and the meal section carries the owner's caretaker sentence. The nav's New Booking becomes **Room Booking** and **Meal Booking** (`/book/meals`, a route so the nav can light the open door). My Bookings is **Current, Upcoming and Previous**, the last five at a time with Show all and the archive beside it. And a student whose **hostel is NULL** goes straight to the Guest House Manager **explicitly** - it already did, by the generic "a stage nobody can decide is skipped" rule, but the log called it a console nobody had filled in and the mail module would have copied a warden who does not exist. A **day scholar persona** to test it with. **No migration.** |
 | **13 Oct**, later | **The second door closed, the schema left alone.** Migration 31 drops the `profiles -> auth.users` foreign key and all **38** `authenticated` RLS policies, so a portal account no longer implies a database credential; `createProfile` and `seed.sql` mint no Supabase password. The normalization review found **two** real problems worth acting on (`profiles` had almost no indexes and no checks - fixed; `total_rooms` can drift - recorded) and four denormalizations that are correct as they are. **No table split, no column dropped.** Two repair scripts, 16 new tests. Migration 31 deliberately **not** applied to the hosted project. |
 
 ## The problem
@@ -420,7 +422,7 @@ Playwright journeys before the next began. Reasoning in
 | The GH Manager can still override | **Done** | `canOverrideGuestHousePolicy`, and the exception goes into the booking's first log entry |
 | Typing the **veg** count fills non-veg with the rest, and the other way round | **Done** | `fillOtherDietCount`; a split that does not add up is no longer reachable from the form, and `dietCountsError` still enforces it for a crafted payload |
 | Show the **rates** for the chosen guest house, from the same rates the invoice uses | **Done** | `tariffPreviews` resolves through `resolveTariff`, on the server, one set per guest house and booking type. An unpriced charge reads "Not published", never a zero |
-| A **Change rate** button for the GHM, creating a new rate from today | **Done** | Tariffs & Invoicing: a rate in force cannot be edited, so the button copies its scope into the Add-a-rate form dated today |
+| A **Change rate** button for the GHM, creating a new rate from today | **Done**, dated **tomorrow** since 16 Oct 2026 | Tariffs & Invoicing: a rate in force cannot be edited, so the button copies its scope into the Add-a-rate form, dated the earliest a new rate may start (`tariffStartError`) |
 | Everyone but the manager, caretaker and developer sees only "**N rooms available**", on the availability page and in the form | **Done** | `SEES_ROOMS` in `app/actions/availability.ts`; everyone else is sent `rooms: []`, `segments: []` and counts. The charts' simplified mode is retired - there is nothing left to simplify |
 | The server sends those users **the number only**, never room numbers | **Done** | The counts are the whole answer; `tests/eighth-round.test.ts` asserts no room number appears in them, and the journey asserts none reaches the page |
 
@@ -907,6 +909,85 @@ as one of the places that read `GUEST_HOUSE_CONTACT`.
 `SIGN_IN_PHOTOS.bookRoom` and `.bookMeal` are **kept but unplaced**: both
 photographs are still in the Gallery, and putting either back is one prop.
 
+## The owner's thirteenth list - 16 October 2026
+
+Three items, asked at the end of 15 October. Each was checked against the
+code before anything was written, and **none of the three was built**.
+
+> - Only for future booking GHM can change the rates. Like in the GHM settings
+>   they can change rates of rooms right, as a admin role. FOr that only future
+>   bookings they can change rates, currently even past and todays rate
+>   apparently we can change rates, which is not right.
+> - Add the guest house name while differentiating the invoices in the
+>   dashboard where we are showing the previous bookings for GHM/GHC.
+> - For bageshri meals should not come in invoice.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | The GHM may change rates for future bookings only | **Done** for the date a rate starts: `effective_from` on a new row must be **later than today** (`tariffStartError`). The form was taking any date, defaulting to **today**, and merely *describing* what back-dating would do; it now seeds tomorrow, sets `min`, and **disables Add with the reason on screen**. `createTariffAction` applies the same rule. **Partly open:** a stay booked earlier is still priced night by night, so a rate starting tomorrow does price its later nights - see [03-roadmap.md](03-roadmap.md) §2 |
+| 2 | The guest house named where the desk differentiates invoices | **Done.** `StaysTable` and `CheckoutsToday` print it under the room numbers (the column is now **Guest house & rooms**); **Awaiting payment** - which has no date window and holds both houses' bills for months - leads its second line with it; and the invoice dialog opens on the heading the PDF draws, "INVOICE - IIT Palakkad *Bageshri* Guest House". A line, not a column: width is what pushed the Status column off the approver queues on 11 Oct 2026 |
+| 3 | No meals on a Bageshri invoice | **Done**, as invoice **`version: 5`**. A guest house with no kitchen prints no Dining Charges section at all - no meal rows, no subtotal, no GST row, no meal-count boxes, no "Dining charges" to charge an extra to, no Dining row in the mail to Accounts, and the letters read **Grand Total (A+B)**. The counts are **zeroed server-side** whatever arrives. An invoice issued before today reprints exactly as it was issued |
+
+**Where the third one had already been applied, and the invoice missed.**
+`StaysTable` drops its Meals column and `BookingDetails` its per-day table at
+a guest house with no kitchen (7 Oct 2026), for the reason the office gave
+then: a figure of nothing reads as a refusal rather than as a question never
+asked. The invoice was the last place still printing the question - and the
+only one that let the desk **type a charge** into it.
+
+**No migration.** `serves_meals` is a field of the invoice snapshot (jsonb),
+and the rate rule is policy in a server action.
+
+## The owner's fourteenth list - 17 October 2026
+
+Nine items: six about the booking page and My Bookings, one about the nav, one
+an approval route, one a test account. Each was checked against the code
+first.
+
+> 1. Keep the available tariff categories and their corresponding rates, such
+>    as ₹1,000 for parents and ₹2,000 for official guests, displayed on the
+>    right-hand side of the booking page; allow users to select the
+>    appropriate tariff category; completely remove the existing rates section
+>    from its current location.
+> 2. For all user types that support meal booking, display the Guest Details
+>    section before the Meal Booking section.
+> 3. Ask users whether they require meals; display the meal-booking section
+>    only when the user selects Yes.
+> 4. Include "In any case talk with caretaker for any change in meal booking"
+>    in the meal-booking section.
+> 5. Replace the New Booking navigation entry with Room Booking and Meal
+>    Booking.
+> 6. Reduce the number of bookings displayed on My Bookings by default.
+> 7. Organize My Bookings into Upcoming, Current and Previous.
+> 8. Students with a hostel keep the warden workflow; students whose hostel
+>    value is NULL go directly to the Guest House Manager.
+> 9. Create a student user whose hostel field is genuinely NULL, to test it.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Tariff categories on the right, selectable, and gone from the form | **Done.** A category is one (guest house, booking type) pair the requester is eligible for, shown with the rate those two resolve to; choosing one writes both fields, which is what `resolveTariff` reads, so the quote cannot drift from the invoice (`lib/tariff-categories.ts`, `components/tariff-panel.tsx`). The rates card is deleted from the form, and the form now owns the two-column grid because the panel asks a question. **Open as a question for the office:** a *named* category stored on the booking would need a column on `tariffs` too - [03-roadmap.md](03-roadmap.md) §2j |
+| 2 | Guest Details before Meal Booking | **Done.** The kitchen's head count on a stay *is* the guests entered above, and the diet counts have to add up to it, so the old order asked about a number nobody had given yet. A role with no meal booking (a student, Bageshri) still sees no meal section at all |
+| 3 | Ask whether meals are required | **Done.** "Do you require meals?", **No** by default - which is what the form already did (`NO_MEALS`). One gate (`mealsRequested` -> `mealPlan`), so on No the service type stays `room`, no diet split is sent and no meal rule can fire; the ticks are kept, so Yes restores them. A dining booking is never asked |
+| 4 | The caretaker sentence in the meal section | **Done**, word for word, as `MEAL_CHANGE_NOTICE` (`lib/meals.ts`), at the foot of the meal section on both doors and nowhere else |
+| 5 | Room Booking and Meal Booking in the nav | **Done.** `/book` and `/book/meals` - two routes over one page, so `usePathname()` can tell which door is open; `?service=meals_only` still works. Meal Booking appears only where the account could submit one, by the same `serviceTypesFor` question the My Bookings tile asks |
+| 6 | Fewer bookings shown | **Done.** Previous draws five (`PREVIOUS_BOOKINGS_SHOWN`), with **Show all N** in place and **All booking history** beside the heading. The figure by the heading is the whole section; nothing is deleted and nothing is unreachable |
+| 7 | Upcoming, Current, Previous | **Done** (`lib/my-bookings.ts`): status decides the section, dates decide within it. `OCCUPIED` is always current, a finished request always previous, anything open placed by `stayPhase` - the function the desk's own console groups by |
+| 8 | A NULL hostel routes straight to the GHM | **Done, and made explicit.** It already reached the desk, by the generic rule that a stage nobody can decide is skipped - but the log read "Nobody is set to decide…" (a day scholar reported as an unfilled console) and it only held where the caller had every profile, so the mail module and the Copy-to chain **kept the warden stage and would have copied a warden who does not exist**. Now `hasHostel` / `approverNotApplicable` answer from the requester's own account, `droppedStages` carries the reason, and the log says the stage does not apply and why. Faculty, staff, offices, clubs and the IAR cells are untouched |
+| 9 | A test student with a null hostel | **Done.** `student-day-scholar`, "Devika Iyer (day scholar - no hostel)", `122203099@smail.iitpkd.ac.in` - in the mock seed, `supabase/seed.sql` (hostel column `null`) and the dummy directory, with its login in [05-credentials-and-security.md](05-credentials-and-security.md). No academic record behind it, so the form asks for the parents' names rather than locking them |
+
+**What the round did not need.** No migration: `profiles.hostel_name` has
+always been nullable, migration 16 normalizes a blank to NULL, and the
+console's Hostel dropdown already offered **None**. No change to any store,
+to `resolveTariff`, to the invoice, or to the shape of `rules.approval`.
+
+**One regression the round caused and fixed.** Six end-to-end journeys read a
+booking's reference with `page.getByText(REFERENCE).first()`, which worked
+only because My Bookings used to show the newest request in its first row.
+With three sections the first reference on the page belongs to whatever stay
+is current, and one journey went on to drive **somebody else's booking**. They
+now read the confirmation toast (`submittedReference`) -
+[22-running-and-testing.md](22-running-and-testing.md) Part 2.
+
 ---
 
 ## Branches
@@ -939,10 +1020,12 @@ photographs are still in the Gallery, and putting either back is one prop.
 ## Status
 
 Feature-complete for every workflow the institute has specified, taken through
-the ten-phase production-readiness programme of September 2026 and **twelve
-rounds** of the office's corrections, plus the owner's design pass, the round
-that made the approval workflow itself configurable, and the withdrawal of the
-privacy notice into `archive/privacy-notice/`. **Not deployed for real use.**
+the ten-phase production-readiness programme of September 2026, **twelve
+rounds** of the office's corrections and **the owner's thirteenth list**, plus
+the owner's design pass, the round that made the approval workflow itself
+configurable, the withdrawal of the privacy notice into
+`archive/privacy-notice/`, and the office's photographs with the landing page
+built around them. **Not deployed for real use.**
 
 What is left is [03-roadmap.md](03-roadmap.md); what a production build needs
 is [04-production.md](04-production.md).
