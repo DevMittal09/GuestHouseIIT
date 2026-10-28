@@ -11,13 +11,23 @@ export type NavItem = { href: string; label: string };
  * up on their own path (`/`); the rest also cover their sub-pages
  * (`/admin/users` lights Developer Console).
  *
- * - `tone="dark"` - the portal's charcoal bar (iitpkd.ac.in's own menu
- *   colour), uppercase items, a 3px vermilion bar under the current page.
- * - `tone="light"` - the public site's white header: sentence-case links,
- *   a short vermilion underline under the current page.
+ * **The current page is filled, not underlined** (27 Oct 2026, the owner:
+ * "improve active-tab styling so the selected tab is distinguishable without
+ * relying on the conventional underline indicator"). Every selected thing in
+ * this application now reads the same way - a filled rectangle at the 6px
+ * corner, which is what `segment()` has always done for a toggle - so a tab,
+ * a console section and a view switcher no longer each have their own idea of
+ * "chosen".
+ *
+ * - `tone="ink"` - the public site's masthead: the institute's own charcoal
+ *   bar, white links, the current one filled **vermilion-deep** (5.2:1 with
+ *   white on it), which is the colour iitpkd.ac.in marks its own current menu
+ *   item with.
  * - `tone="service"` - the portal's service navigation under its ink
- *   masthead (30 Sep 2026, after GOV.UK's): a white bar, bold sentence-case
- *   items, a 4px vermilion bar under the current one.
+ *   masthead (30 Sep 2026, after GOV.UK's): a white bar, the current item
+ *   filled ink.
+ * - `tone="light"` - a white bar with dark links, the current one in a
+ *   vermilion-soft chip. Kept for a light header.
  *
  * `scroll` lets the row scroll sideways inside itself on a phone instead of
  * wrapping into a block of links.
@@ -26,34 +36,33 @@ export function NavBar({
   items,
   label,
   exact = ["/"],
-  tone = "dark",
+  tone = "service",
   scroll = false,
   className,
 }: {
   items: NavItem[];
   label: string;
   exact?: string[];
-  tone?: "dark" | "light" | "service";
+  tone?: "ink" | "light" | "service";
   scroll?: boolean;
   className?: string;
 }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     exact.includes(href) ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-  const dark = tone === "dark";
+  const ink = tone === "ink";
   const service = tone === "service";
 
   return (
     <nav
       aria-label={label}
-      className={cn(dark && "bg-ink", service && "border-b border-border-strong bg-white", className)}
+      className={cn(service && "border-b border-border-strong bg-white", className)}
     >
       <div
         className={cn(
-          "flex items-stretch",
-          dark && "mx-auto w-full max-w-[1200px] flex-wrap px-[clamp(4px,1.5vw,20px)]",
+          "flex items-center gap-x-1",
           service &&
-            "mx-auto w-full max-w-[1200px] gap-x-1 overflow-x-auto px-[clamp(6px,3vw,16px)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            "mx-auto w-full max-w-[1200px] overflow-x-auto px-[clamp(6px,3vw,16px)] py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           scroll && "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         )}
       >
@@ -65,34 +74,28 @@ export function NavBar({
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex shrink-0 items-center whitespace-nowrap transition-colors duration-200 focus-visible:-outline-offset-2",
-                dark
-                  ? "px-[clamp(9px,1.4vw,16px)] py-3.5 text-meta font-semibold tracking-[0.08em] text-white uppercase hover:bg-ink-soft hover:text-white"
+                "relative flex shrink-0 items-center rounded-md whitespace-nowrap transition-colors duration-200 focus-visible:-outline-offset-2",
+                ink
+                  ? cn(
+                      "px-[clamp(10px,1.1vw,15px)] py-2 text-[14.5px] font-medium tracking-[0.01em]",
+                      active
+                        ? "bg-vermilion-deep font-semibold text-white"
+                        : "text-white/80 hover:bg-white/10 hover:text-white"
+                    )
                   : service
                     ? cn(
-                        "px-[clamp(8px,1.1vw,14px)] pt-4 pb-[14px] text-[15px] font-semibold",
-                        active ? "text-ink" : "text-body hover:text-vermilion-deep"
+                        "px-[clamp(9px,1.1vw,14px)] py-2 text-[15px] font-semibold",
+                        active ? "bg-ink text-white" : "text-body hover:bg-band hover:text-ink"
                       )
                     : cn(
-                      "px-[clamp(9px,1vw,13px)] py-3 text-[15px] font-medium",
-                      active ? "text-ink" : "text-body hover:text-ink"
-                    )
+                        "px-[clamp(9px,1vw,13px)] py-2 text-[15px] font-medium",
+                        active
+                          ? "bg-vermilion-soft font-semibold text-vermilion-hover"
+                          : "text-body hover:bg-band hover:text-ink"
+                      )
               )}
             >
               {item.label}
-              {active && (
-                <span
-                  aria-hidden
-                  className={cn(
-                    "absolute",
-                    dark
-                      ? "inset-x-0 bottom-0 h-[3px] bg-vermilion"
-                      : service
-                        ? "inset-x-[clamp(8px,1.1vw,14px)] bottom-0 h-1 bg-vermilion"
-                        : "inset-x-[clamp(9px,1vw,13px)] bottom-1.5 h-[2px] bg-vermilion"
-                  )}
-                />
-              )}
             </Link>
           );
         })}

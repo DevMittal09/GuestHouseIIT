@@ -5645,6 +5645,16 @@ in the code.
 
 ## 15 October 2026, second round — the hero becomes a slideshow
 
+> **Superseded 27 Oct 2026.** The slideshow is now a **full-screen hero of
+> two photographs with no visible controls at all** - the numbering, the
+> arrows and the Pause button are gone, and clicking the photograph pauses
+> it. What survives of this entry: the four rules a rotating carousel has to
+> keep (it stops, `prefers-reduced-motion` stops the rotation itself,
+> `aria-live` follows it, every slide stays mounted), and the rule that the
+> mosaic may not repeat what the hero showed. See "27 October 2026 (second) -
+> the landing page becomes cinematic" at the foot of this file.
+
+
 The owner, after the round above:
 
 > See basically i want to change the landing page UI to the iitpkd.ac.in
@@ -5724,6 +5734,15 @@ named.
 ---
 
 ## 15 October 2026, third pass — the ink panel off the home page
+
+> **Superseded 27 Oct 2026**, and in the direction this entry pointed. The
+> headline, the lead and the two doors are still centred and still carry no
+> phone number - they are now set **over the photograph** rather than on the
+> page's own ground beneath it, which is what the ink panel was reaching for
+> and could not have, because in October the photograph was contained in the
+> layout. The reasoning that the block is a title page and the sections below
+> it keep their left-hand labels is unchanged.
+
 
 Two short asks, minutes apart, both about the same block:
 
@@ -6164,3 +6183,414 @@ in every queue and list it can appear in.
 **No academic record behind it**, deliberately: the booking form then asks for
 the parents' names instead of locking them, which is also the path a student
 the office has not imported takes.
+
+---
+
+# 27 October 2026 - what to request from the institute, per kind of user
+
+The owner's ask: *"I currently have few types of users, like Student, Faculty,
+Department Offices [Director, Branch Department like Data Science], IAR
+Cell.etc. So like i need to import the data for these users. I dont know the
+database structure actually. So can you give me a document telling how to
+import these data and what all columns of data i need to request for each kind
+of user."*
+
+Nothing in the code changed. What changed is one new root document and five
+corrections to this folder, four of which came out of **probing the hosted
+project rather than reading the notes**.
+
+## A third document, not a section of the other two
+
+**Decision.** [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) at
+the repo root, beside [`IMPORTING-USERS.md`](../IMPORTING-USERS.md), with
+[04-production.md](04-production.md) §1a still the reference the other two
+answer to.
+
+**Why not a section of `IMPORTING-USERS.md`.** That file is a runbook: it is
+read **on the day**, standing at the console, and it is organised by what to
+press. The question asked here is answered **weeks earlier**, in an email to
+the institute, and it is organised by **kind of person** - which is the one
+axis the runbook deliberately does not use, because the accounts import takes
+one sheet for everybody. Folding "what to ask the Data Science office for" into
+a numbered click-path would have made both worse. The three now divide as
+*what* (this), *how* (the runbook), *why* (§1a), and the two root files each
+say which is authoritative.
+
+**Why not in `.memories/`.** It is written to be **handed to the institute and
+the guest house office**, who have no reason to read an agent's memory folder.
+The repo root is where the other two office-facing documents already live.
+
+## The per-user-type tables are the deliverable, and they are per *account*
+
+**Decision.** A section per kind of user, each giving the `profiles` row and
+the `academic_records` row separately, plus five copy-and-send sheet
+specifications in §6.
+
+**Why the split is stated twice.** The single most common way this import can
+be got wrong is putting reference data in `profiles`, which **any signed-in
+session can read**, instead of `academic_records`, which no browser can. So the
+two-destination table opens the document, and every user-type section repeats
+the division. Parents' names in particular are named as `academic_records`-only
+three times, on purpose.
+
+**Why "Department Offices [Director, Branch Department like Data Science]" is
+answered as three things.** The phrase holds a department (`Data Science`,
+`kind: department`, its head is the HOD), that department's own office
+(`kind: office`, `office_class: department`, **`parent_id` the department** -
+which is where its HOD comes from), and an officer office (`Director's
+Office`, `office_class: officer`, its HOD unit is itself). `hodUnitIdFor`
+treats the three differently and nothing else in the portal does, so a document
+that called them all "offices" would produce a console full of units that route
+nowhere.
+
+## Four facts the notes had wrong, found by asking the database
+
+Recorded here because the *method* is the decision: **ask the project, never
+read the number out of this folder** - the rule 9 Oct 2026 already established
+for migrations, applied this time to reference data as well.
+
+1. **Migration 32 is applied.** This folder said 31-34 were deliberately not
+   applied, re-verified 14 Oct 2026. `user_import_batches` now exists.
+   31, 33 and 34 remain unprobeable and their state is **unknown**, which is
+   now written down as unknown rather than as "not applied" -
+   [04-production.md](04-production.md) §5.
+2. **`units` is empty on the hosted project.** Nobody had checked. It blocks
+   the `unit` column of the import outright and means **no faculty official
+   booking has an HOD stage at all**. The seed creates units only in the mock
+   store, which is why this was invisible: every local run looks correct.
+3. **All 13 hosted profiles have `ldap_uid`, `unit_id` and `staff_category`
+   empty**, and the hosted seed still carries the retired `faculty_advisor`
+   persona. So those rows are not a model for a real account.
+4. **`academic_records` is empty**, so no student's parents are locked today -
+   which is the benign case, and §5.1 explains why the half-filled case is not.
+
+## The warning the document is really for
+
+**`guestNameRule` makes an incomplete student record worse than no record.**
+No record leaves the form fully open. A record naming **both** parents locks
+both and waives their ID documents. A record naming **one** parent
+**withholds the other from the dropdown entirely** - that student cannot book
+for their mother at all, and gets *"Your academic record does not name a
+mother"*.
+
+This is correct behaviour and was decided deliberately on 7 Oct 2026 (there
+would be no name to lock a typed parent to). But it turns a *data quality*
+question into a *support* question at import time, and nobody would guess it
+from the column list. So the ask to the institute is **both parents' names for
+every student, or neither** - and the document says, in those words, that
+sending one is worse than sending none. [03-roadmap.md](03-roadmap.md) carries
+it as an open decision for the office, because it is their call and not ours.
+
+## The office mailbox is load-bearing, and that is a request-time problem
+
+`OFFICE_DEBIT_HEADS` keys an office's permitted budgets on the **local part of
+its address** - `office_ds`, `director_iitpkd`, `ro`, `sportsofficer`. An
+office loaded as `datascience.office@iitpkd.ac.in` does not match, keeps the
+category's wider six-head list, and **nothing reports it**: the booking simply
+offers budgets that office has no authority over. The only fixes are the real
+mailbox or a new `aliases` entry, and the second is a code change. So this
+belongs in the *request*, not in the import checklist, and §4.2 says to ask for
+the mailbox rather than a friendly name.
+
+## 27 October 2026 (second) - the landing page becomes cinematic
+
+> **Partly superseded 28 Oct 2026**, by the owner's next brief. The
+> **translucent ink header band** was one day old and is now **one opaque
+> charcoal bar on every page**; the hero's wash went 60% -> 66%; *Book a
+> Meal* is a **solid saffron** button rather than an outline; the amenities,
+> the guest houses and Contact us are **centred**; and the gallery's row of
+> six equal thumbnails became two bands of unequal widths. Everything else
+> here stands, including why the hero may be full-bleed at all.
+
+A written brief rather than a numbered correction list: six sections, the
+owner's own copy for the hero, and a page of quality requirements ending
+*"Create a premium, cinematic, modern IIT Palakkad Guest House landing page"*.
+What follows is why each decision went the way it did, including the two
+places where the brief reversed something this file had argued for.
+
+### A photograph may be full-bleed now, and the header may lie over it
+
+Two September decisions are *Superseded* above. Both were made for the same
+reason and both are reversed by the same fact.
+
+**26 Sep 2026, evening:** a full-screen photograph read as "so weird" to the
+owner and photographs were contained in the layout from then on. **26 Sep
+2026, afternoon:** the header lay transparent over that photograph, and went
+back to a white bar in the same breath.
+
+What is different is **what the photograph is carrying**. In September it was
+decoration: a picture, with the page beginning underneath it and the title
+somewhere below the fold. The brief puts the page's `<h1>`, its one sentence
+and both doors *in the middle of it*, which is the thing that makes a
+full-viewport photograph a masthead rather than a splash screen. It is also
+**the only one on the site**: every other photograph is still contained, and
+the Gallery, the preview strip and the sign-in page are untouched.
+
+The header is the same argument with a measurement attached. Transparent over
+sky, white links sat near 2.4:1 - that is what "unreadable" meant in
+September, and a drop shadow or a scrim would have broken the site's own ban
+on shadows and gradients. **A translucent ink band is neither.** The wash is
+`bg-ink/60`, the band `bg-ink/65` over it, so the photograph shows through
+both and white type on the band is above 5:1 against the brightest part of
+either photograph. Measured, not guessed: `hamsanandi-courtyard` has a sky in
+its top third at L≈0.96, and the middle band where the title sits is L≈0.68 at
+the 90th percentile, which is where 60% came from (3.1:1 for display type
+against the brightest tenth, ~7:1 against the average).
+
+**And it stops being an overlay the moment the reader leaves the hero.** At
+`scrollY > 24` the header is the ordinary white bar, sticky from `lg` as on
+every other page. A transparent header over white content is the actual bug
+in most of the sites this pattern is copied from.
+
+### Why `site-header.tsx` is now a client component
+
+It needs the path (`usePathname`) to know it is on `/`, and the scroll
+position to know it has left the photograph. A layout cannot read either.
+The alternatives were worse: a prop threaded from every page would make six
+pages responsible for how the header looks, and a CSS-only version
+(`position: sticky` with a scroll-driven animation) is not supported widely
+enough to be the thing holding the navigation's legibility.
+
+It costs one small component in the client bundle. `BrandBlock` and `NavBar`
+go with it, and `NavBar` was already a client component for `usePathname`.
+
+### The photograph is the pause button
+
+The brief: *"Remove the image numbering and the pause button currently
+displayed at the bottom. Clicking the hero image should pause the slideshow;
+clicking again should resume it."*
+
+With two slides and no arrows, the numbering was counting to two and the
+controls were furniture. But **"it stops" is not negotiable** - it is one of
+the four rules written down on 15 Oct 2026, and a photograph that slides away
+while somebody is looking at it is the complaint those rules exist for. So
+the control did not go; it moved into the photograph:
+
+- the click target is a real `<button>` with an `aria-label` that says which
+  way it will go, so it is reachable and announced from the keyboard;
+- the title block above it is `pointer-events-none`, with `pointer-events-auto`
+  on its two links alone, so a click anywhere a reader would call "the hero
+  image" reaches the button and the two doors still work;
+- a quiet **Paused** marker appears in the corner, because a control nobody
+  can see needs its state visible somewhere;
+- `prefers-reduced-motion` still stops the rotation **and** both zooms.
+
+**What was dropped: holding on hover.** It was one of the four rules. On a
+hero this size the pointer rests over the photograph most of the time, so
+holding on hover would have quietly cancelled the auto-transitions the brief
+asks for - and hovering now means something else, which is the zoom. Keyboard
+focus inside the hero still holds it, and the click is one gesture away.
+
+### The zoom is two layers, and neither is a React re-render
+
+*"A subtle, continuous slow zoom-in... when hovering over different areas,
+the image should smoothly zoom towards the hovered area without feeling
+exaggerated."* Those are two different motions, and one element cannot carry
+both: a CSS animation owns `transform`, so a hover transition on the same
+property would fight it.
+
+So the drift (`@keyframes hero-drift`, 30s, `alternate`) is on an inner
+layer and the pointer zoom on an outer one. `alternate` rather than a loop
+because a hard cut from 1.12 back to 1.02 every half minute is the one thing
+a reader would notice. The pointer zoom is `transform-origin` following the
+pointer **through a ref**, with a 1.4s transition on both origin and scale:
+writing one style on one element in an event handler, rather than re-rendering
+the layers at the pointer's frame rate to say the same thing. The origin is
+left where it was on leave, so the move reverses rather than snapping.
+
+### The cards lost their photograph, their label and their sentence
+
+*"Two elegant, text-based cards... Do not include the labels 'Rooms' or
+'Rooms & Dining'. Do not include descriptions such as 'Double-sharing rooms,
+with meals served on site.'"*
+
+The photograph went up into the hero - these two cards were where the site
+said which guest house a photograph shows, and `HOME_PHOTOS.slides` **is**
+`GUEST_HOUSE_PHOTOS` now, so the attribution is intact and in one place. A
+unit test pins that identity.
+
+`houseSummary` was **deleted** rather than left unused. It had a test pinning
+its wording, and an exported function with a test and no caller is exactly the
+drift this folder exists to stop. What a guest house offers is still said
+where somebody is deciding: the Guidelines' capacities and meal section, from
+the same store and Settings. `lib/site-content.ts` carries a note where it was.
+
+The one thing the cards still read from the store is **`serves_meals`**, which
+decides whether *Book a Meal* is one of the doors. Never the guest house's
+name - that rule is as old as the meal plan.
+
+### Contact moved onto the landing page, and the maps lost their footer
+
+*"Remove the redundant links below the maps if the same actions are already
+available within them. Do not display the guest house name again below each
+map, as it will already appear in the section above."*
+
+Both true, and both were true on `/contact` before this round: the embed
+carries "View larger map" and a directions control of its own, and the name
+was printed directly under the tab that had just been clicked. So the row
+came off `GuestHouseMap` itself and the home page never grew one - which is
+why `MapEmbed` is shared rather than copied. **The footer still links each
+guest house's map and directions**, for a reader who never reaches either
+page; that is the one place the pair is not redundant.
+
+The new section replaced the *Planning a visit?* row of two links, whose
+Contact link it makes redundant; the Guidelines link moved into it. Nothing
+else links out of the home page that did not before.
+
+### `--text-hero`, and why it is a step rather than a clamp
+
+A page's `<h1>` is `text-display`, which tops out at 48px - correct for a
+page title, small for one set in the middle of a 900px photograph. The rule
+from 11 Oct 2026 is that a new size is **a named step in `@theme inline` and
+in `TYPE_STEPS`**, never a `clamp()` at the point of use, because one-off
+clamps are how eight heading sizes reached one page. So `--text-hero`
+(40px -> 68px) is the sixth step, used once, and registered with
+tailwind-merge in the same commit - without that, `cn("text-hero", "text-white")`
+would read the size as a colour and silently drop it.
+
+## 28 October 2026 - the Taramani pass: what was borrowed, and what was refused
+
+The owner named a reference site for the first time -
+[Taramani Guest House, IIT Madras](https://tgh.iitm.ac.in/) - and asked for
+the application to be brought up to it: "premium, elegant, professional, and
+visually distinctive... avoid generic UI patterns, excessive decoration,
+unnecessary animations, and inconsistent styling."
+
+**Its stylesheet was read rather than its screenshots guessed at**
+(`/roombook/assets/index-*.css`): IIT Madras maroon `#800000`-`#8B0000`, a
+gold `#C9973A`-`#E2B95C`, a cream `#F1E9DC`, **Fraunces** for display and
+**Manrope** for text, tracking from `0.06em` to `0.18em` on its small
+capitals - and `box-shadow: 0 28px 60px`, `border-radius: 1rem`, `rounded-full`
+and five gradient pairs.
+
+So the decision is a **split**, and it is the reason this entry exists:
+
+| Theirs | Taken? |
+| --- | --- |
+| A serif display face over tracked small capitals | **Yes** - already ours (Source Serif 4 + `Label`); this round leans on it, and the hero's kicker is the clearest case |
+| A warm ground, a deep institutional colour, a gold answering it | **Yes** - `--band`, ink and **saffron**, which until now was a footer label colour and is the hero's second button and kicker |
+| Photographs *composed* rather than listed | **Yes** - the gallery's two unequal bands |
+| Shadows, gradients, pills, 16px radii | **No.** Banned here on 30 Sep 2026, and the ban is what keeps the page from reading as a template. A reference is a direction, not a stylesheet to copy |
+
+**The one place the ban was nearly broken** is the hero's type: the owner said
+it "lacks prominence", and the obvious fix is a text shadow behind the
+letters. It was written, then taken out again. What replaced it: the kicker,
+the vermilion stub, a larger and lighter lead, and the wash from **60% to
+66%** - measured, as the first pass was, so the claim is checkable (white
+display type is 3.6:1 against the brightest tenth of the middle band of
+either photograph, 7.6:1 against its average).
+
+## 28 October 2026 - one opaque bar, and one way of saying "this one"
+
+### The header
+
+> "Redesign the header/navigation bar. It currently looks too juvenile and
+> translucent. Make it fully opaque, more refined, and professionally styled.
+> Centre-align the navigation links."
+
+The translucent ink band was **one day old** - it was the answer, the evening
+before, to white links being unreadable over bare sky. Opaque removes the
+problem rather than managing it, and it let three things go at once:
+
+- **the scroll listener.** The band had to turn white once the reader left
+  the photograph. An opaque bar is legible over anything, so the colour never
+  changes and `site-header.tsx` keeps only `usePathname`;
+- **the white-header-on-other-pages split.** One bar now, on every public
+  page, which is also the portal's masthead - so the public site and the
+  signed-in service open the same way and the ink footer answers both;
+- **the question of what colour.** `#1A1A1A` is iitpkd.ac.in's own top bar.
+  Nothing was invented.
+
+It is still **laid over** the hero on `/` (`absolute`, `lg:fixed`) so the
+photograph fills the first viewport, which is what the brief before this one
+asked for and this one did not withdraw.
+
+### "Filled, never underlined"
+
+> "Improve active-tab styling so the selected tab is distinguishable without
+> relying on the conventional underline indicator."
+
+Taken as a rule rather than as a tweak to one component, because the service
+had **four** ways of saying "this one": a 3px vermilion bar (portal nav), a
+2px vermilion underline (site nav), a 3px bar over a hairline (`LinkTabs`),
+and an ink fill (`segment()`, the Approval Log's tiles). The fill was already
+the clearest and already ours, so the other three were brought to it: ink on
+white, vermilion-deep on ink. One language, and no bars left to mistake for a
+heading's rule.
+
+### And no rules under headings
+
+> "Remove the default horizontal lines or underlines beneath page and section
+> headings. Use more refined alternatives."
+
+Three went: `rule-title` (the vermilion hairline under every portal page
+title, from iitpkd.ac.in's `h1.node-title`, 11 Oct 2026 - **deleted**, it had
+one reader), `SectionHead`'s full-width rule above every public heading, and
+`SectionHeading`'s leader rule beside every console list heading. What
+replaced them: a label, the serif, space - and, on the public site, a **40px
+vermilion stub**, which is the mark the home page has carried since 15 Oct
+2026 and is now the device a section opens on.
+
+The institute's other borrowed device, `figure-serif`, is untouched: it marks
+a figure, not a heading.
+
+## 28 October 2026 - the sign-in door, and what stayed behind it
+
+> "We will not be using LDAP. The intended authentication method is Google
+> authentication, but for now, clicking the sign-in button should initiate a
+> mock authentication flow."
+
+**The interface changed; the authentication did not.** `signInWithLdap`, the
+per-uid throttle, `lib/ldap/` and *Import LDAP usernames* are all exactly as
+they were - the directory is still how real usernames get onto profiles, and
+the action is still correct if a form is ever rendered again. What went is the
+**form**: two fields, a submit button and the sentence naming the two kinds of
+account. One button is left, and it points at `/mock-login`.
+
+Three things were weighed and decided deliberately:
+
+- **The button does not say "Google" while it opens the picker.** The rule
+  that the placeholder carries no Google mark predates this round, and saying
+  it in words would be the same claim. It reads *Sign in*, with one line
+  under it - "Google sign-in is not connected yet - you will be asked to
+  choose an account" - and becomes *Sign in with Google*, with the mark, the
+  moment `GOOGLE_CLIENT_ID` is set. Nothing about that flow was built here.
+- **The e2e suite had to move with it**, because it signed in by typing into
+  the form that no longer exists. `signIn()` now opens the picker and matches
+  a persona by **name, anchored** (`^Guest House Manager\b`) - the button
+  reads "name, email, role", so an unanchored match would one day find a role
+  badge. `uid` is kept as the session cache's key and `password` is kept in
+  `ACCOUNTS` because it is still the dummy directory's.
+- **The throttle no longer protects sign-in in practice.** Nothing types a
+  password, so nothing is rate-limited at the door; the picker is open only
+  while Google is unconfigured (`mockLoginEnabled()`), which is the same gate
+  that has always stood in front of it.
+
+## 28 October 2026 - the console says less, and shows the same
+
+> "The Guest House Manager console currently feels cluttered and
+> unnecessarily complicated... remove unnecessary visual clutter without
+> removing useful information or functionality."
+
+**Every figure on that page was printed twice** - once in the ruled index at
+the top, once in the heading of the section below - and four sections drew a
+heading and a grey line to announce they were empty. On an ordinary morning
+the manager read "0" eight times before reaching the one list with work in it.
+
+So: **a list with nothing in it is not drawn**, and the index is where a zero
+is reported. That is the whole change. Nothing was moved, renamed, merged or
+hidden behind a control; the moment a list has a row it is back, in the same
+place, with the same table and the same actions.
+
+Two details that follow from it:
+
+- **A zero row is no longer a link.** It pointed at an anchor that is not
+  rendered. The row stays exactly where it was - the index does not re-sort
+  on the count, for the reason it never did: the desk reads it all day.
+- **A console with nothing at all says so**, in one line. Without it the page
+  would be a title, a tab row and an index of zeros, which reads as broken
+  rather than as quiet.
+
+**Reception got the same change in the same commit.** The two consoles share
+their tables precisely so they cannot drift, and a rule about when a section
+is drawn is exactly the kind of thing that drifts.

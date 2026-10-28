@@ -58,6 +58,9 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **16 Oct** | **The owner's thirteenth list.** Three items, none of them built before: the GHM's rates may now only start **in the future** (`tariffStartError`; the form had defaulted to today and merely described what back-dating would do), every desk list and the invoice dialog **name the guest house** they are billing for, and a guest house with **no kitchen prints no dining section** on its invoice - invoice **version 5**, with the meal counts zeroed server-side and the letters down to Grand Total (A+B). **No migration.** |
 | **17 Oct** | **The owner's fourteenth list**, nine items about the booking page and one approval route. The **tariff categories move to a panel on the right of the booking page and become a question** - choosing one writes the guest house and the booking type, which is what the rate is resolved from, so nothing is quoted that the invoice would not charge; the rates card is deleted from the form. **Guest Details now stands above Meal Booking**, meals are asked as **Yes / No** (No by default, the section hidden on No), and the meal section carries the owner's caretaker sentence. The nav's New Booking becomes **Room Booking** and **Meal Booking** (`/book/meals`, a route so the nav can light the open door). My Bookings is **Current, Upcoming and Previous**, the last five at a time with Show all and the archive beside it. And a student whose **hostel is NULL** goes straight to the Guest House Manager **explicitly** - it already did, by the generic "a stage nobody can decide is skipped" rule, but the log called it a console nobody had filled in and the mail module would have copied a warden who does not exist. A **day scholar persona** to test it with. **No migration.** |
 | **13 Oct**, later | **The second door closed, the schema left alone.** Migration 31 drops the `profiles -> auth.users` foreign key and all **38** `authenticated` RLS policies, so a portal account no longer implies a database credential; `createProfile` and `seed.sql` mint no Supabase password. The normalization review found **two** real problems worth acting on (`profiles` had almost no indexes and no checks - fixed; `total_rooms` can drift - recorded) and four denormalizations that are correct as they are. **No table split, no column dropped.** Two repair scripts, 16 new tests. Migration 31 deliberately **not** applied to the hosted project. |
+| **27 Oct** | **What to request from the institute, per kind of user.** No code change: one root document, [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) - the schema explained for somebody who has not read it, a section per kind of account saying which columns to fill and which to leave blank, five copy-and-send sheet specifications, and the drop list. Probing the hosted project rather than reading these notes found four things wrong with them: **migration 32 is applied** (recorded as not), 31/33/34 are **unknown** rather than unapplied, **`units` is empty** so no faculty booking has an HOD stage and the `unit` column cannot be imported at all, and every hosted profile has no LDAP username, unit or staff category. The document's real warning is that a student record naming **one** parent withholds the other from the form entirely - so it is **both parents or neither**. |
+| **27 Oct** (second) | **The landing page redesigned**, to a written brief: "modern, cinematic, elegant". The hero becomes a **full-viewport photograph** with the navigation laid over it as a translucent ink band, the page's title and both doors set in the middle of it, **two** slides instead of six and **no visible controls** - clicking the photograph pauses it. Below it: the six amenities in one ruled strip, a **six-thumbnail** gallery preview, **text-only** guest house cards (no photograph, no label, no summary line - `houseSummary` deleted), and a new **Contact us** section with one map per guest house. The row of links under every map is gone, on `/contact` too. **Public site only** - no migration, no store operation, no booking rule. |
+| **28 Oct** | **The Taramani pass, and the sign-in.** Two briefs. The first names the [Taramani Guest House](https://tgh.iitm.ac.in/) as the standard: a stronger hero (saffron kicker, a 66% wash, a **solid saffron** second door), **one opaque charcoal header on every page** with the links **centred**, Amenities / Our guest houses / Contact us **centred**, the gallery recomposed into two unequal bands - and, application-wide, **no rule under any heading** (`rule-title` deleted) and **everything selected filled rather than underlined**. The second is functional: **LDAP comes off the sign-in page** (one button, the mock account picker; the action and directory untouched), the advance-window and stay-cap sentences come **off the booking form** (no rule changed), a count reads **"Current bookings: 1"**, and the manager's console **stops drawing a list with nothing in it** - the index at the top is where a zero is reported. Reception got the same. **No migration.** |
 
 ## The problem
 
@@ -987,6 +990,164 @@ With three sections the first reference on the page belongs to whatever stay
 is current, and one journey went on to drive **somebody else's booking**. They
 now read the confirmation toast (`submittedReference`) -
 [22-running-and-testing.md](22-running-and-testing.md) Part 2.
+
+---
+
+## What to request from the institute, per kind of user - 27 October 2026
+
+**What was asked.** *"I currently have few types of users, like Student,
+Faculty, Department Offices [Director, Branch Department like Data Science],
+IAR Cell.etc. So like i need to import the data for these users. I dont know
+the database structure actually. So can you give me a document telling how to
+import these data and what all columns of data i need to request for each kind
+of user."*
+
+**Status: done.** One new root document, no code change, and five corrections
+to this folder - four of which came from probing the hosted project instead of
+reading the notes.
+
+| Item | Status |
+| --- | --- |
+| A document explaining the database structure to somebody who has not read it | Done - [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §1 |
+| The exact columns to request, per kind of user | Done - §5, one section each for student, faculty, non-teaching staff, department office, officer office, IAR Office, IAR Student Cell, club / council, Assistant Warden |
+| A copy-and-send version for the institute | Done - §6, five sheet specifications and five questions to ask alongside them |
+| How to import it | Done - §7, pointing at [`IMPORTING-USERS.md`](../IMPORTING-USERS.md) for the click path rather than repeating it |
+| Saved in the project root | Done |
+
+**Why a third document and not a section of the other two** is in
+[02-decisions.md](02-decisions.md) under this date: the runbook is read at the
+console on the day and is organised by what to press; this question is answered
+weeks earlier, in an email, and is organised by kind of person.
+
+### What probing the database found
+
+Read-only over PostgREST, 27 Oct 2026. All four of these contradicted what was
+written here:
+
+1. **Migration 32 is applied** - `user_import_batches` exists. This folder had
+   recorded 31-34 as deliberately not applied, re-verified 14 Oct. **31, 33 and
+   34 cannot be probed and are now recorded as *unknown*** rather than as not
+   applied; 31 is the one that matters, because `createProfile` fails without
+   it.
+2. **`units` is empty on the hosted project** - 0 rows. It blocks the `unit`
+   column of the import outright, and means **no faculty official booking has
+   an HOD stage at all**. Invisible locally, because the seed creates units only
+   in the mock store.
+3. **All 13 hosted profiles have `ldap_uid`, `unit_id` and `staff_category`
+   empty**, and the hosted seed still carries the `faculty_advisor` persona
+   migration 25 retired - so those rows are not a model for a real account.
+4. **`academic_records` is empty**, so no student's parents are locked today.
+
+Also counted: `hostels` 2 (Saveri, Malhar), `official_email_whitelist` 3,
+`guest_houses` 2, `rooms` 23, `bookings` 34. Recorded in
+[04-production.md](04-production.md) §1a.2, and the four open items in
+[03-roadmap.md](03-roadmap.md) §1.
+
+### The one rule the document exists to warn about
+
+`guestNameRule` (7 Oct 2026) means an **incomplete** student academic record is
+worse than none: a record naming one parent and not the other **withholds the
+missing one from the dropdown entirely**, so that student cannot book for their
+mother at all. No record leaves the form fully open; both parents locks both and
+waives their ID documents. So the ask to the institute is **both parents' names
+for every student, or neither** - which nobody would infer from a column list,
+and which is the office's decision to make rather than ours.
+
+---
+
+## The landing page redesigned - 27 October 2026 (second)
+
+A written brief rather than a correction list: six numbered sections, the
+owner's own copy for the hero, and a page of quality requirements -
+
+> I want to redesign the landing page of the IIT Palakkad Guest House Booking
+> Portal to make it modern, cinematic, elegant, and aesthetically pleasing,
+> while maintaining a professional institutional identity. [...] Let the hero
+> section be the visual highlight. Keep the remaining sections clean and
+> elegant, avoiding excessive animations, gradients, decorations, or clutter.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | A cinematic hero: full viewport, the navigation **layered over it**, only the **first two** of the six slideshow photographs, a translucent solid-colour overlay from the institute's palette, the title and lead centred over it, *Book a Room* / *Book a Meal* under them, a slow continuous zoom that eases **towards the pointer**, automatic transitions, **no numbering and no pause button**, **click the image to pause and resume** | **Done.** `min-h-svh`, `bg-ink/60` (measured: white display type clears 3:1 against the brightest tenth of the middle of either photograph), 6.5s a slide with a 1.4s cross-fade, `hero-drift` 30s alternating, the pointer moving `transform-origin` through a ref. The click target is a labelled `<button>` under the title block, so it is operable from the keyboard and announced |
+| 2 | Keep every amenity, improve the layout, centre it if balanced, keep it compact | **Done.** The same six from `amenities()`, in one ruled strip of 2 / 3 / **6** columns, the icon over its label, centred. The **headings stay left**: the gallery section has to carry a link at its top right, and one centred heading among four left-ruled ones is the inconsistency the brief warns about |
+| 3 | A compact gallery preview, the best photographs, **neither hero image**, heading left and *See the full gallery* top right | **Done.** Six thumbnails in one row (2 / 3 / 6), where it was a 540px mosaic of four - the tallest thing on the page. `HOME_PHOTOS.preview` repointed and varied so no two frames beside each other look alike |
+| 4 | Two **text-based** guest house cards: the name, *Book a Room*, and *Book a Meal* for Hamsanandi. No images, no "Rooms" / "Rooms & Dining" label, no description | **Done.** `houseSummary` **deleted** with its test rather than left uncalled. The meal door follows `serves_meals`, never the guest house's name |
+| 5 | Contact details - both locations, the manager's phone and email - with a map each; **no repeated name or links under a map** | **Done.** A new section on the home page, and the row came off `GuestHouseMap` itself, so `/contact` loses it too. The embed carries its own "View larger map" and directions; the **footer** still links both, for a reader who reaches neither page |
+| 6 | Keep the footer | **Untouched** |
+
+**Two September decisions were reversed, both asked for outright** and both
+recorded as *Superseded* notes in [02-decisions.md](02-decisions.md): a
+photograph may be full-bleed (it carries the `<h1>` now, and it is the only
+one on the site), and the header may lie over it (as a translucent ink band,
+not as nothing - white links over bare sky measured 2.4:1, which is what
+"unreadable" meant in September).
+
+**What else changed around the edges.** `site-header.tsx` is a client
+component now, because only the client knows the path and the scroll
+position; `NavBar` gained `tone="overlay"`; `MapEmbed` is shared by the two
+pages that draw a map; `--text-hero` is a sixth named type step, registered
+with tailwind-merge in the same change; the nav reads **Book a Meal** rather
+than "Book Meal", matching the hero and the cards.
+
+**No migration, no store operation, no server action, no booking rule, and
+no portal page.** Verified with lint, types, 603 unit tests, a production
+build and the Playwright journeys on both the desktop and 320px phone
+projects - plus screenshots read back at 1440px and 390px, which caught two
+things the tests could not: half-empty map cards, and a title that wrapped to
+"IIT Palakkad -" over "Guest House" on a phone.
+
+---
+
+## The Taramani pass, and the sign-in - 28 October 2026
+
+Two briefs in one sitting, and the first time the owner named a reference
+site.
+
+> I want to redesign the landing page [...] taking inspiration from the
+> **Taramani Guest House, IIT Madras** website. Review the reference website
+> to understand its visual style, layout, and presentation, and use it as
+> inspiration without copying it directly.
+
+> We will **not be using LDAP**. The intended authentication method is Google
+> authentication, but for now, clicking the sign-in button should initiate a
+> **mock authentication flow**.
+
+### Brief one - the look
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | The hero: the new lead sentence, type that stands out against the photographs, a **solid** *Book a Meal*, an **opaque** refined header with **centred** links | **Done.** The institute's name in tracked saffron capitals above the `<h1>`, a vermilion stub under it, the lead at 21px, the wash 60% -> **66%** (measured, not guessed), `siteButton.saffron` beside the vermilion one, and **one opaque charcoal bar on every public page** - iitpkd.ac.in's own top-bar colour, which is also the portal's masthead |
+| 2 | Centre Amenities, Our Guest Houses and Contact Us | **Done.** The gallery stays left, as the brief allowed: its heading carries the link to `/gallery`, and a centred heading would strand it |
+| 3 | A curated gallery | **Done.** Six photographs in two bands of unequal widths on one row height, in place of six equal thumbnails |
+| 4 | A polished, centred Contact Us | **Done.** The phone, email and address as one ruled band of three, then one map per guest house |
+| 5 | Application-wide: no rules under headings, no underlined tabs, review the small secondary text, a distinctive identity, a clean manager console | **Done.** `rule-title` **deleted** with the rules under `SectionHead` and `SectionHeading`; everything selected is **filled** (`NavBar`, `LinkTabs`, `segment()` and the log's tiles now agree); the console is item 4 of the second brief |
+
+**What was borrowed and what was refused** is in
+[02-decisions.md](02-decisions.md) under this date: their stylesheet was read
+(maroon, gold, cream, Fraunces over Manrope, tracking to 0.18em - and
+`box-shadow: 0 28px 60px`, `border-radius: 1rem`, `rounded-full`), and the
+four things this project has banned since 30 Sep 2026 were left where they
+were.
+
+### Brief two - the service
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | No LDAP; the button starts a **mock** flow; no photograph; centred; no domain sentence | **Done.** The three doors are one centred panel with one button into `/mock-login`. **`signInWithLdap`, the throttle and `lib/ldap/` are untouched** - the directory still backs *Import LDAP usernames*, and the door is a form away if the institute wants it |
+| 2 | Remove the advance-window and stay-cap sentences from New Booking | **Done**, and nothing else: the date boxes keep their `min`/`max`, `advanceWindowMessage` is still the schema's error, the Guidelines still state both rules |
+| 3 | "Current bookings: 1" rather than "Current bookings 1" | **Done** in `SectionHeading`, so every console list reads the same way |
+| 4 | Simplify the Guest House Manager console | **Done.** A list with nothing in it is not drawn; the ruled index at the top still names every list, in the same order, and is now where a zero is reported; one line when the whole desk is clear. **Reception got the same**, because the two consoles share their tables and must not drift |
+
+**No migration, no store operation, no booking rule, no permission and no
+route changed.** The e2e suite had to move with the sign-in door - it typed
+into a form that no longer exists - and now signs in through the account
+picker by name.
+
+**Verified** with lint, types, 603 unit tests, a production build and the
+Playwright suite (49/50, the one failure a **midnight-rollover flake** in a
+fixture that builds two dates from "now" either side of IST midnight; 3/3 on
+a re-run), plus screenshots read back at 1440px and 390px, which caught a
+stray space before a colon and three contact cells left top-aligned.
 
 ---
 

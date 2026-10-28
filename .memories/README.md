@@ -60,14 +60,28 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwright.
 **Node 20** via nvm; the machine default is 18.
 
-**Status, 17 Oct 2026.** Feature-complete for every workflow specified; taken
+**Status, 28 Oct 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme, **twelve** rounds of the
-office's corrections and the owner's **thirteenth and fourteenth lists**, two
-design passes,
+office's corrections and the owner's **thirteenth and fourteenth lists**,
+**four** design passes,
 the round that put **the approval workflow itself in the manager's hands**
 (Console -> Approval Workflow), and two rounds preparing the institute's
 **user import** - which closed a GoTrue door the portal had never used and
-gave the import an **undo**. The last round is nine items about the booking page: the
+gave the import an **undo**. **The last round is two briefs.** The first names the
+**Taramani Guest House (IIT Madras)** site as the standard: the header becomes
+**one opaque charcoal bar on every page** with its links centred, the hero
+gains a saffron kicker and a **solid saffron** second door, Amenities / Our
+guest houses / Contact us are **centred**, the gallery is recomposed - and,
+across the whole application, **no rule runs under any heading** and
+**whatever is selected is filled, never underlined**. The second is
+functional: **LDAP comes off the sign-in page** (one button into the account
+picker; the action and the directory untouched), two rule sentences come off
+the booking form, a count reads **"Current bookings: 1"**, and the manager's
+console **stops drawing a list with nothing in it**. The round before it made
+the landing page cinematic: a **full-viewport hero** with no visible controls
+(click the photograph to pause). The round before it was no code at all -
+[`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md), what to ask the
+institute for per kind of user. The one before that was nine items about the booking page: the
 **tariff categories move to a panel on the right and become a question**
 (choosing one writes the guest house and the booking type, which is what the
 rate is resolved from), **Guest Details stands above Meal Booking**, meals are
@@ -89,15 +103,24 @@ number is the manager's, free rooms are counted in green, past dates are
 greyed out of the week and month views, the privacy consent tick is gone, and
 **bookings open six months ahead**). **Not deployed for real use** — everything that first deployment needs is in
 [04-production.md](04-production.md), and the gates are
-[03-roadmap.md](03-roadmap.md) §1. Migrations **31-34 are written and tested
-but deliberately not applied** to the hosted project, and the hosted project's
-email/password provider is **still on**: [04-production.md](04-production.md)
-§1a.1 is the order to do it in.
+[03-roadmap.md](03-roadmap.md) §1. The hosted project has **1-30 and 32**
+(re-verified 27 Oct 2026 - **32 was applied since 14 Oct**, which this folder
+had recorded as not applied); **31, 33 and 34 cannot be probed over PostgREST
+and their state is unknown**, which matters most for 31, and the hosted
+project's email/password provider is **still on**:
+[04-production.md](04-production.md) §1a.1 is the order to do it in. On that
+project `units` is **empty**, so nothing routes to an HOD yet -
+[`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §3 and §4.2.
+
+**Signing in** is **one button** since 28 Oct 2026: Google once it is
+configured, the account picker until then. LDAP is withdrawn from the
+interface and intact underneath -
+[05-credentials-and-security.md](05-credentials-and-security.md) Part 2.
 
 **Numbers.** 34 migrations · 10 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
 19 demo personas · 6 demo bookings · 23 real rooms · **25 photographs** ·
-603 unit tests · 48 end-to-end journeys · 15 console sections ·
+603 unit tests · 50 end-to-end journeys · 15 console sections ·
 **5 invoice layout versions**.
 
 ---

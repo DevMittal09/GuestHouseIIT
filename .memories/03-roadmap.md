@@ -72,6 +72,36 @@ deliberately not done yet").
   already applied them. **Run the script rather than writing the answer down
   again.** Migrations **17 and 23** are function-only and it cannot see them;
   the one-line SQL for those is in the same file.
+- **Find out whether migrations 31, 33 and 34 are applied, and record it.**
+  Re-probed 27 Oct 2026: **32 is now in** (it had been recorded as deliberately
+  not applied), so somebody applied at least one of the four. 31, 33 and 34 add
+  only a dropped constraint, policies, a trigger and indexes, which PostgREST
+  cannot see, so the script names them and prints the SQL. **31 is the one that
+  matters**: without it `createProfile` fails outright and the 38
+  `authenticated` policies are still behind any GoTrue JWT. Paste the four
+  queries ([04-production.md](04-production.md) §5, also in
+  [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §3.2).
+- **Create the units on the hosted project.** `units` is **empty** there
+  (measured 27 Oct 2026), so no `unit` value can be imported and **no faculty
+  official booking has an HOD stage at all** - it is skipped, logged, and
+  reaches the desk unapproved. Eleven departments, their department offices,
+  the officer offices, the clubs and councils; how each is modelled is
+  [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §4.2. This
+  blocks the user import, not just HOD routing.
+- **Decide the student-record policy before the institute's sheet is
+  requested.** A student record with **one** parent named and the other blank
+  withholds the missing parent from the form entirely - that student cannot
+  book for their mother at all (`guestNameRule`). A record with **neither** is
+  harmless, and **no record at all** leaves the form fully open. So a
+  half-filled parent column is worse than an empty one, and the ask to the
+  institute has to say so. Reasoning in
+  [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §5.1.
+- **Confirm the institute's real office mailbox addresses before loading the
+  office accounts.** `OFFICE_DEBIT_HEADS` narrows an office's budgets on the
+  **local part** of its address (`office_ds`, `director_iitpkd`, `ro`…), so an
+  office loaded as `datascience.office@` silently keeps the category's wider
+  six-head list. The fix is either the real mailbox or a new `aliases` entry,
+  which is a code change - so it is much cheaper to ask first.
 ## 2a. Loose ends from the 8 Oct 2026 round
 
 - ~~Confirm whether the Special Budget approval upload should be mandatory~~ —
@@ -416,21 +446,31 @@ Four of the five items closed outright. What they opened:
 
 Every item of both rounds closed. What they opened:
 
-**From the slideshow (second round):**
+**From the slideshow (second round)** - ~~the arrows, the numbering and the
+Pause button~~ were removed on 27 Oct 2026, which closed the items about them.
+What still stands, now about the hero:
 
-- **Nothing drives the slideshow with a keyboard in the suite.** The controls are real `<button>`s with
-  labels and visible focus rings, and the e2e journey clicks them, but no test tabs to them, and none
-  checks that focus inside the carousel holds the rotation - which is the behaviour a keyboard reader
-  actually depends on. Nor is `prefers-reduced-motion` exercised; Playwright can emulate it in one line
-  (`test.use({ reducedMotion: "reduce" })`) and that is the cheap version of this item.
-- **The e2e journey costs ~14s per project, so ~28s of the suite**, waiting on real timers. It is the only
-  honest way to test "it moves by itself". If the suite gets slow, look here first - the fix is to make
-  `ADVANCE_MS` injectable rather than to delete the assertion.
-- **No swipe.** A phone reader uses the arrows (44px targets at the photograph's edges). Touch-dragging is
-  the obvious next ask and is not built; it would need pointer handlers on the track and care not to eat
-  vertical scrolling.
-- **The slideshow's photographs are a hardcoded list** (`HOME_PHOTOS.slides`), like everything else in
-  `lib/site.ts`. Changing which ones appear, or their order, is a code change.
+- **Nothing drives the hero with a keyboard in the suite.** The pause control
+  is a real `<button>` with a label and a visible focus ring, and the e2e
+  journey clicks it, but no test tabs to it, and none checks that focus inside
+  the hero holds the rotation - the behaviour a keyboard reader depends on.
+  Nor is `prefers-reduced-motion` exercised; Playwright emulates it in one
+  line (`test.use({ reducedMotion: "reduce" })`) and that is the cheap version
+  of this item. **Bigger now than it was**, because the pointer no longer
+  holds the rotation and focus is the only thing left that does.
+- **The e2e journey costs ~15s per project, so ~30s of the suite**, waiting on
+  real timers. It is the only honest way to test "it moves by itself". If the
+  suite gets slow, look here first - the fix is to make `ADVANCE_MS`
+  injectable rather than to delete the assertion.
+- **No swipe, and now no arrows either.** A phone reader can pause by tapping
+  and wait 6.5s for the other photograph; there is no way to go *back*. With
+  two slides that is a small thing. If a third is ever added it stops being
+  one - and the fix is touch handlers, not the arrows coming back, which the
+  brief removed on purpose.
+- **The hero's photographs are a hardcoded list** (`HOME_PHOTOS.slides`), like
+  everything else in `lib/site.ts`. Changing which ones appear, or their
+  order, is a code change - and these two are also `GUEST_HOUSE_PHOTOS`, so
+  changing them changes which photograph the site attributes to each house.
 
 **From the ink panel and the booking doors (later the same day):**
 
@@ -440,10 +480,12 @@ Every item of both rounds closed. What they opened:
 - **`SIGN_IN_PHOTOS.bookRoom` and `.bookMeal` are unplaced.** Both photographs are still in the Gallery, so
   nothing is orphaned and no test fails; they are kept because restoring either image is one prop. Drop them
   from the registry if the decision settles.
-- **The home page's masthead is the only centred block on the site.** It reads as a title page under the
-  slideshow. Centring the sections below would mean rebuilding `SectionHead`, whose construction *is* a
-  left-hand label over a full-width hairline. Recorded so a later pass does not "make it consistent" by
-  accident - in either direction.
+- **The home page's title is the only centred block on the site**, and since
+  27 Oct 2026 it is set over the photograph rather than under it. Centring the
+  sections below would mean rebuilding `SectionHead`, whose construction *is*
+  a left-hand label over a full-width hairline - and the gallery section needs
+  that row for its link. Recorded so a later pass does not "make it
+  consistent" by accident, in either direction.
 - **Nothing tests that the credentials box stays gone.** It is the kind of thing a demo-friendly change puts
   back. A one-line unit or e2e assertion that no public page contains a password field's example value would
   hold it; `AGENTS.md` carries the rule in the meantime.
@@ -470,10 +512,9 @@ Every item of both rounds closed. What they opened:
   no home-page alt text names a guest house. They cannot check the attribution
   itself - that rests entirely on the owner's message of 15 Oct 2026, which is
   quoted in [01-background.md](01-background.md).
-- **The hero is taller than it was**, because it now carries two photographs
-  instead of one. Verified at 320px (no sideways scroll, one `<h1>`), but
-  nothing measures how far down the page the amenities now start. §5's missing
-  visual regression test would cover this and the green figures both.
+- ~~**The hero is taller than it was**~~ - it is now a full viewport by
+  design (27 Oct 2026), so "how far down the page the amenities start" is
+  answered rather than open. §5's missing visual regression test still stands.
 
 ## 2i. Opened by the 16 Oct 2026 round - the owner's thirteenth list
 
@@ -556,6 +597,91 @@ All nine items closed. What they opened:
   component.
 
 ---
+
+## 2k. Opened by the 27 Oct 2026 (second) round - the cinematic landing page
+
+Every item of the brief closed. What it opened:
+
+- ~~**The overlay header reads the scroll position in JavaScript.**~~
+  **Closed 28 Oct 2026**: the header is opaque on every page, so there is no
+  scroll state and no first-frame flash. The original note follows, because
+  the technique would come back with a translucent header.
+- **(closed)** `scrollY > 24`
+  in a listener, so between the first paint and hydration the header on `/` is
+  always in its over-the-photograph state. That is the correct state at the
+  top of the page, which is where a first paint is - but a reader who lands on
+  `/` already scrolled (a reload part-way down) sees white type on white for
+  one frame. A `scroll-timeline` or an `IntersectionObserver` sentinel would
+  fix it without a listener; neither was worth it for one frame.
+- **Nothing tests the overlay header at all.** The e2e journeys check the
+  hero's behaviour and the sections below it, not that the header turns solid
+  on scroll or that its links stay readable over the photograph. The contrast
+  figures in [02-decisions.md](02-decisions.md) were measured by hand against
+  the two photographs that are in the hero **today** - a third photograph, or
+  a brighter replacement for either, is not checked by anything.
+- **`prefers-reduced-motion` has three jobs here now** (the rotation, the
+  drift, the pointer zoom) and is still exercised by nothing. See §2h.
+- **The pointer zoom is mouse-only** (`e.pointerType !== "mouse"` returns
+  early). A trackpad reports as a mouse and is fine; a pen does not, and gets
+  the drift alone. Deliberate - a tap is the pause, and a zoom that followed a
+  finger would fight it - but it is a decision nobody will remember.
+- **Two map iframes now load on the home page.** They are `loading="lazy"` and
+  below the fold, so nothing is fetched until a reader scrolls to them, but
+  the home page can now reach Google's servers where it never did before. If
+  the institute ever asks for a cookie or third-party notice, this is the page
+  that needs it, not just `/contact`.
+- **The maps are slow to paint.** Measured: the embed is a 301 to
+  `google.com/maps/embed` and then four `maps.googleapis.com` scripts, so a
+  screenshot 2.5s after scrolling is still blank. Unchanged from `/contact`
+  and not something this round can fix, but worth knowing before somebody
+  reports the home page's maps as broken.
+- **`houseSummary` is deleted.** If the office ever asks for a line under each
+  guest house's name again, it is in the git history of
+  `lib/site-content.ts`, and a note where it was says so.
+- **The guest houses are still listed in the store's order on the home page
+  and the registry's order in the maps** - Bageshri first in the cards,
+  Hamsanandi first in the maps, **on the same page now**, which is where it
+  finally shows. See §2h for the two ways to fix it; it is the owner's call.
+
+## 2l. Opened by the 28 Oct 2026 round - the Taramani pass and the sign-in
+
+Every item of both briefs closed. What they opened:
+
+- **The sign-in throttle no longer protects the door.** Nothing types a
+  password, so `RATE_LIMITS.signIn` guards an action the interface does not
+  call. It still guards `signInWithLdap` itself, and the account picker is
+  open only while Google is unconfigured - but if the picker is ever the real
+  door for a deployment, the question "what stops somebody signing in as the
+  manager" has only one answer today, and it is `mockLoginEnabled()`.
+  [04-production.md](04-production.md) already carries closing that door as a
+  gate; this round makes it the **only** gate.
+- **The LDAP form has no test and no caller.** `signInWithLdap`, the
+  throttle, the "one message for both failures" rule and the empty-password
+  refusal are all still there and still unit-covered where they were, but no
+  journey exercises the door any more. If it is ever rendered again, re-read
+  `05-credentials-and-security.md` rather than trusting that it still works.
+- **Nothing tests the opaque header**: not that white links stay readable
+  over the hero (the measurement is in [02-decisions.md](02-decisions.md),
+  taken against the two photographs that are in the hero *today*), and not
+  that the centred row and the lockup do not collide at an awkward width.
+  A third photograph, or a brighter replacement for either, is checked by
+  nothing.
+- **The quiet console is untested.** That a list with nothing in it is not
+  drawn, that the index still names it, and that a zero row is not a link -
+  three assertions, and the state is easy to arrange (a guest house with no
+  bookings).
+- **`fifth-round.spec.ts` has a midnight flake.** The database is seeded with
+  a stay six days out and the test moves its check-in five days out; both are
+  built from "now", so a run that crosses IST midnight makes them the same
+  day and the button is correctly disabled. It cost a full suite run to
+  diagnose. The fix is for the test to read the stay's current check-in and
+  choose a different day, rather than counting from today.
+- **`SIGN_IN_PHOTOS` is entirely unplaced** now that `/sign-in` has no
+  photograph either. Kept deliberately (one prop restores any of them, and
+  all are in the Gallery); drop the registry if the decision settles.
+- **`text-hero` and `--saffron-deep` have one reader each.** That is correct
+  for a type step used by one heading, but it is the shape a scale drifts
+  into: check before adding a seventh step or a third saffron.
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 

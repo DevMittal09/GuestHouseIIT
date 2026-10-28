@@ -1,13 +1,4 @@
-"use client";
-
-import { useState, useTransition } from "react";
 import Link from "next/link";
-import { KeyRoundIcon } from "lucide-react";
-import { signInWithLdap } from "@/app/actions/auth";
-
-const LABEL = "mb-[7px] block text-[13.5px] font-semibold text-ink";
-const INPUT =
-  "block w-full rounded-[4px] border border-input bg-white px-3.5 py-[13px] text-[15.5px] text-ink placeholder:text-[#8f8880] focus-visible:border-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-vermilion aria-invalid:border-destructive";
 
 /** The Google "G", as Google's sign-in button guidelines draw it. */
 function GoogleMark() {
@@ -22,19 +13,28 @@ function GoogleMark() {
 }
 
 /**
- * The sign-in form the institute sees, on `/sign-in`, `/book-room` and
- * `/book-meal` (inside `SignInPanel`, which supplies the heading): an LDAP
- * username and password, or the second door.
- * `signInWithLdap` redirects on success, so the only state this holds is the
- * error from a failed attempt.
+ * The sign-in door, inside `SignInPanel` (which supplies the heading).
  *
- * The second door is **"Sign in with Google"** - the real OpenID Connect flow
- * (`/api/auth/google/start`, Phase 8) - once Google is configured. Until then
- * it is **"Mock Authentication"**, the persona picker at `/mock-login`, and it
- * says so rather than promising Google and delivering something else.
- * "Keep me signed in" and "Forgot password" from the design are deliberately
- * absent - passwords belong to the directory, and a control that does nothing
- * is worse than none.
+ * **One button, and no password** (27 Oct 2026, the owner: "we will not be
+ * using LDAP. The intended authentication method is Google authentication,
+ * but for now, clicking the sign-in button should initiate a mock
+ * authentication flow"). So:
+ *
+ * - **Configured Google** (`GOOGLE_CLIENT_ID` and friends) - *Sign in with
+ *   Google*, the Google mark, the real OpenID Connect flow at
+ *   `/api/auth/google/start` (Phase 8). Nothing about it was built in this
+ *   round; the button has always pointed there.
+ * - **Otherwise** - *Sign in*, opening the account picker at `/mock-login`,
+ *   with one line underneath saying what that is. The mark is **not** drawn
+ *   on this one: a Google "G" on a button that does not talk to Google
+ *   claims something untrue, and that rule predates this round.
+ *
+ * **The LDAP username and password fields are gone**, and so is every
+ * mention of LDAP here. `signInWithLdap` (`app/actions/auth.ts`) and
+ * `lib/ldap/` are **untouched** - the directory still backs *Import LDAP
+ * usernames* in Users & Roles, and the door can be reopened by rendering a
+ * form again. Nothing about sessions, roles or access control changed: both
+ * doors end in the same `sessions` row that `getCurrentUser()` reads.
  */
 export function LoginForm({
   next,
@@ -43,138 +43,61 @@ export function LoginForm({
   center,
   googleSignIn = "none",
   notice,
-  domainNote,
 }: {
   /** Where to land after signing in, when the page wants somewhere specific. */
   next?: string;
   submitLabel?: string;
   footnote?: React.ReactNode;
-  /** Centre the prose around the fields. The labels stay left - see `SignInPanel`. */
+  /** Centre the prose under the button. */
   center?: boolean;
   /** Real Google sign-in, the mock account picker, or neither. */
   googleSignIn?: "google" | "mock" | "none";
   /** A message from a failed sign-in (`?error=` on the way back from Google). */
   notice?: string | null;
-  /** Which accounts may sign in, shown under the fields. */
-  domainNote?: React.ReactNode;
 }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  const secondDoorPath = googleSignIn === "google" ? "/api/auth/google/start" : "/mock-login";
-  const secondDoorHref = next
-    ? `${secondDoorPath}?next=${encodeURIComponent(next)}`
-    : secondDoorPath;
-
-  const submit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError(null);
-    startTransition(async () => {
-      const result = await signInWithLdap(username, password, next);
-      // Only a failure returns - success leaves through `redirect()`.
-      if (!result.ok) {
-        setError(result.error);
-        setPassword("");
-      }
-    });
-  };
+  const google = googleSignIn === "google";
+  const path = google ? "/api/auth/google/start" : "/mock-login";
+  const href = next ? `${path}?next=${encodeURIComponent(next)}` : path;
 
   return (
     <div className="min-w-0">
-      <div>
-        {notice && (
-          <p role="alert" className="mb-4 rounded-[3px] border border-red-300 bg-red-50 px-3 py-2 text-[14.5px] text-red-900">
-            {notice}
-          </p>
-        )}
-        <form onSubmit={submit} noValidate>
-          <label htmlFor="login-username" className={LABEL}>
-            LDAP username
-          </label>
-          <input
-            id="login-username"
-            name="username"
-            type="text"
-            autoComplete="username"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            placeholder="e.g. 142301026"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? "login-error" : undefined}
-            className={`${INPUT} mb-[18px]`}
-          />
+      {notice && (
+        <p
+          role="alert"
+          className="mb-5 rounded-[3px] border border-red-300 bg-red-50 px-3 py-2 text-[14.5px] text-red-900"
+        >
+          {notice}
+        </p>
+      )}
 
-          <label htmlFor="login-password" className={LABEL}>
-            LDAP password
-          </label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? "login-error" : undefined}
-            className={`${INPUT} mb-[22px]`}
-          />
+      {googleSignIn === "none" ? (
+        <p className="rounded-[3px] border border-notice-border bg-notice px-4 py-3 text-[14.5px] leading-[1.55] text-ink">
+          Sign-in is not configured on this deployment. Ask the guest house office.
+        </p>
+      ) : (
+        <Link
+          href={href}
+          prefetch={false}
+          className="flex w-full items-center justify-center gap-3 rounded-md bg-vermilion-deep p-3.5 text-[15.5px] font-semibold text-white transition-colors duration-150 hover:bg-vermilion-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion"
+        >
+          {google && <GoogleMark />}
+          {google ? "Sign in with Google" : submitLabel}
+        </Link>
+      )}
 
-          {error && (
-            <p id="login-error" role="alert" className="-mt-2 mb-4 text-sm text-destructive">
-              {error}
-            </p>
-          )}
+      {googleSignIn === "mock" && (
+        <p
+          className={`mt-3.5 text-[13.5px] leading-[1.55] text-muted-foreground${center ? " text-center" : ""}`}
+        >
+          Google sign-in is not connected yet - you will be asked to choose an account.
+        </p>
+      )}
 
-          <button
-            type="submit"
-            disabled={isPending || username.trim() === "" || password === ""}
-            className="w-full cursor-pointer rounded-[6px] bg-vermilion-deep p-3.5 text-[15.5px] font-semibold text-white transition-colors duration-150 hover:bg-vermilion-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPending ? "Signing in…" : submitLabel}
-          </button>
-          {domainNote && (
-            <p
-              className={`mt-3 text-[13.5px] leading-[1.5] text-muted-foreground${center ? " text-center" : ""}`}
-            >
-              {domainNote}
-            </p>
-          )}
-        </form>
-
-        {googleSignIn !== "none" && (
-          <>
-            <div className="my-6 flex items-center gap-3 text-meta text-muted-foreground" aria-hidden="true">
-              <span className="h-px flex-1 bg-border" />
-              or
-              <span className="h-px flex-1 bg-border" />
-            </div>
-
-            <Link
-              href={secondDoorHref}
-              prefetch={false}
-              className="flex w-full items-center justify-center gap-3 rounded-[6px] border border-ink bg-white p-3 text-[15.5px] font-semibold text-ink transition-colors duration-150 hover:bg-ink hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion"
-            >
-              {/* The Google mark belongs only on the real Google flow - on the
-                  placeholder it would claim something the button does not do. */}
-              {googleSignIn === "google" ? <GoogleMark /> : <KeyRoundIcon className="size-5 shrink-0" aria-hidden />}
-              {googleSignIn === "google" ? "Sign in with Google" : "Mock Authentication"}
-            </Link>
-          </>
-        )}
-
-        {footnote && (
-          <p className={`mt-4 text-sm leading-normal text-muted-foreground${center ? " text-center" : ""}`}>
-            {footnote}
-          </p>
-        )}
-      </div>
-
+      {footnote && (
+        <p className={`mt-5 text-sm leading-normal text-muted-foreground${center ? " text-center" : ""}`}>
+          {footnote}
+        </p>
+      )}
     </div>
   );
 }

@@ -98,21 +98,15 @@
  * everywhere and a new page cannot invent a third.
  */
 
-/* A page title closes on the institute's vermilion hairline, with a heavier
-   stub over its start so a working screen still opens on a firm edge. */
-@utility rule-title {
-  position: relative;
-  border-bottom: 1px solid var(--vermilion);
-  &::after {
-    content: "";
-    position: absolute;
-    inset-inline-start: 0;
-    bottom: -2px;
-    width: 3.5rem;
-    height: 3px;
-    background-color: var(--vermilion);
-  }
-}
+/*
+ * `rule-title` - the vermilion hairline under a page title, from
+ * iitpkd.ac.in's `h1.node-title` - was **deleted on 27 Oct 2026**. The owner
+ * asked for the horizontal rules under page and section headings to go
+ * ("use more refined alternatives"), and it had exactly one reader,
+ * `PageHeader`. What replaced it there is the label above the title and the
+ * space below it; what replaced `SectionHead`'s is a 40px vermilion stub.
+ * The institute's other device, `figure-serif`, is untouched.
+ */
 
 /* Every figure the reader is meant to compare - a queue's count, rooms free,
    a total - is set in the serif with tabular numerals, as the institute sets
@@ -125,6 +119,25 @@
   font-optical-sizing: auto;
 }
 
+/*
+ * The home page's full-screen hero (27 Oct 2026): a slow, continuous zoom
+ * across the photograph behind the title - "cinematic photograph with the
+ * text naturally integrated into it, rather than a conventional website
+ * banner". It alternates rather than resetting, because a hard cut back to
+ * 1.0 every half minute is the one thing a reader would notice.
+ *
+ * It is the only keyframed animation the site has, and it is applied through
+ * `motion-safe:` so `prefers-reduced-motion` leaves the photograph still.
+ */
+@keyframes hero-drift {
+  from {
+    transform: scale(1.02);
+  }
+  to {
+    transform: scale(1.12);
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -132,13 +145,18 @@
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-heading: var(--font-source-serif), Georgia, serif;
   /*
-   * The type scale, five named steps and nothing between them (11 Oct 2026).
+   * The type scale, six named steps and nothing between them (11 Oct 2026;
+   * `hero` added 27 Oct 2026).
    * Headings used to be written as one-off `clamp()` values at the point of
    * use, which is how eight different sizes of heading appeared on one page.
-   * A step is a decision about rank, so it is named: display for a page
+   * A step is a decision about rank, so it is named: hero for the home
+   * page's title over its photograph, display for a page
    * title, title for a section of the public site, section for a console's
    * list, card for a card, meta for small print. Body text is `text-base`.
    */
+  --text-hero: clamp(2.5rem, 1.5rem + 3.6vw, 4.25rem);
+  --text-hero--line-height: 1.02;
+  --text-hero--letter-spacing: -0.028em;
   --text-display: clamp(2rem, 1.35rem + 2.1vw, 3rem);
   --text-display--line-height: 1.05;
   --text-display--letter-spacing: -0.022em;
@@ -159,6 +177,7 @@
   --color-vermilion-hover: var(--vermilion-hover);
   --color-vermilion-soft: var(--vermilion-soft);
   --color-saffron: var(--saffron);
+  --color-saffron-deep: var(--saffron-deep);
   --color-body: var(--body-text);
   --color-band: var(--band);
   --color-canvas: var(--canvas);
@@ -251,6 +270,8 @@
   --vermilion-hover: #a8331a;
   --vermilion-soft: #fdf0eb;
   --saffron: #f5a300;
+  /* Hover for the saffron button (27 Oct 2026). Ink on it is 7.1:1. */
+  --saffron-deep: #d98f00;
   --body-text: #4a4541;
   --band: #f3f1eb;
   /* The portal's working canvas, a shade lighter than the band, so white

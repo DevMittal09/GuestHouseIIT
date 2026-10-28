@@ -262,34 +262,44 @@ export function guestHousePhoto(name: string): SitePhoto | null {
 
 export const HOME_PHOTOS = {
   /**
-   * **The hero slideshow**, in the order the owner listed them on 15 Oct
-   * 2026: the main photograph of each guest house first, then the four asked
-   * for "after the first two" (7, 6, 4 and 1 of the set). Six, where
-   * iitpkd.ac.in's own hero has five.
+   * **The hero**, full screen and behind the page's title (27 Oct 2026, the
+   * owner: "Use only the first two of the six images currently used in the
+   * landing-page slideshow. Keep the remaining images in the gallery").
+   *
+   * They are the two the owner named on 15 Oct 2026 as the main photograph of
+   * each guest house - the only two the site is allowed to attribute - so the
+   * hero now shows a building whose name the page is willing to print, and
+   * nothing else. The four that came off it (`hamsanandiBlock`,
+   * `doubleBedroom`, `kitchenCorner`, `twinRoom`) were already in
+   * `GALLERY_SECTIONS` and stay there; two of them lead the preview below.
    */
-  slides: [
-    PHOTOS.hamsanandiCourtyard,
-    PHOTOS.bageshriFront,
-    PHOTOS.hamsanandiBlock,
-    PHOTOS.doubleBedroom,
-    PHOTOS.kitchenCorner,
-    PHOTOS.twinRoom,
-  ],
+  slides: [PHOTOS.hamsanandiCourtyard, PHOTOS.bageshriFront],
   /**
-   * "A look inside" - four the slideshow does **not** show, so that scrolling
-   * down finds new photographs rather than the hero again. The first is set
-   * at double size by the page.
+   * "A look inside" - the compact strip of six that stands for the Gallery,
+   * none of them in the hero (27 Oct 2026: "Do not reuse either of the two
+   * images used in the hero slideshow"). A unit test fails if the two sets
+   * ever overlap: scrolling down has to find new photographs, or the page
+   * repeats itself within two screens.
    */
-  preview: [PHOTOS.hamsanandiEntrance, PHOTOS.bageshriCorridor, PHOTOS.sittingRoom, PHOTOS.livingArea],
+  preview: [
+    PHOTOS.hamsanandiBlock,
+    PHOTOS.bageshriCorridor,
+    PHOTOS.doubleBedroom,
+    PHOTOS.twinRoom,
+    PHOTOS.kitchenCorner,
+    PHOTOS.livingArea,
+  ],
 };
 
 /**
  * The photograph beside a sign-in page's form. Decorative (empty alt).
  *
- * **Only `signIn` is placed at present** (15 Oct 2026, the owner: "For room
- * and meal booking remove the image and center align the login page").
- * `bookRoom` and `bookMeal` are kept because putting either back is one prop
- * on `SignInPanel`, and both photographs are in the Gallery regardless.
+ * **None of them is placed at present** (27 Oct 2026). The owner took the
+ * photograph off the two booking doors on 15 Oct 2026 and off `/sign-in`
+ * itself on 27 Oct ("remove the image currently displayed on the right side
+ * of the sign-in portal"), so all three doors are one centred panel. The
+ * registry is kept because putting a photograph back is one prop on
+ * `SignInPanel`, and every one of these is in the Gallery regardless.
  */
 export const SIGN_IN_PHOTOS = {
   signIn: PHOTOS.livingRoom,

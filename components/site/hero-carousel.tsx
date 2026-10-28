@@ -1,101 +1,143 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { SitePhoto } from "@/lib/site";
 
 /**
- * The home page's slideshow (15 Oct 2026, the owner: "i need images which
- * change evry few seconds and has the option of arrows to move to next
- * image... just go to iitpkd.ac.in website and see what i mean").
+ * The home page's hero: the photograph **fills the first viewport**, a
+ * translucent ink wash over it, and the page's title set in the middle of it
+ * (27 Oct 2026, the owner: "a cinematic photograph with the text naturally
+ * integrated into it, rather than a conventional website banner").
  *
  * **The one client component on the public site.** Everything else there is a
- * server component; this needs a timer and state, so it is marked and kept as
- * small as possible - it takes photographs and renders them, and knows
- * nothing about guest houses.
+ * server component; this needs a timer, a pointer and state, so it is marked
+ * and kept as small as possible - it takes photographs and whatever belongs
+ * over them, and knows nothing about guest houses, the store or any booking
+ * rule. The title, the lead and the two doors are the page's own server-
+ * rendered markup, passed in as `children`.
  *
- * Modelled on iitpkd.ac.in's own hero: five banner photographs, **Previous /
- * Pause / Next**, and **numbered** indicators rather than dots. The numbers
- * are theirs and they suit this codebase - a row of round dots would be the
- * pills the design rules ban, and a number says how far through you are
- * without a legend.
+ * It reverses two older decisions, each asked for outright:
  *
- * What was not copied: their slides are wrapped in links to other pages, and
- * these are not. A photograph here is a photograph; the site's rule that no
- * photograph carries a visible caption holds inside the slideshow too, so a
- * slide says nothing and the guest houses are named in the cards below it.
+ * - **A photograph may now be full-bleed.** Photographs were contained in the
+ *   layout from 26 Sep 2026, when a full-screen one read as "so weird" to the
+ *   owner. This one is asked for by the brief, is the only one on the site,
+ *   and carries the page's title - which is what it was missing in September.
+ * - **There are no visible controls.** The slideshow of 15 Oct 2026 had
+ *   iitpkd.ac.in's Previous / Pause / Next and numbered indicators; the brief
+ *   removes the numbering and the pause button and makes **the photograph
+ *   itself** the pause control. With two slides and no arrows there is nothing
+ *   for a number to count.
  *
- * Four rules an auto-rotating carousel has to keep, all of them here:
+ * What survives of the four rules a rotating carousel has to keep:
  *
- * - **It stops.** A visible Pause button, and it also holds while a pointer
- *   is over it or the keyboard focus is inside it, so nobody loses the
- *   photograph they were looking at or the control they were tabbing to.
- * - **`prefers-reduced-motion` turns the rotation off**, not just the
- *   transition. Movement a reader did not ask for is the thing that setting
- *   is about.
- * - **`aria-live` follows the rotation**: "off" while it advances by itself
- *   (a screen reader must not narrate a timer), "polite" the moment it is
- *   paused and the reader is driving.
- * - **Every slide stays mounted** and the inactive ones are `aria-hidden`,
- *   so the track can slide and nothing off-screen is announced or focusable.
+ * - **It stops.** The whole photograph is one labelled `<button>` that toggles
+ *   the rotation, so it is operable and announced from the keyboard as well as
+ *   under a pointer, and a small "Paused" marker says so on screen. It no
+ *   longer holds on hover - hovering is now the zoom, and on a hero this size
+ *   the pointer rests over it most of the time, which would stop the
+ *   rotation the brief asks for. Keyboard focus inside it still holds it.
+ * - **`prefers-reduced-motion` stops the rotation itself**, the drift and the
+ *   pointer zoom - not just the transition between slides.
+ * - **`aria-live` follows the rotation**: "off" while it advances by itself (a
+ *   screen reader must not narrate a timer), "polite" once it is paused and
+ *   the reader is driving.
+ * - **Every slide stays mounted**, the inactive ones `aria-hidden`, so the
+ *   two can cross-fade and nothing underneath is announced.
  */
 
 /** How long each photograph is held. Long enough to look at a building. */
-const ADVANCE_MS = 6000;
+const ADVANCE_MS = 6500;
 
-const CONTROL =
-  "grid size-11 shrink-0 place-items-center rounded-md border border-border-strong bg-white text-ink " +
-  "transition-colors hover:bg-ink hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 " +
-  "focus-visible:outline-[var(--ring)]";
+/** The cross-fade, and the pointer zoom. Slow on purpose: this is the one
+ *  place on the site where something moves without being asked. */
+const FADE_MS = 1400;
 
-export function HeroCarousel({ photos }: { photos: SitePhoto[] }) {
+export function HeroCarousel({
+  photos,
+  children,
+}: {
+  photos: SitePhoto[];
+  /** The title, the lead and the two doors - set over the photograph. */
+  children: React.ReactNode;
+}) {
   const count = photos.length;
   const [index, setIndex] = useState(0);
-  /** The Pause button. */
-  const [playing, setPlaying] = useState(true);
-  /** A pointer is over it, or the focus is inside it. */
+  /** The photograph was clicked. */
+  const [paused, setPaused] = useState(false);
+  /** The keyboard focus is inside the hero. */
   const [held, setHeld] = useState(false);
+  const [still, setStill] = useState(false);
+  /**
+   * The layer the pointer moves. Written through the ref rather than through
+   * state: a pointer move is one style on one element, and re-rendering six
+   * layers at the frame rate to say so would be the expensive way to do it.
+   */
+  const lens = useRef<HTMLDivElement | null>(null);
 
-  const show = useCallback(
-    (next: number) => setIndex(((next % count) + count) % count),
-    [count]
-  );
+  useEffect(() => {
+    const quiet = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const read = () => setStill(quiet.matches);
+    read();
+    quiet.addEventListener("change", read);
+    return () => quiet.removeEventListener("change", read);
+  }, []);
 
-  const rotating = playing && !held && count > 1;
+  const rotating = !paused && !held && !still && count > 1;
 
   useEffect(() => {
     if (!rotating) return;
-    // Not just the transition: the rotation itself stops.
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const timer = window.setInterval(() => setIndex((i) => (i + 1) % count), ADVANCE_MS);
     return () => window.clearInterval(timer);
   }, [rotating, count]);
 
+  /**
+   * The photograph eases towards whatever the pointer is over: the origin
+   * follows the pointer and the scale lifts a little, both through one slow
+   * transition, so it reads as a camera moving rather than as a hover effect.
+   * Touch is left alone - there is no hover to answer, and a tap is the pause.
+   */
+  const follow = (e: React.PointerEvent<HTMLElement>) => {
+    const layer = lens.current;
+    if (!layer || still || e.pointerType !== "mouse") return;
+    const box = e.currentTarget.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return;
+    const x = ((e.clientX - box.left) / box.width) * 100;
+    const y = ((e.clientY - box.top) / box.height) * 100;
+    layer.style.transformOrigin = `${x.toFixed(1)}% ${y.toFixed(1)}%`;
+    layer.style.transform = "scale(1.06)";
+  };
+
+  /** Back out from where it was, so the move reverses rather than jumping. */
+  const release = () => {
+    const layer = lens.current;
+    if (layer) layer.style.transform = "scale(1)";
+  };
+
   if (count === 0) return null;
 
   return (
-    <div
-      role="group"
-      aria-roledescription="carousel"
-      aria-label="Photographs of the guest houses"
-      className="overflow-hidden rounded-lg border border-border-strong bg-white"
-      onPointerEnter={() => setHeld(true)}
-      onPointerLeave={() => setHeld(false)}
+    <section
+      className="relative isolate flex min-h-svh flex-col justify-center overflow-hidden bg-ink"
+      onPointerMove={follow}
+      onPointerLeave={release}
       onFocusCapture={() => setHeld(true)}
       onBlurCapture={() => setHeld(false)}
     >
-      <div className="relative">
-        <div className="overflow-hidden">
-          {/* One track, translated. The arrows imply sideways movement, so
-              the photographs move sideways; a crossfade would not match
-              the control. */}
-          <div
-            aria-live={rotating ? "off" : "polite"}
-            className="flex transition-transform duration-700 ease-out motion-reduce:transition-none"
-            style={{ transform: `translateX(-${index * 100}%)` }}
-          >
+      <div
+        role="group"
+        aria-roledescription="carousel"
+        aria-label="Photographs of the guest houses"
+        aria-live={rotating ? "off" : "polite"}
+        className="absolute inset-0"
+      >
+        <div
+          ref={lens}
+          style={{ transitionDuration: `${FADE_MS}ms` }}
+          className="absolute inset-0 transition-[transform,transform-origin] ease-out will-change-transform motion-reduce:transition-none"
+        >
+          <div className="absolute inset-0 motion-safe:animate-[hero-drift_30s_ease-in-out_infinite_alternate]">
             {photos.map((photo, i) => (
               <div
                 key={photo.src ?? photo.alt}
@@ -103,21 +145,23 @@ export function HeroCarousel({ photos }: { photos: SitePhoto[] }) {
                 aria-roledescription="slide"
                 aria-label={`${i + 1} of ${count}`}
                 aria-hidden={i !== index}
-                // 4:3 on a phone shows more of a building than a letterbox
-                // does; 16:9 from `sm` is the banner shape.
-                className="relative aspect-[4/3] w-full shrink-0 bg-band sm:aspect-[16/9]"
+                style={{ transitionDuration: `${FADE_MS}ms` }}
+                className={cn(
+                  "absolute inset-0 transition-opacity ease-in-out motion-reduce:transition-none",
+                  i === index ? "opacity-100" : "opacity-0"
+                )}
               >
                 {photo.src && (
                   <Image
                     src={photo.src}
                     alt={photo.alt}
                     fill
-                    sizes="(min-width: 1280px) 1160px, 100vw"
-                    // The first carries the page's largest paint. The rest
-                    // are eager deliberately: they sit inside `overflow-hidden`
-                    // and translated off to the side, where lazy loading
-                    // cannot be relied on to have fetched them before the
-                    // timer brings them round.
+                    sizes="100vw"
+                    // The first is the page's largest paint. The second is
+                    // eager deliberately: it is stacked behind the first at
+                    // zero opacity, where lazy loading cannot be relied on to
+                    // have fetched it before the fade begins, and a blank
+                    // frame mid-fade is worse than the bytes.
                     priority={i === 0}
                     loading={i === 0 ? undefined : "eager"}
                     className="object-cover"
@@ -127,72 +171,49 @@ export function HeroCarousel({ photos }: { photos: SitePhoto[] }) {
             ))}
           </div>
         </div>
+        {/*
+          The wash: one translucent solid colour, the institute's own charcoal,
+          and no gradient - the brief asks for the photograph to stay clearly
+          visible through it, and the site bans gradients anyway.
 
-        {count > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={() => show(index - 1)}
-              aria-label="Previous photograph"
-              className={cn(CONTROL, "absolute top-1/2 left-3 -translate-y-1/2 sm:left-4")}
-            >
-              <ChevronLeft aria-hidden className="size-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => show(index + 1)}
-              aria-label="Next photograph"
-              className={cn(CONTROL, "absolute top-1/2 right-3 -translate-y-1/2 sm:right-4")}
-            >
-              <ChevronRight aria-hidden className="size-5" />
-            </button>
-          </>
-        )}
+          **66% since 27 Oct 2026**, up from 60: the owner found the type over
+          the photographs short of prominence, and the answer is the wash and
+          the type, not a drop shadow behind the letters, which this project
+          bans everywhere and which is the thing that makes a hero look
+          cheap. White display type now clears 3.6:1 against the brightest
+          tenth of the middle of either photograph and 7.6:1 against its
+          average, and the architecture still reads through.
+        */}
+        <div aria-hidden className="absolute inset-0 bg-ink/66" />
       </div>
 
-      {count > 1 && (
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border-strong px-3 py-2 sm:px-4">
-          {/* Numbered, as iitpkd.ac.in has them. The bar under each number is
-              the page's own hairline vocabulary rather than a dot. */}
-          <ul className="flex min-w-0 flex-wrap items-center">
-            {photos.map((photo, i) => (
-              <li key={photo.src ?? photo.alt}>
-                <button
-                  type="button"
-                  onClick={() => show(i)}
-                  aria-label={`Photograph ${i + 1} of ${count}`}
-                  aria-current={i === index ? "true" : undefined}
-                  className="group block px-2 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
-                >
-                  <span
-                    className={cn(
-                      "block text-meta font-semibold tabular-nums transition-colors",
-                      i === index ? "text-ink" : "text-muted-foreground group-hover:text-ink"
-                    )}
-                  >
-                    {i + 1}
-                  </span>
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "mt-1 block h-[3px] w-full transition-colors",
-                      i === index ? "bg-vermilion" : "bg-border-strong group-hover:bg-ink"
-                    )}
-                  />
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            onClick={() => setPlaying((on) => !on)}
-            aria-label={playing ? "Pause the slideshow" : "Play the slideshow"}
-            className={cn(CONTROL, "size-9")}
-          >
-            {playing ? <Pause aria-hidden className="size-4" /> : <Play aria-hidden className="size-4" />}
-          </button>
-        </div>
+      {/*
+        Clicking the photograph pauses it, clicking again resumes - the brief's
+        replacement for the pause button. It is a real `<button>` covering the
+        photograph so it is reachable and announced, under the title block
+        rather than over it, and the title block passes clicks through to it.
+      */}
+      <button
+        type="button"
+        onClick={() => setPaused((on) => !on)}
+        aria-label={paused ? "Resume the photographs" : "Pause the photographs"}
+        className="absolute inset-0 z-10 cursor-default focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-white"
+      />
+
+      {/*
+        `pointer-events-none` so a click anywhere but the two doors reaches the
+        button underneath: everything a reader would call "the hero image" has
+        to answer the same way.
+      */}
+      <div className="pointer-events-none relative z-20 mx-auto w-full max-w-[1240px] px-[clamp(16px,4vw,40px)] py-[clamp(96px,16vh,176px)]">
+        {children}
+      </div>
+
+      {paused && (
+        <p className="absolute right-[clamp(16px,4vw,40px)] bottom-6 z-20 text-meta font-semibold tracking-[0.18em] text-white/70 uppercase">
+          Paused
+        </p>
       )}
-    </div>
+    </section>
   );
 }

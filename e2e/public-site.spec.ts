@@ -40,7 +40,7 @@ test("the privacy notice is not published", async ({ page }) => {
 
 test("the booking doors ask for a sign-in rather than failing silently", async ({ page }) => {
   await page.goto("/book-room");
-  await expect(page.getByLabel("LDAP username")).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: /^Sign in to book$/ })).toBeVisible();
 });
 
 test("the contact page shows each guest house on the map, and the footer links the institute", async ({ page }) => {
@@ -57,10 +57,12 @@ test("the contact page shows each guest house on the map, and the footer links t
   await tabs.getByRole("tab", { name: "Bageshri" }).click();
   await expect(map).toHaveAttribute("title", "Bageshri on the map");
   await expect(map).toHaveAttribute("src", /ll=10\.8063107,76\.726681/);
-  await expect(page.getByRole("link", { name: /Open in Google Maps/ })).toHaveAttribute(
-    "href",
-    "https://maps.app.goo.gl/AspNpPu7sTDLXxL2A"
-  );
+
+  // Nothing is printed under the map (27 Oct 2026): the embed carries "View
+  // larger map" and the directions itself, and the name is the tab above it.
+  // The footer still links both, for a reader who never reaches this page.
+  await expect(page.getByRole("link", { name: /Open in Google Maps/ })).toHaveCount(0);
+  await expect(page.getByRole("contentinfo").getByRole("link", { name: /Directions/ })).toHaveCount(2);
 
   // The keyboard moves between guest houses too.
   await page.keyboard.press("ArrowLeft");
@@ -74,50 +76,84 @@ test("the contact page shows each guest house on the map, and the footer links t
 });
 
 /**
- * The home page's slideshow (15 Oct 2026, the owner: "i need images which
- * change evry few seconds and has the option of arrows to move to next
- * image"). Three things have to hold, and each of them has been the bug in
- * somebody's carousel: it moves on its own, the arrows move it, and it can
- * be stopped - a photograph that slides away while you are looking at it is
- * what the Pause button is for.
+ * The home page's hero (27 Oct 2026). The brief took the numbering and the
+ * pause button off it and made the photograph itself the control, so what is
+ * left to check is what every carousel gets wrong: that it moves on its own,
+ * that it can be stopped, and that stopping it sticks. Two slides, and the
+ * only way to pause is to click the photograph.
  */
-test("the home page's slideshow advances, takes the arrows, and stops", async ({ page }) => {
-  await page.goto("/");
+test("the home page's hero advances, and a click on it stops and starts it", async ({ page }) => {
   const carousel = page.getByRole("group", { name: "Photographs of the guest houses" });
+  const slide = async () =>
+    (await carousel.locator('[aria-roledescription="slide"][aria-hidden="false"]').getAttribute("aria-label")) ?? "";
+
+  await page.goto("/");
   await expect(carousel).toBeVisible();
+  // The two the owner attributed, Hamsanandi first.
+  await expect(carousel.locator('[aria-roledescription="slide"]')).toHaveCount(2);
+  expect(await slide()).toBe("1 of 2");
 
-  // `getByRole` has no `current` option, so the indicator is matched on the
-  // attribute itself - which is the thing a screen reader reads anyway.
-  const slideNumber = async () =>
-    (await carousel.locator('button[aria-current="true"]').getAttribute("aria-label")) ?? "";
-
-  // The guest houses lead it, in the owner's order.
-  expect(await slideNumber()).toContain("Photograph 1 of 6");
-
-  // The arrows move it, and it wraps rather than dead-ending.
-  await carousel.getByRole("button", { name: "Next photograph" }).click();
-  expect(await slideNumber()).toContain("Photograph 2 of 6");
-  await carousel.getByRole("button", { name: "Previous photograph" }).click();
-  expect(await slideNumber()).toContain("Photograph 1 of 6");
-  await carousel.getByRole("button", { name: "Previous photograph" }).click();
-  expect(await slideNumber()).toContain("Photograph 6 of 6");
-
-  // A number jumps straight to its photograph.
-  await carousel.getByRole("button", { name: "Photograph 3 of 6" }).click();
-  expect(await slideNumber()).toContain("Photograph 3 of 6");
-
-  // It advances by itself - 6s a slide, so one tick inside 10s. The pointer
-  // has to be off it, because hovering holds it deliberately.
-  await page.mouse.move(0, 0);
+  // It advances by itself - 6.5s a slide, so one tick inside 12s. The pointer
+  // may rest anywhere: unlike the slideshow it replaced, hovering zooms the
+  // photograph rather than holding it.
   await expect
-    .poll(slideNumber, { timeout: 10_000, message: "the slideshow never advanced on its own" })
-    .toContain("Photograph 4 of 6");
+    .poll(slide, { timeout: 12_000, message: "the hero never advanced on its own" })
+    .toBe("2 of 2");
 
-  // And it stops when asked, for as long as it is asked.
-  await carousel.getByRole("button", { name: "Pause the slideshow" }).click();
-  await page.mouse.move(0, 0);
-  const held = await slideNumber();
-  await page.waitForTimeout(7_000);
-  expect(await slideNumber(), "a paused slideshow moved anyway").toBe(held);
-  await expect(carousel.getByRole("button", { name: "Play the slideshow" })).toBeVisible();
+  // Clicking the photograph pauses it, and it stays paused.
+  const pause = page.getByRole("button", { name: "Pause the photographs" });
+  await pause.click();
+  await expect(page.getByRole("button", { name: "Resume the photographs" })).toBeVisible();
+  const held = await slide();
+  await page.waitForTimeout(8_000);
+  expect(await slide(), "a paused hero moved anyway").toBe(held);
+
+  // And clicking again starts it.
+  await page.getByRole("button", { name: "Resume the photographs" }).click();
+  await expect(pause).toBeVisible();
+
+  // The controls the brief removed are gone, and the doors over the
+  // photograph still lead into the portal.
+  await expect(page.getByRole("button", { name: /^Photograph \d/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Next|Previous) photograph$/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Book a Room" }).first()).toHaveAttribute("href", "/book-room");
+  await expect(page.getByRole("link", { name: "Book a Meal" }).first()).toHaveAttribute("href", "/book-meal");
+});
+
+/**
+ * The rest of the landing page, in the order the owner wrote it out: the
+ * amenities, a compact gallery preview that links the Gallery, a text-only
+ * card per guest house, and the contact details with one map each.
+ */
+test("the landing page carries the amenities, the gallery preview, both guest houses and the maps", async ({ page }) => {
+  await page.goto("/");
+
+  // One `<h1>`, and it is the hero's.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/IIT\s*Palakkad\s*-?\s*Guest\s*House/);
+
+  const amenities = page.getByRole("region", { name: "Amenities" });
+  await expect(amenities.getByRole("listitem")).toHaveCount(6);
+  await expect(amenities.getByText("Dining")).toBeVisible();
+
+  // The preview shows six photographs and sends the reader to the Gallery.
+  const gallery = page.getByRole("region", { name: "A look inside" });
+  await expect(gallery.getByRole("listitem")).toHaveCount(6);
+  await expect(gallery.getByRole("link", { name: /See the full gallery/ })).toHaveAttribute("href", "/gallery");
+
+  // A card per guest house, text only, with the meal door only where there
+  // is a kitchen.
+  const houses = page.getByRole("region", { name: "Our guest houses" });
+  await expect(houses.getByRole("heading", { level: 2, name: "Hamsanandi" })).toBeVisible();
+  await expect(houses.getByRole("heading", { level: 2, name: "Bageshri" })).toBeVisible();
+  await expect(houses.getByRole("img")).toHaveCount(0);
+  await expect(houses.getByRole("link", { name: "Book a Room" })).toHaveCount(2);
+  await expect(houses.getByRole("link", { name: "Book a Meal" })).toHaveCount(1);
+
+  // The manager's line, and one map per guest house with nothing under it.
+  const contact = page.getByRole("region", { name: "Contact us" });
+  await expect(contact.getByRole("link", { name: "+91 491 209 2016" })).toBeVisible();
+  await expect(contact.getByRole("link", { name: "ghm@iitpkd.ac.in" })).toBeVisible();
+  await expect(contact.locator("iframe")).toHaveCount(2);
+  await expect(contact.getByRole("heading", { level: 3, name: "Hamsanandi" })).toBeVisible();
+  await expect(contact.getByRole("link", { name: /Google Maps|directions/i })).toHaveCount(0);
 });

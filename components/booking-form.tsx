@@ -51,7 +51,6 @@ import {
 } from "@/lib/occupancy";
 import {
   AADHAAR_DIGITS,
-  advanceWindowMessage,
   bookingPayloadSchema,
   checkOutOrderError,
   MAX_COPY_TO_EMAILS,
@@ -75,7 +74,6 @@ import {
   guestHousesForBookingType,
   latestCheckOutDate,
   mealsAllowedFor,
-  stayLengthHint,
   STUDENT_GUEST_HOUSE_NOTE,
   ALUMNI_GUEST_HOUSE_NOTE,
 } from "@/lib/policy";
@@ -785,20 +783,25 @@ export function BookingForm({
   const mealPartyMax = mealPartyLimit > 0 ? mealPartyLimit : 100;
 
   // Advance-booking window: officials are exempt, so the cap can be absent.
+  // **The window is not written out under the field** (27 Oct 2026, the
+  // owner): it was "Bookings open 6 months in advance - the latest check-in
+  // you can request is 27/04/2027", which is the rule the date box already
+  // enforces with its `max` and the schema states in the error when it
+  // fires - the three homes a rule has (9 Oct 2026), of which the form is
+  // not one. Nothing about the rule changed.
   const [checkInLimits] = useState(() => {
     const months = rules.booking.advance_booking_months;
     const limit = latestCheckIn(config.role, new Date(), months);
     return {
       min: toInstituteDateValue(new Date()),
       max: limit ? toInstituteDateValue(limit) : undefined,
-      note: advanceWindowMessage(config.role, months),
     };
   });
   // The stay-length cap (Settings), applied to the check-out picker. The
   // picker blocking it is a courtesy; the schema is the rule, on the client
-  // and again on the server.
+  // and again on the server. Its sentence came off the form on the same day
+  // and for the same reason as the one above.
   const maxNights = rules.booking.max_stay_nights;
-  const durationHint = stayLengthHint(config.role, user.email, maxNights);
   const latestCheckOut = checkInDate
     ? latestCheckOutDate(checkInDate, config.role, user.email, maxNights)
     : null;
@@ -1574,9 +1577,6 @@ export function BookingForm({
               value={checkInTime}
               onChange={(v) => setValue("check_in_time", v)}
             />
-            {checkInLimits.note && (
-              <p className="text-xs text-muted-foreground">{checkInLimits.note}.</p>
-            )}
             <FieldError message={err("check_in")} />
           </div>
           <div className="space-y-2">
@@ -1593,7 +1593,6 @@ export function BookingForm({
               value={checkOutTime}
               onChange={(v) => setValue("check_out_time", v)}
             />
-            {durationHint && <p className="text-xs text-muted-foreground">{durationHint}</p>}
             <FieldError message={err("check_out")} />
           </div>
 

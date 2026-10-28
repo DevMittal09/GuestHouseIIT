@@ -24,6 +24,11 @@ export type DeskFigure = {
  * The order is the one the caller declares and does not re-sort on the count.
  * This is read all day by the same two people; a figure that moves because
  * somebody checked out is a figure they have to look for again.
+ *
+ * **A zero is not a link** (27 Oct 2026). Since the console stopped drawing
+ * a section with nothing in it, a zero row has nothing to jump to - and this
+ * strip became the one place a zero is reported. The row stays exactly where
+ * it was, in the same order, so the index still reads as the whole desk.
  */
 export function DeskSummary({ figures, label = "At a glance" }: { figures: DeskFigure[]; label?: string }) {
   return (
@@ -34,20 +39,21 @@ export function DeskSummary({ figures, label = "At a glance" }: { figures: DeskF
         {figures.map((f) => {
           const hot = f.alert && f.count > 0;
           const live = f.count > 0;
+          // A fixed row height with the three parts centred in it. The
+          // figure changes size with the count, so aligning on the baseline
+          // put the one cell with work in it a few pixels below its
+          // neighbours.
+          const Row = live ? "a" : "div";
           return (
             <li key={f.anchor} className="border-b border-border">
-              {/* A fixed row height with the three parts centred in it. The
-                  figure changes size with the count, so aligning on the
-                  baseline put the one cell with work in it a few pixels below
-                  its neighbours. */}
-              <a
-                href={`#${f.anchor}`}
+              <Row
+                href={live ? `#${f.anchor}` : undefined}
                 className="group flex h-11 items-center gap-3 no-underline focus-visible:-outline-offset-2"
               >
                 <span
                   className={cn(
-                    "text-[13.5px] leading-none font-semibold transition-colors duration-150 group-hover:text-vermilion-deep",
-                    live ? "text-ink" : "text-muted-foreground"
+                    "text-[13.5px] leading-none font-semibold transition-colors duration-150",
+                    live ? "text-ink group-hover:text-vermilion-deep" : "text-muted-foreground"
                   )}
                 >
                   {f.label}
@@ -65,7 +71,7 @@ export function DeskSummary({ figures, label = "At a glance" }: { figures: DeskF
                 >
                   {f.count}
                 </span>
-              </a>
+              </Row>
             </li>
           );
         })}

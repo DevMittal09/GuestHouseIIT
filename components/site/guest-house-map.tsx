@@ -1,16 +1,22 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { ArrowUpRight } from "lucide-react";
+import { MapEmbed } from "@/components/site/site-ui";
 import type { MapPin } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 /**
- * The Contact page's map: one tab per guest house (`guestHouseMapPins`), the
- * chosen one embedded, and its "Open in Google Maps" / "Get directions" links
- * underneath. A WAI-ARIA tab list - arrow keys, Home and End move between
- * guest houses - so it works from the keyboard as well as by pointer. With a
- * single pin there is nothing to choose, and no tab list is drawn.
+ * The Contact page's map: one tab per guest house (`guestHouseMapPins`) and
+ * the chosen one embedded. A WAI-ARIA tab list - arrow keys, Home and End
+ * move between guest houses - so it works from the keyboard as well as by
+ * pointer. With a single pin there is nothing to choose, and no tab list is
+ * drawn.
+ *
+ * **The row under the map is gone** (27 Oct 2026): it reprinted the name of
+ * the tab directly above it, and offered "Open in Google Maps" and "Get
+ * directions" - both of which the embed itself carries. The footer still
+ * links each guest house's map and directions, for a reader who never reaches
+ * this page.
  */
 export function GuestHouseMap({ pins }: { pins: MapPin[] }) {
   const [selected, setSelected] = useState(0);
@@ -80,37 +86,8 @@ export function GuestHouseMap({ pins }: { pins: MapPin[] }) {
         role={pins.length > 1 ? "tabpanel" : undefined}
         aria-labelledby={pins.length > 1 ? `${id}-tab-${pin.slug}` : undefined}
       >
-        <iframe
-          key={pin.slug}
-          title={`${pin.name} on the map`}
-          src={pin.embedUrl}
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          className="block h-[clamp(300px,58vw,460px)] w-full border-0 bg-band"
-        />
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-border px-4 py-3.5 text-[15px]">
-          <span className="font-semibold text-ink">{pin.name}</span>
-          <span className="flex flex-wrap gap-x-6 gap-y-2">
-            <MapLink href={pin.openUrl}>Open in Google Maps</MapLink>
-            <MapLink href={pin.directionsUrl}>Get directions</MapLink>
-          </span>
-        </div>
+        <MapEmbed key={pin.slug} pin={pin} className="h-[clamp(300px,58vw,460px)]" />
       </div>
     </div>
-  );
-}
-
-function MapLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 font-semibold text-ink underline decoration-vermilion decoration-2 underline-offset-[5px] hover:text-vermilion-deep"
-    >
-      {children}
-      <ArrowUpRight aria-hidden className="size-4" />
-      <span className="sr-only">(opens in a new tab)</span>
-    </a>
   );
 }

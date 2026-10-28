@@ -24,7 +24,10 @@ on 10 Oct 2026. The reasoning behind these choices is in
 
 ### Demo logins (dummy LDAP directory)
 
-Used whenever `LDAP_URL` is **unset**. Sign in on `/sign-in` with the LDAP
+Used whenever `LDAP_URL` is **unset**. **Since 28 Oct 2026 the sign-in page
+has no form**, so these are reached through `signInWithLdap` only; the way in
+through the interface is the account picker, one click per persona, which is
+also how the e2e suite signs in. Sign in on `/sign-in` with the LDAP
 username and password below — or, while Google is unconfigured, press **Mock
 Authentication** and pick the persona with one click (no password).
 **Keep this table and `lib/ldap/mock-directory.ts` in step.**
@@ -91,8 +94,27 @@ Authentication** and pick the persona with one click (no password).
 
 ### How sign-in works
 
+> **The LDAP form is off the page** (28 Oct 2026, the owner: "we will not be
+> using LDAP. The intended authentication method is Google authentication,
+> but for now, clicking the sign-in button should initiate a mock
+> authentication flow"). `/sign-in`, `/book-room` and `/book-meal` show
+> **one button**, which opens the account picker at `/mock-login` - or the
+> real Google flow once `GOOGLE_CLIENT_ID` and friends are set.
+>
+> **Everything in this section still exists and still works.**
+> `signInWithLdap`, the throttle, the error wording, the dummy directory and
+> the real-directory switch below are untouched; nothing in the interface
+> calls the first of them. Two consequences worth knowing:
+>
+> - **the door is a form away**, so this is the section to re-read if the
+>   institute asks for its directory back;
+> - **the only thing standing in front of the account picker is
+>   `mockLoginEnabled()`** - configure Google, or set `MOCK_LOGIN=false`,
+>   before a real deployment. That was already a production gate; it is now
+>   the *only* one at the door.
+
 ```
-LDAP form ─▶ signInWithLdap() (app/actions/auth.ts)
+LDAP form (withdrawn 28 Oct 2026) ─▶ signInWithLdap() (app/actions/auth.ts)
               1. normalise the uid; reject blanks, "@" (unless the directory uses email usernames), bad characters
               2. throttle: 8 attempts / 15 min per `ldap:<uid>` (a row in the database — RATE_LIMITS.signIn)
               3. getDirectory().authenticate(uid, password)      ← "is this the password?"
@@ -102,8 +124,8 @@ LDAP form ─▶ signInWithLdap() (app/actions/auth.ts)
                    profiles.ldap_uid match, else (opt-in) link by email
               5. create a session row (opaque cookie), redirect to safe `next` or homeForRole()
 
-Second button, Google unconfigured ─▶ "Mock Authentication" ─▶ /mock-login?next=… ─▶ loginAs(profileId, next)
-Second button, Google configured   ─▶ "Sign in with Google" ─▶ /api/auth/google/start ─▶ callback (lib/oidc.ts)
+The one button, Google unconfigured ─▶ "Sign in"             ─▶ /mock-login?next=… ─▶ loginAs(profileId, next)
+The one button, Google configured   ─▶ "Sign in with Google" ─▶ /api/auth/google/start ─▶ callback (lib/oidc.ts)
 ```
 
 Two questions, two systems. **The directory checks the password. The portal's

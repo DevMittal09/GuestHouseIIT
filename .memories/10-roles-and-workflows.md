@@ -60,19 +60,19 @@ console names them — change the name there and the queue or option moves.
 
 ### Signing in — every role
 
-- **LDAP username + password** on `/sign-in` (also embedded in the public
-  `/book-room` and `/book-meal`). Until `LDAP_URL` is set, the dummy directory
-  in `lib/ldap/mock-directory.ts` answers. The username is matched to a
-  portal account through `profiles.ldap_uid`; a valid LDAP login with no
-  portal account gets "not registered". Unknown user and wrong password get
-  one message. **8 attempts per username per 15 minutes** (a row in the
-  database, `RATE_LIMITS.signIn`).
-- **Mock Authentication** (the second button) — the one-click persona picker
-  at `/mock-login`, open while Google sign-in is not configured
-  (`mockLoginEnabled()`), closed by `MOCK_LOGIN=false`. When
-  `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `APP_URL` are set, the same
-  button is **Sign in with Google** (real OpenID Connect; institute domains
-  only; must match an existing portal account) and the picker 404s.
+- **One button**, on `/sign-in` and on the public `/book-room` and
+  `/book-meal` (28 Oct 2026; it was an LDAP username and password, with this
+  as the second door). It opens the one-click **account picker** at
+  `/mock-login`, which is available while Google sign-in is not configured
+  (`mockLoginEnabled()`) and closed by `MOCK_LOGIN=false`. When
+  `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `APP_URL` are set the button
+  is **Sign in with Google** (real OpenID Connect; institute domains only;
+  must match an existing portal account) and the picker 404s.
+- **LDAP still works underneath** - `signInWithLdap`, the dummy directory,
+  the `profiles.ldap_uid` match, the one message for an unknown user or a
+  wrong password, and **8 attempts per username per 15 minutes** - but
+  nothing in the interface calls it. See
+  [05-credentials-and-security.md](05-credentials-and-security.md) Part 2.
 - **Session**: a row in `sessions`, opaque cookie (`__Host-gh_session` in
   production), **30 minutes idle, 12 hours absolute**. "Switch user" signs out
   to `/sign-in`. One browser = one session: signing in as someone else in one

@@ -96,11 +96,13 @@ persona or column does not require deleting the database.
 session is a **row** in `sessions` and the cookie holds an opaque token
 (`lib/sessions.ts`); `lib/auth.ts` is the only module that reads it. The
 sign-in card (`/sign-in`, also embedded in the public `/book-room` and
-`/book-meal`) opens a session through two doors: **LDAP** username + password,
-and a second button that is **"Sign in with Google"** (the real OpenID
-Connect flow) when `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL`
-are set, and **"Mock Authentication"** — the persona picker at `/mock-login` —
-otherwise (`mockLoginEnabled()`; `MOCK_LOGIN=false` closes it). The
+`/book-meal`) opens a session through **one button** since 28 Oct 2026:
+**"Sign in with Google"** (the real OpenID Connect flow) when
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL` are set, and
+otherwise **"Sign in"**, which opens the persona picker at `/mock-login`
+(`mockLoginEnabled()`; `MOCK_LOGIN=false` closes it). **The LDAP door is
+withdrawn from the interface, not from the code**: `signInWithLdap`, the
+throttle and the seam below are untouched and have no caller. The
 pre-Phase-8 `gh_mock_user` cookie is honoured only with `DEV_LOGIN=true`
 outside production. `/` is the public website, so signed-out guards redirect to
 `SIGN_IN_PATH`, not `/`.
@@ -606,7 +608,7 @@ acting account.
 | Concern | File |
 | --- | --- |
 | Public website (home, booking entry points, guidelines, gallery, contact) | `app/(site)/*`, `components/site/*` — see [14-public-site-and-ui.md](14-public-site-and-ui.md) |
-| Sign-in (LDAP + Google button) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` → `components/login-form.tsx` |
+| Sign-in (**one button** since 28 Oct 2026: the account picker, or Google once configured) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` (one centred shape) → `components/login-form.tsx` (no fields). `signInWithLdap` is untouched and has no caller |
 | Google sign-in (real OpenID Connect: state, PKCE, verified id_token) | `lib/oidc.ts`, `app/api/auth/google/start`, `app/api/auth/google/callback` |
 | **Mock Authentication** persona picker — open while Google is unconfigured (`mockLoginEnabled()`), 404 otherwise or with `MOCK_LOGIN=false` | `app/(site)/mock-login/page.tsx`, `loginAs` |
 | Sessions (rows, opaque token, idle/absolute expiry, rotation, revoke) | `lib/sessions.ts` |
@@ -1132,7 +1134,7 @@ Guest Houses & Rooms.
 | `lib/format.ts`, `lib/tz.ts` | Formatting, all delegating to `lib/tz.ts` — the institute timezone (`Asia/Kolkata`): `instituteIso` to parse, `formatInstitute*` / `instituteHour` / `instituteDayBounds` to read back, and UTC-safe helpers for `"yyyy-MM-dd"` calendar dates. |
 | `lib/report-pdf.ts` | Client-side PDF rendering for the history report (dynamically imported). |
 | `lib/revalidate.ts` | The three cache sets actions invalidate. |
-| `components/site/hero-carousel.tsx` | **The one client component on the public site** (15 Oct 2026): the home page's hero slideshow. Everything else under `app/(site)/` is server-rendered, and this is kept that way by taking `SitePhoto[]` and nothing else - no store, no domain, no rules. |
+| `components/site/hero-carousel.tsx` | The home page's **full-viewport hero** (15 Oct 2026; rewritten 27 Oct 2026): two photographs under an ink wash, with the page's title passed in as `children` and set over them. It takes `SitePhoto[]` and markup - no store, no domain, no rules - so everything else under `app/(site)/` stays server-rendered. **It is no longer the only client component there**: `site-header.tsx` became one on 27 Oct 2026, because the overlay needs the path and the scroll position. |
 | `lib/site.ts`, `lib/site-data.ts`, `lib/site-content.ts` | The public website's editable values and its content rendered from `lib/`. Two slug-keyed registries live in `site.ts` and are read the same way - `GUEST_HOUSE_LOCATIONS` / `guestHouseMapPins()` for the map, and `GUEST_HOUSE_PHOTOS` / `guestHousePhoto()` for the one photograph that names a guest house (15 Oct 2026). Both key on `guestHouseSlug(name)`, so a guest house renamed in the console loses both until the registry learns the new name. |
 
 ### UI primitives
@@ -1307,10 +1309,12 @@ navy/gold from the design handoff) in [14-public-site-and-ui.md](14-public-site-
 
 Public-site modules (26 Sep): `components/site/brand.tsx` (`BrandBlock`, the
 lockup, also in the portal header), `site-header.tsx` (the white header,
-sticky from `lg`), `site-chrome.tsx` (`SiteFooter`), `guest-house-map.tsx`
-(map tabs), `PageMasthead` / `SectionHead` / `ArrowLink` in
-`site-ui.tsx`; `amenities` / `houseSummary` / `BOOKING_STEPS` / `guidelineSections` /
-`mealTimetable` in `lib/site-content.ts`; `GUEST_HOUSE_LOCATIONS` /
+sticky from `lg` - **client since 27 Oct 2026**, and laid over the hero on
+`/`), `site-chrome.tsx` (`SiteFooter`), `guest-house-map.tsx`
+(map tabs), `PageMasthead` / `SectionHead` / `ArrowLink` / **`MapEmbed`** in
+`site-ui.tsx`; `amenities` / `BOOKING_STEPS` / `guidelineSections` /
+`mealTimetable` in `lib/site-content.ts` (**`houseSummary` deleted
+27 Oct 2026** with the guest house cards' summary line); `GUEST_HOUSE_LOCATIONS` /
 `guestHouseMapPins` / `HOME_PHOTOS` / `SIGN_IN_PHOTOS` in
 `lib/site.ts`. The My Bookings tiles are `BookingDoor` in
 `app/(portal)/dashboard/page.tsx`.

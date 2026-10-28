@@ -49,10 +49,19 @@ form, all approval tiers, the room grid, invoices, the desk and the console.
 | --- | --- | --- |
 | `npm run lint` | ESLint incl. the strict React Compiler rules | must stay clean |
 | `npm run typecheck` | `next typegen && tsc --noEmit` | `npm run build` also typechecks |
-| `npm test` | Vitest, `tests/` — 35 files, 603 checks (17 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
-| `npm run test:e2e` | Playwright, `e2e/` — 48 journeys (about 2 min) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
+| `npm test` | Vitest, `tests/` — 35 files, 603 checks (27 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
+| `npm run test:e2e` | Playwright, `e2e/` — 50 journeys (about 4 min) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
 | `npm run check:migrations` | Which migrations the project in `.env.local` actually has | **Read-only** (`GET`, one row, shape only). Exits 1 if any marker is missing. Migrations 17 and 23 are function-only and cannot be seen — it says so and gives the SQL. **Not a CI step** — CI runs with no secrets, where it prints "no project configured" and exits 0. Run it against a deployment, before relying on one |
 | `npm run check:lockfile` | The npm optional-dependency bug that breaks `npm ci` | Runs in CI |
+
+> **The suite signs in through the account picker** (28 Oct 2026). The
+> sign-in page has no form any more, so `signIn()` in `e2e/helpers.ts` clicks
+> the one button and then the persona, matched by **name, anchored**
+> (`^Guest House Manager\b`) - a button reads "name, email, role", so an
+> unanchored match would eventually find a role badge. `ACCOUNTS` keeps each
+> `uid` (the session cache's key) and `password` (still the dummy directory's).
+> Nothing types a password any more, so the sign-in throttle no longer bites
+> inside a run - the session cache is kept all the same, because it is faster.
 
 Playwright journeys: `booking-journey` (student → warden → manager → desk →
 invoice → paid), `official-and-dining` (faculty through the HOD; a meals-only
@@ -63,7 +72,9 @@ moves who can book), `room-party` (2 guests + 2 infants in a room),
 `alumni-and-relationships` (Student Cell alumni booking; no second Mother),
 `sign-in` (Mock Authentication on a production build), `desk-links`
 (Reception → kitchen → back; the developer turned away from New Booking; the
-help line's number), `public-site` (320 px, desktop and phone), and
+help line's number), `public-site` (320 px, desktop and phone; the hero
+advancing by itself and stopping when the photograph is clicked; the four
+sections under it), and
 `fourteenth-round` (17 Oct 2026: the tariff panel's categories setting the
 form's own guest house and booking type; the guests card above the meals card;
 the meal Yes/No with nothing left behind on No; the two nav doors and which
@@ -1057,6 +1068,47 @@ running `next dev`" warning in `AGENTS.md`.)
 > "Process from config.webServer was not able to start. Exit code: 1".
 > **`pkill -f "[n]ext-server"`** is what frees the port; `ss -ltnp | grep 3100`
 > names the holder either way. Do both, in that order, and check.
+
+> **Third form of the same trap, and the worst-looking one** (27 Oct 2026).
+> A server started **by hand** on 3100 - `npx next start -p 3100`, to take
+> screenshots against - is reused by Playwright too, and a hand-started one
+> does **not** carry `webServer.env`: no `MOCK_DB_PATH`, so the suite runs
+> against **`.local-db.json`** instead of the throwaway `./.e2e-db.json`.
+> The public-site journeys pass (they read nothing), and **four portal
+> journeys fail**, three of them by timing out on a persona that is not where
+> the fixture expects, one with the tell: `Error: ENOENT: no such file or
+> directory, open './.e2e-db.json'` from a helper reading the file directly.
+> It reads as "my change broke four journeys". **Free the port before
+> running the suite** - `fuser -k 3100/tcp`, or the two `pkill`s above - and
+> let Playwright start its own server. It also **writes demo bookings into
+> `.local-db.json`**, which is somebody's local demo data: check
+> `stat .local-db.json` before deleting it, because `Birth` tells you whether
+> this session created it.
+>
+> **And a hand-started server does not survive a rebuild.** `next start`
+> holds the build manifest it started with, while `npm run build` replaces
+> every hashed file under `.next/static`. The server keeps answering, the
+> HTML keeps pointing at a stylesheet that no longer exists, and the page
+> renders **completely unstyled** - which looks like a catastrophic CSS
+> change rather than a stale process. Restart it after every build.
+
+### A test that builds two dates from "now" breaks at midnight (28 Oct 2026)
+
+`fifth-round.spec.ts` - "reception moves a stay's check-in, earlier and
+later" - failed once in a full run with **"That is the check-in the stay
+already has"**, the button correctly disabled, and passed on its own
+immediately afterwards.
+
+The cause is a fixture built from the clock **twice**: `global-setup` seeds a
+stay **six days out**, and the test moves its check-in to **five days out**.
+A run that starts before IST midnight and reaches that test after it computes
+the two from different days, and they land on the same date.
+
+**How to recognise it:** one failure, in a date-moving test, in a run that
+crossed midnight, which passes on a re-run. Check the clock before looking
+for a regression. The real fix is for the test to read the stay's current
+check-in and pick a day that differs from it - it is in
+[03-roadmap.md](03-roadmap.md) §2l.
 
 A clean loop, then:
 

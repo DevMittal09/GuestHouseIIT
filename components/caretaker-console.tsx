@@ -45,6 +45,13 @@ export function CaretakerConsole({
   awaitingPayment?: AwaitingPaymentRow[];
   nowIso: string;
 }) {
+  // The same rule the manager's console took on 27 Oct 2026: a list with
+  // nothing in it is not drawn, and the index above is where a zero is
+  // reported. The two consoles share their tables so they cannot drift;
+  // they should not drift in this either.
+  const quiet = [checkoutsToday, current, overdue, toBill, upcoming, awaitingPayment].every(
+    (list) => list.length === 0
+  );
   return (
     <div className="space-y-10">
       <DeskSummary
@@ -59,21 +66,20 @@ export function CaretakerConsole({
             : []),
         ]}
       />
-      <div id="checkouts" className="scroll-mt-20">
-        <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} />
-      </div>
+      {quiet && <EmptyState>Nothing needs reception at this guest house right now.</EmptyState>}
 
-      <section id="in-house" className="scroll-mt-20">
-        <SectionHeading
-          title="Current occupants"
-          count={current.length}
-        />
-        {current.length === 0 ? (
-          <EmptyState>Nobody is staying at this guest house right now.</EmptyState>
-        ) : (
+      {checkoutsToday.length > 0 && (
+        <div id="checkouts" className="scroll-mt-20">
+          <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} />
+        </div>
+      )}
+
+      {current.length > 0 && (
+        <section id="in-house" className="scroll-mt-20">
+          <SectionHeading title="Current occupants" count={current.length} />
           <StaysTable bookings={current} />
-        )}
-      </section>
+        </section>
+      )}
 
       {overdue.length > 0 && (
         <section id="awaiting" className="scroll-mt-20">
@@ -102,17 +108,12 @@ export function CaretakerConsole({
         </section>
       )}
 
-      <section id="upcoming" className="scroll-mt-20">
-        <SectionHeading
-          title="Upcoming stays"
-          count={upcoming.length}
-        />
-        {upcoming.length === 0 ? (
-          <EmptyState>No upcoming stays for this guest house.</EmptyState>
-        ) : (
+      {upcoming.length > 0 && (
+        <section id="upcoming" className="scroll-mt-20">
+          <SectionHeading title="Upcoming stays" count={upcoming.length} />
           <StaysTable bookings={upcoming} />
-        )}
-      </section>
+        </section>
+      )}
 
       {/* **Awaiting payment** - the last section, and the only one with no
           date window (7 Oct 2026). "Checked out - to bill" above is the

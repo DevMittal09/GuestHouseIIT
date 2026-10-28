@@ -145,9 +145,19 @@ by domain ([§2](#2-the-debitable-heads-as-the-office-gave-them-8-oct-2026)).
 > **The step-by-step procedure for whoever runs the import is
 > [`IMPORTING-USERS.md`](../IMPORTING-USERS.md) at the repo root** (14 Oct
 > 2026): what to click, in order, with the column tables, the dry run, the
-> verification list and a table of what every refusal means. **This section
-> stays the reference** - the reasoning, the constraints and the decisions. If
-> the two disagree, this one is right and the runbook needs fixing.
+> verification list and a table of what every refusal means.
+>
+> **What to ask the institute for, per kind of user, is
+> [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md)** (27 Oct
+> 2026): the schema explained for somebody who has not read it, a section per
+> user type (student, faculty, non-teaching staff, department office, officer
+> office, IAR Office, IAR Student Cell, club, warden) saying which columns to
+> fill and which to leave blank, five copy-and-send sheet specifications, and
+> the drop list. The runbook is *how*; that one is *what*.
+>
+> **This section stays the reference** - the reasoning, the constraints and the
+> decisions. If any of the three disagree, this one is right and the other two
+> need fixing.
 
 The college is sending the people as an Excel file. This section is the whole
 procedure. **It was written before the file arrived**, from the schema and the
@@ -280,6 +290,28 @@ unknown name rather than inventing one:
 - **Units** must exist before anyone naming one
   (`profiles.unit_id -> units(id)`). Departments & Clubs. Note the import
   matches a unit by **name or id**, case-insensitively.
+
+> **Measured on the hosted project, 27 Oct 2026** (read-only, over PostgREST):
+> `profiles` **13** - every demo persona, and **every one of them has
+> `ldap_uid`, `unit_id` and `staff_category` empty**; `units` **0**;
+> `hostels` **2** (Saveri, Malhar); `official_email_whitelist` **3**;
+> `academic_records` **0**; `guest_houses` 2; `rooms` 23; `bookings` 34;
+> `user_import_batches` 0 but present.
+>
+> **`units` being empty is the gate nobody had noticed.** Until the
+> departments and offices exist, no `unit` value can be imported at all
+> (`planUserImport` refuses an unknown name), **and no HOD approval can route
+> anywhere** - every faculty official booking reaches the desk with the stage
+> skipped. It is also why the hosted seed's own personas have no unit: the
+> seed creates units only in the mock store. So "create the units" is step one
+> of the import, not a tidy-up afterwards. The three kinds to create, and why a
+> department, a department office and an officer office are modelled
+> differently, are in
+> [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §4.2.
+>
+> Note also that the hosted seed is **older than the code**: it still carries
+> `fa.petrichor@` as a `faculty_advisor` role, which migration 25 retired. Do
+> not read those 13 rows as an example of how a real account should look.
 
 ### 1a.3 Which columns to keep, and which to drop
 
@@ -828,15 +860,27 @@ read tables and columns but not `pg_proc`, `pg_constraint`, `pg_policies`,
 `pg_trigger` or `pg_indexes`. For each it says so and prints the SQL to paste
 in the editor.
 
-> **The current hosted project has 1 – 30, re-verified 14 Oct 2026** by
-> `npm run check:migrations`, which reports **32 as missing** and names 17, 23,
-> 31, 33 and 34 as the five it cannot probe. **Migrations 31, 32, 33 and 34 are
-> written and tested but deliberately NOT applied** - see §1a.1; applying them
-> is a production change needing the owner's approval.
+> **The current hosted project has 1 – 30 *and 32*, re-verified 27 Oct 2026**
+> by `npm run check:migrations`, which now reports **32 as present** -
+> `user_import_batches` exists - and names 17, 23, 31, 33 and 34 as the five it
+> cannot probe. **32 was applied some time between 14 and 27 Oct 2026**; this
+> file had recorded all four of 31 - 34 as deliberately not applied, which is
+> no longer true of 32.
+>
+> **Whether 31, 33 and 34 are applied is not known from here**, and it matters
+> most for **31**: without it `createProfile` fails outright and the 38
+> `authenticated` policies are still in place. Do not infer it from 32 being
+> in. Paste the four queries the script prints (they are also reproduced in
+> [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §3.2) and
+> record the answer here. Applying any of them is a production change needing
+> the owner's approval - see §1a.1 for the order.
+>
 > This file previously said 24 – 30 were outstanding. They were not: they had
 > been applied in the SQL editor, and the note was wrong because the old check
 > recipe listed markers only up to migration 25, so nothing past it could be
-> verified. That is exactly why the number is no longer recorded in prose.
+> verified. That is exactly why the number is no longer recorded in prose - and
+> why 32 drifting from "not applied" to "applied" was caught by the script
+> rather than by reading this paragraph.
 
 The table below is what a *missing* migration costs, which is the reason to
 check at all:

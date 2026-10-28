@@ -13,7 +13,17 @@ import path from "node:path";
  * re-wording a label, and it is the same key the payload is built from.
  */
 
-/** The dummy directory's accounts (`lib/ldap/mock-directory.ts`). */
+/**
+ * The seeded accounts, by the name the account picker prints.
+ *
+ * **The suite signs in the way a person now does** (27 Oct 2026): the sign-in
+ * page has one button, and it opens the account picker at `/mock-login`. The
+ * LDAP form is gone from the interface, so `uid` and `password` are no longer
+ * typed anywhere - they are kept here because they are still the dummy
+ * directory's credentials (`lib/ldap/mock-directory.ts`), which
+ * `signInWithLdap` and *Import LDAP usernames* still use, and because `uid`
+ * is this map's key for the session cache.
+ */
 export const ACCOUNTS = {
   student: { uid: "112201001", password: "Anjali@2026", name: "Anjali Menon" },
   // A day scholar: no hostel on the profile, so no Assistant Warden stage
@@ -49,7 +59,7 @@ export const ID_DOCUMENT = path.join(process.cwd(), "e2e", "fixtures", "id-docum
  */
 const sessions = new Map<string, Cookie[]>();
 
-export async function signIn(page: Page, account: { uid: string; password: string }): Promise<void> {
+export async function signIn(page: Page, account: { uid: string; name: string }): Promise<void> {
   await page.context().clearCookies();
   const saved = sessions.get(account.uid);
   if (saved) {
@@ -60,10 +70,17 @@ export async function signIn(page: Page, account: { uid: string; password: strin
     await page.context().clearCookies();
   }
   await page.goto("/sign-in");
-  await page.getByLabel("LDAP username").fill(account.uid);
-  await page.getByLabel("LDAP password").fill(account.password);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"), { timeout: 30_000 });
+  // Scoped to the page: the header carries a "Sign in" link of its own.
+  await page.getByRole("main").getByRole("link", { name: "Sign in", exact: true }).click();
+  await page.waitForURL((url) => url.pathname.startsWith("/mock-login"), { timeout: 30_000 });
+  // Each persona's button reads "<name> <email> <role>", so the name is
+  // anchored: "Guest House Manager" is also a role badge on nobody else's
+  // button, but a bare substring would have matched it there one day.
+  await page
+    .getByRole("button", { name: new RegExp(`^${account.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`) })
+    .first()
+    .click();
+  await page.waitForURL((url) => !url.pathname.startsWith("/mock-login"), { timeout: 30_000 });
   sessions.set(account.uid, await page.context().cookies());
 }
 

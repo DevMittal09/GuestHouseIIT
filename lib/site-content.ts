@@ -70,15 +70,16 @@ export const MEAL_NOTICE_RULE =
 // ------------------------------------------------------------------ home page
 
 /**
- * One line about a guest house for its card on the home page - what it
- * offers, from the store, with no counts: "Double-sharing rooms, with meals
- * served on site."
+ * **`houseSummary` is gone** (27 Oct 2026). It wrote one line about a guest
+ * house for its card on the home page - "Double-sharing rooms, with meals
+ * served on site." - and the owner asked for the cards to carry the name and
+ * the booking doors and nothing else: "Do not include descriptions such as
+ * 'Double-sharing rooms, with meals served on site.'" Nothing else called it,
+ * so it went rather than sitting here with a test pinning wording no page
+ * prints. What a guest house offers is still said where a reader is deciding:
+ * the Guidelines' room capacities and meal section, both computed from the
+ * same store and Settings.
  */
-export function houseSummary(house: SiteGuestHouse): string {
-  const types = roomTypesIn([house]).map((type) => ROOM_TYPE_LABELS[type].toLowerCase().replace(" ", "-"));
-  const rooms = types.length > 0 ? `${joinNames(types).replace(/^./, (c) => c.toUpperCase())} rooms` : "Rooms";
-  return house.serves_meals ? `${rooms}, with meals served on site.` : `${rooms}.`;
-}
 
 /** An amenity on the home page: a short label, and which icon draws it. */
 export type Amenity = { key: string; label: string };

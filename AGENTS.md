@@ -207,7 +207,9 @@ port 3000 before launching your own.
   exception to "no role names on the public site"; don't widen it to the
   approver roles, which a unit test still guards.
 
-- **Headings come off the five-step scale** (11 Oct 2026): `text-display` for
+- **Headings come off the six-step scale** (11 Oct 2026; `text-hero` added
+  27 Oct 2026 for the home page's title over its photograph, and used
+  nowhere else; **no heading closes on a rule** since 28 Oct 2026): `text-display` for
   a page's `<h1>`, `text-title` for a public section, `text-section` for a
   console list, `text-card` for a card, `text-meta` for small print. Don't
   write a new `clamp()` at the point of use - that is how eight sizes of
@@ -285,13 +287,27 @@ outstanding invoices instead of every booking ever made.
   **service-role key**. Never commit it, never log it, never send it anywhere.
   `.env.example` documents the variables.
 
-## Sign-in: LDAP and Google, one session module
+## Sign-in: one door, and one session module
 
 `lib/auth.ts` `getCurrentUser()` reads the session cookie — an opaque token
 whose SHA-256 keys a row in `sessions` (`lib/sessions.ts`, Phase 8). It is the
-only reader. Two doors open a session (`app/actions/auth.ts`), and both are on
-the card at `/sign-in`, which is also embedded in the public `/book-room` and
-`/book-meal`:
+only reader.
+
+> **The LDAP form is off the sign-in page** (28 Oct 2026, the owner: "we will
+> not be using LDAP. The intended authentication method is Google
+> authentication, but for now, clicking the sign-in button should initiate a
+> mock authentication flow"). `/sign-in`, `/book-room` and `/book-meal` are
+> one centred panel with **one button**: *Sign in with Google* once Google is
+> configured, otherwise *Sign in*, which opens the account picker at
+> `/mock-login`. **Nothing was deleted below the interface** —
+> `signInWithLdap`, the throttle, `lib/ldap/` and *Import LDAP usernames* are
+> all as they were, and the rules below still describe them. Don't put the
+> username and password fields back without being asked; don't put Google's
+> "G" on the placeholder; and remember the **e2e suite now signs in through
+> the picker** (`signIn()` in `e2e/helpers.ts` matches a persona by name).
+
+Three doors open a session (`app/actions/auth.ts`); the first is reachable
+only by a crafted request while the form is withdrawn:
 
 - **LDAP username + password** → `signInWithLdap()`. The *directory* checks the
   password (`lib/ldap/`: `getDirectory()` returns the real `LdapDirectory`
@@ -708,6 +724,15 @@ account.
 `REQUESTER_ROLES`. It stays in the `Role` union and in `BOOKING_CATEGORY_ROLES`
 (used by history filters and reports) because stored bookings still carry it —
 dropping it would orphan them.
+
+> **A list with nothing in it is not drawn** (28 Oct 2026, the owner: the
+> console "feels cluttered and unnecessarily complicated"). On `/manager` and
+> `/caretaker` the sections render only when they hold something, and
+> `DeskSummary` - the ruled index at the top, which still names every list in
+> the same order - is where a zero is reported; its zero rows are not links,
+> because there is nothing to jump to. When every list is empty the console
+> says so in one line. Nothing was removed: every section, figure and action
+> is still there the moment it has a row.
 
 ### Guest House Caretaker — `gh_caretaker`
 
@@ -1750,10 +1775,12 @@ null`).
 
 Built 19 Sep 2026 from `design_handoff/`; **redesigned 26 Sep 2026** in the
 institute's own palette, over three passes that day; **revamped 30 Sep 2026**
-(editorial public sections, GOV.UK-style portal primitives — see file 16). Where it landed: **clean
-and institutional**, modelled on peer guest-house sites (IIT Madras's
-Taramani Guest House) — photographs **contained** in the layout, never
-full-screen (the owner called a full-screen hero "so weird").
+(editorial public sections, GOV.UK-style portal primitives — see file 16).
+**Clean and institutional**, modelled on peer guest-house sites (IIT Madras's
+Taramani Guest House). Photographs are **contained** in the layout
+everywhere - **except the home page's hero**, which fills the first viewport
+(27 Oct 2026, asked for outright; it was "so weird" in September, when it was
+a picture with the page beginning under it and nothing set over it).
 
 - **What the public site may say (the owner, 26 Sep 2026):** never the
   portal's internals — **no requester categories, no approval chains, no role
@@ -1775,18 +1802,36 @@ full-screen (the owner called a full-screen hero "so weird").
   14 Oct 2026 - `archive/privacy-notice/`). Chrome:
   `components/site/brand.tsx` (**`BrandBlock`** — the emblem-only
   `iitpkd-logo.png` beside "Guest House" in the serif and a tracked tagline;
-  shared with the portal header), `site-header.tsx` (a white bar, sticky from
-  `lg`; links in the header, a sideways-scrolling row below `lg`),
+  shared with the portal header), `site-header.tsx` (**one opaque charcoal
+  bar on every page** since 28 Oct 2026 - the institute's own top-bar colour
+  and the portal's masthead, closed by a vermilion rule, with the six links
+  **centred** and the current one in a vermilion-deep chip; `absolute`
+  (`lg:fixed`) over the hero on `/`, sticky from `lg` everywhere else. It is a
+  client component only for `usePathname`),
   `site-chrome.tsx` (`SiteFooter`: an MRBS line, then address, front office,
   both guest houses' directions, institute links). No utility strip. `NavBar` (`site-nav.tsx`) is shared:
   `tone="dark"` portal bar, `"light"` / `"overlay"` site header.
-- **Layout:** home = a 5 + 7 split hero as one contained block (an ink
-  panel with the headline, two buttons and the front-office number, joined
-  to one 4:3 photo), a card per guest house
-  (`houseSummary`, no counts), a ruled grid of six amenities (no meeting or
-  exercise room, 30 Sep 2026), a four-photo
-  mosaic, a closing row of ruled links. Sections open on a hairline ink rule
-  with the label in the left quarter (`SectionHead`). Inner pages open on a
+- **Layout:** home = **a full-viewport hero** (`HeroCarousel`: two
+  photographs, a solid `bg-ink/66` wash, the kicker, `<h1>`, lead and two
+  solid doors centred over it), then a ruled strip of six amenities
+  (no meeting or exercise room, 30 Sep 2026), a **six-photograph** gallery
+  preview in two bands of unequal widths, a **text-only card per guest
+  house** (the name and its booking doors - no photograph, no label, no
+  summary line), and **Contact us** (the manager's line, email and address as
+  one ruled band of three, then one map per guest house). **Amenities, the
+  guest houses and Contact us are centred; the gallery is not**, because its
+  heading carries the link to `/gallery` (28 Oct 2026).
+- **A section opens on a label, a serif heading and a 40px vermilion stub**
+  (`SectionHead`, 28 Oct 2026). **No rule runs across the page under a
+  heading** - not here, not on a portal page title (`PageHeader`), not beside
+  a console list's heading (`SectionHeading`). `rule-title` is **deleted**.
+  The owner: "remove the default horizontal lines or underlines beneath page
+  and section headings - use more refined alternatives".
+- **Whatever is selected is filled, never underlined** (28 Oct 2026). One
+  language across the service: the site nav's current page is a
+  vermilion-deep chip, the portal nav's and the desk's guest-house tabs
+  (`LinkTabs`) are ink chips, and `segment()` and the Approval Log's tiles
+  already filled. Don't reintroduce a bar under a tab. Inner pages open on a
   plain light band (`PageMasthead`). **`SignInPanel` has two shapes, chosen
   by whether a `photo` is passed** (15 Oct 2026): `/sign-in` keeps the
   split-screen panel, the form beside a photograph (`SIGN_IN_PHOTOS`); the
@@ -1795,11 +1840,26 @@ full-screen (the owner called a full-screen hero "so weird").
   form's own labels stay left-aligned in both; centring a label over a
   full-width input reads as a mistake. Inner mastheads put the title in seven
   columns and the lead under a vermilion rule in five.
-- **The home page's masthead carries no ink panel and no phone line**
-  (15 Oct 2026, the owner: the black box "looks unnecessary"). It is centred
-  plain type under the slideshow - and it is **the only centred block on the
-  site**; the sections below it keep `SectionHead`'s left-hand label over a
-  full-width hairline. Don't "make it consistent" in either direction.
+- **The home page's title is set over the photograph** (27 Oct 2026, the
+  owner, after the ink panel came off it on 15 Oct 2026). The hero is the
+  institute's name in tracked **saffron** capitals, the page's `<h1>`, a
+  vermilion stub, one sentence and two **solid** doors (vermilion and
+  saffron), centred on `bg-ink/66`
+  over a photograph that fills the viewport - **the only centred block and
+  the only full-bleed photograph on the site**; the sections below it keep
+  `SectionHead`'s left-hand label over a full-width hairline. Don't "make it
+  consistent" in either direction.
+- **The hero has no visible controls** (27 Oct 2026). Two slides, 6.5s each,
+  a cross-fade; **clicking the photograph pauses and resumes it** - that
+  click target is a labelled `<button>` under the title block, which is why
+  the title block is `pointer-events-none` and only its two links are not.
+  The numbering, the arrows and the Pause button of 15 Oct 2026 are **gone**;
+  don't put a control back. `prefers-reduced-motion` stops the rotation, the
+  slow `hero-drift` zoom and the pointer zoom - not just the transition.
+- **A photograph may name a guest house on the two hero slides and nowhere
+  else.** `HOME_PHOTOS.slides` **is** `GUEST_HOUSE_PHOTOS` (the two the owner
+  attributed on 15 Oct 2026), and a unit test fails if `HOME_PHOTOS.preview`
+  ever shows one of them again.
 - **The sign-in card publishes no credentials.** The dashed "Demo build -
   LDAP accounts are dummy ones, e.g. `uid` / `password`" box under the form
   is **deleted** (15 Oct 2026, the owner). It printed a working dummy login
@@ -1859,6 +1919,10 @@ full-screen (the owner called a full-screen hero "so weird").
   is `Button variant="brand"`. No drop shadows, no gradients. Source
   Serif 4 (optical sizes) / Source Sans 3 via `next/font`. Tokens in
   `app/globals.css`; the portal is restyled **through the shadcn tokens**.
+- **A heading with a count is written "Current bookings: 3"** (28 Oct 2026,
+  the owner). `SectionHeading` puts the colon in; the figure keeps its serif.
+  It is one component, so My Bookings, the desk's lists and the approval
+  queues all read the same way.
 - **My Bookings leads with two large doors**, "New room booking" (vermilion)
   and "Meal booking" (ink), both reading `ROOM_BOOKING_PATH` /
   `MEAL_BOOKING_PATH`. **Then three sections** (17 Oct 2026): **Current**,

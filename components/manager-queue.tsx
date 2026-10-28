@@ -107,6 +107,26 @@ export function ManagerQueue({
   // allocate; it was reading as a stay with every cell dashed out.
   const pendingRooms = pending.filter((b) => b.service_type !== "meals_only");
   const pendingMeals = pending.filter((b) => b.service_type === "meals_only");
+  // **A list with nothing in it is not drawn** (27 Oct 2026, the owner: the
+  // console "feels cluttered and unnecessarily complicated"). Four sections
+  // used to render a heading and a grey line to say they were empty, and on
+  // an ordinary morning the manager scrolled past all four - and past four
+  // more zeros in the index above them - to reach the one list with work in
+  // it. Nothing is lost: the index at the top still names every list and
+  // still prints its figure, and it is where a zero is now reported.
+  const quiet =
+    [
+      checkoutsToday,
+      cancellationRequests,
+      pendingRooms,
+      pendingMeals,
+      current,
+      overdue,
+      toBill,
+      upcoming,
+      missed,
+      awaitingPayment,
+    ].every((list) => list.length === 0);
   return (
     <div className="space-y-8">
       <DeskSummary
@@ -130,10 +150,16 @@ export function ManagerQueue({
         ]}
       />
 
+      {quiet && (
+        <EmptyState>Nothing needs the desk at this guest house right now.</EmptyState>
+      )}
+
       {/* What the desk needs first thing: which rooms come back today. */}
-      <div id="checkouts" className="scroll-mt-20">
-        <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} isManager />
-      </div>
+      {checkoutsToday.length > 0 && (
+        <div id="checkouts" className="scroll-mt-20">
+          <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} isManager />
+        </div>
+      )}
 
       {/* Cancellation Requests Section */}
       {cancellationRequests.length > 0 && (
@@ -168,16 +194,13 @@ export function ManagerQueue({
 
       {/* Incoming room requests. A meal booking is not one of them - see
           below. */}
-      <section id="incoming" className="scroll-mt-20">
-        <SectionHeading
-          title="Incoming room requests"
-          count={pendingRooms.length}
-          // Nothing to explain about a list with nothing in it.
-          description={pendingRooms.length > 0 ? "Allocating rooms is what approves the request." : undefined}
-        />
-        {pendingRooms.length === 0 ? (
-          <EmptyState>No requests waiting for allocation.</EmptyState>
-        ) : (
+      {pendingRooms.length > 0 && (
+        <section id="incoming" className="scroll-mt-20">
+          <SectionHeading
+            title="Incoming room requests"
+            count={pendingRooms.length}
+            description="Allocating rooms is what approves the request."
+          />
           <div className="overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
@@ -205,8 +228,8 @@ export function ManagerQueue({
               </TableBody>
             </Table>
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Meal bookings waiting for approval, in their own section (1 Oct
           2026, the office's request).
@@ -248,17 +271,12 @@ export function ManagerQueue({
       )}
 
       {/* Current occupants - guests physically in the building now */}
-      <section id="in-house" className="scroll-mt-20">
-        <SectionHeading
-          title="Current occupants"
-          count={current.length}
-        />
-        {current.length === 0 ? (
-          <EmptyState>Nobody is staying at this guest house right now.</EmptyState>
-        ) : (
+      {current.length > 0 && (
+        <section id="in-house" className="scroll-mt-20">
+          <SectionHeading title="Current occupants" count={current.length} />
           <StaysTable bookings={current} isManager />
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Past check-out but never closed off. Their own section, because
           counting them as "current occupants" would be the same kind of lie
@@ -289,17 +307,12 @@ export function ManagerQueue({
       )}
 
       {/* Upcoming - allocated, not started */}
-      <section id="upcoming" className="scroll-mt-20">
-        <SectionHeading
-          title="Upcoming stays"
-          count={upcoming.length}
-        />
-        {upcoming.length === 0 ? (
-          <EmptyState>No upcoming stays for this guest house.</EmptyState>
-        ) : (
+      {upcoming.length > 0 && (
+        <section id="upcoming" className="scroll-mt-20">
+          <SectionHeading title="Upcoming stays" count={upcoming.length} />
           <StaysTable bookings={upcoming} isManager />
-        )}
-      </section>
+        </section>
+      )}
 
       {/* **Missed** - requests nobody decided before their check-in
           (migration 29, 7 Oct 2026). They used to sit in a queue for ever

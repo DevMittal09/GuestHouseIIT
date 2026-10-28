@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { SitePhoto } from "@/lib/site";
+import type { MapPin, SitePhoto } from "@/lib/site";
 
 /**
  * Building blocks of the public website, in the institute's own palette
@@ -123,23 +123,29 @@ export function PageMasthead({
 }
 
 /**
- * A section's heading, set the editorial way: the small-capitals label and
- * any link on one line, a hairline ink rule under them, then the serif
- * heading.
+ * A section's opener: a tracked label, the serif heading, and a short
+ * vermilion stub under it.
  *
- * Rearranged 11 Oct 2026. The label used to sit in the left quarter of a
- * 12-column grid with the heading beside it, and every section's content was
- * then indented to match (`lg:ml-[calc(25%+10px)]`). That left a quarter of
- * the page empty down its whole length, holding one six-word label - the
- * single biggest reason the home page read as mostly nothing. The rule now
- * runs the full width and so does the content under it; the label keeps its
- * place above, where it reads as furniture rather than as an empty column.
+ * **The full-width hairline is gone** (27 Oct 2026, the owner: "remove the
+ * default horizontal lines or underlines beneath page and section headings -
+ * use more refined alternatives"). A rule ran across the page above every
+ * heading on the site, which is the most generic device a page can own, and
+ * four sections carrying the same one is what makes a page read as a
+ * template. What is left is the type and one 40px mark - the stub the home
+ * page has carried since 15 Oct 2026, promoted to the device every section
+ * opens on.
+ *
+ * `align="center"` centres the whole block, for the sections the owner asked
+ * to centre (Amenities, Our guest houses, Contact us). A section with a
+ * `link` stays left: the link sits on the heading's own line, at the far
+ * right, where a centred heading would leave it stranded.
  */
 export function SectionHead({
   label,
   title,
   id,
   link,
+  align = "left",
   tone = "light",
   className,
 }: {
@@ -147,36 +153,40 @@ export function SectionHead({
   title: React.ReactNode;
   id?: string;
   link?: { href: string; label: string };
+  align?: "left" | "center";
   tone?: "light" | "dark";
   className?: string;
 }) {
   const dark = tone === "dark";
+  const centred = align === "center";
   return (
-    <div className={cn("min-w-0", className)}>
-      {(label || link) && (
-        <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 pb-3">
-          {label && <Label className={cn(dark && "text-saffron")}>{label}</Label>}
-          {link && (
-            <ArrowLink
-              href={link.href}
-              className={cn("ml-auto", dark && "text-white hover:text-saffron")}
-            >
-              {link.label}
-            </ArrowLink>
-          )}
-        </div>
-      )}
-      <div className={cn("border-t pt-5", dark ? "border-white/40" : "border-ink")}>
+    <div className={cn("min-w-0", centred && "text-center", className)}>
+      {label && <Label className={cn("mb-3", dark && "text-saffron")}>{label}</Label>}
+      <div
+        className={cn(
+          "flex flex-wrap items-end gap-x-8 gap-y-2",
+          centred ? "justify-center" : "justify-between"
+        )}
+      >
         <h2
           id={id}
-          className={cn(
-            "max-w-[22ch] text-title font-semibold",
-            dark ? "text-white" : "text-ink"
-          )}
+          className={cn("max-w-[24ch] text-title font-semibold", dark ? "text-white" : "text-ink")}
         >
           {title}
         </h2>
+        {link && (
+          <ArrowLink
+            href={link.href}
+            className={cn("mb-1.5 ml-auto", dark && "text-white hover:text-saffron")}
+          >
+            {link.label}
+          </ArrowLink>
+        )}
       </div>
+      <div
+        aria-hidden
+        className={cn("mt-5 h-[3px] w-10 bg-vermilion", centred && "mx-auto")}
+      />
     </div>
   );
 }
@@ -228,6 +238,14 @@ export const siteButton = {
   brand: cn(BUTTON_BASE, "bg-vermilion-deep text-white hover:bg-vermilion-hover hover:text-white"),
   ink: cn(BUTTON_BASE, "bg-ink text-white hover:bg-ink-soft hover:text-white"),
   outline: cn(BUTTON_BASE, "border border-ink bg-transparent text-ink hover:bg-ink hover:text-white"),
+  /**
+   * The emblem's saffron, carrying ink (8.4:1) - the second solid button
+   * beside the vermilion one (27 Oct 2026, the owner: *Book a Meal* "looks
+   * too transparent... give it a solid, attractive colour that complements
+   * the Book a Room button"). Red and gold is the institute's own pairing,
+   * and the outline it replaced read as a disabled button over a photograph.
+   */
+  saffron: cn(BUTTON_BASE, "bg-saffron text-ink hover:bg-saffron-deep hover:text-ink"),
   /** Solid white, on a photograph or ink. */
   light: cn(BUTTON_BASE, "bg-white text-ink hover:bg-band hover:text-ink"),
   /** Outlined, on a photograph or ink. */
@@ -287,5 +305,27 @@ export function SitePhotoFrame({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One guest house on the map.
+ *
+ * **Nothing is printed under it** (27 Oct 2026, the owner: the embed already
+ * offers "View larger map" and the directions, "so remove the redundant links
+ * below the maps", and the name "will already appear in the section above").
+ * So this is the frame and the iframe, and whoever draws it says which guest
+ * house it is - the tab on `/contact`, the heading over it on the home page.
+ * It is shared so the two cannot disagree about the embed's attributes.
+ */
+export function MapEmbed({ pin, className }: { pin: MapPin; className?: string }) {
+  return (
+    <iframe
+      title={`${pin.name} on the map`}
+      src={pin.embedUrl}
+      loading="lazy"
+      referrerPolicy="no-referrer-when-downgrade"
+      className={cn("block w-full border-0 bg-band", className)}
+    />
   );
 }

@@ -3,7 +3,7 @@
 Read this before changing anything visual, adding a public page, or touching
 the sign-in pages.
 
-**Eight passes so far:**
+**Ten passes so far:**
 
 | Date | Where | What |
 | --- | --- | --- |
@@ -15,9 +15,167 @@ the sign-in pages.
 | 30 Sep 2026 | `main` | A written revamp brief: TGH structure, Aman / Standard editorial rules, **GOV.UK** tables and tags; 4px inputs, 6px buttons, 8px cards, never a pill, shadow, gradient or glass. Primitives rebuilt (see "The 30 Sep revamp" below); the evening's content rules all kept. **Afternoon:** the supervisor's review — see "Promise less" below |
 | 11 Oct 2026 | `main` | The owner: the interface "looks too ai generated"; wanted it distinctive, professional and purpose-designed, with no generic dashboard patterns, excessive cards, decorative icons, unnecessary badges or repetitive layouts. **The palette was checked against iitpkd.ac.in again and kept** - what changed was composition, type and density. See "The 11 Oct design pass" below |
 | 15 Oct 2026, morning | `main` | The office's eleven new photographs, and **the first two the site is allowed to name**: the owner said which guest house each of two shows and asked for a landing page that showcases them, "similar but not exact copy" of iitpkd.ac.in. The home page's hero and its "Our guest houses" section became **one block** - the ink masthead across the top, a guest house under each half of it, photograph first and the name under it. **No colour, token or primitive changed.** See "The guest houses become the hero" below |
-| **15 Oct 2026, later (current)** | `main` | The owner: "i need images which change evry few seconds and has the option of arrows to move to next image... just go to iitpkd.ac.in website and see what i mean". A **hero slideshow** - the one client component on the public site - with iitpkd.ac.in's own Previous / Pause / Next and numbered indicators. The masthead moved **under** it, then lost its ink panel and its phone line and was **centred** ("the black box... looks unnecessary"); the guest houses went back to a section of their own. **No colour, token or primitive changed.** See "The hero becomes a slideshow" below |
+| 15 Oct 2026, later | `main` | The owner: "i need images which change evry few seconds and has the option of arrows to move to next image... just go to iitpkd.ac.in website and see what i mean". A **hero slideshow** - the one client component on the public site - with iitpkd.ac.in's own Previous / Pause / Next and numbered indicators. The masthead moved **under** it, then lost its ink panel and its phone line and was **centred** ("the black box... looks unnecessary"); the guest houses went back to a section of their own. **No colour, token or primitive changed.** See "The hero becomes a slideshow" below |
+| 27 Oct 2026 | `main` | A written brief: make the landing page "modern, cinematic, elegant and aesthetically pleasing, while maintaining a professional institutional identity", in six sections. The hero becomes **a full viewport photograph with the navigation laid over it** and the page's title set in the middle of it; two slides, no visible controls, a slow zoom that follows the pointer. Below it the amenities become one ruled strip, the mosaic a **six-thumbnail** preview, the guest houses **text-only cards**, and **Contact us** arrives on the page with a map each. **The first pass to add a type step (`--text-hero`) and a keyframe; no colour changed.** See "The landing page becomes cinematic" below |
+| **28 Oct 2026 (current)** | `main` | The owner names a reference site for the first time - the **Taramani Guest House, IIT Madras** - and asks for the application to be brought up to it, plus a functional brief. The header becomes **one opaque charcoal bar on every page** with the links centred; the hero gains a saffron kicker, a deeper wash and a **solid saffron** second door; Amenities, Our guest houses and Contact us are **centred**; the gallery is recomposed. Application-wide: **no rule under any heading** (`rule-title` deleted) and **everything selected is filled, never underlined**. The sign-in page loses its form, its photograph and every mention of LDAP. See "The Taramani pass" below |
+
+## The Taramani pass (28 Oct 2026)
+
+The first round with a **named reference**: the owner asked for the
+application to be brought up to the [Taramani Guest House, IIT
+Madras](https://tgh.iitm.ac.in/) site, "used as inspiration without copying
+it directly".
+
+**Its stylesheet was read, not its screenshots guessed at.** IIT Madras
+maroon `#800000`-`#8B0000`, gold `#C9973A`-`#E2B95C`, cream `#F1E9DC`,
+**Fraunces** display over **Manrope** text, small capitals tracked `0.06em`
+to `0.18em` - and `box-shadow: 0 28px 60px`, `border-radius: 1rem`,
+`rounded-full`, five gradient pairs. What was taken and what was refused is
+in [02-decisions.md](02-decisions.md) under this date; the short version is
+**the typography and the composition, not the decoration**.
+
+### What changed on the home page
+
+| Block | Change |
+| --- | --- |
+| Hero | **Indian Institute of Technology Palakkad** in tracked **saffron** capitals above the `<h1>`; a 56px vermilion stub under it; the lead at `clamp(17.5px,…,21px)` in `font-light`; the wash **`bg-ink/60` -> `bg-ink/66`**; *Book a Meal* becomes **`siteButton.saffron`** - solid, ink on the emblem's gold - beside the vermilion *Book a Room* |
+| Amenities | **Centred**, label and all; the ruled strip is `max-w-[1040px]` |
+| A look inside | Six photographs in **two bands of unequal widths** (wide, narrow, narrow / narrow, narrow, wide) on one `auto-rows-[clamp(170px,15.5vw,215px)]`. **The only section still left-aligned**, because its heading carries *See the full gallery* |
+| Our guest houses | **Centred**, `max-w-[920px]` |
+| Contact us | **Centred**: the manager's line, the email and the address as **one ruled band of three** (`sm:grid-cols-3`, each cell centred), then one map per guest house |
+
+### The header: one opaque bar
+
+**`bg-ink`, on every public page, closed by a vermilion rule** - the
+translucent band of the day before "looks too juvenile and translucent". It
+is the institute's own top-bar colour and the portal's masthead, so both
+halves of the application now open the same way.
+
+| | |
+| --- | --- |
+| Layout | Three columns from `lg` (`1fr auto 1fr`), so the six links sit in the **middle of the bar** whatever the lockup and the button measure. Below `lg`, a second scrolling row |
+| Current page | A **vermilion-deep chip** (5.2:1 with white on it), which is the colour iitpkd.ac.in marks its own current menu item with |
+| On `/` | Still laid **over** the hero (`absolute`, `lg:fixed`), so the photograph fills the first viewport |
+| Client code | `usePathname` only. The scroll listener is gone with the colour change it drove |
+
+### Two rules that now hold everywhere
+
+- **No rule runs under a heading.** `rule-title` is **deleted** (it had one
+  reader, `PageHeader`); `SectionHead`'s full-width hairline is gone, replaced
+  by a **40px vermilion stub**; `SectionHeading`'s leader rule is gone, and
+  the manager's console drew eight of them down one screen. What ranks a
+  heading now is a label, the serif and the space under it.
+- **Whatever is selected is filled, never underlined.** The service had four
+  ways of saying "this one"; it has one. Ink on white (`NavBar tone="service"`,
+  `LinkTabs`, `segment()`, the Approval Log's tiles), vermilion-deep on ink
+  (`NavBar tone="ink"`). `tone="dark"` is gone - nothing used it.
+
+### And the sign-in page
+
+The second brief of the same day. **One centred panel, one button, no
+photograph and no mention of LDAP** - the fields, the "institute LDAP account
+or your @iitpkd.ac.in account" sentence and the split-screen shape are all
+gone. See "Sign-in: what changed and what did not" below, which this round
+rewrites.
+
+## The landing page becomes cinematic (27 Oct 2026)
+
+A written brief, six numbered sections, and the owner's own copy for the
+hero. The page is now **five blocks**:
+
+**Hero (full viewport) -> Amenities -> A look inside -> Our guest houses ->
+Contact us.** The *Planning a visit?* row of two links is gone - its Contact
+link became the section above it, its Guidelines link moved inside that
+section.
+
+### The hero
+
+| | |
+| --- | --- |
+| Shape | `min-h-svh` - the first viewport, whatever the browser chrome does |
+| Photographs | **2** (`HOME_PHOTOS.slides`), which **are** `GUEST_HOUSE_PHOTOS` - the only two the site attributes. 6.5s each, a 1.4s cross-fade |
+| Wash | **`bg-ink/60`**, one translucent solid colour, no gradient. Measured against both photographs: white display type clears 3:1 against the brightest tenth of the middle band and sits near 7:1 against its average |
+| Over it | The page's only `<h1>` (`text-hero`, the vermilion separator `hidden sm:inline`), one sentence, *Book a Room* (brand) and *Book a Meal* (outline-light), centred |
+| Motion | `hero-drift` 30s `alternate` on an inner layer; the pointer moves `transform-origin` and lifts the scale to 1.06 on an outer one, both over 1.4s |
+| Controls | **None.** Clicking the photograph pauses and resumes it; a quiet **Paused** marker says so |
+| The header | Laid over it as a translucent **ink band** (`bg-ink/65`), white type, turning into the ordinary white bar at `scrollY > 24` |
+
+**Why two layers of motion.** A CSS animation owns `transform`, so a hover
+transition on the same property would fight it: the drift is on an inner
+layer, the pointer zoom on an outer one. The zoom is written **through a ref
+in the event handler** - one style on one element - rather than by
+re-rendering the layers at the pointer's frame rate.
+
+**Why the click target is a `<button>`.** "It stops" is one of the four rules
+of 15 Oct 2026 and the brief removed the visible control, so the control moved
+into the photograph: a real `<button>` covering it, under the title block,
+with an `aria-label` that says which way it will go. The title block is
+therefore **`pointer-events-none`**, with `pointer-events-auto` on its two
+links alone, so a click anywhere a reader would call "the hero image" reaches
+the button and the doors still work. **Holding on hover was dropped** - on a
+hero this size the pointer rests over it most of the time, which would cancel
+the auto-transitions the brief asks for, and hovering now means the zoom.
+Focus inside the hero still holds it, and `prefers-reduced-motion` stops the
+rotation, the drift and the pointer zoom.
+
+### The four sections under it
+
+- **Amenities** - the same six from `amenities()`, in one ruled strip
+  (`gap-px` over a border-coloured ground) of **2 / 3 / 6** columns, the icon
+  over its label, centred. Six divides into all three, so no cell is ever
+  empty. **The headings stay left**: the gallery section has to carry a link
+  at its top right, and one centred heading among four left-ruled ones is the
+  inconsistency the brief warns about.
+- **A look inside** - **six** thumbnails in one row (2 / 3 / 6), where it was
+  a 540px mosaic of four. `HOME_PHOTOS.preview` was repointed and varied so no
+  two frames beside each other look alike, and a unit test keeps it disjoint
+  from the hero.
+- **Our guest houses** - **text only**: the name as an `<h2>`, a vermilion
+  stub, *Book a Room*, and *Book a Meal* where `serves_meals`. No photograph
+  (both are in the hero now), no "Rooms & dining" label, no summary line -
+  **`houseSummary` is deleted**, with its test.
+- **Contact us** - the manager's line, email and address in four columns,
+  beside **one map per guest house** in eight. The map grows to whatever the
+  details column needs (`flex-1`), so the two end on one line.
+
+### The map loses the row under it
+
+`GuestHouseMap`'s footer - the guest house's name, *Open in Google Maps* and
+*Get directions* - is **deleted**, on `/contact` as well as here: the embed
+carries its own "View larger map" and directions control, and the name was
+printed directly under the tab that had just been clicked. `MapEmbed`
+(`site-ui.tsx`) is the shared iframe, so the two pages cannot drift. **The
+footer still links each guest house's map and directions** - that is the one
+place the pair is not redundant.
+
+### What this reversed
+
+Both were argued against in September and asked for anyway;
+[02-decisions.md](02-decisions.md) carries the *Superseded* notes.
+
+- **Photographs are contained in the layout** (26 Sep 2026) - still true of
+  every photograph but this one, which carries the page's `<h1>` rather than
+  standing in front of it.
+- **The header is a plain white bar** (26 Sep 2026, after an afternoon of
+  lying transparent over a photograph) - it is a **translucent band** over the
+  hero now, not nothing, which is what makes white links readable (2.4:1 over
+  bare sky; above 5:1 on the band).
+
+### Two things the tests could not have caught
+
+Found by reading screenshots back at 1440px and 390px: the two map cards were
+**half empty** (a grid row stretches to the taller details column, so the
+iframe is `flex-1` now), and the title wrapped to **"IIT Palakkad -"** over
+"Guest House" on a phone, which reads as a hyphenated word (the separator is
+`hidden sm:inline`).
 
 ## The hero becomes a slideshow (15 Oct 2026, later)
+
+> **Superseded 27 Oct 2026** - see the section above. The slideshow is now a
+> full-screen hero of **two** photographs with **no visible controls**. What
+> survives of this section: the four rules a rotating carousel has to keep,
+> and the rule that the mosaic may not repeat what the hero showed. The rest
+> is a record of what the page looked like between 15 and 27 October.
 
 The owner asked for iitpkd.ac.in's hero outright - photographs that change by
 themselves, arrows to move between them, the details below. **A carousel had
@@ -190,13 +348,15 @@ pulled again and counted: `#e94c26` 22 times, then `#fff`, `#333`, `#ededed`,
 `#1a1a1a`, `font-family: 'Source Serif Pro'` on headings. That is already what
 `:root` holds. Nothing in the token table further down this file changed.
 
-### The type scale - five named steps
+### The type scale - five named steps, six since 27 Oct 2026
 
 In `@theme inline` (`app/globals.css`), used through Tailwind as
-`text-display`, `text-title`, `text-section`, `text-card`, `text-meta`:
+`text-hero`, `text-display`, `text-title`, `text-section`, `text-card`,
+`text-meta`:
 
 | Step | Size | For |
 | --- | --- | --- |
+| `hero` | `clamp(2.5rem, 1.5rem + 3.6vw, 4.25rem)` | **The home page's title over its photograph, and nothing else** (27 Oct 2026). `display` tops out at 48px, which is right for a page title and small in the middle of a 900px photograph |
 | `display` | `clamp(2rem, 1.35rem + 2.1vw, 3rem)` | A page's one `<h1>` (`PageHeader`) |
 | `title` | `clamp(1.75rem, 1.35rem + 1.5vw, 2.5rem)` | A public section's `<h2>` (`SectionHead`), the guest-house names |
 | `section` | `1.3125rem` | A console list's `<h2>` (`SectionHeading`) |
@@ -630,7 +790,7 @@ routes or role names, no captions, instructions only on the Guidelines.
 app/
   layout.tsx            root: fonts (Source Sans 3 / Source Serif 4), metadata
   (site)/               PUBLIC website — open to everyone
-    layout.tsx          white header (sticky from lg), footer (address, directions)
+    layout.tsx          header (white, sticky from lg; over the hero on /), footer
     page.tsx            /            Home
     book-room/          /book-room   gated entry → sign in → /book
     book-meal/          /book-meal   gated entry → sign in → /book/meals
@@ -675,34 +835,37 @@ would go stale until the next build.
 
 ## Sign-in: what changed and what did not
 
-> **Current state (15 Oct 2026):** the card asks for an **LDAP username +
-> password**; the second button reads **"Mock Authentication"** (no Google
-> "G" mark) and opens `/mock-login?next=…` while Google is unconfigured, and
-> reads **"Sign in with Google"** (real OpenID Connect) once
-> `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL` are set.
+> **Current state (28 Oct 2026): one button, and no password.** The owner
+> withdrew LDAP from the interface - "we will not be using LDAP. The intended
+> authentication method is Google authentication, but for now, clicking the
+> sign-in button should initiate a mock authentication flow" - so all three
+> doors (`/sign-in`, `/book-room`, `/book-meal`) are the **same centred
+> panel**: the kicker, the title, one line of lead, one button, one line
+> under it.
 >
-> **Two things changed on 15 Oct 2026**, both at the owner's request:
+> | Configured | The button |
+> | --- | --- |
+> | Google (`GOOGLE_CLIENT_ID` and friends) | **Sign in with Google**, with the Google mark, to `/api/auth/google/start` - the real OpenID Connect flow of Phase 8, unchanged and still unbuilt-upon |
+> | Nothing | **Sign in**, to `/mock-login?next=…`, with "Google sign-in is not connected yet - you will be asked to choose an account" under it. **No Google mark**: a "G" on a button that does not talk to Google claims something untrue, and that rule predates this round |
 >
-> - **`SignInPanel` has two shapes, chosen by whether a `photo` is passed.**
->   `/sign-in` keeps the split-screen panel (form in five columns, photograph
->   in seven from `lg`). The booking doors **`/book-room` and `/book-meal`
->   pass none** and get a narrow `max-w-[560px]` panel **centred** in the
->   page, with the kicker, title, lead, domain note and footnote centred too
->   (`PageTitle center`, `LoginForm center`). **The form's own labels stay
->   left-aligned in both** - a centred label over a full-width input
->   separates the two and reads as a rendering mistake. Don't "finish" the
->   centring.
-> - **The dashed "Demo build" box under the form is deleted**, with the
->   `sampleAccount` prop. It printed a **working dummy LDAP login** -
->   `uid` / `password` in two `<code>` tags - on three public,
->   unauthenticated pages. The accounts are in
->   [05-credentials-and-security.md](05-credentials-and-security.md) and
->   `lib/ldap/mock-directory.ts`; **don't put them back on a page.** The
->   sentence it also carried, that "Mock Authentication" is a persona picker
->   standing in for Google, is in `AGENTS.md` - and the button has said so
->   itself since 23 Sep 2026.
+> **What went:** the LDAP username and password fields, the domain sentence
+> ("Use your institute LDAP account or your @iitpkd.ac.in account. Personal
+> email accounts cannot be used."), the photograph beside `/sign-in`, the
+> split-screen shape, and the picker's "← Back to LDAP sign in".
 >
-> The notes below are the history of how it got there.
+> **What did not:** `signInWithLdap`, the per-uid throttle, the single message
+> for an unknown user and a wrong password, the empty-password refusal,
+> `lib/ldap/` and *Import LDAP usernames*. The door is a form away.
+>
+> **The e2e suite signs in through the picker now** (`signIn()` in
+> `e2e/helpers.ts`), matching a persona by **name, anchored** - the button
+> reads "name, email, role", so an unanchored match would one day find a role
+> badge.
+>
+> **The dashed "Demo build" box is still deleted** (15 Oct 2026): it printed a
+> working dummy login on three public pages. The accounts are in
+> [05-credentials-and-security.md](05-credentials-and-security.md) and
+> `lib/ldap/mock-directory.ts`; **don't put them back on a page.**
 
 > **Superseded in part (19 Sep 2026, later the same day):** the card now asks
 > for an **LDAP username + password** (`signInWithLdap`) and has a **"Sign in
@@ -746,13 +909,14 @@ On `:root`, exposed to Tailwind through `@theme inline`:
 
 | Token | Hex | Tailwind | Use |
 | --- | --- | --- | --- |
-| `--ink` | `#1A1A1A` | `bg-ink` / `text-ink` | footers, the portal nav bar, headings, the ink panels, the wash over photographs |
+| `--ink` | `#1A1A1A` | `bg-ink` / `text-ink` | **both mastheads** (the public site's since 28 Oct 2026, the portal's since 30 Sep), both footers, headings, and the home hero's wash at **`bg-ink/66`** (measured: white display type 3.6:1 against the brightest tenth of the middle of either photograph, 7.6:1 against its average) |
 | `--ink-soft` | `#2B2926` | `bg-ink-soft` | hover on ink |
 | `--vermilion` | `#E94C26` | `text-vermilion` / `bg-vermilion` | rules, icons, active-nav bar, display-size numbers — **never behind white text** |
 | `--vermilion-deep` | `#C43C1C` | `bg-vermilion-deep` / `text-vermilion-deep` | **buttons with white text** (5.2:1), small labels and link hover (5.8:1 on white) |
 | `--vermilion-hover` | `#A8331A` | `bg-vermilion-hover` | hover on the above |
 | `--vermilion-soft` | `#FDF0EB` | `bg-vermilion-soft` | spare tint |
-| `--saffron` | `#F5A300` | `text-saffron` / `border-saffron` | the emblem colour: labels on ink (8.4:1), notice-box edge; carries **ink** text, never white |
+| `--saffron` | `#F5A300` | `text-saffron` / `bg-saffron` | the emblem colour: labels on ink (8.4:1), the hero's kicker and its **solid *Book a Meal* button** (28 Oct 2026), notice-box edge; carries **ink** text, never white |
+| `--saffron-deep` | `#D98F00` | `bg-saffron-deep` | hover on the saffron button (ink on it is 7.1:1) |
 | `--body-text` | `#4A4541` | `text-body` | paragraphs (9.5:1) |
 | `--band` | `#F3F1EB` | `bg-band` | mastheads, the sign-in band, fills (close to the institute's `#EDEDED` / `#F0EFE7`) |
 | `--notice` / `--notice-border` | `#FFF7E6` / `#EFD7A3` | `bg-notice` / `border-notice-border` | notice box, "To be confirmed" chips |
@@ -777,6 +941,12 @@ Serif 4** (headings — the successor of the Source Serif Pro iitpkd.ac.in
 uses), the serif loaded with `axes: ["opsz"]` so display sizes get the
 display cut. `h1`–`h4` get `font-heading` in the base layer.
 
+**One keyframe, `hero-drift`** (27 Oct 2026, `app/globals.css`): the hero's
+slow `scale(1.02)` -> `scale(1.12)`, 30s, `alternate`, applied through
+`motion-safe:` and used in one place. It is the site's only animation; add a
+second only with a reason, and never one that moves something a reader is
+trying to read.
+
 Mail templates (`lib/mail/render.ts`) still carry the old amber header.
 
 ## Components
@@ -784,17 +954,17 @@ Mail templates (`lib/mail/render.ts`) still carry the old amber header.
 | File | What |
 | --- | --- |
 | `components/site/brand.tsx` | **`BrandBlock`** — the lockup: `iitpkd-logo.png` (emblem only) + "Guest House" (serif) + a tracked tagline (`tagline`, default "IIT Palakkad"); `tone="light"` over photos and on ink; `compact` for the portal. Used by the site header, the footer and the portal header |
-| `components/site/site-header.tsx` | **`SiteHeader`** and `SITE_NAV`: a white bar, sticky from `lg`; links inside the header, a sideways-scrolling row below `lg`; Sign in / My portal |
+| `components/site/site-header.tsx` | **`SiteHeader`** and `SITE_NAV`: **one opaque `bg-ink` bar on every page** (28 Oct 2026), vermilion rules top and bottom, the lockup left, the six links **centred** in a `1fr auto 1fr` grid from `lg`, Sign in / My portal right, a scrolling link row below `lg`. On `/` it is `absolute` (`lg:fixed`) **over** the hero; elsewhere sticky from `lg`. Client for `usePathname` alone. `SITE_NAV`'s second meal item reads **Book a Meal** |
 | `components/site/site-chrome.tsx` | **`SiteFooter({ pins })`** — the lockup and address, the number under `GUEST_HOUSE_CONTACT.phoneLabel` (**Guest House Manager** since 14 Oct 2026), **Find us** (each guest house's Map and Directions, How to reach the campus), **Institute** (`SITE_LINKS`), and a bottom line (Guidelines, Contact - the **Privacy notice** link went with the notice on 14 Oct 2026). The **MRBS line** that opened it ("Booking a lecture hall or meeting room?") was removed on **7 Oct 2026** at the office's request, with every other mention of the Meeting Room Booking System |
-| `components/site/site-nav.tsx` | `NavBar` — `tone="dark"` (portal: charcoal bar, uppercase, vermilion bar under the current page) or `"light"` (the white site header, a short vermilion underline); `scroll` for the phone row |
-| `components/site/site-ui.tsx` | `Container` (1240px), `Label` (tracked capitals), `PageTitle` (the sign-in pages' `<h1>`, optional `kicker`, optional `center`), **`PageMasthead`** (a light band: breadcrumb, `<h1>`, lead, `note`, `aside`), `SectionHead` (label + `<h2>` + optional link), `ArrowLink`, `BulletList`, `siteButton.{brand,ink,outline,light,outlineLight}`, `SitePhotoFrame` (8px corners; `zoom` eases on hover) |
-| `components/site/hero-carousel.tsx` | **`HeroCarousel({ photos })`** (client, 15 Oct 2026) — the home page's six-slide hero: Previous / Pause / Next and **numbered** indicators (iitpkd.ac.in's own set), 6s a slide on one translating track, `aspect-[4/3]` to `sm:aspect-[16/9]`. Holds on hover and on focus-within; `prefers-reduced-motion` stops the **rotation**, not just the transition; `aria-live` is `off` while rotating and `polite` once paused. Takes `SitePhoto[]` and nothing else — it knows no domain at all |
-| `components/site/guest-house-map.tsx` | **`GuestHouseMap`** (client): WAI-ARIA tabs, one per pin, the chosen embed, "Open in Google Maps" / "Get directions" |
-| `components/site/sign-in-panel.tsx` | `PageTitle` + the form (or "You are signed in"). **Two shapes** (15 Oct 2026): with a `photo`, five columns on the left and a contained photograph in seven on the right from `lg` (`/sign-in`); **without one, a narrow `max-w-[560px]` panel centred in the page** with its prose centred (`/book-room`, `/book-meal`). The form's labels stay left-aligned in both |
-| `components/login-form.tsx` | The form — no card, no second heading; submit is vermilion-deep; `domainNote` under it (centred with the rest when `center` is passed); **no demo-credentials box** since 15 Oct 2026; the second door is **Mock Authentication** (→ `/mock-login?next=`) or **Sign in with Google** once configured. Labels "LDAP username" / "LDAP password" and the button name "Sign in" are what the e2e helpers use — keep them |
-| `components/page-header.tsx` | Portal page title: a short vermilion rule, serif `h1`, description, optional `actions`, a closing hairline |
-| `components/section-heading.tsx` | `SectionHeading` (serif `<h2>`, a count tag — red with `tone="alert"` — description, action) and `EmptyState` |
-| `components/link-tabs.tsx` | `LinkTabs` — page-level tabs that are links, vermilion bar under the current one, `aria-current` (the desk's guest-house switcher) |
+| `components/site/site-nav.tsx` | `NavBar` — **the current item is filled, never underlined** (28 Oct 2026). `tone="ink"` (the public masthead: white links, the current one a **vermilion-deep** chip), `"service"` (the portal's white bar: the current one **ink**), `"light"` (a white bar, the current one a vermilion-soft chip). `tone="dark"` and `"overlay"` are **gone** - nothing used them after this. `scroll` for the phone row |
+| `components/site/site-ui.tsx` | `Container` (1240px), `Label` (tracked capitals), `PageTitle` (the sign-in pages' `<h1>`, optional `kicker`, optional `center`), **`PageMasthead`** (a light band: breadcrumb, `<h1>`, lead, `note`, `aside`), `SectionHead` (label + `<h2>` + a **40px vermilion stub**, `align="center"` for the three centred sections; **no full-width rule** since 28 Oct 2026), `ArrowLink`, `BulletList`, `siteButton.{brand,ink,outline,light,outlineLight}`, `SitePhotoFrame` (8px corners; `zoom` eases on hover), **`MapEmbed({ pin })`** (27 Oct 2026: the iframe and **nothing under it**, shared by the home page and `/contact`) |
+| `components/site/hero-carousel.tsx` | **`HeroCarousel({ photos, children })`** (client; rewritten 27 Oct 2026) — the home page's **full-viewport** hero: two photographs cross-fading every 6.5s under a `bg-ink/60` wash, the `children` (title, lead, two doors) centred over them, a 30s `hero-drift` zoom and a pointer-following one. **No visible controls**: the photograph is a labelled `<button>` that pauses and resumes. Holds on focus-within, not on hover; `prefers-reduced-motion` stops the **rotation** and both zooms; `aria-live` is `off` while rotating and `polite` once paused. Takes `SitePhoto[]` and markup — it knows no domain at all |
+| `components/site/guest-house-map.tsx` | **`GuestHouseMap`** (client): WAI-ARIA tabs, one per pin, and the chosen embed. **Nothing under it** since 27 Oct 2026 - the name repeated the tab above it, and the embed carries its own "View larger map" and directions |
+| `components/site/sign-in-panel.tsx` | `PageTitle` + the door (or "You are signed in"). **One shape since 28 Oct 2026**: a narrow `max-w-[560px]` panel **centred**, for all three doors. `photo` is accepted and deliberately unused - the split-screen shape is three lines away |
+| `components/login-form.tsx` | **One button and no fields** (28 Oct 2026): *Sign in* into `/mock-login?next=`, or *Sign in with Google* with the mark once configured, plus one line of explanation and the optional `footnote`. It is a server component now - there is no state left to hold. `signInWithLdap` is untouched and simply has no caller |
+| `components/page-header.tsx` | Portal page title: a tracked vermilion caption, serif `h1`, description, optional `actions`. **No rule under it** since 28 Oct 2026 - `rule-title` is deleted |
+| `components/section-heading.tsx` | `SectionHeading` (serif `<h2>`, the count as a **serif figure after a colon** - "Current bookings: 3", 28 Oct 2026 - vermilion with `tone="alert"`, description, action) and `EmptyState`. **No leader rule** since 28 Oct 2026 |
+| `components/link-tabs.tsx` | `LinkTabs` — page-level tabs that are links, the current one **filled ink** (28 Oct 2026; it was a 3px vermilion bar over a hairline), `aria-current` (the desk's guest-house switcher) |
 | `components/console-nav.tsx` | `ConsoleNav` (client) — the console's sections as a segmented list, current one ink |
 | `components/segmented.tsx` | `segmentGroup` / `segment(active, size)` — every in-page toggle (Day/Week/Month, outbox filter, Form Builder roles) |
 
@@ -821,13 +991,16 @@ requests" heading that used to stand over the one table is gone with it.
 
 ## The pages
 
-- **Home** — see "The hero becomes a slideshow" above (15 Oct 2026, later):
-  a **six-slide hero slideshow**, then a **centred** masthead in plain type
-  (`<h1>`, a vermilion stub, the lead, the two doors - **no ink panel and no
-  phone line**), then *Our guest houses* as two cards each led
-  by its own photograph with the name under it, a ruled amenity grid, a
-  four-photo mosaic of what the slideshow did **not** show, and a closing row
-  of ruled links. No figures, meal times, rules or captions.
+- **Home** — see "The Taramani pass" (28 Oct 2026) and "The landing page
+  becomes cinematic" (27 Oct 2026) above:
+  a **full-viewport hero** (two photographs, a 66% ink wash, the saffron
+  kicker, the `<h1>`, one sentence and two solid doors centred over it, the
+  opaque charcoal masthead laid over the top of it), then **Amenities** as
+  one centred ruled strip of six, **A look inside** as six photographs in two
+  unequal bands linking the Gallery, **Our guest houses** as two centred
+  **text-only** cards, and **Contact us** - the manager's line, email and
+  address as one ruled band of three, then a map each. No figures, meal
+  times, rules or captions.
 - **Guidelines** — light masthead with a **Provisional edition** note while
   `GUIDELINES_PROVISIONAL` is true; **How booking works** as five small
   numbered cards (`BOOKING_STEPS`); a sticky **Contents** list; eight numbered
@@ -842,14 +1015,14 @@ requests" heading that used to stand over the one table is gone with it.
 - **Contact** — light masthead; the number labelled **Guest House Manager**
   (14 Oct 2026, the office; it read "Front office", and
   `GUEST_HOUSE_CONTACT.phoneLabel` is now the one wording, shared with the
-  home page's hero line and the footer), email, address and a Bookings
-  note (online only — the lecture-hall sentence came off on 7 Oct 2026);
-  **Finding the guest houses**
-  with the map tabs in a rounded card.
-- **Sign in** — the form beside a contained photo, one line of lead.
-- **Book a room / Book meals** — **no photograph** (15 Oct 2026): the same
-  `SignInPanel` in its narrow **centred** shape, one line of lead each. Book
-  meals points to the guidelines for meal times.
+  home page's **Contact us** section and the footer), email, address and a
+  Bookings note (online only — the lecture-hall sentence came off on
+  7 Oct 2026); **Finding the guest houses** with the map tabs in a rounded
+  card, and **nothing printed under the map** since 27 Oct 2026.
+- **Sign in / Book a room / Book meals** — **the same centred panel** since
+  28 Oct 2026: kicker, title, one line of lead, **one button** into the
+  account picker (or Google, once configured), one line under it, and each
+  page's own footnote. No photograph, no fields, no mention of LDAP.
 - **Privacy, Mock Authentication** — content unchanged.
 
 ## Content comes from the backend — and what stays off the site
@@ -891,8 +1064,9 @@ house page on iitpkd.ac.in, How to reach, Telephone directory — all checked to
 resolve on 26 Sep 2026; there is no Bageshri page on iitpkd.ac.in),
 `GUEST_HOUSE_CONTACT`, **`GUEST_HOUSE_LOCATIONS`**,
 **`GUEST_HOUSE_CONTACT`** - read by `/contact`, the Guidelines, the site
-footer and the portal footer. **Not by the home page**, whose masthead
-carried the number until 15 Oct 2026. **`INSTITUTE_MAP`**,
+footer, the portal footer and, since 27 Oct 2026, **the home page's Contact
+us section** (its masthead carried the number until 15 Oct 2026, which is a
+different thing: this is a contact section, not a line under a headline). **`INSTITUTE_MAP`**,
 `guestHouseMapPins()`, the photo registry (`PHOTOS`;
 `HOME_PHOTOS` — now only the four-photo `preview`, `hero` having gone with the
 15 Oct hero; **`SIGN_IN_PHOTOS`** — the photo beside each sign-in page's form;

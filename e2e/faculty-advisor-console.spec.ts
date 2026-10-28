@@ -11,7 +11,7 @@ import { ACCOUNTS, signIn, unlockConsole } from "./helpers";
  * Restores the demo appointments at the end: the journeys share one database.
  */
 
-const ADVISOR = { uid: "arun.prasad", password: "Arun@2026" };
+const ADVISOR = { uid: "arun.prasad", name: "Dr. Arun Prasad" };
 
 async function openUnitsConsole(page: Page) {
   await signIn(page, ACCOUNTS.manager);

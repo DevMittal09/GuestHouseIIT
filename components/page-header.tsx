@@ -1,15 +1,17 @@
 /**
  * The title block at the top of every portal page.
  *
- * Redrawn 11 Oct 2026 on the institute's own device: the title closes on the
- * vermilion hairline iitpkd.ac.in puts under `h1.node-title`, with a heavier
- * stub over its start (`rule-title`). It replaced a 2px ink rule, which was
- * the same mark the tables already use for their header row - so a page and a
- * table opened identically and neither outranked the other.
+ * **No rule under it** (27 Oct 2026, the owner: "remove the default
+ * horizontal lines or underlines beneath page and section headings - use more
+ * refined alternatives"). It closed on the vermilion hairline iitpkd.ac.in
+ * puts under `h1.node-title` from 11 Oct 2026, which was the institute's own
+ * device but still a line across the page under every heading in the service.
+ * What ranks the title now is the type and the space: a small tracked label
+ * above it, the serif at display size, and a clear gap before the page
+ * begins.
  *
- * The caption above the title is the one thing the title cannot say: which
- * guest house, whose queue, which slice of the archive. It is set as a small
- * tracked label rather than a grey sentence.
+ * The caption is the one thing the title cannot say: which guest house, whose
+ * queue, which slice of the archive.
  */
 export function PageHeader({
   title,
@@ -25,7 +27,7 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="rule-title flex flex-wrap items-end justify-between gap-x-8 gap-y-5 pb-5">
+    <div className="mb-9 flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
       <div className="min-w-0">
         {caption && (
           <p className="mb-2.5 text-[11.5px] font-semibold tracking-[0.18em] text-vermilion-deep uppercase">

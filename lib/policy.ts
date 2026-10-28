@@ -87,15 +87,14 @@ export function stayLengthError(
 export const CONTACT_FOR_LONGER_STAYS =
   "For longer stays, contact the Guest House Manager.";
 
-/** Helper text under the date range on the booking form. */
-export function stayLengthHint(
-  role: Role,
-  email?: string | null,
-  maxNights: number = MAX_BOOKING_NIGHTS
-): string | null {
-  if (isDurationExempt(role, email) || maxNights <= 0) return null;
-  return `Bookings are limited to a maximum of ${maxNights} nights. ${CONTACT_FOR_LONGER_STAYS}`;
-}
+/**
+ * **`stayLengthHint` is gone** (27 Oct 2026). It wrote "Bookings are limited
+ * to a maximum of 14 nights. For longer stays, contact the Guest House
+ * Manager." under the check-out box, and the owner asked for it off the page.
+ * The rule is unchanged and still has its three homes: the Guidelines state
+ * it, `stayLengthError` says it with the reader's own figures when it fires,
+ * and `latestCheckOutDate` keeps the date picker from offering the day.
+ */
 
 /**
  * The latest check-out the date picker should offer for a stay starting on

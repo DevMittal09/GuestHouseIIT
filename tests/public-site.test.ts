@@ -12,7 +12,7 @@ import {
   PHOTOS,
   SITE_LINKS,
 } from "@/lib/site";
-import { amenities, BOOKING_STEPS, guidelineSections, houseSummary, MEAL_NOTICE_RULE } from "@/lib/site-content";
+import { amenities, BOOKING_STEPS, guidelineSections, MEAL_NOTICE_RULE } from "@/lib/site-content";
 import type { SiteGuestHouse } from "@/lib/site-data";
 import { ROLE_LABELS, type Role } from "@/lib/types";
 
@@ -94,16 +94,6 @@ describe("footer links", () => {
   });
 });
 
-describe("guest house cards", () => {
-  it("say what each house offers, without counts", () => {
-    expect(houseSummary(BAGESHRI)).toBe("Double-sharing rooms.");
-    expect(houseSummary(HAMSANANDI)).toBe("Double-sharing rooms, with meals served on site.");
-    expect(houseSummary({ ...BAGESHRI, roomsByType: { double_sharing: 4, single: 2 } })).toBe(
-      "Double-sharing and single rooms."
-    );
-  });
-});
-
 describe("guest house photographs (15 Oct 2026)", () => {
   /**
    * The owner named the main photograph of each guest house. Nothing else on
@@ -131,25 +121,29 @@ describe("guest house photographs (15 Oct 2026)", () => {
     expect(Object.values(GUEST_HOUSE_PHOTOS)).toHaveLength(2);
   });
 
-  it("leads the slideshow with the main photograph of each guest house", () => {
-    // The owner's order: "8.jpeg and 10.jpeg are the two images i want to
-    // see in the landing pages", then the other four after them.
-    expect(HOME_PHOTOS.slides.slice(0, 2)).toEqual([
-      PHOTOS.hamsanandiCourtyard,
-      PHOTOS.bageshriFront,
-    ]);
-    expect(HOME_PHOTOS.slides).toHaveLength(6);
-    expect(new Set(HOME_PHOTOS.slides.map((p) => p.src)).size).toBe(6);
+  it("shows the two attributed photographs in the hero, and only those two", () => {
+    // 27 Oct 2026: "Use only the first two of the six images currently used
+    // in the landing-page slideshow." They are also the only two the site is
+    // allowed to attribute, so the one photograph that fills the screen is
+    // always of a guest house the page would name.
+    expect(HOME_PHOTOS.slides).toEqual([PHOTOS.hamsanandiCourtyard, PHOTOS.bageshriFront]);
+    expect(Object.values(GUEST_HOUSE_PHOTOS)).toEqual(HOME_PHOTOS.slides);
   });
 
-  it("shows nothing in the mosaic that the slideshow already showed", () => {
+  it("shows nothing in the gallery preview that the hero already showed", () => {
     // Scrolling past the hero has to find new photographs, or the page
-    // repeats itself twice over within two screens.
+    // repeats itself twice over within two screens. "Do not reuse either of
+    // the two images used in the hero slideshow" (27 Oct 2026).
     const slides = new Set(HOME_PHOTOS.slides.map((p) => p.src));
     for (const photo of HOME_PHOTOS.preview) {
-      expect(slides, `${photo.src} is in both the slideshow and the mosaic`).not.toContain(photo.src);
+      expect(slides, `${photo.src} is in both the hero and the preview`).not.toContain(photo.src);
     }
     expect(new Set(HOME_PHOTOS.preview.map((p) => p.src)).size).toBe(HOME_PHOTOS.preview.length);
+  });
+
+  it("keeps the preview a full strip, so no column of it is left empty", () => {
+    // The strip is 2, 3 and 6 columns wide; six fills every one of them.
+    expect(HOME_PHOTOS.preview).toHaveLength(6);
   });
 
   it("keeps every photograph the site holds in the Gallery", () => {

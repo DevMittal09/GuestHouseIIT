@@ -192,6 +192,16 @@ its form is not in the Form Builder and every guest field is required.
   calendar days. **Exempt:** Official, GH Manager, developer, and
   `director.office@iitpkd.ac.in`.
 - All times are **Asia/Kolkata**, whatever the server's zone.
+- **Neither of those two rules is written on the form** (28 Oct 2026, the
+  owner). The sentences under the date boxes - "Bookings open 6 months in
+  advance - the latest check-in you can request is …" and "Bookings are
+  limited to a maximum of 14 nights. For longer stays, contact the Guest
+  House Manager." - are **deleted**, and `stayLengthHint` with them. The
+  rules are unchanged and keep their three homes (9 Oct 2026): the
+  **Guidelines** state both, the **error** says either with the reader's own
+  figures (`advanceWindowMessage`, `stayLengthError`), and the **control**
+  refuses the day (`min` / `max` on the date boxes, from `latestCheckIn` and
+  `latestCheckOutDate`).
 
 **Rooms and parties** (per room card, at submission)
 

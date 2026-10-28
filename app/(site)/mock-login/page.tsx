@@ -71,7 +71,7 @@ export default async function MockLoginPage({
 
         <div className="mt-8 text-center">
           <Button asChild variant="ghost" size="sm">
-            <Link href={SIGN_IN_PATH}>← Back to LDAP sign in</Link>
+            <Link href={SIGN_IN_PATH}>← Back to sign in</Link>
           </Button>
         </div>
       </Container>

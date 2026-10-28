@@ -1,11 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 import { googleOauth, mockLoginEnabled } from "@/lib/env";
 import { LoginForm } from "@/components/login-form";
 import { Container, PageTitle, siteButton } from "@/components/site/site-ui";
-import { LOGIN_DOMAIN, type SitePhoto } from "@/lib/site";
-import { cn } from "@/lib/utils";
+import { type SitePhoto } from "@/lib/site";
 import { ROLE_LABELS, type Profile } from "@/lib/types";
 
 /**
@@ -13,20 +11,19 @@ import { ROLE_LABELS, type Profile } from "@/lib/types";
  * `/sign-in`). Someone already signed in is offered a way through instead of
  * a second form. Renders its own `Container`.
  *
- * **Two shapes, chosen by whether a `photo` is given** (15 Oct 2026):
+ * **One shape since 27 Oct 2026: a narrow panel, centred.** The owner asked
+ * for the photograph off `/sign-in` too ("remove the image currently
+ * displayed on the right side of the sign-in portal... centre-align the
+ * sign-in content"), which is what `/book-room` and `/book-meal` were given
+ * on 15 Oct 2026. The three doors are now the same panel.
  *
- * - **With one** - `/sign-in` - the bordered split-screen panel it has had
- *   since 30 Sep 2026: the title, one line of lead and the form in five
- *   columns, the photograph filling the other seven from `lg`. (It filled
- *   half the *screen* for an afternoon on 26 Sep, which was too much; it now
- *   fills half the panel, inside the page's width.)
- * - **Without one** - the two booking doors, `/book-room` and `/book-meal`
- *   (the owner: "For room and meal booking remove the image and center align
- *   the login page") - a narrow panel centred in the page.
+ * `photo` is **kept and unused**: the split-screen shape is three lines away
+ * if the office asks for it back, and `SIGN_IN_PHOTOS` still holds the
+ * photographs - all of which are in the Gallery regardless.
  *
- * **The form's own labels stay left-aligned in both.** Centring a label over
- * a full-width input separates the two and reads as a mistake; what centres
- * is the panel and the prose around it.
+ * There is nothing left to left-align: the panel holds a heading, one
+ * button and two short lines, so the old rule about labels sitting left of
+ * a centred panel no longer has a field to apply to.
  */
 export function SignInPanel({
   title,
@@ -54,7 +51,8 @@ export function SignInPanel({
   /** A failed sign-in's message, e.g. coming back from Google. */
   notice?: string | null;
 }) {
-  const split = Boolean(photo);
+  // `photo` is accepted and deliberately not drawn - see the note above.
+  void photo;
 
   return (
     <div className="border-b border-border bg-band">
@@ -64,25 +62,17 @@ export function SignInPanel({
             (from `lg`; phones get the form alone). Without a photograph the
             same panel is simply narrow and centred. */}
         <div
-          className={cn(
-            "overflow-hidden rounded-lg border border-border-strong bg-white",
-            split ? "grid lg:grid-cols-12" : "mx-auto w-full max-w-[560px]"
-          )}
+          className="mx-auto w-full max-w-[560px] overflow-hidden rounded-lg border border-border-strong bg-white"
         >
-          <div
-            className={cn(
-              "min-w-0 px-[clamp(20px,4vw,56px)] py-[clamp(32px,5vw,64px)]",
-              split && "lg:col-span-5"
-            )}
-          >
-            <div className={cn("w-full", split ? "max-w-[440px]" : "mx-auto max-w-[400px]")}>
-              <PageTitle kicker="Guest house portal" intro={intro} center={!split}>
+          <div className="min-w-0 px-[clamp(20px,4vw,56px)] py-[clamp(32px,5vw,64px)]">
+            <div className="mx-auto w-full max-w-[400px]">
+              <PageTitle kicker="Guest house portal" intro={intro} center>
                 {title}
               </PageTitle>
 
               <div className="mt-10">
                 {user ? (
-                  <div className="border-t border-ink pt-6">
+                  <div className="border-t border-ink pt-6 text-center">
                     <p className="text-[16px] leading-[1.6] text-body">
                       You are signed in as <strong className="text-ink">{user.full_name}</strong>{" "}
                       ({ROLE_LABELS[user.role]}).
@@ -104,26 +94,15 @@ export function SignInPanel({
                     next={next}
                     submitLabel={submitLabel}
                     footnote={footnote}
-                    center={!split}
+                    center
                     googleSignIn={googleOauth() ? "google" : mockLoginEnabled() ? "mock" : "none"}
                     notice={notice}
-                    domainNote={
-                      <>
-                        Use your institute LDAP account or your <strong>@{LOGIN_DOMAIN}</strong> account.
-                        Personal email accounts cannot be used.
-                      </>
-                    }
                   />
                 )}
               </div>
             </div>
           </div>
 
-          {photo?.src && (
-            <div className="relative hidden min-h-[508px] border-l border-border-strong lg:col-span-7 lg:block">
-              <Image src={photo.src} alt="" fill sizes="700px" className="object-cover" />
-            </div>
-          )}
         </div>
       </Container>
     </div>
