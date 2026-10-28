@@ -1020,6 +1020,23 @@ if `DEV_LOGIN` is set, or if Supabase, `APP_URL`, `CRON_SECRET` or
 > That is deliberate for the office's demo deployment, and fatal for a real
 > one: anyone who reaches `/mock-login` can become any account. **A deployment
 > holding real bookings must set `MOCK_LOGIN=false` or configure Google.**
+>
+> **And `MOCK_LOGIN=false` on its own now leaves no door at all**, since the
+> LDAP form came off the sign-in page on 28 Oct 2026: the panel reads
+> "Sign-in is not configured on this deployment". Configuring Google is the
+> real answer, and **[`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) is the
+> runbook** - the client to ask the Computer Centre for, the Google Cloud
+> steps, the derived redirect URI, the verification checklist, and the two
+> defects to fix first (the 1000-row account lookup, and `hd` possibly hiding
+> `@smail` students from the account chooser).
+
+> **Set Supabase's "Max rows" above the real headcount** (Dashboard ->
+> Settings -> API). It defaults to **1000** and truncates an unbounded select
+> **silently**, and `listProfiles()` has no `.range()`: past 1000 accounts,
+> sign-in fails for arbitrary people and the user import starts re-creating
+> people it should be updating. A **new** Supabase project defaults back to
+> 1000, so this belongs on the deployment checklist, not just in the fix.
+> [03-roadmap.md](03-roadmap.md) gate 12.
 
 **Still to settle before the first real deployment:**
 
@@ -1280,8 +1297,9 @@ executed (its reasoning, phase by phase, is in
 Send one email listing all of it, not one ask at a time.
 
 | --- | --- | --- |
-| Which identity provider backs `iitpkd.ac.in` and `smail.iitpkd.ac.in` | Decides the whole login implementation | Almost certainly Google Workspace — the institute runs Google Sites on `sites.google.com/iitpkd.ac.in`. Confirm rather than assume. |
-| An OAuth 2.0 client (client id + secret) with an authorised redirect URI | Sign in with institute account | Needs a named requesting department — get the Administration Section to co-sign |
+| Which identity provider backs `iitpkd.ac.in` and `smail.iitpkd.ac.in` | Decides the whole login implementation | Almost certainly Google Workspace — the institute runs Google Sites on `sites.google.com/iitpkd.ac.in`. Confirm rather than assume. **Ask specifically whether `smail` is a second domain of the same Workspace or a separate tenant**: the start leg sends `hd=iitpkd.ac.in`, which on a separate tenant keeps every student out of Google's account chooser ([`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §5). |
+| An OAuth 2.0 client (client id + secret) with an authorised redirect URI | Sign in with institute account | Needs a named requesting department — get the Administration Section to co-sign. **Scopes are `openid email profile` only, so it needs no Google verification review.** The email to send is in [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §11 |
+| An export of Workspace users (primary addresses) | **Google sign-in matches the verified email against `profiles.email`, exactly.** An alias or an HR-sheet address never matches, and the person is simply told they are not registered | Admin console → Users → Download users. It is the column the account import needs: [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §6 |
 | Whether a central SSO / LDAP exists that they'd prefer you use | They may not want a new OAuth client | If `dashboard.iitpkd.ac.in` has a login, ask what it uses |
 | A sending mailbox, e.g. `guesthouse@iitpkd.ac.in`, plus SMTP relay access | Sending mail as the institute | See Phase 2 |
 | A subdomain — `guesthouse.iitpkd.ac.in` — and a TLS cert | Nobody trusts `guesthouse-iitpkd.vercel.app` | May be routed through their reverse proxy |

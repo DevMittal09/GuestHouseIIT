@@ -23,11 +23,13 @@ export function devLoginEnabled(): boolean {
 /**
  * Whether the **mock authentication** door (`/mock-login`, `loginAs`) is open.
  *
- * Google sign-in is not built yet, so the button on the sign-in card has to
+ * Google sign-in is **built** (`lib/oidc.ts` and `app/api/auth/google/*`,
+ * Phase 8) but not **configured**, so the button on the sign-in card has to
  * lead somewhere: while `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` /
  * `APP_URL` are not all set, it opens the persona picker instead. Configure
  * Google and the door closes on its own - there is no flag to remember to
  * unset, which is the failure mode a `DEV_LOGIN`-style switch has.
+ * `GOOGLE-SIGN-IN.md` is the setup, and what to fix before it is switched on.
  *
  * `MOCK_LOGIN=false` closes it early, for a deployment that wants LDAP only.
  *

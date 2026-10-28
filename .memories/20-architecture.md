@@ -107,6 +107,16 @@ pre-Phase-8 `gh_mock_user` cookie is honoured only with `DEV_LOGIN=true`
 outside production. `/` is the public website, so signed-out guards redirect to
 `SIGN_IN_PATH`, not `/`.
 
+> **The Google leg is built and verified, only unconfigured** - `lib/oidc.ts`
+> (authorization code + PKCE + state + nonce, the `id_token` checked against
+> Google's JWKS) and the two routes under `app/api/auth/google/`. Three
+> environment variables are the whole switch, and the redirect URI is
+> **derived** from `APP_URL`, never configured. Don't rebuild it; the setup
+> and the two defects to fix first are
+> [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md), and the checks it performs are
+> listed in
+> [05-credentials-and-security.md](05-credentials-and-security.md) Part 2.
+
 LDAP is the third environment-selected seam, alongside the store and the
 mailer:
 

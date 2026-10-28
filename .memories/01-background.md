@@ -62,6 +62,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **27 Oct** (second) | **The landing page redesigned**, to a written brief: "modern, cinematic, elegant". The hero becomes a **full-viewport photograph** with the navigation laid over it as a translucent ink band, the page's title and both doors set in the middle of it, **two** slides instead of six and **no visible controls** - clicking the photograph pauses it. Below it: the six amenities in one ruled strip, a **six-thumbnail** gallery preview, **text-only** guest house cards (no photograph, no label, no summary line - `houseSummary` deleted), and a new **Contact us** section with one map per guest house. The row of links under every map is gone, on `/contact` too. **Public site only** - no migration, no store operation, no booking rule. |
 | **28 Oct** | **The Taramani pass, and the sign-in.** Two briefs. The first names the [Taramani Guest House](https://tgh.iitm.ac.in/) as the standard: a stronger hero (saffron kicker, a 66% wash, a **solid saffron** second door), **one opaque charcoal header on every page** with the links **centred**, Amenities / Our guest houses / Contact us **centred**, the gallery recomposed into two unequal bands - and, application-wide, **no rule under any heading** (`rule-title` deleted) and **everything selected filled rather than underlined**. The second is functional: **LDAP comes off the sign-in page** (one button, the mock account picker; the action and directory untouched), the advance-window and stay-cap sentences come **off the booking form** (no rule changed), a count reads **"Current bookings: 1"**, and the manager's console **stops drawing a list with nothing in it** - the index at the top is where a zero is reported. Reception got the same. **No migration.** |
 | **28 Oct** (second) | **The landing page again, and Taramani named a second time.** The owner: the hero type "is blending with the background too much", and the page "overall looks very basic... make it look creative and aesthetic". The wash goes **66% -> 78%**, the `<h1>` becomes **Guest House Portal** in **bold** (the institute's name is kept, in full, as the tracked saffron line above it), and the lead loses `font-light`. Below it the page gains **an opening statement computed from the store** where it used to drop straight from a photograph into six icons; the amenities move **onto ink with saffron icons** - the page's one dark band; the gallery becomes a **twelve-column mosaic**; and the two guest houses become **one ruled plate** with their names at display size. Still no shadow, gradient, pill or 16px radius: all of it bought with composition, ground, type and one accent colour. **Public site only - no migration, no store operation, no booking rule.** |
+| **28 Oct** (third) | **The Google sign-in plan - no application code.** The owner asked how to set up Google OAuth, given that the institute's **email data for every user is being collected**. The review found the flow **already built and verified** (Phase 8: `lib/oidc.ts` and `app/api/auth/google/*` - PKCE, state, nonce, the `id_token` checked against Google's JWKS, the `hd` claim and `isInstituteEmail`, then a profile that must already exist) and **three places saying it was not**, each of which would have sent the next session to build it again. Output: **[`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md)** at the repo root, and corrections to `lib/env.ts`, `lib/site.ts`, `AGENTS.md` and `.env.example` (which also pointed at a memory file deleted on 10 Oct). Two defects recorded rather than fixed: the callback finds the account by scanning **every** profile, which Supabase truncates at **1000 rows silently** (roadmap **gate 12** - it breaks the institute's account import too, and migration 31's `lower(email)` index has been unused since 13 Oct), and `hd=iitpkd.ac.in` on the start leg is narrower than the return leg's own rule, so it may hide every `@smail` student from Google's account chooser. **No migration, no store operation, no booking rule, no permission and no route.** |
 
 ## The problem
 
@@ -1321,3 +1322,61 @@ Student clubs / office bookings → official. Should go to respective HOD.
 * Documentation for every workflow we are doing while booking.
 
 * **Developer Account should be able to edit everything such that nothing is left to fix in backend for an IT person.**
+
+---
+
+## Round of 28 October 2026 (third) - the Google sign-in plan
+
+**No application code changed.** One message, with a standing fact attached:
+
+> "I need to plan to setup google oauth for users in my application, for that
+> i need to know the current state, step-by-step how do i set it up and other
+> stuff to note if any. Also note that we are collecting the email data for
+> all users from the college."
+
+Plus: go through `.memories/` and correct it where it has drifted from the
+repository.
+
+### What was asked, and the status of each item
+
+| § | Asked | Status |
+| --- | --- | --- |
+| 1 | The current state of Google OAuth | **Done.** It is **built and verified, only unconfigured** - Phase 8's `lib/oidc.ts` and the two routes under `app/api/auth/google/`. There is no application code to write for the happy path |
+| 2 | Step-by-step setup | **Done.** [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §3 (Google Cloud: consent screen, Internal vs External, the client, the exact redirect URI) and §4 (the three variables, and why not in CI) |
+| 3 | Other stuff to note | **Done.** §5 the two domains, §7 the 1000-row blocker, §8 six smaller notes, §9 the auto-provisioning decision, §10 a fifteen-item verification checklist, §11 the email to send the Computer Centre |
+| 4 | The email data being collected for every user | **Done, and it has a section of its own** - §6. The match is `profiles.email` against Google's verified `email` claim, **exact**, so the column must be each person's **Google primary address**. The recommendation is to ask the Computer Centre for the **Workspace user export** rather than an HR sheet, because that is the only list that holds primaries and aliases |
+| 5 | Correct `.memories/` where it has drifted | **Done** - and the drift was outside the folder. See below |
+
+### The drift, and where it actually was
+
+`npm run check:memories` passed before this round and passes after it: fifteen
+files, no strays, every link inside the folder resolving. The folder's *facts*
+about sign-in were right too - [05-credentials-and-security.md](05-credentials-and-security.md)
+Part 2 has carried the Google leg in its flow diagram, and
+[20-architecture.md](20-architecture.md) called it "the real OpenID Connect
+flow".
+
+**What had drifted was prose the check cannot read:**
+
+| File | Said | Now |
+| --- | --- | --- |
+| `lib/env.ts` | "Google sign-in is not built yet" | Built, **unconfigured**, with a pointer to the runbook |
+| `lib/site.ts` | `isInstituteEmail` "is the rule real Google sign-in **must** enforce ... neither needs it today" | It **already enforces** it, on the address and the `hd` claim - plus the `hd`/students warning |
+| `AGENTS.md` | "the real flow must enforce `isInstituteEmail()` on the verified address" | A bullet for the Google door: what it checks, the derived redirect URI, the two defects, and "don't set these in CI" |
+| `.env.example` | the card's "**second** button"; a button reading "**Mock Authentication**"; `MOCK_LOGIN=false` leaving "LDAP sign-in only"; a link to `.memories/11-ldap-accounts.md` | One button; it reads "Sign in"; `MOCK_LOGIN=false` **leaves no door at all** since 28 Oct; the link points at `05-credentials-and-security.md`, the file that has owned those accounts since 10 Oct |
+
+The first three would each have sent a later session off to rebuild a feature
+that exists. The fourth is the file somebody reads *to find the variables*,
+and one of its links had been dead for eighteen days.
+
+### What the review turned up that nobody had asked about
+
+Both recorded, neither fixed - the ask was a plan:
+
+- **Gate 12**, the 1000-row account lookup ([03-roadmap.md](03-roadmap.md)
+  §1). It blocks Google sign-in **and** the institute's account import, and
+  the index to fix it has existed, unused, since migration 31.
+- **§2n** in the roadmap: the unused `sub`, the uncleared OAuth cookie, the
+  per-IP rate limit behind one campus NAT, the 29 other `listProfiles()`
+  callers, and the e2e suite that configuring Google would delete the door
+  out from under.

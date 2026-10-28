@@ -306,8 +306,9 @@ only reader.
 > "G" on the placeholder; and remember the **e2e suite now signs in through
 > the picker** (`signIn()` in `e2e/helpers.ts` matches a persona by name).
 
-Three doors open a session (`app/actions/auth.ts`); the first is reachable
-only by a crafted request while the form is withdrawn:
+Three doors open a session - two server actions in `app/actions/auth.ts` and
+one pair of route handlers under `app/api/auth/google/`. The first is
+reachable only by a crafted request while the form is withdrawn:
 
 - **LDAP username + password** → `signInWithLdap()`. The *directory* checks the
   password (`lib/ldap/`: `getDirectory()` returns the real `LdapDirectory`
@@ -323,8 +324,23 @@ only by a crafted request while the form is withdrawn:
   gated on `DEV_LOGIN`, which is how it once vanished from the office's
   deployment and took every demo account with it. `MOCK_LOGIN=false` closes it
   early. Configuring Google closes it and turns the button back into
-  "Sign in with Google"; the real flow must enforce `isInstituteEmail()` on the
-  verified address. Don't put Google's "G" mark on the placeholder.
+  "Sign in with Google". Don't put Google's "G" mark on the placeholder.
+- **Google (OpenID Connect)** → `/api/auth/google/start` → `.../callback` →
+  `startSession()`. **It is built and verified, only unconfigured**
+  (`lib/oidc.ts`: authorization code + PKCE + state + nonce, the `id_token`
+  checked against Google's JWKS, `iss` / `aud` / `exp`, `email_verified`, the
+  `hd` claim **and** `isInstituteEmail()` on the address, then a profile that
+  must already exist). Don't rebuild any of it. Setting `GOOGLE_CLIENT_ID`,
+  `GOOGLE_CLIENT_SECRET` and `APP_URL` is the whole switch; the redirect URI
+  is **derived** (`${APP_URL}/api/auth/google/callback`), never configured.
+  **`GOOGLE-SIGN-IN.md` is the setup**, and holds the two things to fix first:
+  the callback finds the account with `listProfiles()`, which Supabase
+  truncates at **1000 rows** silently (the `lower(email)` index migration 31
+  added for this is still unused), and `hd=iitpkd.ac.in` on the start leg is
+  narrower than `isInstituteEmail()`, so it may keep `@smail` students out of
+  Google's own account chooser. Configuring Google also **deletes
+  `/mock-login`**, which is how the Playwright suite signs in - don't set
+  these in CI.
 
 Rules for the LDAP door:
 

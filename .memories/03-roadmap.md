@@ -26,7 +26,7 @@ Each of these is configuration or plumbing, not new design.
 | # | Gate | Why | How |
 | --- | --- | --- | --- |
 | 1 | **Connect the institute's LDAP** | Until `LDAP_URL` is set the dummy accounts work, and their passwords are published in this repository | [05-credentials-and-security.md](05-credentials-and-security.md) Part 2, "Moving to the real LDAP accounts" — env vars, then load real usernames (Users & Roles → Import LDAP usernames) |
-| 2 | **Close Mock Authentication** | Open wherever Google is unconfigured, production included; anyone reaching `/mock-login` becomes any account | Configure Google (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APP_URL`) or set `MOCK_LOGIN=false` |
+| 2 | **Close Mock Authentication** | Open wherever Google is unconfigured, production included; anyone reaching `/mock-login` becomes any account | Configure Google (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APP_URL`) or set `MOCK_LOGIN=false`. **The Google flow is built and verified, only unconfigured** - the whole setup, and the two things to fix before switching it on, is [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) at the repo root. **`MOCK_LOGIN=false` with Google unconfigured leaves no door at all** since the LDAP form came off the page on 28 Oct 2026 |
 | 3 | **Production secrets** | The server refuses to start without them | `APP_URL`, `CRON_SECRET`, `ID_ENCRYPTION_KEY` + the Supabase keys ([05-credentials-and-security.md](05-credentials-and-security.md)) |
 | 4 | **Change the console password** | Default `0000` | Console → Console Access |
 | 5 | **Delete or disable the demo personas and demo data** | They sign in with published passwords | Users & Roles; `supabase/repairs/2026-09-21-clear-test-bookings.sql` for bookings |
@@ -36,6 +36,8 @@ Each of these is configuration or plumbing, not new design.
 | 9 | **Backups** | Supabase's free plan has none | Confirm the plan; run the restore drill in the runbook |
 | **10** | ~~Close the GoTrue / PostgREST door~~ **- done in code; three production steps left** | Migration 31 drops the `profiles -> auth.users` key and all 38 `authenticated` policies, `createProfile` and `seed.sql` mint no Supabase password, and `tests/rls-surface.test.ts` keeps it that way | **Left to do, in this order:** (1) **disable the email/password provider** - Dashboard -> Authentication -> Providers -> Email. **Confirmed ON with signup open, 14 Oct 2026**, so this is now first: it is a toggle, needs no migration, and the portal does not use the provider; (2) apply migrations **31, 32, 33, 34** to the hosted project - `npm run check:migrations` prints the SQL for the ones it cannot probe; (3) run `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql`, which refuses to run before 31. **31 and 32 are not optional once the code is deployed.** [04-production.md](04-production.md) §1a.1 |
 | **11** | ~~Make the user import atomic, or batch it~~ **- no longer a gate, 14 Oct 2026** | Two of the three problems are closed: the **inserts** are chunked (250 a request, so a first load is ~8 requests instead of ~2000), and a failure now **records where it stopped** - migration 32's undo record is written before the writes, so a part-way import is recoverable instead of a mystery. A username moving between two accounts in one paste used to fail part-way; fixed | What remains is that the **updates** are still one request per person, which cannot be chunked (each row has different values). Mitigation in [04-production.md](04-production.md) §1a.6: read the plan's "updated" count, import in pieces when it is large, and undo if it times out. The remaining fix is a single upsert, which needs the `ldap_uid` swap handled inside it - [03-roadmap.md](03-roadmap.md) §2f |
+
+| **12** | **Stop finding an account by scanning every profile** - **new, 28 Oct 2026** | The Google callback and `profileForDirectoryEntry` both do `listProfiles()` then `.find()`. `SupabaseStore.listProfiles` is `select("*")` with **no `.range()`**, and Supabase truncates an unbounded select at **1000 rows silently** (HTTP 200; the truth is only in `Content-Range`), ordered by `role` so *which* 1000 is arbitrary. Past that many accounts: sign-in fails for arbitrary people with "not registered on the guest house portal", and `planUserImport` reads already-imported people as **new**, tries to create them and the unique `email` constraint refuses the whole paste. `MAX_USER_IMPORT_ROWS` is 2000 and [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §7 says to split the file, which walks into it | **Both:** (1) raise **Max rows** (Supabase Dashboard -> Settings -> API; ceiling 1,000,000) and record it in [04-production.md](04-production.md), because a new project defaults back to 1000; (2) add `getProfileByEmail` to `DataStore` and **both** stores and use it in the callback - migration 31 already added `profiles (lower(email))` **for this and nothing uses it**. [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §7 has the code |
 
 **Next security phase** (not a gate for a pilot, but the next real step):
 move request-scoped database access off the service-role key so row-level
@@ -708,6 +710,54 @@ Every item of that brief closed. What it opened:
   the hero today.** This round moved it from 66% to 78%, so it is further
   from the edge than it was - but a brighter replacement photograph is still
   checked by nothing (see §2l).
+
+## 2n. Opened by the 28 Oct 2026 round (third) - the Google sign-in plan
+
+No code changed in the application. What the review of the auth seam turned up:
+
+- **Gate 12 above is the hard one** - the 1000-row account lookup. It is a
+  blocker for the institute's import as much as for Google sign-in.
+- **The other 29 `listProfiles()` callers.** Raising Max rows makes them
+  correct but not cheap: `lib/mail/digest.ts`, `lib/mail/recipients.ts`,
+  `lib/academic/copy-to.ts`, `lib/approval-routes-server.ts` and
+  `lib/booking-context-server.ts` each load **every** profile to find a
+  handful of approvers, and the booking page does it per render. At 19
+  personas that is free; at 5,000 accounts it is the portal's slowest query
+  on its commonest path. The fix is a paginating `listProfiles` plus
+  purpose-built lookups (`getProfileByEmail`, and a `profilesByIds`), not a
+  bigger cap. **Not a gate** - correctness is gate 12; this is speed.
+- **Email is the only identity key.** `completeGoogleSignIn` returns Google's
+  immutable `sub` and the callback drops it, so a **reassigned** institute
+  address (a reused roll number, a renamed staff account) hands the new
+  holder the previous person's profile, bookings and role. The fix is
+  `profiles.google_sub` (a migration 35), matched first and recorded on the
+  first email match. Worth doing before the portal holds a year of real
+  bookings; deliberately not done with the plan.
+  [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §8.1.
+- **`hd=iitpkd.ac.in` on the start leg is narrower than
+  `isInstituteEmail()`.** If `smail.iitpkd.ac.in` is a separate Workspace
+  tenant rather than a second domain of the same one, that hint keeps
+  **every student** out of Google's account chooser - the portal would work
+  for staff and be unusable for the people it is for. Answered only by the
+  Computer Centre or by one real student account; the fix is one line
+  (`hostedDomain: "*"`, or drop the hint - the return leg is the real check).
+- **The OAuth state cookie is not cleared.** Set with
+  `path: "/api/auth/google"`, deleted with a bare `jar.delete(OAUTH_COOKIE)`,
+  which defaults to `/`. It lives out its 10-minute `maxAge` instead. Low
+  severity - a code cannot be exchanged twice and the nonce is single-use -
+  and one line to fix.
+- **Configuring Google deletes `/mock-login`, which is how the Playwright
+  suite signs in.** All 50 journeys go through `signIn()` in
+  `e2e/helpers.ts`. `e2e/sign-in.spec.ts` says in its header that it expects
+  to be *replaced* at that point; nothing replaces it yet, and the happy path
+  cannot be driven without a real Google account. Mocking Google's two
+  endpoints, or testing the callback's rejections directly, is the gap.
+- **Auto-provisioning is still unanswered**, and should stay refused: a
+  `profiles` row carries the role, hostel and unit, which decide the approval
+  chain and the debitable heads, and there is no safe default for those. What
+  can be improved cheaply is the refusal message, which is a dead end -
+  naming the office's address from `GUEST_HOUSE_CONTACT` would give the
+  person somewhere to go. [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §9.
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 

@@ -67,7 +67,11 @@ office's corrections and the owner's **thirteenth and fourteenth lists**,
 the round that put **the approval workflow itself in the manager's hands**
 (Console -> Approval Workflow), and two rounds preparing the institute's
 **user import** - which closed a GoTrue door the portal had never used and
-gave the import an **undo**. **The last round is the landing page, asked for a
+gave the import an **undo**. **The last round is no code at all: the plan for turning
+Google sign-in on** ([`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md)), which found
+the flow already built, three places in the repository saying it was not, and
+two defects worth fixing before it is switched on. **The round before it was
+the landing page, asked for a
 third time in one day.** The hero's wash goes to **78%**, its title becomes
 **Guest House Portal** in **bold** (the institute's name is kept, in full, in
 the tracked saffron line above it), and the page under it gains **an opening
@@ -121,6 +125,13 @@ project `units` is **empty**, so nothing routes to an HOD yet -
 configured, the account picker until then. LDAP is withdrawn from the
 interface and intact underneath -
 [05-credentials-and-security.md](05-credentials-and-security.md) Part 2.
+**The Google flow is built and verified, only unconfigured** - don't rebuild
+it. Turning it on is [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) at the repo
+root, which also carries the two defects to fix first: the account lookup
+scans **every** profile and Supabase truncates that at **1000 rows silently**
+([03-roadmap.md](03-roadmap.md) gate 12, which breaks the institute's account
+import too), and the start leg's `hd` hint may keep every `@smail` student out
+of Google's account chooser.
 
 **Numbers.** 34 migrations · 10 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·

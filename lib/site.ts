@@ -9,10 +9,16 @@
 
 /**
  * Institute domain for sign-in. Subdomains are accepted too, because students
- * are `<roll>@smail.iitpkd.ac.in`. Named on the sign-in page. `isInstituteEmail`
- * is the rule real Google sign-in must enforce on the verified address; the
- * mock Google door lists only portal accounts, and LDAP sign-in takes a
- * username, so neither needs it today.
+ * are `<roll>@smail.iitpkd.ac.in`. Named on the sign-in page.
+ *
+ * `isInstituteEmail` is the rule **Google sign-in already enforces** on the
+ * verified address (`app/api/auth/google/callback/route.ts`, against both the
+ * address and the `hd` claim). The account picker lists only portal accounts
+ * and LDAP sign-in takes a username, so neither of those needs it.
+ *
+ * > The start leg sends `hd=iitpkd.ac.in`, which is narrower than this rule:
+ * > if `smail.iitpkd.ac.in` is a separate Workspace tenant, that hint keeps
+ * > students out of Google's account chooser. `GOOGLE-SIGN-IN.md` §5.
  */
 export const LOGIN_DOMAIN = "iitpkd.ac.in";
 

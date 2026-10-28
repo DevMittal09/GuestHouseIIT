@@ -7,93 +7,135 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 28 October 2026 (second) - the landing page, asked for a third time
+## Round of 28 October 2026 (third) - the Google sign-in plan
 
-**The same day as the Taramani pass, after it had shipped.** One message, four
-items, and the [Taramani Guest House, IIT Madras](https://tgh.iitm.ac.in/)
-named a second time: the hero type "is blending with the background too much",
-and the page "overall looks very basic... make it look creative and
-aesthetic".
+**No application code changed.** The owner asked for a plan: the current state
+of Google OAuth, the step-by-step setup, anything else worth knowing - with
+the standing fact that **the institute's email data for every user is being
+collected** - and for `.memories/` to be corrected where it has drifted.
 
-That is the finding, not the complaint. The morning's pass took Taramani's
-typography and composition and refused its decoration, and the page it
-produced reads as correct and reads as basic - which are different things.
-What was missing was not a shadow: the page had **nothing to read** between a
-photograph and six icons, every one of its five blocks sat on a light ground,
-and two of them were lists rather than compositions.
+### The finding
 
-### What was asked, and what was done
+**The flow was already built.** `lib/oidc.ts` and the two routes under
+`app/api/auth/google/` are a complete, verified OpenID Connect
+implementation from Phase 8: authorization code with **PKCE**, `state` and
+`nonce` in a short-lived httpOnly cookie, the `id_token` **verified** against
+Google's JWKS with `iss` / `aud` / `exp`, `email_verified`, **both** domain
+checks (`isInstituteEmail` on the address *and* the `hd` claim), a profile
+that must already exist, then a `sessions` row and an audit entry.
 
-| § | Asked | Done |
-| --- | --- | --- |
-| 1 | More opacity on the hero's overlay | `bg-ink/66` -> **`bg-ink/78`**, measured again: white display type clears **6:1** against the brightest tenth of the middle band of either photograph, near 12:1 against its average. Not pushed past ~85%, where the photograph stops reading at all |
-| 2 | Keep "INDIAN INSTITUTE OF TECHNOLOGY PALAKKAD"; change the title to "GUEST HOUSE PORTAL" | The kicker is **kept verbatim** and now sits between two 40px saffron hairlines. The `<h1>` is **Guest House Portal** - title case, because the line above it is already tracked capitals. The old title said the institute's name twice and needed its separator hidden below `sm` |
-| 3 | The type blends in - make it bolder | The `<h1>` is **`font-bold`**, the site's one bold heading; the lead loses `font-light`. **No drop shadow** - the answer to white type over a photograph is the wash and the weight |
-| 4 | The page looks basic - make it creative and aesthetic | Four blocks, below |
+**Three places said it was not built**, and each would have sent a later
+session off to build it again. Setting it up is a client id, three
+environment variables, and the accounts - not code.
 
-### The four blocks
+### What was written
 
-| Block | Change |
+| File | What |
 | --- | --- |
-| **Staying on campus** | **New section.** `homeIntro(houses)` - two sentences computed from the store, naming the guest houses it holds and mentioning meals only where one has a kitchen - in five columns, with `HOME_PHOTOS.intro` in seven beside it and a **saffron corner mark** offset from its bottom left |
-| Amenities | **On ink, icons in saffron**, hairlines in `white/15`. The page's one dark band between the hero and the footer. No token added: the ink is the header's and the footer's |
-| A look inside | A **twelve-column mosaic** - 5x2 beside 7, then 3 and 4, then 7 and 5 - on the warm band. The spans tile the grid exactly **in that order**, so auto-placement leaves no hole |
-| Our guest houses | **One ruled plate of two cells**, the name at `text-display` over a **saffron** stub. **Still text only** - the 27 Oct instruction stands, and both attributed photographs are in the hero |
+| **[`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md)** (new, repo root) | The runbook. §1 what exists and what it already gets right · §2 the switch · §3 the Google Cloud steps and the exact redirect URI · §4 the portal side, and why **not in CI** · §5 the two domains · §6 **the email data** · §7 the 1000-row blocker, with the fix · §8 six smaller notes · §9 the auto-provisioning decision · §10 a fifteen-item verification checklist · §11 the email to send the Computer Centre |
 
-Plus a **scroll cue** at the foot of the hero: an `aria-hidden`,
-`pointer-events-none` chevron on `hero-cue`, the site's second keyframe. A
-full viewport of photograph gives the reader no edge to say the page goes on.
+A **root file, not a sixteenth memory file**: fifteen is a hard rule, and this
+is a runbook performed once against an external party, like
+[`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md). What the code
+*does* stays in [05-credentials-and-security.md](05-credentials-and-security.md)
+Part 2; what is *open* in [03-roadmap.md](03-roadmap.md); what production must
+*set* in [04-production.md](04-production.md). The runbook links to all three.
 
-**Nothing decorative was borrowed.** No shadow, no gradient, no pill, no
-radius above 8px - all four banned since 30 Sep 2026. Everything above was
-bought with composition, ground, type and one accent colour.
-[02-decisions.md](02-decisions.md) under this date says what the next answer
-would have to be if the page is still thought basic: a deliberate decision to
-lift that ban, which is a change to the portal as well as the site, not four
-devices smuggled onto one page.
+### The drift, and where it was
 
-### Files
+`npm run check:memories` passed before this round and passes after it, and the
+folder's *facts* were right - Part 2 of file 05 has carried the Google leg in
+its flow diagram all along. **What had drifted was prose the check cannot
+read:**
+
+| File | Said | Now |
+| --- | --- | --- |
+| `lib/env.ts` | "Google sign-in is **not built yet**" | Built, **unconfigured** |
+| `lib/site.ts` | `isInstituteEmail` "is the rule real Google sign-in **must** enforce ... neither needs it today" | It **already enforces** it - plus the `hd`/students warning |
+| `AGENTS.md` | "the real flow **must enforce** `isInstituteEmail()`" | A bullet for the Google door: what it checks, the derived redirect URI, the two defects, "don't set these in CI" |
+| `.env.example` | the card's "**second** button"; a button reading "**Mock Authentication**"; `MOCK_LOGIN=false` leaving "LDAP sign-in only"; a link to `.memories/11-ldap-accounts.md` | One button, reading "Sign in"; `MOCK_LOGIN=false` **leaves no door at all**; the link points at file 05, which has owned those accounts since 10 Oct - **the old link had been dead for eighteen days** |
+
+### Two defects found, recorded not fixed
+
+The ask was a plan, so both are written down rather than patched.
+
+**1. The account lookup scans every profile - roadmap [gate 12](03-roadmap.md).**
+`app/api/auth/google/callback/route.ts` does
+`(await getStore().listProfiles()).find(...)`, and `SupabaseStore.listProfiles`
+is `select("*").order("role")` with **no `.range()`**. Supabase caps an
+unbounded select at **1000 rows by default and truncates silently** - HTTP 200,
+the truth only in `Content-Range`. Past 1000 accounts:
+
+- **sign-in fails for arbitrary people** (Google and LDAP both) with "not
+  registered on the guest house portal" - indistinguishable from a genuinely
+  absent account, so the person goes to the office, not to the developer;
+- **the account import breaks**: `planUserImport` builds its "who already
+  exists" map from the same truncated list, so a second batch reads
+  already-imported people as **new** and the unique `email` constraint refuses
+  the whole paste. `MAX_USER_IMPORT_ROWS` is 2000 and
+  [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §7 says to
+  **split the file** - the documented procedure walks into the defect;
+- Users & Roles, the mail digest, the approval routing and the Copy-to line
+  all read the same call.
+
+Fix both ways: raise Supabase's **Max rows** (a new project defaults back to
+1000, so it belongs on the deployment checklist) **and** add
+`getProfileByEmail` to `DataStore` and both stores. **Migration 31 already
+added `profiles (lower(email))` for exactly this, and nothing has used it
+since 13 Oct 2026.**
+
+**2. `hd` on the start leg is narrower than the return leg's own rule.** The
+start leg sends `hd=iitpkd.ac.in`; the return leg accepts that **and any
+subdomain**. Students are `<roll>@smail.iitpkd.ac.in`. If `smail` is a
+separate Workspace tenant rather than a second domain of the same one, that
+hint keeps **every student** out of Google's account chooser - the portal
+would work for staff and be unusable for the people it is for. One line to
+fix (`hostedDomain: "*"`, or drop the hint - `hd` is a hint, not a control,
+and the callback re-checks), but it must not be guessed: it is the first
+question in the email to the Computer Centre, and one real student account
+settles it.
+
+### Files touched
 
 | File | Change |
 | --- | --- |
-| `app/(site)/page.tsx` | The hero's kicker rules, the new `<h1>`, the opening statement, the ink amenities band, the mosaic (`MOSAIC` / `WIDE`), the guest houses as one plate (`HouseCard` -> `HouseCell`) |
-| `components/site/hero-carousel.tsx` | The wash to `bg-ink/78` with the measurement; the scroll cue |
-| `app/globals.css` | `@keyframes hero-cue` |
-| `lib/site.ts` | `HOME_PHOTOS.intro` (`hamsanandiEntrance`) |
-| `lib/site-content.ts` | `homeIntro(houses)` |
-| `tests/public-site.test.ts` | Four tests for `homeIntro`, one holding the three photo sets apart, and `homeIntro` added to the no-role-names check |
-| `e2e/public-site.spec.ts` | The `<h1>`, the kicker, and the opening statement's section |
-| `AGENTS.md` | The home page's layout, the `<h1>` and the wash, the scroll cue, and that new home copy is computed from the store |
+| `GOOGLE-SIGN-IN.md` | **New.** The runbook |
+| `lib/env.ts`, `lib/site.ts` | **Comments only** - no behaviour |
+| `AGENTS.md` | The Google door bullet replaces the stale clause |
+| `.env.example` | The Sign-in block rewritten; the dead memory link fixed |
+| `.memories/03-roadmap.md` | Gate 2 rewritten, **gate 12 added**, §2n added |
+| `.memories/04-production.md` | **Max rows** on the deployment checklist; the Computer Centre asks now name the two-domains question and the Workspace user export |
+| `.memories/05-credentials-and-security.md` | Part 2 gains **"Google sign-in - built, verified, unconfigured"** |
+| `.memories/20-architecture.md` | The auth seam notes the Google leg is built, with the pointer |
+| `.memories/01-background.md`, `02-decisions.md`, `99-recent-changes.md` | This round |
 
-**No migration, no store operation, no booking rule, no permission and no
-route.**
+**No migration, no store operation, no booking rule, no permission, no route
+and no public-site change.**
 
 ### Verified
 
-`npm run lint`, `npx tsc --noEmit`, `npm test` (**608**, 5 new), a production
-build, and the **full Playwright suite: 50/50**, including both 320px phone
-passes. Section screenshots were read back at 1440px - which is what caught
-the opening statement sitting in a column half its width (it had six columns
-and a `max-w-[46ch]` cap inside them; it is five columns and no cap at `lg`
-now).
-
-**A trap worth knowing, hit twice here:** `pkill -f "[n]ext start"` does not
-kill the server. The process renames itself **`next-server`**, so the parent
-dies, the port stays held, the next `next start` fails `EADDRINUSE` in a
-background log nobody reads, and the stale server goes on serving the
-**previous** build out of a `.next` that has since been overwritten - which
-looks exactly like "my change did nothing". Written up in
-[22-running-and-testing.md](22-running-and-testing.md) Part 2.
+`npm run lint`, `npx tsc --noEmit`, `npm test` (**608**) and
+`npm run check:memories`. No new tests: nothing executable changed - the two
+code edits are comments.
 
 ### Left open
 
-- **The ban on shadows, gradients, pills and 16px radii has now been tested
-  twice against the same reference site.** It held both times, but it is the
-  one lever left if a fourth brief says the same thing. It is a decision
-  about the whole service, not about this page.
-- **Nothing tests the dark amenities band** - that saffron on ink is what
-  ships, or that the band does not merge with the ink footer at some width.
-- **`SIGN_IN_PHOTOS` is still entirely unplaced** (from the round before).
-- **`HOME_PHOTOS` now has three disjoint sets** and a unit test holding them
-  apart. A fourth photograph slot on this page is one more set to keep
-  disjoint by hand; there is no helper for it.
+- **Gate 12 is the next thing to do**, and it is a prerequisite for the
+  institute's import as much as for Google sign-in.
+- **Email is the only identity key.** `completeGoogleSignIn` returns Google's
+  immutable `sub` and the callback drops it, so a **reassigned** institute
+  address hands the new holder the previous person's profile, bookings and
+  role. `profiles.google_sub` (a migration 35) is the fix - worth doing before
+  the portal holds a year of real bookings. [03-roadmap.md](03-roadmap.md) §2n.
+- **The OAuth state cookie is not cleared** - set with
+  `path: "/api/auth/google"`, deleted with a bare `jar.delete()`, which
+  defaults to `/`. Low severity, one line.
+- **Configuring Google deletes `/mock-login`, which is how all 50 Playwright
+  journeys sign in.** `e2e/sign-in.spec.ts` says it expects to be *replaced*
+  at that point; nothing replaces it yet.
+- **The 29 other `listProfiles()` callers** are correct once Max rows is
+  raised, but several load every profile to find a handful of approvers.
+  Speed, not correctness.
+- **The refusal message for a valid account with no profile is a dead end.**
+  Naming the office's address from `GUEST_HOUSE_CONTACT` would give the person
+  somewhere to go.

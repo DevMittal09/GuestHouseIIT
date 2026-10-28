@@ -146,6 +146,63 @@ password; the session row is what proves, on every later request, that the
 person holding the cookie is the one who did. The unsigned `gh_mock_user`
 cookie it replaced is honoured only with `DEV_LOGIN=true` outside production.
 
+### Google sign-in - built, verified, unconfigured
+
+**The intended door** (the owner, 28 Oct 2026). The flow is **written and
+tested**; the only thing missing is a client id. **Do not rebuild it.**
+
+> **The step-by-step setup is [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) at
+> the repo root** - what to ask the Computer Centre for, the Google Cloud
+> steps, the exact redirect URI, the verification checklist, and the two
+> things to fix before switching it on. This section is what the code does;
+> that file is how to turn it on. One fact, one home.
+
+| Piece | File |
+| --- | --- |
+| The protocol | `lib/oidc.ts` |
+| Leg one (state, PKCE, redirect) | `app/api/auth/google/start/route.ts` |
+| Leg two (verify, find the profile, start the session) | `app/api/auth/google/callback/route.ts` |
+| The switch | `googleOauth()` in `lib/env.ts` |
+
+**The switch is three variables** - `GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET` and `APP_URL`. The redirect URI is **derived**
+(`${APP_URL}/api/auth/google/callback`), never configured, and must be
+registered in Google Cloud character for character. A malformed `APP_URL`
+makes `googleOauth()` null and **silently reopens the mock door** rather than
+erroring; in production `assertEnv()` refuses to start, so the silent case is
+staging.
+
+What it checks, in order, before a session exists:
+
+1. `state` matches the httpOnly cookie minted at the start leg (10 min life).
+2. The code is exchanged with the **PKCE** verifier.
+3. The `id_token` is **verified**: RS256, signature against Google's JWKS
+   (cached an hour), `iss`, `aud` = our client id, `exp`, and the `nonce`
+   this request sent.
+4. `email_verified` is true.
+5. **Both** domain checks - `isInstituteEmail()` on the address *and* the
+   `hd` claim, which proves a Workspace account rather than a personal one.
+6. **A `profiles` row with that email must already exist.** No
+   auto-provisioning: the row carries the role, hostel and unit, and there is
+   no safe default for those ([03-roadmap.md](03-roadmap.md) §2n).
+
+Both outcomes are audited (`signin.success` / `signin.failure`, `method:
+"google"`, with a reason). The start leg is rate-limited per IP
+(`RATE_LIMITS.oauth`, 20 per 10 min - watch it if the campus is behind one
+NAT address). There is **no refresh token and no offline access**: the portal
+asks Google who somebody is, once, and keeps its own session.
+
+**Three things it does not do**, all recorded in
+[03-roadmap.md](03-roadmap.md) §2n: it finds the profile by scanning
+`listProfiles()` (gate 12 - Supabase truncates that at 1000 rows silently);
+it matches on **email alone** and drops Google's immutable `sub`, so a
+reassigned address hands over the previous holder's profile; and `hd` on the
+start leg is narrower than `isInstituteEmail()`, which may keep `@smail`
+students out of Google's account chooser.
+
+**Configuring it deletes `/mock-login`**, which is how the Playwright suite
+signs in - so never set these variables in CI.
+
 ### Moving to the real LDAP accounts
 
 Nothing in the code changes. Three steps:
@@ -279,7 +336,7 @@ must set.
 | `CRON_SECRET` | Guards `/api/mail/cron` and `/api/mail/dispatch` (≥ 16 chars) | **Required** |
 | `ID_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEYS_OLD` | Encrypt ID numbers / TOTP secrets; old keys for rotation (`v1:…,v2:…`) | **Required** (the key) |
 | `LDAP_URL`, `LDAP_BASE_DN`, `LDAP_BIND_DN`, `LDAP_BIND_PASSWORD`, `LDAP_UID_ATTRIBUTE`, `LDAP_STARTTLS`, `LDAP_LINK_BY_EMAIL` | Real directory; without `LDAP_URL` the dummy accounts above work | **Required for any real deployment** |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Real Google sign-in (with `APP_URL`); closes Mock Authentication | Recommended |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Real Google sign-in (with `APP_URL`); closes Mock Authentication. The flow is built - [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) | Recommended |
 | `MOCK_LOGIN` | `false` closes Mock Authentication | **Set to `false` unless Google is configured** |
 | `DEV_LOGIN` | Development-only developer doors (the legacy `gh_mock_user` cookie) | **Never** — the server refuses to start |
 | `ALLOW_MOCK_STORE` | Lets a production build run on the JSON store (e2e only) | **Never** |

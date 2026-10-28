@@ -6680,3 +6680,137 @@ smuggled onto one page.
 > the Taramani pass earlier the same day, all replaced above. The content
 > rules of 26-30 Sep 2026 and the ban on shadows, gradients, pills and 16px
 > radii are **not** superseded.
+
+---
+
+## 28 October 2026 (third) - the Google sign-in plan
+
+**No application code changed.** The owner asked for a plan to set up Google
+OAuth: the current state, the step-by-step, and anything else to note, with
+the standing fact that **the institute's email data for every user is being
+collected**. The output is
+[`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) at the repo root, plus corrections
+to four files that described the auth seam wrongly.
+
+### The finding: it was already built, and the notes said it was not
+
+`lib/oidc.ts` and the two routes under `app/api/auth/google/` are a complete,
+verified OpenID Connect implementation from Phase 8 - authorization code with
+PKCE, `state`, `nonce`, the `id_token` checked against Google's JWKS with
+`iss` / `aud` / `exp`, `email_verified`, the `hd` claim *and*
+`isInstituteEmail()`, then a profile that must already exist, then a session
+row and an audit entry.
+
+Three places said otherwise, and each would have sent the next session off to
+build it again:
+
+- **`lib/env.ts`** - "Google sign-in is not built yet". It is built; it is
+  **unconfigured**. Corrected, with a pointer to the runbook.
+- **`lib/site.ts`** - `isInstituteEmail` "is the rule real Google sign-in
+  **must** enforce ... so neither needs it today". The callback has enforced
+  it since Phase 8. Corrected.
+- **`AGENTS.md`** - the same "the real flow must enforce" clause. Replaced
+  with a bullet for the Google door itself, naming what it already checks and
+  what to fix first.
+
+`.env.example` was wrong in a fourth way: it described the sign-in card's
+"**second** button" and a button reading "**Mock Authentication**" (both from
+before the LDAP form came off the page on 28 Oct 2026), said
+`MOCK_LOGIN=false` would leave "LDAP sign-in only" (it now leaves **no door at
+all**), and pointed at `.memories/11-ldap-accounts.md`, **which has not
+existed since the folder was reorganised on 10 Oct 2026**. All four fixed.
+
+**Why this is worth a decision entry rather than a quiet fix.** The folder's
+structural check (`npm run check:memories`) passes on all of it: the file
+count is right and every *link inside `.memories/`* resolves. What drifted was
+**prose in code comments and `.env.example`** - neither of which the check
+reads. A comment that says a built feature is unbuilt is worse than no
+comment, because it is load-bearing for the next person's plan.
+
+### Why the plan is a root file, not a sixteenth memory file
+
+**Fifteen files is a hard rule** (`CLAUDE.md`), and a sixteenth is a
+deliberate decision added to `EXPECTED` in `scripts/check-memories.mjs`. This
+did not need one: it is a **runbook** - a procedure performed once, against
+an external party, like
+[`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) and
+[`IMPORTING-USERS.md`](../IMPORTING-USERS.md), which are both root files for
+the same reason. What the *code does* stays in
+[05-credentials-and-security.md](05-credentials-and-security.md) Part 2, which
+owns sign-in; what is *open* stays in [03-roadmap.md](03-roadmap.md); what
+production must *set* stays in [04-production.md](04-production.md). One fact,
+one home - the runbook links to all three rather than restating them.
+
+### The blocker the review turned up: a 1000-row account lookup
+
+`app/api/auth/google/callback/route.ts` finds the account with
+`(await getStore().listProfiles()).find(...)`, and
+`SupabaseStore.listProfiles` is `select("*").order("role")` with **no
+`.range()`**. Supabase caps an unbounded select at **1000 rows by default and
+truncates silently** - HTTP 200, the truth only in `Content-Range`, which
+`supabase-js` does not surface. The order is `role`, so *which* 1000 come back
+is arbitrary within each role.
+
+This is recorded as **gate 12** rather than fixed, because fixing it is a
+`DataStore` change and the owner asked for a plan. What it costs past 1000
+accounts:
+
+- **Sign-in fails for arbitrary people** - Google and LDAP both - with "not
+  registered on the guest house portal", which is indistinguishable from a
+  genuinely absent account and sends the person to the office, not to the
+  developer.
+- **The account import breaks**, which is the cruel one: `planUserImport`
+  builds its "who already exists" map from the same truncated list, so a
+  second batch reads already-imported people as **new**, tries to create them,
+  and the unique `email` constraint refuses the whole paste.
+  `MAX_USER_IMPORT_ROWS` is **2000** and
+  [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §7 says the
+  institute is larger than that and to **split the file** - the documented
+  procedure walks straight into the defect. It at least fails loudly.
+- Users & Roles shows part of the directory; the mail digest, the approval
+  routing and the Copy-to line all read the same call.
+
+**Two fixes, both wanted.** Raising Supabase's **Max rows** is the five-second
+one and belongs on the deployment checklist, because a *new* project defaults
+back to 1000. But the real fix is to stop scanning a table to sign one person
+in: `getProfileByEmail` on the interface and both stores. **Migration 31
+already added `profiles (lower(email))` for exactly this, and nothing uses
+it** - the index has been sitting unused since 13 Oct 2026.
+
+### Two identity decisions left open deliberately
+
+- **Email is the only key.** `completeGoogleSignIn` returns Google's immutable
+  `sub` and the callback drops it. An institute **reassigns** addresses - a
+  reused roll number, a renamed staff account - and the new holder would
+  inherit the previous person's profile, bookings, role and hostel. The fix
+  (`profiles.google_sub`, matched first, recorded on the first email match) is
+  small but needs a migration, so it is named in the roadmap as a decision
+  rather than slipped in. Worth doing before the portal holds a year of real
+  bookings.
+- **No auto-provisioning, and keep it that way.** A valid institute Google
+  account with no `profiles` row is refused. That looks unfriendly and is
+  right: a profile row carries the **role, hostel and unit**, which decide the
+  approval chain and the debitable heads, and there is **no safe default** for
+  any of them - a wrong role picks the wrong budget, a missing hostel routes a
+  student's booking to nobody. The import is where that decision belongs, and
+  it has an undo (migration 32). What should improve is the refusal message,
+  which is a dead end: it should name the office's address from
+  `GUEST_HOUSE_CONTACT`.
+
+### The one question only the institute can answer
+
+The start leg sends `hd=iitpkd.ac.in`; the return leg accepts that domain
+**and any subdomain**, via `isInstituteEmail`. Students are
+`<roll>@smail.iitpkd.ac.in`. If `smail` is a **secondary domain of the same
+Workspace tenant**, `hd` names the tenant and students are offered their
+accounts normally. If it is a **separate tenant**, `hd=iitpkd.ac.in` filters
+every student out of Google's account chooser - and the portal would work
+perfectly for staff and be **unusable for the people it exists for**.
+
+The fix is one line (`hostedDomain: "*"`, or drop the hint - `hd` is a hint,
+not a control, and the callback re-checks both the claim and the address), but
+it must not be guessed: it is the first question in the email to the Computer
+Centre, and one real student account settles it. It is also why the
+collected **email column must be the Google *primary* address** - an alias or
+an HR-sheet address never matches, and the whole support load of a rollout
+lands on that one column.
