@@ -63,21 +63,26 @@ JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwri
 **Status, 28 Oct 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme, **twelve** rounds of the
 office's corrections and the owner's **thirteenth and fourteenth lists**,
-**four** design passes,
+**five** design passes,
 the round that put **the approval workflow itself in the manager's hands**
 (Console -> Approval Workflow), and two rounds preparing the institute's
 **user import** - which closed a GoTrue door the portal had never used and
-gave the import an **undo**. **The last round is two briefs.** The first names the
-**Taramani Guest House (IIT Madras)** site as the standard: the header becomes
-**one opaque charcoal bar on every page** with its links centred, the hero
-gains a saffron kicker and a **solid saffron** second door, Amenities / Our
-guest houses / Contact us are **centred**, the gallery is recomposed - and,
-across the whole application, **no rule runs under any heading** and
-**whatever is selected is filled, never underlined**. The second is
-functional: **LDAP comes off the sign-in page** (one button into the account
-picker; the action and the directory untouched), two rule sentences come off
-the booking form, a count reads **"Current bookings: 1"**, and the manager's
-console **stops drawing a list with nothing in it**. The round before it made
+gave the import an **undo**. **The last round is the landing page, asked for a
+third time in one day.** The hero's wash goes to **78%**, its title becomes
+**Guest House Portal** in **bold** (the institute's name is kept, in full, in
+the tracked saffron line above it), and the page under it gains **an opening
+statement computed from the store**, an **ink amenities band with saffron
+icons**, a **twelve-column gallery mosaic** and **one ruled plate** for the
+two guest houses. The ban on shadows, gradients, pills and 16px radii held:
+all of it was bought with composition, ground, type and one accent colour.
+**The two briefs before it, the same day**, were the **Taramani Guest House
+(IIT Madras)** pass - the header becomes **one opaque charcoal bar on every
+page** with its links centred, and across the whole application **no rule
+runs under any heading** and **whatever is selected is filled, never
+underlined** - and a functional one: **LDAP comes off the sign-in page** (one
+button into the account picker; the action and the directory untouched), two
+rule sentences come off the booking form, a count reads **"Current bookings:
+1"**, and the manager's console **stops drawing a list with nothing in it**. The round before it made
 the landing page cinematic: a **full-viewport hero** with no visible controls
 (click the photograph to pause). The round before it was no code at all -
 [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md), what to ask the
@@ -120,7 +125,7 @@ interface and intact underneath -
 **Numbers.** 34 migrations · 10 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
 19 demo personas · 6 demo bookings · 23 real rooms · **25 photographs** ·
-603 unit tests · 50 end-to-end journeys · 15 console sections ·
+608 unit tests · 50 end-to-end journeys · 15 console sections ·
 **5 invoice layout versions**.
 
 ---

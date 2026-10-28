@@ -61,6 +61,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **27 Oct** | **What to request from the institute, per kind of user.** No code change: one root document, [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) - the schema explained for somebody who has not read it, a section per kind of account saying which columns to fill and which to leave blank, five copy-and-send sheet specifications, and the drop list. Probing the hosted project rather than reading these notes found four things wrong with them: **migration 32 is applied** (recorded as not), 31/33/34 are **unknown** rather than unapplied, **`units` is empty** so no faculty booking has an HOD stage and the `unit` column cannot be imported at all, and every hosted profile has no LDAP username, unit or staff category. The document's real warning is that a student record naming **one** parent withholds the other from the form entirely - so it is **both parents or neither**. |
 | **27 Oct** (second) | **The landing page redesigned**, to a written brief: "modern, cinematic, elegant". The hero becomes a **full-viewport photograph** with the navigation laid over it as a translucent ink band, the page's title and both doors set in the middle of it, **two** slides instead of six and **no visible controls** - clicking the photograph pauses it. Below it: the six amenities in one ruled strip, a **six-thumbnail** gallery preview, **text-only** guest house cards (no photograph, no label, no summary line - `houseSummary` deleted), and a new **Contact us** section with one map per guest house. The row of links under every map is gone, on `/contact` too. **Public site only** - no migration, no store operation, no booking rule. |
 | **28 Oct** | **The Taramani pass, and the sign-in.** Two briefs. The first names the [Taramani Guest House](https://tgh.iitm.ac.in/) as the standard: a stronger hero (saffron kicker, a 66% wash, a **solid saffron** second door), **one opaque charcoal header on every page** with the links **centred**, Amenities / Our guest houses / Contact us **centred**, the gallery recomposed into two unequal bands - and, application-wide, **no rule under any heading** (`rule-title` deleted) and **everything selected filled rather than underlined**. The second is functional: **LDAP comes off the sign-in page** (one button, the mock account picker; the action and directory untouched), the advance-window and stay-cap sentences come **off the booking form** (no rule changed), a count reads **"Current bookings: 1"**, and the manager's console **stops drawing a list with nothing in it** - the index at the top is where a zero is reported. Reception got the same. **No migration.** |
+| **28 Oct** (second) | **The landing page again, and Taramani named a second time.** The owner: the hero type "is blending with the background too much", and the page "overall looks very basic... make it look creative and aesthetic". The wash goes **66% -> 78%**, the `<h1>` becomes **Guest House Portal** in **bold** (the institute's name is kept, in full, as the tracked saffron line above it), and the lead loses `font-light`. Below it the page gains **an opening statement computed from the store** where it used to drop straight from a photograph into six icons; the amenities move **onto ink with saffron icons** - the page's one dark band; the gallery becomes a **twelve-column mosaic**; and the two guest houses become **one ruled plate** with their names at display size. Still no shadow, gradient, pill or 16px radius: all of it bought with composition, ground, type and one accent colour. **Public site only - no migration, no store operation, no booking rule.** |
 
 ## The problem
 
@@ -1148,6 +1149,42 @@ Playwright suite (49/50, the one failure a **midnight-rollover flake** in a
 fixture that builds two dates from "now" either side of IST midnight; 3/3 on
 a re-run), plus screenshots read back at 1440px and 390px, which caught a
 stray space before a colon and three contact cells left top-aligned.
+
+---
+
+## The landing page again - 28 October 2026 (second)
+
+The same day, after the pass above had shipped. One message, four items, and
+the reference site named a second time.
+
+> I want the overlays opacity to be increased a bit more so that the text is
+> more prominent. Also, Keep the "INDIAN INSTITUTE OF TECHNOLOGY PALAKKAD"
+> and change the "IIT PALAKKAD - GUEST HOUSE" to "GUEST HOUSE PORTAL".
+>
+> Also Make the text more prominent, like its blending with the background
+> too much, maybe making it bolder?? Something idk.
+>
+> And the landing page overall looks very basic. See look at taramani guest
+> house portal, it looks like something you wanna look at, its aesthetic and
+> looks very creative. Ours look very basic, like make it look creative and
+> aesthetic.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | More opacity on the hero's overlay | **Done.** `bg-ink/66` -> **`bg-ink/78`**, measured again: white display type clears 6:1 against the brightest tenth of the middle of either photograph. Not pushed past about 85%, where the photograph stops reading at all |
+| 2 | Keep the institute's name; the title becomes **GUEST HOUSE PORTAL** | **Done.** The tracked saffron line is kept verbatim and now sits between two saffron hairlines; the `<h1>` is **Guest House Portal**, in title case because the line above it is already tracked capitals and two capitalised lines would flatten the hierarchy the round before built |
+| 3 | The type is blending in - make it bolder | **Done.** The `<h1>` is **`font-bold`**, the one bold heading on the site; the lead loses `font-light`. **No drop shadow**, here or anywhere |
+| 4 | The page looks basic - make it creative and aesthetic, after Taramani | **Done**, in four blocks: a new **opening statement** computed from the store with one photograph beside it; the amenities **on ink with saffron icons**, the page's one dark band; the gallery as a **twelve-column mosaic**; the two guest houses as **one ruled plate** with their names at display size. A scroll cue at the foot of the hero. The ban on shadows, gradients, pills and 16px radii **held** - what changed is composition, ground, type and one accent colour |
+
+**Public site only.** No migration, no store operation, no booking rule, no
+permission and no route. The copy added is computed from the store
+(`homeIntro`) and goes through the same test that keeps role names off the
+public site.
+
+**Verified** with lint, types, **608** unit tests (5 new), a production build
+and the **full Playwright suite, 50/50**, including both 320px phone passes.
+Section screenshots were read back at 1440px, which is what caught the
+opening statement sitting in a column half its width.
 
 ---
 

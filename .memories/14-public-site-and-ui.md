@@ -17,7 +17,39 @@ the sign-in pages.
 | 15 Oct 2026, morning | `main` | The office's eleven new photographs, and **the first two the site is allowed to name**: the owner said which guest house each of two shows and asked for a landing page that showcases them, "similar but not exact copy" of iitpkd.ac.in. The home page's hero and its "Our guest houses" section became **one block** - the ink masthead across the top, a guest house under each half of it, photograph first and the name under it. **No colour, token or primitive changed.** See "The guest houses become the hero" below |
 | 15 Oct 2026, later | `main` | The owner: "i need images which change evry few seconds and has the option of arrows to move to next image... just go to iitpkd.ac.in website and see what i mean". A **hero slideshow** - the one client component on the public site - with iitpkd.ac.in's own Previous / Pause / Next and numbered indicators. The masthead moved **under** it, then lost its ink panel and its phone line and was **centred** ("the black box... looks unnecessary"); the guest houses went back to a section of their own. **No colour, token or primitive changed.** See "The hero becomes a slideshow" below |
 | 27 Oct 2026 | `main` | A written brief: make the landing page "modern, cinematic, elegant and aesthetically pleasing, while maintaining a professional institutional identity", in six sections. The hero becomes **a full viewport photograph with the navigation laid over it** and the page's title set in the middle of it; two slides, no visible controls, a slow zoom that follows the pointer. Below it the amenities become one ruled strip, the mosaic a **six-thumbnail** preview, the guest houses **text-only cards**, and **Contact us** arrives on the page with a map each. **The first pass to add a type step (`--text-hero`) and a keyframe; no colour changed.** See "The landing page becomes cinematic" below |
-| **28 Oct 2026 (current)** | `main` | The owner names a reference site for the first time - the **Taramani Guest House, IIT Madras** - and asks for the application to be brought up to it, plus a functional brief. The header becomes **one opaque charcoal bar on every page** with the links centred; the hero gains a saffron kicker, a deeper wash and a **solid saffron** second door; Amenities, Our guest houses and Contact us are **centred**; the gallery is recomposed. Application-wide: **no rule under any heading** (`rule-title` deleted) and **everything selected is filled, never underlined**. The sign-in page loses its form, its photograph and every mention of LDAP. See "The Taramani pass" below |
+| 28 Oct 2026 | `main` | The owner names a reference site for the first time - the **Taramani Guest House, IIT Madras** - and asks for the application to be brought up to it, plus a functional brief. The header becomes **one opaque charcoal bar on every page** with the links centred; the hero gains a saffron kicker, a deeper wash and a **solid saffron** second door; Amenities, Our guest houses and Contact us are **centred**; the gallery is recomposed. Application-wide: **no rule under any heading** (`rule-title` deleted) and **everything selected is filled, never underlined**. The sign-in page loses its form, its photograph and every mention of LDAP. See "The Taramani pass" below |
+| **28 Oct 2026, later (current)** | `main` | The same day, after that pass shipped: the hero type "is blending with the background too much" and the page "overall looks very basic... make it look creative and aesthetic", Taramani named again. The wash goes **66% -> 78%**, the `<h1>` becomes **Guest House Portal** in **bold**, and the page gains **an opening statement**, an **ink amenities band**, a **twelve-column gallery mosaic** and **one ruled plate** for the two guest houses. **One keyframe added (`hero-cue`); no colour, token or primitive changed.** See "The page stops being basic" below |
+
+## The page stops being basic (28 Oct 2026, later)
+
+The same brief as the morning, given again because the morning's answer was
+correct and still read as a template. Four items; the first three are the
+hero, the fourth is everything under it.
+
+### The hero
+
+| | |
+| --- | --- |
+| Wash | **`bg-ink/78`**, from 66% that morning and 60% the day before. White display type clears **6:1** against the brightest tenth of the middle band of either photograph, near 12:1 against its average. The ceiling is about 85%, past which the photograph is decoration behind a charcoal panel |
+| Kicker | **Kept verbatim** - "Indian Institute of Technology Palakkad", tracked saffron capitals - and now set **between two 40px saffron hairlines**, dropped below `sm` where the line itself wraps |
+| `<h1>` | **"Guest House Portal"**, `font-bold` - the one bold heading on the site. It was "IIT Palakkad - Guest House": the institute's name twice over, and a separator that had to be hidden on a phone because "IIT Palakkad -" over "Guest House" reads as a hyphenated word |
+| Lead | Loses `font-light`. The owner's own sentence of 27 Oct is otherwise untouched |
+| Scroll cue | A saffron-free white chevron at the foot of the hero, `aria-hidden` and `pointer-events-none` so it cannot take the click that pauses the photographs. `hero-cue`, the site's second keyframe, through `motion-safe:` |
+
+### The four blocks below it
+
+| Block | Change |
+| --- | --- |
+| **Staying on campus** | **New.** `homeIntro(houses)` in `lib/site-content.ts` - two sentences computed from the store, naming the guest houses it holds and saying meals only where one has a kitchen - in five columns, with `HOME_PHOTOS.intro` in seven beside it and a **saffron corner mark** offset from its bottom left. The page had nothing to read between a photograph and six icons |
+| Amenities | **On ink, icons in saffron**, hairlines in `white/15`. The page's one dark band between the hero and the footer; the ink is the header's and the footer's, so no token was added |
+| A look inside | A **twelve-column mosaic**: 5x2 beside 7, then 3 and 4, then 7 and 5. The spans tile the grid exactly **in that order**, so auto-placement leaves no hole - a seventh photograph needs the pattern rethought, not appended to. Two columns below `lg`, first and last spanning both. On the warm band now, so the photographs sit on a ground |
+| Our guest houses | **One ruled plate of two cells** - the same device as the amenities above and the contact band below - with the name at **`text-display`** over a **saffron** stub. Still **text only** |
+
+**Nothing decorative was borrowed.** No shadow, no gradient, no pill, no
+radius above 8px. Everything above is composition, ground, type and one
+accent colour - which is the answer to "it looks basic" this project is
+allowed to give, and [02-decisions.md](02-decisions.md) under this date says
+what the next answer would have to be instead.
 
 ## The Taramani pass (28 Oct 2026)
 
@@ -909,7 +941,7 @@ On `:root`, exposed to Tailwind through `@theme inline`:
 
 | Token | Hex | Tailwind | Use |
 | --- | --- | --- | --- |
-| `--ink` | `#1A1A1A` | `bg-ink` / `text-ink` | **both mastheads** (the public site's since 28 Oct 2026, the portal's since 30 Sep), both footers, headings, and the home hero's wash at **`bg-ink/66`** (measured: white display type 3.6:1 against the brightest tenth of the middle of either photograph, 7.6:1 against its average) |
+| `--ink` | `#1A1A1A` | `bg-ink` / `text-ink` | **both mastheads** (the public site's since 28 Oct 2026, the portal's since 30 Sep), both footers, headings, and the home hero's wash at **`bg-ink/78`** (measured: white display type 6:1 against the brightest tenth of the middle of either photograph, near 12:1 against its average), **plus the amenities band under it** (28 Oct 2026) |
 | `--ink-soft` | `#2B2926` | `bg-ink-soft` | hover on ink |
 | `--vermilion` | `#E94C26` | `text-vermilion` / `bg-vermilion` | rules, icons, active-nav bar, display-size numbers — **never behind white text** |
 | `--vermilion-deep` | `#C43C1C` | `bg-vermilion-deep` / `text-vermilion-deep` | **buttons with white text** (5.2:1), small labels and link hover (5.8:1 on white) |

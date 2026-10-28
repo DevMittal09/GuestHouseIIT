@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { SitePhoto } from "@/lib/site";
@@ -176,15 +177,19 @@ export function HeroCarousel({
           and no gradient - the brief asks for the photograph to stay clearly
           visible through it, and the site bans gradients anyway.
 
-          **66% since 27 Oct 2026**, up from 60: the owner found the type over
-          the photographs short of prominence, and the answer is the wash and
-          the type, not a drop shadow behind the letters, which this project
-          bans everywhere and which is the thing that makes a hero look
-          cheap. White display type now clears 3.6:1 against the brightest
-          tenth of the middle of either photograph and 7.6:1 against its
-          average, and the architecture still reads through.
+          **78% since 28 Oct 2026**, 66% the day before and 60% before that:
+          the owner asked twice for the title to carry more weight over the
+          photograph ("its blending with the background too much"), and the
+          answer is the wash and the type - not a drop shadow behind the
+          letters, which this project bans everywhere and which is the thing
+          that makes a hero look cheap. White display type now clears 6:1
+          against the brightest tenth of the middle of either photograph and
+          sits near 12:1 against its average. The architecture still reads
+          through: at 78% the courtyard, the roofline and the trees are all
+          still legible, which is what stops this being a flat charcoal panel
+          with a photograph wasted behind it.
         */}
-        <div aria-hidden className="absolute inset-0 bg-ink/66" />
+        <div aria-hidden className="absolute inset-0 bg-ink/78" />
       </div>
 
       {/*
@@ -207,6 +212,24 @@ export function HeroCarousel({
       */}
       <div className="pointer-events-none relative z-20 mx-auto w-full max-w-[1240px] px-[clamp(16px,4vw,40px)] py-[clamp(96px,16vh,176px)]">
         {children}
+      </div>
+
+      {/*
+        The one thing a full-screen hero has to say that its photograph cannot:
+        that the page continues below it (28 Oct 2026). Decoration, so it is
+        `aria-hidden` - the reader with a screen reader is already past it -
+        and `pointer-events-none`, so it does not steal the click that pauses
+        the photographs underneath. `prefers-reduced-motion` leaves it still
+        rather than removing it.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-7 z-20 flex justify-center"
+      >
+        <ChevronDown
+          strokeWidth={1.5}
+          className="size-6 text-white/55 motion-safe:animate-[hero-cue_2.6s_ease-in-out_infinite]"
+        />
       </div>
 
       {paused && (

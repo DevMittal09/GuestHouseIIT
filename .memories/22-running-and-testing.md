@@ -125,11 +125,22 @@ its own shell (`pkill -f "[n]ext start"`; a bare `pkill -f "next start"` in the
 same command kills that command, exit 144):
 
 ```bash
-pkill -f "[n]ext start"
+pkill -f "[n]ext start"; pkill -f "[n]ext-server"   # both: see below
 NEXT_PUBLIC_SUPABASE_URL= npm run build
 NEXT_PUBLIC_SUPABASE_URL= npm run test:e2e
 npm run build        # rebuild normally afterwards if you will `next start` against Supabase
 ```
+
+> **`pkill -f "[n]ext start"` alone does not kill the server** (28 Oct 2026).
+> The process renames itself **`next-server (vXX)`**, so that pattern kills
+> only the launcher: the port stays held, the next `next start` dies with
+> `EADDRINUSE` into a background log nobody reads, and the stale server goes
+> on serving the build that was in `.next` when it started — out of a `.next`
+> the rebuild has since overwritten. The symptom is "my change did nothing",
+> with a page that renders the **old** markup and element screenshots that
+> capture the wrong part of it (the server's manifests point at chunks that
+> were replaced). **Check the port, not the process list:**
+> `ss -ltnp | grep :3100`, and kill that pid.
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests, a mock-store
 build and the journeys, **with no secrets at all**.

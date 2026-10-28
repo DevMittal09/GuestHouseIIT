@@ -275,6 +275,18 @@ export const HOME_PHOTOS = {
    */
   slides: [PHOTOS.hamsanandiCourtyard, PHOTOS.bageshriFront],
   /**
+   * **The photograph beside the opening statement** (28 Oct 2026). The page
+   * used to drop straight from the hero into a strip of amenity icons, which
+   * is what made it read as a template; it now opens on a sentence about the
+   * place with one contained photograph beside it.
+   *
+   * It is in neither the hero nor the preview below, for the same reason they
+   * are disjoint from each other: three blocks within two screens must not
+   * show the reader the same building three times. A unit test holds all
+   * three sets apart.
+   */
+  intro: PHOTOS.hamsanandiEntrance,
+  /**
    * "A look inside" - the compact strip of six that stands for the Gallery,
    * none of them in the hero (27 Oct 2026: "Do not reuse either of the two
    * images used in the hero slideshow"). A unit test fails if the two sets

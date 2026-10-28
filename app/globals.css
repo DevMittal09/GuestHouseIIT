@@ -138,6 +138,25 @@
   }
 }
 
+/*
+ * The scroll cue at the foot of the hero (28 Oct 2026). A full viewport of
+ * photograph gives a reader no edge to tell them the page goes on, and the
+ * brief of 27 Oct took every visible control off it - so the one mark left
+ * down there says "there is more", and says it by moving rather than by
+ * printing a word. Applied through `motion-safe:`, like the drift above it.
+ */
+@keyframes hero-cue {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translateY(8px);
+    opacity: 1;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

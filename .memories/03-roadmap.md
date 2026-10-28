@@ -683,6 +683,32 @@ Every item of both briefs closed. What they opened:
   for a type step used by one heading, but it is the shape a scale drifts
   into: check before adding a seventh step or a third saffron.
 
+## 2m. Opened by the 28 Oct 2026 round (second) - the landing page again
+
+Every item of that brief closed. What it opened:
+
+- **The ban on shadows, gradients, pills and 16px radii has been tested twice
+  in one day against the same reference site**, and held both times - the
+  page was lifted with composition, ground, type and one accent colour
+  instead. It is the one lever left if a fourth brief says "still basic", and
+  pulling it is a decision about **the whole service**, since the tokens are
+  shared with the portal. Decide it deliberately, in
+  [02-decisions.md](02-decisions.md), or not at all.
+- **Nothing tests the dark amenities band**: not that saffron on ink is what
+  ships, and not that it does not merge with the ink footer at some width.
+  It is the first ink section the public site has had.
+- **Nothing tests the mosaic's shape.** The unit test pins the preview at six
+  and keeps the three photo sets disjoint; the spans that tile twelve columns
+  exactly are held only by the comment above them. A seventh photograph is a
+  hole on the page and a green test run.
+- **`HOME_PHOTOS` now has three sets to keep disjoint by hand.** The unit
+  test checks it, but there is no helper, and a fourth slot on this page is a
+  fourth set.
+- **The hero's contrast measurement is still against the two photographs in
+  the hero today.** This round moved it from 66% to 78%, so it is further
+  from the edge than it was - but a brighter replacement photograph is still
+  checked by nothing (see §2l).
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the

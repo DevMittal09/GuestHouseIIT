@@ -6594,3 +6594,89 @@ Two details that follow from it:
 **Reception got the same change in the same commit.** The two consoles share
 their tables precisely so they cannot drift, and a rule about when a section
 is drawn is exactly the kind of thing that drifts.
+
+## 28 October 2026 (second) - the landing page, asked for a third time
+
+> "I want the overlays opacity to be increased a bit more so that the text is
+> more prominent... change the 'IIT PALAKKAD - GUEST HOUSE' to 'GUEST HOUSE
+> PORTAL'... make the text more prominent, like its blending with the
+> background too much, maybe making it bolder?... the landing page overall
+> looks very basic. See look at taramani guest house portal... ours look very
+> basic, like make it look creative and aesthetic."
+
+**The second brief naming [Taramani](https://tgh.iitm.ac.in/) in one day, and
+that is the finding, not the complaint.** The morning's pass took Taramani's
+typography and composition and refused its decoration; the page it produced
+reads as correct and reads as basic, and the owner is right that those are
+different things. What was missing was not a shadow. It was that the page had
+**nothing to read** between a photograph and six icons, that every one of its
+five blocks sat on a light ground, and that two of them - the thumbnail strip
+and the pair of near-empty house cards - were lists rather than compositions.
+
+### The hero: three changes, all asked for outright
+
+- **The wash goes 66% -> 78%.** The same answer as the morning, applied
+  harder, and for the same reason: the fix for white type over a photograph is
+  the wash and the weight of the letters, never a drop shadow behind them.
+  Measured again at 78%, display type clears 6:1 against the brightest tenth
+  of the middle band of either photograph. The architecture still reads
+  through, which is the limit - past about 85% the photograph is decoration
+  behind a charcoal panel and may as well not be there.
+- **The `<h1>` is "Guest House Portal".** It was "IIT Palakkad - Guest House",
+  which spent the page's largest type on an abbreviation of the line directly
+  above it, and whose separator had to be hidden on a phone because
+  "IIT Palakkad -" over "Guest House" reads as a hyphenated word. The
+  institute's name is said once, in full, in the tracked saffron line; the
+  title names what the reader has arrived at. **The kicker is kept verbatim**,
+  as asked.
+- **It is the one bold heading on the site.** Every other is `font-semibold`.
+  A display face at 68px over a photograph is the one place where the extra
+  weight is structural rather than emphatic, and the lead under it loses
+  `font-light` for the same reason.
+
+### Below it: a statement, a dark band, and two compositions
+
+- **A page needs something to read.** `homeIntro(houses)` is two sentences
+  computed from the store - which guest houses there are, and what the portal
+  is for - set beside one contained photograph. It is the block the page has
+  been missing since the figures came off it on 26 Sep 2026, and it keeps
+  every rule of that day: no figures, no categories, no chain, no role, no
+  adjective about a room. A unit test holds it to that.
+- **The amenities move onto ink, with saffron icons.** Five light sections in
+  a row have no spine. One dark band between the hero and the footer is the
+  one device genuinely worth taking from the site the owner named - a deep
+  institutional colour answered by a gold - and it costs no new token: the ink
+  is the header's and the footer's, the saffron is the emblem's.
+- **The gallery becomes a mosaic.** Two bands of unequal widths on one row
+  height (this morning) was better than six equal thumbnails (the day before)
+  and still a strip. It is 5x2 beside 7, then 3 and 4, then 7 and 5 across
+  twelve columns - spans that tile the grid exactly in that order, so
+  auto-placement leaves no hole. That is also why a seventh photograph would
+  need the pattern rethought rather than appended to, and why the test that
+  pins the preview at six now says so.
+- **The two guest houses become one plate of two cells**, names at display
+  size over a saffron stub. Two near-empty bordered boxes were the most basic
+  thing on the page. They are **still text only** - the 27 Oct instruction
+  stands, and both attributed photographs are in the hero anyway.
+- **A scroll cue at the foot of the hero.** A full viewport of photograph
+  gives the reader no edge to say the page continues. It is `aria-hidden`
+  decoration and `pointer-events-none`, so it cannot take the click that
+  pauses the photographs underneath.
+
+### What was refused again, and why it is worth writing down twice
+
+Taramani's `box-shadow: 0 28px 60px`, its `border-radius: 1rem`, its
+`rounded-full` chips and its five gradient pairs. The ban on all four is
+30 Sep 2026's and it held: **everything above was bought with composition,
+ground, type and one accent colour.** If the page is still thought basic, the
+next move is a deliberate decision to lift that ban - which is a change to the
+portal as well as the site, since the tokens are shared - and not four devices
+smuggled onto one page.
+
+> **Superseded, 28 Oct 2026 (second):** the hero wash of **66%**, the `<h1>`
+> **"IIT Palakkad - Guest House"** and its `sm:`-hidden separator, the
+> **amenities on the warm band**, the gallery's **two bands of unequal
+> widths**, and the guest houses as **two separate bordered cards** - all from
+> the Taramani pass earlier the same day, all replaced above. The content
+> rules of 26-30 Sep 2026 and the ban on shadows, gradients, pills and 16px
+> radii are **not** superseded.

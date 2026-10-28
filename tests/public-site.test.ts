@@ -12,7 +12,7 @@ import {
   PHOTOS,
   SITE_LINKS,
 } from "@/lib/site";
-import { amenities, BOOKING_STEPS, guidelineSections, MEAL_NOTICE_RULE } from "@/lib/site-content";
+import { amenities, BOOKING_STEPS, guidelineSections, homeIntro, MEAL_NOTICE_RULE } from "@/lib/site-content";
 import type { SiteGuestHouse } from "@/lib/site-data";
 import { ROLE_LABELS, type Role } from "@/lib/types";
 
@@ -130,6 +130,18 @@ describe("guest house photographs (15 Oct 2026)", () => {
     expect(Object.values(GUEST_HOUSE_PHOTOS)).toEqual(HOME_PHOTOS.slides);
   });
 
+  it("shows a different photograph beside the opening statement again", () => {
+    // 28 Oct 2026: the page opens on a sentence with one photograph beside
+    // it. Three blocks inside two screens, so all three sets are disjoint -
+    // the hero, the opening statement and the mosaic must not show the
+    // reader the same building three times.
+    const slides = HOME_PHOTOS.slides.map((p) => p.src);
+    const preview = HOME_PHOTOS.preview.map((p) => p.src);
+    expect(slides).not.toContain(HOME_PHOTOS.intro.src);
+    expect(preview).not.toContain(HOME_PHOTOS.intro.src);
+    expect(HOME_PHOTOS.intro.alt).not.toMatch(/Hamsanandi|Bageshri/);
+  });
+
   it("shows nothing in the gallery preview that the hero already showed", () => {
     // Scrolling past the hero has to find new photographs, or the page
     // repeats itself twice over within two screens. "Do not reuse either of
@@ -141,8 +153,11 @@ describe("guest house photographs (15 Oct 2026)", () => {
     expect(new Set(HOME_PHOTOS.preview.map((p) => p.src)).size).toBe(HOME_PHOTOS.preview.length);
   });
 
-  it("keeps the preview a full strip, so no column of it is left empty", () => {
-    // The strip is 2, 3 and 6 columns wide; six fills every one of them.
+  it("keeps the preview six, which is what the mosaic's spans tile exactly", () => {
+    // The mosaic (28 Oct 2026) is 5+7 / 3+4 / 7+5 across twelve columns, in
+    // that order, and two columns below `lg` with the first and last spanning
+    // both. Six photographs fill it with no hole; a seventh needs the pattern
+    // rethought rather than appended to - which is what this guards.
     expect(HOME_PHOTOS.preview).toHaveLength(6);
   });
 
@@ -173,6 +188,35 @@ describe("amenities", () => {
   });
 });
 
+describe("the home page's opening statement (28 Oct 2026)", () => {
+  it("names the guest houses the store holds, and says so grammatically for one", () => {
+    expect(homeIntro([HAMSANANDI, BAGESHRI]).body[0]).toBe(
+      "Hamsanandi and Bageshri are the institute's guest houses on the campus at Palakkad."
+    );
+    expect(homeIntro([BAGESHRI]).body[0]).toBe(
+      "Bageshri is the institute's guest house on the campus at Palakkad."
+    );
+  });
+
+  it("falls back to a sentence that names none when the store could not be read", () => {
+    // `getSiteGuestHouses` swallows a store error so the public site cannot
+    // 500, which means this page has to read correctly with no guest houses
+    // at all - the same reason `guestHouseMapPins([])` still offers both pins.
+    expect(homeIntro([]).body[0]).toBe("The institute's guest houses stand on the campus at Palakkad.");
+  });
+
+  it("mentions meals only where a guest house has a kitchen, as the amenities do", () => {
+    expect(homeIntro([BAGESHRI, HAMSANANDI]).body[1]).toContain("meals");
+    expect(homeIntro([BAGESHRI]).body[1]).not.toContain("meals");
+  });
+
+  it("states no figure, so the page keeps the rule of 26 Sep 2026", () => {
+    // "23 rooms... 1 month... 14 nights" came off the home page that day.
+    const intro = homeIntro([BAGESHRI, HAMSANANDI]);
+    expect([intro.title, ...intro.body].join(" ")).not.toMatch(/\d/);
+  });
+});
+
 describe("the public copy keeps the portal's internals to itself", () => {
   // Every role name the portal uses, bar the ones a guest would say anyway.
   const internal = (Object.entries(ROLE_LABELS) as [Role, string][])
@@ -180,9 +224,12 @@ describe("the public copy keeps the portal's internals to itself", () => {
     .map(([, label]) => label);
   const words = ["Warden", "HOD", "IAR", "Faculty Advisor", "Caretaker", "Official / Dignitary", "whitelist"];
 
+  const intro = homeIntro([BAGESHRI, HAMSANANDI]);
   const copy = [
     ...BOOKING_STEPS.flatMap((s) => [s.title, s.body]),
     ...guidelineSections([BAGESHRI, HAMSANANDI]).flatMap((s) => [s.title, ...s.items]),
+    intro.title,
+    ...intro.body,
   ].join("\n");
 
   it("names no role and no approval stage", () => {

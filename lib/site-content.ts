@@ -81,6 +81,39 @@ export const MEAL_NOTICE_RULE =
  * same store and Settings.
  */
 
+/**
+ * The opening statement on the home page, under the hero (28 Oct 2026).
+ *
+ * The owner asked for a landing page that is not "very basic", after the
+ * Taramani Guest House site again. A page that goes straight from a
+ * photograph to six icons has nothing to read, so this is the sentence it was
+ * missing - and it is **computed, not written**: the guest houses are named
+ * from the store, and the second line mentions meals only where some guest
+ * house has a kitchen, exactly as `amenities()` decides whether Dining is one
+ * of them.
+ *
+ * It keeps every content rule of 26-30 Sep 2026: no figures, no requester
+ * categories, no approval chain, no role name, and nothing about the rooms
+ * that the office has not confirmed. What is left is where the guest houses
+ * are and what this portal is for.
+ */
+export function homeIntro(houses: SiteGuestHouse[]): { title: string; body: string[] } {
+  const names = houses.map((h) => h.name);
+  return {
+    title: "Staying on campus",
+    body: [
+      names.length === 0
+        ? "The institute's guest houses stand on the campus at Palakkad."
+        : names.length === 1
+          ? `${names[0]} is the institute's guest house on the campus at Palakkad.`
+          : `${joinNames(names)} are the institute's guest houses on the campus at Palakkad.`,
+      servingHouses(houses).length > 0
+        ? "Rooms are requested through this portal, and meals where the guest house has a kitchen."
+        : "Rooms are requested through this portal.",
+    ],
+  };
+}
+
 /** An amenity on the home page: a short label, and which icon draws it. */
 export type Amenity = { key: string; label: string };
 

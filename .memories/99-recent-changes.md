@@ -7,83 +7,93 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 27-28 October 2026 - the Taramani pass, then the sign-in and the desk
+## Round of 28 October 2026 (second) - the landing page, asked for a third time
 
-**Two briefs in one sitting.** The first was a visual one, naming the
-[Taramani Guest House, IIT Madras](https://tgh.iitm.ac.in/) as the standard
-("modern, cinematic, elegant... premium, elegant, professional, and visually
-distinctive"); the second was functional - sign-in, two notices, a heading
-format and the manager's console. They are one round because they land in one
-working tree.
+**The same day as the Taramani pass, after it had shipped.** One message, four
+items, and the [Taramani Guest House, IIT Madras](https://tgh.iitm.ac.in/)
+named a second time: the hero type "is blending with the background too much",
+and the page "overall looks very basic... make it look creative and
+aesthetic".
 
-### Brief one: the look
+That is the finding, not the complaint. The morning's pass took Taramani's
+typography and composition and refused its decoration, and the page it
+produced reads as correct and reads as basic - which are different things.
+What was missing was not a shadow: the page had **nothing to read** between a
+photograph and six icons, every one of its five blocks sat on a light ground,
+and two of them were lists rather than compositions.
 
-| § | Asked | Done |
-| --- | --- | --- |
-| 1 | A stronger hero: new lead, more prominent type, a **solid** *Book a Meal* button, an **opaque** refined header with **centred** links | The institute's name in tracked **saffron** capitals above the `<h1>`, a vermilion stub, the lead at 21px in `font-light`, the wash **60% -> 66%**, and `siteButton.saffron` beside the vermilion one. The header is **one opaque charcoal bar on every page** |
-| 2 | Centre Amenities, Our Guest Houses and Contact Us; the gallery may stay left | Done. The gallery stays left because its heading carries the link to `/gallery` |
-| 3 | A curated gallery, not a row of images | Six photographs in **two bands of unequal widths** (wide, narrow, narrow / narrow, narrow, wide) on one fixed row height |
-| 4 | A polished, centred Contact Us | The phone, email and address as **one ruled band of three**, then a map each |
-| 5 | **Application-wide**: no rules under headings, no underlined tabs, review secondary text, a distinctive identity, a clean manager console | `rule-title` **deleted**; `SectionHead` and `SectionHeading` lost their rules; everything selected is now **filled** (`NavBar`, `LinkTabs`, `segment()`); the console is in brief two |
-
-**What was taken from Taramani and what was not.** Taken: the serif display
-over tracked small capitals, the warm ground, photographs composed rather than
-listed, a deep institutional colour answered by a gold. Not taken: their drop
-shadows, gradients, pill corners and 16px radii - banned here since 30 Sep
-2026, and the reason a page reads as assembled rather than designed.
-
-### Brief two: the service
+### What was asked, and what was done
 
 | § | Asked | Done |
 | --- | --- | --- |
-| 1 | **No LDAP.** Google is the intent; the button opens a **mock** flow. No photograph, centred, no domain sentence | `/sign-in`, `/book-room` and `/book-meal` are one centred panel with **one button** -> `/mock-login`. `LoginForm` holds no fields. **`signInWithLdap`, the throttle and `lib/ldap/` are untouched** |
-| 2 | Remove the advance-window and stay-cap sentences from New Booking | Both `<p>`s gone; `stayLengthHint` **deleted**. **No rule, validation or date limit changed** |
-| 3 | "Current bookings: 1", not "Current bookings 1" | `SectionHeading` - one component, so every console list reads the same way |
-| 4 | Simplify the Guest House Manager console | **A list with nothing in it is not drawn.** The ruled index at the top still names every list and is now where a zero is reported; its zero rows are not links. One line when the whole desk is clear. Reception got the same, so the two cannot drift |
+| 1 | More opacity on the hero's overlay | `bg-ink/66` -> **`bg-ink/78`**, measured again: white display type clears **6:1** against the brightest tenth of the middle band of either photograph, near 12:1 against its average. Not pushed past ~85%, where the photograph stops reading at all |
+| 2 | Keep "INDIAN INSTITUTE OF TECHNOLOGY PALAKKAD"; change the title to "GUEST HOUSE PORTAL" | The kicker is **kept verbatim** and now sits between two 40px saffron hairlines. The `<h1>` is **Guest House Portal** - title case, because the line above it is already tracked capitals. The old title said the institute's name twice and needed its separator hidden below `sm` |
+| 3 | The type blends in - make it bolder | The `<h1>` is **`font-bold`**, the site's one bold heading; the lead loses `font-light`. **No drop shadow** - the answer to white type over a photograph is the wash and the weight |
+| 4 | The page looks basic - make it creative and aesthetic | Four blocks, below |
+
+### The four blocks
+
+| Block | Change |
+| --- | --- |
+| **Staying on campus** | **New section.** `homeIntro(houses)` - two sentences computed from the store, naming the guest houses it holds and mentioning meals only where one has a kitchen - in five columns, with `HOME_PHOTOS.intro` in seven beside it and a **saffron corner mark** offset from its bottom left |
+| Amenities | **On ink, icons in saffron**, hairlines in `white/15`. The page's one dark band between the hero and the footer. No token added: the ink is the header's and the footer's |
+| A look inside | A **twelve-column mosaic** - 5x2 beside 7, then 3 and 4, then 7 and 5 - on the warm band. The spans tile the grid exactly **in that order**, so auto-placement leaves no hole |
+| Our guest houses | **One ruled plate of two cells**, the name at `text-display` over a **saffron** stub. **Still text only** - the 27 Oct instruction stands, and both attributed photographs are in the hero |
+
+Plus a **scroll cue** at the foot of the hero: an `aria-hidden`,
+`pointer-events-none` chevron on `hero-cue`, the site's second keyframe. A
+full viewport of photograph gives the reader no edge to say the page goes on.
+
+**Nothing decorative was borrowed.** No shadow, no gradient, no pill, no
+radius above 8px - all four banned since 30 Sep 2026. Everything above was
+bought with composition, ground, type and one accent colour.
+[02-decisions.md](02-decisions.md) under this date says what the next answer
+would have to be if the page is still thought basic: a deliberate decision to
+lift that ban, which is a change to the portal as well as the site, not four
+devices smuggled onto one page.
 
 ### Files
 
 | File | Change |
 | --- | --- |
-| `components/site/site-header.tsx` | One opaque ink bar, centred links, no scroll listener |
-| `components/site/site-nav.tsx` | `tone="ink"`; the current item is **filled**, never underlined |
-| `components/site/site-ui.tsx` | `SectionHead` gains `align` and loses its rule; `siteButton.saffron` |
-| `components/site/hero-carousel.tsx` | The wash to `bg-ink/66`, with the measurement |
-| `app/(site)/page.tsx` | The hero's kicker, rule, lead and two solid doors; three sections centred; the gallery recomposed; the contact band |
-| `components/page-header.tsx`, `section-heading.tsx`, `link-tabs.tsx`, `desk-summary.tsx` | No heading rules; filled tabs; `: count`; zero rows unlinked |
-| `app/globals.css`, `lib/utils.ts` | `--saffron-deep`; `rule-title` deleted |
-| `components/login-form.tsx`, `site/sign-in-panel.tsx`, `app/(site)/sign-in/page.tsx`, `mock-login/page.tsx` | One door, centred, no photograph, no LDAP wording |
-| `components/booking-form.tsx`, `lib/policy.ts` | The two notices off the form; `stayLengthHint` deleted |
-| `components/manager-queue.tsx`, `caretaker-console.tsx` | Empty lists not drawn; one line when the desk is clear |
-| `e2e/helpers.ts` + 6 specs | The suite signs in **through the account picker**, by name |
-| `AGENTS.md` | The sign-in door, the opaque header, "filled, never underlined", no heading rules, the heading format, the quiet console |
+| `app/(site)/page.tsx` | The hero's kicker rules, the new `<h1>`, the opening statement, the ink amenities band, the mosaic (`MOSAIC` / `WIDE`), the guest houses as one plate (`HouseCard` -> `HouseCell`) |
+| `components/site/hero-carousel.tsx` | The wash to `bg-ink/78` with the measurement; the scroll cue |
+| `app/globals.css` | `@keyframes hero-cue` |
+| `lib/site.ts` | `HOME_PHOTOS.intro` (`hamsanandiEntrance`) |
+| `lib/site-content.ts` | `homeIntro(houses)` |
+| `tests/public-site.test.ts` | Four tests for `homeIntro`, one holding the three photo sets apart, and `homeIntro` added to the no-role-names check |
+| `e2e/public-site.spec.ts` | The `<h1>`, the kicker, and the opening statement's section |
+| `AGENTS.md` | The home page's layout, the `<h1>` and the wash, the scroll cue, and that new home copy is computed from the store |
+
+**No migration, no store operation, no booking rule, no permission and no
+route.**
 
 ### Verified
 
-`npm run lint`, `npx tsc --noEmit`, `npm test` (**603**), a production build,
-and the Playwright suite - **49 of 50 on the first pass**, the one failure a
-**midnight-rollover flake** in `fifth-round.spec.ts` (the database is seeded
-with a stay six days out, the test moves a check-in five days out; the run
-crossed IST midnight, so the two dates met and the button was correctly
-disabled with "That is the check-in the stay already has"). Re-run on one side
-of midnight: **3/3 pass**. It is a fixture built from "now" twice, not a
-regression, and it is now in [03-roadmap.md](03-roadmap.md).
+`npm run lint`, `npx tsc --noEmit`, `npm test` (**608**, 5 new), a production
+build, and the **full Playwright suite: 50/50**, including both 320px phone
+passes. Section screenshots were read back at 1440px - which is what caught
+the opening statement sitting in a column half its width (it had six columns
+and a `max-w-[46ch]` cap inside them; it is five columns and no cap at `lg`
+now).
 
-Screenshots were read back at 1440px and 390px for the home page, `/sign-in`,
-`/guidelines`, the manager console, My Bookings and `/book`. They caught what
-the tests could not: the count read **"Current bookings : 0"** with a space
-before the colon (the colon was a flex child with a gap), and the three
-contact cells were top-aligned in a stretched row.
+**A trap worth knowing, hit twice here:** `pkill -f "[n]ext start"` does not
+kill the server. The process renames itself **`next-server`**, so the parent
+dies, the port stays held, the next `next start` fails `EADDRINUSE` in a
+background log nobody reads, and the stale server goes on serving the
+**previous** build out of a `.next` that has since been overwritten - which
+looks exactly like "my change did nothing". Written up in
+[22-running-and-testing.md](22-running-and-testing.md) Part 2.
 
 ### Left open
 
-- **`SIGN_IN_PHOTOS` is now entirely unplaced.** Kept, with a note: putting a
-  photograph back is one prop, and all three are in the Gallery.
-- **The LDAP door is reachable only by a crafted request.** The action, the
-  throttle and the directory are all still there and still correct; nothing in
-  the interface points at them. If the institute's directory is ever wanted
-  back, it is a form, not a rebuild.
-- **Nothing tests the opaque header** - that it is readable over the hero, or
-  that the centred row does not collide with the lockup at an awkward width.
-- **The manager console's quiet state is untested**, and so is the rule that a
-  zero row is not a link.
+- **The ban on shadows, gradients, pills and 16px radii has now been tested
+  twice against the same reference site.** It held both times, but it is the
+  one lever left if a fourth brief says the same thing. It is a decision
+  about the whole service, not about this page.
+- **Nothing tests the dark amenities band** - that saffron on ink is what
+  ships, or that the band does not merge with the ink footer at some width.
+- **`SIGN_IN_PHOTOS` is still entirely unplaced** (from the round before).
+- **`HOME_PHOTOS` now has three disjoint sets** and a unit test holding them
+  apart. A fourth photograph slot on this page is one more set to keep
+  disjoint by hand; there is no helper for it.

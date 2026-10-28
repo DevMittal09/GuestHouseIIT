@@ -1313,9 +1313,13 @@ sticky from `lg` - **client since 27 Oct 2026**, and laid over the hero on
 `/`), `site-chrome.tsx` (`SiteFooter`), `guest-house-map.tsx`
 (map tabs), `PageMasthead` / `SectionHead` / `ArrowLink` / **`MapEmbed`** in
 `site-ui.tsx`; `amenities` / `BOOKING_STEPS` / `guidelineSections` /
-`mealTimetable` in `lib/site-content.ts` (**`houseSummary` deleted
-27 Oct 2026** with the guest house cards' summary line); `GUEST_HOUSE_LOCATIONS` /
-`guestHouseMapPins` / `HOME_PHOTOS` / `SIGN_IN_PHOTOS` in
+`mealTimetable` / **`homeIntro`** in `lib/site-content.ts` (**`houseSummary`
+deleted 27 Oct 2026** with the guest house cards' summary line;
+**`homeIntro` added 28 Oct 2026** - the home page's opening statement,
+computed from the store like everything else here, never written into the
+page); `GUEST_HOUSE_LOCATIONS` /
+`guestHouseMapPins` / `HOME_PHOTOS` (`slides` / `intro` / `preview`, all
+three disjoint) / `SIGN_IN_PHOTOS` in
 `lib/site.ts`. The My Bookings tiles are `BookingDoor` in
 `app/(portal)/dashboard/page.tsx`.
 

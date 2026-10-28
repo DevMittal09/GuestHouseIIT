@@ -122,25 +122,41 @@ test("the home page's hero advances, and a click on it stops and starts it", asy
 
 /**
  * The rest of the landing page, in the order the owner wrote it out: the
- * amenities, a compact gallery preview that links the Gallery, a text-only
- * card per guest house, and the contact details with one map each.
+ * opening statement, the amenities, a gallery mosaic that links the Gallery,
+ * a text-only cell per guest house, and the contact details with one map
+ * each.
  */
-test("the landing page carries the amenities, the gallery preview, both guest houses and the maps", async ({ page }) => {
+test("the landing page carries the statement, the amenities, the mosaic, both guest houses and the maps", async ({ page }) => {
   await page.goto("/");
 
-  // One `<h1>`, and it is the hero's.
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/IIT\s*Palakkad\s*-?\s*Guest\s*House/);
+  // One `<h1>`, and it is the hero's. **"Guest House Portal"** since 28 Oct
+  // 2026: the institute's name is the tracked line above it, in full, so the
+  // title no longer abbreviates it.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Guest House Portal");
+  // `exact`, because the institute's full name is also the first line of the
+  // address in the contact band and in the footer's copyright.
+  await expect(page.getByText("Indian Institute of Technology Palakkad", { exact: true })).toBeVisible();
+
+  // The opening statement names the guest houses the store holds, and has a
+  // photograph of its own beside it.
+  const welcome = page.getByRole("region", { name: "Staying on campus" });
+  // Both names, in whatever order the store lists them.
+  const statement = welcome.getByText(/are the institute's guest houses on the campus at Palakkad/);
+  await expect(statement).toBeVisible();
+  await expect(statement).toContainText("Bageshri");
+  await expect(statement).toContainText("Hamsanandi");
+  await expect(welcome.getByRole("img")).toHaveCount(1);
 
   const amenities = page.getByRole("region", { name: "Amenities" });
   await expect(amenities.getByRole("listitem")).toHaveCount(6);
   await expect(amenities.getByText("Dining")).toBeVisible();
 
-  // The preview shows six photographs and sends the reader to the Gallery.
+  // The mosaic shows six photographs and sends the reader to the Gallery.
   const gallery = page.getByRole("region", { name: "A look inside" });
   await expect(gallery.getByRole("listitem")).toHaveCount(6);
   await expect(gallery.getByRole("link", { name: /See the full gallery/ })).toHaveAttribute("href", "/gallery");
 
-  // A card per guest house, text only, with the meal door only where there
+  // A cell per guest house, text only, with the meal door only where there
   // is a kitchen.
   const houses = page.getByRole("region", { name: "Our guest houses" });
   await expect(houses.getByRole("heading", { level: 2, name: "Hamsanandi" })).toBeVisible();

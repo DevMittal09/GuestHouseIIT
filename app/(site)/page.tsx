@@ -19,7 +19,7 @@ import {
   siteButton,
 } from "@/components/site/site-ui";
 import { GUEST_HOUSE_CONTACT, guestHouseMapPins, HOME_PHOTOS } from "@/lib/site";
-import { amenities } from "@/lib/site-content";
+import { amenities, homeIntro } from "@/lib/site-content";
 import { getSiteGuestHouses, type SiteGuestHouse } from "@/lib/site-data";
 import { cn } from "@/lib/utils";
 
@@ -29,25 +29,36 @@ import { cn } from "@/lib/utils";
  * for half an hour under the `site` cache tag (Phase 9).
  * `revalidateEverything()` drops that tag the moment a guest house changes.
  *
- * **27 Oct 2026 - cinematic, in five blocks**, and refined the same evening
- * against the Taramani Guest House (IIT Madras) site the owner named as the
- * standard. The order is the owner's own: a full-screen hero, amenities, a
- * gallery preview, the two guest houses, contact details with a map each.
+ * **28 Oct 2026 - six blocks**, after the owner named the Taramani Guest
+ * House (IIT Madras) site a second time: the page "looks very basic... make
+ * it look creative and aesthetic". The hero and the four sections under it
+ * were the owner's own order of 27 Oct; what this round changes is the
+ * hero's weight, an opening statement where the page used to drop straight
+ * into icons, and the composition of everything below it.
  *
  * | Block | Where it stands now |
  * | --- | --- |
- * | Hero | The photograph **fills the first viewport** with the opaque charcoal masthead laid over it; two slides, no visible controls - the photograph is the pause control. Over it: the institute's name in tracked saffron capitals, the `<h1>`, a vermilion stub, the lead, and **two solid doors** - vermilion and saffron. `components/site/hero-carousel.tsx` |
- * | Amenities | The same six, from `amenities()`, in one ruled strip - **centred**, label and all |
- * | A look inside | Six photographs in **two bands of unequal widths**, not a row of equal thumbnails. **The one section left aligned**, because its heading carries the line to the Gallery |
- * | Our guest houses | **Text only and centred**: the name, and the doors that apply to it. No photograph, no "Rooms & dining" label, no summary line |
+ * | Hero | The photograph **fills the first viewport** under the opaque charcoal masthead; two slides, no visible controls - the photograph is the pause control. Over it: the institute's name in tracked saffron capitals **between two saffron hairlines**, the `<h1>` **Guest House Portal** in bold, a vermilion stub, the lead, and two solid doors - vermilion and saffron. `components/site/hero-carousel.tsx` |
+ * | Staying on campus | **New.** A computed sentence about the place (`homeIntro`), with one contained photograph beside it and a saffron corner mark offset from it |
+ * | Amenities | The same six, from `amenities()`, in one ruled strip - now **on ink, with saffron icons**: the page's one dark band between the hero and the footer |
+ * | A look inside | The six photographs as a **mosaic of four spans across twelve columns**, not a strip of equal thumbnails. **The one section left aligned**, because its heading carries the line to the Gallery |
+ * | Our guest houses | **One ruled plate of two cells, centred**: the name at display size over a saffron stub, and the doors that apply to it. Still text only - no photograph, no label, no summary line |
  * | Contact us | **Centred**: the manager's line, the email and the address as one ruled band of three, then one map per guest house |
  *
+ * **The device language is three deep, and nothing else.** A tracked label
+ * over a serif heading over a short mark; a ruled plate whose cells are
+ * divided by hairlines (the amenities, the guest houses, the contact
+ * details); and photographs composed rather than listed. A page reads as
+ * designed when it repeats a few devices deliberately, and as assembled when
+ * every block invents one.
+ *
  * **What was taken from Taramani and what was not.** Theirs: the serif
- * display face over tracked small capitals, a warm ground, photographs
- * composed rather than listed, and a deep institutional colour answered by a
- * gold. Not theirs: the drop shadows, the gradients, the pill corners and the
- * 16px radii - this project has banned all four since 30 Sep 2026, and they
- * are what a page looks like when it was assembled rather than designed.
+ * display face over tracked small capitals, a warm ground, a deep
+ * institutional colour answered by a gold, and photographs composed rather
+ * than listed. Not theirs: the drop shadows, the gradients, the pill corners
+ * and the 16px radii - this project has banned all four since 30 Sep 2026,
+ * and they are what a page looks like when it was assembled rather than
+ * designed.
  *
  * The content rules of 26-30 Sep all still hold: no figures, no requester
  * categories, no approval chains, no role names, no photograph captions, and
@@ -67,11 +78,35 @@ const AMENITY_ICONS: Record<string, LucideIcon> = {
   reception: ConciergeBell,
 };
 
-const SECTION = "py-[clamp(48px,6vw,88px)]";
+const SECTION = "py-[clamp(56px,7vw,104px)]";
+
+/**
+ * The gallery mosaic, in a twelve-column grid three rows deep (28 Oct 2026).
+ *
+ * The spans are written out rather than derived because the point of them is
+ * that no two neighbouring frames are the same shape: 5x2 beside 7, then 3
+ * and 4, then 7 and 5. They tile the twelve columns exactly, in this order,
+ * so auto-placement leaves no hole - which is why the order matters and why a
+ * seventh photograph would need the pattern rethought rather than appended
+ * to. Below `lg` it is two columns, with the first and last spanning both so
+ * the strip opens and closes on a picture rather than on a postage stamp.
+ */
+const MOSAIC = [
+  "col-span-2 lg:col-span-5 lg:row-span-2",
+  "lg:col-span-7",
+  "lg:col-span-3",
+  "lg:col-span-4",
+  "lg:col-span-7",
+  "col-span-2 lg:col-span-5",
+];
+
+/** The wide frames of the mosaic - the ones that get a landscape crop on a phone. */
+const WIDE = new Set([0, 1, 4, 5]);
 
 export default async function HomePage() {
   const houses = await getSiteGuestHouses();
   const pins = guestHouseMapPins(houses.map((h) => h.name));
+  const intro = homeIntro(houses);
 
   return (
     <>
@@ -83,25 +118,29 @@ export default async function HomePage() {
           prominent on 26 Sep 2026, and they point at the same public
           sign-in doors as the navigation. */}
       <HeroCarousel photos={HOME_PHOTOS.slides}>
-        <div className="mx-auto max-w-[880px] text-center">
+        <div className="mx-auto max-w-[920px] text-center">
           {/* A tracked line of the institute's own name over the title: the
               hierarchy the owner asked for is three steps, not two, and this
-              is the one fact the title abbreviates. Saffron is the emblem's
-              colour and carries 8.4:1 on the wash. */}
-          <p className="text-[clamp(11px,0.6rem+0.3vw,13px)] font-semibold tracking-[0.3em] text-saffron uppercase">
-            Indian Institute of Technology Palakkad
+              is the one fact the title no longer carries. Saffron is the
+              emblem's colour and holds 8.4:1 on the wash. The two hairlines
+              are the device the institute's own headings use, and they are
+              dropped below `sm` where the line itself has to wrap. */}
+          <p className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[clamp(11px,0.6rem+0.3vw,13px)] font-semibold tracking-[0.3em] text-saffron uppercase">
+            <span aria-hidden className="hidden h-px w-10 shrink-0 bg-saffron/60 sm:block" />
+            <span>Indian Institute of Technology Palakkad</span>
+            <span aria-hidden className="hidden h-px w-10 shrink-0 bg-saffron/60 sm:block" />
           </p>
-          {/* The separator is dropped below `sm` rather than left at the end
-              of a line: wrapped, "IIT Palakkad -" over "Guest House" reads as
-              a hyphenated word. Hidden, not removed, so the two halves still
-              stack as one heading. */}
-          <h1 className="mt-6 flex flex-wrap items-baseline justify-center gap-x-5 text-hero font-semibold text-white">
-            <span>IIT Palakkad</span>
-            <span aria-hidden className="hidden text-saffron sm:inline">-</span>
-            <span>Guest House</span>
-          </h1>
+          {/* **"Guest House Portal"** (28 Oct 2026, the owner). It was "IIT
+              Palakkad - Guest House", which said the institute's name twice -
+              the line above it says it in full - and spent the page's largest
+              type on an abbreviation. What is left names the thing the reader
+              has arrived at, in one line at every width, and carries the
+              weight the owner asked for: **bold**, where every other heading
+              on the site is semibold. The separator that had to be hidden on
+              a phone goes with the words it separated. */}
+          <h1 className="mt-7 text-hero font-bold text-white">Guest House Portal</h1>
           <div aria-hidden className="mx-auto mt-8 h-[3px] w-14 bg-vermilion" />
-          <p className="mx-auto mt-8 max-w-[58ch] text-[clamp(17.5px,0.95rem+0.55vw,21px)] leading-[1.55] font-light text-white">
+          <p className="mx-auto mt-8 max-w-[56ch] text-[clamp(17.5px,0.95rem+0.55vw,21px)] leading-[1.55] text-white">
             An integrated booking portal for comfortable guest accommodation and convenient meal
             reservations at IIT Palakkad.
           </p>
@@ -116,26 +155,83 @@ export default async function HomePage() {
         </div>
       </HeroCarousel>
 
+      {/* ----------------------------------------------- staying on campus */}
+      {/* **The page's opening statement** (28 Oct 2026). Under the hero there
+          was nothing to read: the next thing a reader met was six icons, and
+          a page whose first words are "Air-conditioned rooms" reads as a
+          template whatever is drawn around it. The sentence is computed from
+          the store (`homeIntro`) so it cannot claim a guest house the office
+          has closed, and the photograph beside it is in neither the hero nor
+          the mosaic below. The corner mark is the one piece of decoration on
+          the page: two saffron rules offset from the frame, which is how an
+          editorial page says "this picture was placed" without a shadow. */}
+      <section aria-labelledby="welcome-title" className={SECTION}>
+        <Container>
+          <div className="grid items-center gap-x-[clamp(32px,5vw,72px)] gap-y-10 lg:grid-cols-12">
+            {/* Five columns against seven: the text measures about 45
+                characters at the width the column gives it, so it needs no cap
+                of its own once the grid is doing the measuring - the cap is
+                for the single-column layout below `lg`, where it would
+                otherwise run the width of a tablet. */}
+            <div className="min-w-0 lg:col-span-5">
+              <SectionHead id="welcome-title" label="Welcome" title={intro.title} />
+              <div className="mt-8 max-w-[46ch] space-y-5 lg:max-w-none">
+                {intro.body.map((line) => (
+                  <p key={line} className="text-[17.5px] leading-[1.7] text-body">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </div>
+            <div className="relative min-w-0 lg:col-span-7">
+              <SitePhotoFrame
+                photo={HOME_PHOTOS.intro}
+                aspect="3/2"
+                sizes="(min-width: 1024px) 660px, 100vw"
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -bottom-3.5 -left-3.5 hidden size-24 border-b-[3px] border-l-[3px] border-saffron lg:block"
+              />
+            </div>
+          </div>
+        </Container>
+      </section>
+
       {/* -------------------------------------------------------- amenities */}
       {/* A ruled strip rather than floating cards: one border, hairlines
-          between the cells (the 1px gap over a border-coloured ground).
+          between the cells (the 1px gap over a ground the cells sit on).
           `amenities()` always returns six, so 2, 3 and 6 columns leave no
           empty cell showing the ground through. The cells are centred - the
           icon over its label - which is what makes six of them fit one row
-          at full width and keeps the section short. */}
-      <section aria-labelledby="amenities-title" className={`bg-band ${SECTION}`}>
+          at full width and keeps the section short.
+
+          **On ink since 28 Oct 2026**, with the icons in the emblem's
+          saffron. It is the page's one dark band between the hero and the
+          footer, and it is what the page was missing: six light sections in a
+          row have no spine, and a deep institutional colour answered by a
+          gold is the one device worth taking from the site the owner named. */}
+      <section aria-labelledby="amenities-title" className={`bg-ink ${SECTION}`}>
         <Container>
-          <SectionHead id="amenities-title" label="Facilities" title="Amenities" align="center" />
-          <ul className="mx-auto mt-10 grid max-w-[1040px] grid-cols-2 gap-px overflow-hidden rounded-lg border border-border-strong bg-border-strong sm:grid-cols-3 lg:grid-cols-6">
+          <SectionHead
+            id="amenities-title"
+            label="Facilities"
+            title="Amenities"
+            align="center"
+            tone="dark"
+          />
+          <ul className="mx-auto mt-12 grid max-w-[1040px] grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/15 bg-white/15 sm:grid-cols-3 lg:grid-cols-6">
             {amenities(houses).map((item) => {
               const Icon = AMENITY_ICONS[item.key] ?? ConciergeBell;
               return (
                 <li
                   key={item.key}
-                  className="flex flex-col items-center gap-3.5 bg-white px-4 py-8 text-center"
+                  className="flex flex-col items-center gap-4 bg-ink px-4 py-10 text-center"
                 >
-                  <Icon aria-hidden className="size-[26px] shrink-0 text-vermilion-deep" strokeWidth={1.25} />
-                  <span className="text-[14.5px] leading-[1.35] font-medium text-ink">{item.label}</span>
+                  <Icon aria-hidden className="size-[30px] shrink-0 text-saffron" strokeWidth={1.25} />
+                  <span className="text-[14.5px] leading-[1.35] font-medium text-white">
+                    {item.label}
+                  </span>
                 </li>
               );
             })}
@@ -144,15 +240,14 @@ export default async function HomePage() {
       </section>
 
       {/* ---------------------------------------------------------- gallery */}
-      {/* **Left, and composed rather than listed** (27 Oct 2026). Six equal
-          thumbnails in a row was a contact sheet; the owner asked for
-          something curated, after the way the Taramani Guest House site
-          sets its photographs. So the row is broken into two bands of
-          unequal widths - wide, narrow, narrow / narrow, narrow, wide - on
-          one fixed height, which reads as a composition and still measures
-          two rows deep. The heading keeps its line to the Gallery at the
-          right, which is why this is the one section that is not centred. */}
-      <section aria-labelledby="gallery-title" className={SECTION}>
+      {/* **Left, and composed rather than listed.** Six equal thumbnails in a
+          row was a contact sheet; two bands of unequal widths on one height
+          was better and still a strip. It is a mosaic now - `MOSAIC` above
+          holds the spans and says why they are written out - on the warm
+          band, so the photographs sit on a ground rather than on white. The
+          heading keeps its line to the Gallery at the right, which is why
+          this is the one section that is not centred. */}
+      <section aria-labelledby="gallery-title" className={`bg-band ${SECTION}`}>
         <Container>
           <SectionHead
             id="gallery-title"
@@ -160,29 +255,19 @@ export default async function HomePage() {
             title="A look inside"
             link={{ href: "/gallery", label: "See the full gallery" }}
           />
-          <ul className="mt-10 grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 lg:auto-rows-[clamp(170px,15.5vw,215px)]">
+          <ul className="mt-12 grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-12 lg:auto-rows-[clamp(132px,10.5vw,170px)]">
             {HOME_PHOTOS.preview.map((photo, i) => (
-              <li
-                key={photo.alt}
-                className={cn(
-                  "min-w-0",
-                  // 0 and 5 are the wide ones; on a phone the first spans
-                  // the width, so the strip opens on a picture and not on
-                  // two postage stamps.
-                  i === 0 && "col-span-2",
-                  i === 5 && "sm:col-span-2"
-                )}
-              >
+              <li key={photo.alt} className={cn("min-w-0", MOSAIC[i])}>
                 <SitePhotoFrame
                   photo={photo}
                   sizes={
-                    i === 0 || i === 5
-                      ? "(min-width: 1024px) 580px, (min-width: 640px) 50vw, 100vw"
-                      : "(min-width: 1024px) 290px, (min-width: 640px) 25vw, 50vw"
+                    WIDE.has(i)
+                      ? "(min-width: 1024px) 620px, (min-width: 640px) 50vw, 100vw"
+                      : "(min-width: 1024px) 320px, (min-width: 640px) 50vw, 50vw"
                   }
                   className={cn(
-                    "h-full",
-                    i === 0 ? "aspect-[16/9] sm:aspect-auto" : "aspect-[4/3] sm:aspect-auto"
+                    WIDE.has(i) ? "aspect-[16/9]" : "aspect-[4/3]",
+                    "lg:aspect-auto lg:h-full"
                   )}
                 />
               </li>
@@ -197,10 +282,16 @@ export default async function HomePage() {
           label or summary line either. What is left is the name and the
           doors that apply to it - `serves_meals` decides whether the meal
           door is one of them, as it does everywhere else; never the guest
-          house's name. The two photographs the owner attributed are in the
-          hero now, which is where this section's picture went. */}
+          house's name.
+
+          **One plate of two cells** since 28 Oct 2026, the same device as the
+          amenities above and the contact details below, with the name at
+          display size over a saffron stub. Two near-empty bordered boxes with
+          a hairline of space between them was the most basic block on the
+          page; one plate divided by a hairline is a composition, and it sets
+          the names two steps larger than they were. */}
       {houses.length > 0 && (
-        <section aria-labelledby="houses-title" className={`bg-band ${SECTION}`}>
+        <section aria-labelledby="houses-title" className={SECTION}>
           <Container>
             <SectionHead
               id="houses-title"
@@ -208,11 +299,11 @@ export default async function HomePage() {
               title="Our guest houses"
               align="center"
             />
-            <div className="mx-auto mt-10 grid max-w-[920px] gap-5 sm:grid-cols-2">
+            <ul className="mx-auto mt-12 grid max-w-[960px] gap-px overflow-hidden rounded-lg border border-border-strong bg-border-strong sm:grid-cols-2">
               {houses.map((house) => (
-                <HouseCard key={house.id} house={house} />
+                <HouseCell key={house.id} house={house} />
               ))}
-            </div>
+            </ul>
           </Container>
         </section>
       )}
@@ -231,7 +322,7 @@ export default async function HomePage() {
         <Container>
           <SectionHead id="contact-title" label="Contact" title="Contact us" align="center" />
 
-          <ul className="mx-auto mt-10 grid max-w-[1000px] grid-cols-1 gap-px overflow-hidden rounded-lg border border-border-strong bg-border-strong sm:grid-cols-3">
+          <ul className="mx-auto mt-12 grid max-w-[1000px] grid-cols-1 gap-px overflow-hidden rounded-lg border border-border-strong bg-border-strong sm:grid-cols-3">
             <li className="flex flex-col justify-center bg-white px-6 py-8 text-center">
               <p className="text-[11.5px] font-semibold tracking-[0.2em] text-vermilion-deep uppercase">
                 {GUEST_HOUSE_CONTACT.phoneLabel}
@@ -292,7 +383,9 @@ export default async function HomePage() {
 }
 
 /**
- * One guest house: its name, and the doors that apply to it.
+ * One guest house: its name, and the doors that apply to it. One cell of the
+ * plate the section draws, so it carries its own ground and no border - the
+ * hairline between the two is the plate's.
  *
  * The meal door appears only where the guest house serves meals
  * (`serves_meals`, a column the console toggles) - at Bageshri there is no
@@ -302,12 +395,12 @@ export default async function HomePage() {
  * guest house, because the form asks for it and a student or an alumni
  * booking is narrowed to one house whatever the link said.
  */
-function HouseCard({ house }: { house: SiteGuestHouse }) {
+function HouseCell({ house }: { house: SiteGuestHouse }) {
   return (
-    <article className="flex min-w-0 flex-col items-center rounded-lg border border-border-strong bg-white px-6 py-[clamp(28px,3.4vw,44px)] text-center">
-      <h2 className="text-title font-semibold text-ink">{house.name}</h2>
-      <div aria-hidden className="mt-5 h-[3px] w-10 bg-vermilion" />
-      <div className="mt-7 flex flex-wrap justify-center gap-3">
+    <li className="flex min-w-0 flex-col items-center bg-white px-6 py-[clamp(36px,4.2vw,56px)] text-center">
+      <h2 className="text-display font-semibold text-ink">{house.name}</h2>
+      <div aria-hidden className="mt-6 h-[3px] w-10 bg-saffron" />
+      <div className="mt-8 flex flex-wrap justify-center gap-3">
         <Link href="/book-room" className={siteButton.brand}>
           Book a Room
         </Link>
@@ -317,6 +410,6 @@ function HouseCard({ house }: { house: SiteGuestHouse }) {
           </Link>
         )}
       </div>
-    </article>
+    </li>
   );
 }

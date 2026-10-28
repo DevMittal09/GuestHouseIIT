@@ -1785,12 +1785,17 @@ a picture with the page beginning under it and nothing set over it).
 - **What the public site may say (the owner, 26 Sep 2026):** never the
   portal's internals — **no requester categories, no approval chains, no role
   names** (Assistant Warden, HOD, IAR…). The **home page is visual and light**:
-  photographs, the guest-house names, one sentence, amenities — **no figures,
+  photographs, the guest-house names, the hero's one sentence, **the two-line
+  opening statement** (`homeIntro`, 28 Oct 2026), amenities — **no figures,
   no meal times, no instructions, no photo captions**. Rules and "How booking
   works" (in general terms) live on `/guidelines`. `tests/public-site.test.ts`
-  fails if a role name reaches the public copy. **Promise less** (30 Sep
+  fails if a role name reaches the public copy, and `homeIntro` goes through
+  that same check. **Promise less** (30 Sep
   2026): plain statements of what exists — no adjectives about the rooms, no
-  lists of who may stay, no unconfirmed services.
+  lists of who may stay, no unconfirmed services. **New home-page copy is
+  computed from the store, not written into the page**: `homeIntro` names the
+  guest houses the store holds and mentions meals only where one has a
+  kitchen, the same question `amenities()` asks.
 - **Where a rule *is* stated** (advance window, stay cap, capacity, meal
   times, the kitchen's notice, charges) it is rendered from `lib/` and
   Settings by `lib/site-content.ts` (`guidelineSections`), never hardcoded,
@@ -1812,15 +1817,26 @@ a picture with the page beginning under it and nothing set over it).
   both guest houses' directions, institute links). No utility strip. `NavBar` (`site-nav.tsx`) is shared:
   `tone="dark"` portal bar, `"light"` / `"overlay"` site header.
 - **Layout:** home = **a full-viewport hero** (`HeroCarousel`: two
-  photographs, a solid `bg-ink/66` wash, the kicker, `<h1>`, lead and two
-  solid doors centred over it), then a ruled strip of six amenities
+  photographs, a solid `bg-ink/78` wash, the kicker, `<h1>`, lead and two
+  solid doors centred over it, a scroll cue at its foot), then **an opening
+  statement** (`homeIntro(houses)` beside `HOME_PHOTOS.intro`, 28 Oct 2026 -
+  the page had nothing to read between a photograph and six icons), a ruled
+  strip of six amenities **on ink with saffron icons**
   (no meeting or exercise room, 30 Sep 2026), a **six-photograph** gallery
-  preview in two bands of unequal widths, a **text-only card per guest
-  house** (the name and its booking doors - no photograph, no label, no
-  summary line), and **Contact us** (the manager's line, email and address as
-  one ruled band of three, then one map per guest house). **Amenities, the
-  guest houses and Contact us are centred; the gallery is not**, because its
-  heading carries the link to `/gallery` (28 Oct 2026).
+  **mosaic**, **one ruled plate of two text-only cells, one per guest
+  house** (the name at `text-display` over a saffron stub and its booking
+  doors - no photograph, no label, no summary line), and **Contact us** (the
+  manager's line, email and address as one ruled band of three, then one map
+  per guest house). **Amenities, the guest houses and Contact us are centred;
+  the gallery and the statement are not**, because the gallery's heading
+  carries the link to `/gallery` and the statement is a two-column editorial
+  block (28 Oct 2026).
+  **The mosaic's spans tile twelve columns exactly, in order** - 5x2, 7, 3,
+  4, 7, 5 - so auto-placement leaves no hole; a seventh photograph means
+  rethinking the pattern, not appending to it. A unit test pins the preview
+  at six and keeps it disjoint from the hero **and** from `HOME_PHOTOS.intro`.
+  **`bg-ink` is the amenities band's too now**, with the header's and the
+  footer's, which is why no token was added for it.
 - **A section opens on a label, a serif heading and a 40px vermilion stub**
   (`SectionHead`, 28 Oct 2026). **No rule runs across the page under a
   heading** - not here, not on a portal page title (`PageHeader`), not beside
@@ -1842,13 +1858,22 @@ a picture with the page beginning under it and nothing set over it).
   columns and the lead under a vermilion rule in five.
 - **The home page's title is set over the photograph** (27 Oct 2026, the
   owner, after the ink panel came off it on 15 Oct 2026). The hero is the
-  institute's name in tracked **saffron** capitals, the page's `<h1>`, a
-  vermilion stub, one sentence and two **solid** doors (vermilion and
-  saffron), centred on `bg-ink/66`
+  institute's name in tracked **saffron** capitals **between two saffron
+  hairlines**, the page's `<h1>`, a vermilion stub, one sentence and two
+  **solid** doors (vermilion and saffron), centred on `bg-ink/78`
   over a photograph that fills the viewport - **the only centred block and
-  the only full-bleed photograph on the site**; the sections below it keep
-  `SectionHead`'s left-hand label over a full-width hairline. Don't "make it
-  consistent" in either direction.
+  the only full-bleed photograph on the site**. Don't "make it
+  consistent" with the sections below it in either direction.
+  **The `<h1>` is "Guest House Portal", and it is the site's one `font-bold`
+  heading** (28 Oct 2026, the owner: the type "is blending with the
+  background too much"). It was "IIT Palakkad - Guest House", which said the
+  institute's name twice - the tracked line above it says it in full - and
+  needed its separator hidden below `sm`, where "IIT Palakkad -" over "Guest
+  House" reads as a hyphenated word. **The answer to white type over a
+  photograph is the wash and the weight, never a drop shadow**: the wash has
+  gone 60 -> 66 -> 78% on three briefs and about 85% is the ceiling, past
+  which the photograph may as well not be there. Keep the kicker's wording
+  verbatim.
 - **The hero has no visible controls** (27 Oct 2026). Two slides, 6.5s each,
   a cross-fade; **clicking the photograph pauses and resumes it** - that
   click target is a labelled `<button>` under the title block, which is why
@@ -1856,6 +1881,10 @@ a picture with the page beginning under it and nothing set over it).
   The numbering, the arrows and the Pause button of 15 Oct 2026 are **gone**;
   don't put a control back. `prefers-reduced-motion` stops the rotation, the
   slow `hero-drift` zoom and the pointer zoom - not just the transition.
+  **The scroll cue is not a control**: it is an `aria-hidden`,
+  `pointer-events-none` chevron on the site's second keyframe (`hero-cue`),
+  there because a full viewport of photograph gives the reader no edge. It
+  must never take the click that pauses the photographs.
 - **A photograph may name a guest house on the two hero slides and nowhere
   else.** `HOME_PHOTOS.slides` **is** `GUEST_HOUSE_PHOTOS` (the two the owner
   attributed on 15 Oct 2026), and a unit test fails if `HOME_PHOTOS.preview`
