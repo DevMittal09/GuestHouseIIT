@@ -44,7 +44,7 @@ async function requireAcademicConsole(): Promise<Profile> {
 }
 
 const MIGRATION_HINT =
-  "The academic records table is not there yet - apply supabase/migrations/00000000000028_academic_records.sql.";
+  "The academic records table is not there yet - apply scripts/init-postgres.sql (table: academic_records).";
 
 function fail(e: unknown): ActionResult {
   const code = (e as { code?: string } | null)?.code;

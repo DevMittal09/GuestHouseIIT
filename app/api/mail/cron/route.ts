@@ -82,7 +82,7 @@ function failed(error: unknown): Response {
     {
       ok: false,
       error: message,
-      hint: "If the outbox table is missing, apply supabase/migrations/00000000000010_email_outbox.sql.",
+      hint: "If the outbox table is missing, apply scripts/init-postgres.sql (table: email_outbox).",
     },
     { status: 500 }
   );

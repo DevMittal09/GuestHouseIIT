@@ -81,13 +81,15 @@ import type {
   UserImportSettlement,
   UserImportStatus,
 } from "@/lib/users-import-undo";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import * as fs from "fs";
 import * as path from "path";
 
+type Queryable = Pick<Pool | PoolClient, "query">;
+
 const SEARCH_SCAN_LIMIT = 1000;
 
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+const UPLOAD_DIR = path.join(process.cwd(), ".uploads");
 
 function withMealsFlag(row: GuestHouse): GuestHouse {
   return { ...row, serves_meals: row.serves_meals ?? false };
@@ -117,7 +119,7 @@ function importBatchError(error: { code?: string; message: string }): Error {
   if (error.code === "42P01") {
     return new Error(
       "Cannot import accounts until migration 32 is applied " +
-        "(supabase/migrations/00000000000032_user_import_batches.sql) - " +
+        "(scripts/init-postgres.sql, table: user_import_batches) - " +
         "it is the table that records what an import changed, so it can be undone"
     );
   }
@@ -178,6 +180,21 @@ function userImportFromRow(row: Record<string, unknown>): UserImportBatch {
 
 export class PostgresStore implements DataStore {
   private pool: Pool = getPool();
+
+  private async withTx<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await fn(client);
+      await client.query("COMMIT");
+      return result;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
 
   private async bufferNow(): Promise<number> {
     try {
@@ -436,60 +453,55 @@ export class PostgresStore implements DataStore {
     const vals = Object.values(bookingData);
     const placeholders = vals.map((_, i) => `$${i + 1}`).join(", ");
 
-    const { rows: [booking] } = await this.pool.query(
-      `INSERT INTO bookings (${cols.join(", ")}) VALUES (${placeholders}) RETURNING *`,
-      vals
-    );
-
-    for (let ri = 0; ri < rooms.length; ri++) {
-      const roomInput = rooms[ri];
-      const { rows: [card] } = await this.pool.query(
-        `INSERT INTO booking_rooms (booking_id, room_index) VALUES ($1, $2) RETURNING id`,
-        [booking.id, ri]
+    return this.withTx(async (client) => {
+      const { rows: [booking] } = await client.query(
+        `INSERT INTO bookings (${cols.join(", ")}) VALUES (${placeholders}) RETURNING *`,
+        vals
       );
-      for (const guest of roomInput.guests) {
-        const guestData: Record<string, unknown> = {
-          booking_id: booking.id,
-          booking_room_id: card.id,
-          name: guest.name,
-          gender: guest.gender ?? null,
-          age: guest.age ?? null,
-          relationship: guest.relationship ?? null,
-          id_number: encryptValue(guest.id_number ?? null),
-          id_document_url: guest.id_document_url ?? null,
-          passport_number: encryptValue(guest.passport_number ?? null),
-          citizenship: guest.citizenship ?? "indian",
-          nationality: guest.nationality ?? null,
-          is_infant: guest.is_infant ?? false,
-        };
-        const gCols = Object.keys(guestData);
-        const gVals = Object.values(guestData);
-        const gPh = gVals.map((_, i) => `$${i + 1}`).join(", ");
-        await this.pool.query(
-          `INSERT INTO booking_guests (${gCols.join(", ")}) VALUES (${gPh})`,
-          gVals
+
+      for (let ri = 0; ri < rooms.length; ri++) {
+        const roomInput = rooms[ri];
+        const { rows: [card] } = await client.query(
+          `INSERT INTO booking_rooms (booking_id, room_index) VALUES ($1, $2) RETURNING id`,
+          [booking.id, ri]
         );
+        if (roomInput.guests.length > 0) {
+          const guestCols = [
+            "booking_id", "booking_room_id", "name", "gender", "age",
+            "relationship", "id_number", "id_document_url", "passport_number",
+            "citizenship", "nationality", "is_infant",
+          ];
+          const guestParams: unknown[] = [];
+          const guestRows: string[] = [];
+          for (const guest of roomInput.guests) {
+            const rowVals = [
+              booking.id, card.id, guest.name, guest.gender ?? null,
+              guest.age ?? null, guest.relationship ?? null,
+              encryptValue(guest.id_number ?? null), guest.id_document_url ?? null,
+              encryptValue(guest.passport_number ?? null),
+              guest.citizenship ?? "indian", guest.nationality ?? null,
+              guest.is_infant ?? false,
+            ];
+            const offset = guestParams.length;
+            guestRows.push(`(${rowVals.map((_, i) => `$${offset + i + 1}`).join(", ")})`);
+            guestParams.push(...rowVals);
+          }
+          await client.query(
+            `INSERT INTO booking_guests (${guestCols.join(", ")}) VALUES ${guestRows.join(", ")}`,
+            guestParams
+          );
+        }
       }
-    }
 
-    // Initial log entry
-    const logData = {
-      booking_id: booking.id,
-      action_by: input.created_by ?? input.user_id,
-      action_by_name: on_behalf_of_name ?? null,
-      previous_status: null,
-      new_status: booking.status,
-      remarks: input.submission_remarks ?? null,
-    };
-    const lCols = Object.keys(logData);
-    const lVals = Object.values(logData);
-    const lPh = lVals.map((_, i) => `$${i + 1}`).join(", ");
-    await this.pool.query(
-      `INSERT INTO booking_logs (${lCols.join(", ")}) VALUES (${lPh})`,
-      lVals
-    );
+      await client.query(
+        `INSERT INTO booking_logs (booking_id, action_by, action_by_name, previous_status, new_status, remarks)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [booking.id, input.created_by ?? input.user_id, on_behalf_of_name ?? null,
+         null, booking.status, input.submission_remarks ?? null]
+      );
 
-    return booking;
+      return booking;
+    });
   }
 
   private async hydrate(bookingRows: Record<string, unknown>[]): Promise<BookingWithDetails[]> {
@@ -625,7 +637,7 @@ export class PostgresStore implements DataStore {
               : "official"),
         alumni_name: r.alumni_name ?? null,
         alumni_roll_number: r.alumni_roll_number ?? null,
-        service_type: r.service_type ?? ((r.meals as unknown[])?.length ?? 0) > 0 ? "room_meals" : "room",
+        service_type: r.service_type ?? (((r.meals as unknown[])?.length ?? 0) > 0 ? "room_meals" : "room"),
         meal_preference: r.meal_preference ?? null,
         meal_diet_counts: r.meal_diet_counts ?? null,
         meal_guest_count: r.meal_guest_count ?? null,
@@ -756,54 +768,48 @@ export class PostgresStore implements DataStore {
     return runBookingSearch(candidates, criteria, rows.length >= SEARCH_SCAN_LIMIT);
   }
 
-  async countBookingsByStatus(): Promise<Record<string, number>> {
-    const { rows } = await this.pool.query(
-      "SELECT status, count(*)::int AS count FROM bookings GROUP BY status"
-    );
-    const counts: Record<string, number> = {};
-    for (const row of rows) counts[row.status] = row.count;
-    return counts;
-  }
-
   async updateBookingStatus(id: string, update: StatusUpdate, log: NewLogInput): Promise<void> {
-    const { rows: [current] } = await this.pool.query(
-      "SELECT status, check_in, check_out FROM bookings WHERE id = $1",
-      [id]
-    );
-    if (!current) throw new Error("Booking not found");
+    await this.withTx(async (client) => {
+      const { rows: [current] } = await client.query(
+        "SELECT status, check_in, check_out FROM bookings WHERE id = $1",
+        [id]
+      );
+      if (!current) throw new Error("Booking not found");
 
-    if (update.assigned_room_ids !== undefined) {
-      await this.setRoomHolds(id, update.assigned_room_ids, current.check_in, current.check_out, {
-        overrideRoomIds: update.override_room_ids ?? [],
-        overrideBy: update.override_by ?? null,
-      });
-      await this.assignRoomsToCards(id, update.assigned_room_ids);
-    }
+      if (update.assigned_room_ids !== undefined) {
+        await this.setRoomHolds(client, id, update.assigned_room_ids, current.check_in, current.check_out, {
+          overrideRoomIds: update.override_room_ids ?? [],
+          overrideBy: update.override_by ?? null,
+        });
+        await this.assignRoomsToCards(client, id, update.assigned_room_ids);
+      }
 
-    const sets: string[] = ["status = $2", "updated_at = $3"];
-    const vals: unknown[] = [id, update.status, new Date().toISOString()];
-    let pi = 4;
-    if (update.rejection_reason !== undefined) {
-      sets.push(`rejection_reason = $${pi}`); vals.push(update.rejection_reason); pi++;
-    }
-    if (update.no_show_released_at !== undefined) {
-      sets.push(`no_show_released_at = $${pi}`); vals.push(update.no_show_released_at); pi++;
-    }
-    await this.pool.query(`UPDATE bookings SET ${sets.join(", ")} WHERE id = $1`, vals);
+      const sets: string[] = ["status = $2", "updated_at = $3"];
+      const vals: unknown[] = [id, update.status, new Date().toISOString()];
+      let pi = 4;
+      if (update.rejection_reason !== undefined) {
+        sets.push(`rejection_reason = $${pi}`); vals.push(update.rejection_reason); pi++;
+      }
+      if (update.no_show_released_at !== undefined) {
+        sets.push(`no_show_released_at = $${pi}`); vals.push(update.no_show_released_at); pi++;
+      }
+      await client.query(`UPDATE bookings SET ${sets.join(", ")} WHERE id = $1`, vals);
 
-    if (!ROOM_HOLDING_STATUSES.includes(update.status)) {
-      await this.pool.query("DELETE FROM room_holds WHERE booking_id = $1", [id]);
-      if (update.status !== "VACATED") await this.assignRoomsToCards(id, []);
-    }
+      if (!ROOM_HOLDING_STATUSES.includes(update.status)) {
+        await client.query("DELETE FROM room_holds WHERE booking_id = $1", [id]);
+        if (update.status !== "VACATED") await this.assignRoomsToCards(client, id, []);
+      }
 
-    await this.pool.query(
-      `INSERT INTO booking_logs (booking_id, action_by, action_by_name, previous_status, new_status, remarks)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, log.action_by, log.action_by_name, current.status, update.status, log.remarks]
-    );
+      await client.query(
+        `INSERT INTO booking_logs (booking_id, action_by, action_by_name, previous_status, new_status, remarks)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, log.action_by, log.action_by_name, current.status, update.status, log.remarks]
+      );
+    });
   }
 
   private async setRoomHolds(
+    q: Queryable,
     bookingId: string,
     roomIds: string[],
     checkIn: string,
@@ -814,7 +820,7 @@ export class PostgresStore implements DataStore {
     }
   ): Promise<void> {
     try {
-      await this.pool.query(
+      await q.query(
         "SELECT set_room_holds($1, $2, $3, $4, $5, $6)",
         [bookingId, roomIds, checkIn, checkOut, override.overrideRoomIds, override.overrideBy]
       );
@@ -827,64 +833,74 @@ export class PostgresStore implements DataStore {
     }
   }
 
-  private async assignRoomsToCards(bookingId: string, roomIds: string[]): Promise<void> {
-    const { rows: cards } = await this.pool.query(
+  private async assignRoomsToCards(q: Queryable, bookingId: string, roomIds: string[]): Promise<void> {
+    const { rows: cards } = await q.query(
       "SELECT id, room_index FROM booking_rooms WHERE booking_id = $1 ORDER BY room_index",
       [bookingId]
     );
+    if (cards.length === 0) return;
+    const params: unknown[] = [];
+    const cases: string[] = [];
+    const ids: string[] = [];
     for (let i = 0; i < cards.length; i++) {
       const next = roomIds[i] ?? null;
-      await this.pool.query(
-        "UPDATE booking_rooms SET assigned_room_id = $1 WHERE id = $2",
-        [next, cards[i].id]
-      );
+      params.push(cards[i].id, next);
+      cases.push(`WHEN id = $${params.length - 1} THEN $${params.length}`);
+      ids.push(cards[i].id);
     }
+    params.push(ids);
+    await q.query(
+      `UPDATE booking_rooms SET assigned_room_id = CASE ${cases.join(" ")} END WHERE id = ANY($${params.length})`,
+      params
+    );
   }
 
   async updateBookingDetails(id: string, patch: BookingDetailsPatch, log: NewLogInput): Promise<void> {
-    const { rows: [current] } = await this.pool.query(
-      "SELECT status, check_in, check_out, extension_requested_until FROM bookings WHERE id = $1",
-      [id]
-    );
-    if (!current) throw new Error("Booking not found");
-
-    const checkIn = patch.check_in ?? current.check_in;
-    const checkOut = patch.check_out ?? current.check_out;
-
-    if (checkIn !== current.check_in || checkOut !== current.check_out) {
-      const { rows: holds } = await this.pool.query(
-        "SELECT room_id FROM room_holds WHERE booking_id = $1", [id]
+    await this.withTx(async (client) => {
+      const { rows: [current] } = await client.query(
+        "SELECT status, check_in, check_out, extension_requested_until FROM bookings WHERE id = $1",
+        [id]
       );
-      await this.setRoomHolds(id, holds.map((h: { room_id: string }) => h.room_id), checkIn, checkOut);
-    }
+      if (!current) throw new Error("Booking not found");
 
-    const sets: string[] = ["updated_at = $2"];
-    const vals: unknown[] = [id, new Date().toISOString()];
-    let pi = 3;
-    if (patch.check_in !== undefined) { sets.push(`check_in = $${pi}`); vals.push(checkIn); pi++; }
-    if (patch.check_out !== undefined) { sets.push(`check_out = $${pi}`); vals.push(checkOut); pi++; }
-    if (patch.purpose_of_visit !== undefined) { sets.push(`purpose_of_visit = $${pi}`); vals.push(patch.purpose_of_visit); pi++; }
-    if (patch.meals !== undefined) { sets.push(`meals = $${pi}`); vals.push(JSON.stringify(patch.meals)); pi++; }
-    if (patch.meal_preference !== undefined) { sets.push(`meal_preference = $${pi}`); vals.push(patch.meal_preference); pi++; }
-    if (patch.meal_diet_counts !== undefined) { sets.push(`meal_diet_counts = $${pi}`); vals.push(JSON.stringify(patch.meal_diet_counts)); pi++; }
+      const checkIn = patch.check_in ?? current.check_in;
+      const checkOut = patch.check_out ?? current.check_out;
 
-    if (patch.extension_request !== undefined) {
-      sets.push(`extension_requested_until = $${pi}`); vals.push(patch.extension_request?.until ?? null); pi++;
-      sets.push(`extension_reason = $${pi}`); vals.push(patch.extension_request?.reason ?? null); pi++;
-      sets.push(`extension_requested_at = $${pi}`); vals.push(patch.extension_request ? new Date().toISOString() : null); pi++;
-    } else if (current.extension_requested_until && Date.parse(current.extension_requested_until) <= Date.parse(checkOut)) {
-      sets.push(`extension_requested_until = $${pi}`); vals.push(null); pi++;
-      sets.push(`extension_reason = $${pi}`); vals.push(null); pi++;
-      sets.push(`extension_requested_at = $${pi}`); vals.push(null); pi++;
-    }
+      if (checkIn !== current.check_in || checkOut !== current.check_out) {
+        const { rows: holds } = await client.query(
+          "SELECT room_id FROM room_holds WHERE booking_id = $1", [id]
+        );
+        await this.setRoomHolds(client, id, holds.map((h: { room_id: string }) => h.room_id), checkIn, checkOut);
+      }
 
-    await this.pool.query(`UPDATE bookings SET ${sets.join(", ")} WHERE id = $1`, vals);
+      const sets: string[] = ["updated_at = $2"];
+      const vals: unknown[] = [id, new Date().toISOString()];
+      let pi = 3;
+      if (patch.check_in !== undefined) { sets.push(`check_in = $${pi}`); vals.push(checkIn); pi++; }
+      if (patch.check_out !== undefined) { sets.push(`check_out = $${pi}`); vals.push(checkOut); pi++; }
+      if (patch.purpose_of_visit !== undefined) { sets.push(`purpose_of_visit = $${pi}`); vals.push(patch.purpose_of_visit); pi++; }
+      if (patch.meals !== undefined) { sets.push(`meals = $${pi}`); vals.push(JSON.stringify(patch.meals)); pi++; }
+      if (patch.meal_preference !== undefined) { sets.push(`meal_preference = $${pi}`); vals.push(patch.meal_preference); pi++; }
+      if (patch.meal_diet_counts !== undefined) { sets.push(`meal_diet_counts = $${pi}`); vals.push(JSON.stringify(patch.meal_diet_counts)); pi++; }
 
-    await this.pool.query(
-      `INSERT INTO booking_logs (booking_id, action_by, action_by_name, previous_status, new_status, remarks)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, log.action_by, log.action_by_name, current.status, current.status, log.remarks]
-    );
+      if (patch.extension_request !== undefined) {
+        sets.push(`extension_requested_until = $${pi}`); vals.push(patch.extension_request?.until ?? null); pi++;
+        sets.push(`extension_reason = $${pi}`); vals.push(patch.extension_request?.reason ?? null); pi++;
+        sets.push(`extension_requested_at = $${pi}`); vals.push(patch.extension_request ? new Date().toISOString() : null); pi++;
+      } else if (current.extension_requested_until && Date.parse(current.extension_requested_until) <= Date.parse(checkOut)) {
+        sets.push(`extension_requested_until = $${pi}`); vals.push(null); pi++;
+        sets.push(`extension_reason = $${pi}`); vals.push(null); pi++;
+        sets.push(`extension_requested_at = $${pi}`); vals.push(null); pi++;
+      }
+
+      await client.query(`UPDATE bookings SET ${sets.join(", ")} WHERE id = $1`, vals);
+
+      await client.query(
+        `INSERT INTO booking_logs (booking_id, action_by, action_by_name, previous_status, new_status, remarks)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, log.action_by, log.action_by_name, current.status, current.status, log.remarks]
+      );
+    });
   }
 
   async listBookingsWithMealsOn(day: string, guestHouseId?: string): Promise<BookingWithDetails[]> {
@@ -1275,38 +1291,40 @@ export class PostgresStore implements DataStore {
     added: NewAcademicRecordInput[],
     updated: { id: string; input: NewAcademicRecordInput }[]
   ): Promise<void> {
-    if (added.length > 0) {
-      const firstRow = this.academicRowOf(added[0]);
-      const cols = Object.keys(firstRow);
-      const params: unknown[] = [];
-      const valueRows: string[] = [];
-      for (const input of added) {
-        const row = this.academicRowOf(input);
-        const placeholders: string[] = [];
-        for (const col of cols) {
-          params.push(row[col]);
-          placeholders.push(`$${params.length}`);
+    await this.withTx(async (client) => {
+      if (added.length > 0) {
+        const firstRow = this.academicRowOf(added[0]);
+        const cols = Object.keys(firstRow);
+        const params: unknown[] = [];
+        const valueRows: string[] = [];
+        for (const input of added) {
+          const row = this.academicRowOf(input);
+          const placeholders: string[] = [];
+          for (const col of cols) {
+            params.push(row[col]);
+            placeholders.push(`$${params.length}`);
+          }
+          valueRows.push(`(${placeholders.join(", ")})`);
         }
-        valueRows.push(`(${placeholders.join(", ")})`);
+        try {
+          await client.query(
+            `INSERT INTO academic_records (${cols.join(", ")}) VALUES ${valueRows.join(", ")}`,
+            params
+          );
+        } catch (err: unknown) {
+          const e = err as { code?: string };
+          if (e.code === "23505") throw new Error("One of those records is already stored for that email");
+          throw err;
+        }
       }
-      try {
-        await this.pool.query(
-          `INSERT INTO academic_records (${cols.join(", ")}) VALUES ${valueRows.join(", ")}`,
-          params
-        );
-      } catch (err: unknown) {
-        const e = err as { code?: string };
-        if (e.code === "23505") throw new Error("One of those records is already stored for that email");
-        throw err;
+      for (const { id, input } of updated) {
+        const row = this.academicRowOf(input);
+        const entries = Object.entries(row);
+        const sets = entries.map(([col], i) => `${col} = $${i + 2}`);
+        const vals = entries.map(([, v]) => v);
+        await client.query(`UPDATE academic_records SET ${sets.join(", ")} WHERE id = $1`, [id, ...vals]);
       }
-    }
-    for (const { id, input } of updated) {
-      const row = this.academicRowOf(input);
-      const entries = Object.entries(row);
-      const sets = entries.map(([col], i) => `${col} = $${i + 2}`);
-      const vals = entries.map(([, v]) => v);
-      await this.pool.query(`UPDATE academic_records SET ${sets.join(", ")} WHERE id = $1`, [id, ...vals]);
-    }
+    });
   }
 
   async deleteAcademicRecord(id: string): Promise<void> {
@@ -1389,20 +1407,22 @@ export class PostgresStore implements DataStore {
     ];
     const touched = new Set<string>(guests.map((g: { booking_id: string }) => g.booking_id));
 
-    if (guests.length > 0) {
-      const guestIds = guests.map((g: { id: string }) => g.id);
-      await this.pool.query(
-        "UPDATE booking_guests SET id_number = NULL, passport_number = NULL, id_document_url = NULL WHERE id = ANY($1)",
-        [guestIds]
-      );
-    }
-    const withCards = stays.filter((b: { alumni_id_url: string | null }) => b.alumni_id_url).map((b: { id: string }) => b.id);
-    if (withCards.length > 0) {
-      await this.pool.query(
-        "UPDATE bookings SET alumni_id_url = NULL WHERE id = ANY($1)", [withCards]
-      );
-      for (const id of withCards) touched.add(id);
-    }
+    await this.withTx(async (client) => {
+      if (guests.length > 0) {
+        const guestIds = guests.map((g: { id: string }) => g.id);
+        await client.query(
+          "UPDATE booking_guests SET id_number = NULL, passport_number = NULL, id_document_url = NULL WHERE id = ANY($1)",
+          [guestIds]
+        );
+      }
+      const withCards = stays.filter((b: { alumni_id_url: string | null }) => b.alumni_id_url).map((b: { id: string }) => b.id);
+      if (withCards.length > 0) {
+        await client.query(
+          "UPDATE bookings SET alumni_id_url = NULL WHERE id = ANY($1)", [withCards]
+        );
+        for (const id of withCards) touched.add(id);
+      }
+    });
     return { bookings: touched.size, documents };
   }
 
@@ -1569,20 +1589,22 @@ export class PostgresStore implements DataStore {
   }
 
   async deleteBooking(id: string): Promise<void> {
-    await this.pool.query(
-      "DELETE FROM invoices WHERE booking_id = $1 AND status = 'draft'", [id]
-    ).catch((e: { code?: string }) => {
-      if (e.code !== "42P01") throw e;
-    });
-    try {
-      await this.pool.query("DELETE FROM bookings WHERE id = $1", [id]);
-    } catch (err: unknown) {
-      const e = err as { code?: string; message?: string };
-      if (e.code === "23503" && /invoices/.test(e.message ?? "")) {
-        throw new InvoiceStateError("An invoice was issued for this booking, so it cannot be deleted - cancel the booking instead.");
+    await this.withTx(async (client) => {
+      await client.query(
+        "DELETE FROM invoices WHERE booking_id = $1 AND status = 'draft'", [id]
+      ).catch((e: { code?: string }) => {
+        if (e.code !== "42P01") throw e;
+      });
+      try {
+        await client.query("DELETE FROM bookings WHERE id = $1", [id]);
+      } catch (err: unknown) {
+        const e = err as { code?: string; message?: string };
+        if (e.code === "23503" && /invoices/.test(e.message ?? "")) {
+          throw new InvoiceStateError("An invoice was issued for this booking, so it cannot be deleted - cancel the booking instead.");
+        }
+        throw err;
       }
-      throw err;
-    }
+    });
   }
 
   // ---- sessions, 2FA and throttles (migration 21) -----------------------

@@ -34,7 +34,7 @@ function fail(e: unknown): ActionResult {
     return {
       ok: false,
       error:
-        "The units table is not there yet - apply supabase/migrations/00000000000015_units_and_debit_heads.sql.",
+        "The units table is not there yet - apply scripts/init-postgres.sql (table: units).",
     };
   }
   // 42703 / PGRST204: a column the database does not have yet - the Faculty
@@ -43,7 +43,7 @@ function fail(e: unknown): ActionResult {
     return {
       ok: false,
       error:
-        "Faculty Advisors are not in the database yet - apply supabase/migrations/00000000000025_faculty_advisors.sql.",
+        "Faculty Advisors are not in the database yet - apply scripts/init-postgres.sql (column: units.faculty_advisor_id).",
     };
   }
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
@@ -100,7 +100,7 @@ async function studentBodyError(
     return "Only a council, fest or club has a Faculty Advisor and a secretary's mailbox";
   }
   if (fields.faculty_advisor_id) {
-    const advisor = (await getStore().listProfiles()).find((p) => p.id === fields.faculty_advisor_id);
+    const advisor = await getStore().getProfile(fields.faculty_advisor_id);
     if (!advisor) return "That Faculty Advisor's account was not found";
     if (!canBeFacultyAdvisor(advisor)) {
       return `${advisor.full_name} cannot be a Faculty Advisor - choose a faculty member`;

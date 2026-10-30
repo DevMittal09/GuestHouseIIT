@@ -42,6 +42,8 @@ const REQUIRED_IN_PRODUCTION = [
   ["APP_URL", "the site's own URL, for sign-in redirects and server-action origins"],
   ["CRON_SECRET", "so the daily jobs cannot be triggered by anyone"],
   ["ID_ENCRYPTION_KEY", "to encrypt guests' ID numbers at rest (32 bytes, base64)"],
+  ["GOOGLE_CLIENT_ID", "for Google sign-in - the only authentication method in production"],
+  ["GOOGLE_CLIENT_SECRET", "for Google sign-in - the only authentication method in production"],
 ] as const;
 
 export type EnvProblem = { variable: string; problem: string };

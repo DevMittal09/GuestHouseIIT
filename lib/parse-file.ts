@@ -34,6 +34,18 @@ async function readExcel(file: File): Promise<string> {
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) throw new FileParseError("The file has no sheets");
   const sheet = workbook.Sheets[sheetName];
+  // Replace newlines inside cells with a space before converting to CSV.
+  // sheet_to_csv quotes cells that contain newlines (RFC 4180), but every
+  // downstream parser splits on \n first, so a multiline cell would break
+  // across two "lines" and cause a parse error.
+  for (const addr of Object.keys(sheet)) {
+    if (addr.startsWith("!")) continue;
+    const cell = sheet[addr];
+    if (cell && typeof cell.v === "string" && /[\r\n]/.test(cell.v)) {
+      cell.v = cell.v.replace(/\r?\n/g, " ");
+      cell.w = cell.v;
+    }
+  }
   return XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
 }
 

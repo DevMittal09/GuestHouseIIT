@@ -50,9 +50,9 @@ import type { ActionResult } from "./bookings";
  */
 
 const MIGRATION_HINT =
-  "Invoices are not set up yet - apply supabase/migrations/00000000000019_tariffs_and_invoices.sql.";
+  "Invoices are not set up yet - apply scripts/init-postgres.sql (table: invoices).";
 const EXTRA_CHARGES_HINT =
-  "Additional charges are not set up yet - apply supabase/migrations/00000000000026_invoice_additional_charges.sql.";
+  "Additional charges are not set up yet - apply scripts/init-postgres.sql (column: invoices.extra_charges).";
 
 function fail(e: unknown): { ok: false; error: string } {
   if (e instanceof InvoiceStateError) return { ok: false, error: e.message };

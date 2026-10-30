@@ -2,7 +2,8 @@ import "server-only";
 import { Pool, types } from "pg";
 
 // Return timestamps as ISO strings instead of Date objects, matching the
-// shape the rest of the codebase expects (Supabase PostgREST returned strings).
+// shape the rest of the codebase expects (the original Supabase PostgREST
+// layer returned strings).
 // 1114 = timestamp without time zone, 1184 = timestamp with time zone.
 types.setTypeParser(1114, (val: string) => val);
 types.setTypeParser(1184, (val: string) => new Date(val).toISOString());
@@ -22,11 +23,17 @@ export function getPool(): Pool {
     if (!connectionString) {
       throw new Error("DATABASE_URL is not set");
     }
+    const ssl =
+      process.env.DATABASE_SSL === "true" ||
+      /sslmode=require/.test(connectionString)
+        ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true" }
+        : undefined;
     pool = new Pool({
       connectionString,
       max: 20,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
+      ssl,
     });
   }
   return pool;

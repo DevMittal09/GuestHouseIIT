@@ -95,7 +95,7 @@ describe("session rules", () => {
 });
 
 describe("the environment gate", () => {
-  const base = { NODE_ENV: "production", APP_URL: "https://gh.iitpkd.ac.in", CRON_SECRET: "0123456789abcdef", DATABASE_URL: "postgresql://u:p@localhost/gh", ID_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64") } as NodeJS.ProcessEnv;
+  const base = { NODE_ENV: "production", APP_URL: "https://gh.iitpkd.ac.in", CRON_SECRET: "0123456789abcdef", DATABASE_URL: "postgresql://u:p@localhost/gh", ID_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"), GOOGLE_CLIENT_ID: "123.apps.googleusercontent.com", GOOGLE_CLIENT_SECRET: "GOCSPX-test" } as NodeJS.ProcessEnv;
 
   it("passes a complete production environment", () => {
     expect(envProblems(base)).toEqual([]);
@@ -106,6 +106,8 @@ describe("the environment gate", () => {
     expect(names).toContain("DATABASE_URL");
     expect(names).toContain("CRON_SECRET");
     expect(names).toContain("ID_ENCRYPTION_KEY");
+    expect(names).toContain("GOOGLE_CLIENT_ID");
+    expect(names).toContain("GOOGLE_CLIENT_SECRET");
     expect(envProblems({ ...base, CRON_SECRET: "short" })[0].variable).toBe("CRON_SECRET");
     expect(envProblems({ ...base, ID_ENCRYPTION_KEY: "not-a-key" })[0].variable).toBe("ID_ENCRYPTION_KEY");
   });

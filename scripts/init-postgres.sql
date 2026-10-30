@@ -268,7 +268,7 @@ create table public.bookings (
   pets_policy_acknowledged    boolean not null default false,
   pets_policy_acknowledged_at timestamptz,
   has_foreign_national  boolean not null default false,
-  created_by            uuid references public.profiles (id),
+  created_by            uuid references public.profiles (id) on delete set null,
   on_behalf_of_name     text,
   on_behalf_of_email    text,
   on_behalf_of_phone    text,

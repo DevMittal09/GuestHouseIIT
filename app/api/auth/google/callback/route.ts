@@ -62,7 +62,7 @@ export async function GET(request: Request): Promise<Response> {
     return back(`Use your @${LOGIN_DOMAIN} account - personal Google accounts cannot sign in.`, base);
   }
 
-  const profile = (await getStore().listProfiles()).find((p) => p.email.toLowerCase() === identity.email);
+  const profile = await getStore().getProfileByEmail(identity.email);
   if (!profile) {
     await recordAudit(null, "signin.failure", identity.email, { method: "google", reason: "no portal account" });
     return back("That account is not registered on the guest house portal. Please contact the guest house office.", base);

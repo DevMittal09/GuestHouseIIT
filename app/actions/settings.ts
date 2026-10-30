@@ -72,7 +72,7 @@ function fail(e: unknown): ActionResult {
     return {
       ok: false,
       error:
-        "The settings tables are not there yet - apply supabase/migrations/00000000000016_settings_and_audit.sql.",
+        "The settings tables are not there yet - apply scripts/init-postgres.sql (table: app_settings).",
     };
   }
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
