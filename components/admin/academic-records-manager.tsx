@@ -25,6 +25,7 @@ import {
   type AcademicImportPlan,
   type StoredAcademicRecord,
 } from "@/lib/academic/stored";
+import { FileUploadInput } from "@/components/admin/file-upload-input";
 import type { AcademicRecordKind } from "@/lib/academic/types";
 import { formatDateTime } from "@/lib/format";
 
@@ -90,6 +91,7 @@ function ImportSection({ kind }: { kind: AcademicRecordKind }) {
   const [planning, startPlanning] = useTransition();
   const [text, setText] = useState("");
   const [plan, setPlan] = useState<AcademicImportPlan | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const header = csvHeaderFor(kind);
   const columns = csvColumnsFor(kind);
 
@@ -142,7 +144,22 @@ function ImportSection({ kind }: { kind: AcademicRecordKind }) {
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="academic-paste">Records</Label>
+        <Label>Upload a file</Label>
+        <FileUploadInput
+          disabled={isPending || planning}
+          onLoaded={(csv, name) => {
+            setText(csv);
+            setPlan(null);
+            setFileName(name);
+          }}
+        />
+        <p className="text-xs text-muted-foreground">
+          CSV or Excel (.xlsx / .xls). The first sheet is read; the columns must match the order above.
+        </p>
+      </div>
+
+      <div className="relative space-y-1.5">
+        <Label htmlFor="academic-paste">Or paste records</Label>
         <Textarea
           id="academic-paste"
           rows={8}
@@ -153,6 +170,7 @@ function ImportSection({ kind }: { kind: AcademicRecordKind }) {
           onChange={(e) => {
             setText(e.target.value);
             setPlan(null);
+            setFileName(null);
           }}
         />
       </div>
@@ -191,7 +209,7 @@ function ImportSection({ kind }: { kind: AcademicRecordKind }) {
           disabled={planning || isPending || text.trim() === ""}
           onClick={preview}
         >
-          {planning ? "Checking…" : "Check the paste"}
+          {planning ? "Checking…" : fileName ? "Check the file" : "Check the paste"}
         </Button>
         <Button
           type="button"
@@ -214,6 +232,7 @@ function ImportSection({ kind }: { kind: AcademicRecordKind }) {
               () => {
                 setText("");
                 setPlan(null);
+                setFileName(null);
               }
             )
           }

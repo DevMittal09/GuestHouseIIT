@@ -15,6 +15,7 @@ import {
   type UserFormInput,
   type UserImportSummary,
 } from "@/app/actions/admin";
+import { FileUploadInput } from "@/components/admin/file-upload-input";
 import { RequiredFieldsNote } from "@/components/required-fields-note";
 import { Button } from "@/components/ui/button";
 import {
@@ -518,7 +519,14 @@ export function UsersManager({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="users-import">People</Label>
+            <FileUploadInput
+              disabled={isPending}
+              onLoaded={(csv) => {
+                setUsersText(csv);
+                setPlan(null);
+              }}
+            />
+            <Label htmlFor="users-import">Or paste</Label>
             <Textarea
               id="users-import"
               rows={9}
@@ -596,7 +604,14 @@ export function UsersManager({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="ldap-import">Email and LDAP username</Label>
+            <FileUploadInput
+              disabled={isPending}
+              onLoaded={(csv) => {
+                setImportText(csv);
+                setImportProblems([]);
+              }}
+            />
+            <Label htmlFor="ldap-import">Or paste</Label>
             <Textarea
               id="ldap-import"
               rows={8}
