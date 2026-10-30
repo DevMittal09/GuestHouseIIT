@@ -569,6 +569,10 @@ export class MockStore implements DataStore {
     return loadDb().profiles.find((p) => p.id === id) ?? null;
   }
 
+  async getProfileByEmail(email: string): Promise<Profile | null> {
+    return loadDb().profiles.find((p) => p.email.toLowerCase() === email.toLowerCase()) ?? null;
+  }
+
   async listGuestHouses(): Promise<GuestHouse[]> {
     return loadDb().guest_houses;
   }

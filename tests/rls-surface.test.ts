@@ -165,12 +165,10 @@ describe("profiles is independent of Supabase Auth", () => {
     expect(bare).not.toContain("password123");
   });
 
-  it("mints no password in the Supabase store", () => {
-    const store = readFileSync(join(process.cwd(), "lib", "store", "supabase.ts"), "utf8");
+  it("mints no password in the Postgres store", () => {
+    const store = readFileSync(join(process.cwd(), "lib", "store", "postgres.ts"), "utf8");
     const code = withoutComments(store).replace(/\/\*[\s\S]*?\*\//g, "");
     expect(code).not.toContain("password123");
-    expect(code).not.toMatch(/auth\.admin\.createUser/);
-    // Deleting one is still right for an account that predates migration 31.
-    expect(store).toMatch(/auth\.admin\.deleteUser/);
+    expect(code).not.toMatch(/auth\.admin/);
   });
 });

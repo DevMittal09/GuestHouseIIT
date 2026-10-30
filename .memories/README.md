@@ -58,19 +58,22 @@ by one ([01-background.md](01-background.md)). Repository
 **Stack.** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript ·
 Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwright.
-**Node 20** via nvm; the machine default is 18.
+**Node 22 or newer**; see the root [`setup.md`](../setup.md) for runtime and
+deployment requirements.
 
-**Status, 28 Oct 2026.** Feature-complete for every workflow specified; taken
+**Status, 30 Oct 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme, **twelve** rounds of the
 office's corrections and the owner's **thirteenth and fourteenth lists**,
 **five** design passes,
 the round that put **the approval workflow itself in the manager's hands**
 (Console -> Approval Workflow), and two rounds preparing the institute's
 **user import** - which closed a GoTrue door the portal had never used and
-gave the import an **undo**. **The last round is no code at all: the plan for turning
+gave the import an **undo**. **The previous no-code round was the plan for turning
 Google sign-in on** ([`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md)), which found
 the flow already built, three places in the repository saying it was not, and
-two defects worth fixing before it is switched on. **The round before it was
+two defects worth fixing before it is switched on. **The current documentation-only
+round adds the root [`setup.md`](../setup.md)**, a consolidated guide to
+implementation, dependencies and deployment. The round before the Google plan was
 the landing page, asked for a
 third time in one day.** The hero's wash goes to **78%**, its title becomes
 **Guest House Portal** in **bold** (the institute's name is kept, in full, in
@@ -160,7 +163,7 @@ plans, `1x` is the product as configured, `2x` is engineering, `99` is now.
 | [13-billing-and-dining.md](13-billing-and-dining.md) | Tariffs, invoices, GST per section, payments, additional charges, dining |
 | [14-public-site-and-ui.md](14-public-site-and-ui.md) | The public website, the design tokens and primitives, the copy rules, sign-in pages, photographs, the map |
 | [20-architecture.md](20-architecture.md) | **How it is put together and why** (two stores, one auth seam, config-driven forms, institute time, holds in the database) and **where the code for each feature lives** |
-| [21-database.md](21-database.md) | Tables, enums, RLS, storage, **all 30 migrations**, the one-off repairs, resetting data |
+| [21-database.md](21-database.md) | Tables, enums, RLS, storage, **all 34 migrations**, the one-off repairs, resetting data |
 | [22-running-and-testing.md](22-running-and-testing.md) | Running locally, mock vs hosted database, the test suites, every way of verifying a change — and **every error already hit, with its cause and fix** |
 | [99-recent-changes.md](99-recent-changes.md) | **Only the most recent round** — replaced, never appended |
 

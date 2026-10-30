@@ -65,10 +65,12 @@ export const seedRooms: Room[] = [
 // `ldap_uid` is each persona's dummy LDAP username - the local part of the
 // address, as in the institute directory. Passwords are in
 // lib/ldap/mock-directory.ts and .memories/05-credentials-and-security.md.
+// `password_hash` is a pre-computed scrypt hash of each persona's password,
+// so the email+password sign-in works out of the box in development.
 export const seedProfiles: Profile[] = [
   // ----- Requesters -----
-  { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112201001", ldap_uid: "112201001" },
-  { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student", hostel_name: "Saveri", department_or_club: null, roll_number: "142202014", ldap_uid: "142202014" },
+  { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112201001", ldap_uid: "112201001", password_hash: "f1cb701751db82af4445c63677f6406d:2a9973e4ea9e1c635cdb6a69fa14b78a655aba67bc610d9ad1af981d1d3b1b513ee62c86f49d7cf3eabdf484352cc9cf1abd744c431ffd3a925b62cc6caeacec" },
+  { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student", hostel_name: "Saveri", department_or_club: null, roll_number: "142202014", ldap_uid: "142202014", password_hash: "b61fb20ab6aab5973d9384ba7c98dc7e:e5ce4ca41daa40c80256855cd723f90ebb910559363ba8ff367e052c73fce4b483bf5dbc6771b4247d699703e732edc260f57ebb412d1986782a29ec5e6fd7ed" },
   /**
    * A day scholar: `hostel_name` is **genuinely null**, which is what makes
    * this persona the test of the 17 Oct 2026 rule - a student with no hostel
@@ -77,21 +79,12 @@ export const seedProfiles: Profile[] = [
    * every queue and list it appears in; the booking's own log says why it
    * skipped the warden.
    */
-  { id: "student-day-scholar", email: "122203099@smail.iitpkd.ac.in", full_name: "Devika Iyer (day scholar - no hostel)", role: "student", hostel_name: null, department_or_club: null, roll_number: "122203099", ldap_uid: "122203099" },
-  // Faculty in CSE: her official bookings go to the CSE HOD first.
-  { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "priya", unit_id: "unit-cse", staff_category: "faculty" },
-  // An officer office: its bookings are debited to the Institute Grant.
-  { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: "Administration", roll_number: null, ldap_uid: "admin", unit_id: "unit-director-office" },
-  // Belongs to Petrichor, which sits under the Cultural Affairs Council. It
-  // raises no bookings itself: its Faculty Advisor books for it (24 Sep 2026).
-  { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "petrichor", unit_id: "unit-petrichor" },
-  // The council's own account is its secretary's mailbox, which outlives any
-  // one secretary. Like a club, it is booked for by the council's Faculty
-  // Advisor, and it is the address copied on the council's clubs' bookings.
-  { id: "council-cultural", email: "sec_arts@iitpkd.ac.in", full_name: "Cultural Affairs Council", role: "club", hostel_name: null, department_or_club: "Cultural Affairs", roll_number: null, ldap_uid: "sec_arts", unit_id: "unit-cultural" },
-  // No alumni persona: alumni have no institute login, so the IAR Office and
-  // the IAR Student Cell raise those bookings for them (migration 9).
-  { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "alumnicell" },
+  { id: "student-day-scholar", email: "122203099@smail.iitpkd.ac.in", full_name: "Devika Iyer (day scholar - no hostel)", role: "student", hostel_name: null, department_or_club: null, roll_number: "122203099", ldap_uid: "122203099", password_hash: "b5754f4e78bb3cb7c9acb2b9e5d0d985:98323afd6ddb76fa5614c29e3cde61d0600320203176f772917277af58f7525e1508bdd034c9b51ee50062cc174c7f632900beaf3b9198cca201d9249d0687b0" },
+  { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "priya", unit_id: "unit-cse", staff_category: "faculty", password_hash: "93a5cb619e7a40442f41645f79390871:857e12cfc5db2600fc9199f5d90790984de2c017d5a9c1ac8947db541590e6d58f7c627d33aea0518d0299c1b8a6323a82a126790c61b3a0959be35eca310df7" },
+  { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: "Administration", roll_number: null, ldap_uid: "admin", unit_id: "unit-director-office", password_hash: "f6d23983b2c744827683bc51a4fbefa4:28a82b08c7f70ef90bafb57f791efa97a6c8f051b500efb72b93ed0f81ff4abb4cd5c42d6e7058272ad105037b4d404afa8a2c63f455304ae0b5fe32bb491787" },
+  { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "petrichor", unit_id: "unit-petrichor", password_hash: "b81b6055ba585fc2a49621d221e62051:4f2b238212723ba19706e37b4edfd9c523a30796dd43569f29bcd297e500d6ba457d443f59c2f33bae41583ad02f08ee9c72533715f801fa7e6bf7310051458b" },
+  { id: "council-cultural", email: "sec_arts@iitpkd.ac.in", full_name: "Cultural Affairs Council", role: "club", hostel_name: null, department_or_club: "Cultural Affairs", roll_number: null, ldap_uid: "sec_arts", unit_id: "unit-cultural", password_hash: "c1da2f119deeb0d7b7d3248c4a8f9354:34c33597737c852dbeffa103e85e3f7247354ecd6858ab6400015cee96c9d3c817885b3b7266204608e0caf84a26e431635c454df25c2a5863a19b989c95c4db" },
+  { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "alumnicell", password_hash: "6f3bad73241791a2a270073c51863d27:61efe77695cc944c59fefeca4c5911005b66633cc94cc35c7a6c6c4a18f73d0242635fa0cd5c1cc1f969ec54e9c4d279e0f28447f8aeae0d7622ffbb38470f38" },
   // ----- Unit heads (migration 15) -----
   // Approvers by appointment rather than by role: the HOD is an employee, the
   // council secretary a student. Change who heads a unit in the console and
@@ -100,22 +93,18 @@ export const seedProfiles: Profile[] = [
   // of Petrichor - an appointment in Departments & Clubs, not an account of
   // its own, so New Booking offers him "Book as Faculty Advisor" beside his
   // own bookings, and naming someone else there moves it to them.
-  { id: "faculty-arun", email: "arun.prasad@iitpkd.ac.in", full_name: "Dr. Arun Prasad", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "arun.prasad", unit_id: "unit-cse", staff_category: "faculty" },
-  { id: "hod-cse", email: "hod.cse@iitpkd.ac.in", full_name: "Prof. R. Venkatesh (HOD, CSE)", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "hod.cse", unit_id: "unit-cse", staff_category: "faculty" },
-  { id: "secretary-cultural", email: "112301045@smail.iitpkd.ac.in", full_name: "Meera Nair (Cultural Secretary)", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112301045", ldap_uid: "112301045" },
+  { id: "faculty-arun", email: "arun.prasad@iitpkd.ac.in", full_name: "Dr. Arun Prasad", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "arun.prasad", unit_id: "unit-cse", staff_category: "faculty", password_hash: "d14ef55b046be291f52f0d6c393af423:2e1b2c801c331c29748cdb76b8fb9fa6ab8c78c915bb88619fadef1fc7318f6cb77c6b50813fc7d30cf6f1a7e874d3d032d473128b2873c8e862dc3e66e459b7" },
+  { id: "hod-cse", email: "hod.cse@iitpkd.ac.in", full_name: "Prof. R. Venkatesh (HOD, CSE)", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "hod.cse", unit_id: "unit-cse", staff_category: "faculty", password_hash: "39e0c3160d746a4420ac176fe3a33bdd:a140b2decce6efa36bb1f1fc238e30850d04d3c8c4ad84de7f8b4991c596a8cbc6708d65a213b94633148bad68d0d8bc868c9ac120cb3b1252cc952e58df5be7" },
+  { id: "secretary-cultural", email: "112301045@smail.iitpkd.ac.in", full_name: "Meera Nair (Cultural Secretary)", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112301045", ldap_uid: "112301045", password_hash: "fe27b3ab0f365923476e2ccc7a1d93c6:128542b56fda7755150ed2d36cd96bac48a1e5671702b2a9d563fabf7cd840f25fcc584a95d948457036982ec8341b219fbf9b11f704efdb26b408eb830fab96" },
   // ----- Reviewers / Admins -----
-  { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Assistant Warden, Malhar)", role: "warden", hostel_name: "Malhar", department_or_club: null, roll_number: null, ldap_uid: "warden.malhar" },
-  { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Assistant Warden, Saveri)", role: "warden", hostel_name: "Saveri", department_or_club: null, roll_number: null, ldap_uid: "warden.saveri" },
-  // A department office (Phase 4): its official bookings go Direct or to
-  // the CSE HOD, as the office chooses, and are debited to the Department.
-  { id: "office-cse", email: "cse.office@iitpkd.ac.in", full_name: "CSE Department Office", role: "official", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "cse.office", unit_id: "unit-cse-office" },
-  // Non-teaching staff in CSE: official bookings go to the HOD too, and are
-  // debited to the Department only.
-  { id: "staff-ravi", email: "ravi.k@iitpkd.ac.in", full_name: "Ravi K. (Technical Staff, CSE)", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "ravi.k", unit_id: "unit-cse", staff_category: "staff" },
-  { id: "iar-cell", email: "iar@iitpkd.ac.in", full_name: "IAR Office", role: "iar_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "iar", unit_id: "unit-iar-office" },
-  { id: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "guesthouse" },
-  { id: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "gh.reception" },
-  { id: "developer", email: "developer@iitpkd.ac.in", full_name: "Portal Developer", role: "developer", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "developer" },
+  { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Assistant Warden, Malhar)", role: "warden", hostel_name: "Malhar", department_or_club: null, roll_number: null, ldap_uid: "warden.malhar", password_hash: "f4e0ce15b1fe7e145b4c9f1d3f4dbdac:62153839363a3c608fddf6fc4121616a1d84e1d4f64b7a6c8987819f1218f241657d9ed3ffb082b42e7ce0692ee674bd961239ac0fc59698828b3ba500ded8ff" },
+  { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Assistant Warden, Saveri)", role: "warden", hostel_name: "Saveri", department_or_club: null, roll_number: null, ldap_uid: "warden.saveri", password_hash: "d3475d1cbb929892b32817e388324488:d73592e4c98ba3a36f1eceeb1319e849d5a1113a00d307fa8d51d3966ba7a8b690a889cb498383fe2fddd4c926051e82411a22fbce83af5697fc96268e893ed0" },
+  { id: "office-cse", email: "cse.office@iitpkd.ac.in", full_name: "CSE Department Office", role: "official", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "cse.office", unit_id: "unit-cse-office", password_hash: "e5211e3b8cb33bd9732653d1551093cb:9b3eb09bbbbb57e62a94c04f85e148fc4999b76bf13697ab97592853b7a44a865531589c23cc53182e7ffa5130e43c0c33ceffccd1bb0d4fcca67b1f847ee09a" },
+  { id: "staff-ravi", email: "ravi.k@iitpkd.ac.in", full_name: "Ravi K. (Technical Staff, CSE)", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "ravi.k", unit_id: "unit-cse", staff_category: "staff", password_hash: "905d262bd204d2b62d37b0a9d255396d:bfbcfc04a182c104582637b18f0452eacf4b26de80800e3ea9fb603a7783a8df41696c9c4afe531bb4005fa9188bc6676d1023d4cb7e739696a173c182f1c223" },
+  { id: "iar-cell", email: "iar@iitpkd.ac.in", full_name: "IAR Office", role: "iar_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "iar", unit_id: "unit-iar-office", password_hash: "6e4fcfc7c4a1d2c4fcbee7a0691b47d0:084190b6ee96f50b142c4fe1cadc376a34b912fc3c99dff33cd19a3a3cb1a2462b6cf7e8525284080c1bb216cce79261f0c47e517ffb6f11d7a4586103bc5375" },
+  { id: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "guesthouse", password_hash: "9cebc84de7db94a347aa96df00d3a00b:6b8209d6f76dda193fd8e8c27154ae6d2690b0f7fe61ccd22bb24037324ae34f4e9f755f45d2d540e4174372de2a2fb3a1028464c73926ec82d7cd73e4d04002" },
+  { id: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "gh.reception", password_hash: "97faeea7471eebaf0a69e03c284f4617:e1ddd860448350e7bf254a008e661501cf868845ded7dd1b8ad13e456117f104a12f9a41d8207b92129e9d3a4f224680923ec9ec0bb7dc08c042b5e7669ff2a5" },
+  { id: "developer", email: "developer@iitpkd.ac.in", full_name: "Portal Developer", role: "developer", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "developer", password_hash: "7daa8fdc2cb3c1dd4755618707e350f6:81a644aa7479374d204219220651a595985107f9e91588c0be0535ca9e32598877aed5724aae51032e7269ad22cbfb6f95d8ce57ed30f5f1bf551e45cf6a6008" },
 ];
 
 /**

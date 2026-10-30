@@ -212,6 +212,8 @@ export type Profile = {
    * until a developer sets it. Unique, compared lowercased.
    */
   ldap_uid: string | null;
+  /** scrypt hash of the account password, null until one is set. */
+  password_hash?: string | null;
   /**
    * The department, club or office this person belongs to (migration 15). It
    * is what their approver is found through - see `lib/units.ts`. Optional

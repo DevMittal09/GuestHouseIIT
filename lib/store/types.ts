@@ -116,11 +116,12 @@ export type NewLogInput = Omit<BookingLog, "id" | "booking_id" | "timestamp" | "
 
 /**
  * Storage abstraction. `MockStore` (JSON file, zero setup) is used when no
- * Supabase env vars are present; `SupabaseStore` otherwise.
+ * DATABASE_URL is present; `PostgresStore` otherwise.
  */
 export interface DataStore {
   listProfiles(): Promise<Profile[]>;
   getProfile(id: string): Promise<Profile | null>;
+  getProfileByEmail(email: string): Promise<Profile | null>;
 
   listGuestHouses(): Promise<GuestHouse[]>;
   getGuestHouse(id: string): Promise<GuestHouse | null>;

@@ -2081,9 +2081,9 @@ restore. First and so far only: **`archive/privacy-notice/`**.
   `!.env.example` exception must stay.
 - Domain shapes in `lib/types.ts` are `type` aliases, not `interface`, so
   Supabase's generated `Insert`/`Update` helpers accept them.
-- **Node version.** The system default is Node v18, but Next.js 16 requires
-  `>= 20.9.0`. Load nvm first:
-  `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 20`
+- **Node version.** The system default is Node v18, but this project requires
+  Node.js `>= 22.0.0` (`package.json`). Load the supported version first:
+  `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 22`
   before running `npm run dev` / `npm run build`.
 
 ## Demo personas

@@ -17,6 +17,11 @@ and reorganised **10 Oct 2026**. The portal is feature-complete for every
 workflow the institute has specified and has been through a ten-phase
 production-readiness programme; it is **not deployed for real use**.
 
+The repo-root [`setup.md`](../setup.md) is the consolidated implementation,
+dependency, migration and deployment guide. This roadmap remains the source
+for what is still open; the production checklist is in
+[04-production.md](04-production.md).
+
 ---
 
 ## 1. Gates before real bookings go on it

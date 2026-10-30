@@ -63,6 +63,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **28 Oct** | **The Taramani pass, and the sign-in.** Two briefs. The first names the [Taramani Guest House](https://tgh.iitm.ac.in/) as the standard: a stronger hero (saffron kicker, a 66% wash, a **solid saffron** second door), **one opaque charcoal header on every page** with the links **centred**, Amenities / Our guest houses / Contact us **centred**, the gallery recomposed into two unequal bands - and, application-wide, **no rule under any heading** (`rule-title` deleted) and **everything selected filled rather than underlined**. The second is functional: **LDAP comes off the sign-in page** (one button, the mock account picker; the action and directory untouched), the advance-window and stay-cap sentences come **off the booking form** (no rule changed), a count reads **"Current bookings: 1"**, and the manager's console **stops drawing a list with nothing in it** - the index at the top is where a zero is reported. Reception got the same. **No migration.** |
 | **28 Oct** (second) | **The landing page again, and Taramani named a second time.** The owner: the hero type "is blending with the background too much", and the page "overall looks very basic... make it look creative and aesthetic". The wash goes **66% -> 78%**, the `<h1>` becomes **Guest House Portal** in **bold** (the institute's name is kept, in full, as the tracked saffron line above it), and the lead loses `font-light`. Below it the page gains **an opening statement computed from the store** where it used to drop straight from a photograph into six icons; the amenities move **onto ink with saffron icons** - the page's one dark band; the gallery becomes a **twelve-column mosaic**; and the two guest houses become **one ruled plate** with their names at display size. Still no shadow, gradient, pill or 16px radius: all of it bought with composition, ground, type and one accent colour. **Public site only - no migration, no store operation, no booking rule.** |
 | **28 Oct** (third) | **The Google sign-in plan - no application code.** The owner asked how to set up Google OAuth, given that the institute's **email data for every user is being collected**. The review found the flow **already built and verified** (Phase 8: `lib/oidc.ts` and `app/api/auth/google/*` - PKCE, state, nonce, the `id_token` checked against Google's JWKS, the `hd` claim and `isInstituteEmail`, then a profile that must already exist) and **three places saying it was not**, each of which would have sent the next session to build it again. Output: **[`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md)** at the repo root, and corrections to `lib/env.ts`, `lib/site.ts`, `AGENTS.md` and `.env.example` (which also pointed at a memory file deleted on 10 Oct). Two defects recorded rather than fixed: the callback finds the account by scanning **every** profile, which Supabase truncates at **1000 rows silently** (roadmap **gate 12** - it breaks the institute's account import too, and migration 31's `lower(email)` index has been unused since 13 Oct), and `hd=iitpkd.ac.in` on the start leg is narrower than the return leg's own rule, so it may hide every `@smail` student from Google's account chooser. **No migration, no store operation, no booking rule, no permission and no route.** |
+| **30 Oct** | **The deployment guide.** The owner asked for a whole-code implementation overview, dependencies and migration-by-migration deployment instructions. Added root [`setup.md`](../setup.md), covering architecture, runtime/package requirements, local setup, environment variables, sign-in gates, all 34 Supabase migrations, verification limits, Vercel schedules, operational safeguards and troubleshooting. Updated the root README to point at the guide and remove outdated deployment guidance. **Documentation only; no application behavior changed.** |
 
 ## The problem
 
@@ -1380,3 +1381,24 @@ Both recorded, neither fixed - the ask was a plan:
   per-IP rate limit behind one campus NAT, the 29 other `listProfiles()`
   callers, and the e2e suite that configuring Google would delete the door
   out from under.
+
+---
+
+## Round of 30 October 2026 - the deployment setup guide
+
+The owner asked for an implementation overview, all required dependencies,
+and deployment instructions that include the database migration dependencies.
+
+### What was asked, and the status of each item
+
+| § | Asked | Status |
+|---|---|---|
+| 1 | Explain how the application is implemented | **Done.** Root [`setup.md`](../setup.md) describes the Next.js app, server actions, auth and authorization, data-store adapters, Supabase, uploads, mail and scheduled routes. |
+| 2 | List dependencies and local requirements | **Done.** The guide records the Node/npm requirements, package stack, integrations, local setup and test/build commands. |
+| 3 | Document deployment and migration dependencies | **Done.** It covers required production configuration, all 34 ordered migrations, manual migration verification, the migration 31 rollout and Vercel schedules. |
+| 4 | Make the guide discoverable and keep project memory current | **Done.** The root README links to it; this index, the roadmap, production checklist and recent-change record point to it. |
+
+Documentation-only apart from a CRLF-safe line split in the memory-link
+checker, so running the required validation on Windows reads existing headings
+correctly. No application behavior, schema, permissions, routes or runtime
+dependencies changed.

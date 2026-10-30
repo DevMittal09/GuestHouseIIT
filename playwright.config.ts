@@ -44,7 +44,6 @@ export default defineConfig({
     env: {
       NODE_ENV: "production",
       MOCK_DB_PATH: DB,
-      NEXT_PUBLIC_SUPABASE_URL: "",
       ALLOW_MOCK_STORE: "true",
       MAIL_DRY_RUN: "true",
       APP_URL: `http://127.0.0.1:${PORT}`,

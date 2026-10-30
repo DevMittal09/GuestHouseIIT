@@ -17,6 +17,11 @@ in [02-decisions.md](02-decisions.md); what is open in general is
 and this file disagree, **this one is about production and wins for
 production**.
 
+For the consolidated architecture, dependencies, environment setup, migration
+sequence and Vercel deployment walkthrough, see the repo-root
+[`setup.md`](../setup.md). This file remains the production checklist and
+source for institute-specific prerequisites.
+
 ---
 
 # Part 1 — The production checklist
@@ -1448,4 +1453,3 @@ Security, and an audit trail of each.
    over from you.
 
 ---
-

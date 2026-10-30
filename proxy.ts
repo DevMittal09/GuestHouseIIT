@@ -14,7 +14,7 @@ import { NextResponse, type NextRequest } from "next/server";
  *   attributes, which a nonce cannot cover.
  * - `frame-src` Google Maps: the Contact page embeds the institute's own pin.
  * - `img-src data:`/`blob:`: the invoice preview and the PDF download.
- * - `connect-src` Supabase: the browser talks to it directly for realtime.
+ * - `connect-src 'self'`: all connections stay on the same origin.
  * - fonts are self-hosted by `next/font`, so `font-src 'self'` is enough.
  *
  * Portal pages also get `X-Robots-Tag: noindex`: the booking portal and the
@@ -35,20 +35,16 @@ const PORTAL_PREFIXES = [
   "/approvals",
   "/availability",
   "/api",
-  "/mock-login",
 ];
 
 function contentSecurityPolicy(nonce: string, isProduction: boolean): string {
-  const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   return [
     "default-src 'self'",
-    // `strict-dynamic` makes the host list below irrelevant in modern
-    // browsers; it is there for ones that do not understand it.
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https: ${isProduction ? "" : "'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    `connect-src 'self' ${supabase}`.trim(),
+    "connect-src 'self'",
     "frame-src https://www.google.com https://maps.google.com",
     "frame-ancestors 'none'",
     "form-action 'self'",

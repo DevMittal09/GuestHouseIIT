@@ -34,7 +34,7 @@ async function openConsole(
   page: Page,
   path: string,
   heading: string,
-  as: { uid: string; name: string } = ACCOUNTS.manager
+  as: { uid: string; email: string; password: string; name: string } = ACCOUNTS.manager
 ) {
   await signIn(page, as);
   await page.goto(path);

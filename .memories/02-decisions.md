@@ -6814,3 +6814,27 @@ Centre, and one real student account settles it. It is also why the
 collected **email column must be the Google *primary* address** - an alias or
 an HR-sheet address never matches, and the whole support load of a rollout
 lands on that one column.
+
+## A root deployment guide, with the project memory remaining authoritative (30 October 2026)
+
+The deployment request needed one file a new operator could follow without
+assembling the architecture, package requirements, environment variables,
+migrations and hosting steps from several notes. Put that walkthrough in the
+repo-root [`setup.md`](../setup.md), and point to it from the root README.
+
+The guide is an entry point, not a second source of truth: the production
+checklist and institute-specific prerequisites stay in
+[`04-production.md`](04-production.md), the complete secret and environment
+inventory in [`05-credentials-and-security.md`](05-credentials-and-security.md),
+and unresolved work in [`03-roadmap.md`](03-roadmap.md). Migration state must
+still be checked against the target database, not inferred from the guide.
+
+The README's former Supabase and sign-in instructions described an older
+schema and UI. They were replaced by a pointer to the current guide; the
+generic frequent-dispatch cron example is explicitly distinguished from the
+daily Vercel schedule.
+
+Running the required memory check on Windows exposed a parser issue:
+`anchorsOf()` split only on LF, so CRLF headings were reported as missing. Its
+line split now accepts either line ending; this fixes the validator rather
+than rewriting sound links throughout the memory files.

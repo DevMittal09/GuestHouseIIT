@@ -20,7 +20,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
-    env: { TZ: "UTC", NEXT_PUBLIC_SUPABASE_URL: "" },
+    env: { TZ: "UTC" },
     // Store tests share one JSON file per worker; keep files isolated.
     pool: "forks",
     // Store tests do real file I/O and run in parallel; the defaults (5 s /

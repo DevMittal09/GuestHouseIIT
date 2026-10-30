@@ -1,27 +1,10 @@
-import { cookies } from "next/headers";
 import { cache } from "react";
-import { devLoginEnabled } from "@/lib/env";
-import { currentSession, steppedUp, LEGACY_COOKIE, type Session } from "@/lib/sessions";
+import { currentSession, steppedUp, type Session } from "@/lib/sessions";
 import { getStore } from "@/lib/store";
 import type { Profile } from "@/lib/types";
 
-/**
- * Who is making this request.
- *
- * The session is a row in `sessions` and the cookie is an opaque token
- * (`lib/sessions.ts`); this module stays the **only** reader of it, so every
- * page and action asks the same question in the same way. Nothing else in the
- * codebase touches the cookie.
- *
- * `gh_mock_user` - the old "cookie holding a profile id" - is honoured only
- * when the developer sign-in doors are switched on (`DEV_LOGIN=true`, never in
- * production). That is what lets a developer switch persona in one click; in
- * production the branch does not exist.
- */
-
 export type SessionUser = {
   user: Profile;
-  /** Null for a developer-impersonated session (dev only). */
   session: Session | null;
 };
 
@@ -30,14 +13,6 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   if (session) {
     const user = await profileOrNull(session.user_id);
     return user ? { user, session } : null;
-  }
-  if (devLoginEnabled()) {
-    const jar = await cookies();
-    const id = jar.get(LEGACY_COOKIE)?.value;
-    if (id) {
-      const user = await profileOrNull(id);
-      if (user) return { user, session: null };
-    }
   }
   return null;
 });

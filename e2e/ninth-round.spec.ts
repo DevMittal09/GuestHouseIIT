@@ -24,7 +24,7 @@ async function openConsole(
   page: Page,
   path: string,
   present: string | RegExp,
-  as: { uid: string; name: string } = ACCOUNTS.manager
+  as: { uid: string; email: string; password: string; name: string } = ACCOUNTS.manager
 ) {
   await signIn(page, as);
   await page.goto(path);

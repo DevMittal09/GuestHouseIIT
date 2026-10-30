@@ -27,7 +27,6 @@ export default function robots(): MetadataRoute.Robots {
           "/approvals",
           "/availability",
           "/api",
-          "/mock-login",
           "/sign-in",
         ],
       },

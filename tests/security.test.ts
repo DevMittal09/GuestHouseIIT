@@ -95,7 +95,7 @@ describe("session rules", () => {
 });
 
 describe("the environment gate", () => {
-  const base = { NODE_ENV: "production", APP_URL: "https://gh.iitpkd.ac.in", CRON_SECRET: "0123456789abcdef", NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "k", ID_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64") } as NodeJS.ProcessEnv;
+  const base = { NODE_ENV: "production", APP_URL: "https://gh.iitpkd.ac.in", CRON_SECRET: "0123456789abcdef", DATABASE_URL: "postgresql://u:p@localhost/gh", ID_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64") } as NodeJS.ProcessEnv;
 
   it("passes a complete production environment", () => {
     expect(envProblems(base)).toEqual([]);
@@ -103,16 +103,15 @@ describe("the environment gate", () => {
 
   it("refuses production without the secrets, and with the developer door open", () => {
     const names = envProblems({ NODE_ENV: "production" } as NodeJS.ProcessEnv).map((p) => p.variable);
-    expect(names).toContain("NEXT_PUBLIC_SUPABASE_URL");
+    expect(names).toContain("DATABASE_URL");
     expect(names).toContain("CRON_SECRET");
     expect(names).toContain("ID_ENCRYPTION_KEY");
-    expect(envProblems({ ...base, DEV_LOGIN: "true" })[0].variable).toBe("DEV_LOGIN");
     expect(envProblems({ ...base, CRON_SECRET: "short" })[0].variable).toBe("CRON_SECRET");
     expect(envProblems({ ...base, ID_ENCRYPTION_KEY: "not-a-key" })[0].variable).toBe("ID_ENCRYPTION_KEY");
   });
 
   it("says nothing in development", () => {
-    expect(envProblems({ NODE_ENV: "development", DEV_LOGIN: "true" } as NodeJS.ProcessEnv)).toEqual([]);
+    expect(envProblems({ NODE_ENV: "development" } as NodeJS.ProcessEnv)).toEqual([]);
   });
 });
 

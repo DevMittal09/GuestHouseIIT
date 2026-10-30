@@ -9,9 +9,9 @@ Deploying and operating it live is [04-production.md](04-production.md); every
 login and secret is
 [05-credentials-and-security.md](05-credentials-and-security.md).
 
-> **Node 20.** The machine's default Node is v18 and Next.js 16 needs
-> ≥ 20.9. Load nvm first in every new shell:
-> `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 20`.
+> **Node 22 or newer.** The machine's default Node is v18; `package.json`
+> requires `>= 22.0.0`. Load the supported version first in every new shell:
+> `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 22`.
 
 ---
 
@@ -801,14 +801,14 @@ free.
 Supabase's generated `Insert` / `Update` helpers accept them. Converting one to an
 `interface` will produce confusing assignability errors in `lib/store/supabase.ts`.
 
-### `npm run dev` says Node.js >= 20.9.0 required
+### `npm run dev` reports an unsupported Node.js version
 
 **Cause.** The system default is Node v18.19.1 and `nvm` is not loaded in the
 current terminal session.
 
-**Fix.** Load nvm first, then run:
+**Fix.** The package requires Node.js >= 22.0.0. Load nvm first, then run:
 ```bash
-export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use 20
+export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use 22
 ```
 Then `npm run dev`, `npm run build`, etc. will work. Keep the terminal open;
 the Node version persists for the session.
@@ -1124,7 +1124,7 @@ check-in and pick a day that differs from it - it is in
 A clean loop, then:
 
 ```bash
-export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 20
+export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 22
 pkill -f "[n]ext start"; pkill -f "[n]ext-server"   # once up it renames itself
 ss -ltnp | grep 3100 || true              # must print nothing; the database is wiped by global-setup
 NEXT_PUBLIC_SUPABASE_URL= npm run build   # empty, or the bundle talks to hosted Supabase

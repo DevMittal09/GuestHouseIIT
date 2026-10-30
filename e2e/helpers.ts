@@ -14,33 +14,22 @@ import path from "node:path";
  */
 
 /**
- * The seeded accounts, by the name the account picker prints.
- *
- * **The suite signs in the way a person now does** (27 Oct 2026): the sign-in
- * page has one button, and it opens the account picker at `/mock-login`. The
- * LDAP form is gone from the interface, so `uid` and `password` are no longer
- * typed anywhere - they are kept here because they are still the dummy
- * directory's credentials (`lib/ldap/mock-directory.ts`), which
- * `signInWithLdap` and *Import LDAP usernames* still use, and because `uid`
- * is this map's key for the session cache.
+ * The seeded accounts. Each has an email and password for the sign-in form,
+ * and the `uid` key for the session cache.
  */
 export const ACCOUNTS = {
-  student: { uid: "112201001", password: "Anjali@2026", name: "Anjali Menon" },
-  // A day scholar: no hostel on the profile, so no Assistant Warden stage
-  // (17 Oct 2026). The test account for that route.
-  dayScholar: { uid: "122203099", password: "Devika@2026", name: "Devika Iyer" },
-  faculty: { uid: "priya", password: "Priya@2026", name: "Dr. Priya Sharma" },
-  hod: { uid: "hod.cse", password: "HodCse@2026", name: "Prof. R. Venkatesh" },
-  warden: { uid: "warden.malhar", password: "Malhar@2026", name: "Dr. Suresh Kumar" },
-  manager: { uid: "guesthouse", password: "Manager@2026", name: "Guest House Manager" },
-  caretaker: { uid: "gh.reception", password: "Reception@2026", name: "Guest House Caretaker" },
-  developer: { uid: "developer", password: "Developer@2026", name: "Portal Developer" },
-  iarStudentCell: { uid: "alumnicell", password: "AlumniCell@2026", name: "IAR Student Cell" },
-  iarOffice: { uid: "iar", password: "IarOffice@2026", name: "IAR Office" },
-  // Two offices that differ in one thing: the Director's Office has no HOD,
-  // the CSE Department Office answers to the CSE HOD (11 Oct 2026).
-  directorOffice: { uid: "admin", password: "Director@2026", name: "Director's Office" },
-  departmentOffice: { uid: "cse.office", password: "CseOffice@2026", name: "CSE Department Office" },
+  student: { uid: "112201001", email: "112201001@smail.iitpkd.ac.in", password: "Anjali@2026", name: "Anjali Menon" },
+  dayScholar: { uid: "122203099", email: "122203099@smail.iitpkd.ac.in", password: "Devika@2026", name: "Devika Iyer" },
+  faculty: { uid: "priya", email: "priya@iitpkd.ac.in", password: "Priya@2026", name: "Dr. Priya Sharma" },
+  hod: { uid: "hod.cse", email: "hod.cse@iitpkd.ac.in", password: "HodCse@2026", name: "Prof. R. Venkatesh" },
+  warden: { uid: "warden.malhar", email: "warden.malhar@iitpkd.ac.in", password: "Malhar@2026", name: "Dr. Suresh Kumar" },
+  manager: { uid: "guesthouse", email: "guesthouse@iitpkd.ac.in", password: "Manager@2026", name: "Guest House Manager" },
+  caretaker: { uid: "gh.reception", email: "gh.reception@iitpkd.ac.in", password: "Reception@2026", name: "Guest House Caretaker" },
+  developer: { uid: "developer", email: "developer@iitpkd.ac.in", password: "Developer@2026", name: "Portal Developer" },
+  iarStudentCell: { uid: "alumnicell", email: "alumnicell@iitpkd.ac.in", password: "AlumniCell@2026", name: "IAR Student Cell" },
+  iarOffice: { uid: "iar", email: "iar@iitpkd.ac.in", password: "IarOffice@2026", name: "IAR Office" },
+  directorOffice: { uid: "admin", email: "admin@iitpkd.ac.in", password: "Director@2026", name: "Director's Office" },
+  departmentOffice: { uid: "cse.office", email: "cse.office@iitpkd.ac.in", password: "CseOffice@2026", name: "CSE Department Office" },
 } as const;
 
 /** A 1×1 PNG that passes the upload sniffer, for guest ID documents. */
@@ -59,28 +48,21 @@ export const ID_DOCUMENT = path.join(process.cwd(), "e2e", "fixtures", "id-docum
  */
 const sessions = new Map<string, Cookie[]>();
 
-export async function signIn(page: Page, account: { uid: string; name: string }): Promise<void> {
+export async function signIn(page: Page, account: { uid: string; email: string; password: string; name: string }): Promise<void> {
   await page.context().clearCookies();
   const saved = sessions.get(account.uid);
   if (saved) {
     await page.context().addCookies(saved);
-    // A live session is sent on from /sign-in to its home.
     await page.goto("/sign-in");
     if (!new URL(page.url()).pathname.startsWith("/sign-in")) return;
     await page.context().clearCookies();
   }
+  const res = await page.request.post("/api/auth/dev-sign-in", {
+    data: { email: account.email, password: account.password },
+  });
+  if (!res.ok()) throw new Error(`dev-sign-in failed for ${account.email}: ${res.status()}`);
   await page.goto("/sign-in");
-  // Scoped to the page: the header carries a "Sign in" link of its own.
-  await page.getByRole("main").getByRole("link", { name: "Sign in", exact: true }).click();
-  await page.waitForURL((url) => url.pathname.startsWith("/mock-login"), { timeout: 30_000 });
-  // Each persona's button reads "<name> <email> <role>", so the name is
-  // anchored: "Guest House Manager" is also a role badge on nobody else's
-  // button, but a bare substring would have matched it there one day.
-  await page
-    .getByRole("button", { name: new RegExp(`^${account.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`) })
-    .first()
-    .click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/mock-login"), { timeout: 30_000 });
+  await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"), { timeout: 30_000 });
   sessions.set(account.uid, await page.context().cookies());
 }
 
