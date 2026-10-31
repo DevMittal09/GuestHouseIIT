@@ -759,6 +759,48 @@ No code changed in the application. What the review of the auth seam turned up:
   naming the office's address from `GUEST_HOUSE_CONTACT` would give the
   person somewhere to go. [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §9.
 
+## 2o. Asked on 31 Oct 2026 - spouse eligibility for MS and PhD students
+
+**Nothing is built.** The rule and the roll-number scheme it reads are written
+up in [11-booking-forms.md](11-booking-forms.md#the-roll-number-encodes-the-programme-31-oct-2026);
+this is what building it would touch.
+
+- **MS and PhD students may book for a spouse with no parent on the
+  request** - an exemption from the parent-dependency rule, for a **spouse
+  only**. Programme comes from the **sixth character of the roll number**
+  (`3` MS, `4` PhD), not from a new field and not from the academic record's
+  free-text `program`.
+- **It is config, like the two rules beside it.** `parent_relationships`,
+  `dependent_relationships` and `unique_relationships` are all
+  `RoleFormConfig` arrays the Form Builder can rename, so a relationship
+  named in code would be the first thing to drift. The exemption wants the
+  same shape - a `spouse_relationships`-style list, defaulted for `student`
+  and empty for everyone else - and `Spouse` added to
+  `STUDENT_RELATIONSHIPS`, `STUDENT_UNIQUE_RELATIONSHIPS` (one spouse) and
+  the saved-row backfill in `sanitizeFormConfig`. A student row saved in the
+  Form Builder before it will not have `Spouse` until it is added there or
+  reset, exactly as happened with `Self` on 30 Sep.
+- **One matcher, both sides.** `parentDependencyError(config,
+  relationships)` is called by the form *and* `bookingPayloadSchema`, so the
+  programme has to reach both - a field on `BookingSchemaContext`, computed
+  once per page and again in `createBooking` from the requester's own
+  profile, the way `guestNames` carries the locked parent names. **Never
+  from the payload**: the programme decides what the request may contain.
+- **The widening to avoid.** The exemption must excuse a **spouse** and
+  nothing else: a sibling or a grandparent on an MS student's request still
+  needs a parent. Tests for both directions, plus a roll number that is
+  null, short or non-numeric reading as **no exemption**.
+- **No persona is on `4` or `5`.** Testing PhD eligibility needs a seeded
+  student with a `4` in the sixth place, and the dummy academic record to
+  match - [11-booking-forms.md](11-booking-forms.md) Part 2 §3 and
+  `lib/academic/mock-source.ts` are kept in step by hand.
+- **Arrived with two other items**, recorded here so the next session does not
+  re-derive their status: the **NULL-hostel student bypassing the warden** is
+  **already done** (17 Oct 2026 - `approverNotApplicable`, with the day
+  scholar persona), and **dropping the denominator from every room-availability
+  figure** (`5/20` to `5`) is **open** - `components/availability-counts.tsx`
+  still prints `/{total}` and "of {total} rooms free all day".
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the

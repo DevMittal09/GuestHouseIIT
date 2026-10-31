@@ -129,6 +129,57 @@ its form is not in the Form Builder and every guest field is required.
 
 ---
 
+### The roll number encodes the programme (31 Oct 2026)
+
+**The sixth character of a student's roll number** is their programme. The
+office writes the pattern `xxxxxNxxx`. `profiles.roll_number` holds the
+string (the academic record carries the same one, with a free-text
+`program` beside it).
+
+| Sixth character | Programme | Seeded example |
+| --- | --- | --- |
+| `1` | B.Tech | `112201001` - Anjali Menon |
+| `2` | M.Tech | `142202014` - Rahul Nair |
+| `3` | MS | `122203099` - Devika Iyer (the day scholar) |
+| `4` | PhD | none |
+| `5` | M.Sc | none |
+
+The seeded students already agree with the scheme, and so does the dummy
+academic record's own `program` string (`lib/academic/mock-source.ts`):
+`112201001` reads B.Tech there and `142202014` M.Tech. **No persona is on `4`
+or `5`**, so a PhD or M.Sc roll number has to be created to test anything that
+turns on one.
+
+**What it is for.** The office asked on 31 Oct 2026 that **MS and PhD students
+be able to book for a spouse with no parent on the request** - an exemption
+from the parent-dependency rule above, for a **spouse only**. B.Tech, M.Tech
+and M.Sc students are unchanged, and an MS or PhD student still needs a parent
+on the request for a sibling or a grandparent.
+
+**Why the roll number and not a field.** The programme is already in the
+identifier the institute issues, so deriving it needs no column, no migration
+and nothing for the office to maintain - and a hand-kept programme field is
+exactly how a student's eligibility would drift from the programme they are
+actually on. The academic record's `program` is **not** the source of truth
+for it: it is free text somebody pasted in, it is absent for anyone with no
+record, and `academicRecordFor()` falls back to the profile on an outage - a
+down academic database must never change what a form allows.
+
+**Where it can read as nothing.** `roll_number` is **nullable** and is not
+guaranteed to be nine digits or even numeric: a transfer, a legacy account or
+a hand-typed profile can hold anything. A value shorter than six characters,
+or whose sixth character is not one of the five above, has **no programme and
+therefore no exemption** - the existing rules apply unmodified. That is the
+safe direction, and the only safe one: an unreadable roll number must never
+widen what a student may book.
+
+> **Status: not implemented.** Nothing in the code reads the sixth character,
+> `Spouse` is on no relationship list, and `parentDependencyError`
+> (`lib/form-config.ts`) is still the one matcher described above. The open
+> work, and what it would touch, is [03-roadmap.md](03-roadmap.md) §2o.
+
+---
+
 ### What every booking is asked, top to bottom
 
 > **The page is two columns, laid out by `BookingForm`** (17 Oct 2026). The
