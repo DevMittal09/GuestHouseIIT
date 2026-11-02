@@ -1,15 +1,13 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { appUrl, googleOauth, isProduction } from "@/lib/env";
-import { startGoogleSignIn } from "@/lib/oidc";
+import { startGoogleSignIn, OAUTH_COOKIE } from "@/lib/oidc";
 import { RATE_LIMITS } from "@/lib/security";
 import { LOGIN_DOMAIN, safeNextPath } from "@/lib/site";
 import { getStore } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-/** Where the state, verifier and nonce live between the two legs, for 10 minutes. */
-export const OAUTH_COOKIE = isProduction() ? "__Host-gh_oauth" : "gh_oauth";
 
 /**
  * Leg one of Google sign-in: mint state + PKCE, remember them in an httpOnly

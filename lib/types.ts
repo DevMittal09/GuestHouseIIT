@@ -207,12 +207,6 @@ export type Profile = {
   department_or_club: string | null;
   roll_number: string | null;
   /**
-   * The person's institute LDAP username (migration 12). Kept as a profile
-   * attribute; the column exists in the database and user imports may carry it.
-   * LDAP sign-in itself is removed - Google OAuth is the only door.
-   */
-  ldap_uid: string | null;
-  /**
    * The department, club or office this person belongs to (migration 15). It
    * is what their approver is found through - see `lib/units.ts`. Optional
    * because profiles written before migration 15 have none.

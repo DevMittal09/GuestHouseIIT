@@ -13,8 +13,8 @@ import { useThrowawayMockDb } from "./helpers";
 // whitelist, no audit log, units without an office class.
 const OLD_DB = {
   profiles: [
-    { id: "s1", email: "s1@smail.iitpkd.ac.in", full_name: "S1", role: "student", hostel_name: "Tilang", department_or_club: null, roll_number: null, ldap_uid: null, unit_id: null, staff_category: null },
-    { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: null, roll_number: null, ldap_uid: "admin", unit_id: null, staff_category: null },
+    { id: "s1", email: "s1@smail.iitpkd.ac.in", full_name: "S1", role: "student", hostel_name: "Tilang", department_or_club: null, roll_number: null, unit_id: null, staff_category: null },
+    { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: null, roll_number: null, unit_id: null, staff_category: null },
   ],
   guest_houses: [],
   rooms: [],
@@ -70,7 +70,7 @@ describe("self-healing an old database file", () => {
 
   it("wrote the healed file back", () => {
     const saved = JSON.parse(fs.readFileSync(db.file, "utf8"));
-    expect(Array.isArray(saved.hostels)).toBe(true);
+    expect(Array.isArray(saved.institute_hostels ?? saved.hostels)).toBe(true);
     expect(Array.isArray(saved.security_audit)).toBe(true);
   });
 });

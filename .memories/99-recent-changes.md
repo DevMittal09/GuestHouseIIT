@@ -7,58 +7,31 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 2 November 2026 (fourth session) - Supabase removal: Postgres only
+## Round of 2 November 2026 (fifth session) - Consolidate hostels into institute_hostels
 
-Continuation of the auth cleanup. The owner's instruction: **"I want only
-postgres."** The Supabase store, its migration files, seed SQL, repair scripts
-and the `@supabase/supabase-js` dependency were already removed in prior
-sessions. This session removed the `supabase/` directory itself and every
-remaining reference to it.
+Consolidation of duplicate hostel tables and audit of unused tables. The owner noticed
+that `institute_wardens` has `hostel_id` which was not present in the legacy `hostels`
+table, and asked to drop unused tables and rewire `profiles` to use `institute_hostels`.
 
 ### What was delivered
 
-**Deleted `supabase/` directory** (393 KB): 35 migration SQL files, 10 repair
-scripts, `seed.sql`, and `.temp/` scratch files. None were executed by any code
-path — `lib/store/index.ts` already selected only `PostgresStore` or
-`MockStore`. The consolidated schema lives in `scripts/init-postgres.sql`.
+**Consolidated Hostels in Postgres Schema** (`scripts/init-postgres.sql`):
+- Dropped the legacy `public.hostels` table.
+- Added `hostel_name text not null unique check (length(btrim(hostel_name)) between 1 and 60 and hostel_name = btrim(hostel_name))` constraint to `institute_hostels`.
+- Rewired `profiles.hostel_name` foreign key constraint to reference `public.institute_hostels (hostel_name) on update cascade on delete restrict`.
 
-**Deleted `tests/rls-surface.test.ts`** (174 lines): asserted RLS invariants
-by reading `supabase/migrations/`. With direct Postgres and no Supabase Auth,
-the `authenticated` role is not reachable and the RLS surface it guarded is
-moot. The invariants it proved (no `authenticated` policy, RLS enabled, no
-public bucket) are structural to `init-postgres.sql`.
+**Consolidated Store Implementations**:
+- `lib/store/postgres.ts`: `listHostels`, `addHostel`, `renameHostel`, `removeHostel` now operate on `institute_hostels`. Added foreign key deletion protection on `deleteInstituteHostel` and `deleteAllInstituteHostels` if profiles still reference a hostel.
+- `lib/store/mock.ts`: Migrated `db.hostels` into `db.institute_hostels`. `listHostels`, `addHostel`, `renameHostel`, `removeHostel`, and `assertHostelExists` all read and write `institute_hostels`.
+- `scripts/check-migrations.mjs`: Updated migration 16 marker to verify `institute_hostels.hostel_name`.
 
-**Fixed `tests/fourteenth-round.test.ts`**: removed the assertion that read
-`supabase/seed.sql` (the day-scholar persona test). The seed fact it checked
-(`122203099` is a student with null hostel) is still tested from the mock
-store's seed data.
+**Fixed Academic Adapter Logic Miss**:
+- `lib/academic/store-source.ts` & `lib/institute/academic-adapter.ts`: When fetching a warden's academic record, `row.hostel_id` is now resolved to `hostel_name` from `institute_hostels` so `wardenToRecord` no longer returns `hostel: null`.
+- `lib/oidc.ts`: Relocated `OAUTH_COOKIE` out of the route handler file to fix Next.js 16 type generation constraints.
 
-**Updated `scripts/check-migrations.mjs`**: the final output message no longer
-references `supabase/migrations/` paths. The script itself is unchanged — it
-probes the live database with SQL queries, not migration files.
-
-**Cleaned up supabase comments** in 6 source files: `lib/store/seed.ts`,
-`lib/store/mock.ts`, `lib/types.ts`, `tests/user-import-undo.test.ts`,
-`lib/users-import-undo.ts`, `lib/academic/mock-source.ts`.
-
-### What stays
-
-- **`scripts/init-postgres.sql`** is the single schema source of truth.
-- **`scripts/check-migrations.mjs`** (`npm run check:migrations`) still probes
-  the live database for schema markers — useful for verifying a deployment.
-- **`lib/store/postgres.ts`** (direct `pg` driver) and **`lib/store/mock.ts`**
-  (JSON file) are the two `DataStore` implementations.
-- **`ldap_uid`** column stays on profiles (37 references, harmless).
-
-### What is open
-
-- The `supabase` references in `.memories/` markdown files and `AGENTS.md` are
-  now historical. Architecture file (`20-architecture.md`) updated this round.
-- `AGENTS.md` still carries extensive Supabase migration documentation — that
-  file is generated/maintained separately and describes the project as last
-  committed.
-
-### Validation
-
-`npm run lint`, `npm run typecheck`, `npm test` (599 tests, 34 files) and
-`npm run build` all clean.
+**Verification**:
+- Vitest suite: 34 files, 596 tests passed.
+- Next.js type generation & TypeScript check: 0 errors.
+- ESLint: 0 errors, 0 warnings.
+- Production build: all 41 routes successfully compiled.
+- `check:memories`: all 15 files and markdown links verified.

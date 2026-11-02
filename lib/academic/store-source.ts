@@ -69,7 +69,13 @@ export class StoreAcademicSource implements AcademicSource {
         return null;
       case "warden": {
         const row = await store.findWarden(email);
-        return row ? wardenToRecord(row) : null;
+        if (!row) return null;
+        let hostelName: string | null = null;
+        if (row.hostel_id) {
+          const hostels = await store.listInstituteHostels();
+          hostelName = hostels.find((h) => h.hostel_id === row.hostel_id)?.hostel_name ?? null;
+        }
+        return wardenToRecord(row, hostelName);
       }
     }
   }

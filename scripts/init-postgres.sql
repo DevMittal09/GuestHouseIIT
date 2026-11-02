@@ -121,8 +121,6 @@ create table public.profiles (
   hostel_name         text,
   department_or_club  text,
   roll_number         text,
-  -- migration 12
-  ldap_uid            text,
   -- migration 15
   unit_id             uuid,
   staff_category      text check (staff_category is null or staff_category in ('faculty', 'staff'))
@@ -169,17 +167,24 @@ create trigger app_settings_updated_at
   before update on public.app_settings
   for each row execute function public.set_updated_at();
 
--- ------------------------------ hostels -----------------------------------
--- Migration 16
-create table public.hostels (
-  name       text primary key check (length(btrim(name)) between 1 and 60 and name = btrim(name)),
-  created_at timestamptz not null default now()
+-- ------------------------------ institute_hostels --------------------------
+-- Migration 35 (consolidated; replaces legacy hostels table)
+create table public.institute_hostels (
+  id                uuid primary key default gen_random_uuid(),
+  hostel_id         text not null unique,
+  hostel_name       text not null unique check (length(btrim(hostel_name)) between 1 and 60 and hostel_name = btrim(hostel_name)),
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
 );
 
--- FK from profiles.hostel_name to hostels
+create trigger institute_hostels_updated_at
+  before update on public.institute_hostels
+  for each row execute function public.set_updated_at();
+
+-- FK from profiles.hostel_name to institute_hostels
 alter table public.profiles
   add constraint profiles_hostel_fk
-  foreign key (hostel_name) references public.hostels (name)
+  foreign key (hostel_name) references public.institute_hostels (hostel_name)
   on update cascade on delete restrict;
 
 -- ------------------------------ units -------------------------------------
@@ -795,20 +800,6 @@ create unique index institute_fcc_email_idx
 
 create trigger institute_fcc_updated_at
   before update on public.institute_fcc
-  for each row execute function public.set_updated_at();
-
--- ------------------------------ institute_hostels --------------------------
--- Migration 35
-create table public.institute_hostels (
-  id                uuid primary key default gen_random_uuid(),
-  hostel_id         text not null unique,
-  hostel_name       text not null,
-  created_at        timestamptz not null default now(),
-  updated_at        timestamptz not null default now()
-);
-
-create trigger institute_hostels_updated_at
-  before update on public.institute_hostels
   for each row execute function public.set_updated_at();
 
 -- ------------------------------ institute_wardens --------------------------
@@ -1517,8 +1508,7 @@ create trigger rooms_recount_total
 
 -- ============================== INDEXES ===================================
 
--- profiles (migrations 12, 31)
-create unique index profiles_ldap_uid_key on public.profiles (lower(ldap_uid)) where ldap_uid is not null;
+-- profiles (migration 31)
 create index profiles_role_idx on public.profiles (role);
 create index profiles_unit_idx on public.profiles (unit_id) where unit_id is not null;
 create index profiles_hostel_idx on public.profiles (hostel_name) where hostel_name is not null;

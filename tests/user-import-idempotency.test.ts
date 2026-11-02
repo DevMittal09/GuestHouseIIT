@@ -81,10 +81,10 @@ const C = "imp.faculty@iitpkd.ac.in";
 const D = "imp.newcomer@iitpkd.ac.in";
 
 const SHEET = [
-  "email, full_name, role, hostel_name, roll_number, ldap_uid",
-  `${A}, Anjali Menon, student, Malhar, 112201001, imp001`,
-  `${B}, Rahul Nair, student, Saveri, 142202014, imp002`,
-  `${C}, Dr Priya Sharma, employee, , , impfaculty`,
+  "email, full_name, role, hostel_name, roll_number",
+  `${A}, Anjali Menon, student, Malhar, 112201001`,
+  `${B}, Rahul Nair, student, Saveri, 142202014`,
+  `${C}, Dr Priya Sharma, employee, , `,
 ].join("\n");
 
 /** Only the rows this file is about. */
@@ -120,11 +120,11 @@ describe("importing the same sheet twice", () => {
 
     // An updated sheet: a corrected name, a new hostel, and one new person.
     const updated = [
-      "email, full_name, role, hostel_name, roll_number, ldap_uid",
-      `${A}, Anjali R Menon, student, Saveri, 112201001, imp001`,
-      `${B}, Rahul Nair, student, Saveri, 142202014, imp002`,
-      `${C}, Dr Priya Sharma, employee, , , impfaculty`,
-      `${D}, New Comer, student, Malhar, 112301099, impnewcomer`,
+      "email, full_name, role, hostel_name, roll_number",
+      `${A}, Anjali R Menon, student, Saveri, 112201001`,
+      `${B}, Rahul Nair, student, Saveri, 142202014`,
+      `${C}, Dr Priya Sharma, employee, , `,
+      `${D}, New Comer, student, Malhar, 112301099`,
     ].join("\n");
 
     const plan = await apply(updated);
@@ -146,8 +146,8 @@ describe("importing the same sheet twice", () => {
   it("matches on the email case-insensitively, so a re-cased sheet is not a new person", async () => {
     const count = (await mine()).length;
     const recased = [
-      "email, full_name, role, hostel_name, roll_number, ldap_uid",
-      `${C.toUpperCase()}, Dr Priya Sharma, employee, , , impfaculty`,
+      "email, full_name, role, hostel_name, roll_number",
+      `${C.toUpperCase()}, Dr Priya Sharma, employee, , `,
     ].join("\n");
 
     const plan = planUserImport(recased, await context());
@@ -172,7 +172,6 @@ describe("what a partial sheet may and may not do", () => {
     const anjali = (await mine()).find((p) => p.email === A)!;
     expect(anjali.hostel_name).toBe("Saveri");
     expect(anjali.roll_number).toBe("112201001");
-    expect(anjali.ldap_uid).toBe("imp001");
   });
 
   it("refuses a hostel that is not on record rather than inventing one", async () => {
@@ -209,26 +208,10 @@ describe("the store's own duplicate guard, behind the plan", () => {
         hostel_name: null,
         department_or_club: null,
         roll_number: null,
-        ldap_uid: null,
         unit_id: null,
         staff_category: null,
       })
     ).rejects.toThrow(/already exists/i);
   });
 
-  it("refuses to give one LDAP username to two accounts", async () => {
-    await expect(
-      store.createProfile({
-        email: "someone.else@iitpkd.ac.in",
-        full_name: "Someone Else",
-        role: "employee",
-        hostel_name: null,
-        department_or_club: null,
-        roll_number: null,
-        ldap_uid: "impfaculty",
-        unit_id: null,
-        staff_category: null,
-      })
-    ).rejects.toThrow();
-  });
 });

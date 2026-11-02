@@ -74,13 +74,13 @@ export function fccToRecord(f: InstituteFCC): StudentRepRecord {
   };
 }
 
-export function wardenToRecord(w: InstituteWarden): WardenRecord {
+export function wardenToRecord(w: InstituteWarden, hostelName?: string | null): WardenRecord {
   return {
     kind: "warden",
     name: w.full_name,
     phone: w.warden_phone,
     email: w.warden_email,
-    hostel: null,
+    hostel: hostelName ?? null,
   };
 }
 

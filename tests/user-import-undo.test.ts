@@ -6,7 +6,6 @@ import {
   importFieldsOf,
   planUserImportRevert,
   revertBlocker,
-  uidsToRelease,
   type UserImportBatch,
 } from "@/lib/users-import-undo";
 import type { DataStore } from "@/lib/store/types";
@@ -106,11 +105,6 @@ async function apply(text: string, stopAfter?: number): Promise<UserImportBatch>
     error: null,
   });
   let written = 0;
-  for (const { id, before, row } of plan.updated) {
-    if (before.ldap_uid && (before.ldap_uid ?? null) !== row.ldap_uid) {
-      await store.updateProfile(id, { ldap_uid: null });
-    }
-  }
   if (stopAfter === undefined) await store.createProfiles(added);
   for (const { id, row } of plan.updated) {
     if (stopAfter !== undefined && written >= stopAfter) break;
@@ -139,10 +133,6 @@ async function revert(batchId: string, locked?: (p: Profile) => string | null) {
       conflicts.push(`${account.email} - ${e instanceof Error ? e.message : "no"}`);
     }
   }
-  const fresh = await store.listProfiles();
-  for (const id of uidsToRelease(plan.restore, fresh)) {
-    await store.updateProfile(id, { ldap_uid: null }).catch(() => undefined);
-  }
   for (const row of plan.restore) {
     await store.updateProfile(row.id, row.to);
     restored += 1;
@@ -160,9 +150,9 @@ const B = "undo.rahul@smail.iitpkd.ac.in";
 const C = "undo.priya@iitpkd.ac.in";
 
 const FIRST = [
-  "email, full_name, role, hostel_name, roll_number, ldap_uid",
-  `${A}, Anjali Menon, student, Malhar, 112201001, undoanjali`,
-  `${B}, Rahul Nair, student, Saveri, 142202014, undorahul`,
+  "email, full_name, role, hostel_name, roll_number",
+  `${A}, Anjali Menon, student, Malhar, 112201001`,
+  `${B}, Rahul Nair, student, Saveri, 142202014`,
 ].join("\n");
 
 /** The stale sheet: it moves Anjali to the wrong hostel and renames Rahul. */
@@ -217,8 +207,8 @@ describe("an import records what it is about to change", () => {
     expect(anjali.before.hostel_name).toBe("Malhar");
     expect(anjali.after.hostel_name).toBe("Saveri");
     // A column the paste does not carry is left alone, so it is on neither side.
-    expect(anjali.before.ldap_uid).toBe("undoanjali");
-    expect(anjali.after.ldap_uid).toBe("undoanjali");
+    expect(anjali.before.roll_number).toBe("112201001");
+    expect(anjali.after.roll_number).toBe("112201001");
   });
 });
 
@@ -301,52 +291,6 @@ describe("the rules the undo will not bend", () => {
     expect(plan.conflicts.join(" ")).toContain("Only a developer can edit this account");
   });
 
-  it("releases an LDAP username before restoring it to its old holder", async () => {
-    // Two accounts swap usernames in one paste. `lower(ldap_uid)` is unique,
-    // so restoring them one at a time collides unless the current holder
-    // gives it up first - the same trap the import itself has.
-    const swap = [
-      "email, ldap_uid",
-      `${A}, undorahul`,
-      `${B}, undoanjali`,
-    ].join("\n");
-    const batch = await apply(swap);
-    expect((await find(A))?.ldap_uid).toBe("undorahul");
-
-    const result = await revert(batch.id);
-
-    expect(result.restored).toBe(2);
-    expect(result.conflicts).toEqual([]);
-    expect((await find(A))?.ldap_uid).toBe("undoanjali");
-    expect((await find(B))?.ldap_uid).toBe("undorahul");
-  });
-
-  it("names the other half of a swap when one half was corrected by hand", async () => {
-    /**
-     * Two accounts swap usernames
-     * in one import; somebody then corrects one of them by hand, so the undo
-     * must leave that one alone - which means the **other** one cannot have
-     * its old username back either, because the account holding it is staying
-     * as it is. The unique index refuses it, and the right outcome is to name
-     * that row, not to fail the undo.
-     */
-    const swap = ["email, ldap_uid", `${A}, undorahul`, `${B}, undoanjali`].join("\n");
-    const batch = await apply(swap);
-    const anjali = (await find(A))!;
-    // The hand correction: Anjali keeps the username the import gave her.
-    await store.updateProfile(anjali.id, { full_name: "Anjali R Menon" });
-
-    const result = await revert(batch.id);
-
-    // Anjali is left alone, and Rahul cannot be given `undoanjali` back.
-    expect(result.restored).toBe(0);
-    expect(result.conflicts).toHaveLength(2);
-    expect(result.conflicts.join(" ")).toMatch(/changed since the import/);
-    expect(result.conflicts.join(" ")).toMatch(/LDAP username/);
-    expect((await find(A))?.ldap_uid).toBe("undorahul");
-    expect((await find(B))?.ldap_uid).toBe("undoanjali");
-  });
-
   it("does nothing for a batch that changed nothing", () => {
     const empty: UserImportBatch = {
       id: "batch-0",
@@ -382,7 +326,6 @@ describe("createProfiles", () => {
           hostel_name: null,
           department_or_club: null,
           roll_number: null,
-          ldap_uid: null,
           unit_id: null,
           staff_category: null,
         },
@@ -395,7 +338,6 @@ describe("createProfiles", () => {
           hostel_name: null,
           department_or_club: null,
           roll_number: null,
-          ldap_uid: null,
           unit_id: null,
           staff_category: null,
         },

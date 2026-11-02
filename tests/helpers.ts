@@ -26,7 +26,6 @@ export function profile(patch: Partial<Profile> = {}): Profile {
     hostel_name: null,
     department_or_club: null,
     roll_number: null,
-    ldap_uid: null,
     unit_id: null,
     staff_category: null,
     ...patch,

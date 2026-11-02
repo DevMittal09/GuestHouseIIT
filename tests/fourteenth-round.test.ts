@@ -531,7 +531,6 @@ describe("a student with no hostel has no Assistant Warden", () => {
     expect(dayScholar.role).toBe("student");
     expect(dayScholar.hostel_name).toBeNull();
     expect(dayScholar.roll_number).toBe("122203099");
-    expect(dayScholar.ldap_uid).toBe("122203099");
   });
 
   it("gives the account a name that says what it is for", () => {

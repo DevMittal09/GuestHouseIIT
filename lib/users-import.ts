@@ -1,11 +1,4 @@
 import { splitCsvLine } from "./csv";
-const LDAP_UID_PATTERN = /^[a-z0-9][a-z0-9._@+-]{0,127}$/;
-function normalizeLdapUid(value: string): string {
-  return value.trim().toLowerCase();
-}
-function isValidLdapUid(value: string): boolean {
-  return LDAP_UID_PATTERN.test(normalizeLdapUid(value));
-}
 import { ROLE_LABELS, type Profile, type Role, type StaffCategory } from "./types";
 import type { Unit } from "./units";
 
@@ -47,7 +40,6 @@ export type UserColumn =
   | "hostel_name"
   | "department_or_club"
   | "roll_number"
-  | "ldap_uid"
   | "staff_category"
   | "unit";
 
@@ -63,7 +55,6 @@ export const DEFAULT_COLUMNS: UserColumn[] = [
   "hostel_name",
   "department_or_club",
   "roll_number",
-  "ldap_uid",
 ];
 
 /** Every column that may be named in a header, and what a header may call it. */
@@ -74,7 +65,6 @@ export const KNOWN_COLUMNS: Record<UserColumn, string[]> = {
   hostel_name: ["hostel_name", "hostel", "hostel name"],
   department_or_club: ["department_or_club", "department", "dept", "club", "department / club", "dept / club"],
   roll_number: ["roll_number", "roll number", "roll no", "roll no.", "roll", "employee id"],
-  ldap_uid: ["ldap_uid", "ldap", "ldap username", "ldap uid", "username", "uid"],
   staff_category: ["staff_category", "staff category", "category", "faculty or staff"],
   unit: ["unit", "unit_id", "unit name", "department unit"],
 };
@@ -92,7 +82,6 @@ export type UserImportRow = {
   hostel_name: string | null;
   department_or_club: string | null;
   roll_number: string | null;
-  ldap_uid: string | null;
   staff_category: StaffCategory | null;
   unit_id: string | null;
 };
@@ -187,7 +176,6 @@ function sameProfile(before: Profile, row: UserImportRow): boolean {
     (before.hostel_name ?? null) === row.hostel_name &&
     (before.department_or_club ?? null) === row.department_or_club &&
     (before.roll_number ?? null) === row.roll_number &&
-    (before.ldap_uid ?? null) === row.ldap_uid &&
     (before.staff_category ?? null) === row.staff_category &&
     (before.unit_id ?? null) === row.unit_id
   );
@@ -231,7 +219,6 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
   let columns = DEFAULT_COLUMNS;
   let hadHeader = false;
   const seen = new Map<string, number>();
-  const uidLine = new Map<string, number>();
   let rows = 0;
 
   const lines = text.split(/\r?\n/);
@@ -340,17 +327,6 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
       unitId = unit.id;
     }
 
-    const uidWord = value("ldap_uid");
-    let uid = current?.ldap_uid ?? null;
-    if (uidWord) {
-      const normalized = normalizeLdapUid(uidWord);
-      if (!isValidLdapUid(normalized)) {
-        problems.push(`Line ${n}: "${uidWord}" is not a valid LDAP username.`);
-        return;
-      }
-      uid = normalized;
-    }
-
     const row: UserImportRow = {
       email,
       full_name: name,
@@ -358,7 +334,6 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
       hostel_name: hostel,
       department_or_club: value("department_or_club") ?? current?.department_or_club ?? null,
       roll_number: value("roll_number") ?? current?.roll_number ?? null,
-      ldap_uid: uid,
       staff_category:
         role === "employee"
           ? (staffCategoryFrom(value("staff_category"), roleWord ?? "") ??
@@ -372,37 +347,6 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
     else if (!sameProfile(current, row)) updated.push({ id: current.id, before: current, row });
     else unchanged += 1;
   });
-
-  /**
-   * An LDAP username is unique across accounts, so the paste is checked
-   * against the state it would leave behind - the same rule as
-   * `planLdapUidImport`, so swapping two people's usernames in one paste is
-   * allowed and giving two people the same one is not.
-   */
-  const wanted = new Map<string, UserImportRow>();
-  for (const row of added) wanted.set(row.email.toLowerCase(), row);
-  for (const { row } of updated) wanted.set(row.email.toLowerCase(), row);
-  const owner = new Map<string, string>();
-  for (const profile of profiles) {
-    const row = wanted.get(profile.email.toLowerCase());
-    const uid = (row ? row.ldap_uid : profile.ldap_uid)?.toLowerCase();
-    if (uid) owner.set(uid, profile.email);
-  }
-  for (const row of wanted.values()) {
-    const uid = row.ldap_uid?.toLowerCase();
-    if (!uid) continue;
-    const held = owner.get(uid);
-    if (held && held.toLowerCase() !== row.email.toLowerCase()) {
-      problems.push(`LDAP username ${uid} for ${row.email} already belongs to ${held}.`);
-    } else {
-      const line = uidLine.get(uid);
-      if (line !== undefined) {
-        problems.push(`LDAP username ${uid} is given to more than one person in this paste.`);
-      }
-      uidLine.set(uid, 1);
-      owner.set(uid, row.email);
-    }
-  }
 
   if (rows === 0 && problems.length === 0) {
     problems.push("Nothing to import - paste one person per line.");
@@ -433,7 +377,6 @@ export function changedFields(before: Profile, row: UserImportRow): string[] {
     ["Hostel", (before.hostel_name ?? null) !== row.hostel_name],
     ["Dept / Club", (before.department_or_club ?? null) !== row.department_or_club],
     ["Roll No.", (before.roll_number ?? null) !== row.roll_number],
-    ["LDAP username", (before.ldap_uid ?? null) !== row.ldap_uid],
     ["Category", (before.staff_category ?? null) !== row.staff_category],
     ["Unit", (before.unit_id ?? null) !== row.unit_id],
   ];

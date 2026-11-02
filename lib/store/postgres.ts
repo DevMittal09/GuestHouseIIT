@@ -114,9 +114,6 @@ function parseRange(literal: string): [string, string] {
 }
 
 function profileWriteError(error: { code?: string; message: string }): Error | typeof error {
-  if (error.code === "23505" && error.message.includes("ldap_uid")) {
-    return new Error("Another user already has this LDAP username");
-  }
   if (error.code === "23503" && error.message.includes("profiles_hostel_fk")) {
     return new Error("That hostel is not on the list - add it in Settings first");
   }
@@ -1064,13 +1061,25 @@ export class PostgresStore implements DataStore {
   }
 
   async listHostels(): Promise<string[]> {
-    const { rows } = await this.pool.query("SELECT name FROM hostels ORDER BY name");
-    return rows.map((r: { name: string }) => r.name);
+    const { rows } = await this.pool.query("SELECT hostel_name FROM institute_hostels ORDER BY hostel_name");
+    return rows.map((r: { hostel_name: string }) => r.hostel_name);
   }
 
   async addHostel(name: string): Promise<void> {
     try {
-      await this.pool.query("INSERT INTO hostels (name) VALUES ($1)", [name]);
+      const baseId = name.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16) || "HOS";
+      let hostelId = baseId;
+      let counter = 1;
+      while (true) {
+        const { rows } = await this.pool.query("SELECT 1 FROM institute_hostels WHERE hostel_id = $1", [hostelId]);
+        if (rows.length === 0) break;
+        counter++;
+        hostelId = `${baseId}${counter}`;
+      }
+      await this.pool.query(
+        "INSERT INTO institute_hostels (hostel_id, hostel_name) VALUES ($1, $2)",
+        [hostelId, name]
+      );
     } catch (err: unknown) {
       const e = err as { code?: string };
       if (e.code === "23505") throw new Error(`${name} is already on the list`);
@@ -1080,7 +1089,7 @@ export class PostgresStore implements DataStore {
 
   async renameHostel(from: string, to: string): Promise<void> {
     try {
-      await this.pool.query("UPDATE hostels SET name = $1 WHERE name = $2", [to, from]);
+      await this.pool.query("UPDATE institute_hostels SET hostel_name = $1 WHERE hostel_name = $2", [to, from]);
     } catch (err: unknown) {
       const e = err as { code?: string };
       if (e.code === "23505") throw new Error(`${to} is already on the list`);
@@ -1090,7 +1099,7 @@ export class PostgresStore implements DataStore {
 
   async removeHostel(name: string): Promise<void> {
     try {
-      await this.pool.query("DELETE FROM hostels WHERE name = $1", [name]);
+      await this.pool.query("DELETE FROM institute_hostels WHERE hostel_name = $1", [name]);
     } catch (err: unknown) {
       const e = err as { code?: string };
       if (e.code === "23503") throw new Error(`Accounts still name ${name} - move them first`);
@@ -1542,10 +1551,21 @@ export class PostgresStore implements DataStore {
   }
 
   async deleteInstituteHostel(id: string): Promise<void> {
-    return this.instituteDelete("institute_hostels", id);
+    try {
+      return await this.instituteDelete("institute_hostels", id);
+    } catch (err: unknown) {
+      const e = err as { code?: string };
+      if (e.code === "23503") throw new Error("This hostel is assigned to user accounts - move them first");
+      throw err;
+    }
   }
 
   async deleteAllInstituteHostels(): Promise<number> {
+    const inUse = await this.pool.query("SELECT DISTINCT hostel_name FROM profiles WHERE hostel_name IS NOT NULL");
+    if (inUse.rows.length > 0) {
+      const names = inUse.rows.map((r: { hostel_name: string }) => r.hostel_name).join(", ");
+      throw new Error(`Cannot clear hostels: accounts still reference ${names}`);
+    }
     return this.instituteDeleteAll("institute_hostels");
   }
 

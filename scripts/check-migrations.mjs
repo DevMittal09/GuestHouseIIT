@@ -25,11 +25,10 @@ const MARKERS = [
   { n: 9, kind: "column", table: "bookings", column: "booking_type", what: "booking types and two roles" },
   { n: 10, kind: "column", table: "email_outbox", column: "idempotency_key", what: "the email outbox" },
   { n: 11, kind: "column", table: "booking_rooms", column: "booking_id", what: "room-scoped guests" },
-  { n: 12, kind: "column", table: "profiles", column: "ldap_uid", what: "LDAP usernames on profiles" },
   { n: 13, kind: "column", table: "mail_templates", column: "event_key", what: "editable mail wording" },
   { n: 14, kind: "column", table: "room_holds", column: "guard", what: "the turnover guard range" },
   { n: 15, kind: "column", table: "units", column: "head_id", what: "units and debitable heads" },
-  { n: 16, kind: "column", table: "hostels", column: "name", what: "settings, hostels and the audit table" },
+  { n: 16, kind: "column", table: "institute_hostels", column: "hostel_name", what: "settings, hostels and the audit table" },
   {
     n: 17, kind: "function", fn: "set_booking_buffer",
     what: "the turnaround buffer",

@@ -71,7 +71,6 @@ import {
   seedLogs,
   seedProfiles,
   seedRoomHolds,
-  seedHostels,
   seedOfficialEmails,
   seedProjects,
   seedTariffs,
@@ -353,14 +352,7 @@ function loadDb(): Db {
         dirty = true;
       }
     }
-    // Migration 12's counterpart: LDAP usernames. Seeded personas get theirs
-    // back (matched by email); anyone else starts
-    // without one, as they would in Postgres.
     for (const p of db.profiles) {
-      if (p.ldap_uid === undefined) {
-        p.ldap_uid = seedProfiles.find((s) => s.email === p.email)?.ldap_uid ?? null;
-        dirty = true;
-      }
       // Migration 15's counterpart: demo personas get their unit back; anyone
       // else starts in none, as they would in Postgres.
       if (p.unit_id === undefined) {
@@ -414,14 +406,54 @@ function loadDb(): Db {
         dirty = true;
       }
     }
-    if (!db.hostels) {
-      // Seeded from what the profiles already say, exactly as the migration
-      // does, so no stored account is left naming a hostel that is not there.
-      const named = db.profiles
-        .map((p) => p.hostel_name?.trim())
-        .filter((h): h is string => Boolean(h));
-      db.hostels = [...new Set([...seedHostels, ...named])].sort();
+    if (!db.institute_hostels) {
+      db.institute_hostels = [...seedInstituteHostels];
       dirty = true;
+    }
+    if (db.hostels && Array.isArray(db.hostels)) {
+      for (const h of db.hostels) {
+        if (!db.institute_hostels.some((ih) => ih.hostel_name.toLowerCase() === h.toLowerCase())) {
+          const baseId = h.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16) || 'HOS';
+          let hostelId = baseId;
+          let counter = 1;
+          while (db.institute_hostels.some((ih) => ih.hostel_id.toLowerCase() === hostelId.toLowerCase())) {
+            counter++;
+            hostelId = `${baseId}${counter}`;
+          }
+          const now = new Date().toISOString();
+          db.institute_hostels.push({
+            id: randomUUID(),
+            hostel_id: hostelId,
+            hostel_name: h,
+            created_at: now,
+            updated_at: now,
+          });
+          dirty = true;
+        }
+      }
+    }
+    const namedHostels = db.profiles
+      .map((p) => p.hostel_name?.trim())
+      .filter((h): h is string => Boolean(h));
+    for (const h of namedHostels) {
+      if (!db.institute_hostels.some((ih) => ih.hostel_name.toLowerCase() === h.toLowerCase())) {
+        const baseId = h.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16) || 'HOS';
+        let hostelId = baseId;
+        let counter = 1;
+        while (db.institute_hostels.some((ih) => ih.hostel_id.toLowerCase() === hostelId.toLowerCase())) {
+          counter++;
+          hostelId = `${baseId}${counter}`;
+        }
+        const now = new Date().toISOString();
+        db.institute_hostels.push({
+          id: randomUUID(),
+          hostel_id: hostelId,
+          hostel_name: h,
+          created_at: now,
+          updated_at: now,
+        });
+        dirty = true;
+      }
     }
     if (!db.official_emails) {
       db.official_emails = [...seedOfficialEmails];
@@ -517,7 +549,6 @@ function loadDb(): Db {
     room_holds: seedRoomHolds,
     email_outbox: [],
     units: seedUnits,
-    hostels: [...seedHostels],
     official_emails: [...seedOfficialEmails],
     projects: [...seedProjects],
     security_audit: [],
@@ -1084,7 +1115,6 @@ export class MockStore implements DataStore {
     if (db.profiles.some((p) => p.email.toLowerCase() === input.email.toLowerCase())) {
       throw new Error("A user with this email already exists");
     }
-    assertLdapUidFree(db, input.ldap_uid, null);
     assertHostelExists(db, input.hostel_name);
     const profile: Profile = { ...input, id: randomUUID() };
     db.profiles.push(profile);
@@ -1102,7 +1132,6 @@ export class MockStore implements DataStore {
     ) {
       throw new Error("A user with this email already exists");
     }
-    if (patch.ldap_uid !== undefined) assertLdapUidFree(db, patch.ldap_uid, id);
     if (patch.hostel_name !== undefined) assertHostelExists(db, patch.hostel_name);
     Object.assign(p, patch);
     saveDb(db);
@@ -1119,7 +1148,6 @@ export class MockStore implements DataStore {
       if (db.profiles.some((p) => p.email.toLowerCase() === input.email.toLowerCase())) {
         throw new Error(`A user with the email ${input.email} already exists`);
       }
-      assertLdapUidFree(db, input.ldap_uid, null);
       assertHostelExists(db, input.hostel_name);
       db.profiles.push({ ...input });
     }
@@ -1332,43 +1360,58 @@ export class MockStore implements DataStore {
   }
 
   async listHostels(): Promise<string[]> {
-    return [...(loadDb().hostels ?? [])].sort((a, b) => a.localeCompare(b));
+    return [...(loadDb().institute_hostels ?? [])]
+      .map((h) => h.hostel_name)
+      .sort((a, b) => a.localeCompare(b));
   }
 
   async addHostel(name: string): Promise<void> {
     const db = loadDb();
-    const hostels = (db.hostels ??= []);
-    if (hostels.some((h) => h.toLowerCase() === name.toLowerCase())) {
+    const hostels = (db.institute_hostels ??= []);
+    if (hostels.some((h) => h.hostel_name.toLowerCase() === name.toLowerCase())) {
       throw new Error(`${name} is already on the list`);
     }
-    hostels.push(name);
+    const baseId = name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16) || 'HOS';
+    let hostelId = baseId;
+    let counter = 1;
+    while (hostels.some((h) => h.hostel_id.toLowerCase() === hostelId.toLowerCase())) {
+      counter++;
+      hostelId = `${baseId}${counter}`;
+    }
+    const now = new Date().toISOString();
+    hostels.push({
+      id: randomUUID(),
+      hostel_id: hostelId,
+      hostel_name: name,
+      created_at: now,
+      updated_at: now,
+    });
     saveDb(db);
   }
 
   async renameHostel(from: string, to: string): Promise<void> {
     const db = loadDb();
-    const hostels = (db.hostels ??= []);
-    const at = hostels.indexOf(from);
-    if (at < 0) throw new Error(`${from} is not on the list`);
-    if (hostels.some((h) => h !== from && h.toLowerCase() === to.toLowerCase())) {
+    const hostels = (db.institute_hostels ??= []);
+    const target = hostels.find((h) => h.hostel_name === from);
+    if (!target) throw new Error(`${from} is not on the list`);
+    if (hostels.some((h) => h !== target && h.hostel_name.toLowerCase() === to.toLowerCase())) {
       throw new Error(`${to} is already on the list`);
     }
-    hostels[at] = to;
-    // `on update cascade`, as the foreign key does in Postgres.
+    target.hostel_name = to;
+    target.updated_at = new Date().toISOString();
     for (const p of db.profiles) if (p.hostel_name === from) p.hostel_name = to;
     saveDb(db);
   }
 
   async removeHostel(name: string): Promise<void> {
     const db = loadDb();
-    // `on delete restrict`: a hostel someone still lives in stays.
     const inUse = db.profiles.filter((p) => p.hostel_name === name);
     if (inUse.length > 0) {
       throw new Error(
-        `${inUse.length} account${inUse.length === 1 ? "" : "s"} still name ${name} - move ${inUse.length === 1 ? "it" : "them"} first`
+        `${inUse.length} account${inUse.length === 1 ? '' : 's'} still name ${name} - move ${inUse.length === 1 ? 'it' : 'them'} first`
       );
     }
-    db.hostels = (db.hostels ?? []).filter((h) => h !== name);
+    db.institute_hostels = (db.institute_hostels ?? []).filter((h) => h.hostel_name !== name);
     saveDb(db);
   }
 
@@ -1591,10 +1634,24 @@ export class MockStore implements DataStore {
   }
 
   async deleteInstituteHostel(id: string): Promise<void> {
+    const db = loadDb();
+    const item = (db.institute_hostels ?? []).find((h) => h.id === id);
+    if (item) {
+      const inUse = db.profiles.filter((p) => p.hostel_name === item.hostel_name);
+      if (inUse.length > 0) {
+        throw new Error(`Accounts still name ${item.hostel_name} - move them first`);
+      }
+    }
     this.mockDelete("institute_hostels", id);
   }
 
   async deleteAllInstituteHostels(): Promise<number> {
+    const db = loadDb();
+    const inUse = db.profiles.filter((p) => Boolean(p.hostel_name));
+    if (inUse.length > 0) {
+      const names = [...new Set(inUse.map((p) => p.hostel_name))].join(", ");
+      throw new Error(`Cannot clear hostels: accounts still reference ${names}`);
+    }
     return this.mockDeleteAll("institute_hostels");
   }
 
@@ -2230,22 +2287,11 @@ function makeReference(): string {
  */
 function assertHostelExists(db: Db, hostel: string | null | undefined): void {
   if (!hostel) return;
-  if (!(db.hostels ?? []).includes(hostel)) {
+  if (!(db.institute_hostels ?? []).some((h) => h.hostel_name === hostel)) {
     throw new Error(`${hostel} is not a hostel on the list - add it in Settings first`);
   }
 }
 
-/**
- * The unique index on `lower(ldap_uid)` (migration 12), emulated. Two profiles
- * sharing a uid would make LDAP sign-in pick one of them arbitrarily.
- */
-function assertLdapUidFree(db: Db, uid: string | null | undefined, exceptId: string | null): void {
-  if (!uid) return;
-  const wanted = uid.toLowerCase();
-  if (db.profiles.some((p) => p.id !== exceptId && p.ldap_uid?.toLowerCase() === wanted)) {
-    throw new Error("Another user already has this LDAP username");
-  }
-}
 
 /** A fresh draft row, as the table's defaults would make it. */
 function blankInvoice(bookingId: string, userId: string, now: string): InvoiceRecord {

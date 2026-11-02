@@ -6956,13 +6956,15 @@ directory (`ldapts`), the dummy accounts, the search-then-bind flow, the
 `signInWithLdap` server action, the bulk username import UI and its planner were
 all deleted. Cost: the LDAP door is now a rebuild, not a revert.
 
-**Why keep `ldap_uid`.** The column is referenced in 37 files (the `Profile`
-type, both stores, the user import system, seeds, Supabase seed SQL, migration
-12's unique index). Dropping it would need a migration and changes across ~20
-files with high regression risk. The column is harmless as a nullable profile
-attribute - hidden from the console UI, still handled by user imports (a
-spreadsheet can still carry it). The uid validation functions needed by user
-import were inlined (3 lines) rather than kept in a module.
+**Why keep `ldap_uid`.** *Superseded 2 Nov 2026 — see "Remove ldap_uid from
+the codebase" below. The column was removed from the code and schema.* The
+column was referenced in 37 files (the `Profile` type, both stores, the user
+import system, seeds, Supabase seed SQL, migration 12's unique index).
+Dropping it would need a migration and changes across ~20 files with high
+regression risk. The column is harmless as a nullable profile attribute -
+hidden from the console UI, still handled by user imports (a spreadsheet can
+still carry it). The uid validation functions needed by user import were
+inlined (3 lines) rather than kept in a module.
 
 **Why a new test-sign-in route rather than keeping dev-sign-in.** The old
 `dev-sign-in` route imported `lib/password.ts` and checked `password_hash` on
@@ -7012,3 +7014,36 @@ deployment has the expected schema. Only its output message was updated.
 (174 lines), 6 files had comments cleaned. Tests went from 606 (35 files)
 to 599 (34 files) — the 7 lost are all from the deleted RLS test file.
 All remaining tests pass.
+
+## Remove ldap_uid from the codebase (2 Nov 2026, fourth session continued)
+
+**Decision.** Remove the `ldap_uid` column from the `Profile` type, both
+stores, user import, import undo, seed data, the Postgres schema, and all
+tests.
+
+**Why.** The owner noticed it was still in the profile table and asked for its
+removal. LDAP sign-in was already deleted; the column served no purpose. The
+complexity it caused — the `assertLdapUidFree` constraint emulation in the
+mock store, the two-pass uid clearing in imports, the `uidsToRelease` function
+in undo — was all about a unique constraint on a column that had no meaning
+any more.
+
+**Why now and not earlier.** The first session kept it to limit blast radius
+(37 references across ~20 files). With the Supabase store and `supabase/`
+directory already removed, the reference count was lower and the risk bounded
+to files this session had already touched.
+
+**What about existing databases.** A Postgres database that still has the
+column is unaffected — the code simply no longer reads or writes it. A
+migration to `ALTER TABLE profiles DROP COLUMN ldap_uid` is not written yet;
+the column is harmless.
+
+**Cost.** 14 files modified, 2 test cases deleted, 3 tests dropped (596 from
+599). The user import system is simpler: no uid validation, no collision
+checking, no two-pass writes, no uid-swap handling in undo.
+
+## Consolidate hostels into institute_hostels (2 Nov 2026, fifth session)
+
+**Decision.** Drop the legacy `hostels` table from `scripts/init-postgres.sql` and both stores. Unify all hostel references to `public.institute_hostels`. Update `profiles.hostel_name` foreign key to reference `institute_hostels (hostel_name)` (`on update cascade on delete restrict`). Wire Settings -> Hostels and `assertHostelExists` to `institute_hostels`. Resolve `w.hostel_id` -> `hostel_name` in `StoreAcademicSource` / `wardenToRecord`.
+
+**Why.** Having two distinct hostel tables (`hostels` with `name` and `institute_hostels` with `hostel_id` + `hostel_name`) created a dual source of truth and a logic disconnect. Profiles referenced `hostels` while imported wardens referenced `institute_hostels`, leaving `institute_hostels` largely unused. Consolidating them ensures that hostel records imported or managed in Settings share a single table, with proper FK constraints and deletion protection when accounts are assigned.

@@ -7,7 +7,7 @@ import { homeForRole } from "@/lib/routes";
 import { startSession } from "@/lib/sessions";
 import { isInstituteEmail, LOGIN_DOMAIN } from "@/lib/site";
 import { getStore } from "@/lib/store";
-import { OAUTH_COOKIE } from "../start/route";
+import { OAUTH_COOKIE } from "@/lib/oidc";
 
 export const dynamic = "force-dynamic";
 

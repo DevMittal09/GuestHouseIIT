@@ -1,5 +1,9 @@
 import "server-only";
 import { createHash, randomBytes, createPublicKey, verify as verifySignature } from "crypto";
+import { isProduction } from "@/lib/env";
+
+/** Where the state, verifier and nonce live between the two legs, for 10 minutes. */
+export const OAUTH_COOKIE = isProduction() ? "__Host-gh_oauth" : "gh_oauth";
 
 /**
  * Google sign-in (OpenID Connect) - Phase 8.

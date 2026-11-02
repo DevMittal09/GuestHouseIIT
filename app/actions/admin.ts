@@ -26,7 +26,6 @@ import {
   importFieldsOf,
   planUserImportRevert,
   revertBlocker,
-  uidsToRelease,
   type UserImportBatch,
 } from "@/lib/users-import-undo";
 import { randomUUID } from "crypto";
@@ -378,7 +377,7 @@ export async function createUserAction(input: UserFormInput): Promise<ActionResu
     // route to becoming one, and the section split would be decoration.
     const roleError = assignRoleError(actor, parsed.data.role);
     if (roleError) return { ok: false, error: roleError };
-    await getStore().createProfile({ ...parsed.data, ldap_uid: null });
+    await getStore().createProfile(parsed.data);
     return done();
   } catch (e) {
     return fail(e);
@@ -530,15 +529,6 @@ export async function importUsersAction(
     });
 
     try {
-      /**
-       * `ldap_uid` is unique on `lower()`. Two passes so a uid moving from
-       * one account to another never collides with itself under the index.
-       */
-      for (const { id, before, row } of plan.updated) {
-        if (before.ldap_uid && (before.ldap_uid ?? null) !== row.ldap_uid) {
-          await store.updateProfile(id, { ldap_uid: null });
-        }
-      }
       // Chunked, so the common case - a sheet of people none of whom have an
       // account yet - is a handful of round trips instead of one per person.
       for (let at = 0; at < added.length; at += IMPORT_CHUNK) {
@@ -621,11 +611,6 @@ export async function revertUserImportAction(
     let restored = 0;
     let removed = 0;
 
-    /**
-     * The accounts the import created go first. One of them may hold a
-     * `ldap_uid` that a restore is about to ask for, and the unique index
-     * would refuse the restore while that row is still there.
-     */
     for (const account of plan.remove) {
       try {
         await store.deleteProfile(account.id);
@@ -637,13 +622,6 @@ export async function revertUserImportAction(
       }
     }
 
-    // Then the same two passes the import itself needs, for the same unique
-    // index: two accounts that swapped usernames cannot be restored one at a
-    // time unless the current holder releases it first.
-    const fresh = await store.listProfiles();
-    for (const id of uidsToRelease(plan.restore, fresh)) {
-      await store.updateProfile(id, { ldap_uid: null }).catch(() => undefined);
-    }
     for (const row of plan.restore) {
       try {
         await store.updateProfile(row.id, row.to);
