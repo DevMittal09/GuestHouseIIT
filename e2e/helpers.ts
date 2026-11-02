@@ -78,7 +78,7 @@ export async function signIn(page: Page, account: { uid: string; email: string; 
  * tests met "Too many attempts". An operator at the desk unlocks once a day;
  * so does the suite now.
  */
-const ADMIN_UNLOCK_COOKIE = "gh_admin_unlock";
+const ADMIN_UNLOCK_COOKIE = process.env.NODE_ENV === "production" ? "__Host-gh_admin_unlock" : "gh_admin_unlock";
 let unlockCookie: Cookie | null = null;
 
 /**

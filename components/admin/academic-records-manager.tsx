@@ -154,7 +154,7 @@ function ImportSection({ kind }: { kind: AcademicRecordKind }) {
           }}
         />
         <p className="text-xs text-muted-foreground">
-          CSV or Excel (.xlsx / .xls). The first sheet is read; the columns must match the order above.
+          CSV or Excel (.xlsx). The first sheet is read; the columns must match the order above.
         </p>
       </div>
 

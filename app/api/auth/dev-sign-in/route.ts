@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { isProduction } from "@/lib/env";
 import { verifyPassword } from "@/lib/password";
 import { homeForRole } from "@/lib/routes";
+import { RATE_LIMITS } from "@/lib/security";
 import { startSession } from "@/lib/sessions";
 import { getStore } from "@/lib/store";
 
@@ -15,7 +17,7 @@ export const dynamic = "force-dynamic";
  * Google", which Playwright cannot drive through the real OAuth flow.
  */
 export async function POST(request: Request): Promise<Response> {
-  if (process.env.ALLOW_MOCK_STORE !== "true") {
+  if (process.env.ALLOW_MOCK_STORE !== "true" || isProduction()) {
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 
@@ -24,6 +26,16 @@ export async function POST(request: Request): Promise<Response> {
   const password = body.password;
   if (!email || !password) {
     return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+  }
+
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+  try {
+    const gate = await getStore().hitRateLimit(`dev-signin:${ip}`, RATE_LIMITS.signIn.limit, RATE_LIMITS.signIn.windowSeconds);
+    if (!gate.allowed) {
+      return NextResponse.json({ error: "Too many attempts" }, { status: 429 });
+    }
+  } catch {
+    // Migration 21 not applied: let it through.
   }
 
   const profile = await getStore().getProfileByEmail(email);

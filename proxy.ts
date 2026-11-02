@@ -51,6 +51,7 @@ function contentSecurityPolicy(nonce: string, isProduction: boolean): string {
     "base-uri 'self'",
     "object-src 'none'",
     ...(isProduction ? ["upgrade-insecure-requests"] : []),
+    ...(isProduction ? ["report-uri /api/csp-report", "report-to csp-endpoint"] : []),
   ].join("; ");
 }
 
@@ -64,6 +65,9 @@ export function proxy(request: NextRequest): NextResponse {
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   const headers = response.headers;
   headers.set("Content-Security-Policy", contentSecurityPolicy(nonce, isProduction));
+  if (isProduction) {
+    headers.set("Report-To", JSON.stringify({ group: "csp-endpoint", max_age: 86400, endpoints: [{ url: "/api/csp-report" }] }));
+  }
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", "DENY");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");

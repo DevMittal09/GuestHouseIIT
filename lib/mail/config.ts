@@ -118,6 +118,9 @@ export function cronAuthorized(request: Request): { ok: true } | { ok: false; re
     if (process.env.NODE_ENV === "production") {
       return { ok: false, reason: "CRON_SECRET is not set on this deployment" };
     }
+    if (env("MAIL_USER")) {
+      console.warn("[security] CRON_SECRET is not set but MAIL_USER is — cron routes are unauthenticated and can trigger real mail sends.");
+    }
     return { ok: true };
   }
   const header = request.headers.get("authorization");

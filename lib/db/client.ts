@@ -26,7 +26,7 @@ export function getPool(): Pool {
     const ssl =
       process.env.DATABASE_SSL === "true" ||
       /sslmode=require/.test(connectionString)
-        ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true" }
+        ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false" }
         : undefined;
     pool = new Pool({
       connectionString,

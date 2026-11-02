@@ -8,6 +8,7 @@ import {
   checkAdminPassword,
   grantAdminUnlock,
   isAdminUnlocked,
+  isDefaultAdminPassword,
   revokeAdminUnlock,
   setAdminPassword,
   throttleCheck,
@@ -69,6 +70,9 @@ async function requireConsole(
   }
   if (!(await isAdminUnlocked())) {
     throw new Error("The console is locked - enter the console password again");
+  }
+  if (process.env.NODE_ENV === "production" && section !== "console_access" && await isDefaultAdminPassword()) {
+    throw new Error("The console password is still the factory default — change it in Console Access before using the console in production");
   }
   // Phase 8: changing who may do what, or deleting records, asks a developer
   // for a fresh second factor. Anyone else is already behind the console
