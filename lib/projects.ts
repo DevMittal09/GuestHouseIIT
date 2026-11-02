@@ -1,4 +1,4 @@
-import { splitCsvLine } from "@/lib/academic/stored";
+import { splitCsvLine } from "@/lib/csv";
 
 /**
  * Sponsored and consultancy projects a stay can be debited to (Phase 4).

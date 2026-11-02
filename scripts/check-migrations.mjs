@@ -49,7 +49,6 @@ const MARKERS = [
   { n: 25, kind: "column", table: "units", column: "faculty_advisor_id", what: "Faculty Advisors" },
   { n: 26, kind: "column", table: "invoices", column: "extra_charges", what: "additional charges on invoices" },
   { n: 27, kind: "column", table: "bookings", column: "meal_diet_counts", what: "each person's meal preference" },
-  { n: 28, kind: "table", table: "academic_records", what: "the institute's academic records" },
   { n: 29, kind: "enum", table: "bookings", column: "status", value: "MISSED", what: "the MISSED status" },
   { n: 30, kind: "column", table: "bookings", column: "fund_declaration_at", what: "the funds declaration" },
   {
@@ -78,12 +77,13 @@ const MARKERS = [
       "'invoices_issued_by_idx','invoices_paid_by_idx','invoices_cancelled_by_idx'," +
       "'privacy_requests_user_idx','privacy_requests_handled_by_idx','room_blocks_created_by_idx'," +
       "'room_holds_override_by_idx','tariffs_created_by_idx','units_head_idx'," +
-      "'units_acting_head_idx','academic_records_imported_by_idx'," +
+      "'units_acting_head_idx'," +
       "'user_import_batches_actor_idx','user_import_batches_reverted_by_idx'," +
       "'units_parent_idx','units_hod_unit_idx','tariffs_guest_house_idx'," +
       "'sessions_rotated_from_idx')",
-    check: (row) => row.c >= 20,
+    check: (row) => row.c >= 19,
   },
+  { n: 35, kind: "table", table: "institute_students", what: "institute data tables (students, employees, offices, fcc, hostels, wardens)" },
 ];
 
 function env() {

@@ -367,16 +367,16 @@ one.
   but it is personal data with no retention rule - unlike `security_audit`,
   which has `purge_security_audit`. Wanted: the same, never below whatever
   period the office wants an undo for.
-- **The undo is not offered for the academic-records import.** That importer is
-  all-or-nothing and keyed on `(kind, lower(email))` the same way, and it
-  overwrites a student's parents' names - which is what the booking form locks
-  a guest to. Migration 32's table is deliberately shaped to take a `kind`
-  column if this is wanted.
-- **Add `profiles` and `academic_records` to whatever is used as a pre-import
-  snapshot.** The documented drill - `supabase db dump` - already covers them;
-  the ad-hoc JSON export kept outside the repo does not, and must not be
-  mistaken for a backup. The undo record is a safety net for one import, **not**
-  a substitute for this.
+- **The undo is not offered for the institute-records import.** That importer
+  (`lib/institute/import.ts`) is all-or-nothing and keyed on `lower(email)` the
+  same way, and it overwrites a student's parents' names - which is what the
+  booking form locks a guest to. Migration 32's table is deliberately shaped to
+  take a `kind` column if this is wanted.
+- **Add `profiles` and the `institute_*` tables to whatever is used as a
+  pre-import snapshot.** The documented drill - `supabase db dump` - already
+  covers them; the ad-hoc JSON export kept outside the repo does not, and must
+  not be mistaken for a backup. The undo record is a safety net for one import,
+  **not** a substitute for this.
 - **No deactivation story for people who leave.** `profiles` has no
   `is_active`, and `deleteProfile` refuses anyone with a booking (correctly -
   it would orphan the history), so repeated imports only accumulate. Wanted:
@@ -831,6 +831,33 @@ CI. What would catch the most next:
 - The room grids are no longer colour-only (● booked, 🔧 maintenance, labelled
   bars, spelled-out legend), but have not had a screen-reader pass.
 - Audit focus order and labels through the long booking form.
+
+## 6a. Institute data tables (2 Nov 2026)
+
+Migration 35 adds six `institute_*` tables (students, employees, offices,
+fests/councils/clubs, hostels, wardens) with types in `lib/institute/types.ts`
+and 30 `DataStore` methods. The second session rewired all dependent code:
+
+- ~~Console pages~~ **Done.** The Academic Records console imports, views and
+  deletes records per institute table kind.
+- ~~Integration with the portal~~ **Done for the academic record path.**
+  `StoreAcademicSource` reads institute_* tables through an adapter
+  (`lib/institute/academic-adapter.ts`). The booking form's parent locking,
+  the warden's family check, the Copy-to chain and the requester-details card
+  all work unchanged.
+
+What is **not built yet**:
+
+- **Delete the dead code** in `lib/academic/stored.ts` (`planAcademicImport`,
+  `StoredAcademicRecord`, `ACADEMIC_RECORD_KINDS` etc.) - no production code
+  imports them any longer
+- **Drop the old `academic_records` table** once migration 35 is applied and
+  confirmed working on the hosted project
+- **Migration 35 applied** to the hosted project
+- **Warden scoping and approval routing from institute tables** - the portal
+  still reads `profiles.hostel_name`, `units` and `hostels` for these; the
+  institute tables are a second copy of this data that is not yet the
+  authority for routing
 
 ## 7. Features likely to be asked for next
 

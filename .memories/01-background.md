@@ -64,6 +64,8 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **28 Oct** (second) | **The landing page again, and Taramani named a second time.** The owner: the hero type "is blending with the background too much", and the page "overall looks very basic... make it look creative and aesthetic". The wash goes **66% -> 78%**, the `<h1>` becomes **Guest House Portal** in **bold** (the institute's name is kept, in full, as the tracked saffron line above it), and the lead loses `font-light`. Below it the page gains **an opening statement computed from the store** where it used to drop straight from a photograph into six icons; the amenities move **onto ink with saffron icons** - the page's one dark band; the gallery becomes a **twelve-column mosaic**; and the two guest houses become **one ruled plate** with their names at display size. Still no shadow, gradient, pill or 16px radius: all of it bought with composition, ground, type and one accent colour. **Public site only - no migration, no store operation, no booking rule.** |
 | **28 Oct** (third) | **The Google sign-in plan - no application code.** The owner asked how to set up Google OAuth, given that the institute's **email data for every user is being collected**. The review found the flow **already built and verified** (Phase 8: `lib/oidc.ts` and `app/api/auth/google/*` - PKCE, state, nonce, the `id_token` checked against Google's JWKS, the `hd` claim and `isInstituteEmail`, then a profile that must already exist) and **three places saying it was not**, each of which would have sent the next session to build it again. Output: **[`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md)** at the repo root, and corrections to `lib/env.ts`, `lib/site.ts`, `AGENTS.md` and `.env.example` (which also pointed at a memory file deleted on 10 Oct). Two defects recorded rather than fixed: the callback finds the account by scanning **every** profile, which Supabase truncates at **1000 rows silently** (roadmap **gate 12** - it breaks the institute's account import too, and migration 31's `lower(email)` index has been unused since 13 Oct), and `hd=iitpkd.ac.in` on the start leg is narrower than the return leg's own rule, so it may hide every `@smail` student from Google's account chooser. **No migration, no store operation, no booking rule, no permission and no route.** |
 | **30 Oct** | **The deployment guide.** The owner asked for a whole-code implementation overview, dependencies and migration-by-migration deployment instructions. Added root [`setup.md`](../setup.md), covering architecture, runtime/package requirements, local setup, environment variables, sign-in gates, all 34 Supabase migrations, verification limits, Vercel schedules, operational safeguards and troubleshooting. Updated the root README to point at the guide and remove outdated deployment guidance. **Documentation only; no application behavior changed.** |
+| **2 Nov** | **Six institute data tables** (migration 35). The user provided the institute's spreadsheet structures for Students (27 fields, Aadhar encrypted), Employees (13), Offices (11), Fest/Council/Clubs (8), Hostels (5) and Wardens (9). New types in `lib/institute/types.ts`, 30 `DataStore` methods, implementations in both stores with generic CRUD helpers, seed data for all six. **No console UI yet — store API only.** |
+| **2 Nov** (second) | **Rewired Academic Records to institute tables.** Adapter layer converts institute_* rows to `AcademicRecord`. `StoreAcademicSource` reads institute tables. Console rewritten for per-kind import/view/delete. `splitCsvLine` moved to `lib/csv.ts`. Seed data aligned with mock-source. Tests rewritten. **The old `academic_records` table is no longer read or written by any code path.** |
 
 ## The problem
 
@@ -1190,6 +1192,28 @@ opening statement sitting in a column half its width.
 
 ---
 
+## Institute data tables - 2 November 2026
+
+The user provided the actual spreadsheet column structures for six institute
+data tables with sample data and asked for them to be implemented.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | `institute_students` table with 27 fields including roll number, batch year, programme, branch, hostel, five Aadhar columns (encrypted at rest) | **Done** |
+| 2 | `institute_employees` table with 13 fields: name, designation, department, employee type, phone, address | **Done** |
+| 3 | `institute_offices` table with 11 fields: office name, department, head, contact, address | **Done** |
+| 4 | `institute_fcc` table with 8 fields: council/club/fest name, type, faculty advisor, secretary | **Done** |
+| 5 | `institute_hostels` table with 5 fields: hostel_id, name, warden name/email/phone | **Done** |
+| 6 | `institute_wardens` table with 9 fields: name, phone, designation, hostel_id FK | **Done** |
+| 7 | TypeScript types and column arrays for all six | **Done** - `lib/institute/types.ts` |
+| 8 | Migration 35 | **Done** - `supabase/migrations/00000000000035_institute_tables.sql` |
+| 9 | DataStore interface + both implementations | **Done** - 30 methods, generic CRUD helpers |
+| 10 | Seed data | **Done** - 2 students, 3 employees, 2 offices, 2 FCCs, 2 hostels, 2 wardens |
+| 11 | Console UI for managing these tables | **Not yet built** |
+| 12 | Integration with portal workflows | **Not yet built** |
+
+---
+
 ## Branches
 
 - **`main`** — everything above.
@@ -1402,3 +1426,27 @@ Documentation-only apart from a CRLF-safe line split in the memory-link
 checker, so running the required validation on Windows reads existing headings
 correctly. No application behavior, schema, permissions, routes or runtime
 dependencies changed.
+
+---
+
+## Round of 2 November 2026 (second session) - rewire Academic Records to institute tables
+
+Continuation of the institute data tables round. The first session created six
+`institute_*` tables (migration 35) with 30 `DataStore` methods. This session
+rewires all dependent code so the portal reads from those tables instead of
+`academic_records`.
+
+### What was asked, and the status of each item
+
+| # | Asked | Status |
+|---|---|---|
+| 1 | Rewire `StoreAcademicSource` to read institute_* tables | **Done.** Adapter in `lib/institute/academic-adapter.ts` converts rows; `store-source.ts` reads via adapter. Falls through to mock-source for alumni_office and missing tables. |
+| 2 | Rewrite Academic Records console for institute tables | **Done.** `components/admin/academic-records-manager.tsx` fully rewritten, `app/actions/academic.ts` has all CRUD + import actions per kind. |
+| 3 | Create import planning for new table shapes | **Done.** `lib/institute/import.ts` with `planInstituteImport`, `describeImport`, per-kind column arrays. |
+| 4 | Move `splitCsvLine` to shared location | **Done.** Now in `lib/csv.ts`; `lib/projects.ts` and `lib/users-import.ts` import it directly. Re-exported from `stored.ts`. |
+| 5 | Align seed data with mock-source | **Done.** `lib/store/seed.ts` institute_students records match `lib/academic/mock-source.ts` exactly. |
+| 6 | Update tests | **Done.** `tests/academic-records.test.ts` rewritten for new store methods and import planning. 606 tests pass. |
+
+The old `academic_records` table is no longer read or written by any code path.
+Dead code in `lib/academic/stored.ts` (`planAcademicImport` etc.) remains for
+backward compatibility but is not imported by any production module.

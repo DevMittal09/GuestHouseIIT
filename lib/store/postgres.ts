@@ -43,12 +43,20 @@ import {
   type NewAuditEvent,
 } from "@/lib/audit";
 import type { NewProjectInput, Project } from "@/lib/projects";
-import type { NewAcademicRecordInput, StoredAcademicRecord } from "@/lib/academic/stored";
-import {
-  ACADEMIC_RECORD_FIELDS,
-  type AcademicRecord,
-  type AcademicRecordKind,
-} from "@/lib/academic/types";
+import type {
+  InstituteStudent,
+  NewStudentInput,
+  InstituteEmployee,
+  NewEmployeeInput,
+  InstituteOffice,
+  NewOfficeInput,
+  InstituteFCC,
+  NewFCCInput,
+  InstituteHostel,
+  NewHostelInput,
+  InstituteWarden,
+  NewWardenInput,
+} from "@/lib/institute/types";
 import type { NewTariffInput, Tariff } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import type { NewSessionInput, Session } from "@/lib/sessions";
@@ -1238,67 +1246,48 @@ export class PostgresStore implements DataStore {
     }
   }
 
-  // ---- academic records (migration 28) ----------------------------------
+  // ---- institute data tables (migration 35) --------------------------------
 
-  private academicRecordOf(row: Record<string, unknown>): AcademicRecord {
-    const kind = row.kind as AcademicRecordKind;
-    const record = { kind } as Record<string, unknown>;
-    for (const field of ACADEMIC_RECORD_FIELDS[kind] as readonly string[]) {
-      record[field] = (row[field] as string | null | undefined) ?? null;
+  private async instituteFind<T>(table: string, emailCol: string, email: string): Promise<T | null> {
+    try {
+      const { rows } = await this.pool.query(
+        `SELECT * FROM ${table} WHERE lower(${emailCol}) = lower($1)`,
+        [email.trim()]
+      );
+      return (rows[0] as T) ?? null;
+    } catch (err: unknown) {
+      const e = err as { code?: string };
+      if (e.code === "42P01") return null;
+      throw err;
     }
-    return record as AcademicRecord;
   }
 
-  private academicRowOf(input: NewAcademicRecordInput): Record<string, unknown> {
-    const record = input.record as unknown as Record<string, unknown>;
-    const row: Record<string, unknown> = {
-      kind: input.record.kind,
-      email: input.email,
-      imported_by: input.imported_by,
-    };
-    for (const field of ACADEMIC_RECORD_FIELDS[input.record.kind] as readonly string[]) {
-      if (field === "email") continue;
-      row[field] = (record[field] as string | null | undefined) ?? null;
+  private async instituteList<T>(table: string, orderBy: string): Promise<T[]> {
+    try {
+      const { rows } = await this.pool.query(`SELECT * FROM ${table} ORDER BY ${orderBy}`);
+      return rows as T[];
+    } catch (err: unknown) {
+      const e = err as { code?: string };
+      if (e.code === "42P01") return [];
+      throw err;
     }
-    return row;
   }
 
-  async findAcademicRecord(kind: AcademicRecordKind, email: string): Promise<AcademicRecord | null> {
-    const { rows } = await this.pool.query(
-      "SELECT * FROM academic_records WHERE kind = $1 AND lower(email) = lower($2)",
-      [kind, email.trim()]
-    );
-    return rows[0] ? this.academicRecordOf(rows[0]) : null;
-  }
-
-  async listAcademicRecords(kind?: AcademicRecordKind): Promise<StoredAcademicRecord[]> {
-    let query = "SELECT * FROM academic_records";
-    const params: unknown[] = [];
-    if (kind) { query += " WHERE kind = $1"; params.push(kind); }
-    query += " ORDER BY email";
-    const { rows } = await this.pool.query(query, params);
-    return rows.map((row: Record<string, unknown>) => ({
-      id: row.id as string,
-      email: row.email as string,
-      record: this.academicRecordOf(row),
-      imported_by: (row.imported_by as string | null) ?? null,
-      created_at: row.created_at as string,
-      updated_at: row.updated_at as string,
-    }));
-  }
-
-  async saveAcademicRecords(
-    added: NewAcademicRecordInput[],
-    updated: { id: string; input: NewAcademicRecordInput }[]
+  private async instituteSave<I>(
+    table: string,
+    emailCol: string,
+    added: I[],
+    updated: { id: string; input: I }[],
+    rowOf: (input: I) => Record<string, unknown>
   ): Promise<void> {
     await this.withTx(async (client) => {
       if (added.length > 0) {
-        const firstRow = this.academicRowOf(added[0]);
+        const firstRow = rowOf(added[0]);
         const cols = Object.keys(firstRow);
         const params: unknown[] = [];
         const valueRows: string[] = [];
         for (const input of added) {
-          const row = this.academicRowOf(input);
+          const row = rowOf(input);
           const placeholders: string[] = [];
           for (const col of cols) {
             params.push(row[col]);
@@ -1308,36 +1297,290 @@ export class PostgresStore implements DataStore {
         }
         try {
           await client.query(
-            `INSERT INTO academic_records (${cols.join(", ")}) VALUES ${valueRows.join(", ")}`,
+            `INSERT INTO ${table} (${cols.join(", ")}) VALUES ${valueRows.join(", ")}`,
             params
           );
         } catch (err: unknown) {
           const e = err as { code?: string };
-          if (e.code === "23505") throw new Error("One of those records is already stored for that email");
+          if (e.code === "23505") throw new Error(`A record with that ${emailCol} is already stored`);
           throw err;
         }
       }
       for (const { id, input } of updated) {
-        const row = this.academicRowOf(input);
+        const row = rowOf(input);
         const entries = Object.entries(row);
         const sets = entries.map(([col], i) => `${col} = $${i + 2}`);
         const vals = entries.map(([, v]) => v);
-        await client.query(`UPDATE academic_records SET ${sets.join(", ")} WHERE id = $1`, [id, ...vals]);
+        await client.query(`UPDATE ${table} SET ${sets.join(", ")} WHERE id = $1`, [id, ...vals]);
       }
     });
   }
 
-  async deleteAcademicRecord(id: string): Promise<void> {
-    await this.pool.query("DELETE FROM academic_records WHERE id = $1", [id]);
+  private async instituteDelete(table: string, id: string): Promise<void> {
+    try {
+      await this.pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+    } catch (err: unknown) {
+      const e = err as { code?: string };
+      if (e.code === "42P01") return;
+      throw err;
+    }
   }
 
-  async deleteAcademicRecords(kind?: AcademicRecordKind): Promise<number> {
-    if (kind) {
-      const { rowCount } = await this.pool.query("DELETE FROM academic_records WHERE kind = $1", [kind]);
+  private async instituteDeleteAll(table: string): Promise<number> {
+    try {
+      const { rowCount } = await this.pool.query(`DELETE FROM ${table}`);
       return rowCount ?? 0;
+    } catch (err: unknown) {
+      const e = err as { code?: string };
+      if (e.code === "42P01") return 0;
+      throw err;
     }
-    const { rowCount } = await this.pool.query("DELETE FROM academic_records");
-    return rowCount ?? 0;
+  }
+
+  private studentRowOf(input: NewStudentInput): Record<string, unknown> {
+    return {
+      email: input.email,
+      batch_year: input.batch_year ?? null,
+      roll_number: input.roll_number ?? null,
+      full_name: input.full_name ?? null,
+      programme: input.programme ?? null,
+      faculty_advisor_guide_name: input.faculty_advisor_guide_name ?? null,
+      department: input.department ?? null,
+      year_of_admission: input.year_of_admission ?? null,
+      phone: input.phone ?? null,
+      aadhar_number: input.aadhar_number ? encryptValue(input.aadhar_number) : null,
+      father_name: input.father_name ?? null,
+      father_aadhar_number: input.father_aadhar_number ? encryptValue(input.father_aadhar_number) : null,
+      father_phone_number: input.father_phone_number ?? null,
+      mother_name: input.mother_name ?? null,
+      mother_aadhar_number: input.mother_aadhar_number ? encryptValue(input.mother_aadhar_number) : null,
+      mother_phone_number: input.mother_phone_number ?? null,
+      spouse_name: input.spouse_name ?? null,
+      spouse_aadhar_number: input.spouse_aadhar_number ? encryptValue(input.spouse_aadhar_number) : null,
+      spouse_phone_number: input.spouse_phone_number ?? null,
+      guardian_name: input.guardian_name ?? null,
+      guardian_aadhar_number: input.guardian_aadhar_number ? encryptValue(input.guardian_aadhar_number) : null,
+      guardian_phone_number: input.guardian_phone_number ?? null,
+      hostel: input.hostel ?? null,
+      imported_by: input.imported_by ?? null,
+    };
+  }
+
+  private hydrateStudent(row: Record<string, unknown>): InstituteStudent {
+    return {
+      ...row,
+      aadhar_number: row.aadhar_number ? decryptValue(row.aadhar_number as string) : null,
+      father_aadhar_number: row.father_aadhar_number ? decryptValue(row.father_aadhar_number as string) : null,
+      mother_aadhar_number: row.mother_aadhar_number ? decryptValue(row.mother_aadhar_number as string) : null,
+      spouse_aadhar_number: row.spouse_aadhar_number ? decryptValue(row.spouse_aadhar_number as string) : null,
+      guardian_aadhar_number: row.guardian_aadhar_number ? decryptValue(row.guardian_aadhar_number as string) : null,
+    } as InstituteStudent;
+  }
+
+  async findStudent(email: string): Promise<InstituteStudent | null> {
+    try {
+      const { rows } = await this.pool.query(
+        "SELECT * FROM institute_students WHERE lower(email) = lower($1)", [email.trim()]
+      );
+      return rows[0] ? this.hydrateStudent(rows[0] as Record<string, unknown>) : null;
+    } catch (err: unknown) {
+      const e = err as { code?: string };
+      if (e.code === "42P01") return null;
+      throw err;
+    }
+  }
+
+  async listStudents(): Promise<InstituteStudent[]> {
+    try {
+      const { rows } = await this.pool.query("SELECT * FROM institute_students ORDER BY email");
+      return (rows as Record<string, unknown>[]).map((r) => this.hydrateStudent(r));
+    } catch (err: unknown) {
+      const e = err as { code?: string };
+      if (e.code === "42P01") return [];
+      throw err;
+    }
+  }
+
+  async saveStudents(
+    added: NewStudentInput[],
+    updated: { id: string; input: NewStudentInput }[]
+  ): Promise<void> {
+    return this.instituteSave("institute_students", "email", added, updated, (i) => this.studentRowOf(i));
+  }
+
+  async deleteStudent(id: string): Promise<void> {
+    return this.instituteDelete("institute_students", id);
+  }
+
+  async deleteAllStudents(): Promise<number> {
+    return this.instituteDeleteAll("institute_students");
+  }
+
+  private employeeRowOf(input: NewEmployeeInput): Record<string, unknown> {
+    return {
+      email: input.email,
+      employee_id: input.employee_id ?? null,
+      full_name: input.full_name ?? null,
+      department: input.department ?? null,
+      employee_type: input.employee_type ?? null,
+      designation: input.designation ?? null,
+      phone: input.phone ?? null,
+      office_number: input.office_number ?? null,
+      gender: input.gender ?? null,
+      imported_by: input.imported_by ?? null,
+    };
+  }
+
+  async findEmployee(email: string): Promise<InstituteEmployee | null> {
+    return this.instituteFind("institute_employees", "email", email);
+  }
+
+  async listEmployees(): Promise<InstituteEmployee[]> {
+    return this.instituteList("institute_employees", "email");
+  }
+
+  async saveEmployees(
+    added: NewEmployeeInput[],
+    updated: { id: string; input: NewEmployeeInput }[]
+  ): Promise<void> {
+    return this.instituteSave("institute_employees", "email", added, updated, (i) => this.employeeRowOf(i));
+  }
+
+  async deleteEmployee(id: string): Promise<void> {
+    return this.instituteDelete("institute_employees", id);
+  }
+
+  async deleteAllEmployees(): Promise<number> {
+    return this.instituteDeleteAll("institute_employees");
+  }
+
+  private officeRowOf(input: NewOfficeInput): Record<string, unknown> {
+    return {
+      office_email: input.office_email,
+      office_name: input.office_name ?? null,
+      office_class: input.office_class ?? null,
+      phone: input.phone ?? null,
+      department_head: input.department_head ?? null,
+      head_name: input.head_name ?? null,
+      head_email: input.head_email ?? null,
+      imported_by: input.imported_by ?? null,
+    };
+  }
+
+  async findOffice(email: string): Promise<InstituteOffice | null> {
+    return this.instituteFind("institute_offices", "office_email", email);
+  }
+
+  async listOffices(): Promise<InstituteOffice[]> {
+    return this.instituteList("institute_offices", "office_email");
+  }
+
+  async saveOffices(
+    added: NewOfficeInput[],
+    updated: { id: string; input: NewOfficeInput }[]
+  ): Promise<void> {
+    return this.instituteSave("institute_offices", "office_email", added, updated, (i) => this.officeRowOf(i));
+  }
+
+  async deleteOffice(id: string): Promise<void> {
+    return this.instituteDelete("institute_offices", id);
+  }
+
+  async deleteAllOffices(): Promise<number> {
+    return this.instituteDeleteAll("institute_offices");
+  }
+
+  private fccRowOf(input: NewFCCInput): Record<string, unknown> {
+    return {
+      council_email: input.council_email,
+      council_name: input.council_name ?? null,
+      event_or_council: input.event_or_council ?? null,
+      faculty_advisor_email: input.faculty_advisor_email ?? null,
+      imported_by: input.imported_by ?? null,
+    };
+  }
+
+  async findFCC(email: string): Promise<InstituteFCC | null> {
+    return this.instituteFind("institute_fcc", "council_email", email);
+  }
+
+  async listFCCs(): Promise<InstituteFCC[]> {
+    return this.instituteList("institute_fcc", "council_email");
+  }
+
+  async saveFCCs(
+    added: NewFCCInput[],
+    updated: { id: string; input: NewFCCInput }[]
+  ): Promise<void> {
+    return this.instituteSave("institute_fcc", "council_email", added, updated, (i) => this.fccRowOf(i));
+  }
+
+  async deleteFCC(id: string): Promise<void> {
+    return this.instituteDelete("institute_fcc", id);
+  }
+
+  async deleteAllFCCs(): Promise<number> {
+    return this.instituteDeleteAll("institute_fcc");
+  }
+
+  private hostelRowOf(input: NewHostelInput): Record<string, unknown> {
+    return {
+      hostel_id: input.hostel_id,
+      hostel_name: input.hostel_name,
+    };
+  }
+
+  async listInstituteHostels(): Promise<InstituteHostel[]> {
+    return this.instituteList("institute_hostels", "hostel_id");
+  }
+
+  async saveInstituteHostels(
+    added: NewHostelInput[],
+    updated: { id: string; input: NewHostelInput }[]
+  ): Promise<void> {
+    return this.instituteSave("institute_hostels", "hostel_id", added, updated, (i) => this.hostelRowOf(i));
+  }
+
+  async deleteInstituteHostel(id: string): Promise<void> {
+    return this.instituteDelete("institute_hostels", id);
+  }
+
+  async deleteAllInstituteHostels(): Promise<number> {
+    return this.instituteDeleteAll("institute_hostels");
+  }
+
+  private wardenRowOf(input: NewWardenInput): Record<string, unknown> {
+    return {
+      warden_email: input.warden_email,
+      full_name: input.full_name ?? null,
+      warden_phone: input.warden_phone ?? null,
+      warden_role: input.warden_role ?? null,
+      hostel_id: input.hostel_id ?? null,
+      imported_by: input.imported_by ?? null,
+    };
+  }
+
+  async findWarden(email: string): Promise<InstituteWarden | null> {
+    return this.instituteFind("institute_wardens", "warden_email", email);
+  }
+
+  async listWardens(): Promise<InstituteWarden[]> {
+    return this.instituteList("institute_wardens", "warden_email");
+  }
+
+  async saveWardens(
+    added: NewWardenInput[],
+    updated: { id: string; input: NewWardenInput }[]
+  ): Promise<void> {
+    return this.instituteSave("institute_wardens", "warden_email", added, updated, (i) => this.wardenRowOf(i));
+  }
+
+  async deleteWarden(id: string): Promise<void> {
+    return this.instituteDelete("institute_wardens", id);
+  }
+
+  async deleteAllWardens(): Promise<number> {
+    return this.instituteDeleteAll("institute_wardens");
   }
 
   // ---- audit ------------------------------------------------------------

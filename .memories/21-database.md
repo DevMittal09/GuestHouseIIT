@@ -1,6 +1,6 @@
 # Database
 
-Schema lives in `supabase/migrations/` — **25 numbered files, applied in order,
+Schema lives in `supabase/migrations/` — **26 numbered files, applied in order,
 forward only** (the first is `00000000000001_initial_schema.sql`); demo data in
 `supabase/seed.sql`. The TypeScript types are hand-maintained in
 `lib/supabase/database.types.ts`. The mock store (`lib/store/mock.ts`) mirrors
@@ -26,6 +26,12 @@ every table in `.local-db.json` and self-heals old files.
 | `security_audit` | (Migration 16) The append-only security audit log. A trigger refuses every UPDATE, every DELETE except through `purge_security_audit(days)` (never under 180 days, CERT-In), and TRUNCATE. Service-role only. |
 | `email_outbox` | The notification queue (migration 10). One row per message: recipients, rendered HTML and text, status, attempts, backoff. **Service-role only, like `app_settings`** — the rendered bodies quote guest names, purposes of visit and rejection reasons, which makes this table more sensitive than the bookings it describes. |
 | `academic_records` | (Migration 28) The institute's records **as the guest house office pasted them in**: one flat row per `(kind, lower(email))`, with every kind's fields as nullable columns. Read by the Requester details card, the Assistant Warden's family check and the booking form's **locked parent names**. **Service-role only** — it holds parents' names and phone numbers. |
+| `institute_students` | (Migration 35) The institute's student directory: 27 fields including roll number, batch year, programme, branch, hostel, family details and **five Aadhar columns encrypted at rest**. Keyed on `lower(email)`. `imported_by` → `profiles`. |
+| `institute_employees` | (Migration 35) The institute's employee directory: 13 fields — name, designation, department, employee type (faculty/staff), phone, address. Keyed on `lower(email)`. `imported_by` → `profiles`. |
+| `institute_offices` | (Migration 35) Institute offices: 11 fields — office name, department, head, contact details, address. Keyed on `lower(office_email)`. `imported_by` → `profiles`. |
+| `institute_fcc` | (Migration 35) Fests, councils and clubs: 8 fields — name, type, faculty advisor, secretary. Keyed on `lower(council_email)`. `imported_by` → `profiles`. |
+| `institute_hostels` | (Migration 35) Institute hostels: `hostel_id` (like "HOS1"), name, warden name/email/phone. No `imported_by`. |
+| `institute_wardens` | (Migration 35) Hostel wardens: 9 fields — name, email, phone, designation, `hostel_id` → `institute_hostels` (`ON UPDATE CASCADE ON DELETE SET NULL`). `imported_by` → `profiles`. |
 
 ### `bookings` columns worth knowing
 
@@ -895,6 +901,18 @@ Current migrations:
     and a non-array `added`. The 31 rollback re-run on top: policies 0 -> 38 ->
     0 with the profiles untouched. The unindexed-foreign-key query returns
     exactly the two rows 34 leaves deliberately.
+
+35. **`00000000000035_institute_tables.sql`** — *the institute's own directory
+    tables* (2 Nov 2026). Six tables: `institute_students` (27 columns, five
+    Aadhar fields encrypted at rest), `institute_employees` (13),
+    `institute_offices` (11), `institute_fcc` (8), `institute_hostels` (5),
+    `institute_wardens` (9 columns, `hostel_id` → `institute_hostels` on update
+    cascade / on delete set null). Unique indexes on lowercased email columns,
+    `set_updated_at()` triggers on all six, `imported_by` → `profiles` on five
+    (not hostels). Uses `CREATE TABLE IF NOT EXISTS`, safe to re-run. Additive
+    and **optional** — no application code requires these tables to exist; both
+    stores degrade gracefully (PostgresStore catches `42P01`, MockStore
+    self-heals). **Not applied to the hosted project.**
 
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.

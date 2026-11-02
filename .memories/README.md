@@ -136,10 +136,10 @@ scans **every** profile and Supabase truncates that at **1000 rows silently**
 import too), and the start leg's `hd` hint may keep every `@smail` student out
 of Google's account chooser.
 
-**Numbers.** 34 migrations · 10 one-off repairs · 12 roles (10 active) ·
+**Numbers.** 35 migrations · 10 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
 19 demo personas · 6 demo bookings · 23 real rooms · **25 photographs** ·
-608 unit tests · 50 end-to-end journeys · 15 console sections ·
+606 unit tests · 50 end-to-end journeys · 15 console sections ·
 **5 invoice layout versions**.
 
 ---

@@ -3,13 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { MEAL_BOOKING_PATH, ROOM_BOOKING_PATH } from "@/lib/routes";
 import { canUseConsoleSection } from "@/lib/access";
-import {
-  describeImport,
-  planAcademicImport,
-  type AcademicImportPlan,
-  type StoredAcademicRecord,
-} from "@/lib/academic/stored";
-import type { AcademicRecordKind } from "@/lib/academic/types";
 import { forgetAcademicRecords } from "@/lib/academic";
 import { isAdminUnlocked } from "@/lib/admin-lock";
 import { recordAudit } from "@/lib/audit-server";
@@ -17,20 +10,18 @@ import { requireUser } from "@/lib/auth";
 import { getStore } from "@/lib/store";
 import type { Profile } from "@/lib/types";
 import type { ActionResult } from "./bookings";
+import type { InstituteTableKind } from "@/lib/institute/types";
+import {
+  planInstituteImport,
+  describeImport,
+  type InstituteImportPlan,
+} from "@/lib/institute/import";
 
 /**
- * Academic records (migration 28, 7 Oct 2026): the institute's records as the
- * guest house office pastes them in.
+ * Institute records (migration 35, 2 Nov 2026): the institute's records as the
+ * guest house office imports them via CSV into the six institute_* tables.
  *
- * The same gate as the rest of the console - the section and the unlock -
- * checked here on the action, not only in the layout, because a crafted
- * request with no unlock must get nothing. **Every change is audited.** These
- * rows decide what a student's booking form locks their parents' names to, so
- * a wrong import is a thing someone will need to trace.
- *
- * What is *not* here: any way to read a record for somebody else. The console
- * lists what is stored - the office typed it in, so it is already theirs -
- * and nothing else returns a record to a browser.
+ * Same gate as the rest of the console. Every change is audited.
  */
 async function requireAcademicConsole(): Promise<Profile> {
   const user = await requireUser();
@@ -44,7 +35,7 @@ async function requireAcademicConsole(): Promise<Profile> {
 }
 
 const MIGRATION_HINT =
-  "The academic records table is not there yet - apply scripts/init-postgres.sql (table: academic_records).";
+  "The institute tables are not there yet - apply scripts/init-postgres.sql (migration 35).";
 
 function fail(e: unknown): ActionResult {
   const code = (e as { code?: string } | null)?.code;
@@ -53,89 +44,70 @@ function fail(e: unknown): ActionResult {
 }
 
 function done(): void {
-  // The lookups are cached for ten minutes, so a paste would otherwise read
-  // back as the record it replaced - and the booking form would go on
-  // locking a student's parent to the old name.
   forgetAcademicRecords();
   revalidatePath("/admin/academic");
-  // The card at the top of New Booking - on both its doors - the warden's
-  // family check and the locked parent names all read these rows.
   revalidatePath(ROOM_BOOKING_PATH);
   revalidatePath(MEAL_BOOKING_PATH);
   revalidatePath("/warden");
 }
 
-export async function listAcademicRecordsForConsole(): Promise<
-  { ok: true; records: StoredAcademicRecord[] } | { ok: false; error: string }
+type InstituteRecord = { id: string; email: string; [key: string]: unknown };
+
+async function listByKind(kind: InstituteTableKind): Promise<InstituteRecord[]> {
+  const store = getStore();
+  switch (kind) {
+    case "student": return (await store.listStudents()) as unknown as InstituteRecord[];
+    case "employee": return (await store.listEmployees()) as unknown as InstituteRecord[];
+    case "office": return (await store.listOffices()).map((o) => ({ ...o, email: o.office_email })) as unknown as InstituteRecord[];
+    case "fcc": return (await store.listFCCs()).map((f) => ({ ...f, email: f.council_email })) as unknown as InstituteRecord[];
+    case "hostel": return (await store.listInstituteHostels()).map((h) => ({ ...h, email: h.hostel_id })) as unknown as InstituteRecord[];
+    case "warden": return (await store.listWardens()).map((w) => ({ ...w, email: w.warden_email })) as unknown as InstituteRecord[];
+  }
+}
+
+async function deleteByKindAndId(kind: InstituteTableKind, id: string): Promise<void> {
+  const store = getStore();
+  switch (kind) {
+    case "student": return store.deleteStudent(id);
+    case "employee": return store.deleteEmployee(id);
+    case "office": return store.deleteOffice(id);
+    case "fcc": return store.deleteFCC(id);
+    case "hostel": return store.deleteInstituteHostel(id);
+    case "warden": return store.deleteWarden(id);
+  }
+}
+
+async function clearByKind(kind: InstituteTableKind): Promise<number> {
+  const store = getStore();
+  switch (kind) {
+    case "student": return store.deleteAllStudents();
+    case "employee": return store.deleteAllEmployees();
+    case "office": return store.deleteAllOffices();
+    case "fcc": return store.deleteAllFCCs();
+    case "hostel": return store.deleteAllInstituteHostels();
+    case "warden": return store.deleteAllWardens();
+  }
+}
+
+export async function listInstituteRecordsForConsole(kind: InstituteTableKind): Promise<
+  { ok: true; records: InstituteRecord[] } | { ok: false; error: string }
 > {
   try {
     await requireAcademicConsole();
-    return { ok: true, records: await getStore().listAcademicRecords() };
+    return { ok: true, records: await listByKind(kind) };
   } catch (e) {
     const problem = fail(e);
     return { ok: false, error: problem.ok ? "Something went wrong" : problem.error };
   }
 }
 
-/**
- * What a paste would do, without doing it. The console shows the plan and
- * asks; the office is pasting hundreds of rows and should see "412 added, 3
- * updated" before it happens, not afterwards.
- */
-export async function planAcademicImportAction(
-  kind: AcademicRecordKind,
-  text: string
-): Promise<{ ok: true; plan: AcademicImportPlan } | { ok: false; error: string }> {
+export async function deleteInstituteRecordAction(kind: InstituteTableKind, id: string): Promise<ActionResult> {
   try {
     const user = await requireAcademicConsole();
-    const existing = await getStore().listAcademicRecords(kind);
-    return { ok: true, plan: planAcademicImport(kind, text, existing, user.id) };
-  } catch (e) {
-    const problem = fail(e);
-    return { ok: false, error: problem.ok ? "Something went wrong" : problem.error };
-  }
-}
-
-/**
- * Apply a paste. The plan is rebuilt here from the text rather than taken
- * from the browser: a plan the client could edit would be a way to write any
- * row into the table, and rebuilding it also means a record changed between
- * the preview and the Import is seen as it is now.
- */
-export async function importAcademicRecordsAction(
-  kind: AcademicRecordKind,
-  text: string
-): Promise<ActionResult & { summary?: string }> {
-  try {
-    const user = await requireAcademicConsole();
-    const store = getStore();
-    const existing = await store.listAcademicRecords(kind);
-    const plan = planAcademicImport(kind, text, existing, user.id);
-    if (plan.problems.length > 0) return { ok: false, error: plan.problems[0] };
-    await store.saveAcademicRecords(plan.added, plan.updated);
-    const summary = describeImport(plan);
-    await recordAudit(user, "settings.changed", "academic_records", {
+    await deleteByKindAndId(kind, id);
+    await recordAudit(user, "settings.changed", "institute_records", {
       kind,
-      added: plan.added.length,
-      updated: plan.updated.length,
-      unchanged: plan.unchanged,
-    });
-    done();
-    return { ok: true, summary };
-  } catch (e) {
-    return fail(e);
-  }
-}
-
-export async function deleteAcademicRecordAction(id: string): Promise<ActionResult> {
-  try {
-    const user = await requireAcademicConsole();
-    const store = getStore();
-    const row = (await store.listAcademicRecords()).find((r) => r.id === id);
-    if (!row) return { ok: false, error: "That record is already gone" };
-    await store.deleteAcademicRecord(id);
-    await recordAudit(user, "settings.changed", "academic_records", {
-      removed: { kind: row.record.kind, email: row.email },
+      removed: id,
     });
     done();
     return { ok: true };
@@ -144,23 +116,73 @@ export async function deleteAcademicRecordAction(id: string): Promise<ActionResu
   }
 }
 
-/**
- * Clear one kind, or everything. The office needs it when a paste went in
- * against the wrong kind - there is no other way to undo that in bulk - and
- * the console makes them type the word.
- */
-export async function clearAcademicRecordsAction(
-  kind?: AcademicRecordKind
+export async function clearInstituteRecordsAction(
+  kind: InstituteTableKind
 ): Promise<ActionResult & { summary?: string }> {
   try {
     const user = await requireAcademicConsole();
-    const removed = await getStore().deleteAcademicRecords(kind);
-    await recordAudit(user, "settings.changed", "academic_records", {
-      cleared: kind ?? "all kinds",
+    const removed = await clearByKind(kind);
+    await recordAudit(user, "settings.changed", "institute_records", {
+      cleared: kind,
       removed,
     });
     done();
     return { ok: true, summary: `${removed} record${removed === 1 ? "" : "s"} removed` };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function saveByKind(kind: InstituteTableKind, plan: InstituteImportPlan<any>): Promise<void> {
+  const store = getStore();
+  switch (kind) {
+    case "student": return store.saveStudents(plan.added, plan.updated);
+    case "employee": return store.saveEmployees(plan.added, plan.updated);
+    case "office": return store.saveOffices(plan.added, plan.updated);
+    case "fcc": return store.saveFCCs(plan.added, plan.updated);
+    case "hostel": return store.saveInstituteHostels(plan.added, plan.updated);
+    case "warden": return store.saveWardens(plan.added, plan.updated);
+  }
+}
+
+export async function planInstituteImportAction(
+  kind: InstituteTableKind,
+  text: string,
+): Promise<{ ok: true; plan: InstituteImportPlan } | { ok: false; error: string }> {
+  try {
+    const user = await requireAcademicConsole();
+    const existing = await listByKind(kind);
+    const plan = planInstituteImport(kind, text, existing, user.id);
+    return { ok: true, plan };
+  } catch (e) {
+    const problem = fail(e);
+    return { ok: false, error: problem.ok ? "Something went wrong" : problem.error };
+  }
+}
+
+export async function importInstituteRecordsAction(
+  kind: InstituteTableKind,
+  text: string,
+): Promise<ActionResult & { summary?: string }> {
+  try {
+    const user = await requireAcademicConsole();
+    const existing = await listByKind(kind);
+    const plan = planInstituteImport(kind, text, existing, user.id);
+    if (plan.problems.length > 0) {
+      return { ok: false, error: plan.problems.join("\n") };
+    }
+    if (plan.added.length + plan.updated.length === 0) {
+      return { ok: true, summary: "Nothing changed - every line matches what is already stored." };
+    }
+    await saveByKind(kind, plan);
+    const summary = describeImport(plan);
+    await recordAudit(user, "settings.changed", "institute_records", {
+      kind,
+      imported: summary,
+    });
+    done();
+    return { ok: true, summary };
   } catch (e) {
     return fail(e);
   }

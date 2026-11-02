@@ -7,41 +7,71 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 30 October 2026 - the deployment setup guide
+## Round of 2 November 2026 (second session) - rewire Academic Records to institute tables
 
-The owner asked for a comprehensive setup document covering how the
-application is implemented, its dependencies, the database migrations and
-everything needed to deploy it.
+The previous session created six `institute_*` tables and 30 `DataStore`
+methods. This session **rewired every dependent module** so the Academic Records
+console, the booking form's parent locking, and the `StoreAcademicSource`
+adapter all read from the new tables instead of the old `academic_records`
+table.
 
 ### What was delivered
 
-Created the repo-root [`setup.md`](../setup.md) with:
+**Adapter layer** (`lib/institute/academic-adapter.ts`): five pure functions
+(`studentToRecord`, `employeeToRecord`, `officeToRecord`, `fccToRecord`,
+`wardenToRecord`) that convert each institute table's row type into the
+`AcademicRecord` union the rest of the portal reads. Downstream code -
+the booking form's parent locking, the warden's family check, the Copy-to
+chain, the requester-details card - is unchanged.
 
-- The application architecture and boundaries between pages, server actions,
-  authorization, store adapters, Supabase, uploads, mail and scheduled jobs.
-- Runtime and package requirements, local development and validation commands.
-- Production environment variables, OAuth/mock-login gates and secret-handling
-  requirements.
-- New and existing database setup, all **34 ordered migrations**, the
-  read-only migration checker, and the manual verification required for
-  migrations 17, 23, 31, 33 and 34.
-- The controlled migration 31 rollout, Vercel deployment and cron schedules,
-  operational safeguards, data notes and troubleshooting.
+**`StoreAcademicSource` rewired** (`lib/academic/store-source.ts`): reads
+institute_* tables via the adapter instead of `academic_records`. Falls through
+to `MockAcademicSource` (dummy records) for `alumni_office` (no table) and
+when tables are missing (Postgres error `42P01`).
 
-Updated the root README to make `setup.md` the deployment entry point and
-remove outdated migration/sign-in guidance. The example frequent-dispatch
-schedule is now explicitly distinguished from the daily Vercel schedule.
+**Console rewritten** (`components/admin/academic-records-manager.tsx`,
+`app/(portal)/admin/academic/page.tsx`, `app/actions/academic.ts`): imports,
+views, and deletes records per institute table kind. The component manages
+per-kind record loading and counts. Server actions route to the correct store
+method per kind. Import planning uses `lib/institute/import.ts`.
 
-### Memory and validation
+**Import planning** (`lib/institute/import.ts`): `planInstituteImport`,
+`describeImport`, `csvColumnsFor`, `csvHeaderFor`, `columnLabel` - the same
+all-or-nothing CSV-paste logic as the old `planAcademicImport`, but reading
+each table's own column arrays from `lib/institute/types.ts`.
 
-Updated the memory index, background timeline, decision log, roadmap and
-production checklist to link to the guide and retain their distinct roles.
-Aligned the root agent instructions and running/testing guide with the package's
-Node 22+ requirement; corrected the memory index's runtime requirement and
-migration count to 34. Made the memory-link checker CRLF-aware after its
-Windows run misread existing headings as broken links.
+**Shared CSV utility** (`lib/csv.ts`): `splitCsvLine` moved here from
+`lib/academic/stored.ts` and re-exported from there for backward
+compatibility. `lib/projects.ts` and `lib/users-import.ts` now import it
+directly from `lib/csv.ts`.
 
-Documentation-only change: no code, migration, configuration, permission or
-runtime dependency changed. `npm run check:memories` is the required
-validation; no build or test suite is needed unless the documentation check
-reveals a code-related issue.
+**Seed data aligned** (`lib/store/seed.ts`): the institute_students seed
+records now match `lib/academic/mock-source.ts` exactly (father/mother/guardian
+names, programme, department, phone), so `StoreAcademicSource` returns
+consistent data whether it reads from the store or falls through to
+the dummies.
+
+**Tests rewritten** (`tests/academic-records.test.ts`): CSV-paste tests use
+`planInstituteImport`; store tests use the new `store.saveStudents` /
+`findStudent` / `listStudents` / `deleteStudent` / `deleteAllStudents`
+methods; the `StoreAcademicSource` adapter test verifies an imported record
+wins over a sample and a missing record falls through.
+
+### What is open
+
+- **Dead code in `lib/academic/stored.ts`**: `planAcademicImport`,
+  `sameRecord`, `recordFromFields`, `StoredAcademicRecord`,
+  `NewAcademicRecordInput`, `ACADEMIC_RECORD_KINDS`,
+  `ACADEMIC_RECORD_KIND_LABELS`, `AcademicImportPlan` are no longer imported
+  by any production code. The old academic_records store methods were removed
+  in the first session. These types and functions can be deleted once the
+  migration from academic_records is confirmed complete.
+- **Migration 35 is not applied** to the hosted project
+- **The old `academic_records` table** (migration 28) still exists in the
+  database schema and in the Supabase migration files but is no longer read
+  or written by any code path
+
+### Validation
+
+`npm run typecheck`, `npm run lint`, `npm test` (606 tests, 35 files) and
+`npm run build` all clean.

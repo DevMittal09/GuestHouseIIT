@@ -25,8 +25,20 @@ import { deriveFromRooms } from "./derive";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
-import type { NewAcademicRecordInput, StoredAcademicRecord } from "@/lib/academic/stored";
-import type { AcademicRecord, AcademicRecordKind } from "@/lib/academic/types";
+import type {
+  InstituteStudent,
+  NewStudentInput,
+  InstituteEmployee,
+  NewEmployeeInput,
+  InstituteOffice,
+  NewOfficeInput,
+  InstituteFCC,
+  NewFCCInput,
+  InstituteHostel,
+  NewHostelInput,
+  InstituteWarden,
+  NewWardenInput,
+} from "@/lib/institute/types";
 import type {
   EmailMessage,
   EmailOutboxFilter,
@@ -65,6 +77,12 @@ import {
   seedTariffs,
   seedRooms,
   seedUnits,
+  seedInstituteStudents,
+  seedInstituteEmployees,
+  seedInstituteOffices,
+  seedInstituteFCCs,
+  seedInstituteHostels,
+  seedInstituteWardens,
 } from "./seed";
 import type { NewProjectInput, Project } from "@/lib/projects";
 import { blockOverlaps, type NewRoomBlockInput, type RoomBlock } from "@/lib/operations";
@@ -131,9 +149,15 @@ interface Db {
   /** Departments, clubs, councils and offices, and who heads each (migration 15). */
   units?: Unit[];
   /** Migration 28: the institute's records as the office pasted them in. */
-  academic_records?: StoredAcademicRecord[];
   /** Migration 32: one row per spreadsheet import - what it changed, so it can be undone. */
   user_import_batches?: UserImportBatch[];
+  /** Migration 35: institute data tables. */
+  institute_students?: InstituteStudent[];
+  institute_employees?: InstituteEmployee[];
+  institute_offices?: InstituteOffice[];
+  institute_fcc?: InstituteFCC[];
+  institute_hostels?: InstituteHostel[];
+  institute_wardens?: InstituteWarden[];
 }
 
 // `MOCK_DB_PATH` lets the test suite run against a throwaway file instead of
@@ -453,6 +477,31 @@ function loadDb(): Db {
       db.user_import_batches = [];
       dirty = true;
     }
+    // Migration 35: institute data tables.
+    if (!db.institute_students) {
+      db.institute_students = seedInstituteStudents;
+      dirty = true;
+    }
+    if (!db.institute_employees) {
+      db.institute_employees = seedInstituteEmployees;
+      dirty = true;
+    }
+    if (!db.institute_offices) {
+      db.institute_offices = seedInstituteOffices;
+      dirty = true;
+    }
+    if (!db.institute_fcc) {
+      db.institute_fcc = seedInstituteFCCs;
+      dirty = true;
+    }
+    if (!db.institute_hostels) {
+      db.institute_hostels = seedInstituteHostels;
+      dirty = true;
+    }
+    if (!db.institute_wardens) {
+      db.institute_wardens = seedInstituteWardens;
+      dirty = true;
+    }
     if (dirty) saveDb(db);
     return db;
   }
@@ -475,6 +524,12 @@ function loadDb(): Db {
     tariffs: [...seedTariffs],
     invoices: [],
     invoice_counters: {},
+    institute_students: seedInstituteStudents,
+    institute_employees: seedInstituteEmployees,
+    institute_offices: seedInstituteOffices,
+    institute_fcc: seedInstituteFCCs,
+    institute_hostels: seedInstituteHostels,
+    institute_wardens: seedInstituteWardens,
   };
   saveDb(db);
   return db;
@@ -1355,65 +1410,218 @@ export class MockStore implements DataStore {
     saveDb(db);
   }
 
-  // ---- academic records (migration 28) --------------------------------
+  // ---- institute data tables (migration 35) --------------------------------
 
-  async findAcademicRecord(
-    kind: AcademicRecordKind,
+  private mockFind<T extends Record<string, unknown>>(
+    key: keyof Db,
+    emailCol: string,
     email: string
-  ): Promise<AcademicRecord | null> {
-    const key = email.trim().toLowerCase();
-    // The unique index on (kind, lower(email)), emulated.
-    const row = (loadDb().academic_records ?? []).find(
-      (r) => r.record.kind === kind && r.email.trim().toLowerCase() === key
-    );
-    return row ? row.record : null;
+  ): T | null {
+    const rows = (loadDb()[key] as T[] | undefined) ?? [];
+    const needle = email.trim().toLowerCase();
+    return rows.find((r) => String(r[emailCol] ?? "").trim().toLowerCase() === needle) ?? null;
   }
 
-  async listAcademicRecords(kind?: AcademicRecordKind): Promise<StoredAcademicRecord[]> {
-    return (loadDb().academic_records ?? [])
-      .filter((r) => !kind || r.record.kind === kind)
-      .sort((a, b) => a.email.localeCompare(b.email));
+  private mockList<T>(key: keyof Db): T[] {
+    return ((loadDb()[key] as T[] | undefined) ?? []);
   }
 
-  async saveAcademicRecords(
-    added: NewAcademicRecordInput[],
-    updated: { id: string; input: NewAcademicRecordInput }[]
-  ): Promise<void> {
+  private mockSave<T extends { id: string; created_at: string; updated_at: string }>(
+    key: keyof Db,
+    emailCol: string,
+    added: T[],
+    updated: { id: string; input: Omit<T, "id" | "created_at" | "updated_at"> }[],
+    toRow: (input: Omit<T, "id" | "created_at" | "updated_at">, id: string, now: string) => T
+  ): void {
     const db = loadDb();
-    const rows = (db.academic_records ??= []);
+    const rows = ((db[key] as T[] | undefined) ?? []) as T[];
     const now = new Date().toISOString();
-    const taken = new Set(rows.map((r) => `${r.record.kind}|${r.email.trim().toLowerCase()}`));
+    const taken = new Set(rows.map((r) => String((r as Record<string, unknown>)[emailCol] ?? "").trim().toLowerCase()));
     for (const input of added) {
-      const key = `${input.record.kind}|${input.email.trim().toLowerCase()}`;
-      if (taken.has(key)) throw new Error(`A ${input.record.kind} record for ${input.email} is already stored`);
-      taken.add(key);
-      rows.push({ ...input, id: randomUUID(), created_at: now, updated_at: now });
+      const emailVal = String((input as unknown as Record<string, unknown>)[emailCol] ?? "").trim().toLowerCase();
+      if (taken.has(emailVal)) throw new Error(`A record with that ${emailCol} is already stored`);
+      taken.add(emailVal);
+      rows.push(toRow(input as Omit<T, "id" | "created_at" | "updated_at">, randomUUID(), now));
     }
     for (const { id, input } of updated) {
       const row = rows.find((r) => r.id === id);
       if (!row) throw new Error("That record is no longer stored");
-      Object.assign(row, input, { updated_at: now });
+      const fresh = toRow(input, id, now);
+      Object.assign(row, fresh, { updated_at: now });
     }
+    (db as unknown as Record<string, unknown>)[key] = rows;
     saveDb(db);
   }
 
-  async deleteAcademicRecord(id: string): Promise<void> {
+  private mockDelete(key: keyof Db, id: string): void {
     const db = loadDb();
-    const rows = db.academic_records ?? [];
+    const rows = ((db[key] as { id: string }[] | undefined) ?? []);
     const at = rows.findIndex((r) => r.id === id);
     if (at < 0) throw new Error("That record is already gone");
     rows.splice(at, 1);
-    db.academic_records = rows;
+    (db as unknown as Record<string, unknown>)[key] = rows;
     saveDb(db);
   }
 
-  async deleteAcademicRecords(kind?: AcademicRecordKind): Promise<number> {
+  private mockDeleteAll(key: keyof Db): number {
     const db = loadDb();
-    const rows = db.academic_records ?? [];
-    const keep = rows.filter((r) => kind && r.record.kind !== kind);
-    db.academic_records = keep;
+    const rows = ((db[key] as unknown[] | undefined) ?? []);
+    const count = rows.length;
+    (db as unknown as Record<string, unknown>)[key] = [];
     saveDb(db);
-    return rows.length - keep.length;
+    return count;
+  }
+
+  async findStudent(email: string): Promise<InstituteStudent | null> {
+    return this.mockFind<InstituteStudent>("institute_students", "email", email);
+  }
+
+  async listStudents(): Promise<InstituteStudent[]> {
+    return this.mockList<InstituteStudent>("institute_students");
+  }
+
+  async saveStudents(
+    added: NewStudentInput[],
+    updated: { id: string; input: NewStudentInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteStudent>(
+      "institute_students", "email", added as unknown as InstituteStudent[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteStudent)
+    );
+  }
+
+  async deleteStudent(id: string): Promise<void> {
+    this.mockDelete("institute_students", id);
+  }
+
+  async deleteAllStudents(): Promise<number> {
+    return this.mockDeleteAll("institute_students");
+  }
+
+  async findEmployee(email: string): Promise<InstituteEmployee | null> {
+    return this.mockFind<InstituteEmployee>("institute_employees", "email", email);
+  }
+
+  async listEmployees(): Promise<InstituteEmployee[]> {
+    return this.mockList<InstituteEmployee>("institute_employees");
+  }
+
+  async saveEmployees(
+    added: NewEmployeeInput[],
+    updated: { id: string; input: NewEmployeeInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteEmployee>(
+      "institute_employees", "email", added as unknown as InstituteEmployee[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteEmployee)
+    );
+  }
+
+  async deleteEmployee(id: string): Promise<void> {
+    this.mockDelete("institute_employees", id);
+  }
+
+  async deleteAllEmployees(): Promise<number> {
+    return this.mockDeleteAll("institute_employees");
+  }
+
+  async findOffice(email: string): Promise<InstituteOffice | null> {
+    return this.mockFind<InstituteOffice>("institute_offices", "office_email", email);
+  }
+
+  async listOffices(): Promise<InstituteOffice[]> {
+    return this.mockList<InstituteOffice>("institute_offices");
+  }
+
+  async saveOffices(
+    added: NewOfficeInput[],
+    updated: { id: string; input: NewOfficeInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteOffice>(
+      "institute_offices", "office_email", added as unknown as InstituteOffice[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteOffice)
+    );
+  }
+
+  async deleteOffice(id: string): Promise<void> {
+    this.mockDelete("institute_offices", id);
+  }
+
+  async deleteAllOffices(): Promise<number> {
+    return this.mockDeleteAll("institute_offices");
+  }
+
+  async findFCC(email: string): Promise<InstituteFCC | null> {
+    return this.mockFind<InstituteFCC>("institute_fcc", "council_email", email);
+  }
+
+  async listFCCs(): Promise<InstituteFCC[]> {
+    return this.mockList<InstituteFCC>("institute_fcc");
+  }
+
+  async saveFCCs(
+    added: NewFCCInput[],
+    updated: { id: string; input: NewFCCInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteFCC>(
+      "institute_fcc", "council_email", added as unknown as InstituteFCC[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteFCC)
+    );
+  }
+
+  async deleteFCC(id: string): Promise<void> {
+    this.mockDelete("institute_fcc", id);
+  }
+
+  async deleteAllFCCs(): Promise<number> {
+    return this.mockDeleteAll("institute_fcc");
+  }
+
+  async listInstituteHostels(): Promise<InstituteHostel[]> {
+    return this.mockList<InstituteHostel>("institute_hostels");
+  }
+
+  async saveInstituteHostels(
+    added: NewHostelInput[],
+    updated: { id: string; input: NewHostelInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteHostel>(
+      "institute_hostels", "hostel_id", added as unknown as InstituteHostel[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteHostel)
+    );
+  }
+
+  async deleteInstituteHostel(id: string): Promise<void> {
+    this.mockDelete("institute_hostels", id);
+  }
+
+  async deleteAllInstituteHostels(): Promise<number> {
+    return this.mockDeleteAll("institute_hostels");
+  }
+
+  async findWarden(email: string): Promise<InstituteWarden | null> {
+    return this.mockFind<InstituteWarden>("institute_wardens", "warden_email", email);
+  }
+
+  async listWardens(): Promise<InstituteWarden[]> {
+    return this.mockList<InstituteWarden>("institute_wardens");
+  }
+
+  async saveWardens(
+    added: NewWardenInput[],
+    updated: { id: string; input: NewWardenInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteWarden>(
+      "institute_wardens", "warden_email", added as unknown as InstituteWarden[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteWarden)
+    );
+  }
+
+  async deleteWarden(id: string): Promise<void> {
+    this.mockDelete("institute_wardens", id);
+  }
+
+  async deleteAllWardens(): Promise<number> {
+    return this.mockDeleteAll("institute_wardens");
   }
 
   async updateProject(id: string, patch: Partial<NewProjectInput>): Promise<void> {

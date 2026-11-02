@@ -73,11 +73,6 @@ create type public.service_type as enum ('room', 'room_meals', 'meals_only');
 -- meal_preference: migration 11
 create type public.meal_preference as enum ('veg', 'non_veg');
 
--- academic_record_kind: migration 28
-create type public.academic_record_kind as enum (
-  'student', 'employee', 'office', 'student_rep', 'alumni_office', 'warden'
-);
-
 -- ========================= UTILITY FUNCTIONS ==============================
 
 -- set_updated_at: migration 1
@@ -666,33 +661,6 @@ create table public.security_audit (
   user_agent text
 );
 
--- ------------------------------ academic_records --------------------------
--- Migration 28
-create table public.academic_records (
-  id              uuid primary key default gen_random_uuid(),
-  kind            public.academic_record_kind not null,
-  email           text not null,
-  name            text,
-  department      text,
-  phone           text,
-  roll_number     text,
-  program         text,
-  father_name     text,
-  mother_name     text,
-  guardian_name    text,
-  hostel          text,
-  employee_id     text,
-  employee_type   text,
-  office_number   text,
-  head_name       text,
-  head_email      text,
-  representative_type text,
-  faculty_in_charge_email text,
-  imported_by     uuid references public.profiles (id) on delete set null,
-  created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
-);
-
 -- ------------------------------ user_import_batches -----------------------
 -- Migration 32
 create table public.user_import_batches (
@@ -723,6 +691,148 @@ create table public.official_email_whitelist (
   email      text primary key check (email = lower(btrim(email)) and email like '_%@_%'),
   created_at timestamptz not null default now()
 );
+
+-- ------------------------------ institute_students -------------------------
+-- Migration 35
+create table public.institute_students (
+  id                      uuid primary key default gen_random_uuid(),
+  email                   text not null,
+  batch_year              text,
+  roll_number             text,
+  full_name               text,
+  programme               text,
+  faculty_advisor_guide_name text,
+  department              text,
+  year_of_admission       text,
+  phone                   text,
+  aadhar_number           text,
+  father_name             text,
+  father_aadhar_number    text,
+  father_phone_number     text,
+  mother_name             text,
+  mother_aadhar_number    text,
+  mother_phone_number     text,
+  spouse_name             text,
+  spouse_aadhar_number    text,
+  spouse_phone_number     text,
+  guardian_name           text,
+  guardian_aadhar_number  text,
+  guardian_phone_number   text,
+  hostel                  text,
+  imported_by             uuid references public.profiles (id) on delete set null,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now()
+);
+
+create unique index institute_students_email_idx
+  on public.institute_students (lower(email));
+
+create trigger institute_students_updated_at
+  before update on public.institute_students
+  for each row execute function public.set_updated_at();
+
+-- ------------------------------ institute_employees ------------------------
+-- Migration 35
+create table public.institute_employees (
+  id                uuid primary key default gen_random_uuid(),
+  email             text not null,
+  employee_id       text,
+  full_name         text,
+  department        text,
+  employee_type     text,
+  designation       text,
+  phone             text,
+  office_number     text,
+  gender            text,
+  imported_by       uuid references public.profiles (id) on delete set null,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create unique index institute_employees_email_idx
+  on public.institute_employees (lower(email));
+
+create trigger institute_employees_updated_at
+  before update on public.institute_employees
+  for each row execute function public.set_updated_at();
+
+-- ------------------------------ institute_offices --------------------------
+-- Migration 35
+create table public.institute_offices (
+  id                uuid primary key default gen_random_uuid(),
+  office_email      text not null,
+  office_name       text,
+  office_class      text,
+  phone             text,
+  department_head   text,
+  head_name         text,
+  head_email        text,
+  imported_by       uuid references public.profiles (id) on delete set null,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create unique index institute_offices_email_idx
+  on public.institute_offices (lower(office_email));
+
+create trigger institute_offices_updated_at
+  before update on public.institute_offices
+  for each row execute function public.set_updated_at();
+
+-- ------------------------------ institute_fcc ------------------------------
+-- Migration 35
+create table public.institute_fcc (
+  id                      uuid primary key default gen_random_uuid(),
+  council_email           text not null,
+  council_name            text,
+  event_or_council        text,
+  faculty_advisor_email   text,
+  imported_by             uuid references public.profiles (id) on delete set null,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now()
+);
+
+create unique index institute_fcc_email_idx
+  on public.institute_fcc (lower(council_email));
+
+create trigger institute_fcc_updated_at
+  before update on public.institute_fcc
+  for each row execute function public.set_updated_at();
+
+-- ------------------------------ institute_hostels --------------------------
+-- Migration 35
+create table public.institute_hostels (
+  id                uuid primary key default gen_random_uuid(),
+  hostel_id         text not null unique,
+  hostel_name       text not null,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create trigger institute_hostels_updated_at
+  before update on public.institute_hostels
+  for each row execute function public.set_updated_at();
+
+-- ------------------------------ institute_wardens --------------------------
+-- Migration 35
+create table public.institute_wardens (
+  id                uuid primary key default gen_random_uuid(),
+  warden_email      text not null,
+  full_name         text,
+  warden_phone      text,
+  warden_role       text,
+  hostel_id         text references public.institute_hostels (hostel_id) on update cascade on delete set null,
+  imported_by       uuid references public.profiles (id) on delete set null,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create unique index institute_wardens_email_idx
+  on public.institute_wardens (lower(warden_email));
+
+create trigger institute_wardens_updated_at
+  before update on public.institute_wardens
+  for each row execute function public.set_updated_at();
 
 -- =============================== VIEWS ====================================
 
@@ -1318,15 +1428,6 @@ begin
   return removed;
 end $$;
 
--- ---- Academic records touch (migration 28) ----
-
-create or replace function public.touch_academic_record()
-returns trigger language plpgsql as $$
-begin
-  new.updated_at := now();
-  return new;
-end;
-$$;
 
 -- ---- Guest house room count (migration 33) ----
 
@@ -1411,11 +1512,6 @@ create trigger security_audit_no_truncate
   before truncate on public.security_audit
   for each statement execute function public.security_audit_no_truncate();
 
--- academic records touch (migration 28)
-create trigger academic_records_touch
-  before update on public.academic_records
-  for each row execute function public.touch_academic_record();
-
 -- rooms recount total (migration 33)
 create trigger rooms_recount_total
   after insert or update or delete on public.rooms
@@ -1483,10 +1579,6 @@ create index security_audit_at_idx on public.security_audit (at desc);
 create index security_audit_event_idx on public.security_audit (event, at desc);
 create index security_audit_actor_idx on public.security_audit (actor_id, at desc);
 
--- academic_records (migration 28)
-create unique index academic_records_kind_email_key on public.academic_records (kind, lower(email));
-create index academic_records_kind_idx on public.academic_records (kind, lower(email));
-
 -- units (migration 25)
 create index units_faculty_advisor_idx on public.units (faculty_advisor_id) where faculty_advisor_id is not null;
 
@@ -1507,7 +1599,6 @@ create index room_holds_override_by_idx on public.room_holds (override_by) where
 create index tariffs_created_by_idx on public.tariffs (created_by) where created_by is not null;
 create index units_head_idx on public.units (head_id) where head_id is not null;
 create index units_acting_head_idx on public.units (acting_head_id) where acting_head_id is not null;
-create index academic_records_imported_by_idx on public.academic_records (imported_by) where imported_by is not null;
 create index user_import_batches_actor_idx on public.user_import_batches (actor_id) where actor_id is not null;
 create index user_import_batches_reverted_by_idx on public.user_import_batches (reverted_by) where reverted_by is not null;
 create index units_parent_idx on public.units (parent_id) where parent_id is not null;

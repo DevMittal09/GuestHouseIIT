@@ -28,14 +28,26 @@ import type { MailTemplateOverride } from "@/lib/mail/template-config";
 import type { Role } from "@/lib/types";
 import type { Unit } from "@/lib/units";
 import type { AuditEvent, AuditFilter, NewAuditEvent } from "@/lib/audit";
+import type {
+  InstituteStudent,
+  NewStudentInput,
+  InstituteEmployee,
+  NewEmployeeInput,
+  InstituteOffice,
+  NewOfficeInput,
+  InstituteFCC,
+  NewFCCInput,
+  InstituteHostel,
+  NewHostelInput,
+  InstituteWarden,
+  NewWardenInput,
+} from "@/lib/institute/types";
 import type { NewProjectInput, Project } from "@/lib/projects";
 import type {
   NewUserImportBatch,
   UserImportBatch,
   UserImportSettlement,
 } from "@/lib/users-import-undo";
-import type { NewAcademicRecordInput, StoredAcademicRecord } from "@/lib/academic/stored";
-import type { AcademicRecord, AcademicRecordKind } from "@/lib/academic/types";
 import type { NewTariffInput, Tariff } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import type { NewSessionInput, Session } from "@/lib/sessions";
@@ -305,29 +317,42 @@ export interface DataStore {
   /** Throws while any booking is debited to it - deactivate it instead. */
   deleteProject(id: string): Promise<void>;
 
-  // ---- academic records (migration 28) --------------------------------
+  // ---- institute data tables (migration 35) ----------------------------
 
-  /**
-   * The institute's records as the office pasted them in (7 Oct 2026). Read
-   * by `StoreAcademicSource`, which is what the Requester details card, the
-   * Assistant Warden's family check and the booking form's locked parent
-   * names go through.
-   */
-  findAcademicRecord(kind: AcademicRecordKind, email: string): Promise<AcademicRecord | null>;
-  /** Every stored record, or one kind's. For the Academic records console. */
-  listAcademicRecords(kind?: AcademicRecordKind): Promise<StoredAcademicRecord[]>;
-  /**
-   * Apply an import: add the new rows and replace the changed ones, in one
-   * go. The plan is built first (`planAcademicImport`) and is all-or-nothing,
-   * so this is handed only rows it has already accepted.
-   */
-  saveAcademicRecords(
-    added: NewAcademicRecordInput[],
-    updated: { id: string; input: NewAcademicRecordInput }[]
-  ): Promise<void>;
-  deleteAcademicRecord(id: string): Promise<void>;
-  /** Every record of one kind, or all of them. Returns how many went. */
-  deleteAcademicRecords(kind?: AcademicRecordKind): Promise<number>;
+  findStudent(email: string): Promise<InstituteStudent | null>;
+  listStudents(): Promise<InstituteStudent[]>;
+  saveStudents(added: NewStudentInput[], updated: { id: string; input: NewStudentInput }[]): Promise<void>;
+  deleteStudent(id: string): Promise<void>;
+  deleteAllStudents(): Promise<number>;
+
+  findEmployee(email: string): Promise<InstituteEmployee | null>;
+  listEmployees(): Promise<InstituteEmployee[]>;
+  saveEmployees(added: NewEmployeeInput[], updated: { id: string; input: NewEmployeeInput }[]): Promise<void>;
+  deleteEmployee(id: string): Promise<void>;
+  deleteAllEmployees(): Promise<number>;
+
+  findOffice(email: string): Promise<InstituteOffice | null>;
+  listOffices(): Promise<InstituteOffice[]>;
+  saveOffices(added: NewOfficeInput[], updated: { id: string; input: NewOfficeInput }[]): Promise<void>;
+  deleteOffice(id: string): Promise<void>;
+  deleteAllOffices(): Promise<number>;
+
+  findFCC(email: string): Promise<InstituteFCC | null>;
+  listFCCs(): Promise<InstituteFCC[]>;
+  saveFCCs(added: NewFCCInput[], updated: { id: string; input: NewFCCInput }[]): Promise<void>;
+  deleteFCC(id: string): Promise<void>;
+  deleteAllFCCs(): Promise<number>;
+
+  listInstituteHostels(): Promise<InstituteHostel[]>;
+  saveInstituteHostels(added: NewHostelInput[], updated: { id: string; input: NewHostelInput }[]): Promise<void>;
+  deleteInstituteHostel(id: string): Promise<void>;
+  deleteAllInstituteHostels(): Promise<number>;
+
+  findWarden(email: string): Promise<InstituteWarden | null>;
+  listWardens(): Promise<InstituteWarden[]>;
+  saveWardens(added: NewWardenInput[], updated: { id: string; input: NewWardenInput }[]): Promise<void>;
+  deleteWarden(id: string): Promise<void>;
+  deleteAllWardens(): Promise<number>;
 
   // ---- security audit log (migration 16) ------------------------------
 

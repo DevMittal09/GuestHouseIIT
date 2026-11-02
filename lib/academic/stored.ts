@@ -108,46 +108,8 @@ export type AcademicImportPlan = {
   problems: string[];
 };
 
-/**
- * Split one CSV line. Handles the quoting a spreadsheet produces - a quoted
- * field may contain commas and doubled quotes - because the office pastes
- * straight out of Excel, where a department called "Physics, Applied" is an
- * ordinary thing to have.
- */
-export function splitCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let field = "";
-  let quoted = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (quoted) {
-      if (c === '"') {
-        if (line[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          quoted = false;
-        }
-      } else {
-        field += c;
-      }
-      continue;
-    }
-    if (c === '"' && field.trim() === "") {
-      quoted = true;
-      field = "";
-      continue;
-    }
-    if (c === "," || c === "\t" || c === ";") {
-      out.push(field);
-      field = "";
-      continue;
-    }
-    field += c;
-  }
-  out.push(field);
-  return out.map((f) => f.trim());
-}
+import { splitCsvLine } from "@/lib/csv";
+export { splitCsvLine } from "@/lib/csv";
 
 function blank(value: string | undefined): string | null {
   const text = (value ?? "").trim();

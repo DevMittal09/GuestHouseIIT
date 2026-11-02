@@ -6838,3 +6838,104 @@ Running the required memory check on Windows exposed a parser issue:
 `anchorsOf()` split only on LF, so CRLF headings were reported as missing. Its
 line split now accepts either line ending; this fixes the validator rather
 than rewriting sound links throughout the memory files.
+
+## 2 November 2026 — six institute data tables, separate from the portal
+
+**Decision.** The institute's own records — students, employees, offices,
+fests/councils/clubs, hostels and wardens — get **six dedicated tables** in
+`institute_*`, separate from the portal's `profiles`, `units`, `hostels` and
+`academic_records`.
+
+**Why separate tables, not columns on `profiles`.** The portal's tables model
+**portal accounts and their authorisation** — who may book, which chain their
+request takes, who may approve. The institute's records model **the directory
+as the administration keeps it**: a student's batch year, programme, branch,
+parents' Aadhar numbers, a hostel's warden assignment history. These are
+different entities with different lifecycles (an employee record exists whether
+or not that person has a portal account), different field sets (27 columns on a
+student vs 8 on `profiles`), and different access patterns (bulk CSV import
+from the administration's spreadsheets vs one-at-a-time profile edits).
+Cramming them into `profiles` would have meant 30+ nullable columns, most of
+which are meaningless for most roles, and a `profiles` row that serves two
+masters — the portal's FK graph and the administration's record keeping.
+
+**Why a separate `institute_hostels` rather than reusing `hostels`.** The
+portal's `hostels` table is a **name-keyed lookup** for `profiles.hostel_name`
+with `ON UPDATE CASCADE / ON DELETE RESTRICT` — renaming it moves every
+student's assignment, and it exists so the warden dropdown has a list. The
+institute's hostel record carries a `hostel_id` (like "HOS1"), a warden name,
+email and phone — fields the portal's table does not have and should not
+acquire, because they describe the institute's directory, not the portal's
+configuration.
+
+**Why Aadhar numbers are encrypted.** Five columns on `institute_students`
+hold family members' Aadhar numbers — the same PII class as
+`booking_guests.id_number`, which is already encrypted at rest with
+`encryptValue()` / `decryptValue()` from `lib/crypto.ts`. The same pattern was
+applied: encrypt on write in `studentRowOf`, decrypt on read in
+`hydrateStudent`, transparent to the rest of the application.
+
+**Why the generic helpers.** Six tables × five operations = 30 store methods.
+Both stores use private generic helpers (`instituteFind` / `instituteList` /
+`instituteSave` / `instituteDelete` / `instituteDeleteAll` in PostgresStore;
+`mockFind` / `mockList` / `mockSave` / `mockDelete` / `mockDeleteAll` in
+MockStore) to avoid repeating the same CRUD boilerplate six times. The student
+entity gets custom find/list (not generic) because of the Aadhar
+encryption/decryption step.
+
+**Why `imported_by` on five of the six tables.** Every table except
+`institute_hostels` has `imported_by uuid references profiles(id) on delete
+set null`, following `academic_records`' pattern: the office pastes records in
+through the console, and knowing who did it is the audit trail. Hostels are
+configuration rather than an import, so they skip it.
+
+**Cost.** Thirty new methods on the `DataStore` interface — the largest single
+addition to it. No console page yet to drive them, so the data is reachable
+only through the store API.
+
+## Rewire academic records to institute tables (2 Nov 2026, second session)
+
+**Decision.** Build an adapter layer (`lib/institute/academic-adapter.ts`) that
+converts each institute_* row into the existing `AcademicRecord` union, rewire
+`StoreAcademicSource` to read institute tables through it, rewrite the console
+and its import logic for the new table shapes, and move the shared
+`splitCsvLine` to `lib/csv.ts`.
+
+**Why the adapter, not rewriting downstream.** The `AcademicRecord` union is
+read by the booking form's parent locking (`guestNameRule`), the warden's
+family check (`checkFamily`, `studentRecordPanels`), the Copy-to chain
+(`copyToAddresses`), and the requester-details card. Rewriting all of those to
+read institute_* types directly would be a large change with high risk of
+regression. The adapter keeps all of them working unchanged. The conversion is
+five pure functions, one per table kind.
+
+**Why `splitCsvLine` moved to `lib/csv.ts`.** It was defined in
+`lib/academic/stored.ts`, but `lib/projects.ts` and `lib/users-import.ts` also
+imported it. With the academic console rewritten to use `lib/institute/import.ts`,
+all three importers would have depended on a file whose primary exports
+(`planAcademicImport` etc.) are dead code. Moving the shared utility to
+`lib/csv.ts` (which already held `csvCell` and `csvLine`) breaks that coupling.
+A re-export from `stored.ts` keeps any remaining callers working.
+
+**Why seed data was aligned with mock-source.** `StoreAcademicSource` reads
+institute_* tables first and falls through to `MockAcademicSource` (the dummy
+records) only when a record is not found. If the seed data for Anjali Menon
+said "Suresh Menon" for father but mock-source said "Ramesh Menon", tests and
+the dev form would show different names depending on whether the mock store had
+been seeded. One source of truth: the seed data matches mock-source exactly.
+
+**Why the console component manages its own loading.** The old component
+received all records from the server page and filtered client-side. The new
+tables have different column shapes per kind, so server-side filtering by kind
+is necessary. The component fetches per-kind via a server action when the user
+switches the dropdown, and maintains per-kind counts in state.
+
+**What was not done.** The dead code in `lib/academic/stored.ts` was left in
+place: it still compiles and the re-export of `splitCsvLine` keeps backward
+compatibility. Deleting it is the next step once the old `academic_records`
+table is confirmed retired. The old migration 28 and its Supabase file are
+untouched.
+
+**Cost.** One new module (`lib/institute/import.ts`), one new module
+(`lib/institute/academic-adapter.ts`), a rewritten console component, six
+modified files. All 606 tests pass.

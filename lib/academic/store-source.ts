@@ -1,4 +1,11 @@
 import { getStore } from "@/lib/store";
+import {
+  studentToRecord,
+  employeeToRecord,
+  officeToRecord,
+  fccToRecord,
+  wardenToRecord,
+} from "@/lib/institute/academic-adapter";
 import { MockAcademicSource } from "./mock-source";
 import {
   AcademicSourceUnavailableError,
@@ -9,52 +16,68 @@ import {
 } from "./types";
 
 /**
- * The records the guest house office pasted in itself (migration 28, 7 Oct
- * 2026) - the portal's own copy, and the source every lookup goes through
- * while the institute's academic database is unconnected.
+ * Reads from the institute_* tables (migration 35, 2 Nov 2026) and converts
+ * each row into the AcademicRecord shape the rest of the portal expects.
  *
- * The office asked for "student guest details from your own database" because
- * the real one does not exist yet and nobody could say when it would, while
- * the booking form needs a student's parents *now*: from this round it locks
- * Father and Mother to the names on record, and there has to be a record to
- * lock them to.
+ * Replaces the old academic_records table (migration 28). The dummy records
+ * are still behind it: a row the office has imported wins; where there is
+ * none, the demo personas fall through to MockAcademicSource.
  *
- * **The dummy records are still behind it.** A row the office has imported
- * wins; where there is none, the demo personas fall through to
- * `MockAcademicSource` exactly as they did before, so a fresh install, the
- * test suite and the demo keep working with nothing imported. A real student
- * who is not in the import matches neither and is correctly reported as
- * having no record - which is what leaves their parents' names editable.
- *
- * A table that is not there yet (migration 28 unapplied) is not an outage: it
- * falls through to the dummy records, the same answer the portal gave
- * yesterday. A table that *is* there and cannot be read is an outage, and is
- * reported as one - `academicRecordFor` catches it and the card falls back to
- * the portal profile, because a database the portal cannot reach must never
- * stop a booking.
+ * A table that is not there yet (migration 35 unapplied) falls through to
+ * the dummy records. A table that *is* there and cannot be read is an outage.
  */
 export class StoreAcademicSource implements AcademicSource {
-  readonly description = "the portal's own academic records";
+  readonly description = "the portal's institute records";
 
   private readonly fallback = new MockAcademicSource();
 
   async find(kind: AcademicRecordKind, email: string): Promise<AcademicFind | null> {
-    let imported: AcademicRecord | null = null;
+    let record: AcademicRecord | null = null;
     try {
-      imported = await getStore().findAcademicRecord(kind, email);
+      record = await this.findInInstituteTable(kind, email);
     } catch (e) {
       if (isMissingTable(e)) return this.fallback.find(kind, email);
       throw new AcademicSourceUnavailableError(e);
     }
-    if (imported) return { record: imported, origin: "imported" };
+    if (record) return { record, origin: "imported" };
     return this.fallback.find(kind, email);
+  }
+
+  private async findInInstituteTable(
+    kind: AcademicRecordKind,
+    email: string
+  ): Promise<AcademicRecord | null> {
+    const store = getStore();
+    switch (kind) {
+      case "student": {
+        const row = await store.findStudent(email);
+        return row ? studentToRecord(row) : null;
+      }
+      case "employee": {
+        const row = await store.findEmployee(email);
+        return row ? employeeToRecord(row) : null;
+      }
+      case "office": {
+        const row = await store.findOffice(email);
+        return row ? officeToRecord(row) : null;
+      }
+      case "student_rep": {
+        const row = await store.findFCC(email);
+        return row ? fccToRecord(row) : null;
+      }
+      case "alumni_office":
+        return null;
+      case "warden": {
+        const row = await store.findWarden(email);
+        return row ? wardenToRecord(row) : null;
+      }
+    }
   }
 }
 
-/** Migration 28 not applied: Postgres 42P01, PostgREST PGRST205. */
+/** Migration 35 not applied: Postgres 42P01, PostgREST PGRST205. */
 function isMissingTable(e: unknown): boolean {
   const code = (e as { code?: string } | null)?.code;
   if (code === "42P01" || code === "PGRST205") return true;
-  // The mock store self-heals a missing key, so this is Supabase-only.
   return false;
 }

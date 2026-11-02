@@ -8,15 +8,13 @@ import {
   NO_GUEST_NAME_RULE,
   withheldRelationshipError,
 } from "@/lib/academic/guest-names";
+import { splitCsvLine } from "@/lib/csv";
 import {
   csvColumnsFor,
   csvHeaderFor,
   describeImport,
-  planAcademicImport,
-  sameRecord,
-  splitCsvLine,
-  type StoredAcademicRecord,
-} from "@/lib/academic/stored";
+  planInstituteImport,
+} from "@/lib/institute/import";
 import type { EmployeeRecord, StudentRecord } from "@/lib/academic/types";
 import { bookingPayloadSchema } from "@/lib/booking-schema";
 import { buildDefaultFormConfig, sanitizeFormConfig } from "@/lib/form-config";
@@ -27,8 +25,8 @@ import { GH, useThrowawayMockDb } from "./helpers";
 
 /**
  * The office's eighth list (7 Oct 2026), phase 2: the institute's records
- * kept in the portal (migration 28), the "Fill in…" list withdrawn, and a
- * student's parents taken from the record instead of typed.
+ * kept in the portal (migration 28 -> migration 35), the "Fill in..." list
+ * withdrawn, and a student's parents taken from the record instead of typed.
  */
 
 const ANJALI: StudentRecord = {
@@ -253,22 +251,14 @@ describe("the schema applies the record on both sides", () => {
 
 // ------------------------------------------------------------- the CSV paste
 
-describe("pasting records in", () => {
-  it("puts the email first and every field of that kind after it", () => {
+describe("pasting institute records in", () => {
+  it("puts the key column first and every field of that kind after it", () => {
     expect(csvColumnsFor("student")[0]).toBe("email");
-    expect(csvColumnsFor("student")).toEqual([
-      "email",
-      "roll_number",
-      "name",
-      "program",
-      "department",
-      "phone",
-      "father_name",
-      "mother_name",
-      "guardian_name",
-      "hostel",
-    ]);
-    expect(csvHeaderFor("warden")).toBe("email, name, phone, hostel");
+    expect(csvColumnsFor("employee")[0]).toBe("email");
+    expect(csvColumnsFor("office")[0]).toBe("office_email");
+    expect(csvColumnsFor("fcc")[0]).toBe("council_email");
+    expect(csvColumnsFor("warden")[0]).toBe("warden_email");
+    expect(csvHeaderFor("hostel")).toBe("hostel_id, hostel_name");
   });
 
   it("splits a spreadsheet's quoting, commas, tabs and semicolons", () => {
@@ -283,91 +273,93 @@ describe("pasting records in", () => {
     ]);
   });
 
-  const stored = (patch: Partial<StudentRecord> = {}): StoredAcademicRecord => ({
-    id: "row-1",
-    email: ANJALI.email!,
-    record: { ...ANJALI, ...patch },
-    imported_by: null,
-    created_at: "2026-10-01T00:00:00.000Z",
-    updated_at: "2026-10-01T00:00:00.000Z",
-  });
-
   it("adds, updates and leaves alone, and reads the header and comments past", () => {
+    const existing = [
+      {
+        id: "row-1",
+        email: "112201001@smail.iitpkd.ac.in",
+        batch_year: "2022",
+        roll_number: "112201001",
+        full_name: "Anjali Menon",
+        programme: "B.Tech",
+        faculty_advisor_guide_name: null,
+        department: "Computer Science and Engineering",
+        year_of_admission: null,
+        phone: "+91 90000 00101",
+        aadhar_number: null,
+        father_name: "Ramesh Menon",
+        father_aadhar_number: null,
+        father_phone_number: null,
+        mother_name: "Sreeja Menon",
+        mother_aadhar_number: null,
+        mother_phone_number: null,
+        spouse_name: null,
+        spouse_aadhar_number: null,
+        spouse_phone_number: null,
+        guardian_name: null,
+        guardian_aadhar_number: null,
+        guardian_phone_number: null,
+        hostel: "Malhar",
+      },
+    ];
     const text = [
       "# the office's list",
       csvHeaderFor("student"),
       "",
-      "112201001@smail.iitpkd.ac.in, 112201001, Anjali Menon, B.Tech, Computer Science and Engineering, +91 90000 00101, Ramesh Menon, Sreeja Menon, , Malhar",
-      "142202014@smail.iitpkd.ac.in, 142202014, Rahul Nair, M.Tech, Electrical Engineering, , , , Gopinath Nair, Saveri",
+      "112201001@smail.iitpkd.ac.in, 2022, 112201001, Anjali Menon, B.Tech, , Computer Science and Engineering, , +91 90000 00101, , Ramesh Menon, , , Sreeja Menon, , , , , , , , , Malhar",
+      "142202014@smail.iitpkd.ac.in, 2022, 142202014, Rahul Nair, M.Tech, , Electrical Engineering, , , , , , , , , , , , , Gopinath Nair, , , Saveri",
     ].join("\n");
-    const plan = planAcademicImport("student", text, [stored()], "p-admin");
+    const plan = planInstituteImport("student", text, existing, "p-admin");
     expect(plan.problems).toEqual([]);
     expect(plan.unchanged).toBe(1);
     expect(plan.added).toHaveLength(1);
     expect(plan.added[0].email).toBe("142202014@smail.iitpkd.ac.in");
-    expect(plan.added[0].record).toMatchObject({
-      kind: "student",
-      father_name: null,
-      guardian_name: "Gopinath Nair",
-      hostel: "Saveri",
-    });
+    expect(plan.added[0].guardian_name).toBe("Gopinath Nair");
+    expect(plan.added[0].hostel).toBe("Saveri");
     expect(plan.added[0].imported_by).toBe("p-admin");
     expect(describeImport(plan)).toBe("1 added, 1 unchanged");
   });
 
-  it("updates a stored record the paste disagrees with, matching the email case-insensitively", () => {
-    const plan = planAcademicImport(
-      "student",
-      "112201001@SMAIL.IITPKD.AC.IN, 112201001, Anjali Menon, B.Tech, Computer Science and Engineering, +91 90000 00101, Ramesh Menon, Latha Menon, , Malhar",
-      [stored()],
-      null
-    );
-    expect(plan.problems).toEqual([]);
-    expect(plan.added).toEqual([]);
-    expect(plan.updated).toHaveLength(1);
-    expect(plan.updated[0].id).toBe("row-1");
-    expect(plan.updated[0].input.record).toMatchObject({ mother_name: "Latha Menon" });
-  });
-
   it("reads a short line as gaps rather than refusing it", () => {
-    const plan = planAcademicImport("student", "new@smail.iitpkd.ac.in, 999", [], null);
+    const plan = planInstituteImport("student", "new@smail.iitpkd.ac.in, 2022, 999", [], null);
     expect(plan.problems).toEqual([]);
-    expect(plan.added[0].record).toMatchObject({
-      kind: "student",
+    expect(plan.added[0]).toMatchObject({
+      email: "new@smail.iitpkd.ac.in",
+      batch_year: "2022",
       roll_number: "999",
-      name: null,
+      full_name: null,
       father_name: null,
       hostel: null,
     });
   });
 
-  it("reads the office's dashes and N/A as a gap, not as a name", () => {
-    const plan = planAcademicImport(
-      "student",
-      "new@smail.iitpkd.ac.in, 999, Someone, -, N/A, nil, none, NULL, --, Malhar",
+  it("reads the office's dashes and N/A as a gap", () => {
+    const plan = planInstituteImport(
+      "employee",
+      "new@iitpkd.ac.in, -, Dr. Someone, N/A, nil, none, NULL, --, Female",
       [],
       null
     );
-    expect(plan.added[0].record).toMatchObject({
-      program: null,
+    expect(plan.added[0]).toMatchObject({
+      employee_id: null,
+      full_name: "Dr. Someone",
       department: null,
+      employee_type: null,
+      designation: null,
       phone: null,
-      father_name: null,
-      mother_name: null,
-      guardian_name: null,
-      hostel: "Malhar",
+      office_number: null,
+      gender: "Female",
     });
   });
 
-  /** All or nothing: a half-applied list is worse than a rejected one. */
   it("imports nothing when any line is wrong, and says which", () => {
-    const plan = planAcademicImport(
-      "student",
+    const plan = planInstituteImport(
+      "employee",
       [
-        "good@smail.iitpkd.ac.in, 1, Fine",
-        "not-an-email, 2, Broken",
-        ", 3, No email at all",
-        "good@smail.iitpkd.ac.in, 4, Twice",
+        "good@iitpkd.ac.in, F1, Fine",
+        "not-an-email, F2, Broken",
+        ", F3, No email at all",
+        "good@iitpkd.ac.in, F4, Twice",
       ].join("\n"),
       [],
       null
@@ -381,33 +373,26 @@ describe("pasting records in", () => {
   });
 
   it("refuses a line with more columns than the kind has", () => {
-    const plan = planAcademicImport(
+    const plan = planInstituteImport(
       "warden",
-      "w@iitpkd.ac.in, A Warden, +91 90000 00601, Malhar, something extra",
+      "w@iitpkd.ac.in, A Warden, +91 90000 00601, Chief Warden, H1, something extra",
       [],
       null
     );
-    expect(plan.problems[0]).toContain("5 columns");
-    expect(plan.problems[0]).toContain("email, name, phone, hostel");
+    expect(plan.problems[0]).toContain("6 columns");
   });
 
   it("says so when there is nothing to import", () => {
-    expect(planAcademicImport("student", "", [], null).problems[0]).toMatch(/Nothing to import/);
-    expect(planAcademicImport("student", `# only a comment\n${csvHeaderFor("student")}`, [], null).problems[0]).toMatch(
-      /Nothing to import/
-    );
-  });
-
-  it("compares records field by field", () => {
-    expect(sameRecord(ANJALI, { ...ANJALI })).toBe(true);
-    expect(sameRecord(ANJALI, { ...ANJALI, hostel: "Saveri" })).toBe(false);
-    expect(sameRecord(ANJALI, RAHUL)).toBe(false);
+    expect(planInstituteImport("student", "", [], null).problems[0]).toMatch(/Nothing to import/);
+    expect(
+      planInstituteImport("student", `# only a comment\n${csvHeaderFor("student")}`, [], null).problems[0]
+    ).toMatch(/Nothing to import/);
   });
 });
 
 // --------------------------------------------------------- the store, and the source
 
-describe("the records the office imported", () => {
+describe("the institute records the office imported", () => {
   const db = useThrowawayMockDb({
     profiles: [],
     guest_houses: [],
@@ -417,6 +402,12 @@ describe("the records the office imported", () => {
     booking_logs: [],
     form_configs: [],
     room_holds: [],
+    institute_students: [],
+    institute_employees: [],
+    institute_offices: [],
+    institute_fcc: [],
+    institute_hostels: [],
+    institute_wardens: [],
   });
   let store: DataStore;
 
@@ -425,50 +416,66 @@ describe("the records the office imported", () => {
   });
   afterAll(() => db.cleanup());
 
-  it("stores, finds, updates and removes a record", async () => {
-    expect(await store.listAcademicRecords()).toEqual([]);
-    await store.saveAcademicRecords(
+  it("stores, finds, updates and removes a student record", async () => {
+    expect(await store.listStudents()).toEqual([]);
+    await store.saveStudents(
       [
-        { email: ANJALI.email!, record: ANJALI, imported_by: "p-admin" },
-        { email: RAHUL.email!, record: RAHUL, imported_by: "p-admin" },
+        {
+          email: "112201001@smail.iitpkd.ac.in",
+          batch_year: "2022",
+          roll_number: "112201001",
+          full_name: "Anjali Menon",
+          programme: "B.Tech",
+          faculty_advisor_guide_name: null,
+          department: "Computer Science and Engineering",
+          year_of_admission: null,
+          phone: "+91 90000 00101",
+          aadhar_number: null,
+          father_name: "Ramesh Menon",
+          father_aadhar_number: null,
+          father_phone_number: null,
+          mother_name: "Sreeja Menon",
+          mother_aadhar_number: null,
+          mother_phone_number: null,
+          spouse_name: null,
+          spouse_aadhar_number: null,
+          spouse_phone_number: null,
+          guardian_name: null,
+          guardian_aadhar_number: null,
+          guardian_phone_number: null,
+          hostel: "Malhar",
+          imported_by: "p-admin",
+        },
       ],
-      []
-    );
-    const rows = await store.listAcademicRecords("student");
-    expect(rows).toHaveLength(2);
-
-    // Found case-insensitively, as `AcademicSource.find` asks.
-    expect(await store.findAcademicRecord("student", ANJALI.email!.toUpperCase())).toMatchObject({
-      kind: "student",
-      father_name: "Ramesh Menon",
-    });
-    expect(await store.findAcademicRecord("employee", ANJALI.email!)).toBeNull();
-    expect(await store.findAcademicRecord("student", "nobody@iitpkd.ac.in")).toBeNull();
-
-    // The unique index on (kind, lower(email)), emulated.
-    await expect(
-      store.saveAcademicRecords([{ email: ANJALI.email!.toUpperCase(), record: ANJALI, imported_by: null }], [])
-    ).rejects.toThrow(/already stored/);
-
-    const anjali = rows.find((r) => r.email === ANJALI.email)!;
-    await store.saveAcademicRecords(
       [],
-      [{ id: anjali.id, input: { email: anjali.email, record: { ...ANJALI, hostel: "Saveri" }, imported_by: null } }]
     );
-    expect(await store.findAcademicRecord("student", ANJALI.email!)).toMatchObject({ hostel: "Saveri" });
+    const rows = await store.listStudents();
+    expect(rows).toHaveLength(1);
 
-    await store.deleteAcademicRecord(anjali.id);
-    expect(await store.listAcademicRecords("student")).toHaveLength(1);
-    expect(await store.deleteAcademicRecords("student")).toBe(1);
-    expect(await store.listAcademicRecords()).toEqual([]);
+    const found = await store.findStudent("112201001@smail.iitpkd.ac.in");
+    expect(found).toMatchObject({ full_name: "Anjali Menon", father_name: "Ramesh Menon" });
+
+    // Case-insensitive lookup
+    const upper = await store.findStudent("112201001@SMAIL.IITPKD.AC.IN");
+    expect(upper).toMatchObject({ full_name: "Anjali Menon" });
+
+    // Not found for wrong email
+    expect(await store.findStudent("nobody@iitpkd.ac.in")).toBeNull();
+
+    // Update
+    await store.saveStudents(
+      [],
+      [{ id: rows[0].id, input: { ...rows[0], hostel: "Saveri", imported_by: null } }],
+    );
+    const updated = await store.findStudent("112201001@smail.iitpkd.ac.in");
+    expect(updated).toMatchObject({ hostel: "Saveri" });
+
+    // Delete
+    await store.deleteStudent(rows[0].id);
+    expect(await store.listStudents()).toEqual([]);
   });
 
-  /**
-   * An imported record wins; where there is none the published dummies are
-   * still behind it, so a fresh install and the demo personas keep working
-   * with nothing imported.
-   */
-  it("prefers an imported record to the dummy one, and says which it gave", async () => {
+  it("prefers an imported record to the dummy one via the adapter", async () => {
     const { StoreAcademicSource } = await import("@/lib/academic/store-source");
     const source = new StoreAcademicSource();
 
@@ -476,22 +483,42 @@ describe("the records the office imported", () => {
     expect(sample?.origin).toBe("sample");
     expect(sample?.record).toMatchObject({ name: "Anjali Menon", hostel: "Malhar" });
 
-    await store.saveAcademicRecords(
+    await store.saveStudents(
       [
         {
           email: "112201001@smail.iitpkd.ac.in",
-          record: { ...ANJALI, father_name: "Ramesh K. Menon", hostel: "Saveri" },
+          batch_year: "2022",
+          roll_number: "112201001",
+          full_name: "Anjali Menon",
+          programme: "B.Tech",
+          faculty_advisor_guide_name: null,
+          department: "Computer Science and Engineering",
+          year_of_admission: null,
+          phone: "+91 90000 00101",
+          aadhar_number: null,
+          father_name: "Ramesh K. Menon",
+          father_aadhar_number: null,
+          father_phone_number: null,
+          mother_name: "Sreeja Menon",
+          mother_aadhar_number: null,
+          mother_phone_number: null,
+          spouse_name: null,
+          spouse_aadhar_number: null,
+          spouse_phone_number: null,
+          guardian_name: null,
+          guardian_aadhar_number: null,
+          guardian_phone_number: null,
+          hostel: "Saveri",
           imported_by: null,
         },
       ],
-      []
+      [],
     );
     const imported = await source.find("student", "112201001@smail.iitpkd.ac.in");
     expect(imported?.origin).toBe("imported");
     expect(imported?.record).toMatchObject({ father_name: "Ramesh K. Menon", hostel: "Saveri" });
 
-    // Nobody at all: neither source has them, so their names stay editable.
     expect(await source.find("student", "999999999@smail.iitpkd.ac.in")).toBeNull();
-    await store.deleteAcademicRecords();
+    await store.deleteAllStudents();
   });
 });
