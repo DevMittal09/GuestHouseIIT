@@ -38,9 +38,11 @@ function escapeCsvField(value: string): string {
 }
 
 async function readExcel(file: File): Promise<string> {
-  const readXlsxFile = (await import("read-excel-file")).default;
+  const readXlsxFile = (await import("read-excel-file/browser")).default;
   const buffer = await file.arrayBuffer();
-  const rows = await readXlsxFile(buffer);
+  const sheets = await readXlsxFile(buffer);
+  if (sheets.length === 0) throw new FileParseError("The file has no sheets");
+  const rows = sheets[0].data;
   if (rows.length === 0) throw new FileParseError("The file has no data");
   return rows
     .map((row) =>
