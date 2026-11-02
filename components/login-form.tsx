@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The sign-in form. Since 30 Oct 2026 it is a single "Sign in with Google"
- * button - the email+password form is commented out below.
+ * The sign-in form. A single "Sign in with Google" button - Google OAuth is
+ * the only authentication method (2 Nov 2026).
  */
 
 export function LoginForm({
@@ -58,91 +58,3 @@ export function LoginForm({
     </div>
   );
 }
-
-/* ---------- Email + password form (commented out 30 Oct 2026) ----------
- *
- * The portal used email+password sign-in before Google OAuth was configured.
- * To re-enable: uncomment the form below and the `signInWithPassword` action
- * in `app/actions/auth.ts`, then import it here.
- *
-
-import { useActionState } from "react";
-import { signInWithPassword } from "@/app/actions/auth";
-
-export function LoginFormPassword({
-  next,
-  submitLabel = "Sign in",
-  center,
-  notice,
-}: {
-  next?: string;
-  submitLabel?: string;
-  center?: boolean;
-  notice?: string | null;
-}) {
-  const [state, formAction, pending] = useActionState(
-    async (_prev: { error: string | null }, formData: FormData) => {
-      const email = formData.get("email") as string;
-      const password = formData.get("password") as string;
-      const result = await signInWithPassword(email, password, next);
-      if (!result.ok) return { error: result.error ?? "Sign-in failed" };
-      return { error: null };
-    },
-    { error: null }
-  );
-
-  const error = notice ?? state.error;
-
-  return (
-    <div className="min-w-0">
-      {error && (
-        <p
-          role="alert"
-          className="mb-5 rounded-[3px] border border-red-300 bg-red-50 px-3 py-2 text-[14.5px] text-red-900"
-        >
-          {error}
-        </p>
-      )}
-
-      <form action={formAction} className="flex flex-col gap-4">
-        <div>
-          <label htmlFor="email" className={`mb-1.5 block text-[14.5px] font-medium text-ink${center ? "" : ""}`}>
-            Email address
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            className="w-full rounded border border-border-strong bg-white px-3 py-2.5 text-[15px] text-ink outline-none transition-colors focus:border-vermilion focus:ring-1 focus:ring-vermilion"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="password" className="mb-1.5 block text-[14.5px] font-medium text-ink">
-            Password
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            className="w-full rounded border border-border-strong bg-white px-3 py-2.5 text-[15px] text-ink outline-none transition-colors focus:border-vermilion focus:ring-1 focus:ring-vermilion"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={pending}
-          className="mt-2 flex w-full items-center justify-center rounded-md bg-vermilion-deep p-3.5 text-[15.5px] font-semibold text-white transition-colors duration-150 hover:bg-vermilion-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion disabled:opacity-60"
-        >
-          {pending ? "Signing in..." : submitLabel}
-        </button>
-      </form>
-    </div>
-  );
-}
-
- * ---------- end commented-out email+password form ---------- */

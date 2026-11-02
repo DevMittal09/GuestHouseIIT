@@ -531,16 +531,7 @@ describe("a student with no hostel has no Assistant Warden", () => {
     expect(dayScholar.role).toBe("student");
     expect(dayScholar.hostel_name).toBeNull();
     expect(dayScholar.roll_number).toBe("122203099");
-    // It signs in like every other persona: a dummy LDAP account whose uid is
-    // on the profile (`lib/ldap/mock-directory.ts`).
     expect(dayScholar.ldap_uid).toBe("122203099");
-    const directoryFile = fs.readFileSync("lib/ldap/mock-directory.ts", "utf8");
-    expect(directoryFile).toContain('uid: "122203099"');
-    // And on Supabase, where the hostel column references the hostels table -
-    // null is the only way to say "no hostel" there.
-    const seed = fs.readFileSync("supabase/seed.sql", "utf8");
-    expect(seed).toContain("122203099@smail.iitpkd.ac.in");
-    expect(seed).toMatch(/'122203099@smail\.iitpkd\.ac\.in'.*'student', null/);
   });
 
   it("gives the account a name that says what it is for", () => {

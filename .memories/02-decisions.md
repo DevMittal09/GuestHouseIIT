@@ -758,9 +758,8 @@ a read-only link to `/availability`, not the pickers back.
 ## Per-tab session guard — built, then reverted
 
 > **Updated.** `components/auto-refresh.tsx` was replaced by
-> `components/live-updates.tsx` in Phase 9 (realtime where Supabase is
-> configured, a 30 s poll otherwise). The advice — don't rebuild the guard —
-> stands.
+> `components/live-updates.tsx` in Phase 9 (a 30 s poll). The advice — don't
+> rebuild the guard — stands.
 
 **Decision.** Do **not** try to make browser tabs behave like independent
 sessions. `components/tab-session-guard.tsx` was written and removed the same
@@ -6939,3 +6938,77 @@ untouched.
 **Cost.** One new module (`lib/institute/import.ts`), one new module
 (`lib/institute/academic-adapter.ts`), a rewritten console component, six
 modified files. All 606 tests pass.
+
+## Auth cleanup: Google OAuth only (2 Nov 2026, third session)
+
+> **Supersedes:** "Mock authentication with one swap point" (the original
+> standing decision). The mock-login swap and the LDAP swap are both deleted.
+> Google OAuth is the single sign-in door.
+
+The owner's instruction: "Keep only Google OAuth only. Remove rest." Scope
+confirmed as removing password_hash, the dev-sign-in route, the entire
+`lib/ldap/` directory, and Mock Authentication.
+
+**Why delete LDAP entirely rather than leaving it dormant.** It had been
+"withdrawn from the interface" since 28 Oct 2026, with the code intact as a
+revert path. The owner now asked for removal, not just withdrawal. The LDAP
+directory (`ldapts`), the dummy accounts, the search-then-bind flow, the
+`signInWithLdap` server action, the bulk username import UI and its planner were
+all deleted. Cost: the LDAP door is now a rebuild, not a revert.
+
+**Why keep `ldap_uid`.** The column is referenced in 37 files (the `Profile`
+type, both stores, the user import system, seeds, Supabase seed SQL, migration
+12's unique index). Dropping it would need a migration and changes across ~20
+files with high regression risk. The column is harmless as a nullable profile
+attribute - hidden from the console UI, still handled by user imports (a
+spreadsheet can still carry it). The uid validation functions needed by user
+import were inlined (3 lines) rather than kept in a module.
+
+**Why a new test-sign-in route rather than keeping dev-sign-in.** The old
+`dev-sign-in` route imported `lib/password.ts` and checked `password_hash` on
+the profile - both deleted. It was also gated by `!isProduction()`, but
+Playwright runs against a production build (`next start`). The replacement
+`app/api/auth/test-sign-in/route.ts` is gated only by `E2E_TEST_SECRET` env
+var (no isProduction check), accepts `{ email, secret }` and starts a session.
+The secret is set in `playwright.config.ts`'s webServer env and documented in
+`.env.example`.
+
+**Why remove `password_hash` from Profile.** It was used only by `dev-sign-in`
+(deleted) and seed data. No Supabase migration needed: the column was in
+`scripts/init-postgres.sql` (the mock/Postgres store's init) but not in any
+numbered migration file.
+
+**Cost.** 7 files deleted (`lib/ldap/*`), 2 more deleted (`lib/password.ts`,
+`app/api/auth/dev-sign-in/route.ts`), 1 created (`app/api/auth/test-sign-in/`),
+10 modified. The `ldapts` dependency removed. All 606 tests pass.
+
+## Remove the Supabase directory and all references (2 Nov 2026, fourth session)
+
+**Decision.** Delete the `supabase/` directory (35 migration SQL files, 10
+repair scripts, `seed.sql`, `.temp/`), delete `tests/rls-surface.test.ts`, and
+clean up every remaining "supabase" reference in source files. The two data
+stores are now `PostgresStore` (direct `pg`) and `MockStore` (JSON file).
+
+**Why.** The owner asked for "only Postgres". `lib/store/supabase.ts` and the
+`@supabase/supabase-js` dependency had already been removed in prior sessions.
+`lib/store/index.ts` already selected only Postgres or Mock. The `supabase/`
+directory was 393 KB of SQL files that no code path executed — the consolidated
+schema is `scripts/init-postgres.sql`, and the Postgres store talks directly
+to the database through the `pg` driver.
+
+**Why delete `rls-surface.test.ts`.** It read `supabase/migrations/` to assert
+that no `authenticated` RLS policy survived. With direct Postgres and no
+Supabase Auth, the `authenticated` role is not reachable — the test's invariant
+is structurally guaranteed. The RLS policies, the `auth.users` foreign key, and
+the seeded Auth passwords it guarded against are all absent from
+`init-postgres.sql`.
+
+**Why keep `check-migrations.mjs`.** The script probes the live database with
+SQL queries for schema markers (tables, columns, enum values, functions). It
+never read migration files. It is still useful for verifying a production
+deployment has the expected schema. Only its output message was updated.
+
+**Cost.** The `supabase/` directory (393 KB) deleted, 1 test file deleted
+(174 lines), 6 files had comments cleaned. Tests went from 606 (35 files)
+to 599 (34 files) — the 7 lost are all from the deleted RLS test file.
+All remaining tests pass.

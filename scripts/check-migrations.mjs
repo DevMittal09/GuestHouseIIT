@@ -184,11 +184,10 @@ async function main() {
 
   console.log("");
   if (missing.length > 0) {
-    console.log(`${missing.length} migration(s) appear to be missing. Apply them in order:`);
+    console.log(`${missing.length} schema element(s) appear to be missing. Apply the matching sections from scripts/init-postgres.sql:`);
     for (const m of missing) {
-      console.log(`  supabase/migrations/${String(m.n).padStart(14, "0")}_*.sql`);
+      console.log(`  ${String(m.n).padStart(2)}  ${m.what}`);
     }
-    console.log("Every migration from 6 onwards is safe to re-run.");
   } else {
     console.log("Every migration has been applied.");
   }

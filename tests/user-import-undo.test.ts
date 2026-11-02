@@ -323,8 +323,7 @@ describe("the rules the undo will not bend", () => {
 
   it("names the other half of a swap when one half was corrected by hand", async () => {
     /**
-     * Found by running `supabase/repairs/2026-10-14-restore-user-import.sql`
-     * against a throwaway Postgres (14 Oct 2026). Two accounts swap usernames
+     * Two accounts swap usernames
      * in one import; somebody then corrects one of them by hand, so the undo
      * must leave that one alone - which means the **other** one cannot have
      * its old username back either, because the account holding it is staying

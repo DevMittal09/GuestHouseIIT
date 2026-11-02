@@ -15,7 +15,6 @@ import {
   validatePasswordChoice,
 } from "@/lib/admin-lock";
 import type { RoleFormConfig } from "@/lib/form-config";
-import { planLdapUidImport } from "@/lib/ldap/import";
 import {
   changedFields,
   describeUserImport,
@@ -32,7 +31,6 @@ import {
 } from "@/lib/users-import-undo";
 import { randomUUID } from "crypto";
 import { getHostels } from "@/lib/settings-server";
-import { isValidLdapUid, LDAP_UID_ERROR, normalizeLdapUid } from "@/lib/ldap/uid";
 import { mailConfig } from "@/lib/mail/config";
 import { dispatchOutbox, drainOutbox } from "@/lib/mail/dispatch";
 import { queueMessages } from "@/lib/mail/notify";
@@ -366,11 +364,6 @@ const userSchema = z.object({
     .enum(["", "faculty", "staff"])
     .optional()
     .transform((v) => (v ? v : null)),
-  // Optional: without one the person signs in only through the Google door.
-  ldap_uid: z
-    .string()
-    .transform((v) => normalizeLdapUid(v) || null)
-    .refine((v) => v === null || isValidLdapUid(v), LDAP_UID_ERROR),
 });
 
 export type UserFormInput = z.input<typeof userSchema>;
@@ -385,7 +378,7 @@ export async function createUserAction(input: UserFormInput): Promise<ActionResu
     // route to becoming one, and the section split would be decoration.
     const roleError = assignRoleError(actor, parsed.data.role);
     if (roleError) return { ok: false, error: roleError };
-    await getStore().createProfile(parsed.data);
+    await getStore().createProfile({ ...parsed.data, ldap_uid: null });
     return done();
   } catch (e) {
     return fail(e);
@@ -420,39 +413,6 @@ function assignRoleError(actor: Profile, role: Role): string | null {
   const allowed = assignableRoles(actor.role, Object.keys(ROLE_LABELS) as Role[]);
   if (allowed.includes(role)) return null;
   return `Only a developer can assign the ${ROLE_LABELS[role]} role`;
-}
-
-export type LdapImportResult =
-  | { ok: true; updated: number; unchanged: number }
-  | { ok: false; error: string; problems?: string[] };
-
-/**
- * Bulk-load LDAP usernames onto existing accounts - how the institute's real
- * LDAP logins get into the portal. Planned by `planLdapUidImport` (all or
- * nothing); see there for the accepted format.
- */
-export async function importLdapUidsAction(text: string): Promise<LdapImportResult> {
-  try {
-    await requireConsole("users");
-    const store = getStore();
-    const plan = planLdapUidImport(text, await store.listProfiles());
-    if (plan.problems.length) {
-      return { ok: false, error: "Nothing was changed - fix these lines and try again", problems: plan.problems };
-    }
-    if (plan.changes.length === 0 && plan.unchanged === 0) {
-      return { ok: false, error: "No \"email, LDAP username\" lines found" };
-    }
-    // Two passes, so a uid moving from one account to another (a swap, or a
-    // correction) never collides with itself under the unique index.
-    for (const c of plan.changes) {
-      if (c.from !== null) await store.updateProfile(c.id, { ldap_uid: null });
-    }
-    for (const c of plan.changes) await store.updateProfile(c.id, { ldap_uid: c.to });
-    revalidateConsole();
-    return { ok: true, updated: plan.changes.length, unchanged: plan.unchanged };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
-  }
 }
 
 /**
@@ -571,14 +531,8 @@ export async function importUsersAction(
 
     try {
       /**
-       * An LDAP username is unique on `lower()`, and `planUserImport`
-       * deliberately allows one paste to move a username from one account to
-       * another (a swap, or a correction). Applied one row at a time that
-       * collides with itself: the account being given the username is written
-       * before the account giving it up. So the old holder releases it first -
-       * the same two passes as `importLdapUidsAction`, over the rows whose
-       * username actually moves, and before the inserts as well as the updates
-       * because a *new* account can be the one taking it.
+       * `ldap_uid` is unique on `lower()`. Two passes so a uid moving from
+       * one account to another never collides with itself under the index.
        */
       for (const { id, before, row } of plan.updated) {
         if (before.ldap_uid && (before.ldap_uid ?? null) !== row.ldap_uid) {
@@ -668,10 +622,9 @@ export async function revertUserImportAction(
     let removed = 0;
 
     /**
-     * The accounts the import created go first. One of them may hold an LDAP
-     * username that a restore is about to ask for - the import gave a new
-     * person the username an existing account was giving up - and the unique
-     * index would refuse the restore while that row is still there.
+     * The accounts the import created go first. One of them may hold a
+     * `ldap_uid` that a restore is about to ask for, and the unique index
+     * would refuse the restore while that row is still there.
      */
     for (const account of plan.remove) {
       try {

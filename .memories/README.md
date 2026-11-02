@@ -56,8 +56,8 @@ by one ([01-background.md](01-background.md)). Repository
 `Rizzwan285`.
 
 **Stack.** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript ·
-Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
-JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwright.
+Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · PostgreSQL (direct via
+`pg`, or a JSON mock store) · nodemailer · jsPDF · Vitest · Playwright.
 **Node 22 or newer**; see the root [`setup.md`](../setup.md) for runtime and
 deployment requirements.
 
@@ -115,31 +115,24 @@ number is the manager's, free rooms are counted in green, past dates are
 greyed out of the week and month views, the privacy consent tick is gone, and
 **bookings open six months ahead**). **Not deployed for real use** — everything that first deployment needs is in
 [04-production.md](04-production.md), and the gates are
-[03-roadmap.md](03-roadmap.md) §1. The hosted project has **1-30 and 32**
-(re-verified 27 Oct 2026 - **32 was applied since 14 Oct**, which this folder
-had recorded as not applied); **31, 33 and 34 cannot be probed over PostgREST
-and their state is unknown**, which matters most for 31, and the hosted
-project's email/password provider is **still on**:
-[04-production.md](04-production.md) §1a.1 is the order to do it in. On that
-project `units` is **empty**, so nothing routes to an HOD yet -
-[`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §3 and §4.2.
+[03-roadmap.md](03-roadmap.md) §1. The portal now uses **direct Postgres** (no
+Supabase). The schema is `scripts/init-postgres.sql` and `npm run
+check:migrations` verifies a live database has everything it needs.
 
-**Signing in** is **one button** since 28 Oct 2026: Google once it is
-configured, the account picker until then. LDAP is withdrawn from the
-interface and intact underneath -
+**Signing in** is **Google OAuth only** since 2 Nov 2026. LDAP and Mock
+Authentication were removed entirely -
 [05-credentials-and-security.md](05-credentials-and-security.md) Part 2.
 **The Google flow is built and verified, only unconfigured** - don't rebuild
 it. Turning it on is [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) at the repo
 root, which also carries the two defects to fix first: the account lookup
-scans **every** profile and Supabase truncates that at **1000 rows silently**
-([03-roadmap.md](03-roadmap.md) gate 12, which breaks the institute's account
-import too), and the start leg's `hd` hint may keep every `@smail` student out
+scans **every** profile (inefficient at scale — [03-roadmap.md](03-roadmap.md)
+gate 12), and the start leg's `hd` hint may keep every `@smail` student out
 of Google's account chooser.
 
-**Numbers.** 35 migrations · 10 one-off repairs · 12 roles (10 active) ·
+**Numbers.** 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
 19 demo personas · 6 demo bookings · 23 real rooms · **25 photographs** ·
-606 unit tests · 50 end-to-end journeys · 15 console sections ·
+599 unit tests · 50 end-to-end journeys · 15 console sections ·
 **5 invoice layout versions**.
 
 ---
@@ -218,7 +211,7 @@ updated. **Work the table, not your memory.**
 | A tariff, an invoice or a payment rule | [13-billing-and-dining.md](13-billing-and-dining.md) |
 | A Setting, a default, or a floor under a Setting | [12-settings-and-defaults.md](12-settings-and-defaults.md), [04-production.md](04-production.md) §3 if the office must fill it in |
 | A migration | [21-database.md](21-database.md), [04-production.md](04-production.md) §5, **and `scripts/check-migrations.mjs`'s `MARKERS` table** - with `kind: "sql"` and the query to run when PostgREST cannot see what it added (a function, a trigger, a policy, an index) |
-| A new persona, password or secret | [05-credentials-and-security.md](05-credentials-and-security.md) **and `lib/ldap/mock-directory.ts`** |
+| A new persona, password or secret | [05-credentials-and-security.md](05-credentials-and-security.md) |
 | An academic-record field or dummy record | [11-booking-forms.md](11-booking-forms.md) Part 2 **and `lib/academic/mock-source.ts`** |
 | Anything on the public site, or a design token | [14-public-site-and-ui.md](14-public-site-and-ui.md) |
 | Where a feature's code lives, or a new module | [20-architecture.md](20-architecture.md) Part 2 |

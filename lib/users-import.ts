@@ -1,5 +1,11 @@
 import { splitCsvLine } from "./csv";
-import { isValidLdapUid, normalizeLdapUid } from "./ldap/uid";
+const LDAP_UID_PATTERN = /^[a-z0-9][a-z0-9._@+-]{0,127}$/;
+function normalizeLdapUid(value: string): string {
+  return value.trim().toLowerCase();
+}
+function isValidLdapUid(value: string): boolean {
+  return LDAP_UID_PATTERN.test(normalizeLdapUid(value));
+}
 import { ROLE_LABELS, type Profile, type Role, type StaffCategory } from "./types";
 import type { Unit } from "./units";
 

@@ -123,8 +123,6 @@ create table public.profiles (
   roll_number         text,
   -- migration 12
   ldap_uid            text,
-  -- password authentication
-  password_hash       text,
   -- migration 15
   unit_id             uuid,
   staff_category      text check (staff_category is null or staff_category in ('faculty', 'staff'))

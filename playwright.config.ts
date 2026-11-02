@@ -5,13 +5,13 @@ import { defineConfig, devices } from "@playwright/test";
  * driven through a real browser against a real build.
  *
  * The server is started by Playwright itself, in production mode, against the
- * **mock store on a throwaway database file** (`MOCK_DB_PATH`) — a test run
+ * **mock store on a throwaway database file** (`MOCK_DB_PATH`) - a test run
  * can never touch a developer's `.local-db.json`, let alone the hosted
  * project.
  *
- * Each test signs in the way a person does — the LDAP form, against the dummy
- * directory — because the developer sign-in door does not exist in a
- * production build, which is exactly what these tests are running against.
+ * Sign-in uses the test-only `/api/auth/test-sign-in` route, gated by the
+ * `E2E_TEST_SECRET` env var: it accepts an email and the secret, looks up
+ * the profile, and starts a session without a password.
  */
 const PORT = Number(process.env.E2E_PORT ?? 3100);
 const DB = process.env.E2E_DB ?? "./.e2e-db.json";
@@ -48,6 +48,7 @@ export default defineConfig({
       MAIL_DRY_RUN: "true",
       APP_URL: `http://127.0.0.1:${PORT}`,
       CRON_SECRET: "e2e-cron-secret-0123456789",
+      E2E_TEST_SECRET: "e2e-test-secret-0123456789",
       ID_ENCRYPTION_KEY: "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
     },
   },

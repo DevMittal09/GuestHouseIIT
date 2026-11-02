@@ -21,10 +21,10 @@ is in [02-decisions.md](02-decisions.md); how to run and verify any of it is
 | Components | shadcn/ui (radix base, "nova" preset) | shadcn 4.x |
 | Validation | zod | 4.x |
 | Forms | react-hook-form (+ @hookform/resolvers) | 7.x |
-| Backend | Supabase (Postgres + Storage), optional | @supabase/supabase-js 2.x |
+| Backend | PostgreSQL (direct via `pg`) | pg 8.x |
 | Toasts | sonner | 2.x |
 
-Also: date-fns, jsPDF (+ autotable), nodemailer, ldapts. Tests: Vitest
+Also: date-fns, jsPDF (+ autotable), nodemailer. Tests: Vitest
 (`npm test`, `tests/`) and Playwright (`npm run test:e2e`, `e2e/`). How to run
 and verify: [22-running-and-testing.md](22-running-and-testing.md).
 
@@ -34,9 +34,8 @@ and verify: [22-running-and-testing.md](22-running-and-testing.md).
 app/
   (site)/                  PUBLIC website (19 Sep 2026): / home, book-room, book-meal,
                            guidelines, gallery, contact, sign-in,
-                           mock-login (Mock Authentication — open while Google is
-                           unconfigured) — see 14-public-site-and-ui.md
-                           (privacy/ withdrawn 14 Oct 2026 → archive/privacy-notice/)
+                           (mock-login removed 2 Nov 2026; privacy/ withdrawn
+                           14 Oct 2026 → archive/privacy-notice/)
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
     dashboard/             requester's own bookings
@@ -56,7 +55,6 @@ app/
                            invoices/preview/[bookingId], mail/{cron,dispatch}
 components/                feature components + components/ui primitives
 lib/                       domain logic: types, workflow, form config, tz, store
-supabase/                  migrations + seed SQL
 ```
 
 Everything that writes data goes through a **server action** in `app/actions/`.
@@ -75,10 +73,10 @@ it:
 - `lib/store/mock.ts` — a JSON file (`.local-db.json`) plus `.uploads/`
   (outside `public/`, served only through `/api/documents`).
   Zero setup, so the app runs immediately after `npm install`.
-- `lib/store/supabase.ts` — Postgres tables plus a private Storage bucket.
+- `lib/store/postgres.ts` — direct PostgreSQL via the `pg` driver.
 
-`lib/store/index.ts` picks one **from the environment** at first use: Supabase if
-`NEXT_PUBLIC_SUPABASE_URL` and a key are present, otherwise the mock.
+`lib/store/index.ts` picks one **from the environment** at first use: Postgres if
+`DATABASE_URL` is set (`databaseConfigured()`), otherwise the mock.
 
 > **Rule:** any new data operation must be added to the interface *and both*
 > implementations, or one backend silently breaks. TypeScript catches this if you
@@ -96,16 +94,12 @@ persona or column does not require deleting the database.
 session is a **row** in `sessions` and the cookie holds an opaque token
 (`lib/sessions.ts`); `lib/auth.ts` is the only module that reads it. The
 sign-in card (`/sign-in`, also embedded in the public `/book-room` and
-`/book-meal`) opens a session through **one button** since 28 Oct 2026:
-**"Sign in with Google"** (the real OpenID Connect flow) when
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL` are set, and
-otherwise **"Sign in"**, which opens the persona picker at `/mock-login`
-(`mockLoginEnabled()`; `MOCK_LOGIN=false` closes it). **The LDAP door is
-withdrawn from the interface, not from the code**: `signInWithLdap`, the
-throttle and the seam below are untouched and have no caller. The
-pre-Phase-8 `gh_mock_user` cookie is honoured only with `DEV_LOGIN=true`
-outside production. `/` is the public website, so signed-out guards redirect to
-`SIGN_IN_PATH`, not `/`.
+`/book-meal`) opens a session through **one button**: **"Sign in with Google"**
+(the real OpenID Connect flow at `app/api/auth/google/`). **LDAP and Mock
+Authentication were removed on 2 Nov 2026** — Google OAuth is the only
+sign-in door. The pre-Phase-8 `gh_mock_user` cookie is honoured only with
+`DEV_LOGIN=true` outside production. `/` is the public website, so signed-out
+guards redirect to `SIGN_IN_PATH`, not `/`.
 
 > **The Google leg is built and verified, only unconfigured** - `lib/oidc.ts`
 > (authorization code + PKCE + state + nonce, the `id_token` checked against
@@ -117,22 +111,13 @@ outside production. `/` is the public website, so signed-out guards redirect to
 > listed in
 > [05-credentials-and-security.md](05-credentials-and-security.md) Part 2.
 
-LDAP is the third environment-selected seam, alongside the store and the
-mailer:
-
-| Condition | Directory | Accounts come from |
-| --- | --- | --- |
-| `LDAP_URL` set | `lib/ldap/ldap-directory.ts` (`ldapts`, search-then-bind) | the institute LDAP server |
-| otherwise | `lib/ldap/mock-directory.ts` | dummy accounts ([05-credentials-and-security.md](05-credentials-and-security.md)) |
-
-The directory only answers "is this the password for this username". Identity
-inside the portal (role, hostel, club) stays in `profiles`, joined by
-`profiles.ldap_uid` (migration 12). So the directory never needs to know about
-the portal's roles, and a directory login with no profile gets in nowhere.
+For **e2e tests**, `app/api/auth/test-sign-in/route.ts` accepts
+`{ email, secret }` when `E2E_TEST_SECRET` is set, looks up the profile and
+starts a session. It is the replacement for the deleted `dev-sign-in` route.
 
 **No other module contains auth logic.** The session is a server-side row
 keyed by the SHA-256 of an opaque cookie token (Phase 8), so a forged cookie
-gets nothing. What remains for production is connecting the real directory
+gets nothing. What remains for production is configuring Google
 (`LDAP_URL`) and configuring Google (or closing Mock Authentication). Resist the
 temptation to read cookies or sessions anywhere else.
 
@@ -228,7 +213,7 @@ This is a fixed bug rather than a precaution. `toIso()` was
 and wrong everywhere else; on a UTC host a 12:00 booking was stored as `12:00Z`
 and the manager's console read it back as 5:30 PM. The parse is the dangerous
 half — it puts a wrong value in the database, and rows written that way stay
-wrong after the code is fixed (`supabase/repairs/`). A fixed zone rather than the
+wrong after the code is fixed. A fixed zone rather than the
 viewer's is deliberate: the guest house is one building, so everyone must read
 "12:00" as the same moment. It also removes the SSR/hydration mismatch class,
 because the rendered string no longer depends on which machine rendered it.
@@ -483,7 +468,7 @@ as pure functions over hydrated bookings, and both stores call the same
 `runBookingSearch()`. Each store only decides how to produce candidate rows:
 
 - **Mock** — everything is already in memory, so it hydrates the lot and filters.
-- **Supabase** — pushes the cheap, indexable predicates into SQL (guest house,
+- **Postgres** — pushes the cheap, indexable predicates into SQL (guest house,
   requester role, `userId`, check-in range), caps the scan at
   `SEARCH_SCAN_LIMIT` (1000) and filters the rest in JS.
 
@@ -495,7 +480,7 @@ the search rather than silently showing a partial archive.
 > **Trap that already bit once.** `statuses` must **not** be pushed down to SQL.
 > `runBookingSearch` reports per-status facet counts computed *before* the status
 > filter is applied, so the candidate set has to still contain the other
-> statuses. Pushing it down made the Supabase tiles collapse to zero while the
+> statuses. Pushing it down made tiles collapse to zero while the
 > mock store's stayed correct — two backends, one interface, silently disagreeing.
 
 Authorization is the caller's job, not the store's: `historyScope(user)` in
@@ -618,13 +603,14 @@ acting account.
 | Concern | File |
 | --- | --- |
 | Public website (home, booking entry points, guidelines, gallery, contact) | `app/(site)/*`, `components/site/*` — see [14-public-site-and-ui.md](14-public-site-and-ui.md) |
-| Sign-in (**one button** since 28 Oct 2026: the account picker, or Google once configured) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` (one centred shape) → `components/login-form.tsx` (no fields). `signInWithLdap` is untouched and has no caller |
+| Sign-in (**Google OAuth only** since 2 Nov 2026) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` (one centred shape) → `components/login-form.tsx` (Google button, no fields) |
 | Google sign-in (real OpenID Connect: state, PKCE, verified id_token) | `lib/oidc.ts`, `app/api/auth/google/start`, `app/api/auth/google/callback` |
-| **Mock Authentication** persona picker — open while Google is unconfigured (`mockLoginEnabled()`), 404 otherwise or with `MOCK_LOGIN=false` | `app/(site)/mock-login/page.tsx`, `loginAs` |
+| **Mock Authentication** — removed 2 Nov 2026 | — |
 | Sessions (rows, opaque token, idle/absolute expiry, rotation, revoke) | `lib/sessions.ts` |
-| Login / logout actions | `app/actions/auth.ts` (`signInWithLdap` — directory check, `ldap:<uid>` throttle, profile by `ldap_uid`, safe `next`; `loginAs(id, next)`; `logout` → `/sign-in`) |
+| Login / logout actions | `app/actions/auth.ts` (`logout`, `logoutEverywhere` — sign-in is Google OAuth only) |
 | Academic records (the Requester details card, the warden's check, the **locked parent names**) | `lib/academic/` — `index.ts` (`getAcademicSource()` from env; `academicRecordFor()`, cached and never throwing; `forgetAcademicRecords()`), `store-source.ts` (**reads institute_* tables** through `lib/institute/academic-adapter.ts`, with the dummies behind them), `http-source.ts` (the institute's database; `recordFromJson` is the field mapping), `mock-source.ts` (dummy records), `stored.ts` (legacy CSV import — no production importer), `guest-names.ts` (what the record fixes on the booking form), `fields.ts` (role → kind, display order, guardian and Copy-to rules), `details.ts` (rows + Copy to for the card), `family.ts` / `family-server.ts` (the warden's check). Import: `lib/institute/import.ts`. Console: `/admin/academic`. See [11-booking-forms.md](11-booking-forms.md) |
-| LDAP directory | `lib/ldap/` — `index.ts` (`getDirectory()` from env), `ldap-directory.ts` (real), `mock-directory.ts` (dummy accounts), `link.ts` (entry → profile, opt-in link by email), `import.ts` (bulk import planner), `uid.ts` (client-safe rules). See [05-credentials-and-security.md](05-credentials-and-security.md) |
+| LDAP directory — removed 2 Nov 2026 | `lib/ldap/` deleted entirely. `ldap_uid` column and its validation inlined in `lib/users-import.ts`. See [05-credentials-and-security.md](05-credentials-and-security.md) |
+| E2E test sign-in | `app/api/auth/test-sign-in/route.ts` — gated by `E2E_TEST_SECRET`, accepts `{ email, secret }`, starts a session. Replaces the deleted `dev-sign-in` |
 | Where signed-out visitors go | `SIGN_IN_PATH` in `lib/routes.ts` (`/` is the public home page) |
 | Session read | `lib/auth.ts` (`getCurrentUser`, `requireUser`) |
 | Post-login landing per role | `lib/routes.ts` (`homeForRole`) |
@@ -876,8 +862,7 @@ for.
   via `approveCancellation` / `rejectCancellation` in `app/actions/bookings.ts`.
 
 Queue pages keep themselves current through `components/live-updates.tsx`:
-Supabase realtime on bookings, room holds, blocks and invoices where Supabase
-is configured, and a 30-second poll where it is not (Phase 9).
+a 30-second poll (Phase 9).
 
 ### Room availability grid (`/availability`)
 
@@ -894,7 +879,7 @@ everyone. `app/(portal)/availability/page.tsx` (server, lists guest houses) +
 | "N rooms available" for everyone else | `availabilityCounts` / `rangeBetween` (`lib/availability.ts`), `components/availability-counts.tsx` |
 | Ranges, bucketing, badges, labels | `lib/availability.ts` |
 | Calendar-date arithmetic and labels | `lib/tz.ts` (`parseDateValue`, `addDaysToDateValue`, `formatDateValue`) |
-| Store query | `listRoomOccupancy` in `lib/store/mock.ts` + `lib/store/supabase.ts` |
+| Store query | `listRoomOccupancy` in `lib/store/mock.ts` + `lib/store/postgres.ts` |
 
 **Controls.** Guest house tabs, a **Day / Week / Month** switch, and a date
 input between previous / next buttons that step one day, week or month, plus
@@ -1110,7 +1095,7 @@ Guest Houses & Rooms.
 | `lib/approval-routes.ts` | **The approval workflow as data** (12 Oct 2026): `ApprovalRules` / `ApprovalRouteRule` / `ApprovalStage` / `ApproverRule`, `DEFAULT_APPROVAL_RULES` (the old `switch`, case for case), `matchingRule` / `stagesFor` / `stageForStatus` (first active match wins), `stageApproverIds` / `decidesStage` / `stagesDecidedBy` (who decides, and who has a queue), `hasHostel` / `approverNotApplicable` / `NO_HOSTEL_REASON` (a stage that **cannot apply** to this requester - a student with no hostel has no Assistant Warden, 17 Oct 2026), `describeChain` / `describeConditions` / `describeRouteChanges` (reading a route back in words), `approvalRulesSchema`. Pure - no store |
 | `lib/approval-categories.ts` | **The workflow as a kind of request** (12 Oct 2026, second round): `REQUEST_CATEGORIES` (the eleven kinds, each with a representative request and the conditions a route of its own would carry), `categoryChains` (what each kind does now - answered with `matchingRule`, never worked out separately), `setCategoryStages` (**edit in place, or fork a route for this kind alone above the one it shares**), `insertStage` / `moveStage` / `removeStage` / `slotForApprover` / `setStageApprover` (the steps, and the slot the office never sees), `approverValue` / `approverFromValue` (six approver kinds as one select value), `uncoveredRules`. Pure - no store |
 | `lib/approval-routes-server.ts` | `getApprovalRules()`, `getReviewContext()` (the routes plus every account, which a role- or person-named stage needs), `stageQueuesFor()` (a person's queues), `forwardTargets()` (what each Forward button names) |
-| `lib/types.ts` | Domain shapes and label maps (`ROLE_LABELS`, `STATUS_LABELS`, `REQUESTER_ROLES`, `DEBIT_HEAD_LABELS`…). Declared as `type` aliases, not interfaces, so Supabase's generated `Insert`/`Update` helpers accept them. |
+| `lib/types.ts` | Domain shapes and label maps (`ROLE_LABELS`, `STATUS_LABELS`, `REQUESTER_ROLES`, `DEBIT_HEAD_LABELS`…). Declared as `type` aliases, not interfaces. |
 | `lib/workflow.ts` | `routeFor` (the pipeline), `initialStatusFor`, `approvalStagesFor`, `droppedStages` / `skippedStages` (a stage dropped, and **why** - unstaffed, or inapplicable to this requester), `nextStatusAfter`, `canReview` / `canReviewBooking`, `asksOfficeApproval` (whether an office is asked Direct / HOD at all), `actsAsRequester`, `ROOM_HOLDING_STATUSES`, `stayPhase`, `occupancyNotStartedError`, `hasLapsed`, `displayStatus`, `LIFECYCLE_ROLES`, `historyScope`, `canExportPdf`, the advance window (`latestCheckIn` / `isAdvanceWindowExempt`). |
 | `lib/units.ts` | Units and appointments: `approversOf`, `hodUnitIdFor`, `hodApproversFor`, `unitsGovernedBy`, `isHodForAny`, `approvesClubsFor`, `facultyAdvisorOf`, `secretaryEmailOf`, `parentError`. |
 | `lib/club-booking.ts` (+ `-server.ts`) | Clubs booked by their Faculty Advisor: `canBeFacultyAdvisor`, `facultyInChargeOf`, `clubsBookableBy`, `defaultCopyToFor`, `raisedByFacultyInCharge`, `clubBookingNotice`; `clubsBookableByUser` (cached per request). |
@@ -1123,7 +1108,7 @@ Guest Houses & Rooms.
 | `lib/debit-heads.ts` | Categories, `DEFAULT_DEBIT_RULES` (the office's nine heads and their mapping, revision 6, 8 Oct 2026), `FORBIDDEN_DEBIT_HEADS`, `debitCategoryFor`, `debitHeadsByType`, `upgradeDebitRules`, `describeDebit`, `asksForDebitHead`, and the funds declaration - `FUND_DECLARATION`, `requiresFundDeclaration`, `fundDeclarationError`. |
 | `lib/office-debit-heads.ts` | **The offices' own spreadsheet** (9 Oct 2026): `OFFICE_DEBIT_HEADS`, one row per office mailbox with the heads it marked "Y", plus `officeDebitRowFor` / `officeDebitHeads` / `narrowToOffice`. `debitHeadsByType` intersects it with the Settings list, so an office is offered only its own heads. Keyed by the mailbox before the `@`, with aliases for the demo personas. Source kept as `.memories/04-production.md`. |
 | `lib/users-import.ts` | Loading the accounts from a spreadsheet paste (8 Oct 2026): `KNOWN_COLUMNS` and `columnFor` / `headerColumns` (the header may name the columns in any order), `planUserImport` (all or nothing, updates whoever is already on the list, leaves out what the paste does not carry), `describeUserImport`, `changedFields`. Pure - the console previews the plan with it before applying it. **Matched on `lower(email)`, so a re-import updates in place and a profile's id never changes** - which is what the 19 foreign keys pointing at `profiles.id` require. Asserted in `tests/user-import-idempotency.test.ts`; the plan's own rules are in `tests/ninth-round.test.ts`. |
-| `lib/users-import-undo.ts` | **Undoing one** (14 Oct 2026): `UserImportBatch` (the record, migration 32), `importFieldsOf` / `differingFields` / `sameImportFields` over the eight fields an import may write, `planUserImportRevert` (restore these, delete those, and **name** anything changed since the import or whose LDAP username is now somebody else's), `uidsToRelease`, `revertBlocker`, `describeBatch`. Pure, so the console can say what an undo would do and the tests need no store. The record is written **before** the import's writes, which is what makes a **failed** import recoverable; `tests/user-import-undo.test.ts` (12 checks) pins it, and `supabase/repairs/2026-10-14-restore-user-import.sql` is the same undo in plain SQL for when the application cannot run. |
+| `lib/users-import-undo.ts` | **Undoing one** (14 Oct 2026): `UserImportBatch` (the record, migration 32), `importFieldsOf` / `differingFields` / `sameImportFields` over the eight fields an import may write, `planUserImportRevert` (restore these, delete those, and **name** anything changed since the import or whose LDAP username is now somebody else's), `uidsToRelease`, `revertBlocker`, `describeBatch`. Pure, so the console can say what an undo would do and the tests need no store. The record is written **before** the import's writes, which is what makes a **failed** import recoverable; `tests/user-import-undo.test.ts` (12 checks) pins it,  |
 | `lib/policy.ts` | Stay cap and its exemptions (`stayLengthError`), the alumni guest house, the pets notice (the Guidelines' and the mail's since 11 Oct 2026, not the form's). |
 | `lib/settings.ts` (+ `-server.ts`, `-impact.ts`) | `DEFAULT_RULES`, the Settings schemas, `getRules` / `getOfficialEmails` / `getHostels`, and what a change would break. |
 | `lib/occupancy.ts` | Capacity per room type, `INFANT_AGE_LIMIT`, `roomPartyError` and the Add-button reasons, `extraBedsFor`, `allocationCapacityError`, `describeCapacity`. |
@@ -1282,13 +1267,11 @@ Sentry), `proxy.ts` (CSP nonces and the other headers). Console: **Security**
 ### Performance and tests (Phase 9)
 
 `lib/revalidate.ts` (three named sets in place of 25 whole-application cache
-drops), `components/live-updates.tsx` (Supabase realtime on bookings, holds,
-blocks and invoices; a 30-second poll where there is no Supabase),
+drops), `components/live-updates.tsx` (a 30-second poll),
 `lib/site-data.ts` (the public site's data held under the `site` cache tag for
 half an hour, expired by `revalidateEverything()`), migration 22
-(`bookings.search_text` + GIN, and the indexes every desk read uses) with
-`SupabaseStore.searchBookings` pushing the keyword down, `vercel.json`
-(`regions: ["bom1"]`, the two crons).
+(`bookings.search_text` + GIN, and the indexes every desk read uses),
+`vercel.json` (`regions: ["bom1"]`, the two crons).
 
 Tests: `npm test` (Vitest, unit and store), `npm run typecheck`, and
 `npm run test:e2e` — Playwright against a **production build on the mock
@@ -1307,7 +1290,7 @@ store**, on a throwaway database file:
 `e2e/global-setup.ts` deletes the throwaway database before each run, so the
 sign-in throttle (a row in it) cannot carry over and lock the dummy accounts
 out on a second run inside 15 minutes.
-`.github/workflows/ci.yml` runs all of it with Supabase switched off.
+`.github/workflows/ci.yml` runs all of it on the mock store.
 
 ### Branding
 
@@ -1348,9 +1331,7 @@ templates (`lib/mail/render.ts`) still carry their own inline amber header.
 
 ### Demo data
 
-Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase, auth
-password `password123` — not a portal login; each persona signs in with its
-dummy LDAP account from [05-credentials-and-security.md](05-credentials-and-security.md)):
+Seeded in `lib/store/seed.ts` (mock; Postgres uses `scripts/init-postgres.sql`):
 **18 personas**, 6 units and — mock only — **6 demo bookings** positioned so
 every queue has something in it (DM001 student at the warden, DM002 Petrichor
 at the legacy club stage, DM003 Student Cell alumni at the IAR Office, DM004

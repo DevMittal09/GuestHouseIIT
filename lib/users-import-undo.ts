@@ -229,9 +229,6 @@ export function planUserImportRevert(
    * holder that **is** being restored is fine - it gives the username up first
    * ({@link uidsToRelease}).
    *
-   * Found by running `supabase/repairs/2026-10-14-restore-user-import.sql`
-   * against a throwaway Postgres, where the same case appears as a
-   * `skip_reason`. The two implementations agree deliberately.
    */
   const restoring = new Set(candidates.map((c) => c.id));
   for (const candidate of candidates) {

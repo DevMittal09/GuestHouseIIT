@@ -354,7 +354,7 @@ function loadDb(): Db {
       }
     }
     // Migration 12's counterpart: LDAP usernames. Seeded personas get theirs
-    // back (matched by email, as `supabase/seed.sql` does); anyone else starts
+    // back (matched by email); anyone else starts
     // without one, as they would in Postgres.
     for (const p of db.profiles) {
       if (p.ldap_uid === undefined) {

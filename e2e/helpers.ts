@@ -14,22 +14,22 @@ import path from "node:path";
  */
 
 /**
- * The seeded accounts. Each has an email and password for the sign-in form,
- * and the `uid` key for the session cache.
+ * The seeded accounts. Each has an email for the test sign-in route, and the
+ * `uid` key for the session cache.
  */
 export const ACCOUNTS = {
-  student: { uid: "112201001", email: "112201001@smail.iitpkd.ac.in", password: "Anjali@2026", name: "Anjali Menon" },
-  dayScholar: { uid: "122203099", email: "122203099@smail.iitpkd.ac.in", password: "Devika@2026", name: "Devika Iyer" },
-  faculty: { uid: "priya", email: "priya@iitpkd.ac.in", password: "Priya@2026", name: "Dr. Priya Sharma" },
-  hod: { uid: "hod.cse", email: "hod.cse@iitpkd.ac.in", password: "HodCse@2026", name: "Prof. R. Venkatesh" },
-  warden: { uid: "warden.malhar", email: "warden.malhar@iitpkd.ac.in", password: "Malhar@2026", name: "Dr. Suresh Kumar" },
-  manager: { uid: "guesthouse", email: "guesthouse@iitpkd.ac.in", password: "Manager@2026", name: "Guest House Manager" },
-  caretaker: { uid: "gh.reception", email: "gh.reception@iitpkd.ac.in", password: "Reception@2026", name: "Guest House Caretaker" },
-  developer: { uid: "developer", email: "developer@iitpkd.ac.in", password: "Developer@2026", name: "Portal Developer" },
-  iarStudentCell: { uid: "alumnicell", email: "alumnicell@iitpkd.ac.in", password: "AlumniCell@2026", name: "IAR Student Cell" },
-  iarOffice: { uid: "iar", email: "iar@iitpkd.ac.in", password: "IarOffice@2026", name: "IAR Office" },
-  directorOffice: { uid: "admin", email: "admin@iitpkd.ac.in", password: "Director@2026", name: "Director's Office" },
-  departmentOffice: { uid: "cse.office", email: "cse.office@iitpkd.ac.in", password: "CseOffice@2026", name: "CSE Department Office" },
+  student: { uid: "112201001", email: "112201001@smail.iitpkd.ac.in", name: "Anjali Menon" },
+  dayScholar: { uid: "122203099", email: "122203099@smail.iitpkd.ac.in", name: "Devika Iyer" },
+  faculty: { uid: "priya", email: "priya@iitpkd.ac.in", name: "Dr. Priya Sharma" },
+  hod: { uid: "hod.cse", email: "hod.cse@iitpkd.ac.in", name: "Prof. R. Venkatesh" },
+  warden: { uid: "warden.malhar", email: "warden.malhar@iitpkd.ac.in", name: "Dr. Suresh Kumar" },
+  manager: { uid: "guesthouse", email: "guesthouse@iitpkd.ac.in", name: "Guest House Manager" },
+  caretaker: { uid: "gh.reception", email: "gh.reception@iitpkd.ac.in", name: "Guest House Caretaker" },
+  developer: { uid: "developer", email: "developer@iitpkd.ac.in", name: "Portal Developer" },
+  iarStudentCell: { uid: "alumnicell", email: "alumnicell@iitpkd.ac.in", name: "IAR Student Cell" },
+  iarOffice: { uid: "iar", email: "iar@iitpkd.ac.in", name: "IAR Office" },
+  directorOffice: { uid: "admin", email: "admin@iitpkd.ac.in", name: "Director's Office" },
+  departmentOffice: { uid: "cse.office", email: "cse.office@iitpkd.ac.in", name: "CSE Department Office" },
 } as const;
 
 /** A 1×1 PNG that passes the upload sniffer, for guest ID documents. */
@@ -48,7 +48,7 @@ export const ID_DOCUMENT = path.join(process.cwd(), "e2e", "fixtures", "id-docum
  */
 const sessions = new Map<string, Cookie[]>();
 
-export async function signIn(page: Page, account: { uid: string; email: string; password: string; name: string }): Promise<void> {
+export async function signIn(page: Page, account: { uid: string; email: string; name: string }): Promise<void> {
   await page.context().clearCookies();
   const saved = sessions.get(account.uid);
   if (saved) {
@@ -57,10 +57,12 @@ export async function signIn(page: Page, account: { uid: string; email: string; 
     if (!new URL(page.url()).pathname.startsWith("/sign-in")) return;
     await page.context().clearCookies();
   }
-  const res = await page.request.post("/api/auth/dev-sign-in", {
-    data: { email: account.email, password: account.password },
+  const secret = process.env.E2E_TEST_SECRET;
+  if (!secret) throw new Error("E2E_TEST_SECRET is not set - the test server needs it");
+  const res = await page.request.post("/api/auth/test-sign-in", {
+    data: { email: account.email, secret },
   });
-  if (!res.ok()) throw new Error(`dev-sign-in failed for ${account.email}: ${res.status()}`);
+  if (!res.ok()) throw new Error(`test-sign-in failed for ${account.email}: ${res.status()}`);
   await page.goto("/sign-in");
   await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"), { timeout: 30_000 });
   sessions.set(account.uid, await page.context().cookies());

@@ -285,10 +285,11 @@ there is no profile id to set by hand — a forged cookie gets nothing. Sign in
 the way a person does and keep the cookie jar:
 
 ```bash
-# Sign in through the LDAP form (dummy directory), keeping cookies.
-curl -s -c jar.txt -b jar.txt http://localhost:3000/sign-in > /dev/null
-# then drive the form in a browser, or use the end-to-end suite, which does
-# exactly this: npm run test:e2e
+# Sign in via the test-sign-in endpoint (e2e only, needs E2E_TEST_SECRET):
+curl -s -c jar.txt -b jar.txt -X POST -H "Content-Type: application/json" \
+  -d '{"email":"guesthouse@iitpkd.ac.in","secret":"your-e2e-secret"}' \
+  http://localhost:3000/api/auth/test-sign-in
+# or use the end-to-end suite, which does exactly this: npm run test:e2e
 
 # With a jar from a real sign-in, the ordinary checks still work:
 curl -s -b jar.txt -o /dev/null -w "%{http_code}\n" http://localhost:3000/book
@@ -864,35 +865,18 @@ public website.
 **Fix.** `redirect(SIGN_IN_PATH)` from `lib/routes.ts`. `grep -rn 'redirect("/")' app`
 should find nothing.
 
-### "I can't sign in" with LDAP
+### "I can't sign in" (Google OAuth)
 
-Since 19 Sep 2026 the card takes an LDAP username, not an email address.
+> **LDAP sign-in was removed on 2 Nov 2026.** The only sign-in door is Google
+> OAuth. The historical LDAP troubleshooting section is in
+> [05-credentials-and-security.md](05-credentials-and-security.md) Part 2.
 
-- **"Enter your LDAP username, not your email address"**: the username contains
-  `@`, and the directory's `LDAP_UID_ATTRIBUTE` is not `mail` or
-  `userPrincipalName`.
-- **"Incorrect username or password"**: the directory refused the login. With
-  no `LDAP_URL`, only the dummy accounts in
-  [05-credentials-and-security.md](05-credentials-and-security.md) exist. `password123` is **not** a
-  portal password any more.
-- **"…valid but is not registered on the guest house portal"**: the password
-  was right, but no profile has that `ldap_uid`. Set it in Users & Roles (Edit,
-  or Import LDAP usernames). On Supabase, check that migration 12 is applied
-  and the seed's `update` has been run.
-- **"The institute directory could not be reached"**: the directory threw. The
-  cause is in the server log (`[auth] LDAP sign-in failed:`). The usual
-  suspects:
-  - `LDAP_URL` set without `LDAP_BASE_DN`
-  - a wrong service password
-  - anonymous search refused, which shows up as `noSuchObject` (code 0x20)
-  - an untrusted TLS certificate (use `NODE_EXTRA_CA_CERTS`)
-- **"Too many attempts"**: 8 attempts in 15 minutes for that username
-  (`RATE_LIMITS.signIn`). The count is a **row in the database**
-  (`rate_limits` / the mock's `.local-db.json`), so a restart does not clear
-  it — wait, or on a throwaway mock database delete the file.
-
-A console-created account with no LDAP username can still sign in through
-**Mock Authentication** while Google is unconfigured.
+- **The button does nothing / redirects back**: `GOOGLE_CLIENT_ID`,
+  `GOOGLE_CLIENT_SECRET` and `APP_URL` are not all set. Check `.env.local`.
+- **"not registered on the guest house portal"**: the Google login succeeded
+  but no profile has that email. Create the account in Users & Roles.
+- **Rate limited on the start leg**: `RATE_LIMITS.oauth` is 20 per 10 min per
+  IP. Watch it if the campus is behind one NAT address.
 
 ### Resizing the camera photos gets killed (exit 137)
 

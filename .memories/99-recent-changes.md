@@ -7,71 +7,58 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 2 November 2026 (second session) - rewire Academic Records to institute tables
+## Round of 2 November 2026 (fourth session) - Supabase removal: Postgres only
 
-The previous session created six `institute_*` tables and 30 `DataStore`
-methods. This session **rewired every dependent module** so the Academic Records
-console, the booking form's parent locking, and the `StoreAcademicSource`
-adapter all read from the new tables instead of the old `academic_records`
-table.
+Continuation of the auth cleanup. The owner's instruction: **"I want only
+postgres."** The Supabase store, its migration files, seed SQL, repair scripts
+and the `@supabase/supabase-js` dependency were already removed in prior
+sessions. This session removed the `supabase/` directory itself and every
+remaining reference to it.
 
 ### What was delivered
 
-**Adapter layer** (`lib/institute/academic-adapter.ts`): five pure functions
-(`studentToRecord`, `employeeToRecord`, `officeToRecord`, `fccToRecord`,
-`wardenToRecord`) that convert each institute table's row type into the
-`AcademicRecord` union the rest of the portal reads. Downstream code -
-the booking form's parent locking, the warden's family check, the Copy-to
-chain, the requester-details card - is unchanged.
+**Deleted `supabase/` directory** (393 KB): 35 migration SQL files, 10 repair
+scripts, `seed.sql`, and `.temp/` scratch files. None were executed by any code
+path — `lib/store/index.ts` already selected only `PostgresStore` or
+`MockStore`. The consolidated schema lives in `scripts/init-postgres.sql`.
 
-**`StoreAcademicSource` rewired** (`lib/academic/store-source.ts`): reads
-institute_* tables via the adapter instead of `academic_records`. Falls through
-to `MockAcademicSource` (dummy records) for `alumni_office` (no table) and
-when tables are missing (Postgres error `42P01`).
+**Deleted `tests/rls-surface.test.ts`** (174 lines): asserted RLS invariants
+by reading `supabase/migrations/`. With direct Postgres and no Supabase Auth,
+the `authenticated` role is not reachable and the RLS surface it guarded is
+moot. The invariants it proved (no `authenticated` policy, RLS enabled, no
+public bucket) are structural to `init-postgres.sql`.
 
-**Console rewritten** (`components/admin/academic-records-manager.tsx`,
-`app/(portal)/admin/academic/page.tsx`, `app/actions/academic.ts`): imports,
-views, and deletes records per institute table kind. The component manages
-per-kind record loading and counts. Server actions route to the correct store
-method per kind. Import planning uses `lib/institute/import.ts`.
+**Fixed `tests/fourteenth-round.test.ts`**: removed the assertion that read
+`supabase/seed.sql` (the day-scholar persona test). The seed fact it checked
+(`122203099` is a student with null hostel) is still tested from the mock
+store's seed data.
 
-**Import planning** (`lib/institute/import.ts`): `planInstituteImport`,
-`describeImport`, `csvColumnsFor`, `csvHeaderFor`, `columnLabel` - the same
-all-or-nothing CSV-paste logic as the old `planAcademicImport`, but reading
-each table's own column arrays from `lib/institute/types.ts`.
+**Updated `scripts/check-migrations.mjs`**: the final output message no longer
+references `supabase/migrations/` paths. The script itself is unchanged — it
+probes the live database with SQL queries, not migration files.
 
-**Shared CSV utility** (`lib/csv.ts`): `splitCsvLine` moved here from
-`lib/academic/stored.ts` and re-exported from there for backward
-compatibility. `lib/projects.ts` and `lib/users-import.ts` now import it
-directly from `lib/csv.ts`.
+**Cleaned up supabase comments** in 6 source files: `lib/store/seed.ts`,
+`lib/store/mock.ts`, `lib/types.ts`, `tests/user-import-undo.test.ts`,
+`lib/users-import-undo.ts`, `lib/academic/mock-source.ts`.
 
-**Seed data aligned** (`lib/store/seed.ts`): the institute_students seed
-records now match `lib/academic/mock-source.ts` exactly (father/mother/guardian
-names, programme, department, phone), so `StoreAcademicSource` returns
-consistent data whether it reads from the store or falls through to
-the dummies.
+### What stays
 
-**Tests rewritten** (`tests/academic-records.test.ts`): CSV-paste tests use
-`planInstituteImport`; store tests use the new `store.saveStudents` /
-`findStudent` / `listStudents` / `deleteStudent` / `deleteAllStudents`
-methods; the `StoreAcademicSource` adapter test verifies an imported record
-wins over a sample and a missing record falls through.
+- **`scripts/init-postgres.sql`** is the single schema source of truth.
+- **`scripts/check-migrations.mjs`** (`npm run check:migrations`) still probes
+  the live database for schema markers — useful for verifying a deployment.
+- **`lib/store/postgres.ts`** (direct `pg` driver) and **`lib/store/mock.ts`**
+  (JSON file) are the two `DataStore` implementations.
+- **`ldap_uid`** column stays on profiles (37 references, harmless).
 
 ### What is open
 
-- **Dead code in `lib/academic/stored.ts`**: `planAcademicImport`,
-  `sameRecord`, `recordFromFields`, `StoredAcademicRecord`,
-  `NewAcademicRecordInput`, `ACADEMIC_RECORD_KINDS`,
-  `ACADEMIC_RECORD_KIND_LABELS`, `AcademicImportPlan` are no longer imported
-  by any production code. The old academic_records store methods were removed
-  in the first session. These types and functions can be deleted once the
-  migration from academic_records is confirmed complete.
-- **Migration 35 is not applied** to the hosted project
-- **The old `academic_records` table** (migration 28) still exists in the
-  database schema and in the Supabase migration files but is no longer read
-  or written by any code path
+- The `supabase` references in `.memories/` markdown files and `AGENTS.md` are
+  now historical. Architecture file (`20-architecture.md`) updated this round.
+- `AGENTS.md` still carries extensive Supabase migration documentation — that
+  file is generated/maintained separately and describes the project as last
+  committed.
 
 ### Validation
 
-`npm run typecheck`, `npm run lint`, `npm test` (606 tests, 35 files) and
+`npm run lint`, `npm run typecheck`, `npm test` (599 tests, 34 files) and
 `npm run build` all clean.
