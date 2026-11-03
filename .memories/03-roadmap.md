@@ -654,19 +654,12 @@ Every item of the brief closed. What it opened:
 
 Every item of both briefs closed. What they opened:
 
-- **The sign-in throttle no longer protects the door.** Nothing types a
-  password, so `RATE_LIMITS.signIn` guards an action the interface does not
-  call. It still guards `signInWithLdap` itself, and the account picker is
-  open only while Google is unconfigured - but if the picker is ever the real
-  door for a deployment, the question "what stops somebody signing in as the
-  manager" has only one answer today, and it is `mockLoginEnabled()`.
-  [04-production.md](04-production.md) already carries closing that door as a
-  gate; this round makes it the **only** gate.
-- **The LDAP form has no test and no caller.** `signInWithLdap`, the
-  throttle, the "one message for both failures" rule and the empty-password
-  refusal are all still there and still unit-covered where they were, but no
-  journey exercises the door any more. If it is ever rendered again, re-read
-  `05-credentials-and-security.md` rather than trusting that it still works.
+- ~~The sign-in throttle no longer protects the door.~~ *Resolved 3 Nov 2026:*
+  `RATE_LIMITS.signIn` removed with the rest of LDAP. Google OAuth has its own
+  per-IP throttle (`RATE_LIMITS.oauth`).
+- ~~The LDAP form has no test and no caller.~~ *Resolved 2 Nov 2026:* LDAP
+  sign-in, `signInWithLdap`, the throttle, mock-login and all related code
+  deleted. Google OAuth is the only sign-in door.
 - **Nothing tests the opaque header**: not that white links stay readable
   over the hero (the measurement is in [02-decisions.md](02-decisions.md),
   taken against the two photographs that are in the hero *today*), and not

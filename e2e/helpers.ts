@@ -38,13 +38,9 @@ export const ID_DOCUMENT = path.join(process.cwd(), "e2e", "fixtures", "id-docum
 /**
  * Each account's session cookies, kept for the rest of the run.
  *
- * The sign-in throttle counts every attempt - 8 per username per 15 minutes
- * (`RATE_LIMITS.signIn`) - and by 25 Sep 2026 the suite needed the manager
- * more often than that, so the journeys that came last were locked out with
- * "Too many attempts". A person at the desk stays signed in, and so does the
- * suite now: the **first** sign-in of each account goes through the form, and
- * later ones reuse its session. If the server no longer knows the session,
- * `/sign-in` shows the form again and the form is used.
+ * The first sign-in of each account goes through `/api/auth/test-sign-in`
+ * (gated by `E2E_TEST_SECRET`), and later ones reuse its session. If the
+ * server no longer knows the session, the sign-in endpoint is called again.
  */
 const sessions = new Map<string, Cookie[]>();
 

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { appUrl, googleOauth, isProduction } from "@/lib/env";
+import { appUrl, googleOauth } from "@/lib/env";
 import { startGoogleSignIn, OAUTH_COOKIE } from "@/lib/oidc";
 import { RATE_LIMITS } from "@/lib/security";
 import { LOGIN_DOMAIN, safeNextPath } from "@/lib/site";

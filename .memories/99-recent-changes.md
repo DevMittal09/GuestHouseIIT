@@ -7,31 +7,48 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 2 November 2026 (fifth session) - Consolidate hostels into institute_hostels
+## Round of 3 November 2026 - code analysis and cleanup
 
-Consolidation of duplicate hostel tables and audit of unused tables. The owner noticed
-that `institute_wardens` has `hostel_id` which was not present in the legacy `hostels`
-table, and asked to drop unused tables and rewire `profiles` to use `institute_hostels`.
+Full-codebase audit for logical and syntax issues after the Supabase removal,
+LDAP removal and ldap_uid removal rounds. Five issues found and fixed.
 
 ### What was delivered
 
-**Consolidated Hostels in Postgres Schema** (`scripts/init-postgres.sql`):
-- Dropped the legacy `public.hostels` table.
-- Added `hostel_name text not null unique check (length(btrim(hostel_name)) between 1 and 60 and hostel_name = btrim(hostel_name))` constraint to `institute_hostels`.
-- Rewired `profiles.hostel_name` foreign key constraint to reference `public.institute_hostels (hostel_name) on update cascade on delete restrict`.
+**Removed unused `isProduction` import** (`app/api/auth/google/start/route.ts`):
+imported from `@/lib/env` but never called — the cookie's `secure` flag used
+`process.env.NODE_ENV === "production"` directly. Fixed the lint warning.
 
-**Consolidated Store Implementations**:
-- `lib/store/postgres.ts`: `listHostels`, `addHostel`, `renameHostel`, `removeHostel` now operate on `institute_hostels`. Added foreign key deletion protection on `deleteInstituteHostel` and `deleteAllInstituteHostels` if profiles still reference a hostel.
-- `lib/store/mock.ts`: Migrated `db.hostels` into `db.institute_hostels`. `listHostels`, `addHostel`, `renameHostel`, `removeHostel`, and `assertHostelExists` all read and write `institute_hostels`.
-- `scripts/check-migrations.mjs`: Updated migration 16 marker to verify `institute_hostels.hostel_name`.
+**Removed dead `RATE_LIMITS.signIn`** (`lib/security.ts`): this was the LDAP
+sign-in throttle (8 attempts per uid per 15 min). LDAP is gone; Google OAuth
+has its own `RATE_LIMITS.oauth` (20 per IP per 10 min). No callers remained.
 
-**Fixed Academic Adapter Logic Miss**:
-- `lib/academic/store-source.ts` & `lib/institute/academic-adapter.ts`: When fetching a warden's academic record, `row.hostel_id` is now resolved to `hostel_name` from `institute_hostels` so `wardenToRecord` no longer returns `hostel: null`.
-- `lib/oidc.ts`: Relocated `OAUTH_COOKIE` out of the route handler file to fix Next.js 16 type generation constraints.
+**Cleaned three stale comments**:
+- `lib/security.ts` line 58: "Per LDAP username" on the removed rate limit.
+- `lib/store/types.ts` line 236: "a free LDAP username" in `createProfiles`
+  doc — changed to "a free email".
+- `lib/store/mock.ts` line 150: orphaned "Migration 28" comment for the
+  removed `academic_records` field (replaced by migration 35 institute tables).
 
-**Verification**:
-- Vitest suite: 34 files, 596 tests passed.
-- Next.js type generation & TypeScript check: 0 errors.
-- ESLint: 0 errors, 0 warnings.
-- Production build: all 41 routes successfully compiled.
-- `check:memories`: all 15 files and markdown links verified.
+**Updated e2e comments** (`e2e/helpers.ts`, `e2e/global-setup.ts`): removed
+stale references to `RATE_LIMITS.signIn` and the LDAP sign-in throttle. The
+suite now signs in via `/api/auth/test-sign-in`, not the form.
+
+**Struck two roadmap items** ([03-roadmap.md](03-roadmap.md) §2l): the sign-in
+throttle and the LDAP form are both resolved — deleted with LDAP.
+
+### Confirmed correct
+
+- `institute_hostels` schema: `hostel_id` (text, unique) and `hostel_name`
+  (text, unique) both exist. `institute_wardens.hostel_id` and
+  `profiles.hostel_name` FKs are both valid.
+- Both store implementations match the `DataStore` interface.
+- No broken imports from deleted modules (LDAP, Supabase, mock-login).
+- No functional references to `DEV_LOGIN`, `MOCK_LOGIN`, `mockLoginEnabled`,
+  `signInWithLdap`, `ldap_uid` or `password_hash` (the test's
+  `admin_password_hash` is the console lock, not a login password).
+- `.env.example` is clean.
+
+### Validation
+
+`npm run lint` (0 errors, 0 warnings), `npm run typecheck`, `npm test`
+(596 tests, 34 files), `npm run build` and `npm run check:memories` all clean.

@@ -147,7 +147,6 @@ interface Db {
   mail_templates?: MailTemplateOverride[];
   /** Departments, clubs, councils and offices, and who heads each (migration 15). */
   units?: Unit[];
-  /** Migration 28: the institute's records as the office pasted them in. */
   /** Migration 32: one row per spreadsheet import - what it changed, so it can be undone. */
   user_import_batches?: UserImportBatch[];
   /** Migration 35: institute data tables. */

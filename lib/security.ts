@@ -55,8 +55,6 @@ export type NewPrivacyRequest = { user_id: string; kind: PrivacyRequest["kind"];
  * per key in the database (migration 21), so they survive a restart.
  */
 export const RATE_LIMITS = {
-  /** Per LDAP username. The directory's own lockout is the real defence. */
-  signIn: { limit: 8, windowSeconds: 15 * 60 },
   /** Per developer-console password, per browser. */
   consoleUnlock: { limit: 6, windowSeconds: 15 * 60 },
   /** Per session, for the second factor. */

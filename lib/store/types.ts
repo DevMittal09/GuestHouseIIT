@@ -233,8 +233,8 @@ export interface DataStore {
    *
    * One write, so a spreadsheet import is one statement rather than one round
    * trip per person, and either every account in the chunk exists or none
-   * does. The per-account rules (a free email, a free LDAP username, a hostel
-   * on the list) still apply to each.
+   * does. The per-account rules (a free email, a hostel on the list) still
+   * apply to each.
    */
   createProfiles(inputs: SeededProfileInput[]): Promise<void>;
   updateProfile(id: string, patch: Partial<NewProfileInput>): Promise<void>;
