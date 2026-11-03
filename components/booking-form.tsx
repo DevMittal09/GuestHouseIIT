@@ -749,11 +749,15 @@ export function BookingForm({
   };
 
   /**
-   * The tariff categories this requester may book, each with the rate it
-   * resolves to (17 Oct 2026). One category is one (guest house, booking
-   * type) pair - the two answers the rate is resolved from - so choosing one
-   * in the panel writes exactly those two fields, and the figure quoted
-   * cannot drift from the one the invoice prices.
+   * **The tariff categories this requester could be charged under**, each with
+   * the rates it resolves to (17 Oct 2026; read-only since 31 Oct 2026).
+   *
+   * One category is one (guest house, booking type) pair. It was a radio in
+   * the panel, which made the requester the person who decided which
+   * published rate applied to them; the decision is the Guest House
+   * Manager's now, taken when they approve, and this list is the price list
+   * the requester reads while filling the form in. The guest house and the
+   * kind of booking are still questions on the form.
    *
    * Computed from the same `guestHousesForBookingType` the guest house
    * dropdown narrows itself with, so neither can offer what the other
@@ -767,14 +771,6 @@ export function BookingForm({
     service: mealsOnly ? "meals_only" : "room",
     allowAnyGuestHouse: canOverrideHouse,
   });
-  const chooseCategory = (category: TariffCategory) => {
-    if (category.booking_type !== bookingType) {
-      setValue("booking_type", category.booking_type, { shouldValidate: false });
-    }
-    if (category.guest_house_id !== selectedGuestHouseId) {
-      setValue("guest_house_id", category.guest_house_id, { shouldValidate: false });
-    }
-  };
 
   // The kitchen's limit per sitting (Settings). One booking cannot be larger
   // than it; how much of a sitting is already taken is checked on the server,
@@ -1125,19 +1121,16 @@ export function BookingForm({
       {/* Sticky from `lg`: the questions run to about 2800px, and both panels
           are things a requester checks a field against rather than reads once.
           **Outside the `<form>` element on purpose** - neither panel holds a
-          registered field (the tariff radios are controlled and write through
-          `setValue`), so keeping them out leaves the form exactly the element
-          it was: `numbered-sections` counts its own cards, and nothing beside
-          the questions is numbered as a step. */}
+          field or asks anything (the tariff panel is a price list, read-only
+          since 31 Oct 2026), so keeping them out leaves the form exactly the
+          element it was: `numbered-sections` counts its own cards, and
+          nothing beside the questions is numbered as a step. */}
       <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 lg:col-span-4 lg:col-start-9 lg:row-start-1 lg:self-start">
         {aside}
         <TariffPanel
           categories={categories}
           previews={tariffPreviews}
-          guestHouseId={selectedGuestHouseId}
-          bookingType={bookingType}
           pricesIncludeGst={rules.invoice.prices_include_gst}
-          onSelect={chooseCategory}
           mealsOnly={mealsOnly}
         />
       </aside>
@@ -1643,11 +1636,11 @@ export function BookingForm({
       {/* **The rates are not a section of the form** (17 Oct 2026, the
           owner: keep the tariff categories and their rates on the right-hand
           side). They were a numbered card here, between the stay and the
-          meals, which read as a step with nothing to answer - the rate was
-          already settled by the guest house and the kind of booking chosen
-          above it. They are now the panel in the right-hand column, where
-          choosing a category *is* that choice (`components/tariff-panel.tsx`).
-          Don't put a second copy back on the form. */}
+          meals, which read as a step with nothing to answer. They are the
+          panel in the right-hand column now, and since 31 Oct 2026 it asks
+          nothing either: the category is the Guest House Manager's to choose
+          when they approve (`components/tariff-panel.tsx`). Don't put a
+          second copy back on the form, and don't make this one a question. */}
 
       {wantsRooms && (
         <Card>

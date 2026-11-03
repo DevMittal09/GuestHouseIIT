@@ -86,7 +86,11 @@ test("a faculty member sees the meal rates at the kitchen and is still asked on 
   const hamsanandi = await house.locator("option", { hasText: "Hamsanandi" }).getAttribute("value");
   await house.selectOption(hamsanandi!);
 
-  const rates = page.getByRole("table", { name: /Rates at Hamsanandi, in force today/ });
+  // Every category's rates are listed now (31 Oct 2026), so each table's
+  // caption names the category rather than only the guest house.
+  const rates = page.getByRole("table", {
+    name: /Rates for Hamsanandi - Official booking, in force today/,
+  });
   await expect(rates).toBeVisible();
   await expect(rates.getByRole("cell", { name: "Room, per day" })).toBeVisible();
   await expect(rates.getByRole("cell", { name: "Lunch, per head" })).toBeVisible();

@@ -1,53 +1,47 @@
-"use client";
-
 import { formatINR, toPaise } from "@/lib/invoice";
 import { TariffTable } from "@/components/tariff-table";
 import type { TariffCategory } from "@/lib/tariff-categories";
 import type { TariffPreview } from "@/lib/tariffs";
-import type { BookingType } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 /**
- * **The tariff, beside the form rather than in it** (17 Oct 2026, the owner:
- * keep the categories and their rates on the right-hand side of the booking
- * page and let the requester select the one that applies).
+ * **The tariff, beside the form and not a question in it** (17 Oct 2026, the
+ * owner: keep the categories and their rates on the right-hand side of the
+ * booking page; **31 Oct 2026**, the owner: "remove all interactive selection
+ * functionality from this table ... users should only be able to view the
+ * different tariff categories and their corresponding prices").
  *
- * It was a numbered section in the middle of the form, between the stay and
- * the meals, and it answered nothing - the rate was already decided by the
- * guest house and the kind of booking chosen a few lines above. Here it is
- * the panel the requester reads while they fill the form in, sticky with the
- * requester's own details, and **the category is a question**: picking one
- * sets the guest house and the booking type, which is what the rate is
- * resolved from (`lib/tariff-categories.ts`).
+ * It was a numbered section in the middle of the form, then a panel here with
+ * the category as a radio - picking one wrote the guest house and the booking
+ * type, which is what a rate is resolved from. That made the requester the
+ * person who decided which published rate they would be charged at, and the
+ * office's sheet has rates that are a judgement about the visit rather than a
+ * fact about the account filling the form in. **The decision moved to the
+ * Guest House Manager**, who makes it when they approve
+ * (`components/tariff-category-choice.tsx`), and this panel is what is left:
+ * every category the requester could fall under, with its charges, so they
+ * know the rates before they ask and can check the invoice against them
+ * afterwards.
  *
- * A requester with one eligible category is told it rather than asked - the
- * same rule as the guest house and the booking type, neither of which is a
- * dropdown with one position.
+ * The guest house and the kind of booking are still the requester's to answer
+ * - they are questions on the form itself, where they always were, and they
+ * are not what this panel is for.
+ *
+ * It is a server component again: with nothing to select there is no state,
+ * no selection handler and no reason for it to be on the client.
  */
 export function TariffPanel({
   categories,
   previews,
-  guestHouseId,
-  bookingType,
   pricesIncludeGst,
-  onSelect,
   mealsOnly = false,
 }: {
+  /** Every category this requester could be charged under, with its rates. */
   categories: TariffCategory[];
   previews: TariffPreview[];
-  guestHouseId: string;
-  bookingType: BookingType;
   /** Settings -> Tariffs & Invoicing: whether the office's rates include GST. */
   pricesIncludeGst: boolean;
-  /** Writes the guest house and booking type the chosen category stands for. */
-  onSelect: (category: TariffCategory) => void;
   mealsOnly?: boolean;
 }) {
-  const selected = categories.find(
-    (c) => c.guest_house_id === guestHouseId && c.booking_type === bookingType
-  );
-  const guestHouseName = categories.find((c) => c.guest_house_id === guestHouseId)?.guest_house_name;
-
   return (
     <section
       aria-labelledby="tariff-panel-heading"
@@ -62,72 +56,44 @@ export function TariffPanel({
           No rates have been published yet. The guest house office will confirm the charges on your
           invoice.
         </p>
-      ) : categories.length === 1 ? (
-        /* One category is a statement, not a question. */
-        <p className="text-sm font-medium text-ink">{categories[0].label}</p>
       ) : (
-        <fieldset className="space-y-1.5">
-          <legend className="mb-1.5 text-sm text-muted-foreground">
-            Which rate applies to this booking
-          </legend>
-          {categories.map((category) => {
-            const active = category.key === selected?.key;
-            return (
-              <label
-                key={category.key}
-                className={cn(
-                  "flex cursor-pointer items-start gap-2.5 rounded border px-3 py-2 text-sm transition-colors",
-                  active ? "border-ink bg-band/70" : "border-border hover:border-border-strong"
+        <>
+          {/* **One fact, and it is not a rule this form enforces**: the
+              requester is reading a price list they have no say over, and
+              without this line four categories read as four options. */}
+          <p className="text-sm text-muted-foreground">
+            The Guest House Manager confirms which category applies.
+          </p>
+          <div className="space-y-4">
+            {categories.map((category) => (
+              <div key={category.key} className="space-y-1.5">
+                {/* A single category needs no heading: there is nothing to
+                    tell apart, and the guest house is named on the form. */}
+                {categories.length > 1 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-ink">{category.label}</h3>
+                    {category.headline && category.headline.rate !== null && (
+                      <p className="text-sm text-muted-foreground">
+                        <span className="figure-serif text-[1.0625rem] text-ink">
+                          {formatINR(toPaise(category.headline.rate))}
+                        </span>{" "}
+                        per room per day
+                      </p>
+                    )}
+                  </div>
                 )}
-              >
-                <input
-                  type="radio"
-                  name="tariff_category"
-                  value={category.key}
-                  checked={active}
-                  onChange={() => onSelect(category)}
-                  className="mt-1 size-4 shrink-0 accent-[var(--ink)]"
+                <TariffTable
+                  previews={previews}
+                  guestHouseId={category.guest_house_id}
+                  bookingType={category.booking_type}
+                  guestHouseName={category.guest_house_name}
+                  categoryLabel={categories.length > 1 ? category.label : undefined}
+                  pricesIncludeGst={pricesIncludeGst}
                 />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium text-ink">{category.label}</span>
-                  {category.headline && (
-                    <span className="mt-0.5 block text-muted-foreground">
-                      {category.headline.rate === null ? (
-                        "Rate not published"
-                      ) : (
-                        <>
-                          <span className="figure-serif text-[1.0625rem] text-ink">
-                            {formatINR(toPaise(category.headline.rate))}
-                          </span>{" "}
-                          per room per day
-                        </>
-                      )}
-                    </span>
-                  )}
-                </span>
-              </label>
-            );
-          })}
-        </fieldset>
-      )}
-
-      {/* Every charge the chosen category resolves to - the table that used to
-          stand in the form, unchanged, so what is quoted here is still what
-          the invoice prices. Until one is chosen there is nothing to price:
-          the table's own "choose a guest house" line would be answering a
-          question the list above is already asking. */}
-      {selected ? (
-        <TariffTable
-          previews={previews}
-          guestHouseId={guestHouseId}
-          bookingType={bookingType}
-          guestHouseName={guestHouseName}
-          pricesIncludeGst={pricesIncludeGst}
-        />
-      ) : (
-        categories.length > 0 && (
-          <p className="text-sm text-muted-foreground">Choose one to see every charge.</p>
-        )
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </section>
   );

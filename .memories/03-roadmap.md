@@ -559,21 +559,22 @@ All three items closed. What they opened:
 
 All nine items closed. What they opened:
 
-- **A *named* tariff category on the booking is a question for the office.**
-  The panel offers the pair the rate is resolved from - the guest house and
-  the kind of booking - because that is what a requester can honestly choose
-  and what `resolveTariff` reads. If the office wants the requester to pick
-  from the sheet's own wording ("parents", "government officer", "Hamsanandi
-  type 3"), that is a **column on `tariffs` and a column on `bookings`**, a
-  new dimension in `resolveTariff` and in `specificity()`, and a Form Builder
-  or Settings control for which categories a role may claim. Ask before
-  building it: the sheet currently expresses those categories as scope, which
-  needs nothing stored.
+- ~~**A *named* tariff category on the booking is a question for the
+  office.**~~ **Answered, 31 Oct 2026** - and it cost almost none of what
+  this entry predicted. The office did want the sheet's own wording, and it
+  wanted the **Guest House Manager** to pick it, not the requester. It needed
+  **no column on `tariffs`**, no new dimension in `resolveTariff` and nothing
+  in `specificity()`: the wording is already on the row (`tariffs.note`), so
+  the desk reads that while the engine resolves a scope. What it did need was
+  two nullable columns on `bookings` (**migration 35**) holding the pair the
+  desk chose. §2p below is what that opened.
 - **The office cannot edit the categories, because there is nothing to
   edit.** They are derived. The only way to change what a requester is
   offered is to change the rate sheet, the Form Builder's allowed guest
   houses, or `bookingTypesFor` - which is the same list of levers as before,
-  stated in one more place.
+  stated in one more place. **Still true on 31 Oct 2026, and now the point
+  rather than a limitation**: the desk's categories are enumerated from the
+  rate sheet, so publishing a rate is how the office adds a category.
 - **The caretaker sentence is on the form only.** Not in the booking mail and
   not on `BookingDetails`, where reviewers and the desk would read it too.
   `lib/mail/templates.ts` is where it would go if the office asks - beside
@@ -800,6 +801,43 @@ this is what building it would touch.
   scholar persona), and **dropping the denominator from every room-availability
   figure** (`5/20` to `5`) is **open** - `components/availability-counts.tsx`
   still prints `/{total}` and "of {total} rooms free all day".
+
+## 2p. Opened by the 31 Oct 2026 round - the manager's tariff category
+
+- **A category cannot be corrected after approval.** There is one writer and
+  it is the approval (`allocateRooms`, and `reviewBooking` for a dining
+  booking). If the desk picks the wrong category, cancelling and reissuing the
+  invoice reprices at the **same** category, because the invoice reads the
+  booking. The deliberate reason is in
+  [02-decisions.md](02-decisions.md): a second writer needs its own
+  authorisation, its own audit wording and an answer to "what about the
+  invoice already issued", and none of that was asked for. The cheapest honest
+  fix is a manager-only `setTariffCategory` on an **un-invoiced** booking,
+  audited in the same words the dialog showed, refused once an invoice is
+  issued - a correction then being the existing cancel-and-reissue. Worth
+  doing before the desk has priced a term's stays.
+- **The question grows with the rate sheet.** Hamsanandi publishes two room
+  rates, so nothing there can be approved without an answer; Bageshri
+  publishes one, so the desk is only told. A third Hamsanandi rate appears on
+  the desk's screen on its own - the point of enumerating from the sheet - but
+  so does more to read on every approval. If the office ever publishes many,
+  the list wants an order the office controls rather than "the booking's own
+  first, then by what it costs".
+- **`extra_bed` rows do not make a category.** The defining charge is the room
+  on a stay and the meals on a dining booking, so a rate scoped *only* on an
+  extra bed ("extra bed for government officers") would be priced correctly by
+  `resolveTariff` but would not appear as a category of its own. The office's
+  sheet has **no extra-bed rate at all** today, so nothing is wrong yet;
+  `tariffCategoryItems` is the one place to widen it.
+- **Nothing shows the desk what the *old* category would have cost.** The
+  dialog lists each category's rates, which is enough to choose; it does not
+  put the chosen one's total for *this stay* beside the alternatives. An
+  invoice preview at approval time was not asked for and would duplicate
+  `priceInvoiceDraft`.
+- **The category is not in the archive's filters or exports.** `/history`
+  can search by debitable head but not by tariff category, and neither CSV nor
+  PDF carries it. The column exists, so both are a small addition - ask
+  whether the office wants to report on it before adding a filter nobody uses.
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 

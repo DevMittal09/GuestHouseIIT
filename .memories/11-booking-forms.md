@@ -185,8 +185,12 @@ widen what a student may book.
 > **The page is two columns, laid out by `BookingForm`** (17 Oct 2026). The
 > questions run down the left - they *are* the `<form>` element - and in the
 > right-hand column, sticky from `lg`, stand the **requester's details** and
-> the **tariff panel**, which is where the rates now live and where the
-> **tariff category is chosen**. The numbers below are the questions' own:
+> the **tariff panel**, which is where the rates live. **The panel asks
+> nothing** (31 Oct 2026): it lists every category this requester could be
+> charged under, with its charges, and the **Guest House Manager chooses which
+> applies when they approve** ([10-roles-and-workflows.md](10-roles-and-workflows.md)).
+> It had radios from 17 to 31 Oct 2026, and picking one wrote the guest house
+> and the booking type. The numbers below are the questions' own:
 > `numbered-sections` is on the form, so nothing beside it is counted as a
 > step. On a phone both panels come first, as the record always did.
 >
@@ -223,7 +227,7 @@ widen what a student may book.
 | 17 | ~~Pets notice~~ — **off the form** (11 Oct 2026, the office: "only required in the guidelines no need to show it here"). It is a house rule, not a rule the form enforces, so it keeps its other two homes: the Guidelines page ("During your stay") and the **"Pets" line in every booking mail**. It was a room-booking-only card from 1 Oct 2026, and displayed-only (no tick box) before that | — | — |
 | 18 | **Privacy consent** tick | Everyone | **Yes** |
 | 18a | **Confirm your meal booking** — kitchen, people, preferences, each day and its sittings, who pays, remarks | Meals only | Read-only, live |
-| — | **Tariff** — **in the right-hand panel, not the form** (17 Oct 2026, the owner). The **categories** this requester may book, each labelled and carrying its room rate ("Hamsanandi - Official booking", ₹2,000 per room per day), and **one of them is chosen**: a category is one (guest house, booking type) pair, so choosing it writes those two fields and the rate follows. Then the full table of charges for it - room per day, extra bed per day, and each meal where the kitchen serves them, **the meals alone on a dining booking** (9 Oct 2026, `previewItemsFor`). One category is **stated, not asked**. Resolved through the **same function the invoice prices from** (`resolveTariff`), so the figure quoted is the figure charged; an unpriced charge reads "Not published". `lib/tariff-categories.ts`, `components/tariff-panel.tsx` | Everyone | The category, where there is more than one |
+| — | **Tariff** — **in the right-hand panel, not the form, and not a question** (17 Oct 2026, the owner, for the panel; **31 Oct 2026**, the owner, for taking the choice out of it). **Every** category this requester could be charged under, each labelled and carrying its room rate ("Hamsanandi - Official booking", ₹2,000 per room per day) and its full table of charges - room per day, extra bed per day, and each meal where the kitchen serves them, **the meals alone on a dining booking** (9 Oct 2026, `previewItemsFor`). A category here is one (guest house, booking type) pair; **which one applies is the Guest House Manager's decision, taken at approval**, and one line on the panel says so. Resolved through the **same function the invoice prices from** (`resolveTariff`), so the figures shown are the figures the office charges; an unpriced charge reads "Not published". Each table's caption names its category where more than one is drawn. `lib/tariff-categories.ts`, `components/tariff-panel.tsx` | Everyone | **Nothing - it is a price list** |
 | — | Room availability panel — **how many rooms are free**, as a labelled strip of figures per day (redrawn 9 Oct 2026), or a headline figure and hour chips on a single day. The room-by-room chart is the **desk's** only | Room bookings | Read-only |
 
 ---
@@ -374,7 +378,8 @@ head) is skipped, and the submission log says so.
 | Whether a booking type is asked which budget pays | `asksForDebitHead` (`lib/debit-heads.ts`) |
 | A student's locked parent names | Console → **Academic records** (migration 28); the rule is `guestNameRule` (`lib/academic/guest-names.ts`) |
 | Copy-to cap (25) | `MAX_COPY_TO_EMAILS` (`lib/booking-schema.ts`) and migration 24's check |
-| Which **tariff categories** a requester is offered | Nothing of its own: they are derived (`tariffCategories`, `lib/tariff-categories.ts`) from the rate sheet (Console → Tariffs & Invoicing), the Form Builder's allowed guest houses, `bookingTypesFor` and `mealsAllowedFor` |
+| Which **tariff categories** a requester is **shown** | Nothing of its own: they are derived (`tariffCategories`, `lib/tariff-categories.ts`) from the rate sheet (Console → Tariffs & Invoicing), the Form Builder's allowed guest houses, `bookingTypesFor` and `mealsAllowedFor`. The requester chooses none of them (31 Oct 2026) |
+| Which **tariff category a booking is charged under** | The **Guest House Manager**, when they approve it - from `deskTariffCategories`, enumerated out of the same rate sheet. Stored on the booking (migration 35) and read by the invoice through `pricingScopeFor`. [13-billing-and-dining.md](13-billing-and-dining.md) |
 | The **caretaker line** in the meal section | `MEAL_CHANGE_NOTICE` (`lib/meals.ts`) |
 | Whether the meal section is **offered** at all on a stay | `mealsAllowedFor` + the guest house's "Serves meals" tick; whether it is **shown** is the requester's own Yes / No, which starts at No |
 

@@ -212,6 +212,18 @@ and disables Add with the reason on screen (`tariffStartError`,
 | Meals on alumni bookings | ₹0 | booking type `alumni` |
 | **Extra bed** | **none seeded** | An invoice with an extra bed cannot be issued until one is added |
 
+> **A rate's scope is also the office's list of tariff categories** (31 Oct
+> 2026). The Guest House Manager picks one when they approve a booking, and
+> the list is **enumerated from this table**: every row that could price the
+> booking's defining charge contributes the (booking type, requester role)
+> pair that selects it, named by that row's own **note** - which is why
+> "government officers" above is worth writing in the note box and not only
+> in the scope. So the office adds a category by publishing a rate; there is
+> no separate list and no console section for one. Both guest houses'
+> **room** rates are what a stay's categories come from, the three meal rates
+> what a dining booking's do.
+> [13-billing-and-dining.md](13-billing-and-dining.md).
+
 ### Invoice settings — `rules.invoice`
 
 | Setting | Default |

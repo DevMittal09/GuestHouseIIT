@@ -5977,6 +5977,15 @@ than a new rule.
 
 ### A tariff category is the pair the requester decides, not a field on the booking
 
+> **Superseded (31 October 2026).** The requester decides **nothing** about
+> the tariff now: the panel is a price list and the **Guest House Manager**
+> chooses the category when they approve. The reasoning below about *what a
+> category is* held - it is still a scope on `tariffs`, not a label, and there
+> is still no stored rate and no new dimension in `resolveTariff` - but the
+> person who answers it changed, and so did the half of this entry about the
+> panel asking a question. See "The tariff category is the desk's, and it is a
+> scope" under 31 October 2026.
+
 **Decision.** The categories and their rates live in a panel on the
 **right-hand side** of the booking page, under the requester's own details,
 and **one of them is chosen**. A category is one (guest house, booking type)
@@ -6814,3 +6823,131 @@ Centre, and one real student account settles it. It is also why the
 collected **email column must be the Google *primary* address** - an alias or
 an HR-sheet address never matches, and the whole support load of a rollout
 lands on that one column.
+
+---
+
+## 31 October 2026 — the owner's fifteenth list: the tariff category is the manager's
+
+Three items ([01-background.md](01-background.md)), and they are one change
+read from three sides: the requester stops choosing, the desk starts, and the
+invoice follows the desk.
+
+### The tariff category is the desk's, and it is a scope
+
+**Decision.** A tariff is scoped by guest house, room type, booking type and
+requester role. The first two are **facts** - where the guest sleeps, which
+room the party was given. The other two are a **judgement about the visit**,
+and that judgement is the Guest House Manager's, taken when they approve.
+`TariffScope` is that pair; `bookings.tariff_booking_type` and
+`tariff_requester_role` store it (migration 35); `pricingScopeFor` is the one
+reader, and `buildInvoiceDocument` substitutes it into the single `base` object
+every charge on the invoice is priced from.
+
+**Why it had to move.** The office's sheet prices Hamsanandi's rooms at ₹2,000
+generally and ₹4,000 "for government officers" - a row scoped by
+`requester_role`. Nothing was wrong with the resolution; what was wrong was
+who selected it. A dignitary booked for by a department's faculty resolved the
+faculty's own role and was charged ₹2,000, and the ₹4,000 row was reachable
+only by an office's own account. 17 October had made that worse by turning the
+pair into an explicit radio on the booking form: the requester was being asked,
+in as many words, which published rate they would like.
+
+**Why the category is *still* not a label.** This is the part 17 October got
+right and this round kept. [03-roadmap.md](03-roadmap.md) §2j predicted that
+the sheet's own wording ("government officer", "Hamsanandi type 3") would cost
+"a column on `tariffs` and a column on `bookings`, a new dimension in
+`resolveTariff` and in `specificity()`". It cost none of that, because the
+sheet's wording is already **on the row**: `tariffs.note` is where the office
+writes "Tariff sheet: Hamsanandi type 3, government officers".
+`describeTariffCategory` reads the note off the row that actually prices the
+category's defining charge, so the desk sees the office's words while the
+engine goes on resolving a scope. **Nothing was added to `resolveTariff` or to
+`specificity()`.**
+
+**Why the list is enumerated from the rate sheet.** `deskTariffCategories`
+walks `tariffs`: every row that could price this booking's defining charge
+contributes the scope that selects it. So a rate the office publishes this
+afternoon is a category on the desk's screen this afternoon - no second table
+of category names, nothing to keep in step, and no console section to build.
+Two scopes that resolve to identical figures are collapsed: the sheet does not
+distinguish them, so the screen must not pretend to.
+
+**Why the defining charge is the room on a stay and the meals on a dining
+booking.** Enumerating from *every* item's rows offered "Tariff sheet: meals
+free to students" as a category for a faculty stay, because that row exists
+and is scoped by a role. A category is about the charge it prices.
+
+**Why there is no stored rate**, although the ask said "the selected tariff
+category **and price** should be stored against the booking". A stay crossing
+a rate change is priced night by night (`splitByRate`), so a single figure
+would be wrong for it; and a rupee amount on `bookings` would be a second
+source of truth for money the moment the office published a new row - the
+exact thing 17 October refused. The price is kept in the two places that
+cannot be mistaken for the authority: the **booking's log**, append-only,
+recording what the category stood at on the day it was chosen, and the
+**issued invoice's snapshot**, which is what was actually charged. The office
+asked for traceability and that is what a log entry is for.
+
+### Approval is the only writer
+
+**Decision.** The category is written by the approval that records it, in
+`StatusUpdate` beside the rooms - `allocateRooms` for a stay,
+`reviewBooking` for a dining booking, which has no rooms and whose approval
+*is* the decision. There is no separate "set the category" action.
+
+**Why.** It keeps the decision atomic with the thing it is part of: a booking
+cannot come out of approval approved and unpriced, and one status change plus
+one log line is the whole audit trail. A second writer would need its own
+authorisation, its own audit wording and its own answer to "what happens to an
+invoice already issued" - and none of that was asked for. The cost is recorded
+honestly: **a category cannot be corrected afterwards**
+([03-roadmap.md](03-roadmap.md) §2p).
+
+**Refuse, don't adjust.** The key arrives from the desk's radio, so
+`categoryForApproval` re-derives the list from the rate sheet and matches
+against it: a key the office never published is refused, not priced. Where
+several categories exist and none was chosen the approval is **refused** -
+that is the whole point of the round, and a default would undo it. Where the
+sheet publishes exactly one, it is taken as given and recorded anyway, so
+every booking approved from now on carries an explicit category rather than a
+silence to be interpreted. And a `tariffCategory` on anyone *else's* approval
+is refused outright: an intermediate approver forwards a request, they do not
+price it.
+
+### A booking approved before today is priced exactly as it was
+
+**Decision.** `pricingScopeFor` falls back to the booking's own
+`booking_type` and `user_role`. Nothing is backfilled, and such an invoice
+prints **no** category line.
+
+**Why.** No decision was recorded for those bookings, and inventing one would
+be precisely the "default tariff" this change rules out. The absence is also
+the only honest way for a reader to tell "priced at the requester's own
+category" from "priced at the one the desk picked" - which is why the printed
+fact is conditional rather than a line reading "not recorded".
+
+**Why no new invoice version.** `InvoiceDocument.version` governs the
+**lettering of the money table**, and this round did not touch a single
+figure or label in it. The category is a header fact that no snapshot issued
+before today carries, so every reprint of an older invoice is unchanged. It
+is still `version: 5`.
+
+### The panel is a price list, and a server component again
+
+**Decision.** `components/tariff-panel.tsx` renders **every** eligible
+category with its full charge table and nothing selectable - no radios, no
+`onSelect`, no state, no `"use client"`. The guest house and the kind of
+booking are still questions on the form, where they were before 17 October:
+they decide eligibility, routing and the debitable heads, not just the rate.
+
+**The one line of prose on it** - "The Guest House Manager confirms which
+category applies." - is a deliberate exception to nothing. The rules of 9 and
+11 October are about not restating what the form *enforces* or what a house
+rule says; this states who answers a question the form has stopped asking,
+and without it four categories read as four options. One fact, one line, no
+second clause.
+
+**Each table's caption names its category** ("Rates for Hamsanandi - Official
+booking, in force today") where more than one is drawn. Four tables captioned
+"Rates at Hamsanandi" are indistinguishable in a screen reader's table list -
+and were indistinguishable to Playwright, which is how it was noticed.

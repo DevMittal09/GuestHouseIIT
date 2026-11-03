@@ -12,8 +12,9 @@ import {
 /**
  * The owner's fourteenth list (17 Oct 2026), through the browser:
  *
- * 1. The tariff categories and their rates **beside** the form, selectable,
- *    and gone from the form itself.
+ * 1. The tariff categories and their rates **beside** the form, and gone from
+ *    the form itself. (Selecting one was withdrawn on 31 Oct 2026 - the
+ *    category is the Guest House Manager's to choose.)
  * 2. **Guest Details before Meal Booking.**
  * 3. Meals asked as **Yes / No**, the section shown only on Yes.
  * 4. The caretaker sentence in the meal section.
@@ -32,45 +33,58 @@ function tariffPanel(page: Page) {
   return page.locator('section[aria-labelledby="tariff-panel-heading"]');
 }
 
-/** One category's radio, found by the label beside it. */
-function tariffCategory(page: Page, label: string) {
-  return tariffPanel(page)
-    .locator("label", { hasText: label })
-    .locator('input[type="radio"]');
+/** The guest house dropdown on the form - the panel does not set it. */
+async function chooseHouse(page: Page, name: string) {
+  const house = page.locator('select[name="guest_house_id"]');
+  const value = await house.locator("option", { hasText: name }).getAttribute("value");
+  await house.selectOption(value!);
 }
 
-test("the tariff panel offers the categories and sets what the rate is read from", async ({
-  page,
-}) => {
+/**
+ * **Read-only since 31 Oct 2026.** The panel listed the categories as radios
+ * and picking one wrote the guest house and the booking type; that made the
+ * requester the person who decided which published rate applied to them, and
+ * the decision is the Guest House Manager's now
+ * (`e2e/fifteenth-round.spec.ts`). What is left is the price list.
+ */
+test("the tariff panel lists every category's rates and asks nothing", async ({ page }) => {
   await signIn(page, ACCOUNTS.faculty);
   await page.goto("/book");
   await expect(page.getByRole("heading", { name: /New Booking/i })).toBeVisible();
 
-  // Both guest houses and both kinds of booking, each with its own rate.
+  // Both guest houses and both kinds of booking, each with its own rates.
   const panel = tariffPanel(page);
   await expect(panel.getByRole("heading", { name: "Tariff" })).toBeVisible();
-  const hamsanandiPersonal = tariffCategory(page, "Hamsanandi - Personal booking");
-  await expect(panel.getByText("Bageshri - Official booking")).toBeVisible();
-  await expect(panel.getByText("Hamsanandi - Official booking")).toBeVisible();
-  await expect(panel.getByText("Hamsanandi - Personal booking")).toBeVisible();
-  // A rupee figure against each, or an honest "Rate not published".
-  await expect(panel.getByText(/₹|Rate not published/).first()).toBeVisible();
-
-  // The form opens on no guest house, so the rates wait for a category.
-  await expect(panel.getByText("Choose one to see every charge.")).toBeVisible();
-
-  // Choosing a category is choosing the guest house and the kind of booking:
-  // both of the form's own controls follow it.
-  await hamsanandiPersonal.check();
-  await expect(page.locator('[name="booking_type"][value="personal"]')).toBeChecked();
-  const house = page.locator('select[name="guest_house_id"]');
-  await expect(house.locator("option:checked")).toHaveText(/Hamsanandi/);
-  // And the full table of charges for it - the same caption the table has
-  // carried since the rates were a card in the form.
+  // By the heading, not the text: each table's caption names its category
+  // too, so a plain text match finds both (31 Oct 2026).
+  for (const label of [
+    "Bageshri - Official booking",
+    "Hamsanandi - Official booking",
+    "Hamsanandi - Personal booking",
+  ]) {
+    await expect(panel.getByRole("heading", { name: label })).toBeVisible();
+  }
+  // A rupee figure against each, or an honest "Not published".
+  await expect(panel.getByText(/₹|Not published/).first()).toBeVisible();
+  // Who decides, in one line - without it four categories read as options.
   await expect(
-    panel.getByRole("table", { name: /Rates at Hamsanandi, in force today/ })
+    panel.getByText("The Guest House Manager confirms which category applies.")
   ).toBeVisible();
-  await expect(panel.getByRole("cell", { name: "Lunch, per head" })).toBeVisible();
+
+  // **Nothing in it is selectable**, and every category's charges are shown
+  // at once rather than waiting for one to be picked.
+  await expect(panel.locator("input")).toHaveCount(0);
+  await expect(panel.getByText("Choose one to see every charge.")).toHaveCount(0);
+  await expect(
+    panel.getByRole("table", { name: /Rates for Hamsanandi - Official booking/ })
+  ).toBeVisible();
+  await expect(panel.getByRole("cell", { name: "Lunch, per head" }).first()).toBeVisible();
+
+  // And it still does not move the form's own answers.
+  const house = page.locator('select[name="guest_house_id"]');
+  await expect(house).toHaveValue("");
+  await chooseHouse(page, "Hamsanandi");
+  await expect(house.locator("option:checked")).toHaveText(/Hamsanandi/);
 
   // The rates are **only** in the panel: the form has no numbered Rates
   // section any more.
@@ -81,8 +95,8 @@ test("the guests come before the meals, and the meals are a Yes or No", async ({
   await signIn(page, ACCOUNTS.faculty);
   await page.goto("/book");
 
-  // Hamsanandi, which has the kitchen - picked from the tariff panel.
-  await tariffCategory(page, "Hamsanandi - Official booking").check();
+  // Hamsanandi, which has the kitchen - picked on the form itself.
+  await chooseHouse(page, "Hamsanandi");
 
   const guests = page.getByText("Guests, room by room");
   const meals = page.locator('[data-slot="card-title"]', { hasText: /^Meals$/ });

@@ -705,10 +705,12 @@ invisibly. The six tiles above remain the everyday status filter.
   `--input` edge of `#8C857D` (3:1+); `/book` in two columns with the
   Requester details (a summary list, container-query rows) and a sticky
   "What happens next" (**the panel was removed on 9 Oct 2026**; the column is
-  the Requester details card and, since 17 Oct 2026, the **tariff panel** -
-  and the grid itself moved into `BookingForm`, because choosing a tariff
-  category writes two of the form's fields. The `<form>` element is the left
-  column; the panels are its grid siblings, holding no registered field); the booking form's cards numbered by
+  the Requester details card and, since 17 Oct 2026, the **tariff panel**,
+  which has been a **read-only price list since 31 Oct 2026** - the category
+  is the Guest House Manager's to choose. The grid itself moved into
+  `BookingForm` when choosing a category wrote two of the form's fields and
+  stays there; the `<form>` element is the left column, and the panels are its
+  grid siblings, holding no registered field); the booking form's cards numbered by
   `.numbered-sections` (the counter increments on the **card**, since values
   pass between siblings); `DeskSummary` strip on `/manager` and
   `/caretaker`; the home hero an ink panel joined to the 4:3 photo; inner

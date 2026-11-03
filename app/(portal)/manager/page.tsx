@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { getRules } from "@/lib/settings-server";
+import { deskCategoriesByBooking } from "@/lib/tariff-categories-server";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
 import { awaitingPayment, awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
@@ -146,6 +147,14 @@ export default async function ManagerPage({
    * changes this string and the open grid re-fetches; when nothing has changed
    * the string is stable and it does not.
    */
+  /**
+   * **The tariff categories each waiting request may be charged under**
+   * (31 Oct 2026). Approval is where the category is decided, so the only
+   * rows that need the list are the ones waiting for it - the rate sheet is
+   * read once for the page and keyed by booking.
+   */
+  const tariffCategories = await deskCategoriesByBooking(pending);
+
   const occupancyVersion = [...stays, ...cancellationRequests]
     .map((b) => `${b.id}:${b.status}:${[...b.assigned_room_ids].sort().join("+")}`)
     .sort()
@@ -201,6 +210,7 @@ export default async function ManagerPage({
         checkoutsToday={checkoutsToday}
         cancellationRequests={cancellationRequests}
         rooms={rooms}
+        tariffCategories={tariffCategories}
         occupancyVersion={occupancyVersion}
         nowIso={now.toISOString()}
         capacity={rules.capacity}

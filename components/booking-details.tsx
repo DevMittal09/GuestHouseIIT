@@ -13,6 +13,11 @@ import {
 } from "@/components/ui/table";
 import { countryName } from "@/lib/countries";
 import { describeDebit } from "@/lib/debit-heads";
+import {
+  describeTariffCategoryScope,
+  hasChosenTariffCategory,
+  pricingScopeFor,
+} from "@/lib/tariffs";
 import { raisedByFacultyInCharge } from "@/lib/club-booking";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -187,6 +192,19 @@ export function BookingDetails({
 
       <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
         <Field label="Debitable head" value={describeDebit(booking)} />
+        {/* **The tariff category the manager approved it at** (31 Oct 2026,
+            migration 35). The scope in plain words rather than the office's
+            own name for the rate: naming it would mean resolving the rate
+            sheet here, and the approval entry in the trail below already
+            carries the office's wording and the figure it stood at. Absent
+            on a booking approved before the manager was asked, which is
+            priced from its own facts. */}
+        {hasChosenTariffCategory(booking) && (
+          <Field
+            label="Tariff category"
+            value={describeTariffCategoryScope(pricingScopeFor(booking))}
+          />
+        )}
         {/* The funds declaration the requester gave (8 Oct 2026, migration
             30). Shown to whoever is deciding: the point of recording it is
             that an approver, and the accounts section later, can see the

@@ -791,6 +791,12 @@ export class MockStore implements DataStore {
     b.status = update.status;
     if (update.rejection_reason !== undefined) b.rejection_reason = update.rejection_reason;
     if (update.no_show_released_at !== undefined) b.no_show_released_at = update.no_show_released_at;
+    // The tariff category the manager chose with this approval (migration 35).
+    // Both columns or neither: half a category prices nothing.
+    if (update.tariff_scope !== undefined) {
+      b.tariff_booking_type = update.tariff_scope?.booking_type ?? null;
+      b.tariff_requester_role = update.tariff_scope?.requester_role ?? null;
+    }
     // A hold exists exactly while the booking holds the room, so leaving
     // ROOM_HOLDING_STATUSES releases the rooms with no caller involvement.
     // The room *cards* are not a hold: they record which room the party was

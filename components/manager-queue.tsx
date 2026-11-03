@@ -11,6 +11,7 @@ import { CheckoutsToday } from "@/components/checkouts-today";
 import { DeskSummary } from "@/components/desk-summary";
 import type { CapacityRules } from "@/lib/settings";
 import { RoomGrid } from "@/components/room-grid";
+import { TariffCategoryChoice } from "@/components/tariff-category-choice";
 import { StaysTable } from "@/components/stays-table";
 import { AwaitingPaymentTable } from "@/components/awaiting-payment";
 import { MissedTable } from "@/components/missed-requests";
@@ -39,6 +40,7 @@ import {
 import { formatDateTime } from "@/lib/format";
 import { lapsedError } from "@/lib/workflow";
 import { describeDietCounts, describeMealDays, describeMeals, mealDietCounts } from "@/lib/meals";
+import type { DeskTariffCategory } from "@/lib/tariff-categories";
 import {
   BOOKING_TYPE_LABELS,
   ROLE_LABELS,
@@ -58,6 +60,7 @@ export function ManagerQueue({
   checkoutsToday,
   cancellationRequests,
   rooms,
+  tariffCategories = {},
   occupancyVersion,
   nowIso,
   capacity,
@@ -93,6 +96,14 @@ export function ManagerQueue({
   checkoutsToday: BookingWithDetails[];
   cancellationRequests: BookingWithDetails[];
   rooms: Room[];
+  /**
+   * **The tariff categories each waiting request may be charged under**, by
+   * booking id (31 Oct 2026). Resolved once for the page
+   * (`deskCategoriesByBooking`): the list depends on the guest house, on
+   * whether it is a stay or a dining order, and on the booking's own facts,
+   * so it is per booking rather than per screen.
+   */
+  tariffCategories?: Record<string, DeskTariffCategory[]>;
   /**
    * Changes whenever any booking's room holds change. The allocation grid
    * fetches occupancy once when its dialog opens; without this it never learnt
@@ -220,6 +231,7 @@ export function ManagerQueue({
                     key={b.id}
                     booking={b}
                     rooms={rooms}
+                    tariffCategories={tariffCategories[b.id] ?? []}
                     occupancyVersion={occupancyVersion}
                     capacity={capacity}
                     bufferMinutes={bufferMinutes}
@@ -262,7 +274,11 @@ export function ManagerQueue({
               </TableHeader>
               <TableBody>
                 {sortOfficialFirst(pendingMeals).map((b) => (
-                  <MealRequestRow key={b.id} booking={b} />
+                  <MealRequestRow
+                    key={b.id}
+                    booking={b}
+                    tariffCategories={tariffCategories[b.id] ?? []}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -365,7 +381,13 @@ function sortOfficialFirst(bookings: BookingWithDetails[]): BookingWithDetails[]
  * count and each person's own preference. No rooms, no dates to allocate
  * against - approving is the whole decision.
  */
-function MealRequestRow({ booking }: { booking: BookingWithDetails }) {
+function MealRequestRow({
+  booking,
+  tariffCategories,
+}: {
+  booking: BookingWithDetails;
+  tariffCategories: DeskTariffCategory[];
+}) {
   const [open, setOpen] = useState(false);
   const headCount = booking.meal_guest_count ?? 0;
   const split = mealDietCounts(booking, headCount);
@@ -421,7 +443,11 @@ function MealRequestRow({ booking }: { booking: BookingWithDetails }) {
               </DialogHeader>
               <BookingDetails booking={booking} />
               <Separator />
-              <ApproveMeals booking={booking} onApproved={() => setOpen(false)} />
+              <ApproveMeals
+                booking={booking}
+                tariffCategories={tariffCategories}
+                onApproved={() => setOpen(false)}
+              />
             </DialogContent>
           </Dialog>
           <RejectDialog booking={booking} small />
@@ -435,12 +461,14 @@ function MealRequestRow({ booking }: { booking: BookingWithDetails }) {
 function ManagerRow({
   booking,
   rooms,
+  tariffCategories,
   occupancyVersion,
   capacity,
   bufferMinutes,
 }: {
   booking: BookingWithDetails;
   rooms: Room[];
+  tariffCategories: DeskTariffCategory[];
   occupancyVersion: string;
   capacity?: CapacityRules;
   bufferMinutes?: number;
@@ -512,6 +540,7 @@ function ManagerRow({
               <RoomGrid
                 booking={booking}
                 rooms={rooms}
+                tariffCategories={tariffCategories}
                 occupancyVersion={occupancyVersion}
                 onAllocated={() => setOpen(false)}
                 capacity={capacity}
@@ -531,15 +560,24 @@ function ManagerRow({
 /** Confirm a meals-only booking. There is nothing to allocate, only to agree to. */
 function ApproveMeals({
   booking,
+  tariffCategories,
   onApproved,
 }: {
   booking: BookingWithDetails;
+  /** The meal rates the kitchen's sheet publishes - the desk picks which applies. */
+  tariffCategories: DeskTariffCategory[];
   onApproved: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const headCount = booking.meal_guest_count ?? 0;
   const split = mealDietCounts(booking, headCount);
+  // A dining booking has no rooms, so this approval *is* the decision - and
+  // it is therefore also where its tariff category is chosen (31 Oct 2026).
+  const [category, setCategory] = useState<string | null>(
+    tariffCategories.length === 1 ? tariffCategories[0].key : null
+  );
+  const categoryMissing = tariffCategories.length > 1 && category === null;
 
   return (
     <div className="space-y-3">
@@ -547,12 +585,25 @@ function ApproveMeals({
         {describeMeals(booking.meals)} for {headCount} guest{headCount === 1 ? "" : "s"}
         {split ? ` - ${describeDietCounts(split)}` : ""}.
       </p>
-      <div className="flex justify-end">
+      <TariffCategoryChoice
+        categories={tariffCategories}
+        value={category}
+        onChange={(chosen) => setCategory(chosen.key)}
+        name={`tariff_category_${booking.id}`}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {categoryMissing ? (
+          <p className="text-sm text-muted-foreground">
+            Choose the tariff category these meals are charged under.
+          </p>
+        ) : (
+          <span />
+        )}
         <Button
-          disabled={isPending}
+          disabled={isPending || categoryMissing}
           onClick={() =>
             startTransition(async () => {
-              const result = await reviewBooking(booking.id, "approve");
+              const result = await reviewBooking(booking.id, "approve", undefined, category);
               if (result.ok) {
                 toast.success("Meals approved");
                 onApproved();

@@ -144,16 +144,20 @@ port 3000 before launching your own.
   order from the portal - the desk does it - so this says who to ask about
   something the form does not offer. Don't move it to a page, and don't add a
   second sentence beside it.
-- **The rates are not a section of the form** (17 Oct 2026, the owner: keep
-  the tariff categories and their rates on the right-hand side). They are
-  `components/tariff-panel.tsx` in the right-hand column, where the
-  **category** is also chosen - a category being one (guest house, booking
-  type) pair (`lib/tariff-categories.ts`), so picking one writes the two
-  fields the rate is resolved from and the quote cannot drift from the
-  invoice. One category is **stated, not asked**. A *named* category stored on
-  the booking is deliberately not built: it would be a second source of truth
-  for money unless `tariffs` carried the same column
-  (`.memories/03-roadmap.md` §2j). Don't put a Rates card back on the form.
+- **The rates are not a section of the form, and the requester does not pick
+  one** (17 Oct 2026, the owner: keep the tariff categories and their rates on
+  the right-hand side; **31 Oct 2026**, the owner: "remove all interactive
+  selection functionality from this table ... users should only be able to
+  view the different tariff categories and their corresponding prices").
+  `components/tariff-panel.tsx` is a **price list in the right-hand column**:
+  every category this requester could be charged under, each with its full
+  charge table, plus the one line that says the Guest House Manager confirms
+  which applies. It has no input, no handler and no state, and it is a
+  **server component** - keep it one. The guest house and the kind of booking
+  are still questions **on the form**: they decide eligibility, routing and
+  the debitable heads, not just the rate. Don't put a Rates card back on the
+  form, and don't make this panel a question again - **the category is the
+  desk's** (see "The tariff category is the manager's" below).
 - **The guests are asked before the meals, and the meals behind a Yes / No**
   (17 Oct 2026). The head count the kitchen cooks for *is* the guests entered
   above and the diet split has to add up to it, so the old order asked about a
@@ -766,6 +770,53 @@ cannot drift.
   approval happens through `allocateRooms()`, which assigns rooms and sets
   `APPROVED` in one step. `reviewBooking` explicitly rejects manager approvals.
 - Rejection requires a non-empty reason everywhere (enforced server-side).
+
+> ### The tariff category is the manager's — `lib/tariffs.ts`, migration 35
+>
+> **31 Oct 2026, the owner: "the final authority for determining the
+> applicable tariff category must rest with the GHM", and the invoice must
+> reflect what they chose.** A tariff is scoped by guest house, room type,
+> booking type and requester role. The first two are facts - where the guest
+> sleeps, which room the party was given. The other two are a **judgement
+> about the visit**, so that pair **is** the category: `TariffScope`, stored as
+> `bookings.tariff_booking_type` / `tariff_requester_role` (both or neither,
+> checked in the database).
+>
+> - **They are not facts about the requester.** `tariff_requester_role` is the
+>   role whose *rate* applies - which is how an ordinary employee's visitor is
+>   charged the office's government-officer rate. Routing, debitable heads and
+>   every scoping rule go on reading `user_role` and `booking_type`.
+> - **`pricingScopeFor` is the only reader**, substituted into the single
+>   `base` object in `buildInvoiceDocument` that the rooms, the extra beds and
+>   the meals are all priced from. It falls back to the booking's own facts, so
+>   a booking approved before this round is priced exactly as it was and its
+>   invoice prints no category line. **Don't backfill it** and don't invent a
+>   category for a booking nobody chose one for - that is the "default tariff"
+>   the round exists to rule out.
+> - **The list is enumerated from `tariffs`** (`deskTariffCategories`), not
+>   written down: every row that could price the booking's **defining
+>   charge** - the room on a stay, the meals on a dining booking - contributes
+>   the scope that selects it, named by that row's own `note`. So the office
+>   adds a category by publishing a rate. Enumerating from *every* item's rows
+>   offered "meals free to students" as a category for a faculty stay;
+>   `tariffCategoryItems` is the one place that is decided.
+> - **Asked only where approval happens**: `allocateRooms` for a stay,
+>   `reviewBooking` for a dining booking (no rooms, so that approval *is* the
+>   decision). Both **re-derive the list and refuse a key the sheet does not
+>   publish**; several categories and no answer is refused; exactly one is
+>   taken as given and still recorded. `reviewBooking` refuses the parameter on
+>   any other stage - an intermediate approver forwards a request, they do not
+>   price it. The screen keeps the same rule: Confirm & Allocate is disabled
+>   until it is answered.
+> - **No rate is stored on a booking.** A stay crossing a rate change is
+>   priced night by night (`splitByRate`), so one figure would be wrong for it,
+>   and a rupee amount beside `tariffs` would be a second source of truth for
+>   money. The price lives in the booking's **log** (what the category stood at
+>   that day) and on the **issued invoice**. `InvoiceDocument.tariff_category`
+>   is the office's wording, snapshotted, printed by `invoiceFacts` **only
+>   when present** - which is why this changed no invoice `version`.
+> - **Nothing was added to `resolveTariff` or `specificity()`**, and no column
+>   to `tariffs`. Keep it that way: the category is a scope, not a label.
 - **Incoming meal bookings are their own section** of `/manager` (1 Oct 2026),
   apart from Incoming room requests: a meal booking has no check-in, no
   check-out and nothing to allocate, and it was sitting in a table of rooms
@@ -1918,9 +1969,10 @@ a picture with the page beginning under it and nothing set over it).
   `<form>` element is the left column, and beside it - its grid siblings, not
   its children - the Requester details card (passed in as `aside`, because it
   is server-rendered) above the **tariff panel**. The panel moved into this
-  component because choosing a tariff category writes two of the form's
-  fields, and into the aside rather than the form because nothing in it is a
-  registered field. Its cards are numbered by `.numbered-sections` in
+  component when choosing a tariff category wrote two of the form's fields;
+  it stays here now that it asks nothing (31 Oct 2026) because the grid
+  belongs with the form's own responsive rules, and in the aside rather than
+  the form because nothing in it is a registered field. Its cards are numbered by `.numbered-sections` in
   `globals.css` — no numbers in the markup, and the class stays **on the
   form**, or the panels beside it are counted as steps.
 - **Corners are a fixed scale** (`@theme inline`): `rounded` 4px inputs,
@@ -2244,6 +2296,16 @@ Migration files, applied sequentially:
    Deliberately not added: `invoices.replaces_invoice_id` (invoices are never
    deleted) and `booking_guests (booking_room_id, booking_id)`
    (`booking_guests_room_idx` is the leading column).
+35. `00000000000035_booking_tariff_category.sql` — **the tariff category the
+   Guest House Manager approved under** (31 Oct 2026). Two nullable text
+   columns on `bookings`, `tariff_booking_type` and `tariff_requester_role`,
+   with **the same checks `tariffs` uses** (the category *is* a scope on that
+   table) plus `bookings_tariff_category_pair`: half a category prices
+   nothing, and would read as a decision nobody took. **Nothing is
+   backfilled** - a booking approved earlier is priced from its own facts.
+   **Not optional once the code is deployed**: the manager's approval names
+   both columns, so without it nothing can be approved. Reads degrade - the
+   store names them only on an approval that carried a category.
 
 Full notes per migration in `.memories/21-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine

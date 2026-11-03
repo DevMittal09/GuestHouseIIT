@@ -896,6 +896,42 @@ Current migrations:
     0 with the profiles untouched. The unindexed-foreign-key query returns
     exactly the two rows 34 leaves deliberately.
 
+35. **`00000000000035_booking_tariff_category.sql`** - *the tariff category
+    the Guest House Manager approved under* (31 Oct 2026). Two nullable text
+    columns on `bookings`, `tariff_booking_type` and
+    `tariff_requester_role`, carrying the **scope** the desk chose to price
+    the booking at. The checks are **the same two `tariffs` uses** - because
+    the category *is* a scope on that table, so a value these would refuse
+    could never resolve a rate - plus `bookings_tariff_category_pair`, which
+    refuses **half** a category: with one column set and the other null
+    `pricingScopeFor` falls back to the booking's own facts while the row
+    reads, to anyone looking at the table, as though a decision had been
+    recorded.
+
+    **Nothing is backfilled**, and that is the point: a booking approved
+    before this is priced from its own `booking_type` and `user_role`, which
+    is what every invoice in the portal was priced at until now, and its
+    invoice prints no category line. Inventing a category for it would be the
+    "default tariff" the round exists to rule out.
+
+    **There is deliberately no rate column.** A stay crossing a rate change
+    is priced night by night, so one figure would be wrong for it, and a
+    rupee amount here would be a second source of truth for money the moment
+    the office published a new row. The price is in the booking's log and on
+    the issued invoice's snapshot. Nothing was added to `tariffs`, to
+    `resolveTariff` or to `specificity()`.
+
+    Additive, nullable and **safe to re-run**. Until it is applied the store
+    names the columns only on an approval that carried a category, so only
+    the Guest House Manager's approval is refused ("column does not exist");
+    everything else works.
+
+    **Verified in a throwaway `postgres:16-alpine` (31 Oct 2026):** applied
+    twice on a stub `bookings` table, then a valid category accepted, a
+    booking with no category accepted, and three inserts refused - one column
+    without the other, either way round (`bookings_tariff_category_pair`), and
+    a booking type outside the enum (`bookings_tariff_booking_type_check`).
+
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.
 

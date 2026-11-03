@@ -7,135 +7,101 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 28 October 2026 (third) - the Google sign-in plan
+## Round of 31 October 2026 - the tariff category becomes the manager's
 
-**No application code changed.** The owner asked for a plan: the current state
-of Google OAuth, the step-by-step setup, anything else worth knowing - with
-the standing fact that **the institute's email data for every user is being
-collected** - and for `.memories/` to be corrected where it has drifted.
+The owner's fifteenth list, three items and one documentation item:
 
-### The finding
+1. The New Booking page keeps the tariff table on the right, **showing every
+   category and its prices, with no selection at all** - "do not allow users
+   to decide or assign the applicable tariff category while creating a booking
+   request".
+2. **The Guest House Manager chooses the category when the request reaches
+   them**, from the categories and prices the office has published, "based on
+   the actual nature of the booking".
+3. **The invoice is priced at what the manager chose**, not at anything the
+   requester picked; the choice is stored against the booking and traceable,
+   and nothing is invoiced before approval.
 
-**The flow was already built.** `lib/oidc.ts` and the two routes under
-`app/api/auth/google/` are a complete, verified OpenID Connect
-implementation from Phase 8: authorization code with **PKCE**, `state` and
-`nonce` in a short-lived httpOnly cookie, the `id_token` **verified** against
-Google's JWKS with `iss` / `aud` / `exp`, `email_verified`, **both** domain
-checks (`isInstituteEmail` on the address *and* the `hd` claim), a profile
-that must already exist, then a `sessions` row and an audit entry.
+### The idea the whole round turns on
 
-**Three places said it was not built**, and each would have sent a later
-session off to build it again. Setting it up is a client id, three
-environment variables, and the accounts - not code.
+A tariff row is scoped by **guest house, room type, booking type and
+requester role** (`resolveTariff`). The first two are facts - where the guest
+sleeps, which room the party was given. The other two are a **judgement about
+the visit**, and until this round the requester was making it by filling the
+form in: the office prices Hamsanandi's rooms at ₹2,000 generally and ₹4,000
+"for government officers", and that second row was reachable only by an
+office's *own* account, so a dignitary booked for by a department's faculty
+was charged ₹2,000.
 
-### What was written
+So **the category is that pair** - a `TariffScope` - and the desk decides it.
+Nothing new was added to `resolveTariff`, no column was added to `tariffs`,
+and no rupee figure is stored anywhere near a booking.
 
-| File | What |
+### What changed
+
+| Where | What |
 | --- | --- |
-| **[`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md)** (new, repo root) | The runbook. §1 what exists and what it already gets right · §2 the switch · §3 the Google Cloud steps and the exact redirect URI · §4 the portal side, and why **not in CI** · §5 the two domains · §6 **the email data** · §7 the 1000-row blocker, with the fix · §8 six smaller notes · §9 the auto-provisioning decision · §10 a fifteen-item verification checklist · §11 the email to send the Computer Centre |
+| `lib/tariffs.ts` | **`TariffScope`**, `tariffScopeKey`, `parseTariffScope` (two parts, both checked against the unions), **`pricingScopeFor`** (the manager's category, else the booking's own facts), `hasChosenTariffCategory`, `tariffCategoryItems`, `describeTariffCategory` / `describeTariffCategoryScope` |
+| `lib/tariff-categories.ts` | **`deskTariffCategories`** - the desk's list, **enumerated from the office's rate sheet**: every row that could price the booking's defining charge contributes the scope that selects it, named by that row's own `note`. Plus `deskCategoryFor`. The requester's `tariffCategories` is unchanged |
+| `lib/tariff-categories-server.ts` | **New.** `deskCategoriesFor` / `deskCategoriesByBooking` - the server readers, one query per page |
+| `lib/invoice.ts` | `buildInvoiceDocument` resolves every charge at `pricingScopeFor(booking)` - **one substitution, in the one place the whole invoice is priced from**. `InvoiceDocument.tariff_category` snapshots the office's wording, and `invoiceFacts` prints it |
+| `components/tariff-panel.tsx` | **Read-only, and a server component again**: every eligible category with its full charge table, and one line saying who confirms which applies |
+| `components/tariff-category-choice.tsx` | **New.** The desk's question. One category is **stated, not asked** |
+| `components/room-grid.tsx` | Asks it above the override notice; **Confirm & Allocate stays disabled until it is answered** |
+| `components/manager-queue.tsx` | The same question in **Approve meals** - a dining booking has no rooms, so that approval is where its category is decided |
+| `components/booking-details.tsx` | The chosen category, as a line of plain text |
+| `app/actions/bookings.ts` | `allocateRooms(…, tariffCategory)` and `reviewBooking(…, tariffCategory)`: **re-derived from the rate sheet, never trusted**; refused where several categories exist and none was chosen; refused outright on any other stage's approval. The price it stood at goes in the log |
+| `lib/store/*`, `lib/store/types.ts` | `StatusUpdate.tariff_scope`, written with the approval by both stores |
+| **migration 35** | `bookings.tariff_booking_type` / `tariff_requester_role`, with the same checks `tariffs` uses and a **both-or-neither** constraint |
 
-A **root file, not a sixteenth memory file**: fifteen is a hard rule, and this
-is a runbook performed once against an external party, like
-[`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md). What the code
-*does* stays in [05-credentials-and-security.md](05-credentials-and-security.md)
-Part 2; what is *open* in [03-roadmap.md](03-roadmap.md); what production must
-*set* in [04-production.md](04-production.md). The runbook links to all three.
+### Three decisions worth knowing
 
-### The drift, and where it was
+- **No stored rate.** A stay crossing a rate change is priced night by night,
+  so one figure would be wrong for it, and a rupee amount beside `tariffs`
+  would be a second source of truth. The price lives where it cannot be
+  mistaken for the authority: the **booking's log**, which records what the
+  category stood at the day it was chosen, and the **issued invoice**.
+- **No new document version.** The category prints as a conditional fact, so
+  every invoice issued before today reprints byte-identical. `version` governs
+  the lettering of the money table, which this round did not touch - it is
+  still **5**.
+- **A booking approved before today has no category**, and is priced from its
+  own facts exactly as it always was. Inventing one for it would be the
+  "default tariff" the round exists to rule out, and its invoice prints no
+  category line.
 
-`npm run check:memories` passed before this round and passes after it, and the
-folder's *facts* were right - Part 2 of file 05 has carried the Google leg in
-its flow diagram all along. **What had drifted was prose the check cannot
-read:**
+### What this reverses
 
-| File | Said | Now |
-| --- | --- | --- |
-| `lib/env.ts` | "Google sign-in is **not built yet**" | Built, **unconfigured** |
-| `lib/site.ts` | `isInstituteEmail` "is the rule real Google sign-in **must** enforce ... neither needs it today" | It **already enforces** it - plus the `hd`/students warning |
-| `AGENTS.md` | "the real flow **must enforce** `isInstituteEmail()`" | A bullet for the Google door: what it checks, the derived redirect URI, the two defects, "don't set these in CI" |
-| `.env.example` | the card's "**second** button"; a button reading "**Mock Authentication**"; `MOCK_LOGIN=false` leaving "LDAP sign-in only"; a link to `.memories/11-ldap-accounts.md` | One button, reading "Sign in"; `MOCK_LOGIN=false` **leaves no door at all**; the link points at file 05, which has owned those accounts since 10 Oct - **the old link had been dead for eighteen days** |
-
-### Two defects found, recorded not fixed
-
-The ask was a plan, so both are written down rather than patched.
-
-**1. The account lookup scans every profile - roadmap [gate 12](03-roadmap.md).**
-`app/api/auth/google/callback/route.ts` does
-`(await getStore().listProfiles()).find(...)`, and `SupabaseStore.listProfiles`
-is `select("*").order("role")` with **no `.range()`**. Supabase caps an
-unbounded select at **1000 rows by default and truncates silently** - HTTP 200,
-the truth only in `Content-Range`. Past 1000 accounts:
-
-- **sign-in fails for arbitrary people** (Google and LDAP both) with "not
-  registered on the guest house portal" - indistinguishable from a genuinely
-  absent account, so the person goes to the office, not to the developer;
-- **the account import breaks**: `planUserImport` builds its "who already
-  exists" map from the same truncated list, so a second batch reads
-  already-imported people as **new** and the unique `email` constraint refuses
-  the whole paste. `MAX_USER_IMPORT_ROWS` is 2000 and
-  [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §7 says to
-  **split the file** - the documented procedure walks into the defect;
-- Users & Roles, the mail digest, the approval routing and the Copy-to line
-  all read the same call.
-
-Fix both ways: raise Supabase's **Max rows** (a new project defaults back to
-1000, so it belongs on the deployment checklist) **and** add
-`getProfileByEmail` to `DataStore` and both stores. **Migration 31 already
-added `profiles (lower(email))` for exactly this, and nothing has used it
-since 13 Oct 2026.**
-
-**2. `hd` on the start leg is narrower than the return leg's own rule.** The
-start leg sends `hd=iitpkd.ac.in`; the return leg accepts that **and any
-subdomain**. Students are `<roll>@smail.iitpkd.ac.in`. If `smail` is a
-separate Workspace tenant rather than a second domain of the same one, that
-hint keeps **every student** out of Google's account chooser - the portal
-would work for staff and be unusable for the people it is for. One line to
-fix (`hostedDomain: "*"`, or drop the hint - `hd` is a hint, not a control,
-and the callback re-checks), but it must not be guessed: it is the first
-question in the email to the Computer Centre, and one real student account
-settles it.
-
-### Files touched
-
-| File | Change |
-| --- | --- |
-| `GOOGLE-SIGN-IN.md` | **New.** The runbook |
-| `lib/env.ts`, `lib/site.ts` | **Comments only** - no behaviour |
-| `AGENTS.md` | The Google door bullet replaces the stale clause |
-| `.env.example` | The Sign-in block rewritten; the dead memory link fixed |
-| `.memories/03-roadmap.md` | Gate 2 rewritten, **gate 12 added**, §2n added |
-| `.memories/04-production.md` | **Max rows** on the deployment checklist; the Computer Centre asks now name the two-domains question and the Workspace user export |
-| `.memories/05-credentials-and-security.md` | Part 2 gains **"Google sign-in - built, verified, unconfigured"** |
-| `.memories/20-architecture.md` | The auth seam notes the Google leg is built, with the pointer |
-| `.memories/01-background.md`, `02-decisions.md`, `99-recent-changes.md` | This round |
-
-**No migration, no store operation, no booking rule, no permission, no route
-and no public-site change.**
+The panel's radios are 17 Oct 2026's, and "a *named* category stored on the
+booking is deliberately not built" was that round's reasoning. Both are
+superseded in [02-decisions.md](02-decisions.md), and
+[03-roadmap.md](03-roadmap.md) §2j's open question is **answered**: the office
+did want the sheet's own wording, and it cost no new dimension in
+`resolveTariff` because the category is a scope rather than a label.
 
 ### Verified
 
-`npm run lint`, `npx tsc --noEmit`, `npm test` (**608**) and
-`npm run check:memories`. No new tests: nothing executable changed - the two
-code edits are comments.
+`npm run lint`, `npm run typecheck`, **`npm test` (627 in 37 files)**,
+`npm run build`, **`npx playwright test` (51 journeys)** and
+`npm run check:memories`. Migration 35 applied twice in a throwaway
+`postgres:16-alpine`, and its three refusals checked: half a category either
+way, and a value outside the enum.
+
+New tests: `tests/fifteenth-round.test.ts` (17, the rules on plain data),
+`tests/store-tariff-category.test.ts` (2, the seeded demo database through the
+store and into an invoice) and `e2e/fifteenth-round.spec.ts` (the desk asked,
+blocked until it answers, and the invoice charging ₹4,000 rather than ₹2,000).
+Three existing specs were updated where the panel used to be the control.
 
 ### Left open
 
-- **Gate 12 is the next thing to do**, and it is a prerequisite for the
-  institute's import as much as for Google sign-in.
-- **Email is the only identity key.** `completeGoogleSignIn` returns Google's
-  immutable `sub` and the callback drops it, so a **reassigned** institute
-  address hands the new holder the previous person's profile, bookings and
-  role. `profiles.google_sub` (a migration 35) is the fix - worth doing before
-  the portal holds a year of real bookings. [03-roadmap.md](03-roadmap.md) §2n.
-- **The OAuth state cookie is not cleared** - set with
-  `path: "/api/auth/google"`, deleted with a bare `jar.delete()`, which
-  defaults to `/`. Low severity, one line.
-- **Configuring Google deletes `/mock-login`, which is how all 50 Playwright
-  journeys sign in.** `e2e/sign-in.spec.ts` says it expects to be *replaced*
-  at that point; nothing replaces it yet.
-- **The 29 other `listProfiles()` callers** are correct once Max rows is
-  raised, but several load every profile to find a handful of approvers.
-  Speed, not correctness.
-- **The refusal message for a valid account with no profile is a dead end.**
-  Naming the office's address from `GUEST_HOUSE_CONTACT` would give the person
-  somewhere to go.
+- **A category cannot be corrected after approval.** There is one writer and
+  it is the approval; cancelling and reissuing an invoice reprices at the same
+  category. [03-roadmap.md](03-roadmap.md) §2p.
+- **Migration 35 is not applied to the hosted project** - that is a production
+  change, in the order [04-production.md](04-production.md) §1a.1 sets out.
+- **A guest house with several room rates makes the question compulsory.** At
+  Bageshri there is one category and the desk is only told; at Hamsanandi
+  there are two and nothing can be approved without an answer. If the office
+  publishes a third rate there, the list grows on its own - which is the point
+  - but so does what the desk has to read on every approval.

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   ACCOUNTS,
   chooseGuestHouse,
+  chooseTariffCategory,
   kitchenName,
   localDate,
   nextDay,
@@ -152,6 +153,10 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   await row.getByRole("button", { name: /Review & Approve/ }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: /Approve meals/ })).toBeVisible();
+  // The rate these meals are charged at is the desk's decision, taken with
+  // the approval (31 Oct 2026) - the kitchen's sheet has a general per-head
+  // rate and free meals for students and alumni.
+  await chooseTariffCategory(dialog);
   await dialog.getByRole("button", { name: /Approve|Confirm/ }).last().click();
   await expect(dialog).toBeHidden({ timeout: 30_000 });
 

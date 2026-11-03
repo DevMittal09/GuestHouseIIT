@@ -36,7 +36,7 @@ import type {
 } from "@/lib/users-import-undo";
 import type { NewAcademicRecordInput, StoredAcademicRecord } from "@/lib/academic/stored";
 import type { AcademicRecord, AcademicRecordKind } from "@/lib/academic/types";
-import type { NewTariffInput, Tariff } from "@/lib/tariffs";
+import type { NewTariffInput, Tariff, TariffScope } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import type { NewSessionInput, Session } from "@/lib/sessions";
 import type { PreparedUpload } from "@/lib/uploads";
@@ -91,6 +91,13 @@ export interface StatusUpdate {
   override_by?: string | null;
   /** Mark the stay released as a no-show (migration 20). */
   no_show_released_at?: string | null;
+  /**
+   * **The tariff category the Guest House Manager chose** (migration 35,
+   * 31 Oct 2026), written with the approval that records it. One field here
+   * and two columns on the table, because a category is a pair and half of
+   * one prices nothing - the stores write both or neither.
+   */
+  tariff_scope?: TariffScope | null;
 }
 
 /**

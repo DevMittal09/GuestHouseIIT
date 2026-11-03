@@ -443,6 +443,28 @@ export type Booking = {
    * before the question existed.
    */
   fund_declaration_at?: string | null;
+  /**
+   * **The tariff category the Guest House Manager chose when they approved
+   * it** (migration 35, 31 Oct 2026) - the two dimensions of a tariff's scope
+   * that are a judgement about the visit rather than a fact about it, so the
+   * invoice is priced at the rate the desk decided applies and not at
+   * whatever the requester's own account resolved to.
+   *
+   * **Not facts about the requester**: `tariff_requester_role` is the role
+   * whose *rate* applies, which is how an ordinary employee's guest is
+   * charged the office's government-officer rate. Who asked is still
+   * `user_role`, and what kind of stay it is is still `booking_type`; routing,
+   * debitable heads and every scoping rule read those.
+   *
+   * Both set or both null, and null on a booking approved before the question
+   * existed - `pricingScopeFor` then prices it from the booking's own facts,
+   * which is what the portal did until this round. There is deliberately no
+   * stored rate beside them: a stay crossing a rate change is priced night by
+   * night, and a rupee figure on the booking would be a second source of
+   * truth for money.
+   */
+  tariff_booking_type?: BookingType | null;
+  tariff_requester_role?: Role | null;
   created_at: string;
   updated_at: string;
 }

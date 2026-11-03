@@ -31,15 +31,18 @@ import {
   notifyRoomsAllocated,
   notifyTierApproved,
 } from "@/lib/mail/notify";
-import { vacateBlocker } from "@/lib/invoice";
+import { formatINR, toPaise, vacateBlocker } from "@/lib/invoice";
 import { guestHousePolicyError, mealsPolicyError } from "@/lib/policy";
 import { isWhitelistedOfficial } from "@/lib/settings";
 import { getOfficialEmails, getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
 import { formatDateTime } from "@/lib/format";
+import { deskCategoriesFor } from "@/lib/tariff-categories-server";
+import { deskCategoryFor, type DeskTariffCategory } from "@/lib/tariff-categories";
 import { instituteIso } from "@/lib/tz";
 import type {
   BookingStatus,
+  BookingWithDetails,
   CustomFieldValue,
   Gender,
   NewBookingGuestInput,
@@ -568,7 +571,16 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
 export async function reviewBooking(
   bookingId: string,
   action: "approve" | "reject",
-  reason?: string
+  reason?: string,
+  /**
+   * The tariff category the Guest House Manager is approving a **dining**
+   * booking under (31 Oct 2026). A dining booking has no rooms, so the
+   * manager's approval here is what room allocation is for a stay - which
+   * makes this the one other place a category is decided. Refused on every
+   * other stage: an intermediate approver forwards a request, they do not
+   * price it.
+   */
+  tariffCategory?: string | null
 ): Promise<ActionResult> {
   try {
     const user = await requireUser();
@@ -603,6 +615,15 @@ export async function reviewBooking(
     if (action === "approve" && user.role === "gh_manager" && !mealsOnly) {
       return { ok: false, error: "GH Manager approval happens through room allocation" };
     }
+    // The desk's approval of a dining booking is the moment its category is
+    // decided; nobody else's decision carries one, and a payload that says
+    // otherwise is refused rather than ignored.
+    const pricesIt = action === "approve" && user.role === "gh_manager" && mealsOnly;
+    if (tariffCategory && !pricesIt) {
+      return { ok: false, error: "Only the Guest House Manager sets the tariff category, when they approve" };
+    }
+    const category = pricesIt ? await categoryForApproval(booking, tariffCategory) : null;
+    if (category && !category.ok) return { ok: false, error: category.error };
 
     if (action === "reject") {
       await store.updateBookingStatus(
@@ -625,19 +646,24 @@ export async function reviewBooking(
         booking.status,
         approvalStagesFor(booking, booking.requester, units, review)
       );
+      const chosen = category?.ok ? category.category : null;
       await store.updateBookingStatus(
         bookingId,
-        { status: next },
+        { status: next, ...(pricesIt && { tariff_scope: chosen?.scope ?? null }) },
         {
           action_by: user.id,
           action_by_name: user.full_name,
           new_status: next,
-          remarks:
+          remarks: [
             next === "PENDING_GH_MANAGER"
               ? "Approved and forwarded to Guest House Manager"
               : next === "PENDING_HOD"
                 ? "Approved and forwarded to the HOD"
                 : "Approved",
+            chosen ? describeCategoryForLog(chosen) : null,
+          ]
+            .filter(Boolean)
+            .join(" "),
         }
       );
       // Two audiences, one transition: the requester learns it moved, the next
@@ -691,11 +717,70 @@ export async function getRoomConflicts(
   return conflicts;
 }
 
+/**
+ * **The tariff category the manager is approving this booking under** (31 Oct
+ * 2026, the owner: the final authority for the applicable category is the
+ * GHM's, and the invoice must reflect what they chose).
+ *
+ * Re-derived from the office's rate sheet rather than trusted: the key arrives
+ * from the desk's radio, and a crafted one naming a scope the sheet does not
+ * publish would price a stay at a rate the office never set. Three answers,
+ * all of them deliberate:
+ *
+ * - **a key that is on the sheet** - the manager's decision, recorded;
+ * - **no key where there is exactly one category** - the one category, taken
+ *   as given. A question with one answer is not asked anywhere in this
+ *   portal, and recording it anyway means every booking approved from now on
+ *   carries an explicit category rather than a silence to be interpreted;
+ * - **no key where there are several** - refused. This is the whole point of
+ *   the round: an invoice must not fall back to a default.
+ */
+async function categoryForApproval(
+  booking: BookingWithDetails,
+  key: string | null | undefined
+): Promise<{ ok: true; category: DeskTariffCategory | null } | { ok: false; error: string }> {
+  const categories = await deskCategoriesFor(booking);
+  // No rate covers this booking's charges at all. The category is nobody's to
+  // choose, and the invoice reports the missing rate as a problem of its own
+  // rather than the approval refusing to happen over it.
+  if (categories.length === 0) return { ok: true, category: null };
+  if (key) {
+    const chosen = deskCategoryFor(categories, key);
+    return chosen
+      ? { ok: true, category: chosen }
+      : { ok: false, error: "That tariff category is not on this guest house's rate sheet" };
+  }
+  if (categories.length === 1) return { ok: true, category: categories[0] };
+  return { ok: false, error: "Choose the tariff category this booking is charged under" };
+}
+
+/**
+ * "Tariff category: Hamsanandi type 3, government officers - Room, per day
+ * ₹4,000." The log line that keeps the **price** the category stood at on the
+ * day it was chosen, which the booking itself deliberately does not store: a
+ * stay is priced night by night, so a rate on the booking would be a second
+ * source of truth, but an append-only log entry is a record of a decision and
+ * cannot be mistaken for one.
+ */
+function describeCategoryForLog(category: DeskTariffCategory): string {
+  const published = category.lines.filter((line) => line.rate !== null);
+  const rates = (category.headline?.rate !== null && category.headline ? [category.headline] : published)
+    .map((line) => `${line.label} ${formatINR(toPaise(line.rate ?? 0))}`)
+    .join(", ");
+  return `Tariff category: ${category.label}${rates ? ` - ${rates}` : ""}.`;
+}
+
 export async function allocateRooms(
   bookingId: string,
   roomIds: string[],
   /** Rooms whose turnover overlap the manager is accepting. */
-  overrideRoomIds: string[] = []
+  overrideRoomIds: string[] = [],
+  /**
+   * The tariff category the manager is approving it under
+   * (`tariffScopeKey`). Required where the rate sheet publishes more than
+   * one - approval is where the category is decided.
+   */
+  tariffCategory: string | null = null
 ): Promise<ActionResult> {
   try {
     const user = await requireUser();
@@ -756,6 +841,11 @@ export async function allocateRooms(
       if (problem) return { ok: false, error: problem };
     }
 
+    // The category before the write: it is part of the same decision as the
+    // rooms, so a booking must never come out of this approved and unpriced.
+    const category = await categoryForApproval(booking, tariffCategory);
+    if (!category.ok) return { ok: false, error: category.error };
+
     // Overrides are re-derived here rather than trusted: the client says
     // which rooms it is overriding, but *whether* each one is only a turnover
     // overlap is decided from the stored occupancy. A crafted request naming
@@ -787,6 +877,7 @@ export async function allocateRooms(
         assigned_room_ids: roomIds,
         override_room_ids: overrides,
         override_by: overrides.length > 0 ? user.id : null,
+        tariff_scope: category.category?.scope ?? null,
       },
       {
         action_by: user.id,
@@ -797,6 +888,10 @@ export async function allocateRooms(
             ? `Approved by the Guest House Manager without the remaining review stages (was ${booking.status}).`
             : null,
           `Rooms allocated: ${roomNumbers}`,
+          // The rate it was approved at, in the office's own words and with
+          // the figure in force on the day - the booking stores the category,
+          // and this is where the price it stood at that afternoon is kept.
+          category.category ? describeCategoryForLog(category.category) : null,
           // The override is in the log or it did not happen: it is the record
           // of a human accepting an overlap the system would otherwise refuse.
           overrides.length > 0

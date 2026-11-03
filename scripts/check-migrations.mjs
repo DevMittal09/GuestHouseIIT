@@ -113,6 +113,13 @@ const MARKERS = [
       "'units_parent_idx','units_hod_unit_idx','tariffs_guest_house_idx'," +
       "'sessions_rotated_from_idx');",
   },
+  {
+    n: 35,
+    kind: "column",
+    table: "bookings",
+    column: "tariff_booking_type",
+    what: "the manager's tariff category on a booking",
+  },
 ];
 
 /** The SQL to paste in the editor for the two function-only migrations. */

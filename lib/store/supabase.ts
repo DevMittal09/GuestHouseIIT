@@ -536,6 +536,13 @@ export class SupabaseStore implements DataStore {
         status: update.status,
         ...(update.rejection_reason !== undefined && { rejection_reason: update.rejection_reason }),
         ...(update.no_show_released_at !== undefined && { no_show_released_at: update.no_show_released_at }),
+        // The manager's tariff category (migration 35). Named only when the
+        // approval carried one, so a database still on migration 34 refuses
+        // nothing it used to accept - and both columns move together.
+        ...(update.tariff_scope !== undefined && {
+          tariff_booking_type: update.tariff_scope?.booking_type ?? null,
+          tariff_requester_role: update.tariff_scope?.requester_role ?? null,
+        }),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);

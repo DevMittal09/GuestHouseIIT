@@ -254,23 +254,26 @@ can be done in thirty seconds right now, before any migration:
    it: sign-in is LDAP or Google plus the `sessions` table. This closes the
    open-signup path immediately and needs no schema change, so do it first
    even though the migration is the real fix.
-2. **Apply migrations 31, 32, 33 and 34 to the hosted project, in order.**
-   Needs approval; it is a schema change on live data. None rewrites a table
-   or needs downtime: 31 drops a constraint and policies and adds indexes, 32
-   creates one empty table, 33 adds a trigger and corrects two counts, 34
-   adds 20 indexes. Verify with `npm run check:migrations` - **31's two counts
-   must come back 0, 33's must be 1, 34's must be 20**, and 32 must stop being
-   reported as missing.
+2. **Apply migrations 31, 32, 33, 34 and 35 to the hosted project, in
+   order.** Needs approval; it is a schema change on live data. None rewrites
+   a table or needs downtime: 31 drops a constraint and policies and adds
+   indexes, 32 creates one empty table, 33 adds a trigger and corrects two
+   counts, 34 adds 20 indexes, **35 adds two nullable columns and three
+   checks to `bookings`**. Verify with `npm run check:migrations` - **31's two
+   counts must come back 0, 33's must be 1, 34's must be 20**, and 32 and 35
+   must stop being reported as missing.
 3. **Then run
    `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql`**, which deletes
    the `auth.users` rows that already exist. **Order matters**: it refuses to
    run before migration 31, because the old foreign key's `on delete cascade`
    would take every profile with them.
 
-**31 and 32 are not optional once the code is deployed** - `createProfile`
-inserts without an Auth user, and `importUsersAction` will not import without
-somewhere to record its undo. 33 and 34 are optional and can follow. Deploy the
-code and 31 + 32 together; see §5.
+**31, 32 and 35 are not optional once the code is deployed** -
+`createProfile` inserts without an Auth user, `importUsersAction` will not
+import without somewhere to record its undo, and **the Guest House Manager
+cannot approve anything without 35**, because the approval names the two
+tariff-category columns. 33 and 34 are optional and can follow. Deploy the
+code and 31 + 32 + 35 together; see §5.
 
 Rollback for step 1 is
 `supabase/repairs/2026-10-13-rollback-migration-31.sql` (all 38 policies,
@@ -860,6 +863,11 @@ read tables and columns but not `pg_proc`, `pg_constraint`, `pg_policies`,
 `pg_trigger` or `pg_indexes`. For each it says so and prints the SQL to paste
 in the editor.
 
+> **Migration 35 (31 Oct 2026) is written, tested and not applied**, like 31,
+> 33 and 34. `npm run check:migrations` **can** probe it - it is a column - so
+> it will simply report it missing until it is applied. The desk cannot
+> approve a booking without it.
+>
 > **The current hosted project has 1 – 30 *and 32*, re-verified 27 Oct 2026**
 > by `npm run check:migrations`, which now reports **32 as present** -
 > `user_import_batches` exists - and names 17, 23, 31, 33 and 34 as the five it
