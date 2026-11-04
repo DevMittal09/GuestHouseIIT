@@ -63,6 +63,8 @@ export const RATE_LIMITS = {
   documents: { limit: 60, windowSeconds: 5 * 60 },
   /** Per IP, for the OAuth start - it costs a round trip to Google. */
   oauth: { limit: 20, windowSeconds: 10 * 60 },
+  /** Per email, for email+password sign-in. */
+  passwordLogin: { limit: 8, windowSeconds: 15 * 60 },
 } as const;
 
 /** "1234 5678 9012" → "•••• •••• 9012": what the desk sees unless it asks. */

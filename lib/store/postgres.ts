@@ -229,6 +229,21 @@ export class PostgresStore implements DataStore {
     return rows[0] ?? null;
   }
 
+  async getPasswordHash(email: string): Promise<string | null> {
+    const { rows } = await this.pool.query(
+      "SELECT password_hash FROM profiles WHERE lower(email) = lower($1)",
+      [email.trim()]
+    );
+    return rows[0]?.password_hash ?? null;
+  }
+
+  async setPasswordHash(email: string, hash: string): Promise<void> {
+    await this.pool.query(
+      "UPDATE profiles SET password_hash = $1 WHERE lower(email) = lower($2)",
+      [hash, email.trim()]
+    );
+  }
+
   async createProfile(input: NewProfileInput): Promise<Profile> {
     const cols = Object.keys(input);
     const vals = Object.values(input);
@@ -262,6 +277,17 @@ export class PostgresStore implements DataStore {
       const e = err as { code?: string; message: string };
       throw profileWriteError(e);
     }
+  }
+
+  async bulkUpdateAccountStatus(emails: string[], status: import("@/lib/types").AccountStatus): Promise<number> {
+    if (emails.length === 0) return 0;
+    const lower = emails.map((e) => e.trim().toLowerCase());
+    const placeholders = lower.map((_, i) => `$${i + 2}`).join(", ");
+    const { rowCount } = await this.pool.query(
+      `UPDATE profiles SET account_status = $1 WHERE lower(email) IN (${placeholders})`,
+      [status, ...lower]
+    );
+    return rowCount ?? 0;
   }
 
   async deleteProfile(id: string): Promise<void> {

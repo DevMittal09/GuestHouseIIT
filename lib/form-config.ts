@@ -211,13 +211,17 @@ export function sanitizeFormConfig(
   config: RoleFormConfig,
   guestHouses: GuestHouse[]
 ): RoleFormConfig {
+  // A stored row may predate fields added later. Spread the spec defaults
+  // underneath so every field is present before the specific fixes below.
+  const defaults = buildDefaultFormConfig(config.role, guestHouses);
+  const full: RoleFormConfig = { ...defaults, ...config };
+
   const existing = new Set(guestHouses.map((g) => g.id));
-  const ids = config.allowed_guest_house_ids.filter((id) => existing.has(id));
+  const ids = full.allowed_guest_house_ids.filter((id) => existing.has(id));
 
   // Rows saved before the dependency rule existed have no arrays at all; fall
   // back to the role's spec defaults so the rule is not silently lost.
-  const defaults = buildDefaultFormConfig(config.role, guestHouses);
-  const offered = new Set(config.relationship_options);
+  const offered = new Set(full.relationship_options);
   const parents = (config.parent_relationships ?? defaults.parent_relationships).filter((r) =>
     offered.has(r)
   );
@@ -237,21 +241,22 @@ export function sanitizeFormConfig(
   // no option list to be unique within, and "Mother " and "mother" would be
   // two different answers.
   const unique =
-    config.relationship_style === "dropdown"
+    full.relationship_style === "dropdown"
       ? (config.unique_relationships ?? defaults.unique_relationships).filter((r) =>
           offered.has(r)
         )
       : [];
 
   return {
-    ...config,
-    banner_text: RETIRED_BANNERS.includes((config.banner_text ?? "").trim())
+    ...full,
+    banner_text: RETIRED_BANNERS.includes((full.banner_text ?? "").trim())
       ? null
-      : config.banner_text,
+      : full.banner_text,
     unique_relationships: unique,
     allowed_guest_house_ids: ids.length > 0 ? ids : guestHouses.map((g) => g.id),
     guest_fields: {
-      ...config.guest_fields,
+      ...defaults.guest_fields,
+      ...full.guest_fields,
       // Age may be required or optional, never hidden. A guest below
       // `INFANT_AGE_LIMIT` is an infant, and the per-room limit counts guests
       // and infants separately, so the box must always be there for an
@@ -259,7 +264,7 @@ export function sanitizeFormConfig(
       // forms since 24 Sep 2026) a guest left without one is an adult. A
       // stored "hidden" - from before this rule - reads as required, as it
       // always has.
-      age: config.guest_fields.age === "optional" ? "optional" : "required",
+      age: full.guest_fields.age === "optional" ? "optional" : "required",
     },
     parent_relationships: dependents.length === 0 ? [] : parents,
     dependent_relationships: dependents,

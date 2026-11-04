@@ -4,12 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  bulkUpdateAccountStatusAction,
   createUserAction,
   deleteUserAction,
   deleteUsersAction,
   importUsersAction,
   previewUserImport,
   revertUserImportAction,
+  setUserPasswordAction,
   updateUserAction,
   type UserFormInput,
   type UserImportSummary,
@@ -38,7 +40,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ROLE_LABELS, type Profile, type Role } from "@/lib/types";
+import { ACCOUNT_STATUS_LABELS, ROLE_LABELS, type AccountStatus, type Profile, type Role } from "@/lib/types";
 import { UNIT_CATEGORY_LABELS, type Unit } from "@/lib/units";
 import { USER_CSV_HEADER } from "@/lib/users-import";
 import { describeBatch, revertBlocker, type UserImportBatch } from "@/lib/users-import-undo";
@@ -57,7 +59,10 @@ const EMPTY: UserFormInput = {
   full_name: "",
   role: "student",
   unit_id: "",
+  account_status: "active",
 };
+
+const ALL_STATUSES = Object.keys(ACCOUNT_STATUS_LABELS) as AccountStatus[];
 
 export function UsersManager({
   profiles,
@@ -81,6 +86,7 @@ export function UsersManager({
   const [editing, setEditing] = useState<Profile | null>(null);
   const [values, setValues] = useState<UserFormInput>(EMPTY);
   const [toDelete, setToDelete] = useState<Profile | null>(null);
+  const [newPassword, setNewPassword] = useState("");
   /**
    * Bulk loading accounts from a spreadsheet (8 Oct 2026). `plan` is what the
    * paste would do, fetched by a read-only action: the office presses Check
@@ -95,6 +101,10 @@ export function UsersManager({
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   /** The import whose undo is being confirmed. */
   const [toUndo, setToUndo] = useState<UserImportBatch | null>(null);
+  /** Bulk account status update dialog. */
+  const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
+  const [bulkStatusEmails, setBulkStatusEmails] = useState("");
+  const [bulkStatusTarget, setBulkStatusTarget] = useState<AccountStatus>("relieved");
 
   const deletable = profiles.filter((p) => !isLocked(actorRole, p));
   const selectedProfiles = deletable.filter((p) => selected.has(p.id));
@@ -109,6 +119,7 @@ export function UsersManager({
   const openCreate = () => {
     setEditing(null);
     setValues(EMPTY);
+    setNewPassword("");
     setDialogOpen(true);
   };
 
@@ -119,9 +130,23 @@ export function UsersManager({
       full_name: p.full_name,
       role: p.role,
       unit_id: p.unit_id ?? "",
+      account_status: p.account_status ?? "active",
     });
+    setNewPassword("");
     setDialogOpen(true);
   };
+
+  const savePassword = () =>
+    startTransition(async () => {
+      if (!editing || !newPassword) return;
+      const result = await setUserPasswordAction(editing.id, newPassword);
+      if (result.ok) {
+        toast.success("Password set");
+        setNewPassword("");
+      } else {
+        toast.error(result.error ?? "Failed to set password");
+      }
+    });
 
   const save = () =>
     startTransition(async () => {
@@ -209,6 +234,23 @@ export function UsersManager({
       }
     });
 
+  const runBulkStatus = () =>
+    startTransition(async () => {
+      const result = await bulkUpdateAccountStatusAction(bulkStatusEmails, bulkStatusTarget);
+      if (result.ok) {
+        const parts = [`${result.updated} account${result.updated === 1 ? "" : "s"} set to ${ACCOUNT_STATUS_LABELS[bulkStatusTarget]}`];
+        if (result.notFound && result.notFound.length > 0) {
+          parts.push(`${result.notFound.length} not found: ${result.notFound.slice(0, 5).join(", ")}${result.notFound.length > 5 ? "..." : ""}`);
+        }
+        toast.success(parts.join(". "));
+        setBulkStatusOpen(false);
+        setBulkStatusEmails("");
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+
   const set = (key: keyof UserFormInput) => (v: string) =>
     setValues((prev) => ({ ...prev, [key]: v }));
 
@@ -222,6 +264,9 @@ export function UsersManager({
               Delete {selected.size} selected
             </Button>
           )}
+          <Button variant="outline" onClick={() => setBulkStatusOpen(true)}>
+            Bulk update status
+          </Button>
           <Button variant="outline" onClick={openUsersImport}>
             Import from spreadsheet
           </Button>
@@ -251,6 +296,7 @@ export function UsersManager({
                   scrolling the table sideways. */}
               <TableHead>Account</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Hostel</TableHead>
               <TableHead>Dept / Club</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -278,6 +324,13 @@ export function UsersManager({
                     <span className="font-semibold text-ink">{ROLE_LABELS[p.role]}</span>
                   ) : (
                     ROLE_LABELS[p.role]
+                  )}
+                </TableCell>
+                <TableCell className="text-meta whitespace-nowrap">
+                  {(p.account_status ?? "active") === "active" ? (
+                    <span className="text-green-700">Active</span>
+                  ) : (
+                    <span className="text-vermilion-deep font-medium">{ACCOUNT_STATUS_LABELS[(p.account_status ?? "active") as AccountStatus]}</span>
                   )}
                 </TableCell>
                 <TableCell>{p.hostel_name ?? "-"}</TableCell>
@@ -606,13 +659,103 @@ export function UsersManager({
                 ))}
               </NativeSelect>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="user-status">Account status</Label>
+              <NativeSelect
+                id="user-status"
+                value={values.account_status ?? "active"}
+                onChange={(e) => set("account_status")(e.target.value)}
+              >
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {ACCOUNT_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
           </div>
+          {editing && (
+            <div className="border-t border-border pt-4 mt-2">
+              <p className="text-[13.5px] font-medium text-ink mb-2">Set login password</p>
+              <div className="flex gap-2 items-end">
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New password"
+                  className="flex-1 rounded border border-border-strong bg-white px-3 py-2 text-[14px] text-ink placeholder:text-muted-foreground focus:border-vermilion focus:outline-none focus:ring-1 focus:ring-vermilion"
+                />
+                <Button
+                  size="sm"
+                  onClick={savePassword}
+                  disabled={isPending || !newPassword || newPassword.length < 4}
+                >
+                  Set password
+                </Button>
+              </div>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={save} disabled={isPending}>
               {isPending ? "Saving…" : editing ? "Save changes" : "Create user"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkStatusOpen} onOpenChange={setBulkStatusOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Bulk update account status</DialogTitle>
+            <DialogDescription>
+              Paste or type email addresses (one per line or comma-separated). Each matching account
+              will be set to the chosen status.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="bulk-status-target">Set status to</Label>
+              <NativeSelect
+                id="bulk-status-target"
+                value={bulkStatusTarget}
+                onChange={(e) => setBulkStatusTarget(e.target.value as AccountStatus)}
+              >
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {ACCOUNT_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bulk-status-emails">Email addresses</Label>
+              <Textarea
+                id="bulk-status-emails"
+                rows={8}
+                spellCheck={false}
+                className="font-mono text-xs"
+                placeholder={"user1@iitpkd.ac.in\nuser2@iitpkd.ac.in"}
+                value={bulkStatusEmails}
+                onChange={(e) => setBulkStatusEmails(e.target.value)}
+              />
+            </div>
+            <FileUploadInput
+              disabled={isPending}
+              onLoaded={(csv) => setBulkStatusEmails(csv)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkStatusOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={runBulkStatus}
+              disabled={isPending || bulkStatusEmails.trim() === ""}
+            >
+              {isPending ? "Updating…" : "Update status"}
             </Button>
           </DialogFooter>
         </DialogContent>

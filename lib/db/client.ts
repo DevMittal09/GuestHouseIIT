@@ -1,10 +1,11 @@
 import "server-only";
 import { Pool, types } from "pg";
 
-// Return timestamps as ISO strings instead of Date objects, matching the
-// shape the rest of the codebase expects (the original Supabase PostgREST
+// Return timestamps and dates as strings instead of Date objects, matching
+// the shape the rest of the codebase expects (the original Supabase PostgREST
 // layer returned strings).
-// 1114 = timestamp without time zone, 1184 = timestamp with time zone.
+// 1082 = date, 1114 = timestamp without time zone, 1184 = timestamp with time zone.
+types.setTypeParser(1082, (val: string) => val);
 types.setTypeParser(1114, (val: string) => val);
 types.setTypeParser(1184, (val: string) => new Date(val).toISOString());
 

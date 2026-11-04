@@ -26,7 +26,7 @@ import {
 async function requireAcademicConsole(): Promise<Profile> {
   const user = await requireUser();
   if (!canUseConsoleSection(user.role, "academic")) {
-    throw new Error("You do not have access to Academic records");
+    throw new Error("You do not have access to Employees & Students");
   }
   if (!(await isAdminUnlocked())) {
     throw new Error("The console is locked - enter the console password again");

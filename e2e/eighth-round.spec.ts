@@ -168,7 +168,7 @@ test("Change rate copies an in-force rate's scope into a new rate from tomorrow"
 test("a record pasted into the console locks the student's parents on the booking form", async ({
   page,
 }) => {
-  await openConsole(page, "/admin/academic", "Academic records");
+  await openConsole(page, "/admin/academic", "Employees & Students");
 
   // Students is the kind the form reads; it opens on it.
   await expect(page.locator("#record-kind")).toHaveValue("student");
@@ -218,7 +218,7 @@ test("a record pasted into the console locks the student's parents on the bookin
   await expect(page.getByText("Aadhaar number *")).toBeVisible();
 
   // Put the database back as the other journeys expect it.
-  await openConsole(page, "/admin/academic", "Academic records");
+  await openConsole(page, "/admin/academic", "Employees & Students");
   await page.getByRole("button", { name: "Clear every record" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox").fill("CLEAR ALL");

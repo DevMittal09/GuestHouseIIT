@@ -175,8 +175,8 @@ export async function revokeAdminUnlock(): Promise<void> {
  */
 export async function throttleCheck(
   who: string,
-  limit = RATE_LIMITS.consoleUnlock.limit,
-  windowSeconds = RATE_LIMITS.consoleUnlock.windowSeconds
+  limit: number = RATE_LIMITS.consoleUnlock.limit,
+  windowSeconds: number = RATE_LIMITS.consoleUnlock.windowSeconds
 ): Promise<{ allowed: boolean; retryInSeconds: number }> {
   try {
     const result = await getStore().hitRateLimit(who, limit, windowSeconds);

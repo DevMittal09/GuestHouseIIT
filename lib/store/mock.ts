@@ -156,6 +156,8 @@ interface Db {
   institute_fcc?: InstituteFCC[];
   institute_hostels?: InstituteHostel[];
   institute_wardens?: InstituteWarden[];
+  /** Email+password login (for testing). Keyed by lower(email). */
+  password_hashes?: Record<string, string>;
 }
 
 // `MOCK_DB_PATH` lets the test suite run against a throwaway file instead of
@@ -665,6 +667,18 @@ export class MockStore implements DataStore {
     return p ? withComputed(db, p) : null;
   }
 
+  async getPasswordHash(email: string): Promise<string | null> {
+    const db = loadDb();
+    return db.password_hashes?.[email.trim().toLowerCase()] ?? null;
+  }
+
+  async setPasswordHash(email: string, hash: string): Promise<void> {
+    const db = loadDb();
+    if (!db.password_hashes) db.password_hashes = {};
+    db.password_hashes[email.trim().toLowerCase()] = hash;
+    saveDb(db);
+  }
+
   async listGuestHouses(): Promise<GuestHouse[]> {
     return loadDb().guest_houses;
   }
@@ -1158,6 +1172,20 @@ export class MockStore implements DataStore {
       db.profiles.push({ ...input } as Profile);
     }
     saveDb(db);
+  }
+
+  async bulkUpdateAccountStatus(emails: string[], status: import("@/lib/types").AccountStatus): Promise<number> {
+    const db = loadDb();
+    const lower = new Set(emails.map((e) => e.toLowerCase()));
+    let count = 0;
+    for (const p of db.profiles) {
+      if (lower.has(p.email.toLowerCase())) {
+        (p as Record<string, unknown>).account_status = status;
+        count++;
+      }
+    }
+    if (count > 0) saveDb(db);
+    return count;
   }
 
   async deleteProfile(id: string): Promise<void> {
@@ -2359,7 +2387,7 @@ function resolveComputed(db: Db, p: { email: string; role: string; unit_id?: str
 /** Return a Profile with computed fields resolved from institute tables. */
 function withComputed(db: Db, p: Record<string, unknown>): Profile {
   const computed = resolveComputed(db, p as { email: string; role: string; unit_id?: string | null });
-  return { ...p, ...computed } as Profile;
+  return { account_status: "active", ...p, ...computed } as Profile;
 }
 
 

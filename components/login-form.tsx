@@ -1,9 +1,7 @@
 "use client";
 
-/**
- * The sign-in form. A single "Sign in with Google" button - Google OAuth is
- * the only authentication method (2 Nov 2026).
- */
+import { useActionState, useEffect } from "react";
+import { signInWithPassword, type SignInResult } from "@/app/actions/auth";
 
 export function LoginForm({
   next,
@@ -20,20 +18,80 @@ export function LoginForm({
     ? `/api/auth/google/start?next=${encodeURIComponent(next)}`
     : "/api/auth/google/start";
 
+  const [state, formAction, pending] = useActionState(signInWithPassword, {
+    ok: false,
+    error: null,
+  } as SignInResult);
+
+  useEffect(() => {
+    if (state.ok && state.redirect) {
+      window.location.href = state.redirect;
+    }
+  }, [state]);
+
+  const error = notice || state.error;
+
   return (
     <div className="min-w-0">
-      {notice && (
+      {error && (
         <p
           role="alert"
           className="mb-5 rounded-[3px] border border-red-300 bg-red-50 px-3 py-2 text-[14.5px] text-red-900"
         >
-          {notice}
+          {error}
         </p>
       )}
 
+      <form action={formAction} className="space-y-4">
+        {next && <input type="hidden" name="next" value={next} />}
+
+        <div>
+          <label htmlFor="login-email" className="mb-1.5 block text-[14px] font-medium text-ink">
+            Email
+          </label>
+          <input
+            id="login-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            className="block w-full rounded border border-border-strong bg-white px-3 py-2.5 text-[15px] text-ink placeholder:text-muted-foreground focus:border-vermilion focus:outline-none focus:ring-1 focus:ring-vermilion"
+            placeholder="you@iitpkd.ac.in"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="login-password" className="mb-1.5 block text-[14px] font-medium text-ink">
+            Password
+          </label>
+          <input
+            id="login-password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            className="block w-full rounded border border-border-strong bg-white px-3 py-2.5 text-[15px] text-ink placeholder:text-muted-foreground focus:border-vermilion focus:outline-none focus:ring-1 focus:ring-vermilion"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={pending}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-md bg-ink p-3.5 text-[15.5px] font-semibold text-white transition-colors duration-150 hover:bg-ink/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-60"
+        >
+          {pending ? "Signing in..." : "Sign in"}
+        </button>
+      </form>
+
+      <div className="relative my-6 flex items-center">
+        <div className="grow border-t border-border" />
+        <span className="mx-3 shrink-0 text-[13px] text-muted-foreground">or</span>
+        <div className="grow border-t border-border" />
+      </div>
+
       <a
         href={googleUrl}
-        className={`mt-2 flex w-full items-center justify-center gap-3 rounded-md bg-vermilion-deep p-3.5 text-[15.5px] font-semibold text-white transition-colors duration-150 hover:bg-vermilion-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion${center ? "" : ""}`}
+        className={`flex w-full items-center justify-center gap-3 rounded-md bg-vermilion-deep p-3.5 text-[15.5px] font-semibold text-white transition-colors duration-150 hover:bg-vermilion-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion${center ? "" : ""}`}
       >
         <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" aria-hidden="true">
           <path

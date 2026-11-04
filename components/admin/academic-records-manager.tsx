@@ -85,7 +85,7 @@ export function AcademicRecordsManager({
   return (
     <section className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Institute records</h2>
+        <h2 className="text-lg font-semibold">Employees &amp; Students</h2>
         <p className="text-sm text-muted-foreground">
           The institute&apos;s records, as you paste them in. The Requester details card at the top
           of New Booking, the Assistant Warden&apos;s check of a student&apos;s family and the

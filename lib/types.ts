@@ -11,6 +11,8 @@ export type Role =
    */
   | "alumni"
   | "warden"
+  | "deputy_warden"
+  | "assistant_warden"
   | "faculty_advisor"
   /** The IAR Office: approves IAR Student Cell requests, and books directly. */
   | "iar_cell"
@@ -198,11 +200,22 @@ export const STUDENT_RELATIONSHIPS = [
   "Self",
 ] as const;
 
+export type AccountStatus = "active" | "relieved" | "graduated" | "suspended" | "retired";
+
+export const ACCOUNT_STATUS_LABELS: Record<AccountStatus, string> = {
+  active: "Active",
+  relieved: "Relieved",
+  graduated: "Graduated",
+  suspended: "Suspended",
+  retired: "Retired",
+};
+
 export type Profile = {
   id: string;
   email: string;
   full_name: string;
   role: Role;
+  account_status: AccountStatus;
   /** Computed from institute_students/institute_wardens via profiles_v. */
   hostel_name: string | null;
   /** Computed from units.name via profiles_v. */
@@ -714,6 +727,8 @@ export const ROLE_LABELS: Record<Role, string> = {
   // category anyone can still submit under.
   alumni: "Alumni (via IAR, legacy)",
   warden: "Assistant Warden",
+  deputy_warden: "Deputy Warden",
+  assistant_warden: "Assistant Warden",
   faculty_advisor: "Faculty Advisor",
   iar_cell: "IAR Office",
   iar_student_cell: "IAR Student Cell",

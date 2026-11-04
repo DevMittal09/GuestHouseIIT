@@ -31,7 +31,7 @@ create extension if not exists btree_gist;
 -- user_role: migrations 1 + 9
 create type public.user_role as enum (
   'student', 'employee', 'official', 'club',
-  'warden', 'faculty_advisor', 'iar_cell', 'gh_manager', 'developer',
+  'warden', 'deputy_warden', 'assistant_warden', 'faculty_advisor', 'iar_cell', 'gh_manager', 'developer',
   'iar_student_cell', 'gh_caretaker'
 );
 
@@ -119,7 +119,11 @@ create table public.profiles (
   full_name           text not null,
   role                public.user_role not null,
   -- migration 15
-  unit_id             uuid
+  unit_id             uuid,
+  -- email+password login (for testing)
+  password_hash       text,
+  -- active / relieved / graduated / suspended / retired
+  account_status      text not null default 'active'
 );
 
 comment on table public.profiles is
@@ -847,6 +851,7 @@ where jsonb_typeof(b.meals) = 'array'
 create or replace view public.profiles_v as
 select
   p.id, p.email, p.full_name, p.role,
+  p.account_status,
   case
     when p.role = 'student' then s.hostel
     when p.role = 'warden'  then ih.hostel_name

@@ -150,7 +150,7 @@ export const CONSOLE_SECTIONS: Record<
       "Who forwards whose request: the approval chain for each kind of booking, the stages in it, and who decides each one.",
   },
   academic: {
-    label: "Academic records",
+    label: "Employees & Students",
     href: "/admin/academic",
     roles: ["gh_manager", "developer"],
     blurb:

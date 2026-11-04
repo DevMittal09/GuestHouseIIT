@@ -32,6 +32,7 @@ export function profile(patch: Partial<Profile> = {}): Profile {
     email: "person@iitpkd.ac.in",
     full_name: "Test Person",
     role: "employee",
+    account_status: "active",
     hostel_name: null,
     department_or_club: null,
     roll_number: null,
@@ -176,6 +177,7 @@ function resolveComputed(input: SeededProfileInput): Partial<Profile> {
 /** Promote a SeededProfileInput to a full Profile with computed fields resolved from seed data. */
 export function asProfile(input: SeededProfileInput, patch?: Partial<Profile>): Profile {
   return {
+    account_status: "active",
     ...input,
     hostel_name: null,
     department_or_club: null,

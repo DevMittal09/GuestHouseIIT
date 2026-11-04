@@ -34,8 +34,8 @@ import { dispatchOutbox, drainOutbox } from "@/lib/mail/dispatch";
 import { queueMessages } from "@/lib/mail/notify";
 import type { MailStatus } from "@/lib/mail/types";
 import { getStore } from "@/lib/store";
-import type { BookingStatus, Profile, Role, RoomType } from "@/lib/types";
-import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
+import type { AccountStatus, BookingStatus, Profile, Role, RoomType } from "@/lib/types";
+import { ACCOUNT_STATUS_LABELS, REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
 import { occupancyNotStartedError } from "@/lib/workflow";
 import {
   assignableRoles,
@@ -354,6 +354,10 @@ const userSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v && v.trim() ? v.trim() : null)),
+  account_status: z
+    .enum(Object.keys(ACCOUNT_STATUS_LABELS) as [AccountStatus, ...AccountStatus[]])
+    .optional()
+    .default("active"),
 });
 
 export type UserFormInput = z.input<typeof userSchema>;
@@ -714,6 +718,63 @@ export async function deleteUserAction(id: string): Promise<ActionResult> {
     if (editError) return { ok: false, error: editError };
     await getStore().deleteProfile(id);
     return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setUserPasswordAction(
+  id: string,
+  password: string
+): Promise<ActionResult> {
+  try {
+    const { hashSecret } = await import("@/lib/crypto");
+    await requireConsole("users");
+    if (!password || password.length < 4) {
+      return { ok: false, error: "Password must be at least 4 characters" };
+    }
+    const target = await getStore().getProfile(id);
+    if (!target) return { ok: false, error: "User not found" };
+    await getStore().setPasswordHash(target.email, hashSecret(password));
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export type BulkStatusResult = ActionResult & { updated?: number; notFound?: string[] };
+
+export async function bulkUpdateAccountStatusAction(
+  emailsCsv: string,
+  status: AccountStatus
+): Promise<BulkStatusResult> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    if (!ACCOUNT_STATUS_LABELS[status]) return { ok: false, error: "Invalid status" };
+    const emails = emailsCsv
+      .split(/[\n,]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (emails.length === 0) return { ok: false, error: "No emails provided" };
+    const unique = [...new Set(emails)];
+
+    const store = getStore();
+    const profiles = await store.listProfiles();
+    const knownEmails = new Set(profiles.map((p) => p.email.toLowerCase()));
+    const notFound = unique.filter((e) => !knownEmails.has(e));
+
+    const toUpdate = unique.filter((e) => knownEmails.has(e));
+    if (toUpdate.length === 0) {
+      return { ok: false, error: "None of those emails match an account", notFound };
+    }
+
+    const updated = await store.bulkUpdateAccountStatus(toUpdate, status);
+    await recordAudit(actor, "bulk_status_update", `${updated} accounts`, {
+      status,
+      emails: toUpdate,
+    });
+    revalidateConsole();
+    return { ok: true, updated, notFound };
   } catch (e) {
     return fail(e);
   }

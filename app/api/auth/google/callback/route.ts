@@ -68,6 +68,11 @@ export async function GET(request: Request): Promise<Response> {
     return back("That account is not registered on the guest house portal. Please contact the guest house office.", base);
   }
 
+  if (profile.account_status !== "active") {
+    await recordAudit(profile, "signin.failure", identity.email, { method: "google", reason: "account inactive", status: profile.account_status });
+    return back("Your account is not active. Please contact the guest house office.", base);
+  }
+
   await startSession(profile.id);
   await recordAudit(profile, "signin.success", profile.email, { method: "google" });
   return NextResponse.redirect(new URL(remembered.next ?? homeForRole(profile.role), base));

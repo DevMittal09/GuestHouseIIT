@@ -67,7 +67,7 @@ import type {
   PaymentMode,
 } from "@/lib/invoice";
 
-export type NewProfileInput = Omit<Profile, "id" | "hostel_name" | "department_or_club" | "roll_number" | "staff_category">;
+export type NewProfileInput = Omit<Profile, "id" | "hostel_name" | "department_or_club" | "roll_number" | "staff_category" | "account_status"> & { account_status?: Profile["account_status"] };
 
 /**
  * A profile created with an id the caller already knows.
@@ -134,6 +134,8 @@ export interface DataStore {
   listProfiles(): Promise<Profile[]>;
   getProfile(id: string): Promise<Profile | null>;
   getProfileByEmail(email: string): Promise<Profile | null>;
+  getPasswordHash(email: string): Promise<string | null>;
+  setPasswordHash(email: string, hash: string): Promise<void>;
 
   listGuestHouses(): Promise<GuestHouse[]>;
   getGuestHouse(id: string): Promise<GuestHouse | null>;
@@ -238,6 +240,8 @@ export interface DataStore {
    */
   createProfiles(inputs: SeededProfileInput[]): Promise<void>;
   updateProfile(id: string, patch: Partial<NewProfileInput>): Promise<void>;
+  /** Set account_status for every profile matching one of `emails`. Returns the count of rows changed. */
+  bulkUpdateAccountStatus(emails: string[], status: import("@/lib/types").AccountStatus): Promise<number>;
   /** Throws if the user still has bookings. */
   deleteProfile(id: string): Promise<void>;
 
