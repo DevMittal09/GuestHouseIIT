@@ -1,5 +1,5 @@
 import { splitCsvLine } from "./csv";
-import { ROLE_LABELS, type Profile, type Role, type StaffCategory } from "./types";
+import { ROLE_LABELS, type Profile, type Role } from "./types";
 import type { Unit } from "./units";
 
 /**
@@ -37,10 +37,6 @@ export type UserColumn =
   | "email"
   | "full_name"
   | "role"
-  | "hostel_name"
-  | "department_or_club"
-  | "roll_number"
-  | "staff_category"
   | "unit";
 
 /**
@@ -52,9 +48,7 @@ export const DEFAULT_COLUMNS: UserColumn[] = [
   "email",
   "full_name",
   "role",
-  "hostel_name",
-  "department_or_club",
-  "roll_number",
+  "unit",
 ];
 
 /** Every column that may be named in a header, and what a header may call it. */
@@ -62,10 +56,6 @@ export const KNOWN_COLUMNS: Record<UserColumn, string[]> = {
   email: ["email", "email address", "e-mail", "institute email", "mail"],
   full_name: ["full_name", "full name", "name", "person"],
   role: ["role", "portal role"],
-  hostel_name: ["hostel_name", "hostel", "hostel name"],
-  department_or_club: ["department_or_club", "department", "dept", "club", "department / club", "dept / club"],
-  roll_number: ["roll_number", "roll number", "roll no", "roll no.", "roll", "employee id"],
-  staff_category: ["staff_category", "staff category", "category", "faculty or staff"],
   unit: ["unit", "unit_id", "unit name", "department unit"],
 };
 
@@ -79,10 +69,6 @@ export type UserImportRow = {
   email: string;
   full_name: string;
   role: Role;
-  hostel_name: string | null;
-  department_or_club: string | null;
-  roll_number: string | null;
-  staff_category: StaffCategory | null;
   unit_id: string | null;
 };
 
@@ -159,24 +145,11 @@ function roleIndex(assignable: Role[]): Map<string, Role> {
   return index;
 }
 
-function staffCategoryFrom(value: string | null, roleWord: string): StaffCategory | null {
-  const text = (value ?? roleWord).trim().toLowerCase();
-  if (/^(faculty|teaching)$/.test(text)) return "faculty";
-  if (/^(staff|non-teaching staff|non teaching staff|non-faculty|non faculty)$/.test(text)) {
-    return "staff";
-  }
-  return null;
-}
-
 /** Whether two rows say the same thing about a person. */
 function sameProfile(before: Profile, row: UserImportRow): boolean {
   return (
     before.full_name === row.full_name &&
     before.role === row.role &&
-    (before.hostel_name ?? null) === row.hostel_name &&
-    (before.department_or_club ?? null) === row.department_or_club &&
-    (before.roll_number ?? null) === row.roll_number &&
-    (before.staff_category ?? null) === row.staff_category &&
     (before.unit_id ?? null) === row.unit_id
   );
 }
@@ -185,8 +158,6 @@ export type UserImportContext = {
   profiles: Profile[];
   /** The roles this console user may hand out (`assignableRoles`). */
   assignable: Role[];
-  /** Hostels on record, so a warden's scoping cannot be set to a typo. */
-  hostels: string[];
   units: Unit[];
   /** Accounts this console user may not edit at all (`userEditError`). */
   locked?: (profile: Profile) => string | null;
@@ -202,10 +173,9 @@ export type UserImportContext = {
  * not wipe everyone's hostel.
  */
 export function planUserImport(text: string, context: UserImportContext): UserImportPlan {
-  const { profiles, assignable, hostels, units } = context;
+  const { profiles, assignable, units } = context;
   const byEmail = new Map(profiles.map((p) => [p.email.trim().toLowerCase(), p]));
   const roles = roleIndex(assignable);
-  const hostelByName = new Map(hostels.map((h) => [h.toLowerCase(), h]));
   const unitByName = new Map<string, Unit>();
   for (const unit of units) {
     unitByName.set(unit.name.toLowerCase(), unit);
@@ -305,17 +275,6 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
       return;
     }
 
-    const hostelWord = value("hostel_name");
-    let hostel = current?.hostel_name ?? null;
-    if (hostelWord) {
-      const match = hostelByName.get(hostelWord.toLowerCase());
-      if (!match) {
-        problems.push(`Line ${n}: "${hostelWord}" is not a hostel on record.`);
-        return;
-      }
-      hostel = match;
-    }
-
     const unitWord = value("unit");
     let unitId = current?.unit_id ?? null;
     if (unitWord) {
@@ -331,15 +290,6 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
       email,
       full_name: name,
       role,
-      hostel_name: hostel,
-      department_or_club: value("department_or_club") ?? current?.department_or_club ?? null,
-      roll_number: value("roll_number") ?? current?.roll_number ?? null,
-      staff_category:
-        role === "employee"
-          ? (staffCategoryFrom(value("staff_category"), roleWord ?? "") ??
-            current?.staff_category ??
-            null)
-          : null,
       unit_id: unitId,
     };
 
@@ -374,10 +324,6 @@ export function changedFields(before: Profile, row: UserImportRow): string[] {
   const labels: [string, boolean][] = [
     ["Name", before.full_name !== row.full_name],
     ["Role", before.role !== row.role],
-    ["Hostel", (before.hostel_name ?? null) !== row.hostel_name],
-    ["Dept / Club", (before.department_or_club ?? null) !== row.department_or_club],
-    ["Roll No.", (before.roll_number ?? null) !== row.roll_number],
-    ["Category", (before.staff_category ?? null) !== row.staff_category],
     ["Unit", (before.unit_id ?? null) !== row.unit_id],
   ];
   return labels.filter(([, changed]) => changed).map(([label]) => label);

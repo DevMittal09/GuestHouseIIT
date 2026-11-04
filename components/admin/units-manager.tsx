@@ -25,10 +25,10 @@ import {
   hodApproversFor,
   hodUnitIdFor,
   isStudentBody,
-  OFFICE_CLASS_LABELS,
+  OFFICE_TYPE_LABELS,
   secretaryEmailOf,
   UNIT_HEAD_TITLES,
-  UNIT_KIND_LABELS,
+  UNIT_CATEGORY_LABELS,
   type OfficeClass,
   type Unit,
   type UnitKind,
@@ -47,15 +47,15 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<UnitKind>("department");
-  const [parentId, setParentId] = useState("");
-  const [officeClass, setOfficeClass] = useState<OfficeClass>("department");
+  const [category, setCategory] = useState<UnitKind>("department");
+  const [parentDepartmentId, setParentDepartmentId] = useState("");
+  const [officeType, setOfficeType] = useState<OfficeClass>("department");
   const [deleting, setDeleting] = useState<Unit | null>(null);
 
   const people = [...profiles].sort((a, b) => a.full_name.localeCompare(b.full_name));
   // Anyone the console may name Faculty Advisor: every faculty member.
   const faculty = people.filter((p) => canBeFacultyAdvisor(p));
-  const studentBodies = units.filter((u) => isStudentBody(u.kind));
+  const studentBodies = units.filter((u) => isStudentBody(u.category));
   const byId = new Map(profiles.map((p) => [p.id, p]));
   const members = (unitId: string) => profiles.filter((p) => p.unit_id === unitId).length;
 
@@ -74,13 +74,13 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
     run(async () => {
       const result = await createUnitAction({
         name,
-        kind,
-        parent_id: parentId,
-        office_class: kind === "office" ? officeClass : null,
+        category,
+        parent_department_id: parentDepartmentId,
+        office_type: category === "office" ? officeType : null,
       });
       if (result.ok) {
         setName("");
-        setParentId("");
+        setParentDepartmentId("");
       }
       return result;
     }, `${name} added`);
@@ -119,25 +119,25 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="unit-kind">Kind</Label>
+          <Label htmlFor="unit-category">Category</Label>
           <NativeSelect
-            id="unit-kind"
-            value={kind}
-            onChange={(e) => setKind(e.target.value as UnitKind)}
+            id="unit-category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value as UnitKind)}
           >
-            {(Object.keys(UNIT_KIND_LABELS) as UnitKind[]).map((k) => (
+            {(Object.keys(UNIT_CATEGORY_LABELS) as UnitKind[]).map((k) => (
               <option key={k} value={k}>
-                {UNIT_KIND_LABELS[k]}
+                {UNIT_CATEGORY_LABELS[k]}
               </option>
             ))}
           </NativeSelect>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="unit-parent">Sits under</Label>
+          <Label htmlFor="unit-parent">Parent department</Label>
           <NativeSelect
             id="unit-parent"
-            value={parentId}
-            onChange={(e) => setParentId(e.target.value)}
+            value={parentDepartmentId}
+            onChange={(e) => setParentDepartmentId(e.target.value)}
           >
             <option value="">Nothing</option>
             {units.map((u) => (
@@ -147,17 +147,17 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
             ))}
           </NativeSelect>
         </div>
-        {kind === "office" && (
+        {category === "office" && (
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="unit-office-class">Kind of office</Label>
+            <Label htmlFor="unit-office-type">Office type</Label>
             <NativeSelect
-              id="unit-office-class"
-              value={officeClass}
-              onChange={(e) => setOfficeClass(e.target.value as OfficeClass)}
+              id="unit-office-type"
+              value={officeType}
+              onChange={(e) => setOfficeType(e.target.value as OfficeClass)}
             >
-              {(Object.keys(OFFICE_CLASS_LABELS) as OfficeClass[]).map((c) => (
+              {(Object.keys(OFFICE_TYPE_LABELS) as OfficeClass[]).map((c) => (
                 <option key={c} value={c}>
-                  {OFFICE_CLASS_LABELS[c]}
+                  {OFFICE_TYPE_LABELS[c]}
                 </option>
               ))}
             </NativeSelect>
@@ -179,12 +179,12 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
             <TableHeader>
               <TableRow>
                 <TableHead>Unit</TableHead>
-                <TableHead>Office class</TableHead>
-                <TableHead>Sits under</TableHead>
+                <TableHead>Office type</TableHead>
+                <TableHead>Parent department</TableHead>
                 <TableHead>Head</TableHead>
                 <TableHead>Acting head</TableHead>
                 <TableHead>Approved by</TableHead>
-                <TableHead>HOD approval by</TableHead>
+                <TableHead>HOD Approval From</TableHead>
                 <TableHead className="text-right">Members</TableHead>
                 <TableHead />
               </TableRow>
@@ -197,29 +197,29 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                     <TableCell>
                       <span className="font-medium">{u.name}</span>
                       <Badge variant="outline" className="ml-2 align-middle">
-                        {UNIT_KIND_LABELS[u.kind]}
+                        {UNIT_CATEGORY_LABELS[u.category]}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {u.kind === "office" ? (
+                      {u.category === "office" ? (
                         <NativeSelect
-                          aria-label={`Kind of office: ${u.name}`}
-                          value={u.office_class ?? ""}
+                          aria-label={`Office type: ${u.name}`}
+                          value={u.office_type ?? ""}
                           disabled={isPending}
                           onChange={(e) =>
                             run(
                               () =>
                                 updateUnitAction(u.id, {
-                                  office_class: (e.target.value || null) as OfficeClass | null,
+                                  office_type: (e.target.value || null) as OfficeClass | null,
                                 }),
                               `${u.name} updated`
                             )
                           }
                         >
-                          <option value="">Not set (treated as a department office)</option>
-                          {(Object.keys(OFFICE_CLASS_LABELS) as OfficeClass[]).map((c) => (
+                          <option value="">Not set (treated as under a department)</option>
+                          {(Object.keys(OFFICE_TYPE_LABELS) as OfficeClass[]).map((c) => (
                             <option key={c} value={c}>
-                              {OFFICE_CLASS_LABELS[c]}
+                              {OFFICE_TYPE_LABELS[c]}
                             </option>
                           ))}
                         </NativeSelect>
@@ -229,12 +229,12 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                     </TableCell>
                     <TableCell>
                       <NativeSelect
-                        aria-label={`Parent of ${u.name}`}
-                        value={u.parent_id ?? ""}
+                        aria-label={`Parent department of ${u.name}`}
+                        value={u.parent_department_id ?? ""}
                         disabled={isPending}
                         onChange={(e) =>
                           run(
-                            () => updateUnitAction(u.id, { parent_id: e.target.value }),
+                            () => updateUnitAction(u.id, { parent_department_id: e.target.value }),
                             `${u.name} moved`
                           )
                         }
@@ -251,14 +251,14 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                     </TableCell>
                     <TableCell>
                       <PersonSelect
-                        label={`${UNIT_HEAD_TITLES[u.kind]} of ${u.name}`}
+                        label={`${UNIT_HEAD_TITLES[u.category]} of ${u.name}`}
                         value={u.head_id}
                         people={people}
                         disabled={isPending}
                         onChange={(id) =>
                           run(
                             () => updateUnitAction(u.id, { head_id: id }),
-                            `${UNIT_HEAD_TITLES[u.kind]} of ${u.name} updated`
+                            `${UNIT_HEAD_TITLES[u.category]} of ${u.name} updated`
                           )
                         }
                       />
@@ -290,12 +290,12 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                     </TableCell>
                     <TableCell>
                       <NativeSelect
-                        aria-label={`HOD approval for ${u.name}`}
-                        value={u.hod_unit_id ?? ""}
+                        aria-label={`HOD approval from: ${u.name}`}
+                        value={u.hod_approval_from_id ?? ""}
                         disabled={isPending}
                         onChange={(e) =>
                           run(
-                            () => updateUnitAction(u.id, { hod_unit_id: e.target.value }),
+                            () => updateUnitAction(u.id, { hod_approval_from_id: e.target.value }),
                             `HOD approval for ${u.name} updated`
                           )
                         }
@@ -304,7 +304,7 @@ export function UnitsManager({ units, profiles }: { units: Unit[]; profiles: Pro
                           {defaultHodLabel(u, units, byId)}
                         </option>
                         {units
-                          .filter((other) => other.id !== u.id && (other.kind === "department" || other.kind === "office"))
+                          .filter((other) => other.id !== u.id && (other.category === "department" || other.category === "office"))
                           .map((other) => (
                             <option key={other.id} value={other.id}>
                               {other.name}
@@ -403,7 +403,7 @@ function FacultyAdvisors({
               const mailbox = secretaryEmailOf(u.id, units);
               // Where the value comes from the council above, say whose it is.
               const inheritedFrom = (own: string | null | undefined, effective: string | null) =>
-                !own?.trim() && effective ? nameOf(u.parent_id) : undefined;
+                !own?.trim() && effective ? nameOf(u.parent_department_id) : undefined;
               const advisorFrom = inheritedFrom(u.faculty_advisor_id, advisorId);
               const mailboxFrom = inheritedFrom(u.secretary_email, mailbox);
               // A stored advisor who is no longer faculty still shows, so the
@@ -415,11 +415,11 @@ function FacultyAdvisors({
                   <TableCell>
                     <span className="font-medium">{u.name}</span>
                     <Badge variant="outline" className="ml-2 align-middle">
-                      {UNIT_KIND_LABELS[u.kind]}
+                      {UNIT_CATEGORY_LABELS[u.category]}
                     </Badge>
-                    {u.parent_id && (
+                    {u.parent_department_id && (
                       <span className="mt-0.5 block text-xs text-muted-foreground">
-                        Under {nameOf(u.parent_id) ?? "?"}
+                        Under {nameOf(u.parent_department_id) ?? "?"}
                       </span>
                     )}
                   </TableCell>
@@ -561,7 +561,7 @@ function PersonSelect({
  * actually resolves to rather than leaving the office to guess.
  */
 function defaultHodLabel(unit: Unit, units: Unit[], byId: Map<string, Profile>): string {
-  const withDefault = units.map((x) => (x.id === unit.id ? { ...x, hod_unit_id: null } : x));
+  const withDefault = units.map((x) => (x.id === unit.id ? { ...x, hod_approval_from_id: null } : x));
   const target = hodUnitIdFor(unit.id, withDefault);
   if (!target) return "Default - no HOD stage";
   const names = hodApproversFor({ id: "", unit_id: unit.id }, withDefault).map(

@@ -203,8 +203,11 @@ export type Profile = {
   email: string;
   full_name: string;
   role: Role;
+  /** Computed from institute_students/institute_wardens via profiles_v. */
   hostel_name: string | null;
+  /** Computed from units.name via profiles_v. */
   department_or_club: string | null;
+  /** Computed from institute_students via profiles_v. */
   roll_number: string | null;
   /**
    * The department, club or office this person belongs to (migration 15). It
@@ -212,12 +215,7 @@ export type Profile = {
    * because profiles written before migration 15 have none.
    */
   unit_id?: string | null;
-  /**
-   * Faculty or non-teaching staff, for employees only. Both need their
-   * HOD's approval for an official booking (Phase 4); the category decides
-   * the debitable heads offered (faculty: Department / Project / PDF; staff:
-   * Department).
-   */
+  /** Computed from institute_employees.employee_type via profiles_v. */
   staff_category?: StaffCategory | null;
 }
 

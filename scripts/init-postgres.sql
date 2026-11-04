@@ -118,12 +118,8 @@ create table public.profiles (
   email               text unique not null,
   full_name           text not null,
   role                public.user_role not null,
-  hostel_name         text,
-  department_or_club  text,
-  roll_number         text,
   -- migration 15
-  unit_id             uuid,
-  staff_category      text check (staff_category is null or staff_category in ('faculty', 'staff'))
+  unit_id             uuid
 );
 
 comment on table public.profiles is
@@ -181,32 +177,26 @@ create trigger institute_hostels_updated_at
   before update on public.institute_hostels
   for each row execute function public.set_updated_at();
 
--- FK from profiles.hostel_name to institute_hostels
-alter table public.profiles
-  add constraint profiles_hostel_fk
-  foreign key (hostel_name) references public.institute_hostels (hostel_name)
-  on update cascade on delete restrict;
-
 -- ------------------------------ units -------------------------------------
 -- Migration 15, columns from 16, 18, 25
 create table public.units (
   id               uuid primary key default gen_random_uuid(),
   name             text not null unique,
-  kind             text not null check (kind in ('department', 'club', 'council', 'office')),
-  parent_id        uuid references public.units (id) on delete restrict,
+  category         text not null check (category in ('department', 'club', 'council', 'office')),
+  parent_department_id uuid references public.units (id) on delete restrict,
   head_id          uuid references public.profiles (id) on delete set null,
   acting_head_id   uuid references public.profiles (id) on delete set null,
   created_at       timestamptz not null default now(),
   -- migration 16
-  office_class     text check (office_class is null or office_class in ('officer', 'department')),
+  office_type      text check (office_type is null or office_type in ('officer', 'department')),
   -- migration 18
-  hod_unit_id      uuid references public.units (id) on delete set null,
+  hod_approval_from_id uuid references public.units (id) on delete set null,
   -- migration 25
   faculty_advisor_id uuid references public.profiles (id) on delete set null,
   secretary_email    text,
-  constraint units_hod_unit_not_self check (hod_unit_id is distinct from id),
+  constraint units_hod_unit_not_self check (hod_approval_from_id is distinct from id),
   constraint units_student_body_fields_check check (
-    kind in ('club', 'council') or (faculty_advisor_id is null and secretary_email is null)
+    category in ('club', 'council') or (faculty_advisor_id is null and secretary_email is null)
   ),
   constraint units_secretary_email_check check (
     secretary_email is null or (char_length(secretary_email) <= 254 and secretary_email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$')
@@ -706,7 +696,6 @@ create table public.institute_students (
   programme               text,
   faculty_advisor_guide_name text,
   department              text,
-  year_of_admission       text,
   phone                   text,
   aadhar_number           text,
   father_name             text,
@@ -733,6 +722,12 @@ create unique index institute_students_email_idx
 create trigger institute_students_updated_at
   before update on public.institute_students
   for each row execute function public.set_updated_at();
+
+-- FK from institute_students.hostel to institute_hostels
+alter table public.institute_students
+  add constraint institute_students_hostel_fk
+  foreign key (hostel) references public.institute_hostels (hostel_name)
+  on update cascade on delete set null;
 
 -- ------------------------------ institute_employees ------------------------
 -- Migration 35
@@ -765,7 +760,7 @@ create table public.institute_offices (
   id                uuid primary key default gen_random_uuid(),
   office_email      text not null,
   office_name       text,
-  office_class      text,
+  office_type       text,
   phone             text,
   department_head   text,
   head_name         text,
@@ -845,6 +840,38 @@ cross join lateral jsonb_array_elements(b.meals) as day
 cross join lateral (values ('breakfast'), ('lunch'), ('dinner')) as meal(meal_type)
 where jsonb_typeof(b.meals) = 'array'
   and (day ->> meal.meal_type)::boolean;
+
+-- profiles_v: computed columns from institute tables
+-- department_or_club, roll_number, staff_category and hostel_name are no longer
+-- stored on profiles; they are resolved at read time from the institute tables.
+create or replace view public.profiles_v as
+select
+  p.id, p.email, p.full_name, p.role,
+  case
+    when p.role = 'student' then s.hostel
+    when p.role = 'warden'  then ih.hostel_name
+    else null
+  end as hostel_name,
+  u.name as department_or_club,
+  s.roll_number,
+  p.unit_id,
+  case
+    when e.employee_type is null then null
+    when lower(e.employee_type) like '%non%teaching%'
+      or lower(e.employee_type) like '%non teaching%' then 'staff'
+    else 'faculty'
+  end as staff_category
+from public.profiles p
+left join public.institute_students s
+  on lower(s.email) = lower(p.email) and p.role = 'student'
+left join public.institute_wardens w
+  on lower(w.warden_email) = lower(p.email) and p.role = 'warden'
+left join public.institute_hostels ih
+  on w.hostel_id = ih.hostel_id
+left join public.units u
+  on u.id = p.unit_id
+left join public.institute_employees e
+  on lower(e.email) = lower(p.email) and p.role = 'employee';
 
 -- ============================= FUNCTIONS ==================================
 
@@ -1511,7 +1538,6 @@ create trigger rooms_recount_total
 -- profiles (migration 31)
 create index profiles_role_idx on public.profiles (role);
 create index profiles_unit_idx on public.profiles (unit_id) where unit_id is not null;
-create index profiles_hostel_idx on public.profiles (hostel_name) where hostel_name is not null;
 create index profiles_email_lower_idx on public.profiles (lower(email));
 
 -- bookings (migrations 1, 18, 22)
@@ -1589,8 +1615,8 @@ create index units_head_idx on public.units (head_id) where head_id is not null;
 create index units_acting_head_idx on public.units (acting_head_id) where acting_head_id is not null;
 create index user_import_batches_actor_idx on public.user_import_batches (actor_id) where actor_id is not null;
 create index user_import_batches_reverted_by_idx on public.user_import_batches (reverted_by) where reverted_by is not null;
-create index units_parent_idx on public.units (parent_id) where parent_id is not null;
-create index units_hod_unit_idx on public.units (hod_unit_id) where hod_unit_id is not null;
+create index units_parent_idx on public.units (parent_department_id) where parent_department_id is not null;
+create index units_hod_unit_idx on public.units (hod_approval_from_id) where hod_approval_from_id is not null;
 create index tariffs_guest_house_idx on public.tariffs (guest_house_id) where guest_house_id is not null;
 create index sessions_rotated_from_idx on public.sessions (rotated_from) where rotated_from is not null;
 

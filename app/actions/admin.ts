@@ -29,7 +29,6 @@ import {
   type UserImportBatch,
 } from "@/lib/users-import-undo";
 import { randomUUID } from "crypto";
-import { getHostels } from "@/lib/settings-server";
 import { mailConfig } from "@/lib/mail/config";
 import { dispatchOutbox, drainOutbox } from "@/lib/mail/dispatch";
 import { queueMessages } from "@/lib/mail/notify";
@@ -349,20 +348,12 @@ const userSchema = z.object({
   // Derived from ROLE_LABELS rather than written out again: a hand-kept copy
   // of the role list silently rejected every newly added role.
   role: z.enum(Object.keys(ROLE_LABELS) as [Role, ...Role[]]),
-  hostel_name: z.string().trim().transform((v) => v || null),
-  department_or_club: z.string().trim().transform((v) => v || null),
-  roll_number: z.string().trim().transform((v) => v || null),
   // The unit decides who approves for this person (lib/units.ts); blank means
   // they belong to none, and their requests route as if nobody were set.
   unit_id: z
     .string()
     .optional()
     .transform((v) => (v && v.trim() ? v.trim() : null)),
-  // Only meaningful for employees: faculty official bookings wait for the HOD.
-  staff_category: z
-    .enum(["", "faculty", "staff"])
-    .optional()
-    .transform((v) => (v ? v : null)),
 });
 
 export type UserFormInput = z.input<typeof userSchema>;
@@ -440,15 +431,13 @@ export type UserImportSummary = {
 
 async function userImportContext(actor: Profile) {
   const store = getStore();
-  const [profiles, hostels, units] = await Promise.all([
+  const [profiles, units] = await Promise.all([
     store.listProfiles(),
-    getHostels(),
     store.listUnits(),
   ]);
   return {
     profiles,
     assignable: assignableRoles(actor.role, Object.keys(ROLE_LABELS) as Role[]),
-    hostels,
     units,
     locked: (target: Profile) => userEditError(actor, target),
   };

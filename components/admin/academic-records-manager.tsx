@@ -161,7 +161,7 @@ function ImportSection({
   return (
     <SettingCard
       title={`Paste ${INSTITUTE_TABLE_LABELS[kind].toLowerCase()}`}
-      description="One record per line, comma, semicolon or tab separated. The first column is the key (email or ID), which is what a record is found by; everything after it is optional, and a short line simply leaves the rest off the record. Lines beginning with # are ignored, and so is a pasted header row."
+      description="One record per line, comma, semicolon or tab separated. The first column is the key (email or ID), which is what a record is found by; everything after it is optional, and a short line simply leaves the rest off the record. Lines beginning with # are ignored. A header row is detected automatically and columns are mapped by name, so the order does not have to match; unknown columns in the header are ignored."
     >
       <div className="space-y-1.5">
         <p className="text-sm font-medium">Columns, in order</p>
@@ -241,12 +241,27 @@ function ImportSection({
       )}
 
       {shown && shown.problems.length === 0 && (
-        <p className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm">
-          <span className="font-medium">{describeImport(shown)}.</span>{" "}
-          {shown.added.length + shown.updated.length === 0
-            ? "Every line matches what is already stored."
-            : "Import to apply it. An updated record replaces what is stored for that email."}
-        </p>
+        <div className="border-l-4 border-border-strong bg-band/60 px-3 py-2 text-sm space-y-1">
+          <p>
+            <span className="font-medium">{describeImport(shown)}.</span>{" "}
+            {shown.added.length + shown.updated.length === 0
+              ? "Every line matches what is already stored."
+              : "Import to apply it. An updated record replaces what is stored for that email."}
+          </p>
+          {shown.hadHeader && (
+            <p className="text-xs text-muted-foreground">
+              Header detected: reading {shown.columns.length} column{shown.columns.length === 1 ? "" : "s"} by name
+              {shown.skippedHeaders.length > 0 && (
+                <> ({shown.skippedHeaders.length} ignored: {shown.skippedHeaders.join(", ")})</>
+              )}
+            </p>
+          )}
+          {!shown.hadHeader && (
+            <p className="text-xs text-muted-foreground">
+              No header detected - reading columns in default order
+            </p>
+          )}
+        </div>
       )}
 
       <div className="flex flex-wrap gap-2">

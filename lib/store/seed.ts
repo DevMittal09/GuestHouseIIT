@@ -8,10 +8,10 @@ import type {
   GuestHouse,
   MealKey,
   MealPlan,
-  Profile,
   Room,
   RoomHold,
 } from "@/lib/types";
+import type { SeededProfileInput } from "./types";
 import type { Unit } from "@/lib/units";
 import type { Project } from "@/lib/projects";
 import type {
@@ -70,24 +70,24 @@ export const seedRooms: Room[] = [
   ...makeRooms(GH_HAMSANANDI, HAMSANANDI_ROOM_NUMBERS),
 ];
 
-export const seedProfiles: Profile[] = [
+export const seedProfiles: SeededProfileInput[] = [
   // ----- Requesters -----
-  { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112201001" },
-  { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student", hostel_name: "Saveri", department_or_club: null, roll_number: "142202014" },
+  // hostel_name, department_or_club, roll_number and staff_category are
+  // resolved at read time from institute tables via profiles_v / withComputed.
+  { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student" },
+  { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student" },
   /**
-   * A day scholar: `hostel_name` is **genuinely null**, which is what makes
-   * this persona the test of the 17 Oct 2026 rule - a student with no hostel
-   * has no Assistant Warden, so their request enters at the Guest House
-   * Manager (`approverNotApplicable`). Named so the condition is visible in
-   * every queue and list it appears in; the booking's own log says why it
-   * skipped the warden.
+   * A day scholar: hostel is **genuinely null** in `institute_students`, which
+   * is what makes this persona the test of the 17 Oct 2026 rule - a student
+   * with no hostel has no Assistant Warden, so their request enters at the
+   * Guest House Manager (`approverNotApplicable`).
    */
-  { id: "student-day-scholar", email: "122203099@smail.iitpkd.ac.in", full_name: "Devika Iyer (day scholar - no hostel)", role: "student", hostel_name: null, department_or_club: null, roll_number: "122203099" },
-  { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, unit_id: "unit-cse", staff_category: "faculty" },
-  { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: "Administration", roll_number: null, unit_id: "unit-director-office" },
-  { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null, unit_id: "unit-petrichor" },
-  { id: "council-cultural", email: "sec_arts@iitpkd.ac.in", full_name: "Cultural Affairs Council", role: "club", hostel_name: null, department_or_club: "Cultural Affairs", roll_number: null, unit_id: "unit-cultural" },
-  { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null },
+  { id: "student-day-scholar", email: "122203099@smail.iitpkd.ac.in", full_name: "Devika Iyer (day scholar - no hostel)", role: "student" },
+  { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", unit_id: "unit-cse" },
+  { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", unit_id: "unit-director-office" },
+  { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", unit_id: "unit-petrichor" },
+  { id: "council-cultural", email: "sec_arts@iitpkd.ac.in", full_name: "Cultural Affairs Council", role: "club", unit_id: "unit-cultural" },
+  { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell" },
   // ----- Unit heads (migration 15) -----
   // Approvers by appointment rather than by role: the HOD is an employee, the
   // council secretary a student. Change who heads a unit in the console and
@@ -96,18 +96,18 @@ export const seedProfiles: Profile[] = [
   // of Petrichor - an appointment in Departments & Clubs, not an account of
   // its own, so New Booking offers him "Book as Faculty Advisor" beside his
   // own bookings, and naming someone else there moves it to them.
-  { id: "faculty-arun", email: "arun.prasad@iitpkd.ac.in", full_name: "Dr. Arun Prasad", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, unit_id: "unit-cse", staff_category: "faculty" },
-  { id: "hod-cse", email: "hod.cse@iitpkd.ac.in", full_name: "Prof. R. Venkatesh (HOD, CSE)", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, unit_id: "unit-cse", staff_category: "faculty" },
-  { id: "secretary-cultural", email: "112301045@smail.iitpkd.ac.in", full_name: "Meera Nair (Cultural Secretary)", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112301045" },
+  { id: "faculty-arun", email: "arun.prasad@iitpkd.ac.in", full_name: "Dr. Arun Prasad", role: "employee", unit_id: "unit-cse" },
+  { id: "hod-cse", email: "hod.cse@iitpkd.ac.in", full_name: "Prof. R. Venkatesh (HOD, CSE)", role: "employee", unit_id: "unit-cse" },
+  { id: "secretary-cultural", email: "112301045@smail.iitpkd.ac.in", full_name: "Meera Nair (Cultural Secretary)", role: "student" },
   // ----- Reviewers / Admins -----
-  { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Assistant Warden, Malhar)", role: "warden", hostel_name: "Malhar", department_or_club: null, roll_number: null },
-  { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Assistant Warden, Saveri)", role: "warden", hostel_name: "Saveri", department_or_club: null, roll_number: null },
-  { id: "office-cse", email: "cse.office@iitpkd.ac.in", full_name: "CSE Department Office", role: "official", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, unit_id: "unit-cse-office" },
-  { id: "staff-ravi", email: "ravi.k@iitpkd.ac.in", full_name: "Ravi K. (Technical Staff, CSE)", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, unit_id: "unit-cse", staff_category: "staff" },
-  { id: "iar-cell", email: "iar@iitpkd.ac.in", full_name: "IAR Office", role: "iar_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, unit_id: "unit-iar-office" },
-  { id: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager", hostel_name: null, department_or_club: null, roll_number: null },
-  { id: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker", hostel_name: null, department_or_club: null, roll_number: null },
-  { id: "developer", email: "developer@iitpkd.ac.in", full_name: "Portal Developer", role: "developer", hostel_name: null, department_or_club: null, roll_number: null },
+  { id: "warden-malhar", email: "warden.malhar@iitpkd.ac.in", full_name: "Dr. Suresh Kumar (Assistant Warden, Malhar)", role: "warden" },
+  { id: "warden-saveri", email: "warden.saveri@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi (Assistant Warden, Saveri)", role: "warden" },
+  { id: "office-cse", email: "cse.office@iitpkd.ac.in", full_name: "CSE Department Office", role: "official", unit_id: "unit-cse-office" },
+  { id: "staff-ravi", email: "ravi.k@iitpkd.ac.in", full_name: "Ravi K. (Technical Staff, CSE)", role: "employee", unit_id: "unit-cse" },
+  { id: "iar-cell", email: "iar@iitpkd.ac.in", full_name: "IAR Office", role: "iar_cell", unit_id: "unit-iar-office" },
+  { id: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager" },
+  { id: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker" },
+  { id: "developer", email: "developer@iitpkd.ac.in", full_name: "Portal Developer", role: "developer" },
 ];
 
 /**
@@ -116,19 +116,19 @@ export const seedProfiles: Profile[] = [
  * (migration 25).
  */
 export const seedUnits: Unit[] = [
-  { id: "unit-cse", name: "Computer Science & Engineering", kind: "department", parent_id: null, head_id: "hod-cse", acting_head_id: null, office_class: null },
+  { id: "unit-cse", name: "Computer Science & Engineering", category: "department", parent_department_id: null, head_id: "hod-cse", acting_head_id: null, office_type: null },
   // Its head is the student secretary (who approved club requests stored
   // before 24 Sep 2026); its Faculty Advisor books for it and its clubs, and
   // its secretary's mailbox is copied on those bookings.
-  { id: "unit-cultural", name: "Cultural Affairs Council", kind: "council", parent_id: null, head_id: "secretary-cultural", acting_head_id: null, office_class: null, faculty_advisor_id: "faculty-arun", secretary_email: "sec_arts@iitpkd.ac.in" },
+  { id: "unit-cultural", name: "Cultural Affairs Council", category: "council", parent_department_id: null, head_id: "secretary-cultural", acting_head_id: null, office_type: null, faculty_advisor_id: "faculty-arun", secretary_email: "sec_arts@iitpkd.ac.in" },
   // The fest has a Faculty Advisor of its own; with no secretary's mailbox of
   // its own, its bookings copy the council's.
-  { id: "unit-petrichor", name: "Petrichor", kind: "club", parent_id: "unit-cultural", head_id: null, acting_head_id: null, office_class: null, faculty_advisor_id: "faculty-arun", secretary_email: null },
+  { id: "unit-petrichor", name: "Petrichor", category: "club", parent_department_id: "unit-cultural", head_id: null, acting_head_id: null, office_type: null, faculty_advisor_id: "faculty-arun", secretary_email: null },
   // Officer offices (migration 16): booked against the Institute Grant.
-  { id: "unit-director-office", name: "Director's Office", kind: "office", parent_id: null, head_id: null, acting_head_id: null, office_class: "officer" },
-  { id: "unit-iar-office", name: "International & Alumni Relations", kind: "office", parent_id: null, head_id: null, acting_head_id: null, office_class: "officer" },
+  { id: "unit-director-office", name: "Director's Office", category: "office", parent_department_id: null, head_id: null, acting_head_id: null, office_type: "officer" },
+  { id: "unit-iar-office", name: "International & Alumni Relations", category: "office", parent_department_id: null, head_id: null, acting_head_id: null, office_type: "officer" },
   // A department office under CSE: "Requires HOD approval" goes to the CSE HOD.
-  { id: "unit-cse-office", name: "CSE Department Office", kind: "office", parent_id: "unit-cse", head_id: null, acting_head_id: null, office_class: "department" },
+  { id: "unit-cse-office", name: "CSE Department Office", category: "office", parent_department_id: "unit-cse", head_id: null, acting_head_id: null, office_type: "department" },
 ];
 
 /**
@@ -529,8 +529,10 @@ export const seedLogs: BookingLog[] = [
 const seedTs = "2026-11-01T00:00:00.000Z";
 
 export const seedInstituteStudents: InstituteStudent[] = [
-  { id: "is-anjali", email: "112201001@smail.iitpkd.ac.in", batch_year: "2022", roll_number: "112201001", full_name: "Anjali Menon", programme: "B.Tech", faculty_advisor_guide_name: "Dr. Arun Prasad", department: "Computer Science and Engineering", year_of_admission: "2022", phone: "+91 90000 00101", aadhar_number: null, father_name: "Ramesh Menon", father_aadhar_number: null, father_phone_number: null, mother_name: "Sreeja Menon", mother_aadhar_number: null, mother_phone_number: null, spouse_name: null, spouse_aadhar_number: null, spouse_phone_number: null, guardian_name: null, guardian_aadhar_number: null, guardian_phone_number: null, hostel: "Malhar", imported_by: null, created_at: seedTs, updated_at: seedTs },
-  { id: "is-rahul", email: "142202014@smail.iitpkd.ac.in", batch_year: "2022", roll_number: "142202014", full_name: "Rahul Nair", programme: "M.Tech", faculty_advisor_guide_name: null, department: "Electrical Engineering", year_of_admission: "2022", phone: "+91 90000 00102", aadhar_number: null, father_name: null, father_aadhar_number: null, father_phone_number: null, mother_name: null, mother_aadhar_number: null, mother_phone_number: null, spouse_name: null, spouse_aadhar_number: null, spouse_phone_number: null, guardian_name: "Gopinath Nair", guardian_aadhar_number: null, guardian_phone_number: null, hostel: "Saveri", imported_by: null, created_at: seedTs, updated_at: seedTs },
+  { id: "is-anjali", email: "112201001@smail.iitpkd.ac.in", batch_year: "2022", roll_number: "112201001", full_name: "Anjali Menon", programme: "B.Tech", faculty_advisor_guide_name: "Dr. Arun Prasad", department: "Computer Science and Engineering", phone: "+91 90000 00101", aadhar_number: null, father_name: "Ramesh Menon", father_aadhar_number: null, father_phone_number: null, mother_name: "Sreeja Menon", mother_aadhar_number: null, mother_phone_number: null, spouse_name: null, spouse_aadhar_number: null, spouse_phone_number: null, guardian_name: null, guardian_aadhar_number: null, guardian_phone_number: null, hostel: "Malhar", imported_by: null, created_at: seedTs, updated_at: seedTs },
+  { id: "is-rahul", email: "142202014@smail.iitpkd.ac.in", batch_year: "2022", roll_number: "142202014", full_name: "Rahul Nair", programme: "M.Tech", faculty_advisor_guide_name: null, department: "Electrical Engineering", phone: "+91 90000 00102", aadhar_number: null, father_name: null, father_aadhar_number: null, father_phone_number: null, mother_name: null, mother_aadhar_number: null, mother_phone_number: null, spouse_name: null, spouse_aadhar_number: null, spouse_phone_number: null, guardian_name: "Gopinath Nair", guardian_aadhar_number: null, guardian_phone_number: null, hostel: "Saveri", imported_by: null, created_at: seedTs, updated_at: seedTs },
+  { id: "is-devika", email: "122203099@smail.iitpkd.ac.in", batch_year: "2022", roll_number: "122203099", full_name: "Devika Iyer", programme: "B.Tech", faculty_advisor_guide_name: null, department: "Mechanical Engineering", phone: "+91 90000 00103", aadhar_number: null, father_name: null, father_aadhar_number: null, father_phone_number: null, mother_name: null, mother_aadhar_number: null, mother_phone_number: null, spouse_name: null, spouse_aadhar_number: null, spouse_phone_number: null, guardian_name: null, guardian_aadhar_number: null, guardian_phone_number: null, hostel: null, imported_by: null, created_at: seedTs, updated_at: seedTs },
+  { id: "is-meera", email: "112301045@smail.iitpkd.ac.in", batch_year: "2023", roll_number: "112301045", full_name: "Meera Nair", programme: "B.Tech", faculty_advisor_guide_name: null, department: "Computer Science and Engineering", phone: "+91 90000 00104", aadhar_number: null, father_name: null, father_aadhar_number: null, father_phone_number: null, mother_name: null, mother_aadhar_number: null, mother_phone_number: null, spouse_name: null, spouse_aadhar_number: null, spouse_phone_number: null, guardian_name: null, guardian_aadhar_number: null, guardian_phone_number: null, hostel: "Malhar", imported_by: null, created_at: seedTs, updated_at: seedTs },
 ];
 
 export const seedInstituteEmployees: InstituteEmployee[] = [
@@ -540,8 +542,8 @@ export const seedInstituteEmployees: InstituteEmployee[] = [
 ];
 
 export const seedInstituteOffices: InstituteOffice[] = [
-  { id: "io-director", office_email: "admin@iitpkd.ac.in", office_name: "Director's Office", office_class: "officer", phone: "04923-226000", department_head: "Yes", head_name: "Director", head_email: "director@iitpkd.ac.in", imported_by: null, created_at: seedTs, updated_at: seedTs },
-  { id: "io-cse", office_email: "cse.office@iitpkd.ac.in", office_name: "CSE Department Office", office_class: "department", phone: "04923-226100", department_head: "Yes", head_name: "Prof. R. Venkatesh", head_email: "hod.cse@iitpkd.ac.in", imported_by: null, created_at: seedTs, updated_at: seedTs },
+  { id: "io-director", office_email: "admin@iitpkd.ac.in", office_name: "Director's Office", office_type: "officer", phone: "04923-226000", department_head: "Yes", head_name: "Director", head_email: "director@iitpkd.ac.in", imported_by: null, created_at: seedTs, updated_at: seedTs },
+  { id: "io-cse", office_email: "cse.office@iitpkd.ac.in", office_name: "CSE Department Office", office_type: "department", phone: "04923-226100", department_head: "Yes", head_name: "Prof. R. Venkatesh", head_email: "hod.cse@iitpkd.ac.in", imported_by: null, created_at: seedTs, updated_at: seedTs },
 ];
 
 export const seedInstituteFCCs: InstituteFCC[] = [

@@ -7047,3 +7047,115 @@ checking, no two-pass writes, no uid-swap handling in undo.
 **Decision.** Drop the legacy `hostels` table from `scripts/init-postgres.sql` and both stores. Unify all hostel references to `public.institute_hostels`. Update `profiles.hostel_name` foreign key to reference `institute_hostels (hostel_name)` (`on update cascade on delete restrict`). Wire Settings -> Hostels and `assertHostelExists` to `institute_hostels`. Resolve `w.hostel_id` -> `hostel_name` in `StoreAcademicSource` / `wardenToRecord`.
 
 **Why.** Having two distinct hostel tables (`hostels` with `name` and `institute_hostels` with `hostel_id` + `hostel_name`) created a dual source of truth and a logic disconnect. Profiles referenced `hostels` while imported wardens referenced `institute_hostels`, leaving `institute_hostels` largely unused. Consolidating them ensures that hostel records imported or managed in Settings share a single table, with proper FK constraints and deletion protection when accounts are assigned.
+
+## Remove year_of_admission, make institute import header-aware (3 Nov 2026, sixth session)
+
+**Decision.** Drop `year_of_admission` from `institute_students`; it is the same data as `batch_year`. Add header aliases `KNOWN_*_COLUMNS` for all six institute table kinds and make `planInstituteImport` detect and use a header row, mapping columns by name. Unknown header cells are skipped rather than rejected.
+
+**Why.** The office's actual spreadsheet has columns in a different order from `STUDENT_COLUMNS` and includes columns the DB does not have (like `role`). A positional-only import would reject the paste or silently map fields to the wrong columns. The `users-import.ts` pattern (aliases + header detection + positional fallback) already solved this for profile imports. `year_of_admission` was redundant with `batch_year` — it was confirmed by the office that they are the same field.
+
+**Cost.** 7 files modified. 10 tests added (596 -> 606). No migration needed — schema-only change in `init-postgres.sql`. The `year_of_admission` header alias maps to `batch_year`, so existing spreadsheets with that column name continue to work.
+
+## Eliminate hostel_name from profiles table (3 Nov 2026, seventh session)
+
+> *Supersedes* "Consolidate hostels into institute_hostels" (2 Nov 2026,
+> fifth session) which kept `hostel_name` on the profiles table with an FK
+> to `institute_hostels`. This round removes it entirely.
+
+**Decision.** Remove `hostel_name` as a stored column on `profiles`. Hostel
+information comes from `institute_students.hostel` (students) and
+`institute_wardens.hostel_id` -> `institute_hostels.hostel_name` (wardens).
+The `Profile` TypeScript type keeps `hostel_name` as a computed field.
+PostgresStore reads from a SQL view `profiles_v` that JOINs the three
+tables. MockStore uses `resolveHostel()` / `withHostel()` helpers. The
+profile import system (`lib/users-import.ts`) no longer accepts hostel as a
+column. `NewProfileInput` is `Omit<Profile, "id" | "hostel_name">`.
+
+**Why.** Single source of truth. `institute_students` already carries hostel
+data from the office's imported spreadsheets. Duplicating it on profiles
+meant two places to update and two places that could disagree. Employees
+have no hostel; only students and wardens do. The institute data tables are
+the authoritative source.
+
+**Why the routing functions still work.** `hasHostel`, `approverNotApplicable`,
+`routeFor`, `decidesStage` and friends take `Pick<Profile, "hostel_name">`
+and are pure/synchronous. Making them async to look up hostels would cascade
+through every caller. By resolving hostel at profile load time (in the store),
+every consumer sees the computed field as before.
+
+**Cost.** ~20 files modified. 2 tests removed (606 -> 604: the hostel FK
+write test on profiles, and a hostel-on-record refusal test in user import).
+No migration for existing databases — the column is harmless if still
+present.
+
+### Rename unit columns for clarity (3 Nov 2026)
+
+`units.kind` -> `category`, `units.parent_id` -> `parent_department_id`,
+`units.office_class` -> `office_type`, `units.hod_unit_id` ->
+`hod_approval_from_id`. Also `institute_offices.office_class` -> `office_type`.
+
+**Why.** The owner asked for column names that non-technical people can read
+without explanation. `kind` is a generic programming word; `parent_id` says
+nothing about what the parent is; `office_class` suggests OOP; `hod_unit_id`
+describes an internal concept rather than the business purpose.
+
+**Why these names.** `category` is the word the console's dropdown already
+uses. `parent_department_id` says what the relationship means (a club sits
+under a department). `office_type` matches common business vocabulary.
+`hod_approval_from_id` names the purpose: whose HOD stage does this unit
+inherit from.
+
+**Why the label values changed too.** "Officer office" is tautological;
+"Independent office (Director, Registrar, Deans...)" names the distinction.
+"Department office" could mean "an office *in* a department" or "an office
+*that is* a department"; "Under a department" is unambiguous.
+
+**What stayed.** The enum values (`department`, `club`, `council`, `office`,
+`officer`, `department`) are unchanged — only the column names and display
+labels moved. `KNOWN_OFFICE_COLUMNS` keeps `"office_class"` as an import
+alias so old spreadsheets still work.
+
+**Cost.** ~25 files touched (schema, types, both stores, seed, 5 action/page
+files, 2 business-logic files, 1 institute-import file, 10 test files).
+604 tests unchanged. Existing databases need four `ALTER TABLE RENAME COLUMN`
+statements — the values are unchanged, so no data migration.
+
+### Remove department_or_club, roll_number and staff_category from profiles (4 Nov 2026)
+
+> Continues the pattern established for `hostel_name` on 3 Nov 2026.
+
+**Why.** The three fields duplicate data already in institute tables:
+`department_or_club` is `units.name` (reachable via `profiles.unit_id`),
+`roll_number` is `institute_students.roll_number`, and `staff_category` is
+derived from `institute_employees.employee_type`. Storing them on profiles
+meant two sources of truth - a renamed unit or a corrected employee type
+would not propagate unless profiles were also updated. The same reasoning
+that moved `hostel_name` to the view on 3 Nov applies to all three.
+
+**Why all three at once.** Each follows the identical pattern (drop from
+table, add to view, remove from writes, keep on reads), so splitting them
+into separate rounds would triple the churn for no new information. One
+round, one review, one test pass.
+
+**How `staff_category` is derived.** `institute_employees.employee_type`
+holds free text from the institute's HR system. The SQL view uses
+`CASE WHEN employee_type ILIKE '%non%teaching%' THEN 'staff' ELSE 'faculty'
+END`. The mock store's `withComputed()` does the same check in JS. A null
+employee type or a missing employee record yields null, which business logic
+treats as "assume faculty" (the existing `canBeFacultyAdvisor` rule).
+
+**What stayed on the `Profile` type.** All four computed fields. Code that
+reads `profile.department_or_club`, `profile.roll_number` or
+`profile.staff_category` needed no changes - the values are resolved at
+store level before any consumer sees the profile.
+
+**What was removed from user import.** `department_or_club`, `roll_number`
+and `staff_category` are no longer importable columns. The import handles
+only `email`, `full_name`, `role` and `unit_id`. `staffCategoryFrom()` is
+deleted. This is safe because the three fields are now always derived from
+their authoritative sources; importing them would just be a third copy.
+
+**Cost.** ~30 files touched (schema, types, both stores, seed, 2 action
+files, 2 component files, 2 import modules, 10 test files). 604 tests
+unchanged. Existing databases can drop the three columns or leave them -
+the view shadows them on reads and writes ignore them.

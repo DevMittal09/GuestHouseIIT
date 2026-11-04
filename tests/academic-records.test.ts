@@ -10,9 +10,11 @@ import {
 } from "@/lib/academic/guest-names";
 import { splitCsvLine } from "@/lib/csv";
 import {
+  columnForKind,
   csvColumnsFor,
   csvHeaderFor,
   describeImport,
+  headerColumnsForKind,
   planInstituteImport,
 } from "@/lib/institute/import";
 import type { EmployeeRecord, StudentRecord } from "@/lib/academic/types";
@@ -284,7 +286,6 @@ describe("pasting institute records in", () => {
         programme: "B.Tech",
         faculty_advisor_guide_name: null,
         department: "Computer Science and Engineering",
-        year_of_admission: null,
         phone: "+91 90000 00101",
         aadhar_number: null,
         father_name: "Ramesh Menon",
@@ -306,8 +307,8 @@ describe("pasting institute records in", () => {
       "# the office's list",
       csvHeaderFor("student"),
       "",
-      "112201001@smail.iitpkd.ac.in, 2022, 112201001, Anjali Menon, B.Tech, , Computer Science and Engineering, , +91 90000 00101, , Ramesh Menon, , , Sreeja Menon, , , , , , , , , Malhar",
-      "142202014@smail.iitpkd.ac.in, 2022, 142202014, Rahul Nair, M.Tech, , Electrical Engineering, , , , , , , , , , , , , Gopinath Nair, , , Saveri",
+      "112201001@smail.iitpkd.ac.in, 2022, 112201001, Anjali Menon, B.Tech, , Computer Science and Engineering, +91 90000 00101, , Ramesh Menon, , , Sreeja Menon, , , , , , , , , Malhar",
+      "142202014@smail.iitpkd.ac.in, 2022, 142202014, Rahul Nair, M.Tech, , Electrical Engineering, , , , , , , , , , , , Gopinath Nair, , , Saveri",
     ].join("\n");
     const plan = planInstituteImport("student", text, existing, "p-admin");
     expect(plan.problems).toEqual([]);
@@ -390,6 +391,117 @@ describe("pasting institute records in", () => {
   });
 });
 
+// ---------------------------------------------- header detection and column aliases
+
+describe("header-aware import", () => {
+  it("recognises column aliases", () => {
+    expect(columnForKind("student", "email")).toBe("email");
+    expect(columnForKind("student", "Email Address")).toBe("email");
+    expect(columnForKind("student", "year_of_admission")).toBe("batch_year");
+    expect(columnForKind("student", "Year of Admission")).toBe("batch_year");
+    expect(columnForKind("student", "hostel_id")).toBe("hostel");
+    expect(columnForKind("student", "Hostel ID")).toBe("hostel");
+    expect(columnForKind("student", "programme")).toBe("programme");
+    expect(columnForKind("student", "program")).toBe("programme");
+    expect(columnForKind("student", "unknown_column")).toBeNull();
+  });
+
+  it("detects a header row and maps columns by name", () => {
+    const fields = ["email", "roll_number", "full_name", "hostel_id"];
+    const result = headerColumnsForKind("student", fields);
+    expect(result).not.toBeNull();
+    expect(result!.mapping).toEqual(["email", "roll_number", "full_name", "hostel"]);
+    expect(result!.skipped).toEqual([]);
+  });
+
+  it("skips unknown columns in a header and reports them", () => {
+    const fields = ["email", "role", "roll_number", "full_name"];
+    const result = headerColumnsForKind("student", fields);
+    expect(result).not.toBeNull();
+    expect(result!.mapping).toEqual(["email", null, "roll_number", "full_name"]);
+    expect(result!.skipped).toEqual(["role"]);
+  });
+
+  it("rejects a line that does not start with the key column", () => {
+    expect(headerColumnsForKind("student", ["roll_number", "email"])).toBeNull();
+    expect(headerColumnsForKind("student", [])).toBeNull();
+  });
+
+  it("imports with a header in non-default column order", () => {
+    const text = [
+      "email, hostel_id, full_name, roll_number",
+      "a@smail.iitpkd.ac.in, Malhar, Anjali, 112201001",
+    ].join("\n");
+    const plan = planInstituteImport("student", text, [], null);
+    expect(plan.problems).toEqual([]);
+    expect(plan.hadHeader).toBe(true);
+    expect(plan.added).toHaveLength(1);
+    expect(plan.added[0].hostel).toBe("Malhar");
+    expect(plan.added[0].full_name).toBe("Anjali");
+    expect(plan.added[0].roll_number).toBe("112201001");
+    expect(plan.added[0].father_name).toBeNull();
+  });
+
+  it("maps year_of_admission header to batch_year column", () => {
+    const text = [
+      "email, year_of_admission, roll_number",
+      "a@smail.iitpkd.ac.in, 2022, 112201001",
+    ].join("\n");
+    const plan = planInstituteImport("student", text, [], null);
+    expect(plan.problems).toEqual([]);
+    expect(plan.hadHeader).toBe(true);
+    expect(plan.added[0].batch_year).toBe("2022");
+  });
+
+  it("ignores unknown columns like 'role' in header mode", () => {
+    const text = [
+      "email, role, roll_number, full_name, hostel_id",
+      "a@smail.iitpkd.ac.in, Student, 112201001, Anjali, Malhar",
+    ].join("\n");
+    const plan = planInstituteImport("student", text, [], null);
+    expect(plan.problems).toEqual([]);
+    expect(plan.hadHeader).toBe(true);
+    expect(plan.skippedHeaders).toEqual(["role"]);
+    expect(plan.added[0].roll_number).toBe("112201001");
+    expect(plan.added[0].full_name).toBe("Anjali");
+    expect(plan.added[0].hostel).toBe("Malhar");
+  });
+
+  it("allows more data columns than the kind has when a header is present", () => {
+    const text = [
+      "email, roll_number, role, full_name",
+      "a@smail.iitpkd.ac.in, 112201001, Student, Anjali",
+    ].join("\n");
+    const plan = planInstituteImport("student", text, [], null);
+    expect(plan.problems).toEqual([]);
+    expect(plan.added).toHaveLength(1);
+  });
+
+  it("falls back to positional import without a header", () => {
+    const plan = planInstituteImport(
+      "student",
+      "a@smail.iitpkd.ac.in, 2022, 112201001",
+      [],
+      null,
+    );
+    expect(plan.problems).toEqual([]);
+    expect(plan.hadHeader).toBe(false);
+    expect(plan.added[0].batch_year).toBe("2022");
+    expect(plan.added[0].roll_number).toBe("112201001");
+  });
+
+  it("reports the detected columns and skipped headers in the plan", () => {
+    const text = [
+      "email, role, department, hostel",
+      "a@smail.iitpkd.ac.in, Student, CSE, Malhar",
+    ].join("\n");
+    const plan = planInstituteImport("student", text, [], null);
+    expect(plan.hadHeader).toBe(true);
+    expect(plan.columns).toEqual(["email", "department", "hostel"]);
+    expect(plan.skippedHeaders).toEqual(["role"]);
+  });
+});
+
 // --------------------------------------------------------- the store, and the source
 
 describe("the institute records the office imported", () => {
@@ -428,7 +540,6 @@ describe("the institute records the office imported", () => {
           programme: "B.Tech",
           faculty_advisor_guide_name: null,
           department: "Computer Science and Engineering",
-          year_of_admission: null,
           phone: "+91 90000 00101",
           aadhar_number: null,
           father_name: "Ramesh Menon",
@@ -493,7 +604,6 @@ describe("the institute records the office imported", () => {
           programme: "B.Tech",
           faculty_advisor_guide_name: null,
           department: "Computer Science and Engineering",
-          year_of_admission: null,
           phone: "+91 90000 00101",
           aadhar_number: null,
           father_name: "Ramesh K. Menon",

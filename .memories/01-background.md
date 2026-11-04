@@ -68,6 +68,10 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **2 Nov** (second) | **Rewired Academic Records to institute tables.** Adapter layer converts institute_* rows to `AcademicRecord`. `StoreAcademicSource` reads institute tables. Console rewritten for per-kind import/view/delete. `splitCsvLine` moved to `lib/csv.ts`. Seed data aligned with mock-source. Tests rewritten. **The old `academic_records` table is no longer read or written by any code path.** |
 | **2 Nov** (third) | **Auth cleanup: Google OAuth only.** The owner: "Keep only Google OAuth only. Remove rest." Deleted `lib/ldap/` (7 files), `lib/password.ts`, `app/api/auth/dev-sign-in/`. Removed `password_hash` from Profile, seeds and init SQL. Removed `ldapts` dependency. Rewrote `auth.ts` (logout only) and `login-form.tsx` (Google button only). Removed LDAP import UI and username column from Users & Roles. Created `app/api/auth/test-sign-in/` for e2e (gated by `E2E_TEST_SECRET`). `ldap_uid` column kept (37 references, no migration). **No migration.** |
 | **2 Nov** (fourth) | **Supabase removal: Postgres only.** The owner: "I want only postgres." Deleted `supabase/` directory (35 migrations, 10 repairs, seed SQL - 393 KB). Deleted `tests/rls-surface.test.ts` (read migration files). Cleaned up supabase references in 6 source files. `scripts/check-migrations.mjs` updated (probes live DB, not migration files). The two stores are `PostgresStore` (direct `pg`) and `MockStore`. **No migration.** |
+| **3 Nov** | **Header-aware institute import and `year_of_admission` removal.** The user's student spreadsheet had columns in a different order and with different names than the positional import expected. Added header detection to `lib/institute/import.ts` (modelled on `lib/users-import.ts`): the import now detects a header row automatically and maps columns by name using `KNOWN_*_COLUMNS` alias maps in `lib/institute/types.ts`. Unknown columns are silently skipped, and without a header the positional fallback is unchanged. Removed `year_of_admission` from `institute_students` (redundant with `batch_year`; the alias ensures old spreadsheets still import). UI feedback in the console preview. 10 new tests. **No migration** (column removed from `init-postgres.sql`; existing DBs need `ALTER TABLE institute_students DROP COLUMN IF EXISTS year_of_admission`). |
+| **3 Nov** (second) | **Eliminate `hostel_name` from the profiles table.** Hostel is now a computed field: PostgresStore reads from a SQL view `profiles_v` that JOINs `profiles` to `institute_students` (students) and `institute_wardens` -> `institute_hostels` (wardens). MockStore uses `resolveHostel()` / `withHostel()` helpers. `NewProfileInput` excludes `hostel_name`. User import no longer accepts hostel as a column. FK added on `institute_students.hostel` -> `institute_hostels(hostel_name)`. All 22+ downstream consumers unchanged. ~20 files modified, 604 tests pass. **No migration** (column removed from `init-postgres.sql`). |
+| **3 Nov** (third) | **Rename unit columns for clarity.** `units.kind` -> `category`, `parent_id` -> `parent_department_id`, `office_class` -> `office_type`, `hod_unit_id` -> `hod_approval_from_id`. Also `institute_offices.office_class` -> `office_type`. Label values updated: "Officer office" -> "Independent office", "Department office" -> "Under a department". ~25 files, 604 tests pass. **No migration** (columns renamed in `init-postgres.sql`; existing DBs need four `ALTER TABLE RENAME COLUMN`). |
+| **4 Nov** | **Remove `department_or_club`, `roll_number` and `staff_category` from profiles.** Continues the computed-fields pattern from 3 Nov. All three are now computed at read time by `profiles_v` / `withComputed()`: `department_or_club` from `units.name`, `roll_number` from `institute_students`, `staff_category` from `institute_employees.employee_type`. User import reduced to email/name/role/unit. ~30 files, 604 tests pass. **No migration** (columns removed from `init-postgres.sql`). |
 
 ## The problem
 
@@ -1452,3 +1456,44 @@ rewires all dependent code so the portal reads from those tables instead of
 The old `academic_records` table is no longer read or written by any code path.
 Dead code in `lib/academic/stored.ts` (`planAcademicImport` etc.) remains for
 backward compatibility but is not imported by any production module.
+
+---
+
+## Round of 3 November 2026 (third session) - rename unit columns for clarity
+
+The owner asked for column names that non-technical people can understand
+without explanation.
+
+### What was asked, and the status of each item
+
+| # | Asked | Status |
+|---|---|---|
+| 1 | Rename `units.kind` to `category` | **Done.** DB schema, type, both stores, seed, 5 source files, 10 test files. |
+| 2 | Rename `units.parent_id` to `parent_department_id` | **Done.** Same scope as above. |
+| 3 | Rename `units.office_class` to `office_type` | **Done.** Plus `institute_offices.office_class` and `KNOWN_OFFICE_COLUMNS` (keeps old name as import alias). |
+| 4 | Rename `units.hod_unit_id` to `hod_approval_from_id` | **Done.** |
+| 5 | Update label values | **Done.** "Officer office" -> "Independent office (Director, Registrar, Deans...)", "Department office" -> "Under a department". |
+
+Enum values unchanged. `WorkflowConsoleData.units` DTO field also renamed
+from `kind` to `category`. All 604 tests pass, build clean.
+
+---
+
+## Round of 4 November 2026 - remove department_or_club, roll_number and staff_category from profiles
+
+Continues the computed-fields pattern from the hostel_name round (3 Nov).
+The three remaining derived columns are removed from the `profiles` table
+and computed at read time by the `profiles_v` SQL view (Postgres) or
+`withComputed()` (mock store).
+
+### What was asked, and the status of each item
+
+| # | Asked | Status |
+|---|---|---|
+| 1 | Remove `department_or_club` from profiles table | **Done.** Computed from `units.name` via `unit_id` in `profiles_v` and `withComputed()`. |
+| 2 | Remove `roll_number` from profiles table | **Done.** Computed from `institute_students.roll_number` by email match. |
+| 3 | Remove `staff_category` from profiles table | **Done.** Derived from `institute_employees.employee_type` (Teaching -> faculty, Non Teaching -> staff). |
+| 4 | Update user import to stop writing the three fields | **Done.** `UserImportRow` reduced to email/name/role/unit. `staffCategoryFrom()` deleted. |
+| 5 | Update all test files | **Done.** 10 test files updated with `asProfile`/`asProfiles` helpers. 604 tests pass. |
+
+Build clean: lint, typecheck, tests (604), build all pass.

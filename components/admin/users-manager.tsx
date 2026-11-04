@@ -38,8 +38,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ROLE_LABELS, STAFF_CATEGORY_LABELS, type Profile, type Role } from "@/lib/types";
-import { UNIT_KIND_LABELS, type Unit } from "@/lib/units";
+import { ROLE_LABELS, type Profile, type Role } from "@/lib/types";
+import { UNIT_CATEGORY_LABELS, type Unit } from "@/lib/units";
 import { USER_CSV_HEADER } from "@/lib/users-import";
 import { describeBatch, revertBlocker, type UserImportBatch } from "@/lib/users-import-undo";
 import { SectionHeading } from "@/components/section-heading";
@@ -56,24 +56,17 @@ const EMPTY: UserFormInput = {
   email: "",
   full_name: "",
   role: "student",
-  hostel_name: "",
-  department_or_club: "",
-  roll_number: "",
   unit_id: "",
-  staff_category: "",
 };
 
 export function UsersManager({
   profiles,
   units = [],
-  hostels = [],
   roles = ALL_ROLES,
   actorRole = "developer",
   imports = [],
 }: {
   profiles: Profile[];
-  /** Hostels on the Settings list - the only values `hostel_name` may take. */
-  hostels?: string[];
   /** Departments, clubs and offices a person can be placed in. */
   units?: Unit[];
   /** The roles this console user may hand out - see `assignableRoles`. */
@@ -125,11 +118,7 @@ export function UsersManager({
       email: p.email,
       full_name: p.full_name,
       role: p.role,
-      hostel_name: p.hostel_name ?? "",
-      department_or_club: p.department_or_club ?? "",
-      roll_number: p.roll_number ?? "",
       unit_id: p.unit_id ?? "",
-      staff_category: p.staff_category ?? "",
     });
     setDialogOpen(true);
   };
@@ -264,7 +253,6 @@ export function UsersManager({
               <TableHead>Role</TableHead>
               <TableHead>Hostel</TableHead>
               <TableHead>Dept / Club</TableHead>
-              <TableHead>Roll No.</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -294,7 +282,6 @@ export function UsersManager({
                 </TableCell>
                 <TableCell>{p.hostel_name ?? "-"}</TableCell>
                 <TableCell>{p.department_or_club ?? "-"}</TableCell>
-                <TableCell className="font-mono text-xs">{p.roll_number ?? "-"}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     {/* A manager cannot edit or remove a developer account -
@@ -565,7 +552,7 @@ export function UsersManager({
           <DialogHeader>
             <DialogTitle>{editing ? `Edit ${editing.full_name}` : "Add user"}</DialogTitle>
             <DialogDescription>
-              Hostel scopes wardens/students; Dept/Club scopes faculty advisors and club accounts.
+              Hostel, department/club, roll number and staff category are resolved from institute records.
             </DialogDescription>
           </DialogHeader>
           <RequiredFieldsNote />
@@ -597,30 +584,9 @@ export function UsersManager({
             </div>
             <div className="space-y-2">
               <Label>Hostel</Label>
-              {/* A pick from the Settings list: wardens are scoped by this
-                  name, so a typo here used to leave a student outside every
-                  warden's queue. */}
-              <NativeSelect
-                value={values.hostel_name}
-                onChange={(e) => set("hostel_name")(e.target.value)}
-              >
-                <option value="">None</option>
-                {[...new Set([...hostels, ...(values.hostel_name ? [values.hostel_name] : [])])].map(
-                  (h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  )
-                )}
-              </NativeSelect>
-            </div>
-            <div className="space-y-2">
-              <Label>Department / Club</Label>
-              <Input
-                placeholder="e.g. Petrichor"
-                value={values.department_or_club}
-                onChange={(e) => set("department_or_club")(e.target.value)}
-              />
+              <p className="text-sm text-muted-foreground">
+                {editing ? (profiles.find((p) => p.id === editing.id)?.hostel_name ?? "None") : "Resolved from institute records"}
+              </p>
             </div>
             {/* The unit is what their approver is found through, so it is a
                 pick from the list rather than free text - a typo here used
@@ -635,35 +601,10 @@ export function UsersManager({
                 <option value="">No department or club</option>
                 {units.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.name} ({UNIT_KIND_LABELS[u.kind]})
+                    {u.name} ({UNIT_CATEGORY_LABELS[u.category]})
                   </option>
                 ))}
               </NativeSelect>
-            </div>
-            {values.role === "employee" && (
-              <div className="space-y-2">
-                <Label htmlFor="user-staff-category">Faculty or staff</Label>
-                <NativeSelect
-                  id="user-staff-category"
-                  value={values.staff_category ?? ""}
-                  onChange={(e) => set("staff_category")(e.target.value)}
-                >
-                  <option value="">Not set (treated as faculty)</option>
-                  <option value="faculty">{STAFF_CATEGORY_LABELS.faculty}</option>
-                  <option value="staff">{STAFF_CATEGORY_LABELS.staff}</option>
-                </NativeSelect>
-                <p className="text-xs text-muted-foreground">
-                  Faculty official bookings need their HOD&apos;s approval; staff bookings go
-                  straight to the Guest House Manager.
-                </p>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label>Roll number</Label>
-              <Input
-                value={values.roll_number}
-                onChange={(e) => set("roll_number")(e.target.value)}
-              />
             </div>
           </div>
           <DialogFooter>

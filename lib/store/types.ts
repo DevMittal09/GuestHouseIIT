@@ -67,7 +67,7 @@ import type {
   PaymentMode,
 } from "@/lib/invoice";
 
-export type NewProfileInput = Omit<Profile, "id">;
+export type NewProfileInput = Omit<Profile, "id" | "hostel_name" | "department_or_club" | "roll_number" | "staff_category">;
 
 /**
  * A profile created with an id the caller already knows.

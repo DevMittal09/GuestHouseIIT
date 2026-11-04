@@ -9,6 +9,15 @@ import type {
   Profile,
   Room,
 } from "@/lib/types";
+import type { StaffCategory } from "@/lib/types";
+import type { SeededProfileInput } from "@/lib/store/types";
+import {
+  seedInstituteEmployees,
+  seedInstituteStudents,
+  seedInstituteWardens,
+  seedInstituteHostels,
+  seedUnits,
+} from "@/lib/store/seed";
 
 /**
  * Fixtures for the test suite. Everything here is plain data - no store, no
@@ -126,6 +135,60 @@ export function booking(
     assigned_rooms: assigned,
     ...patch,
   };
+}
+
+/**
+ * Resolve computed fields from seed institute data, mirroring what `profiles_v`
+ * and `withComputed` do at runtime.
+ */
+function resolveComputed(input: SeededProfileInput): Partial<Profile> {
+  const email = input.email.toLowerCase();
+
+  // hostel_name: from institute_students or institute_wardens
+  const student = seedInstituteStudents.find((s) => s.email.toLowerCase() === email);
+  let hostel_name: string | null = student?.hostel ?? null;
+  if (!hostel_name) {
+    const warden = seedInstituteWardens.find((w) => w.warden_email.toLowerCase() === email);
+    if (warden) {
+      const hostel = seedInstituteHostels.find((h) => h.hostel_id === warden.hostel_id);
+      hostel_name = hostel?.hostel_name ?? null;
+    }
+  }
+
+  // department_or_club: from units.name via unit_id
+  const unit = input.unit_id ? seedUnits.find((u) => u.id === input.unit_id) : null;
+  const department_or_club = unit?.name ?? null;
+
+  // roll_number: from institute_students
+  const roll_number = student?.roll_number ?? null;
+
+  // staff_category: from institute_employees.employee_type
+  const emp = seedInstituteEmployees.find((e) => e.email.toLowerCase() === email);
+  let staff_category: StaffCategory | null = null;
+  if (emp?.employee_type) {
+    const et = emp.employee_type.toLowerCase();
+    staff_category = (et.includes("non") && et.includes("teaching")) ? "staff" : "faculty";
+  }
+
+  return { hostel_name, department_or_club, roll_number, staff_category };
+}
+
+/** Promote a SeededProfileInput to a full Profile with computed fields resolved from seed data. */
+export function asProfile(input: SeededProfileInput, patch?: Partial<Profile>): Profile {
+  return {
+    ...input,
+    hostel_name: null,
+    department_or_club: null,
+    roll_number: null,
+    staff_category: null,
+    ...resolveComputed(input),
+    ...patch,
+  };
+}
+
+/** Promote an array of SeededProfileInputs to Profile[]. */
+export function asProfiles(inputs: SeededProfileInput[]): Profile[] {
+  return inputs.map((p) => asProfile(p));
 }
 
 /**

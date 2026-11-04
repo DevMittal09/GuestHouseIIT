@@ -90,7 +90,7 @@ export type WorkflowPerson = {
 export type WorkflowConsoleData = {
   rules: ApprovalRules;
   defaults: ApprovalRules;
-  units: { id: string; name: string; kind: string; hasHead: boolean }[];
+  units: { id: string; name: string; category: string; hasHead: boolean }[];
   people: WorkflowPerson[];
   hostels: string[];
   /** Roles a booking can be stored under, so the console offers only those. */
@@ -125,7 +125,7 @@ export async function getWorkflowConsoleData(): Promise<
         units: units.map((u) => ({
           id: u.id,
           name: u.name,
-          kind: u.kind,
+          category: u.category,
           hasHead: Boolean(u.head_id || u.acting_head_id),
         })),
         people: profiles.map((p) => ({

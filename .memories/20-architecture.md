@@ -74,6 +74,15 @@ it:
   (outside `public/`, served only through `/api/documents`).
   Zero setup, so the app runs immediately after `npm install`.
 - `lib/store/postgres.ts` — direct PostgreSQL via the `pg` driver.
+  All profile reads go through the **`profiles_v` SQL view**
+  (`scripts/init-postgres.sql`), which JOINs `profiles` to institute tables
+  to compute four fields at read time: `hostel_name` (from
+  `institute_students.hostel` or `institute_wardens` -> `institute_hostels`),
+  `department_or_club` (from `units.name` via `unit_id`), `roll_number`
+  (from `institute_students`), and `staff_category` (from
+  `institute_employees.employee_type`). Writes go to the `profiles` base
+  table; none of the four is a stored column. MockStore uses
+  `withComputed()` for the same computation.
 
 `lib/store/index.ts` picks one **from the environment** at first use: Postgres if
 `DATABASE_URL` is set (`databaseConfigured()`), otherwise the mock.
@@ -1117,9 +1126,9 @@ Guest Houses & Rooms.
 | `lib/academic/guest-names.ts` | What a student's academic record **fixes** about their guests: the locked parent names, the relationships it rules out, and the Aadhaar / ID waiver (7 Oct 2026). |
 | `lib/academic/stored.ts` | **Legacy.** The old CSV import for `academic_records`: `planAcademicImport`, `StoredAcademicRecord`, `ACADEMIC_RECORD_KINDS`. No production code imports these any longer; `splitCsvLine` is re-exported from `lib/csv.ts`. |
 | `lib/academic/store-source.ts` | `StoreAcademicSource` — reads the **institute_* tables** through the adapter (`lib/institute/academic-adapter.ts`), with the published dummies behind them. Falls through to `MockAcademicSource` for `alumni_office` (no table) and missing tables (`42P01`). |
-| `lib/institute/types.ts` | The institute's own directory tables (migration 35): types, input types, column arrays and `InstituteTableKind` for students, employees, offices, fests/councils/clubs, hostels and wardens. |
+| `lib/institute/types.ts` | The institute's own directory tables (migration 35): types, input types, column arrays, `KNOWN_*_COLUMNS` alias maps (for header-aware import) and `InstituteTableKind` for students, employees, offices, fests/councils/clubs, hostels and wardens. |
 | `lib/institute/academic-adapter.ts` | Converts institute_* rows to `AcademicRecord`: `studentToRecord`, `employeeToRecord`, `officeToRecord`, `fccToRecord`, `wardenToRecord`. Pure, never throws. |
-| `lib/institute/import.ts` | CSV import planning for institute tables: `planInstituteImport` (all or nothing), `describeImport`, `csvColumnsFor`, `csvHeaderFor`, `columnLabel`. Same pattern as the old `planAcademicImport`. |
+| `lib/institute/import.ts` | CSV import planning for institute tables: `planInstituteImport` (all or nothing), `describeImport`, `csvColumnsFor`, `csvHeaderFor`, `columnLabel`, `columnForKind`, `headerColumnsForKind`. **Header-aware** (3 Nov 2026): detects a header row automatically and maps columns by name using `KNOWN_*_COLUMNS` aliases, so columns can be in any order and unknown ones are skipped; without a header the positional fallback is unchanged. Same pattern as `lib/users-import.ts` (`KNOWN_COLUMNS` + `headerColumns`). |
 | `lib/csv.ts` | Shared CSV utilities: `csvCell`, `csvLine` (for export) and `splitCsvLine` (for import — handles quoting, commas, tabs and semicolons). Used by `lib/projects.ts`, `lib/users-import.ts` and `lib/institute/import.ts`. |
 | `lib/missed-server.ts` | `runMissedSweep` — the nightly job that marks a request nobody decided in time as MISSED, logs it and mails the requester (migration 29). |
 | `lib/meals.ts` | Meal keys and windows, `stayMealDays`, the notice period (`isMealBookable`, `mealLeadTimeError`, `firstBookableMealDate`), `normalizeMeals` (the only reader), the form's slot helpers, `kitchenHeadCount`, `MEAL_CHANGE_NOTICE` (the caretaker line in the meal section, 17 Oct 2026). |

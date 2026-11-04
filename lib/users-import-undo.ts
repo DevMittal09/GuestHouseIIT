@@ -1,4 +1,4 @@
-import type { Profile, Role, StaffCategory } from "./types";
+import type { Profile, Role } from "./types";
 
 /**
  * Undoing a user import (14 Oct 2026).
@@ -21,7 +21,7 @@ import type { Profile, Role, StaffCategory } from "./types";
  * a list of writes. Three properties matter, and each is a deliberate choice:
  *
  * 1. **Only the fields an import can write are restored** ({@link
- *    UserImportFields}, the same eight `sameProfile` compares). A profile
+ *    UserImportFields}, the same fields `sameProfile` compares). A profile
  *    holds more than that, and an undo that wrote the whole row back would
  *    revert edits the import never made.
  * 2. **A row changed since the import is left alone and named.** The undo is
@@ -42,17 +42,13 @@ import type { Profile, Role, StaffCategory } from "./types";
 
 /**
  * The fields a spreadsheet import may write, and the only ones an undo
- * restores. Deliberately the same eight that `sameProfile` and
+ * restores. Deliberately the same as what `sameProfile` and
  * `changedFields` compare in `lib/users-import.ts`: if a column is added to
  * the import, it belongs in all three.
  */
 export type UserImportFields = {
   full_name: string;
   role: Role;
-  hostel_name: string | null;
-  department_or_club: string | null;
-  roll_number: string | null;
-  staff_category: StaffCategory | null;
   unit_id: string | null;
 };
 
@@ -108,23 +104,15 @@ export type UserImportSettlement = {
   reverted_actor_name?: string | null;
 };
 
-/** The eight import-writable fields of anything that has them, with nulls normalized. */
+/** The import-writable fields of anything that has them, with nulls normalized. */
 export function importFieldsOf(source: {
   full_name: string;
   role: Role;
-  hostel_name?: string | null;
-  department_or_club?: string | null;
-  roll_number?: string | null;
-  staff_category?: StaffCategory | null;
   unit_id?: string | null;
 }): UserImportFields {
   return {
     full_name: source.full_name,
     role: source.role,
-    hostel_name: source.hostel_name ?? null,
-    department_or_club: source.department_or_club ?? null,
-    roll_number: source.roll_number ?? null,
-    staff_category: source.staff_category ?? null,
     unit_id: source.unit_id ?? null,
   };
 }
@@ -132,10 +120,6 @@ export function importFieldsOf(source: {
 const FIELD_LABELS: [keyof UserImportFields, string][] = [
   ["full_name", "Name"],
   ["role", "Role"],
-  ["hostel_name", "Hostel"],
-  ["department_or_club", "Dept / Club"],
-  ["roll_number", "Roll No."],
-  ["staff_category", "Category"],
   ["unit_id", "Unit"],
 ];
 

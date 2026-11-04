@@ -13,8 +13,8 @@ import { useThrowawayMockDb } from "./helpers";
 // whitelist, no audit log, units without an office class.
 const OLD_DB = {
   profiles: [
-    { id: "s1", email: "s1@smail.iitpkd.ac.in", full_name: "S1", role: "student", hostel_name: "Tilang", department_or_club: null, roll_number: null, unit_id: null, staff_category: null },
-    { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: null, roll_number: null, unit_id: null, staff_category: null },
+    { id: "s1", email: "s1@smail.iitpkd.ac.in", full_name: "S1", role: "student", unit_id: null },
+    { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", unit_id: null },
   ],
   guest_houses: [],
   rooms: [],
@@ -25,8 +25,11 @@ const OLD_DB = {
   form_configs: [],
   room_holds: [],
   email_outbox: [],
-  units: [{ id: "u1", name: "Maths", kind: "department", parent_id: null, head_id: null, acting_head_id: null }],
+  units: [{ id: "u1", name: "Maths", category: "department", parent_department_id: null, head_id: null, acting_head_id: null }],
   app_settings: { admin_password_hash: "scrypt$abc" },
+  institute_students: [
+    { id: "is-s1", email: "s1@smail.iitpkd.ac.in", batch_year: "2022", roll_number: "S1001", full_name: "S1", programme: "B.Tech", faculty_advisor_guide_name: null, department: "Mathematics", phone: null, aadhar_number: null, father_name: null, father_aadhar_number: null, father_phone_number: null, mother_name: null, mother_aadhar_number: null, mother_phone_number: null, spouse_name: null, spouse_aadhar_number: null, spouse_phone_number: null, guardian_name: null, guardian_aadhar_number: null, guardian_phone_number: null, hostel: "Tilang", imported_by: null, created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
+  ],
 };
 
 let store: DataStore;
@@ -53,10 +56,10 @@ describe("self-healing an old database file", () => {
     ]);
   });
 
-  it("gives old units an office class of null and adds the demo offices", async () => {
+  it("gives old units an office type of null and adds the demo offices", async () => {
     const units = await store.listUnits();
-    expect(units.find((u) => u.id === "u1")?.office_class).toBeNull();
-    expect(units.find((u) => u.id === "unit-director-office")?.office_class).toBe("officer");
+    expect(units.find((u) => u.id === "u1")?.office_type).toBeNull();
+    expect(units.find((u) => u.id === "unit-director-office")?.office_type).toBe("officer");
   });
 
   it("gives a seeded persona with no unit its demo unit, and nobody else", async () => {
@@ -76,12 +79,8 @@ describe("self-healing an old database file", () => {
 });
 
 describe("hostels behave like the foreign key", () => {
-  it("refuses an account naming a hostel that is not on the list", async () => {
-    await expect(store.updateProfile("s1", { hostel_name: "Nowhere" })).rejects.toThrow(/not a hostel/);
-  });
-
-  it("refuses to remove a hostel someone lives in", async () => {
-    await expect(store.removeHostel("Tilang")).rejects.toThrow(/still name Tilang/);
+  it("refuses to remove a hostel a student record references", async () => {
+    await expect(store.removeHostel("Tilang")).rejects.toThrow(/still reference Tilang/);
   });
 
   it("renames a hostel and everyone in it", async () => {

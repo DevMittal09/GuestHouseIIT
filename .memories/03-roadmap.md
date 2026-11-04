@@ -386,13 +386,9 @@ one.
 - **`MAX_USER_IMPORT_ROWS` is 2000 and the institute is larger.** The paste has
   to be split anyway while the updates are sequential, so this is a ceiling to
   remember rather than a bug.
-- **`department_or_club` duplicates `unit_id`** and the two can disagree - a
-  real 3NF violation kept because five modules read it
-  ([21-database.md](21-database.md), finding 1). The practical risk at import
-  time is different: a sheet that fills the free-text column and leaves
-  `unit` blank produces people whose official bookings have **no HOD**. The
-  runbook says to check it; the real fix is to retire the column once every
-  account has a unit.
+- ~~`department_or_club` duplicates `unit_id`~~ **Done, 4 Nov 2026.** The column
+  is eliminated from `profiles` and computed at read time from `units.name`
+  via `unit_id`, along with `roll_number` and `staff_category`.
 - **Migration 31 is the first migration that is not optional once the code is
   deployed.** `createProfile` cannot work on a database still on 30. If the
   project ever gains a real deploy pipeline, this is the case that argues for
@@ -757,6 +753,14 @@ No code changed in the application. What the review of the auth seam turned up:
   naming the office's address from `GUEST_HOUSE_CONTACT` would give the
   person somewhere to go. [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §9.
 
+### From the unit column rename (3 Nov 2026)
+
+- **Rename columns on existing Postgres databases.** The code now expects
+  `units.category` (was `kind`), `parent_department_id` (was `parent_id`),
+  `office_type` (was `office_class`), `hod_approval_from_id` (was
+  `hod_unit_id`), and `institute_offices.office_type` (was `office_class`).
+  Five `ALTER TABLE … RENAME COLUMN` statements; no data changes needed.
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the
@@ -839,6 +843,17 @@ and 30 `DataStore` methods. The second session rewired all dependent code:
   the warden's family check, the Copy-to chain and the requester-details card
   all work unchanged.
 
+**Done in the round of 3 Nov 2026:**
+
+- ~~Header-aware institute import~~ — `lib/institute/import.ts` detects a header
+  row automatically and maps columns by name using `KNOWN_*_COLUMNS` aliases, so
+  the office's spreadsheet columns can be in any order and unknown columns are
+  skipped. Positional fallback unchanged.
+- ~~`year_of_admission` removed from `institute_students`~~ — redundant with
+  `batch_year`. The alias `year_of_admission` -> `batch_year` ensures old
+  spreadsheets still import. Existing databases need
+  `ALTER TABLE institute_students DROP COLUMN IF EXISTS year_of_admission`.
+
 What is **not built yet**:
 
 - **Delete the dead code** in `lib/academic/stored.ts` (`planAcademicImport`,
@@ -847,10 +862,14 @@ What is **not built yet**:
 - **Drop the old `academic_records` table** once migration 35 is applied and
   confirmed working on the hosted project
 - **Migration 35 applied** to the hosted project
-- **Warden scoping and approval routing from institute tables** - the portal
-  still reads `profiles.hostel_name`, `units` and `hostels` for these; the
-  institute tables are a second copy of this data that is not yet the
-  authority for routing
+- **Drop `year_of_admission` from the hosted database** once migration 35 is
+  applied — `ALTER TABLE institute_students DROP COLUMN IF EXISTS year_of_admission`
+- ~~Warden scoping and approval routing from institute tables~~ **Done,
+  3 Nov 2026.** `hostel_name` eliminated from the `profiles` table, computed
+  at read time via `profiles_v` / `withComputed()`. **Extended 4 Nov 2026**:
+  `department_or_club`, `roll_number` and `staff_category` also eliminated
+  from `profiles` and computed the same way. All four fields remain on the
+  `Profile` type; all downstream consumers unchanged
 
 ## 7. Features likely to be asked for next
 
@@ -861,8 +880,7 @@ What is **not built yet**:
 - **Per-guest-house managers** — scope `gh_manager` by a profile field, the way
   wardens are scoped.
 - **Snapshot the academic record onto the booking** if reviewers need the
-  requester's phone, and **fill `hostel_name` from the record at sign-in** so
-  warden routing stops depending on a hand-typed profile field.
+  requester's phone.
 - **Just-in-time provisioning** of profiles on first sign-in - the 2 Sep
   plan's `account_directory` proposal, superseded by `units` and
   `official_email_whitelist` but never built for provisioning - instead of

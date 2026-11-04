@@ -61,14 +61,14 @@ const blankToNull = z
 
 const unitSchema = z.object({
   name: z.string().trim().min(2, "Give the unit a name"),
-  kind: z.enum(["department", "club", "council", "office"]),
-  parent_id: blankToNull,
+  category: z.enum(["department", "club", "council", "office"]),
+  parent_department_id: blankToNull,
   head_id: blankToNull,
   acting_head_id: blankToNull,
   // Whose HOD approves this unit's official requests, when not the default.
-  hod_unit_id: blankToNull,
+  hod_approval_from_id: blankToNull,
   // Offices only: officer (Institute Grant) or department (its Department).
-  office_class: z
+  office_type: z
     .enum(["officer", "department", ""])
     .nullish()
     .transform((v) => (v ? v : null)),
@@ -116,9 +116,9 @@ export async function createUnitAction(input: UnitInput): Promise<ActionResult> 
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid unit" };
     const unit = {
       ...parsed.data,
-      office_class: parsed.data.kind === "office" ? (parsed.data.office_class ?? null) : null,
+      office_type: parsed.data.category === "office" ? (parsed.data.office_type ?? null) : null,
     };
-    const refused = await studentBodyError(unit.kind, unit);
+    const refused = await studentBodyError(unit.category, unit);
     if (refused) return { ok: false, error: refused };
     await getStore().createUnit(unit as Omit<Unit, "id">);
     await recordAudit(user, "settings.changed", `unit:${unit.name}`, { created: unit });
@@ -144,29 +144,29 @@ export async function updateUnitAction(
     const units = await getStore().listUnits();
     const before = units.find((u) => u.id === id);
     if (!before) return { ok: false, error: "Unit not found" };
-    if (parsed.data.parent_id !== undefined) {
-      const loop = parentError(id, parsed.data.parent_id, units);
+    if (parsed.data.parent_department_id !== undefined) {
+      const loop = parentError(id, parsed.data.parent_department_id, units);
       if (loop) return { ok: false, error: loop };
     }
-    if (parsed.data.hod_unit_id && parsed.data.hod_unit_id === id) {
+    if (parsed.data.hod_approval_from_id && parsed.data.hod_approval_from_id === id) {
       return { ok: false, error: "A unit cannot give HOD approval for itself this way - leave it on the default" };
     }
-    // The database refuses an office class on anything but an office; say so
+    // The database refuses an office type on anything but an office; say so
     // in words rather than as a constraint name.
-    const kind = parsed.data.kind ?? before.kind;
-    if (parsed.data.office_class && kind !== "office") {
+    const category = parsed.data.category ?? before.category;
+    if (parsed.data.office_type && category !== "office") {
       return { ok: false, error: "Only an office can be an officer or department office" };
     }
-    const refused = await studentBodyError(kind, {
+    const refused = await studentBodyError(category, {
       faculty_advisor_id: parsed.data.faculty_advisor_id,
       secretary_email: parsed.data.secretary_email,
     });
     if (refused) return { ok: false, error: refused };
     const next = { ...parsed.data } as Partial<Omit<Unit, "id">>;
-    if (parsed.data.kind && parsed.data.kind !== "office") next.office_class = null;
+    if (parsed.data.category && parsed.data.category !== "office") next.office_type = null;
     // A unit that stops being a council or club loses its advisor and
     // mailbox, as the database would refuse to keep them.
-    if (parsed.data.kind && !isStudentBody(parsed.data.kind)) {
+    if (parsed.data.category && !isStudentBody(parsed.data.category)) {
       if (before.faculty_advisor_id) next.faculty_advisor_id = null;
       if (before.secretary_email) next.secretary_email = null;
     }

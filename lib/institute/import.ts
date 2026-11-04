@@ -6,6 +6,12 @@ import {
   FCC_COLUMNS,
   HOSTEL_COLUMNS,
   WARDEN_COLUMNS,
+  KNOWN_STUDENT_COLUMNS,
+  KNOWN_EMPLOYEE_COLUMNS,
+  KNOWN_OFFICE_COLUMNS,
+  KNOWN_FCC_COLUMNS,
+  KNOWN_HOSTEL_COLUMNS,
+  KNOWN_WARDEN_COLUMNS,
   type InstituteTableKind,
   type NewStudentInput,
   type NewEmployeeInput,
@@ -29,6 +35,12 @@ export type InstituteImportPlan<K extends InstituteTableKind = InstituteTableKin
   added: InputForKind[K][];
   updated: { id: string; input: InputForKind[K] }[];
   unchanged: number;
+  /** Whether the first row was recognised as a header. */
+  hadHeader: boolean;
+  /** The DB columns the paste was read as, in order. */
+  columns: string[];
+  /** Header cells that were not recognised (ignored during import). */
+  skippedHeaders: string[];
   problems: string[];
 };
 
@@ -44,6 +56,17 @@ function columnsFor(kind: InstituteTableKind): readonly string[] {
     case "fcc": return FCC_COLUMNS;
     case "hostel": return HOSTEL_COLUMNS;
     case "warden": return WARDEN_COLUMNS;
+  }
+}
+
+function aliasesFor(kind: InstituteTableKind): Record<string, string[]> {
+  switch (kind) {
+    case "student": return KNOWN_STUDENT_COLUMNS;
+    case "employee": return KNOWN_EMPLOYEE_COLUMNS;
+    case "office": return KNOWN_OFFICE_COLUMNS;
+    case "fcc": return KNOWN_FCC_COLUMNS;
+    case "hostel": return KNOWN_HOSTEL_COLUMNS;
+    case "warden": return KNOWN_WARDEN_COLUMNS;
   }
 }
 
@@ -80,7 +103,69 @@ function blank(value: string | undefined): string | null {
   return text;
 }
 
-function buildInput(
+// ---- Header detection -------------------------------------------------------
+
+/** Which DB column a header cell names, or null when nothing recognises it. */
+export function columnForKind(kind: InstituteTableKind, header: string): string | null {
+  const text = header.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!text) return null;
+  const aliases = aliasesFor(kind);
+  for (const [column, names] of Object.entries(aliases)) {
+    if (names.includes(text)) return column;
+  }
+  return null;
+}
+
+type HeaderResult = {
+  /** The DB columns, in the order the header names them. null = skip that position. */
+  mapping: (string | null)[];
+  /** The header cells that were not recognised. */
+  skipped: string[];
+};
+
+/**
+ * Read a line as a header, or null when it is data.
+ *
+ * A header must start with a cell that resolves to the key column (email or
+ * equivalent) and have at least half of its cells recognised. Unknown cells
+ * are recorded as skip positions rather than rejecting the header.
+ */
+export function headerColumnsForKind(
+  kind: InstituteTableKind,
+  fields: string[],
+): HeaderResult | null {
+  if (fields.length === 0) return null;
+  const emailCol = emailColumnFor(kind);
+  const first = columnForKind(kind, fields[0]);
+  if (first !== emailCol) return null;
+
+  const mapping: (string | null)[] = [];
+  const skipped: string[] = [];
+  const seen = new Set<string>();
+  let recognised = 0;
+
+  for (let i = 0; i < fields.length; i++) {
+    const col = columnForKind(kind, fields[i]);
+    if (col && !seen.has(col)) {
+      mapping.push(col);
+      seen.add(col);
+      recognised++;
+    } else if (col && seen.has(col)) {
+      mapping.push(null);
+      skipped.push(fields[i].trim());
+    } else {
+      mapping.push(null);
+      if (fields[i].trim()) skipped.push(fields[i].trim());
+    }
+  }
+
+  if (recognised < 2) return null;
+  return { mapping, skipped };
+}
+
+// ---- Building records -------------------------------------------------------
+
+function buildInputPositional(
   kind: InstituteTableKind,
   fields: string[],
   importedBy: string | null,
@@ -91,7 +176,25 @@ function buildInput(
     record[col] = i === 0 ? (fields[i] ?? "").trim() : blank(fields[i]);
   });
   record["imported_by"] = importedBy;
+  return record as unknown as InputForKind[typeof kind];
+}
 
+function buildInputFromHeader(
+  kind: InstituteTableKind,
+  fields: string[],
+  mapping: (string | null)[],
+  importedBy: string | null,
+): InputForKind[typeof kind] {
+  const columns = columnsFor(kind);
+  const record: Record<string, string | null> = {};
+  for (const col of columns) record[col] = null;
+
+  for (let i = 0; i < mapping.length && i < fields.length; i++) {
+    const col = mapping[i];
+    if (!col) continue;
+    record[col] = i === 0 ? (fields[i] ?? "").trim() : blank(fields[i]);
+  }
+  record["imported_by"] = importedBy;
   return record as unknown as InputForKind[typeof kind];
 }
 
@@ -130,6 +233,9 @@ export function planInstituteImport<K extends InstituteTableKind>(
   const updated: { id: string; input: InputForKind[K] }[] = [];
   let unchanged = 0;
   let rows = 0;
+  let hadHeader = false;
+  let headerMapping: (string | null)[] | null = null;
+  let skippedHeaders: string[] = [];
 
   const needsEmail = kind !== "hostel";
 
@@ -138,7 +244,21 @@ export function planInstituteImport<K extends InstituteTableKind>(
     const line = raw.trim();
     if (!line || line.startsWith("#")) return;
     const fields = splitCsvLine(line);
-    if (fields[0]?.toLowerCase() === emailCol) return;
+
+    // First non-blank, non-comment line: try as a header.
+    if (rows === 0 && !hadHeader) {
+      // Old check: skip the line if it starts with the key column name exactly.
+      if (fields[0]?.toLowerCase() === emailCol) {
+        const detected = headerColumnsForKind(kind, fields);
+        if (detected) {
+          hadHeader = true;
+          headerMapping = detected.mapping;
+          skippedHeaders = detected.skipped;
+        }
+        return;
+      }
+    }
+
     rows += 1;
     if (rows > MAX_IMPORT_ROWS) {
       if (rows === MAX_IMPORT_ROWS + 1) {
@@ -158,7 +278,7 @@ export function planInstituteImport<K extends InstituteTableKind>(
       problems.push(`Line ${n}: "${key}" is not an email address.`);
       return;
     }
-    if (fields.length > columns.length) {
+    if (!headerMapping && fields.length > columns.length) {
       problems.push(
         `Line ${n}: ${fields.length} columns, but a ${kind} record has ${columns.length} - expected "${csvHeaderFor(kind)}".`,
       );
@@ -172,12 +292,15 @@ export function planInstituteImport<K extends InstituteTableKind>(
     }
     seen.set(lowerKey, n);
 
-    const input = buildInput(kind, fields, importedBy) as InputForKind[K];
+    const input = headerMapping
+      ? buildInputFromHeader(kind, fields, headerMapping, importedBy)
+      : buildInputPositional(kind, fields, importedBy);
+    const typed = input as InputForKind[K];
     const current = byEmail.get(lowerKey);
     if (!current) {
-      added.push(input);
-    } else if (!sameRow(kind, current as Record<string, unknown>, input as Record<string, unknown>)) {
-      updated.push({ id: current.id, input });
+      added.push(typed);
+    } else if (!sameRow(kind, current as Record<string, unknown>, typed as Record<string, unknown>)) {
+      updated.push({ id: current.id, input: typed });
     } else {
       unchanged += 1;
     }
@@ -186,8 +309,15 @@ export function planInstituteImport<K extends InstituteTableKind>(
   if (rows === 0 && problems.length === 0) {
     problems.push("Nothing to import - paste one record per line.");
   }
-  if (problems.length > 0) return { kind, added: [], updated: [], unchanged, problems };
-  return { kind, added, updated, unchanged, problems };
+
+  const usedColumns: string[] = headerMapping
+    ? (headerMapping as (string | null)[]).filter((c): c is string => c !== null)
+    : [...columns];
+
+  if (problems.length > 0) {
+    return { kind, added: [], updated: [], unchanged, hadHeader, columns: usedColumns, skippedHeaders, problems };
+  }
+  return { kind, added, updated, unchanged, hadHeader, columns: usedColumns, skippedHeaders, problems };
 }
 
 export function describeImport(plan: Pick<InstituteImportPlan, "added" | "updated" | "unchanged">): string {

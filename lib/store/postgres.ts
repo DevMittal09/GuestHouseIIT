@@ -212,18 +212,18 @@ export class PostgresStore implements DataStore {
   // ---- profiles ---------------------------------------------------------
 
   async listProfiles(): Promise<Profile[]> {
-    const { rows } = await this.pool.query("SELECT * FROM profiles ORDER BY role");
+    const { rows } = await this.pool.query("SELECT * FROM profiles_v ORDER BY role");
     return rows;
   }
 
   async getProfile(id: string): Promise<Profile | null> {
-    const { rows } = await this.pool.query("SELECT * FROM profiles WHERE id = $1", [id]);
+    const { rows } = await this.pool.query("SELECT * FROM profiles_v WHERE id = $1", [id]);
     return rows[0] ?? null;
   }
 
   async getProfileByEmail(email: string): Promise<Profile | null> {
     const { rows } = await this.pool.query(
-      "SELECT * FROM profiles WHERE lower(email) = lower($1)",
+      "SELECT * FROM profiles_v WHERE lower(email) = lower($1)",
       [email.trim()]
     );
     return rows[0] ?? null;
@@ -235,10 +235,13 @@ export class PostgresStore implements DataStore {
     const placeholders = vals.map((_, i) => `$${i + 1}`).join(", ");
     try {
       const { rows } = await this.pool.query(
-        `INSERT INTO profiles (${cols.join(", ")}) VALUES (${placeholders}) RETURNING *`,
+        `INSERT INTO profiles (${cols.join(", ")}) VALUES (${placeholders}) RETURNING id`,
         vals
       );
-      return rows[0];
+      const { rows: profiles } = await this.pool.query(
+        "SELECT * FROM profiles_v WHERE id = $1", [rows[0].id]
+      );
+      return profiles[0];
     } catch (err: unknown) {
       const e = err as { code?: string; message: string };
       throw profileWriteError(e);
@@ -516,7 +519,7 @@ export class PostgresStore implements DataStore {
     const ghIds = [...new Set(bookingRows.map((b) => b.guest_house_id as string).filter(Boolean))];
 
     const [profilesRes, ghRes, guestsRes, cardsRes, logsRes, holdsRes] = await Promise.all([
-      this.pool.query("SELECT * FROM profiles WHERE id = ANY($1)", [userIds]),
+      this.pool.query("SELECT * FROM profiles_v WHERE id = ANY($1)", [userIds]),
       ghIds.length > 0
         ? this.pool.query("SELECT * FROM guest_houses WHERE id = ANY($1)", [ghIds])
         : { rows: [] as Record<string, unknown>[] },
@@ -701,7 +704,7 @@ export class PostgresStore implements DataStore {
       const profileIds = result.map((r: Booking) => r.user_id);
       if (profileIds.length > 0) {
         const { rows: profiles } = await this.pool.query(
-          "SELECT id, hostel_name FROM profiles WHERE id = ANY($1)", [profileIds]
+          "SELECT id, hostel_name FROM profiles_v WHERE id = ANY($1)", [profileIds]
         );
         const hostelByProfile = new Map(profiles.map((p: { id: string; hostel_name: string }) => [p.id, p.hostel_name]));
         result = result.filter((r: Booking) => hostelByProfile.get(r.user_id) === filter.hostelName);
@@ -711,7 +714,7 @@ export class PostgresStore implements DataStore {
       const profileIds = result.map((r: Booking) => r.user_id);
       if (profileIds.length > 0) {
         const { rows: profiles } = await this.pool.query(
-          "SELECT id, department_or_club FROM profiles WHERE id = ANY($1)", [profileIds]
+          "SELECT id, department_or_club FROM profiles_v WHERE id = ANY($1)", [profileIds]
         );
         const clubByProfile = new Map(profiles.map((p: { id: string; department_or_club: string }) => [p.id, p.department_or_club]));
         result = result.filter((r: Booking) => clubByProfile.get(r.user_id) === filter.club);
@@ -1355,7 +1358,6 @@ export class PostgresStore implements DataStore {
       programme: input.programme ?? null,
       faculty_advisor_guide_name: input.faculty_advisor_guide_name ?? null,
       department: input.department ?? null,
-      year_of_admission: input.year_of_admission ?? null,
       phone: input.phone ?? null,
       aadhar_number: input.aadhar_number ? encryptValue(input.aadhar_number) : null,
       father_name: input.father_name ?? null,
@@ -1467,7 +1469,7 @@ export class PostgresStore implements DataStore {
     return {
       office_email: input.office_email,
       office_name: input.office_name ?? null,
-      office_class: input.office_class ?? null,
+      office_type: input.office_type ?? null,
       phone: input.phone ?? null,
       department_head: input.department_head ?? null,
       head_name: input.head_name ?? null,
@@ -1561,10 +1563,14 @@ export class PostgresStore implements DataStore {
   }
 
   async deleteAllInstituteHostels(): Promise<number> {
-    const inUse = await this.pool.query("SELECT DISTINCT hostel_name FROM profiles WHERE hostel_name IS NOT NULL");
+    const inUse = await this.pool.query(
+      `SELECT DISTINCT hostel AS hostel_name FROM institute_students WHERE hostel IS NOT NULL
+       UNION
+       SELECT DISTINCT ih.hostel_name FROM institute_wardens w JOIN institute_hostels ih ON w.hostel_id = ih.hostel_id`
+    );
     if (inUse.rows.length > 0) {
       const names = inUse.rows.map((r: { hostel_name: string }) => r.hostel_name).join(", ");
-      throw new Error(`Cannot clear hostels: accounts still reference ${names}`);
+      throw new Error(`Cannot clear hostels: institute records still reference ${names}`);
     }
     return this.instituteDeleteAll("institute_hostels");
   }

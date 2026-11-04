@@ -24,8 +24,8 @@ import { useThrowawayMockDb } from "./helpers";
  * Restoring the rows it *updated* was not possible at all - the previous
  * values were kept nowhere, and the audit row recorded only the counts. A
  * sheet a month out of date therefore overwrote every correction the office
- * had made by hand, including the hostel a warden is scoped to and the unit an
- * HOD is found through, with no way back.
+ * had made by hand, including the unit an HOD is found through, with no way
+ * back.
  *
  * The tests below are the properties that matter at import time, and each one
  * is a thing that would otherwise be discovered on real data:
@@ -53,8 +53,8 @@ const EMPTY = {
     {
       id: "u-cse",
       name: "Computer Science",
-      kind: "department",
-      parent_id: null,
+      category: "department",
+      parent_department_id: null,
       head_id: null,
       acting_head_id: null,
     },
@@ -75,7 +75,6 @@ async function context(): Promise<UserImportContext> {
   return {
     profiles: await store.listProfiles(),
     assignable: ["student", "employee", "warden"],
-    hostels: await store.listHostels(),
     units: await store.listUnits(),
   };
 }
@@ -150,17 +149,17 @@ const B = "undo.rahul@smail.iitpkd.ac.in";
 const C = "undo.priya@iitpkd.ac.in";
 
 const FIRST = [
-  "email, full_name, role, hostel_name, roll_number",
-  `${A}, Anjali Menon, student, Malhar, 112201001`,
-  `${B}, Rahul Nair, student, Saveri, 142202014`,
+  "email, full_name, role",
+  `${A}, Anjali Menon, student`,
+  `${B}, Rahul Nair, student`,
 ].join("\n");
 
-/** The stale sheet: it moves Anjali to the wrong hostel and renames Rahul. */
+/** The stale sheet: it renames both Anjali and Rahul. */
 const STALE = [
-  "email, full_name, role, hostel_name",
-  `${A}, Anjali Menon, student, Saveri`,
-  `${B}, R. Nair, student, Saveri`,
-  `${C}, Dr Priya Sharma, employee, `,
+  "email, full_name, role",
+  `${A}, A. Menon, student`,
+  `${B}, R. Nair, student`,
+  `${C}, Dr Priya Sharma, employee`,
 ].join("\n");
 
 async function find(email: string): Promise<Profile | undefined> {
@@ -189,7 +188,7 @@ describe("an import records what it is about to change", () => {
     // The record names everything the import intended, not only what landed.
     expect(batch.updated).toHaveLength(2);
     expect(batch.added).toHaveLength(1);
-    expect((await find(A))?.hostel_name).toBe("Saveri");
+    expect((await find(A))?.full_name).toBe("A. Menon");
     // Rahul was never reached, and neither was the new account.
     expect((await find(B))?.full_name).toBe("Rahul Nair");
     expect(await find(C)).toBeUndefined();
@@ -197,18 +196,15 @@ describe("an import records what it is about to change", () => {
     const result = await revert(batch.id);
     expect(result.restored).toBe(1);
     expect(result.conflicts).toEqual([]);
-    expect((await find(A))?.hostel_name).toBe("Malhar");
+    expect((await find(A))?.full_name).toBe("Anjali Menon");
   });
 
   it("keeps the previous value of every field it overwrites", async () => {
     const batch = await apply(STALE);
     const anjali = batch.updated.find((u) => u.email.toLowerCase() === A)!;
 
-    expect(anjali.before.hostel_name).toBe("Malhar");
-    expect(anjali.after.hostel_name).toBe("Saveri");
-    // A column the paste does not carry is left alone, so it is on neither side.
-    expect(anjali.before.roll_number).toBe("112201001");
-    expect(anjali.after.roll_number).toBe("112201001");
+    expect(anjali.before.full_name).toBe("Anjali Menon");
+    expect(anjali.after.full_name).toBe("A. Menon");
   });
 });
 
@@ -216,7 +212,7 @@ describe("undoing one", () => {
   it("restores what it changed and removes what it added, keeping ids", async () => {
     const before = await find(A);
     const batch = await apply(STALE);
-    expect((await find(A))?.hostel_name).toBe("Saveri");
+    expect((await find(A))?.full_name).toBe("A. Menon");
     expect((await find(B))?.full_name).toBe("R. Nair");
     expect(await find(C)).toBeDefined();
 
@@ -224,7 +220,6 @@ describe("undoing one", () => {
 
     expect(result).toMatchObject({ restored: 2, removed: 1, conflicts: [] });
     const after = await find(A);
-    expect(after?.hostel_name).toBe("Malhar");
     expect(after?.full_name).toBe("Anjali Menon");
     // The id never moves - 19 foreign keys point at it.
     expect(after?.id).toBe(before?.id);
@@ -244,10 +239,10 @@ describe("undoing one", () => {
 
   it("leaves an account corrected since the import alone, and names it", async () => {
     const batch = await apply(STALE);
-    // The office fixes Anjali's hostel by hand afterwards; the undo must not
+    // The office fixes Anjali's name by hand afterwards; the undo must not
     // throw that away in the name of putting things back.
     const anjali = (await find(A))!;
-    await store.updateProfile(anjali.id, { hostel_name: "Malhar", full_name: "Anjali R Menon" });
+    await store.updateProfile(anjali.id, { full_name: "Anjali R Menon" });
 
     const result = await revert(batch.id);
 
@@ -276,7 +271,7 @@ describe("undoing one", () => {
     expect(result.conflicts.join(" ")).toContain(C);
     expect(result.conflicts.join(" ")).toMatch(/bookings/);
     expect(await find(C)).toBeDefined();
-    expect((await find(A))?.hostel_name).toBe("Malhar");
+    expect((await find(A))?.full_name).toBe("Anjali Menon");
   });
 });
 
@@ -323,11 +318,7 @@ describe("createProfiles", () => {
           email: "undo.fresh@iitpkd.ac.in",
           full_name: "Fresh Person",
           role: "employee",
-          hostel_name: null,
-          department_or_club: null,
-          roll_number: null,
           unit_id: null,
-          staff_category: null,
         },
         // Second row collides with somebody already on the list.
         {
@@ -335,11 +326,7 @@ describe("createProfiles", () => {
           email: taken.email,
           full_name: "Duplicate Person",
           role: "employee",
-          hostel_name: null,
-          department_or_club: null,
-          roll_number: null,
           unit_id: null,
-          staff_category: null,
         },
       ])
     ).rejects.toThrow(/already exists/);

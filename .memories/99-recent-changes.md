@@ -7,48 +7,75 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 3 November 2026 - code analysis and cleanup
+## Round of 4 November 2026 - remove department_or_club, roll_number and staff_category from profiles
 
-Full-codebase audit for logical and syntax issues after the Supabase removal,
-LDAP removal and ldap_uid removal rounds. Five issues found and fixed.
+Continuation of the "computed fields" pattern established on 3 Nov 2026 for
+`hostel_name`. The three remaining derived columns - `department_or_club`,
+`roll_number` and `staff_category` - are removed from the `profiles` table and
+computed at read time, like `hostel_name` already was.
 
 ### What was delivered
 
-**Removed unused `isProduction` import** (`app/api/auth/google/start/route.ts`):
-imported from `@/lib/env` but never called — the cookie's `secure` flag used
-`process.env.NODE_ENV === "production"` directly. Fixed the lint warning.
+**DB schema** (`scripts/init-postgres.sql`): the three columns dropped from
+`CREATE TABLE profiles`. The `profiles_v` view expanded to compute all four
+fields: `hostel_name` from `institute_students`/`institute_wardens`,
+`department_or_club` from `units.name` via `unit_id`, `roll_number` from
+`institute_students`, and `staff_category` from `institute_employees.employee_type`
+(Teaching Staff -> `faculty`, Non Teaching Staff -> `staff`).
 
-**Removed dead `RATE_LIMITS.signIn`** (`lib/security.ts`): this was the LDAP
-sign-in throttle (8 attempts per uid per 15 min). LDAP is gone; Google OAuth
-has its own `RATE_LIMITS.oauth` (20 per IP per 10 min). No callers remained.
+**Type system** (`lib/types.ts`): `NewProfileInput` now excludes all four
+computed fields: `Omit<Profile, "id" | "hostel_name" | "department_or_club" |
+"roll_number" | "staff_category">`. `Profile` type unchanged - all four fields
+remain on the read type.
 
-**Cleaned three stale comments**:
-- `lib/security.ts` line 58: "Per LDAP username" on the removed rate limit.
-- `lib/store/types.ts` line 236: "a free LDAP username" in `createProfiles`
-  doc — changed to "a free email".
-- `lib/store/mock.ts` line 150: orphaned "Migration 28" comment for the
-  removed `academic_records` field (replaced by migration 35 institute tables).
+**Both stores**: `PostgresStore` writes no longer include the three fields.
+`MockStore`'s `withComputed()` (renamed from `withHostel()`) resolves all four
+fields at read time from the in-memory institute tables: students for
+`hostel_name` and `roll_number`, wardens for `hostel_name`, `units.name` for
+`department_or_club`, and `institute_employees.employee_type` for
+`staff_category`. Seed profiles (`SeededProfileInput`) carry none of the four
+fields; two `as Profile` casts in mock.ts bridge the type gap at insertion.
 
-**Updated e2e comments** (`e2e/helpers.ts`, `e2e/global-setup.ts`): removed
-stale references to `RATE_LIMITS.signIn` and the LDAP sign-in throttle. The
-suite now signs in via `/api/auth/test-sign-in`, not the form.
+**User import** (`lib/users-import.ts`): `department_or_club`, `roll_number` and
+`staff_category` removed from `UserImportRow`, `DEFAULT_COLUMNS`,
+`KNOWN_COLUMNS`, `sameProfile()` and `changedFields()`. Import now handles
+only `email`, `full_name`, `role` and `unit_id`. `staffCategoryFrom()` deleted.
 
-**Struck two roadmap items** ([03-roadmap.md](03-roadmap.md) §2l): the sign-in
-throttle and the LDAP form are both resolved — deleted with LDAP.
+**Import undo** (`lib/users-import-undo.ts`): `UserImportFields` reduced to
+`full_name`, `role` and `unit_id`. `FIELD_LABELS` reduced accordingly.
 
-### Confirmed correct
+**Actions** (`app/actions/admin.ts`): `userSchema` no longer includes the three
+fields. `createProfileAction` and `updateProfileAction` no longer write them.
 
-- `institute_hostels` schema: `hostel_id` (text, unique) and `hostel_name`
-  (text, unique) both exist. `institute_wardens.hostel_id` and
-  `profiles.hostel_name` FKs are both valid.
-- Both store implementations match the `DataStore` interface.
-- No broken imports from deleted modules (LDAP, Supabase, mock-login).
-- No functional references to `DEV_LOGIN`, `MOCK_LOGIN`, `mockLoginEnabled`,
-  `signInWithLdap`, `ldap_uid` or `password_hash` (the test's
-  `admin_password_hash` is the console lock, not a login password).
-- `.env.example` is clean.
+**Components** (`components/admin/users-manager.tsx`): form and table no longer
+show Department/Club, Roll Number or Staff Category columns. The admin Users &
+Roles page removed its unused imports.
+
+**Business logic**: `lib/debit-heads.ts` and `lib/office-debit-heads.ts`
+unchanged - they read `staff_category` from the `Profile` type, which still
+carries it (computed at read time).
+
+**Test helpers** (`tests/helpers.ts`): new `resolveComputed()` function mirrors
+the `profiles_v` / `withComputed()` logic for test data: resolves all four
+fields from seed institute tables. `asProfile()` and `asProfiles()` helpers
+promote `SeededProfileInput` to full `Profile` with computed fields.
+
+**All 10 affected test files** updated: `approval-routes`, `faculty-advisor`,
+`fourteenth-round`, `workflow-hod`, `ninth-round`, `user-import-idempotency`,
+`user-import-undo`, `store-settings`, `fourth-round`, `office-debit-heads`.
 
 ### Validation
 
 `npm run lint` (0 errors, 0 warnings), `npm run typecheck`, `npm test`
-(596 tests, 34 files), `npm run build` and `npm run check:memories` all clean.
+(604 tests, 34 files), `npm run build` all clean.
+
+### What is left open
+
+- Existing Postgres databases with the old columns need
+  `ALTER TABLE profiles DROP COLUMN department_or_club`,
+  `ALTER TABLE profiles DROP COLUMN roll_number`,
+  `ALTER TABLE profiles DROP COLUMN staff_category`.
+  Or they can be left in place - the view shadows them on reads and writes
+  ignore them. The `hostel_name` column (dropped 3 Nov) is the same.
+- The `profiles_v` view must be created or replaced on any database that has
+  the institute tables (migration 35) but not the view yet.

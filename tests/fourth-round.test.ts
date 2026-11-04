@@ -241,10 +241,10 @@ describe("debitable heads: a project's sub-head, and Special Funds", () => {
 
 describe("clubs are booked by their Faculty Advisor", () => {
   const units: Unit[] = [
-    { id: "u-council", name: "Cultural Council", kind: "council", parent_id: null, head_id: "secretary", acting_head_id: null, faculty_advisor_id: "fa-dance" },
-    { id: "u-club", name: "Dance Club", kind: "club", parent_id: "u-council", head_id: null, acting_head_id: null },
-    { id: "u-headed", name: "Music Club", kind: "club", parent_id: null, head_id: "secretary", acting_head_id: null, hod_unit_id: "u-dept", faculty_advisor_id: "dr-music" },
-    { id: "u-dept", name: "Music Department", kind: "department", parent_id: null, head_id: "hod-music", acting_head_id: null },
+    { id: "u-council", name: "Cultural Council", category: "council", parent_department_id: null, head_id: "secretary", acting_head_id: null, faculty_advisor_id: "fa-dance" },
+    { id: "u-club", name: "Dance Club", category: "club", parent_department_id: "u-council", head_id: null, acting_head_id: null },
+    { id: "u-headed", name: "Music Club", category: "club", parent_department_id: null, head_id: "secretary", acting_head_id: null, hod_approval_from_id: "u-dept", faculty_advisor_id: "dr-music" },
+    { id: "u-dept", name: "Music Department", category: "department", parent_department_id: null, head_id: "hod-music", acting_head_id: null },
   ];
   const dance = profile({ id: "club-dance", role: "club", department_or_club: "Dance", unit_id: "u-club" });
   const music = profile({ id: "club-music", role: "club", department_or_club: "Music", unit_id: "u-headed" });
