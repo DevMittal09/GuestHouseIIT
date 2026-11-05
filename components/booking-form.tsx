@@ -56,8 +56,10 @@ import {
   MAX_COPY_TO_EMAILS,
 } from "@/lib/booking-schema";
 import { DEFAULT_RULES, type CapacityRules, type Rules } from "@/lib/settings";
+import { NO_COPY_TO_RULE, type CopyToRule } from "@/lib/user-groups";
 import {
   hasQualifyingParent,
+  isResearchScholar,
   usedUniqueRelationships,
   validateCustomValue,
   type CustomField,
@@ -248,10 +250,21 @@ export function BookingForm({
   hodApprovers = [],
   forClub = null,
   defaultCopyTo = [],
+  copyToRule = NO_COPY_TO_RULE,
   tariffPreviews = [],
   guestNames = NO_GUEST_NAME_RULE,
   aside = null,
+  tariffSheet = null,
+  asideAfter = null,
 }: {
+  /**
+   * The published room tariff (4 Nov 2026, `TariffSheet`), drawn in place of
+   * the per-category panel on a room booking. A dining booking keeps the
+   * panel, which quotes the meal rates.
+   */
+  tariffSheet?: React.ReactNode;
+  /** What stands under the tariff: the catering timings and the Guidelines. */
+  asideAfter?: React.ReactNode;
   /**
    * What the requester's academic record fixes about their guests (7 Oct
    * 2026): a student's father's and mother's names, which the form shows
@@ -291,6 +304,8 @@ export function BookingForm({
    * requester may clear it or add more.
    */
   defaultCopyTo?: string[];
+  /** What the requester's user group allows here (5 Nov 2026). */
+  copyToRule?: CopyToRule;
   /**
    * The debitable heads this requester may use per booking type, for rooms and
    * for dining - computed on the server (`bookingContextFor`) from Settings, so
@@ -799,7 +814,7 @@ export function BookingForm({
   // and for the same reason as the one above.
   const maxNights = rules.booking.max_stay_nights;
   const latestCheckOut = checkInDate
-    ? latestCheckOutDate(checkInDate, config.role, user.email, maxNights)
+    ? latestCheckOutDate(checkInDate, config.role, user.email, maxNights, bookingType)
     : null;
 
   // The room count is its own text state rather than being read off
@@ -958,6 +973,8 @@ export function BookingForm({
     const parsed = bookingPayloadSchema(config, {
       mealsAvailable,
       requesterEmail: user.email,
+      researchScholar: isResearchScholar(user.roll_number),
+      copyTo: copyToRule,
       rules,
       // So the client does not demand a route the form did not offer.
       hasHodApprover: hodApprovers.length > 0,
@@ -1127,12 +1144,17 @@ export function BookingForm({
           nothing beside the questions is numbered as a step. */}
       <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 lg:col-span-4 lg:col-start-9 lg:row-start-1 lg:self-start">
         {aside}
-        <TariffPanel
-          categories={categories}
-          previews={tariffPreviews}
-          pricesIncludeGst={rules.invoice.prices_include_gst}
-          mealsOnly={mealsOnly}
-        />
+        {tariffSheet && !mealsOnly ? (
+          tariffSheet
+        ) : (
+          <TariffPanel
+            categories={categories}
+            previews={tariffPreviews}
+            pricesIncludeGst={rules.invoice.prices_include_gst}
+            mealsOnly={mealsOnly}
+          />
+        )}
+        {asideAfter}
       </aside>
       <form
         onSubmit={onSubmit}
@@ -1949,7 +1971,9 @@ export function BookingForm({
           <CardTitle>Copy to (optional)</CardTitle>
           <CardDescription>
             Copied on every mail you get about this booking.
-            {defaultCopyTo.length > 0 && " The secretary's mailbox is filled in; clear it to remove."}
+            {forClub && defaultCopyTo.length > 0 && " The secretary's mailbox is filled in; clear it to remove."}
+            {!forClub && defaultCopyTo.length > 0 && " Your group's addresses are filled in; remove any you do not want."}
+            {copyToRule.allowed && " Only the addresses your group allows can be copied."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -1964,7 +1988,8 @@ export function BookingForm({
                   type="email"
                   inputMode="email"
                   autoComplete="off"
-                  placeholder="name@example.com"
+                  placeholder={copyToRule.instituteOnly ? "name@iitpkd.ac.in" : "name@example.com"}
+                  list={copyToRule.allowed ? "copy-to-allowed" : undefined}
                   {...register(`copy_to.${i}.email`)}
                 />
                 {copyToFields.length > 1 && (
@@ -1982,6 +2007,13 @@ export function BookingForm({
               <FieldError message={err(`copy_to.${i}.email`)} />
             </div>
           ))}
+          {copyToRule.allowed && (
+            <datalist id="copy-to-allowed">
+              {copyToRule.allowed.map((address) => (
+                <option key={address} value={address} />
+              ))}
+            </datalist>
+          )}
           <FieldError message={err("copy_to_emails")} />
           <Button
             type="button"

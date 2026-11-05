@@ -22,11 +22,18 @@
  */
 export const LOGIN_DOMAIN = "iitpkd.ac.in";
 
+/**
+ * **The institute's two kinds of address** (5 Nov 2026, the owner): a student is
+ * `<roll number>@smail.iitpkd.ac.in`, and everyone else `<position or name>@iitpkd.ac.in`.
+ * Only these two: any other subdomain is refused.
+ */
+export const STUDENT_EMAIL_DOMAIN = `smail.${LOGIN_DOMAIN}`;
+
 export function isInstituteEmail(email: string): boolean {
   const at = email.trim().toLowerCase().lastIndexOf("@");
   if (at < 1) return false;
   const host = email.trim().toLowerCase().slice(at + 1);
-  return host === LOGIN_DOMAIN || host.endsWith(`.${LOGIN_DOMAIN}`);
+  return host === LOGIN_DOMAIN || host === STUDENT_EMAIL_DOMAIN;
 }
 
 export const INSTITUTE_EMAIL_ERROR = `Use your @${LOGIN_DOMAIN} email address - personal email accounts cannot be used to book.`;

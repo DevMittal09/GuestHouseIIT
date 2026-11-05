@@ -7,101 +7,80 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 31 October 2026 - the tariff category becomes the manager's
+## Round of 5 November 2026 - user groups, and blocking rather than deleting
 
-The owner's fifteenth list, three items and one documentation item:
+The owner asked for this in their own words and invited questions. **Four were
+asked and answered:**
 
-1. The New Booking page keeps the tariff table on the right, **showing every
-   category and its prices, with no selection at all** - "do not allow users
-   to decide or assign the applicable tariff category while creating a booking
-   request".
-2. **The Guest House Manager chooses the category when the request reaches
-   them**, from the categories and prices the office has published, "based on
-   the actual nature of the booking".
-3. **The invoice is priced at what the manager chose**, not at anything the
-   requester picked; the choice is stored against the booking and traceable,
-   and nothing is invoiced before approval.
-
-### The idea the whole round turns on
-
-A tariff row is scoped by **guest house, room type, booking type and
-requester role** (`resolveTariff`). The first two are facts - where the guest
-sleeps, which room the party was given. The other two are a **judgement about
-the visit**, and until this round the requester was making it by filling the
-form in: the office prices Hamsanandi's rooms at ₹2,000 generally and ₹4,000
-"for government officers", and that second row was reachable only by an
-office's *own* account, so a dignitary booked for by a department's faculty
-was charged ₹2,000.
-
-So **the category is that pair** - a `TariffScope` - and the desk decides it.
-Nothing new was added to `resolveTariff`, no column was added to `tariffs`,
-and no rupee figure is stored anywhere near a booking.
-
-### What changed
-
-| Where | What |
+| Question | Answer |
 | --- | --- |
-| `lib/tariffs.ts` | **`TariffScope`**, `tariffScopeKey`, `parseTariffScope` (two parts, both checked against the unions), **`pricingScopeFor`** (the manager's category, else the booking's own facts), `hasChosenTariffCategory`, `tariffCategoryItems`, `describeTariffCategory` / `describeTariffCategoryScope` |
-| `lib/tariff-categories.ts` | **`deskTariffCategories`** - the desk's list, **enumerated from the office's rate sheet**: every row that could price the booking's defining charge contributes the scope that selects it, named by that row's own `note`. Plus `deskCategoryFor`. The requester's `tariffCategories` is unchanged |
-| `lib/tariff-categories-server.ts` | **New.** `deskCategoriesFor` / `deskCategoriesByBooking` - the server readers, one query per page |
-| `lib/invoice.ts` | `buildInvoiceDocument` resolves every charge at `pricingScopeFor(booking)` - **one substitution, in the one place the whole invoice is priced from**. `InvoiceDocument.tariff_category` snapshots the office's wording, and `invoiceFacts` prints it |
-| `components/tariff-panel.tsx` | **Read-only, and a server component again**: every eligible category with its full charge table, and one line saying who confirms which applies |
-| `components/tariff-category-choice.tsx` | **New.** The desk's question. One category is **stated, not asked** |
-| `components/room-grid.tsx` | Asks it above the override notice; **Confirm & Allocate stays disabled until it is answered** |
-| `components/manager-queue.tsx` | The same question in **Approve meals** - a dining booking has no rooms, so that approval is where its category is decided |
-| `components/booking-details.tsx` | The chosen category, as a line of plain text |
-| `app/actions/bookings.ts` | `allocateRooms(…, tariffCategory)` and `reviewBooking(…, tariffCategory)`: **re-derived from the rate sheet, never trusted**; refused where several categories exist and none was chosen; refused outright on any other stage's approval. The price it stood at goes in the log |
-| `lib/store/*`, `lib/store/types.ts` | `StatusUpdate.tariff_scope`, written with the approval by both stores |
-| **migration 35** | `bookings.tariff_booking_type` / `tariff_requester_role`, with the same checks `tariffs` uses and a **both-or-neither** constraint |
+| What is a group? | **Programme + batch** ("B.Tech 2023 batch"), or a named group for anyone else. The year is worked out, turning over in July |
+| "What emails are allowed"? | **All three lists:** members, addresses filled in on Copy to, addresses they may type |
+| How does a copy list behave? | **Pre-filled, and the requester may remove it** |
+| A blocked person's bookings? | **They stay, and the manager is warned** |
 
-### Three decisions worth knowing
+### What was built
 
-- **No stored rate.** A stay crossing a rate change is priced night by night,
-  so one figure would be wrong for it, and a rupee amount beside `tariffs`
-  would be a second source of truth. The price lives where it cannot be
-  mistaken for the authority: the **booking's log**, which records what the
-  category stood at the day it was chosen, and the **issued invoice**.
-- **No new document version.** The category prints as a conditional fact, so
-  every invoice issued before today reprints byte-identical. `version` governs
-  the lettering of the money table, which this round did not touch - it is
-  still **5**.
-- **A booking approved before today has no category**, and is priced from its
-  own facts exactly as it always was. Inventing one for it would be the
-  "default tariff" the round exists to rule out, and its invoice prints no
-  category line.
+**Console -> User Groups** (`/admin/groups`), for the manager and the developer: groups
+on the left; on the right a group's details, members, Copy to lists and approval path;
+and **Who may sign in** underneath.
 
-### What this reverses
+| Part | What | Where |
+| --- | --- | --- |
+| Groups | Table `user_groups`, `profiles.group_id`, one per person | migration 36, `lib/user-groups.ts` |
+| CSV | Template download, file upload, preview, all or nothing, the existing undo | `importUsersAction(text, groupId)`, `lib/users-import.ts` |
+| Block | By roll number or email, from a paste, a file or a whole group. Preview, reason, reversible | `planAccessChange`, `app/actions/groups.ts` |
+| Enforcement | Refused on every request, and at all three sign-in doors; gone from the account picker | `lib/auth.ts`, `app/actions/auth.ts`, the Google callback |
+| Copy to | Filled in on the form; limited to the group's list or the institute's domain | `copyToRuleFor`, `lib/booking-schema.ts`, `components/booking-form.tsx` |
+| Routes | A **Requester's group** condition on any approval route | `lib/approval-routes.ts`, `lib/workflow.ts`, `components/admin/workflow-manager.tsx` |
 
-The panel's radios are 17 Oct 2026's, and "a *named* category stored on the
-booking is deliberately not built" was that round's reasoning. Both are
-superseded in [02-decisions.md](02-decisions.md), and
-[03-roadmap.md](03-roadmap.md) §2j's open question is **answered**: the office
-did want the sheet's own wording, and it cost no new dimension in
-`resolveTariff` because the category is a scope rather than a label.
+### The owner's answers the same day
+
+- **The Assistant Warden stays** the approver for students. No change.
+- **Only IIT Palakkad addresses may sign in, nobody else.** `signInRefusal` in
+  `lib/user-groups.ts` is the one rule, at all three doors and on every request. New
+  accounts and every import refuse any other address, and Users & Roles flags one that
+  already exists. This reverses nothing for Copy to, which is still open.
+- **MS and PhD join in January and August**, so each intake is its own batch ("PhD Jan
+  2024 batch") and counts its years from the month it joined. Other programmes turn over
+  in July. Migration 36 was edited in place, not having been applied anywhere.
+
+### The institute's two kinds of address (the owner, the same day)
+
+A student is `<roll number>@smail.iitpkd.ac.in`; everyone else `<position or
+name>@iitpkd.ac.in`. Those are now **the only two domains that may sign in**, no other
+subdomain, and `emailFormatError` holds each kind of account to its own: forms and every
+import refuse a student elsewhere, a roll number disagreeing with the address, or staff
+on `smail`. A sheet may leave a student's roll number empty, and a block by roll number
+finds an account that has none.
+
+Checking that turned up two defects the notes already carried, both fixed:
+
+- **Google's `hd` hint** could have kept every `smail` student out of the chooser. It is
+  `*` now, which works whichever way the Workspace is set up.
+- **`listProfiles` read at most 1000 accounts** ([03-roadmap.md](03-roadmap.md) gate 12).
+  It pages now. Tested against a fake client that truncates at 500, 1000 and 5000, **not
+  against a real Supabase**: nothing here can.
+
+### Worth knowing
+
+- **Someone in no group is unchanged**, including Copy to accepting outside addresses,
+  which tests pin as deliberate. To be confirmed: [03-roadmap.md](03-roadmap.md) §2r.
+- **The default student route is still the Assistant Warden.** The owner mentioned "the
+  associate dean or someone"; that is a route the manager sets, and was not assumed.
+- **A security hole was closed before shipping:** a group's role would have skipped the
+  role check an import's column gets, handing out `developer` by CSV.
+- **Delete still exists** in Users & Roles, refusing anyone with bookings, because the
+  import's undo relies on it. The block is the answer for people who leave.
 
 ### Verified
 
-`npm run lint`, `npm run typecheck`, **`npm test` (627 in 37 files)**,
-`npm run build`, **`npx playwright test` (51 journeys)** and
-`npm run check:memories`. Migration 35 applied twice in a throwaway
-`postgres:16-alpine`, and its three refusals checked: half a category either
-way, and a value outside the enum.
-
-New tests: `tests/fifteenth-round.test.ts` (17, the rules on plain data),
-`tests/store-tariff-category.test.ts` (2, the seeded demo database through the
-store and into an invoice) and `e2e/fifteenth-round.spec.ts` (the desk asked,
-blocked until it answers, and the invoice charging ₹4,000 rather than ₹2,000).
-Three existing specs were updated where the panel used to be the control.
+Lint, typecheck, **692 unit tests in 39 files**, a production build, and **all 55
+Playwright journeys**, including `e2e/user-groups.spec.ts` (a real CSV file through to the
+form, a block and a restore). Migration 36 applied twice in PGlite against stubs, its five refusals
+checked. **Not tested on the hosted project**, and LDAP and Google refusals for a blocked
+account have no test of their own: neither door can run here.
 
 ### Left open
 
-- **A category cannot be corrected after approval.** There is one writer and
-  it is the approval; cancelling and reissuing an invoice reprices at the same
-  category. [03-roadmap.md](03-roadmap.md) §2p.
-- **Migration 35 is not applied to the hosted project** - that is a production
-  change, in the order [04-production.md](04-production.md) §1a.1 sets out.
-- **A guest house with several room rates makes the question compulsory.** At
-  Bageshri there is one category and the desk is only told; at Hamsanandi
-  there are two and nothing can be approved without an answer. If the office
-  publishes a third rate there, the list grows on its own - which is the point
-  - but so does what the desk has to read on every approval.
+[03-roadmap.md](03-roadmap.md) §2r, and the sixteenth list's unanswered assumptions in §2q.

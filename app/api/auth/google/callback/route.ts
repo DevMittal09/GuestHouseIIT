@@ -1,3 +1,4 @@
+import { signInRefusal } from "@/lib/user-groups";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { recordAudit } from "@/lib/audit-server";
@@ -66,6 +67,12 @@ export async function GET(request: Request): Promise<Response> {
   if (!profile) {
     await recordAudit(null, "signin.failure", identity.email, { method: "google", reason: "no portal account" });
     return back("That account is not registered on the guest house portal. Please contact the guest house office.", base);
+  }
+
+  const refusal = signInRefusal(profile);
+  if (refusal) {
+    await recordAudit(profile, "signin.failure", profile.email, { method: "google", reason: refusal });
+    return back(refusal, base);
   }
 
   await startSession(profile.id);

@@ -47,6 +47,17 @@ export interface RoleFormConfig {
    * can have several.
    */
   unique_relationships: string[];
+  /**
+   * Relationships only a **research scholar** may book (4 Nov 2026, the
+   * owner's sixteenth list: "regular students cannot book for a spouse ...
+   * research scholars, identified by their roll number, are allowed to book
+   * rooms for their spouse"). Spouse, for students; empty for everyone else.
+   * A research scholar is an MS or PhD student, read off the sixth character
+   * of the roll number (`isResearchScholar`). Not a dependent relationship:
+   * a spouse needs no parent on the request. Absent on a row saved before
+   * the rule - `sanitizeFormConfig` backfills it.
+   */
+  scholar_only_relationships: string[];
   alumni_card: FieldMode;
   /** Informational banner under "Number of rooms" (null = no banner). */
   banner_text: string | null;
@@ -89,7 +100,55 @@ const STUDENT_UNIQUE_RELATIONSHIPS = [
   "Grandmother",
   "Grandfather",
   "Self",
+  "Spouse",
 ];
+
+/** Booked only by a research scholar - see `scholar_only_relationships`. */
+const STUDENT_SCHOLAR_ONLY_RELATIONSHIPS = ["Spouse"];
+
+/**
+ * **The roll number encodes the programme** (31 Oct 2026, the office): its
+ * sixth character is 1 B.Tech, 2 M.Tech, 3 MS, 4 PhD, 5 M.Sc. MS and PhD are
+ * the research programmes.
+ *
+ * Read from the roll number and nothing else - not the academic record's
+ * free-text `program`, which can be missing or stale, and never from the
+ * booking payload. Anything unreadable (null, short, a sixth character
+ * outside the five) is **not** a research scholar: an unreadable roll number
+ * must never widen what a student may book.
+ */
+export const RESEARCH_PROGRAMME_DIGITS = ["3", "4"];
+
+export function isResearchScholar(rollNumber: string | null | undefined): boolean {
+  const roll = rollNumber?.trim() ?? "";
+  if (roll.length < 6) return false;
+  return RESEARCH_PROGRAMME_DIGITS.includes(roll[5]);
+}
+
+/**
+ * Why this request names a relationship only a research scholar may book,
+ * or null when it does not (or the requester is one). Shared by the form and
+ * the server-side schema, like `parentDependencyError`.
+ */
+export function scholarOnlyRelationshipError(
+  config: Pick<RoleFormConfig, "scholar_only_relationships">,
+  relationships: (string | null | undefined)[],
+  researchScholar: boolean
+): string | null {
+  if (researchScholar || config.scholar_only_relationships.length === 0) return null;
+  const found = [
+    ...new Set(
+      relationships
+        .map((r) => r?.trim())
+        .filter((r): r is string => Boolean(r && config.scholar_only_relationships.includes(r)))
+    ),
+  ];
+  if (found.length === 0) return null;
+  return `Only research scholars (MS and PhD) can book for a ${formatList(
+    found.map((r) => r.toLowerCase()),
+    "or"
+  )}.`;
+}
 
 /** The spec's defaults, used until a developer saves a custom configuration. */
 export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): RoleFormConfig {
@@ -111,6 +170,7 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
     parent_relationships: [],
     dependent_relationships: [],
     unique_relationships: [],
+    scholar_only_relationships: [],
     alumni_card: "hidden",
     banner_text: null,
     custom_fields: [],
@@ -123,6 +183,7 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
         parent_relationships: [...STUDENT_PARENT_RELATIONSHIPS],
         dependent_relationships: [...STUDENT_DEPENDENT_RELATIONSHIPS],
         unique_relationships: [...STUDENT_UNIQUE_RELATIONSHIPS],
+        scholar_only_relationships: [...STUDENT_SCHOLAR_ONLY_RELATIONSHIPS],
         banner_text: null,
       };
     // Faculty and staff (24 Sep 2026): **name and gender are the only
@@ -217,7 +278,26 @@ export function sanitizeFormConfig(
   // Rows saved before the dependency rule existed have no arrays at all; fall
   // back to the role's spec defaults so the rule is not silently lost.
   const defaults = buildDefaultFormConfig(config.role, guestHouses);
+  // A row saved before the spouse rule (4 Nov 2026) has no
+  // `scholar_only_relationships` at all, and no Spouse option either: the
+  // default's options gain it once, so a research scholar is not kept from
+  // booking for a spouse by a Form Builder save that predates the rule. A
+  // row saved since keeps whatever the console chose.
+  const beforeScholarRule = config.scholar_only_relationships === undefined;
+  const relationshipOptions =
+    beforeScholarRule && config.relationship_style === "dropdown"
+      ? [
+          ...config.relationship_options,
+          ...defaults.scholar_only_relationships.filter(
+            (r) => !config.relationship_options.includes(r)
+          ),
+        ]
+      : config.relationship_options;
+  config = { ...config, relationship_options: relationshipOptions };
   const offered = new Set(config.relationship_options);
+  const scholarOnly = (config.scholar_only_relationships ?? defaults.scholar_only_relationships).filter(
+    (r) => offered.has(r)
+  );
   const parents = (config.parent_relationships ?? defaults.parent_relationships).filter((r) =>
     offered.has(r)
   );
@@ -238,9 +318,13 @@ export function sanitizeFormConfig(
   // two different answers.
   const unique =
     config.relationship_style === "dropdown"
-      ? (config.unique_relationships ?? defaults.unique_relationships).filter((r) =>
-          offered.has(r)
-        )
+      ? (beforeScholarRule
+          ? [
+              ...(config.unique_relationships ?? defaults.unique_relationships),
+              ...defaults.scholar_only_relationships,
+            ]
+          : (config.unique_relationships ?? defaults.unique_relationships)
+        ).filter((r, i, all) => offered.has(r) && all.indexOf(r) === i)
       : [];
 
   return {
@@ -249,6 +333,7 @@ export function sanitizeFormConfig(
       ? null
       : config.banner_text,
     unique_relationships: unique,
+    scholar_only_relationships: scholarOnly,
     allowed_guest_house_ids: ids.length > 0 ? ids : guestHouses.map((g) => g.id),
     guest_fields: {
       ...config.guest_fields,

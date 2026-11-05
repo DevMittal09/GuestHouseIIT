@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { allocateRooms, getRoomConflicts } from "@/app/actions/bookings";
@@ -25,9 +25,10 @@ import {
   type ConflictKind,
 } from "@/lib/turnover";
 import { cn } from "@/lib/utils";
-import { DEFAULT_RULES, type CapacityRules } from "@/lib/settings";
+import { DEFAULT_RULES, type CapacityRules, type PolicyRules } from "@/lib/settings";
 import type { DeskTariffCategory } from "@/lib/tariff-categories";
 import type { BookingWithDetails, Room } from "@/lib/types";
+import { requesterMayHaveVipRooms, vipRoomIds } from "@/lib/vip";
 
 /**
  * Cinema-style room allocation grid for one booking.
@@ -46,7 +47,14 @@ export function RoomGrid({
   onAllocated,
   capacity = DEFAULT_RULES.capacity,
   bufferMinutes = DEFAULT_RULES.booking.buffer_minutes,
+  policy = DEFAULT_RULES.policy,
 }: {
+  /**
+   * Which rooms are VIP and who may have them (4 Nov 2026) - the same
+   * `rules.policy` `allocateRooms` checks. A VIP room is marked, and cannot
+   * be picked for a requester without VIP access.
+   */
+  policy?: PolicyRules;
   /** The turnaround buffer from Settings, for the legend and the override notice. */
   bufferMinutes?: number;
   booking: BookingWithDetails;
@@ -82,6 +90,8 @@ export function RoomGrid({
   // any part of this stay is never selectable.
   const checkIn = booking.check_in;
   const checkOut = booking.check_out;
+  const vip = useMemo(() => vipRoomIds(rooms, policy), [rooms, policy]);
+  const vipAllowed = requesterMayHaveVipRooms(booking.requester, policy);
   /**
    * Each room's worst conflict with this stay. A `hard` room is unpickable;
    * a `soft` one overlaps by no more than the turnover grace and can be taken
@@ -246,6 +256,8 @@ export function RoomGrid({
             conflicts={conflicts}
             selected={selected}
             onToggle={toggle}
+            vip={vip}
+            vipAllowed={vipAllowed}
           />
           <RoomSection
             title={`${ROOM_TYPE_LABELS.single} rooms`}
@@ -256,6 +268,8 @@ export function RoomGrid({
             conflicts={conflicts}
             selected={selected}
             onToggle={toggle}
+            vip={vip}
+            vipAllowed={vipAllowed}
           />
         </>
       ) : (
@@ -270,6 +284,8 @@ export function RoomGrid({
           conflicts={conflicts}
           selected={selected}
           onToggle={toggle}
+          vip={vip}
+          vipAllowed={vipAllowed}
         />
       )}
 
@@ -441,10 +457,15 @@ function RoomSection({
   onToggle,
   capacity,
   bufferMinutes,
+  vip,
+  vipAllowed,
 }: {
   title: string;
   description: string;
   rooms: Room[];
+  /** The VIP rooms' ids, and whether this booking may be given one. */
+  vip: Set<string>;
+  vipAllowed: boolean;
   capacity: CapacityRules;
   bufferMinutes: number;
   conflicts: Record<string, ConflictKind>;
@@ -465,6 +486,8 @@ function RoomSection({
           const isOccupied = conflict === "hard";
           const isTurnover = conflict === "soft";
           const isTurnaround = conflict === "turnaround";
+          const isVip = vip.has(room.id);
+          const vipLocked = isVip && !vipAllowed;
           const pickedAt = selected.indexOf(room.id);
           const isSelected = pickedAt >= 0;
           return (
@@ -472,9 +495,11 @@ function RoomSection({
               key={room.id}
               type="button"
               onClick={() => onToggle(room)}
-              disabled={isOccupied}
+              disabled={isOccupied || vipLocked}
               title={
-                isOccupied
+                vipLocked
+                  ? `${room.room_number} - a VIP room, only for a requester with VIP access`
+                  : isOccupied
                   ? `${room.room_number} - already allotted for these dates`
                   : isTurnover
                     ? `${room.room_number} - another stay overlaps by up to ${TURNOVER_GRACE_HOURS} hours. Pick it to accept the changeover.`
@@ -484,7 +509,9 @@ function RoomSection({
               }
               className={cn(
                 "flex h-14 cursor-pointer items-center justify-center rounded border text-sm font-semibold tabular-nums transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
-                isOccupied
+                vipLocked
+                  ? "cursor-not-allowed border-dashed border-border-strong bg-band text-muted-foreground"
+                  : isOccupied
                   ? cn(SEAT.hard, "cursor-not-allowed line-through decoration-white/60")
                   : isSelected
                     ? cn(SEAT.selected, (isTurnover || isTurnaround) && "outline-2 outline-offset-2 outline-amber-500")
@@ -497,6 +524,9 @@ function RoomSection({
             >
               <span className="flex flex-col items-center leading-tight">
                 {room.room_number}
+                {isVip && !isSelected && (
+                  <span className="text-[10px] font-normal tracking-wide uppercase opacity-90">VIP</span>
+                )}
                 {isSelected && (
                   <span className="text-[10px] font-normal opacity-90">
                     Room {pickedAt + 1}

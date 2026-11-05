@@ -42,7 +42,7 @@ describe("reading stored settings", () => {
 
   it("merges a partial row over the defaults (a field added later)", () => {
     const parsed = parseRuleGroup("booking", { advance_booking_months: 3 });
-    expect(parsed).toEqual({ advance_booking_months: 3, max_stay_nights: 14, buffer_minutes: 240, no_show_release_hours: 0 });
+    expect(parsed).toEqual({ advance_booking_months: 3, max_stay_nights: 14, buffer_minutes: 240, no_show_release_hours: 0, cancellation_notice_hours: 24 });
   });
 
   it("ignores a malformed row rather than throwing", () => {
@@ -54,7 +54,7 @@ describe("reading stored settings", () => {
 
   it("ignores keys it does not know", () => {
     const parsed = parseRuleGroup("booking", { max_stay_nights: 7, surprise: true });
-    expect(parsed).toEqual({ advance_booking_months: 6, max_stay_nights: 7, buffer_minutes: 240, no_show_release_hours: 0 });
+    expect(parsed).toEqual({ advance_booking_months: 1, max_stay_nights: 7, buffer_minutes: 240, no_show_release_hours: 0, cancellation_notice_hours: 24 });
   });
 
   /**
@@ -198,8 +198,8 @@ describe("rule functions follow the settings", () => {
 
   it("advance window in months", () => {
     const from = new Date("2026-01-31T06:30:00Z");
-    // The default - six months since 14 Oct 2026, one before that.
-    expect(latestCheckIn("employee", from)?.toISOString().slice(0, 10)).toBe("2026-07-31");
+    // The default - one month again since 4 Nov 2026 (six from 14 Oct).
+    expect(latestCheckIn("employee", from)?.toISOString().slice(0, 10)).toBe("2026-02-28");
     expect(latestCheckIn("employee", from, 3)?.toISOString().slice(0, 10)).toBe("2026-04-30");
     // `addMonths` clamps the day of the month: 31 January plus one month is
     // 28 February, not 3 March. `setMonth` would roll it over.

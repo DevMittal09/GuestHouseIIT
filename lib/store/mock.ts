@@ -1,3 +1,4 @@
+import type { NewUserGroup, UserGroup } from "@/lib/user-groups";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -60,6 +61,7 @@ import {
   seedProfiles,
   seedRoomHolds,
   seedHostels,
+  seedUserGroups,
   seedOfficialEmails,
   seedProjects,
   seedTariffs,
@@ -134,6 +136,7 @@ interface Db {
   academic_records?: StoredAcademicRecord[];
   /** Migration 32: one row per spreadsheet import - what it changed, so it can be undone. */
   user_import_batches?: UserImportBatch[];
+  user_groups?: UserGroup[];
 }
 
 // `MOCK_DB_PATH` lets the test suite run against a throwaway file instead of
@@ -453,6 +456,11 @@ function loadDb(): Db {
       db.user_import_batches = [];
       dirty = true;
     }
+    // Migration 36.
+    if (!db.user_groups) {
+      db.user_groups = [...seedUserGroups];
+      dirty = true;
+    }
     if (dirty) saveDb(db);
     return db;
   }
@@ -471,6 +479,7 @@ function loadDb(): Db {
     hostels: [...seedHostels],
     official_emails: [...seedOfficialEmails],
     projects: [...seedProjects],
+    user_groups: [...seedUserGroups],
     security_audit: [],
     tariffs: [...seedTariffs],
     invoices: [],
@@ -1052,6 +1061,58 @@ export class MockStore implements DataStore {
     if (patch.ldap_uid !== undefined) assertLdapUidFree(db, patch.ldap_uid, id);
     if (patch.hostel_name !== undefined) assertHostelExists(db, patch.hostel_name);
     Object.assign(p, patch);
+    saveDb(db);
+  }
+
+  async updateProfiles(ids: string[], patch: Partial<NewProfileInput>): Promise<void> {
+    const db = loadDb();
+    const wanted = new Set(ids);
+    for (const profile of db.profiles) {
+      if (wanted.has(profile.id)) Object.assign(profile, patch);
+    }
+    saveDb(db);
+  }
+
+  // ---- user groups (migration 36) --------------------------------------
+
+  async listUserGroups(): Promise<UserGroup[]> {
+    return [...(loadDb().user_groups ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async createUserGroup(input: NewUserGroup): Promise<UserGroup> {
+    const db = loadDb();
+    const groups = (db.user_groups ??= []);
+    if (groups.some((g) => g.name.toLowerCase() === input.name.toLowerCase())) {
+      throw new Error("A group with this name already exists");
+    }
+    const group: UserGroup = { ...input, id: randomUUID(), created_at: new Date().toISOString() };
+    groups.push(group);
+    saveDb(db);
+    return group;
+  }
+
+  async updateUserGroup(id: string, patch: Partial<NewUserGroup>): Promise<void> {
+    const db = loadDb();
+    const groups = db.user_groups ?? [];
+    const group = groups.find((g) => g.id === id);
+    if (!group) throw new Error("That group no longer exists");
+    if (
+      patch.name &&
+      groups.some((g) => g.id !== id && g.name.toLowerCase() === patch.name!.toLowerCase())
+    ) {
+      throw new Error("A group with this name already exists");
+    }
+    Object.assign(group, patch);
+    saveDb(db);
+  }
+
+  async deleteUserGroup(id: string): Promise<void> {
+    const db = loadDb();
+    db.user_groups = (db.user_groups ?? []).filter((g) => g.id !== id);
+    // As the foreign key does: on delete set null.
+    for (const profile of db.profiles) {
+      if (profile.group_id === id) profile.group_id = null;
+    }
     saveDb(db);
   }
 

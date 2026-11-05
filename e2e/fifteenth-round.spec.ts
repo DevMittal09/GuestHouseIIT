@@ -22,8 +22,11 @@ import {
  *
  * A faculty member's **personal** stay at **Hamsanandi**, starting within the
  * hour: it goes straight to the manager (no HOD stage on a personal booking),
- * the kitchen's guest house is the one the office prices two ways, and a
- * personal stay is settled at check-out, so one journey reaches the invoice.
+ * and a personal stay is settled at check-out, so one journey reaches the
+ * invoice. Since 4 Nov 2026 a personal stay has one category, Category I, so
+ * the desk is told rather than asked; choosing between II and III on an
+ * official stay is `tests/sixteenth-round.test.ts`, and being blocked until
+ * a choice is made is `tests/fifteenth-round.test.ts`.
  */
 test("the manager chooses the tariff category as they approve, and the invoice prints it", async ({
   page,
@@ -59,31 +62,23 @@ test("the manager chooses the tariff category as they approve, and the invoice p
   await expect(dialog.getByRole("heading", { name: /Allocate rooms/ })).toBeVisible();
 
   /**
-   * The office's sheet prices Hamsanandi's rooms two ways - ₹2,000 generally
-   * and ₹4,000 "for government officers" - so both are offered, with the
-   * booking's own category first and marked. Before this round the second was
-   * unreachable: it was only ever what an office's own account resolved to.
+   * **A personal stay is Category I and nothing else** (4 Nov 2026, the
+   * owner's sixteenth list): the desk "cannot directly change a booking type
+   * from Official to Personal (or vice versa)", and a category scoped to an
+   * official stay would be that change made through the price. So with one
+   * category left there is nothing to ask - the dialog states it.
    */
   const category = dialog.locator("fieldset", { hasText: "Tariff category" });
-  await expect(category.getByText("Tariff sheet: Hamsanandi types 1 and 2")).toBeVisible();
-  await expect(category.getByText("- as requested")).toBeVisible();
-  const officer = category.locator("label", {
-    hasText: "Tariff sheet: Hamsanandi type 3, government officers",
-  });
-  await expect(officer).toBeVisible();
-  await expect(officer).toContainText("₹4,000");
+  await expect(category.getByText(/^Category I:/)).toBeVisible();
+  await expect(category).toContainText("₹1,500");
+  await expect(category.locator('input[type="radio"]')).toHaveCount(0);
+  await expect(category.getByText(/Category II|Category III/)).toHaveCount(0);
 
-  // Pick a room, and the allocation still waits for the category: the rate is
-  // part of the same decision, and an invoice must not fall back to a default.
+  // Pick a room - not a VIP one, which a faculty member's booking cannot be
+  // given - and the allocation is ready: the category is already decided.
   await expect(dialog.getByText("Loading occupancy…")).toHaveCount(0, { timeout: 30_000 });
   await dialog.locator('button[title*="Occupancy:"]:not([disabled])').first().click();
   const confirm = dialog.getByRole("button", { name: /Confirm & Allocate/ });
-  await expect(confirm).toBeDisabled();
-  await expect(
-    dialog.getByText("Choose the tariff category this booking is charged under")
-  ).toBeVisible();
-
-  await officer.locator('input[type="radio"]').check();
   await expect(confirm).toBeEnabled();
   await confirm.click();
   await expect(dialog).toBeHidden({ timeout: 30_000 });
@@ -101,16 +96,13 @@ test("the manager chooses the tariff category as they approve, and the invoice p
   // Priced at what the desk chose, and saying so among the printed facts -
   // the office's own words, snapshotted, so renaming the rate later cannot
   // rewrite an issued invoice.
-  await expect(
-    invoice.getByText("Tariff sheet: Hamsanandi type 3, government officers")
-  ).toBeVisible();
+  await expect(invoice.getByText(/^Category I:/).first()).toBeVisible();
   /**
    * And charged at it. The office's rates include GST, so the Tariff column
-   * prints the rate before tax: **₹3,389.83 is ₹4,000 inclusive** - the
-   * government-officer rate. Had the desk left the booking's own category
-   * the cell would read ₹1,694.92, which is ₹2,000. The figure does not
-   * depend on how many nights the run happens to bill.
+   * prints the rate before tax: **₹1,271.19 is ₹1,500 inclusive** - Category
+   * I at Hamsanandi. Category II would read ₹1,694.92 (₹2,000). The figure
+   * does not depend on how many nights the run happens to bill.
    */
-  await expect(invoice.getByRole("cell", { name: "₹3,389.83" }).first()).toBeVisible();
+  await expect(invoice.getByRole("cell", { name: "₹1,271.19" }).first()).toBeVisible();
   await expect(invoice.getByRole("cell", { name: "₹1,694.92" })).toHaveCount(0);
 });

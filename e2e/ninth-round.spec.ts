@@ -130,7 +130,7 @@ test("the manager loads accounts from a spreadsheet paste and removes them again
   await paste.fill(
     [
       "email, name, roll_number, role",
-      "imported.one@iitpkd.ac.in, Imported One, EMP9001, student",
+      "990000901@smail.iitpkd.ac.in, Imported One, 990000901, student",
       "imported.two@iitpkd.ac.in, Imported Two, EMP9002, employee",
     ].join("\n")
   );
@@ -143,7 +143,7 @@ test("the manager loads accounts from a spreadsheet paste and removes them again
   // the address alone also hits the row's tick box, whose label names the
   // account; filtering on text content does not, because that cell has none.
   const row = (email: string) => page.getByRole("cell").filter({ hasText: email });
-  await expect(row("imported.one@iitpkd.ac.in")).toBeVisible({ timeout: 30_000 });
+  await expect(row("990000901@smail.iitpkd.ac.in")).toBeVisible({ timeout: 30_000 });
   await expect(row("imported.two@iitpkd.ac.in")).toBeVisible();
 
   // Running the same paste again changes nothing - it is how the office
@@ -152,7 +152,7 @@ test("the manager loads accounts from a spreadsheet paste and removes them again
   await page.getByLabel("People", { exact: true }).fill(
     [
       "email, name, roll_number, role",
-      "imported.one@iitpkd.ac.in, Imported One, EMP9001, student",
+      "990000901@smail.iitpkd.ac.in, Imported One, 990000901, student",
       "imported.two@iitpkd.ac.in, Imported Two, EMP9002, employee",
     ].join("\n")
   );
@@ -161,13 +161,13 @@ test("the manager loads accounts from a spreadsheet paste and removes them again
   await page.getByRole("button", { name: "Cancel" }).click();
 
   // And the rows can be ticked and deleted together.
-  await page.getByLabel("Select imported.one@iitpkd.ac.in").check();
+  await page.getByLabel("Select 990000901@smail.iitpkd.ac.in").check();
   await page.getByLabel("Select imported.two@iitpkd.ac.in").check();
   await page.getByRole("button", { name: "Delete 2 selected" }).click();
   await page.locator("#confirm-phrase").fill("delete 2");
   await page.getByRole("button", { name: "Delete accounts" }).click();
   await expect(page.getByText(/2 accounts deleted/)).toBeVisible({ timeout: 30_000 });
-  await expect(row("imported.one@iitpkd.ac.in")).toHaveCount(0);
+  await expect(row("990000901@smail.iitpkd.ac.in")).toHaveCount(0);
   await expect(row("imported.two@iitpkd.ac.in")).toHaveCount(0);
 });
 
@@ -190,7 +190,7 @@ test("the manager undoes an import, and the accounts it changed are restored", a
   await page.getByLabel("People", { exact: true }).fill(
     [
       "email, name, roll_number, role, hostel_name",
-      "undo.one@smail.iitpkd.ac.in, Undo One, EMP9101, student, Malhar",
+      "990000911@smail.iitpkd.ac.in, Undo One, 990000911, student, Malhar",
       "undo.two@iitpkd.ac.in, Undo Two, EMP9102, employee, ",
       "undo.three@iitpkd.ac.in, Undo Three, EMP9103, employee, ",
     ].join("\n")
@@ -207,7 +207,7 @@ test("the manager undoes an import, and the accounts it changed are restored", a
   await page.getByLabel("People", { exact: true }).fill(
     [
       "email, name, hostel_name",
-      "undo.one@smail.iitpkd.ac.in, Undo One, Saveri",
+      "990000911@smail.iitpkd.ac.in, Undo One, Saveri",
       "undo.two@iitpkd.ac.in, Undo Two Renamed, ",
     ].join("\n")
   );
@@ -249,7 +249,7 @@ test("the manager undoes an import, and the accounts it changed are restored", a
   await page.locator("#confirm-phrase").fill("UNDO");
   await page.getByRole("button", { name: "Undo the import" }).click();
   await expect(page.getByText(/Import undone - 3 removed/)).toBeVisible({ timeout: 30_000 });
-  await expect(row("undo.one@smail.iitpkd.ac.in")).toHaveCount(0);
+  await expect(row("990000911@smail.iitpkd.ac.in")).toHaveCount(0);
   await expect(row("undo.two@iitpkd.ac.in")).toHaveCount(0);
   await expect(row("undo.three@iitpkd.ac.in")).toHaveCount(0);
 });

@@ -1257,3 +1257,13 @@ here and there, and the two drifted.
 What this file still owns is **[Deliberately not built](#deliberately-not-built)**
 - which of the prototype's features were left out, and why. That is a design
 record, not an open item.
+
+## The sixteenth list on screen (4 Nov 2026)
+
+- **Guidelines page:** a **Dos and don'ts** section (`DOS_AND_DONTS`, fixed copy),
+  and the masthead button is **Guidelines document**, to `rules.policy.guidelines_url`,
+  falling back to `GUIDELINES_PDF_URL`. The cancellation line states the notice.
+- **Booking page's right column** (`components/booking-sidebar.tsx`): Room tariff,
+  Catering timings, Guidelines. The meal door keeps `TariffPanel` for its meal rates.
+- **Availability** shows a bare figure and "rooms available": no `/total`, no meter,
+  no "of N". The console header says only how many are available.

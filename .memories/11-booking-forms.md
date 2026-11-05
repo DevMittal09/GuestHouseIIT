@@ -173,10 +173,13 @@ therefore no exemption** - the existing rules apply unmodified. That is the
 safe direction, and the only safe one: an unreadable roll number must never
 widen what a student may book.
 
-> **Status: not implemented.** Nothing in the code reads the sixth character,
-> `Spouse` is on no relationship list, and `parentDependencyError`
-> (`lib/form-config.ts`) is still the one matcher described above. The open
-> work, and what it would touch, is [03-roadmap.md](03-roadmap.md) §2o.
+> **Status: built on 4 Nov 2026.** `isResearchScholar` reads the sixth character
+> and `scholar_only_relationships` (Spouse, for students) is refused from anyone
+> else, by the form and by `createBooking`, and not offered to them. It is not a
+> dependent relationship, so a spouse needs no parent. A student row saved in the
+> Form Builder before the rule gains Spouse once, in `sanitizeFormConfig`.
+> An **official** booking is also now exempt from the 14-night cap, whoever
+> raises it (`isDurationExempt`).
 
 ---
 
@@ -238,8 +241,8 @@ widen what a student may book.
 
 - Check-in in the **future** (skipped for meals only — its "check-in" is
   midnight on the first meal day).
-- Check-in within **6 months** of today (`advance_booking_months`; one month
-  until 14 Oct 2026). **Exempt:** Official, GH Manager, developer. Applies to
+- Check-in within **1 month** of today (`advance_booking_months`; six months
+  from 14 Oct to 4 Nov 2026). **Exempt:** Official, GH Manager, developer. Applies to
   check-in only.
 - Check-out after check-in — the message names both times as read, and points
   at the AM/PM dropdowns when they are on the same day.
@@ -821,3 +824,12 @@ booking, and filling the profile from it at sign-in, are listed in
 
 The scripts are not in the repo. Re-create them from this list if you touch
 `lib/academic/`.
+
+---
+
+## Copy to, for someone in a user group (5 Nov 2026)
+
+Their group's `prefill_copy_to` is already in the box and **may be removed**. What they
+may add is `allowed_copy_to` where that is non-empty, else any IIT Palakkad address
+(`copyToAddressError`, applied by the form and again in `createBooking` from the
+requester's own account). **Someone in no group is unchanged:** any address.

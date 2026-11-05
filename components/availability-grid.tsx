@@ -155,8 +155,6 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
    * still gets the same totals the desk reads, from the same arithmetic.
    */
   const roomCount = detailed ? rooms.length : counts.total;
-  const bookedNow = counts.bookedNow ?? 0;
-  const bookedInRange = Math.max(0, counts.total - counts.freeThroughout);
   const period = PERIOD[view];
 
   if (guestHouses.length === 0) {
@@ -243,21 +241,12 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
             {loading ? (
               "Loading availability…"
             ) : (
+              // Available rooms only (4 Nov 2026): no total, and no "booked",
+              // which is the total by another name.
               <>
-                <Figure>{roomCount}</Figure> rooms · <Figure>{bookedInRange}</Figure> booked{" "}
-                {view === "day" ? "on this date" : `during this ${period}`}
-                {view !== "day" && (
-                  <>
-                    {" "}
-                    · <Figure>{counts.freeThroughout}</Figure> free all {period}
-                  </>
-                )}
-                {counts.bookedNow !== null && (
-                  <>
-                    {" "}
-                    · <Figure>{bookedNow}</Figure> booked right now
-                  </>
-                )}
+                <Figure>{counts.freeThroughout}</Figure>{" "}
+                {counts.freeThroughout === 1 ? "room" : "rooms"} available{" "}
+                {view === "day" ? "all day" : `all ${period}`}
               </>
             )}
           </div>

@@ -55,6 +55,8 @@ export type UserImportFields = {
   ldap_uid: string | null;
   staff_category: StaffCategory | null;
   unit_id: string | null;
+  /** Only where there is one; older records have no such field (migration 36). */
+  group_id?: string | null;
 };
 
 /**
@@ -119,6 +121,7 @@ export function importFieldsOf(source: {
   ldap_uid?: string | null;
   staff_category?: StaffCategory | null;
   unit_id?: string | null;
+  group_id?: string | null;
 }): UserImportFields {
   return {
     full_name: source.full_name,
@@ -129,6 +132,7 @@ export function importFieldsOf(source: {
     ldap_uid: source.ldap_uid ?? null,
     staff_category: source.staff_category ?? null,
     unit_id: source.unit_id ?? null,
+    ...(source.group_id ? { group_id: source.group_id } : {}),
   };
 }
 
@@ -141,11 +145,12 @@ const FIELD_LABELS: [keyof UserImportFields, string][] = [
   ["ldap_uid", "LDAP username"],
   ["staff_category", "Category"],
   ["unit_id", "Unit"],
+  ["group_id", "Group"],
 ];
 
 /** Which of the eight differ, by the label the console already uses for each. */
 export function differingFields(a: UserImportFields, b: UserImportFields): string[] {
-  return FIELD_LABELS.filter(([key]) => a[key] !== b[key]).map(([, label]) => label);
+  return FIELD_LABELS.filter(([key]) => (a[key] ?? null) !== (b[key] ?? null)).map(([, label]) => label);
 }
 
 export function sameImportFields(a: UserImportFields, b: UserImportFields): boolean {
@@ -211,7 +216,13 @@ export function planUserImportRevert(
       );
       continue;
     }
-    candidates.push({ id: changed.id, email: changed.email, to: changed.before });
+    // An import that put someone in a group takes them out again, though the
+    // record of what they held has no group to name.
+    const to =
+      changed.after.group_id && !changed.before.group_id
+        ? { ...changed.before, group_id: null }
+        : changed.before;
+    candidates.push({ id: changed.id, email: changed.email, to });
   }
 
   /**

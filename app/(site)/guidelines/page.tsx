@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
-import { ArrowDown } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { Container, PageMasthead, SectionHead, siteButton } from "@/components/site/site-ui";
 import { GUEST_HOUSE_CONTACT, GUIDELINES_PDF_URL, GUIDELINES_PROVISIONAL } from "@/lib/site";
-import { BOOKING_STEPS, guidelineSections, joinNames, type GuidelineSection } from "@/lib/site-content";
+import {
+  BOOKING_STEPS,
+  DOS_AND_DONTS,
+  guidelineSections,
+  joinNames,
+  type GuidelineSection,
+} from "@/lib/site-content";
 import { getSiteGuestHouses } from "@/lib/site-data";
 import { getRules } from "@/lib/settings-server";
 import { cn } from "@/lib/utils";
@@ -31,6 +37,8 @@ export const metadata: Metadata = { title: "Guidelines" };
 export default async function GuidelinesPage() {
   const [houses, rules] = await Promise.all([getSiteGuestHouses(), getRules()]);
   const sections = guidelineSections(houses, rules);
+  // The manager's Drive link (4 Nov 2026), else the PDF the site once shipped.
+  const documentUrl = rules.policy.guidelines_url || GUIDELINES_PDF_URL;
   const provisional = sections
     .map((section, i) => ({ section, number: i + 1 }))
     .filter(({ section }) => section.provisional);
@@ -50,10 +58,10 @@ export default async function GuidelinesPage() {
           ) : undefined
         }
         aside={
-          GUIDELINES_PDF_URL && (
-            <a href={GUIDELINES_PDF_URL} target="_blank" rel="noopener noreferrer" className={siteButton.ink}>
-              Download as PDF
-              <ArrowDown aria-hidden className="size-4 text-saffron" />
+          documentUrl && (
+            <a href={documentUrl} target="_blank" rel="noopener noreferrer" className={siteButton.ink}>
+              Guidelines document
+              <ArrowUpRight aria-hidden className="size-4 text-saffron" />
               <span className="sr-only">(opens in a new tab)</span>
             </a>
           )
@@ -75,6 +83,32 @@ export default async function GuidelinesPage() {
               </li>
             ))}
           </ol>
+        </Container>
+      </section>
+
+      {/* ------------------------------------------------- dos and don'ts */}
+      <section aria-labelledby="dos-title">
+        <Container className="pt-[clamp(56px,7vw,88px)]">
+          <SectionHead id="dos-title" label="In brief" title="Dos and don'ts" />
+          <div className="mt-10 grid gap-px overflow-hidden rounded-lg border border-border-strong bg-border-strong md:grid-cols-2">
+            {(
+              [
+                ["Do", DOS_AND_DONTS.dos],
+                ["Don't", DOS_AND_DONTS.donts],
+              ] as const
+            ).map(([title, items]) => (
+              <div key={title} className="bg-white p-6">
+                <h3 className="text-[20px] font-semibold text-ink">{title}</h3>
+                <ul className="mt-3 space-y-2">
+                  {items.map((item) => (
+                    <li key={item} className="text-[15px] leading-[1.6] text-body">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </Container>
       </section>
 

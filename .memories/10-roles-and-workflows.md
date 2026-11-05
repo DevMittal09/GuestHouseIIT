@@ -144,7 +144,7 @@ Everything a requester can do with a booking they own (or raised for a club):
 - **Special rules:** relationship dropdown with the parent rule (siblings and
   grandparents only alongside Mother / Father / Guardian) and one-of-each
   (one Mother, one Father…); the banner "Double shared rooms will get first
-  preference"; booking window 6 months (1 until 14 Oct 2026); at most
+  preference"; booking window 1 month (6 from 14 Oct to 4 Nov 2026); **a spouse only on an MS or PhD roll number**; at most
   14 nights.
 - **Menu:** My Bookings · Room Booking · Room Availability · Booking History.
   (No Meal Booking: a student's booking can never include meals.)
@@ -479,6 +479,28 @@ Every section's actions re-check the role and the unlock on the server
 (`requireConsole(section)`), not just the page.
 
 ---
+
+### What the sixteenth list changed (4 Nov 2026)
+
+- **VIP access:** `director@`, `office_director@`, `adadmin@` and whoever the
+  manager adds. They alone are counted the VIP rooms, among requesters, and only
+  their bookings or the manager's own may be given one. The desk sees every room.
+- **Caretaker:** invoices personal bookings only (`invoiceRoleError`).
+- **Manager:** the queue is first come, first served; **Shorten this stay** in the
+  allocation dialog; a new console section, VIP Rooms & Guidelines, the twelfth.
+- **Requester:** cancels up to 24 hours before check-in, after which the manager
+  does it.
+
+### User groups and blocked accounts (5 Nov 2026)
+
+- **Console -> User Groups**, manager and developer: load a batch from a CSV, its copy
+  lists, its approval path, and who may sign in.
+- **A route may be limited to a group** ("Requester's group" in Approval Workflow). It
+  is matched like any other condition, first active match wins, so a group's own route
+  must stand above the shared one.
+- **A blocked account** cannot sign in by any door and its open session stops working.
+  Its bookings, invoices and mail go on as before. The manager cannot block themself or
+  the last manager or developer. A blocked approver's stage waits: the preview warns.
 
 ## Part 2 — The pipelines and the states
 

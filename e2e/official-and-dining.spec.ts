@@ -248,7 +248,9 @@ test("the availability console counts rooms for a requester and charts them for 
    * rather than the class, so a missing theme token fails here too.
    */
   const colour = await page
-    .locator('li[aria-label*="rooms free"] span.tabular-nums')
+    // "N rooms available" since 4 Nov 2026 - no denominator. A past day's
+    // label ends "not available to book", so the match is on the end.
+    .locator('li[aria-label$=" available"] span.tabular-nums')
     .first()
     .evaluate((el) => getComputedStyle(el).color);
   expect(colour).toBe("rgb(0, 112, 60)");

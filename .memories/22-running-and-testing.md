@@ -1399,3 +1399,25 @@ now names it. `getByRole("heading", { name: … })` says which was meant.
 to two elements is usually telling you the page has two things a person cannot
 tell apart either - the caption, the accessible name, the heading. Fix the
 page before narrowing the locator.
+
+### Playwright: a submit that does nothing, with no error on screen (4 Nov 2026)
+
+**Symptom:** `submittedReference` times out, the form is still there, no POST
+followed the click, and the failure snapshot shows no message. The availability
+panel still says "Pick a guest house".
+**Cause, inferred from the trace rather than proved:** the journey typed straight
+after `page.goto("/book")`, before hydration, so a student's stated guest house
+was missing at submit. That error has no visible field, and the toast had gone by
+the time of the snapshot. It failed about one run in two.
+**Fix:** wait for the page heading and the guest house line before typing, as
+`e2e/fourteenth-round.spec.ts` and `e2e/fifth-round.spec.ts` now do. Other journeys
+that type straight after opening `/book` may share the race.
+
+The repair of a stale local database: `.local-db.json` keeps the rooms and rates
+it was seeded with. Delete it to pick up the room names and Categories I-III.
+
+### Testing a migration with no Docker on the machine (5 Nov 2026)
+
+`npm install @electric-sql/pglite` in a scratch folder, stub the tables the migration
+references, and run the file twice. It is real Postgres in WebAssembly and needs nothing
+installed. It tests one migration against stubs, not the whole chain.

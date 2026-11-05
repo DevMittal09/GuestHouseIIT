@@ -6,6 +6,7 @@ import {
   canExportCollections,
   canIssueInvoices,
   canUseConsoleSection,
+  invoiceRoleError,
 } from "@/lib/access";
 import { isAdminUnlocked } from "@/lib/admin-lock";
 import { recordAudit } from "@/lib/audit-server";
@@ -172,7 +173,10 @@ export async function getInvoicePanel(
         gstMealPercent: rules.gst_meal_percent,
         kind: invoiceKind(document),
         servesMeals: invoicePrintsDining(document),
-        blocker: live && live.status !== "draft" ? null : invoiceBlocker(booking, document),
+        blocker:
+          live && live.status !== "draft"
+            ? null
+            : (invoiceRoleError(user.role, booking.booking_type) ?? invoiceBlocker(booking, document)),
         history: invoices.filter((i) => i.status === "cancelled"),
         canCancel: canCancelInvoices(user.role),
       },
@@ -218,6 +222,8 @@ export async function saveInvoiceDraftAction(
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
+    const roleProblem = invoiceRoleError(user.role, booking.booking_type);
+    if (roleProblem) return { ok: false, error: roleProblem };
     await store.saveInvoiceDraft(bookingId, cleanCounts(counts), user.id, cleanCharges(booking, charges));
     return { ok: true };
   } catch (e) {
@@ -240,6 +246,9 @@ export async function issueInvoiceAction(
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
+    // The caretaker invoices personal bookings only (4 Nov 2026).
+    const roleProblem = invoiceRoleError(user.role, booking.booking_type);
+    if (roleProblem) return { ok: false, error: roleProblem };
     const mealCounts = cleanCounts(counts);
     const extraCharges = cleanCharges(booking, charges);
     const now = new Date().toISOString();

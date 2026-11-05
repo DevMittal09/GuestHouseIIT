@@ -196,6 +196,10 @@ export const STUDENT_RELATIONSHIPS = [
   // "Fill in from saved details" offers them as "Yourself". Neither a parent
   // nor a dependent, so it neither needs a parent nor lets a sibling in.
   "Self",
+  // A research scholar's (MS or PhD) husband or wife (4 Nov 2026). Offered
+  // on every student's form, accepted only from a research scholar - see
+  // `scholar_only_relationships` in `lib/form-config.ts`. Needs no parent.
+  "Spouse",
 ] as const;
 
 export type Profile = {
@@ -225,6 +229,15 @@ export type Profile = {
    * Department).
    */
   staff_category?: StaffCategory | null;
+  /** The user group they belong to (migration 36, `lib/user-groups.ts`). */
+  group_id?: string | null;
+  /**
+   * Set when the account may no longer sign in - graduated, left the institute
+   * (migration 36). Nobody is deleted: bookings and invoices stay. Null or
+   * absent means they may sign in.
+   */
+  login_disabled_at?: string | null;
+  login_disabled_reason?: string | null;
 }
 
 export type StaffCategory = "faculty" | "staff";

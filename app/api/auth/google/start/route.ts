@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { appUrl, googleOauth } from "@/lib/env";
 import { startGoogleSignIn } from "@/lib/oidc";
 import { RATE_LIMITS } from "@/lib/security";
-import { LOGIN_DOMAIN, safeNextPath } from "@/lib/site";
+import { safeNextPath } from "@/lib/site";
 import { getStore } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,10 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const next = safeNextPath(new URL(request.url).searchParams.get("next"));
-  const start = startGoogleSignIn(config, { hostedDomain: LOGIN_DOMAIN });
+  // "*" is any Workspace account, so students on smail are offered theirs whether
+  // or not it is the same Workspace as iitpkd.ac.in, and personal Gmail is not.
+  // It is a hint: the callback checks the address and the claim on the way back.
+  const start = startGoogleSignIn(config, { hostedDomain: "*" });
   const jar = await cookies();
   jar.set(OAUTH_COOKIE, JSON.stringify({ state: start.state, verifier: start.verifier, nonce: start.nonce, next }), {
     httpOnly: true,

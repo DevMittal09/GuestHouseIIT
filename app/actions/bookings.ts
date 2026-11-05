@@ -21,7 +21,7 @@ import { academicRecordFor } from "@/lib/academic";
 import { guestNameRule, lockedNameFor } from "@/lib/academic/guest-names";
 import { describeProject } from "@/lib/projects";
 import { MEAL_KEYS, mealCapacityError, mealPlatesBooked } from "@/lib/meals";
-import { validateCustomValue } from "@/lib/form-config";
+import { isResearchScholar, validateCustomValue } from "@/lib/form-config";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import {
   notifyBookingSubmitted,
@@ -32,9 +32,10 @@ import {
   notifyTierApproved,
 } from "@/lib/mail/notify";
 import { formatINR, toPaise, vacateBlocker } from "@/lib/invoice";
-import { guestHousePolicyError, mealsPolicyError } from "@/lib/policy";
+import { cancellationNoticeError, guestHousePolicyError, mealsPolicyError } from "@/lib/policy";
 import { isWhitelistedOfficial } from "@/lib/settings";
 import { getOfficialEmails, getRules } from "@/lib/settings-server";
+import { roomsVisibleTo, vipAllocationError } from "@/lib/vip";
 import { getStore } from "@/lib/store";
 import { formatDateTime } from "@/lib/format";
 import { deskCategoriesFor } from "@/lib/tariff-categories-server";
@@ -198,6 +199,9 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     const parsed = bookingPayloadSchema(config, {
       mealsAvailable,
       requesterEmail: requester.email,
+      // From the requester's own roll number, never the payload (4 Nov 2026).
+      researchScholar: isResearchScholar(requester.roll_number),
+      copyTo: bookingContext.copyToRule,
       rules: bookingContext.rules,
       debitHeads: bookingContext.debitHeads,
       projectIds: bookingContext.projects.map((p) => p.id),
@@ -305,7 +309,14 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     // Room limit enforcement: check against total active rooms and date-range
     // availability. A meals-only booking holds no rooms, so none of it applies.
     if (wantsRooms) {
-      const activeRooms = await store.listRooms(payload.guest_house_id);
+      // A VIP room is not this requester's to ask for unless they have VIP
+      // access (4 Nov 2026), so it does not count towards what is free: the
+      // manager could not allocate it to them afterwards.
+      const activeRooms = roomsVisibleTo(
+        await store.listRooms(payload.guest_house_id),
+        requester,
+        bookingContext.rules.policy
+      );
       if (payload.rooms.length > activeRooms.length) {
         return {
           ok: false,
@@ -317,7 +328,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         checkInIso,
         checkOutIso
       );
-      const freeRoomCount = activeRooms.length - occupiedIds.length;
+      const freeRoomCount = activeRooms.filter((r) => !occupiedIds.includes(r.id)).length;
       if (payload.rooms.length > freeRoomCount) {
         return {
           ok: false,
@@ -818,7 +829,10 @@ export async function allocateRooms(
     // Do the picked rooms actually sleep the party? Infants share with their
     // guardians, so they need no bed and are excluded from the head count.
     const selectedRooms = roomIds.map((id) => roomsById.get(id)!);
-    const { capacity } = await getRules();
+    const { capacity, policy } = await getRules();
+    // A VIP room only for a requester with VIP access (4 Nov 2026).
+    const vipProblem = vipAllocationError(roomIds, rooms, booking.requester, policy);
+    if (vipProblem) return { ok: false, error: vipProblem };
     const capacityProblem = allocationCapacityError(
       countBedGuests(booking.guests),
       selectedRooms,
@@ -950,6 +964,13 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
           "This stay has already started - speak to the Guest House Manager to end it early.",
       };
     }
+    // At least 24 hours' notice (4 Nov 2026): inside that, the manager
+    // cancels it - `managerCancelBooking` is never held to this.
+    const notice = cancellationNoticeError(
+      booking.check_in,
+      (await getRules()).booking.cancellation_notice_hours
+    );
+    if (notice) return { ok: false, error: notice };
 
     // **Every** cancellation goes to the Guest House Manager, whatever stage
     // the booking had reached. It used to depend on the stage: a request the

@@ -364,6 +364,10 @@ must set.
 
 ## Part 4 — What protects the portal
 
+**Only `@iitpkd.ac.in` and `@smail.iitpkd.ac.in` may sign in** (5 Nov 2026), students on the second. `signInRefusal`
+(`lib/user-groups.ts`) is applied at the LDAP, Google and picker doors and on every
+request, with the block on accounts that have left.
+
 ### What we are protecting
 
 | Asset | Why it matters |

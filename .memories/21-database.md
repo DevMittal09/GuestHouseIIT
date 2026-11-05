@@ -840,10 +840,11 @@ Current migrations:
     rollback script taking the policy count 0 -> 38 and migration 31 taking it
     back to 0 with the profiles untouched.
 
-    **Not applied to the hosted project** - that is a production change and
-    needs the owner's approval. `npm run check:migrations` reports it as one of
-    the three it cannot probe (no table or column to ask about) and prints the
-    SQL: both counts must come back 0.
+    **The owner reported it applied to the hosted project on 5 Nov 2026; this
+    is not yet verified.** `npm run check:migrations` reports it as one it
+    cannot probe (no table or column to ask about) and prints the SQL: both
+    counts must come back 0. Status of every migration:
+    [04-production.md](04-production.md), the note under "Ask the database".
 
 32. **`00000000000032_user_import_batches.sql`** - *the undo record for a
     spreadsheet import of accounts* (14 Oct 2026). One row per import, written
@@ -963,6 +964,16 @@ When you change the schema you must update, in the same commit:
 4. `lib/store/mock.ts` **and** `lib/store/supabase.ts`,
 5. `supabase/seed.sql` and `lib/store/seed.ts` if demo data is affected.
 
+### Migration 36 - user groups and blocked accounts (5 Nov 2026)
+
+`user_groups` (name unique on `lower()`, a role, programme and batch together or not at
+all, `intake` for MS and PhD and nobody else, two `text[]` copy lists), and on `profiles`: `group_id` (on delete set null),
+`login_disabled_at`, `login_disabled_reason`. RLS on with no `authenticated` policy.
+Additive, idempotent. Applied twice in PGlite with its refusals checked. **Applied to the
+hosted project on 5 Nov 2026, with migration 35, and both confirmed by the migration check
+the same day.** `supabase/repairs/2026-10-14-restore-user-import.sql` restores the
+original eight fields and **not `group_id`**: the console's Undo does.
+
 ## One-off repairs — `supabase/repairs/`
 
 Not migrations, never applied automatically, each with a header explaining what
@@ -977,6 +988,7 @@ deployed. *On demand* means it answers a specific event.
 | --- | --- | --- |
 | `2026-10-13-retire-seeded-auth-users.sql` | **Deployment step** | Deletes the `auth.users` rows that already exist - orphaned credentials once migration 31 removes the foreign key, including the 18 seeded with the published `password123`. **Run it after migration 31, never before**: section 0 refuses otherwise, because the old key's `on delete cascade` would take every profile with them. Touches no `public` table |
 | `2026-10-13-rollback-migration-31.sql` | **Escape hatch - do NOT run when deploying** | Recreates all 38 `authenticated` policies migration 31 dropped, verbatim. Only for the case where something that legitimately connects as `authenticated` turns out to be broken - nothing does today. **Running it after migration 31 as though it were a deployment step reopens the hole the migration closes.** It does not re-add the foreign key (and cannot, once any profile has been created since 31) |
+| `2026-11-04-room-naming.sql` | **On demand, not yet run anywhere** | Renames Bageshri's rooms to B1-B10 and adds Categories I-III in force from the day it is run (the owner, 5 Nov 2026), locked at once, plus a row replacing migration 19's ₹4,000 rate. Hamsanandi's rename and deactivations are commented out until the office gives the mapping. Renames keep room ids, so bookings follow |
 | `2026-10-14-restore-user-import.sql` | **On demand** | Undoes one spreadsheet import of accounts from its `user_import_batches` row (migration 32), in plain SQL, for when the console cannot be used. Sections 0-2 are read-only; 3 and 5 write. Prefer Users & Roles -> Recent imports -> Undo, which checks the same rules and audits the result |
 | `2026-09-10-utc-parsed-bookings.sql` | On demand | Shifts bookings stored 5h30m late by the pre-`lib/tz.ts` `toIso()` on a UTC host, and rebuilds their `room_holds` through `set_room_holds()` in one transaction (a shift that would collide aborts the lot). **Not idempotent** — never run twice |
 | `2026-09-17-retire-alumni-persona.sql` | On demand | Deletes the demo alumnus persona from a project seeded before migration 9 and seats the IAR Student Cell |

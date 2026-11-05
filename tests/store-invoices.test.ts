@@ -106,7 +106,7 @@ describe("invoices in the mock store", () => {
     delete raw.invoice_counters;
     fs.writeFileSync(db.file, JSON.stringify(raw));
     const tariffs = await store.listTariffs();
-    expect(tariffs.find((t) => t.item === "room" && t.requester_role === "official")?.rate).toBe(4000);
+    expect(tariffs.find((t) => t.item === "room" && t.requester_role === "employee")?.rate).toBe(2500);
     expect(tariffs.some((t) => t.item === "extra_bed")).toBe(false);
     expect(await store.listInvoices({})).toEqual([]);
   });

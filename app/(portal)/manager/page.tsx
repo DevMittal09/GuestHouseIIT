@@ -194,7 +194,6 @@ export default async function ManagerPage({
         items={guestHouses.map((g) => ({
           href: `/manager?gh=${g.name.toLowerCase()}`,
           label: g.name,
-          detail: `${g.total_rooms} rooms`,
           active: g.id === current.id,
         }))}
       />
@@ -215,6 +214,7 @@ export default async function ManagerPage({
         nowIso={now.toISOString()}
         capacity={rules.capacity}
         bufferMinutes={rules.booking.buffer_minutes}
+        policy={rules.policy}
       />
     </div>
   );

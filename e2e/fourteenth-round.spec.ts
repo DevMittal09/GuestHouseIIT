@@ -47,48 +47,39 @@ async function chooseHouse(page: Page, name: string) {
  * the decision is the Guest House Manager's now
  * (`e2e/fifteenth-round.spec.ts`). What is left is the price list.
  */
-test("the tariff panel lists every category's rates and asks nothing", async ({ page }) => {
+test("the room tariff is the published sheet, beside the catering timings, and asks nothing", async ({
+  page,
+}) => {
   await signIn(page, ACCOUNTS.faculty);
   await page.goto("/book");
   await expect(page.getByRole("heading", { name: /New Booking/i })).toBeVisible();
 
-  // Both guest houses and both kinds of booking, each with its own rates.
-  const panel = tariffPanel(page);
-  await expect(panel.getByRole("heading", { name: "Tariff" })).toBeVisible();
-  // By the heading, not the text: each table's caption names its category
-  // too, so a plain text match finds both (31 Oct 2026).
-  for (const label of [
-    "Bageshri - Official booking",
-    "Hamsanandi - Official booking",
-    "Hamsanandi - Personal booking",
-  ]) {
-    await expect(panel.getByRole("heading", { name: label })).toBeVisible();
+  /**
+   * **Table 1 of the official policy** since 4 Nov 2026 (the owner's
+   * sixteenth list): the three categories down, the guest houses across, the
+   * room rate in each cell - read off the office's rate sheet.
+   */
+  const sheet = page.locator('section[aria-labelledby="tariff-sheet-heading"]');
+  await expect(sheet.getByRole("heading", { name: "Room tariff" })).toBeVisible();
+  const table = sheet.getByRole("table", { name: /Room tariff per day/ });
+  for (const category of ["Category I", "Category II", "Category III"]) {
+    await expect(table.getByRole("rowheader", { name: new RegExp(category) }).first()).toBeVisible();
   }
-  // A rupee figure against each, or an honest "Not published".
-  await expect(panel.getByText(/₹|Not published/).first()).toBeVisible();
-  // Who decides, in one line - without it four categories read as options.
+  await expect(table.getByRole("columnheader", { name: "Hamsanandi" })).toBeVisible();
+  await expect(table.getByRole("columnheader", { name: "Bageshri" })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "₹2,500" })).toBeVisible();
+  // Who decides, in one line.
+  await expect(sheet.getByText(/The Guest House Manager confirms which category applies/)).toBeVisible();
+  // **Nothing in it is selectable.**
+  await expect(sheet.locator("input")).toHaveCount(0);
+
+  // Table 2, the catering timings, under it - and the Guidelines.
+  const timings = page.locator('section[aria-labelledby="catering-heading"]');
+  await expect(timings.getByRole("rowheader", { name: "Breakfast" })).toBeVisible();
+  await expect(timings).toContainText("8:00");
   await expect(
-    panel.getByText("The Guest House Manager confirms which category applies.")
+    page.locator('section[aria-labelledby="guidelines-heading"]').getByRole("link", { name: /Dos and don/ })
   ).toBeVisible();
-
-  // **Nothing in it is selectable**, and every category's charges are shown
-  // at once rather than waiting for one to be picked.
-  await expect(panel.locator("input")).toHaveCount(0);
-  await expect(panel.getByText("Choose one to see every charge.")).toHaveCount(0);
-  await expect(
-    panel.getByRole("table", { name: /Rates for Hamsanandi - Official booking/ })
-  ).toBeVisible();
-  await expect(panel.getByRole("cell", { name: "Lunch, per head" }).first()).toBeVisible();
-
-  // And it still does not move the form's own answers.
-  const house = page.locator('select[name="guest_house_id"]');
-  await expect(house).toHaveValue("");
-  await chooseHouse(page, "Hamsanandi");
-  await expect(house.locator("option:checked")).toHaveText(/Hamsanandi/);
-
-  // The rates are **only** in the panel: the form has no numbered Rates
-  // section any more.
-  await expect(page.locator('[data-slot="card-title"]', { hasText: /^Rates$/ })).toHaveCount(0);
 });
 
 test("the guests come before the meals, and the meals are a Yes or No", async ({ page }) => {
@@ -267,6 +258,11 @@ test("a student with no hostel goes straight to the Guest House Manager", async 
   // A student who *does* have a hostel still goes to their warden.
   await signIn(page, ACCOUNTS.student);
   await page.goto("/book");
+  // The form is hydrated before anything is typed - as in the first half -
+  // or a fast run fills fields React then resets, and submits a request
+  // with no guest house that no visible field can say is missing.
+  await expect(page.getByRole("heading", { name: /New Booking/i })).toBeVisible();
+  await expect(page.getByText(/accommodated at Bageshri Guest House/)).toBeVisible();
   await page.locator('[name="check_in_date"]').fill(localDate(3));
   await page.locator('[name="check_out_date"]').fill(localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("Parents visiting - Malhar, so the warden");

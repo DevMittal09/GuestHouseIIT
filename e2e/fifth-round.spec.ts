@@ -71,6 +71,8 @@ async function facultyStayStartingNow(page: Page): Promise<string> {
 test("a student's father is filled in on request, an infant gets an infant card, and the warden sees both checked", async ({ page }) => {
   await signIn(page, ACCOUNTS.student);
   await page.goto("/book");
+  // Hydrated before anything is typed: see `e2e/fourteenth-round.spec.ts`.
+  await expect(page.getByText(/accommodated at Bageshri Guest House/)).toBeVisible();
   await page.locator('[name="check_in_date"]').fill(localDate(3));
   await page.locator('[name="check_out_date"]').fill(localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("Father and my niece visiting");

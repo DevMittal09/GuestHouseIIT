@@ -382,6 +382,21 @@ they approve.
   totals read Total / Grand Total (including GST) rather than A+B
   (`invoiceTotalLabels`). The accounts mail follows the same rules.
 
+### Categories I, II and III (4 Nov 2026)
+
+| Category | Who | Hamsanandi | Bageshri | Row's scope |
+| --- | --- | --- | --- | --- |
+| I | Guests and relatives of employees, parents of students on a personal visit | ₹1,500 | ₹1,000 | The house's general row |
+| II | Institute guests on official duty | ₹2,000 | ₹1,500 | `official`, any role, and `official` + role `official` |
+| III | Academic visitors | ₹2,500 | ₹2,000 | `official` + role `employee` |
+
+These are the demo seed; the hosted rows are in the repair. A row's `note` names
+its category, and the text before the colon is what the sidebar's Table 1 groups
+by. **The desk's list stays within the booking's type**, so a personal stay is
+Category I and is told rather than asked. **The caretaker invoices personal
+bookings only**; `invoiceRoleError` refuses the draft and the issue, and the
+invoice dialog shows it as the blocker.
+
 ## Dining (Phase 6)
 
 Meals without a room (`service_type: "meals_only"`) for faculty, staff and

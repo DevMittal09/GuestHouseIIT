@@ -110,7 +110,6 @@ export default async function CaretakerPage({
           items={guestHouses.map((g) => ({
             href: `/caretaker?gh=${g.name.toLowerCase()}`,
             label: g.name,
-            detail: `${g.total_rooms} rooms`,
             active: g.id === current.id,
           }))}
         />

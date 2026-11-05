@@ -1,3 +1,4 @@
+import type { NewUserGroup, UserGroup } from "@/lib/user-groups";
 import type {
   Booking,
   BookingFilter,
@@ -159,9 +160,23 @@ export class SupabaseStore implements DataStore {
   }
 
   async listProfiles(): Promise<Profile[]> {
-    const { data, error } = await this.db.from("profiles").select("*").order("role");
-    if (error) throw error;
-    return data;
+    // Page by page, because Supabase caps one select at its "Max rows" (1000 by
+    // default) and truncates silently: past that, sign-in, the import and the
+    // console would each see an arbitrary part of the directory. Ordered by id as
+    // well so no account can fall between two pages, and advanced by what came
+    // back rather than by the page size, in case the project's cap is lower.
+    const all: Profile[] = [];
+    for (;;) {
+      const { data, error } = await this.db
+        .from("profiles")
+        .select("*")
+        .order("role")
+        .order("id")
+        .range(all.length, all.length + 999);
+      if (error) throw error;
+      if (data.length === 0) return all;
+      all.push(...data);
+    }
   }
 
   async getProfile(id: string): Promise<Profile | null> {
@@ -918,6 +933,41 @@ export class SupabaseStore implements DataStore {
    * The ids come from the caller (see `SeededProfileInput`), so the undo
    * record written before this call already names every row it creates.
    */
+  async updateProfiles(ids: string[], patch: Partial<NewProfileInput>): Promise<void> {
+    // Chunked: `in (...)` travels in the URL, and a batch can be hundreds.
+    for (let at = 0; at < ids.length; at += 200) {
+      const { error } = await this.db
+        .from("profiles")
+        .update(patch)
+        .in("id", ids.slice(at, at + 200));
+      if (error) throw profileWriteError(error);
+    }
+  }
+
+  // ---- user groups (migration 36) --------------------------------------
+
+  async listUserGroups(): Promise<UserGroup[]> {
+    const { data, error } = await this.db.from("user_groups").select("*").order("name");
+    if (error) throw error;
+    return data as UserGroup[];
+  }
+
+  async createUserGroup(input: NewUserGroup): Promise<UserGroup> {
+    const { data, error } = await this.db.from("user_groups").insert(input).select().single();
+    if (error) throw userGroupWriteError(error);
+    return data as UserGroup;
+  }
+
+  async updateUserGroup(id: string, patch: Partial<NewUserGroup>): Promise<void> {
+    const { error } = await this.db.from("user_groups").update(patch).eq("id", id);
+    if (error) throw userGroupWriteError(error);
+  }
+
+  async deleteUserGroup(id: string): Promise<void> {
+    const { error } = await this.db.from("user_groups").delete().eq("id", id);
+    if (error) throw error;
+  }
+
   async createProfiles(inputs: SeededProfileInput[]): Promise<void> {
     if (inputs.length === 0) return;
     const { error } = await this.db.from("profiles").insert(inputs);
@@ -1968,7 +2018,22 @@ function makeReference(): string {
  * Migration 12's unique index on `lower(ldap_uid)`, reported the way the mock
  * store reports it rather than as a raw constraint name.
  */
+const GROUPS_MIGRATION =
+  "Apply migration 36 first (supabase/migrations/00000000000036_user_groups_and_login_access.sql)";
+
+function userGroupWriteError(error: { code?: string; message: string }): Error | typeof error {
+  if (error.code === "23505") return new Error("A group with this name already exists");
+  if (error.code === "42P01" || error.code === "PGRST205") return new Error(GROUPS_MIGRATION);
+  return error;
+}
+
 function profileWriteError(error: { code?: string; message: string }): Error | typeof error {
+  if (
+    (error.code === "42703" || error.code === "PGRST204") &&
+    /group_id|login_disabled/.test(error.message)
+  ) {
+    return new Error(GROUPS_MIGRATION);
+  }
   if (error.code === "23505" && error.message.includes("ldap_uid")) {
     return new Error("Another user already has this LDAP username");
   }

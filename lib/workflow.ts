@@ -157,7 +157,7 @@ export interface RoutingContext {
    */
   directory?: ApproverDirectory;
   /** Who is asking, needed to count a requester-relative stage's approvers. */
-  requester?: Pick<Profile, "id" | "unit_id" | "hostel_name">;
+  requester?: Pick<Profile, "id" | "unit_id" | "hostel_name" | "group_id">;
 }
 
 /**
@@ -179,6 +179,7 @@ function requestFacts(role: Role, service: ServiceType, context: RoutingContext)
     raisedByFacultyInCharge: Boolean(context.raisedByFacultyInCharge),
     unitId: context.unitId ?? context.requester?.unit_id ?? null,
     hostelName: context.hostelName ?? context.requester?.hostel_name ?? null,
+    groupId: context.requester?.group_id ?? null,
   };
 }
 
@@ -360,7 +361,7 @@ type RaisedBy = { user_role?: Role; user_id?: string | null; created_by?: string
  */
 export function routingContextFor(
   booking: { booking_type?: string; office_approval?: OfficeApproval | null } & RaisedBy,
-  requester: Pick<Profile, "id" | "staff_category" | "unit_id" | "hostel_name">,
+  requester: Pick<Profile, "id" | "staff_category" | "unit_id" | "hostel_name" | "group_id">,
   units: Unit[],
   options: { rules?: ApprovalRules; profiles?: Profile[] } = {}
 ): RoutingContext {
@@ -489,7 +490,7 @@ export function requestFactsFor(
     user_id?: string | null;
     created_by?: string | null;
   },
-  requester: Pick<Profile, "id" | "staff_category" | "unit_id" | "hostel_name">
+  requester: Pick<Profile, "id" | "staff_category" | "unit_id" | "hostel_name" | "group_id">
 ): RequestFacts {
   return {
     role: booking.user_role,
@@ -504,6 +505,7 @@ export function requestFactsFor(
     }),
     unitId: requester.unit_id ?? null,
     hostelName: requester.hostel_name ?? null,
+    groupId: requester.group_id ?? null,
   };
 }
 

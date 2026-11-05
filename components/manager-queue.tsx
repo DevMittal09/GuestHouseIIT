@@ -9,8 +9,9 @@ import { RejectDialog } from "@/components/review-queue";
 import { BookingDetails } from "@/components/booking-details";
 import { CheckoutsToday } from "@/components/checkouts-today";
 import { DeskSummary } from "@/components/desk-summary";
-import type { CapacityRules } from "@/lib/settings";
+import type { CapacityRules, PolicyRules } from "@/lib/settings";
 import { RoomGrid } from "@/components/room-grid";
+import { ShortenStay } from "@/components/shorten-stay";
 import { TariffCategoryChoice } from "@/components/tariff-category-choice";
 import { StaysTable } from "@/components/stays-table";
 import { AwaitingPaymentTable } from "@/components/awaiting-payment";
@@ -65,7 +66,10 @@ export function ManagerQueue({
   nowIso,
   capacity,
   bufferMinutes,
+  policy,
 }: {
+  /** VIP rooms and who may have them, for the allocation grid (4 Nov 2026). */
+  policy?: PolicyRules;
   /** Room capacity from Settings, for the allocation grid. */
   capacity?: CapacityRules;
   /** The turnaround buffer from Settings, for the allocation grid. */
@@ -226,7 +230,7 @@ export function ManagerQueue({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortOfficialFirst(pendingRooms).map((b) => (
+                {firstComeFirstServed(pendingRooms).map((b) => (
                   <ManagerRow
                     key={b.id}
                     booking={b}
@@ -235,6 +239,7 @@ export function ManagerQueue({
                     occupancyVersion={occupancyVersion}
                     capacity={capacity}
                     bufferMinutes={bufferMinutes}
+                    policy={policy}
                   />
                 ))}
               </TableBody>
@@ -273,7 +278,7 @@ export function ManagerQueue({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortOfficialFirst(pendingMeals).map((b) => (
+                {firstComeFirstServed(pendingMeals).map((b) => (
                   <MealRequestRow
                     key={b.id}
                     booking={b}
@@ -369,10 +374,17 @@ export function ManagerQueue({
   );
 }
 
-/** Official / dignitary bookings float to the top of a queue. */
-function sortOfficialFirst(bookings: BookingWithDetails[]): BookingWithDetails[] {
+/**
+ * **First come, first served** (4 Nov 2026, the owner's sixteenth list: "the
+ * GHM dashboard must sort requests so the earliest applications appear at
+ * the top"). The earliest submitted first, whoever raised it.
+ *
+ * It replaces official-first, which floated a whitelisted office's request
+ * above every other however late it arrived - the opposite of a queue.
+ */
+function firstComeFirstServed(bookings: BookingWithDetails[]): BookingWithDetails[] {
   return [...bookings].sort(
-    (a, b) => Number(b.user_role === "official") - Number(a.user_role === "official")
+    (a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
   );
 }
 
@@ -465,11 +477,13 @@ function ManagerRow({
   occupancyVersion,
   capacity,
   bufferMinutes,
+  policy,
 }: {
   booking: BookingWithDetails;
   rooms: Room[];
   tariffCategories: DeskTariffCategory[];
   occupancyVersion: string;
+  policy?: PolicyRules;
   capacity?: CapacityRules;
   bufferMinutes?: number;
 }) {
@@ -537,6 +551,7 @@ function ManagerRow({
                   {booking.on_behalf_of_name ?? booking.requester.full_name} · {booking.guest_house.name}
                 </DialogDescription>
               </DialogHeader>
+              <ShortenStay booking={booking} />
               <RoomGrid
                 booking={booking}
                 rooms={rooms}
@@ -545,6 +560,7 @@ function ManagerRow({
                 onAllocated={() => setOpen(false)}
                 capacity={capacity}
                 bufferMinutes={bufferMinutes}
+                policy={policy}
               />
               <Separator />
               <BookingDetails booking={booking} showAlumniCard />

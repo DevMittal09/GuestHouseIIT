@@ -120,6 +120,13 @@ const MARKERS = [
     column: "tariff_booking_type",
     what: "the manager's tariff category on a booking",
   },
+  {
+    n: 36,
+    kind: "column",
+    table: "profiles",
+    column: "login_disabled_at",
+    what: "user groups, and accounts that may no longer sign in",
+  },
 ];
 
 /** The SQL to paste in the editor for the two function-only migrations. */

@@ -22,6 +22,13 @@ import { cn } from "@/lib/utils";
  * screen reader still hears it in full. A day with nothing free is a
  * vermilion rule and the word Full.
  *
+ * **No denominator** (4 Nov 2026, the owner's sixteenth list: "the Total
+ * Rooms metric must be removed ... only display the currently Available
+ * Rooms"). "5/20" became "5", "of 20 rooms free all day" became "rooms
+ * available all day", and the hairline meter of the proportion went with
+ * the total it was drawn against - a requester is shown at most a capped
+ * pool of rooms (`lib/vip.ts`), so a proportion of the house would mislead.
+ *
  * **14 Oct 2026, the office.** Two changes, both about what the figures are
  * saying. The count of free rooms is **green** - the desk's own check-in
  * green (`--occupy`), the one green the portal already has, so nothing new
@@ -59,7 +66,6 @@ export function AvailabilityCountsPanel({
         <DayHeadline
           day={counts.days[0]}
           free={counts.freeByDay[0] ?? 0}
-          total={counts.total}
           isToday={counts.days[0] === today}
           isPast={isPastDay(counts.days[0], today)}
         />
@@ -74,7 +80,6 @@ export function AvailabilityCountsPanel({
                 key={day}
                 day={day}
                 free={counts.freeByDay[i] ?? 0}
-                total={counts.total}
                 isToday={day === today}
                 isPast={isPastDay(day, today)}
               />
@@ -100,7 +105,7 @@ export function AvailabilityCountsPanel({
                 <li
                   key={hour}
                   aria-label={`${hourLabel(hour)}${now ? " (now)" : ""}: ${
-                    full ? "no rooms free" : `${free} of ${counts.total} rooms free`
+                    full ? "no rooms free" : `${free} ${free === 1 ? "room" : "rooms"} available`
                   }`}
                   className={cn(
                     "rounded border px-2 py-1.5",
@@ -133,13 +138,11 @@ export function AvailabilityCountsPanel({
 function DayCell({
   day,
   free,
-  total,
   isToday,
   isPast,
 }: {
   day: string;
   free: number;
-  total: number;
   isToday: boolean;
   /** The day has gone: no figure, because it cannot be booked. */
   isPast: boolean;
@@ -152,7 +155,7 @@ function DayCell({
           ? "a past date, not available to book"
           : full
             ? "no rooms free all day"
-            : `${free} of ${total} rooms free`
+            : `${free} ${free === 1 ? "room" : "rooms"} available`
       }`}
       className={cn(
         "border-t-2 pt-2",
@@ -181,17 +184,11 @@ function DayCell({
             Full
           </span>
         ) : (
-          <>
-            <span className="font-heading text-[1.5rem] leading-none font-semibold text-occupy tabular-nums">
-              {free}
-            </span>
-            <span className="text-[12px] leading-none text-muted-foreground tabular-nums">
-              /{total}
-            </span>
-          </>
+          <span className="font-heading text-[1.5rem] leading-none font-semibold text-occupy tabular-nums">
+            {free}
+          </span>
         )}
       </p>
-      {!isPast && <Meter free={free} total={total} className="mt-2" />}
     </li>
   );
 }
@@ -200,13 +197,11 @@ function DayCell({
 function DayHeadline({
   day,
   free,
-  total,
   isToday,
   isPast,
 }: {
   day: string;
   free: number;
-  total: number;
   isToday: boolean;
   /** The day has gone - see `DayCell`. */
   isPast: boolean;
@@ -236,24 +231,12 @@ function DayHeadline({
             <span className="font-heading text-[2.25rem] leading-none font-semibold text-occupy tabular-nums">
               {free}
             </span>
-            <span className="text-sm text-body">of {total} rooms free all day</span>
+            <span className="text-sm text-body">
+              {free === 1 ? "room" : "rooms"} available all day
+            </span>
           </>
         )}
       </p>
-      {!isPast && <Meter free={free} total={total} className="mt-3 max-w-[22rem]" />}
     </div>
-  );
-}
-
-/** The proportion free, as a hairline bar. Decorative: every cell is labelled. */
-function Meter({ free, total, className }: { free: number; total: number; className?: string }) {
-  const pct = total > 0 ? Math.round((free / total) * 100) : 0;
-  return (
-    <span aria-hidden className={cn("block h-[3px] w-full bg-band", className)}>
-      <span
-        className={cn("block h-full", free === 0 ? "bg-vermilion" : "bg-occupy")}
-        style={{ width: `${pct}%` }}
-      />
-    </span>
   );
 }

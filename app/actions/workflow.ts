@@ -93,6 +93,8 @@ export type WorkflowConsoleData = {
   units: { id: string; name: string; kind: string; hasHead: boolean }[];
   people: WorkflowPerson[];
   hostels: string[];
+  /** User groups a route may be limited to (migration 36). */
+  groups: { id: string; name: string }[];
   /** Roles a booking can be stored under, so the console offers only those. */
   requesterRoles: string[];
   /** How many requests are waiting at each stage right now. */
@@ -106,12 +108,13 @@ export async function getWorkflowConsoleData(): Promise<
   try {
     await requireWorkflowConsole();
     const store = getStore();
-    const [rules, units, profiles, hostels, pending] = await Promise.all([
+    const [rules, units, profiles, hostels, pending, groups] = await Promise.all([
       getApprovalRules(),
       store.listUnits().catch(() => [] as Unit[]),
       store.listProfiles().catch(() => [] as Profile[]),
       store.listHostels().catch(() => [] as string[]),
       waitingBookings(),
+      store.listUserGroups().catch(() => []),
     ]);
     const waiting: Record<string, number> = {};
     for (const booking of pending) {
@@ -138,6 +141,7 @@ export async function getWorkflowConsoleData(): Promise<
             .map((u) => u.name),
         })),
         hostels,
+        groups: groups.map((g) => ({ id: g.id, name: g.name })),
         requesterRoles: [...BOOKING_CATEGORY_ROLES, "gh_manager"],
         waiting,
       },
@@ -276,6 +280,7 @@ export async function previewApprovalRoute(
               raisedByFacultyInCharge: false,
               unitId: requester.unit_id ?? null,
               hostelName: requester.hostel_name ?? null,
+              groupId: requester.group_id ?? null,
             },
             rules
           )?.name ?? null,

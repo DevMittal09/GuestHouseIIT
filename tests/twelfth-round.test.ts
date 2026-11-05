@@ -122,25 +122,27 @@ describe("a request is submitted with no privacy consent at all", () => {
 
   // ------------------------------------------------- the booking window
 
-  it("opens bookings six months ahead, not one", () => {
-    expect(DEFAULT_RULES.booking.advance_booking_months).toBe(6);
-    expect(schema().safeParse(payload({}, 60)).success).toBe(true);
-  });
-
-  it("is what the one-month window refused", () => {
-    const oneMonth: Rules = {
-      ...DEFAULT_RULES,
-      booking: { ...DEFAULT_RULES.booking, advance_booking_months: 1 },
-    };
-    const result = schema(oneMonth).safeParse(payload({}, 60));
+  // Six months from 14 Oct 2026 to 4 Nov 2026, when the sixteenth list put
+  // the window back to one month "similar to railway booking rules".
+  it("opens bookings one month ahead again, not six", () => {
+    expect(DEFAULT_RULES.booking.advance_booking_months).toBe(1);
+    const result = schema().safeParse(payload({}, 60));
     expect(result.success).toBe(false);
     expect(!result.success && JSON.stringify(result.error.issues)).toContain("Bookings open one month");
+  });
+
+  it("is still the office's to widen from Settings", () => {
+    const sixMonths: Rules = {
+      ...DEFAULT_RULES,
+      booking: { ...DEFAULT_RULES.booking, advance_booking_months: 6 },
+    };
+    expect(schema(sixMonths).safeParse(payload({}, 60)).success).toBe(true);
   });
 
   it("is still a window, and still names the last date it allows", () => {
     const result = schema().safeParse(payload({}, 220));
     expect(result.success).toBe(false);
-    expect(advanceWindowMessage("employee")).toContain("6 months");
+    expect(advanceWindowMessage("employee")).toContain("one month");
     // The exempt roles are unchanged: the institute books on its own notice.
     expect(latestCheckIn("official", new Date())).toBeNull();
     expect(latestCheckIn("gh_manager", new Date())).toBeNull();

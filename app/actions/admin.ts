@@ -36,6 +36,8 @@ import { mailConfig } from "@/lib/mail/config";
 import { dispatchOutbox, drainOutbox } from "@/lib/mail/dispatch";
 import { queueMessages } from "@/lib/mail/notify";
 import type { MailStatus } from "@/lib/mail/types";
+import { isInstituteEmail } from "@/lib/site";
+import { emailFormatError, rollNumberFromEmail } from "@/lib/user-groups";
 import { getStore } from "@/lib/store";
 import type { BookingStatus, Profile, Role, RoomType } from "@/lib/types";
 import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
@@ -180,6 +182,7 @@ const formConfigSchema = z.object({
   parent_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
   dependent_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
   unique_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
+  scholar_only_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
   alumni_card: fieldMode,
   banner_text: z.string().trim().max(200).nullable(),
   custom_fields: z
@@ -227,6 +230,7 @@ export async function saveRoleFormConfig(config: RoleFormConfig): Promise<Action
       ...parsed.data.parent_relationships,
       ...parsed.data.dependent_relationships,
       ...parsed.data.unique_relationships,
+      ...parsed.data.scholar_only_relationships,
     ].find((r) => !offered.has(r));
     if (stray) {
       return { ok: false, error: `“${stray}” is not one of the relationship dropdown options` };
@@ -343,7 +347,13 @@ export async function deleteRoomAction(id: string): Promise<ActionResult> {
 // ---------------------------------------------------------------- users
 
 const userSchema = z.object({
-  email: z.string().trim().email("Enter a valid email"),
+  // Only an institute address can sign in (5 Nov 2026), so an account on any
+  // other could never be used.
+  email: z
+    .string()
+    .trim()
+    .email("Enter a valid email")
+    .refine(isInstituteEmail, "Use an IIT Palakkad address - nobody else can sign in"),
   full_name: z.string().trim().min(2, "Name is required"),
   // Derived from ROLE_LABELS rather than written out again: a hand-kept copy
   // of the role list silently rejected every newly added role.
@@ -381,7 +391,14 @@ export async function createUserAction(input: UserFormInput): Promise<ActionResu
     // route to becoming one, and the section split would be decoration.
     const roleError = assignRoleError(actor, parsed.data.role);
     if (roleError) return { ok: false, error: roleError };
-    await getStore().createProfile(parsed.data);
+    const formatError = emailFormatError(parsed.data.role, parsed.data.email, parsed.data.roll_number);
+    if (formatError) return { ok: false, error: formatError };
+    await getStore().createProfile({
+      ...parsed.data,
+      roll_number:
+        parsed.data.roll_number ??
+        (parsed.data.role === "student" ? rollNumberFromEmail(parsed.data.email) : null),
+    });
     return done();
   } catch (e) {
     return fail(e);
@@ -404,6 +421,8 @@ export async function updateUserAction(id: string, input: UserFormInput): Promis
     if (editError) return { ok: false, error: editError };
     const roleError = assignRoleError(actor, parsed.data.role);
     if (roleError) return { ok: false, error: roleError };
+    const formatError = emailFormatError(parsed.data.role, parsed.data.email, parsed.data.roll_number);
+    if (formatError) return { ok: false, error: formatError };
     await getStore().updateProfile(id, parsed.data);
     return done();
   } catch (e) {
@@ -473,16 +492,23 @@ export type UserImportSummary = {
   /** A line per changed account, for the plan's preview. */
   changes: string[];
   problems: string[];
+  /** Nothing refused, but worth a look: a roll number off the group's programme. */
+  warnings: string[];
 };
 
-async function userImportContext(actor: Profile) {
+async function userImportContext(actor: Profile, groupId?: string | null) {
   const store = getStore();
-  const [profiles, hostels, units] = await Promise.all([
+  const [profiles, hostels, units, groups] = await Promise.all([
     store.listProfiles(),
     getHostels(),
     store.listUnits(),
+    groupId ? store.listUserGroups() : Promise.resolve([]),
   ]);
+  const group = groupId ? groups.find((g) => g.id === groupId) : undefined;
+  if (groupId && !group) throw new Error("That group no longer exists");
   return {
+    group,
+    instituteOnly: true,
     profiles,
     assignable: assignableRoles(actor.role, Object.keys(ROLE_LABELS) as Role[]),
     hostels,
@@ -505,24 +531,30 @@ function summarise(plan: UserImportPlan): UserImportSummary {
       ),
     ].slice(0, 200),
     problems: plan.problems,
+    warnings: plan.warnings ?? [],
   };
 }
 
-export async function previewUserImport(text: string): Promise<UserImportSummary> {
-  const actor = await requireConsole("users");
-  return summarise(planUserImport(text, await userImportContext(actor)));
+export async function previewUserImport(
+  text: string,
+  groupId?: string | null
+): Promise<UserImportSummary> {
+  const actor = await requireConsole(groupId ? "groups" : "users");
+  return summarise(planUserImport(text, await userImportContext(actor, groupId)));
 }
 
 /** Accounts created per insert. Keeps one chunk's payload well inside any body limit. */
 const IMPORT_CHUNK = 250;
 
 export async function importUsersAction(
-  text: string
+  text: string,
+  /** Load the list into this group: its role, its members (5 Nov 2026). */
+  groupId?: string | null
 ): Promise<ActionResult & { summary?: string; batchId?: string }> {
   try {
-    const actor = await requireConsole("users", { stepUp: true });
+    const actor = await requireConsole(groupId ? "groups" : "users", { stepUp: true });
     const store = getStore();
-    const plan = planUserImport(text, await userImportContext(actor));
+    const plan = planUserImport(text, await userImportContext(actor, groupId));
     if (plan.problems.length > 0) {
       return { ok: false, error: `Nothing was changed - ${plan.problems[0]}` };
     }

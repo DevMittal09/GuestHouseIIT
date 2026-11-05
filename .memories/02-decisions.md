@@ -6951,3 +6951,102 @@ second clause.
 booking, in force today") where more than one is drawn. Four tables captioned
 "Rates at Hamsanandi" are indistinguishable in a screen reader's table list -
 and were indistinguishable to Playwright, which is how it was noticed.
+
+## 4 November 2026 - the owner's sixteenth list
+
+**VIP rooms are a Setting, not a column.** `rules.policy` is one `app_settings`
+row, so the round needed no migration, and the manager owns it through a console
+section of its own rather than the developer's Settings. The cost: a stored
+list of room ids cannot have a default, because the database issues the ids.
+So `vip_room_ids` is **null until saved**, which resolves to rooms numbered C1
+and C2, and saving even an empty list replaces that for good. Rejected: an
+`is_vip` column, which would have needed a migration on a hosted project whose
+state is partly unknown, for a flag nothing queries in SQL.
+
+**The fixed VIP addresses are code**, so the console cannot take the Director's
+own rooms away from the Director.
+
+**The 14 is a pool across both guest houses.** With 18 non-VIP rooms, a plain
+ceiling of 14 per figure would never bind, since no house has 14, and "if the
+GHM books some of these, the visible count decreases" would be false. So a
+figure is its own free rooms clamped to `cap - held everywhere`. It is
+**display only**: refusing a request on a number the requester was merely shown
+would turn a visibility rule into a capacity rule nobody asked for.
+
+**Availability still counts VIP rooms out at submission.** A requester whose
+request only a VIP room could satisfy is refused by `createBooking`, because the
+manager could not allocate it to them afterwards.
+
+**A category is still a scope, so Category III borrows `requester_role`.** The
+31 Oct 2026 design keys a category on (booking type, requester role), and II and
+III are both official. A third scope dimension would have meant another column on
+both `tariffs` and `bookings`, and a change to `resolveTariff`; the role was
+already standing in for "government officers". The role here is a label for the
+desk's choice and not a claim about the requester, which is worth remembering
+when reading the rate sheet.
+
+**The desk's list never crosses booking types.** This is the sixteenth list's
+"cannot change Official to Personal" applied to the one place it could still
+happen: a category scoped to the other type would be that change, made through
+the price.
+
+**Why the requester's panel gave way to a sheet.** The panel resolves rates for
+one role, so a faculty member would have seen Category III and never II. Table 1
+reads the rows themselves and groups them by `note`, the office's wording. The
+extra bed and meals stay under it at the requester's own rates, because the
+office asked for those on 7 Oct 2026; an unpublished charge reads "Not
+published", as it did before.
+
+**Superseded:** the six-month window (14 Oct 2026), official-first ordering
+(`sortOfficialFirst`), and the real room numbers of 23 Sep 2026. The owner's
+sixteenth list is later than each and names the new value.
+
+## 5 November 2026 - user groups, and blocking rather than deleting
+
+**A table, not a Setting.** Groups are referenced by `profiles.group_id` and members
+are found from it, so unlike the VIP rooms this wanted a foreign key. Migration 36.
+
+**One group per person, by the owner's choice of programme + batch.** The year is
+computed (`studyYear`), because storing it means moving every student each July and
+the rules going wrong if nobody does. Rejected, with the owner: programme alone (no
+per-batch rules), programme + current year (the July chore), free-form (overlaps).
+
+**The block is checked on every request, in `profileOrNull`,** not only at the three
+sign-in doors, so a browser already signed in stops working at once. Sessions are also
+revoked, so a later restore does not revive an old browser.
+
+**Restricting Copy to is scoped to group members.** The owner said everything is on the
+institute's domain, but `tests/fourth-round.test.ts` and the club journey pin an outside
+address as deliberate, and a person in no group has had no such rule. Applying it to all
+would have silently changed bookings nobody asked about. On the roadmap to confirm.
+
+**A group's role cannot be a way round `assignableRoles`.** A CSV into a group takes the
+group's role, which would have skipped the check the role column gets. So the schema
+refuses `developer`, the save action checks what this console may assign, and the planner
+checks again. Found in review, before anything shipped.
+
+**Reused rather than rebuilt:** the plan-then-import and its undo, the approval routes,
+and the booking's own Copy to, which already carries through to the requester's mail. A
+second CSV format was deliberately not added: a group upload is the existing importer with
+the role and the group decided by the screen.
+
+**Why `group_id` is optional on import rows.** A plain import writes no such key, so it
+keeps working on a database that has not had migration 36. The undo record follows the
+same rule and old records read as no group.
+
+**The same day, the owner's answers.** Signing in is institute-only for everyone, as one
+function at every door and on every request rather than a check per door, because Google
+already had it and LDAP and the picker did not. It also stops new accounts on other
+addresses, since one could never be used. MS and PhD get an `intake` rather than a
+two-per-year batch number, so the name, the year and the check constraint all say the
+same thing. Migration 36 was edited rather than followed by a 37, because it has not left
+this working tree.
+
+**Categories I-III start the day the repair is run, not on a future date (5 Nov 2026, the
+owner: implemented "today itself").** The future-date rule is `tariffStartError`, in the console
+action only, and `tariffs_guard` covers update and delete, so the repair's insert is allowed. There
+are no real bookings to re-price. The cost is that the rows lock at once. The repair also adds
+Category I rows scoped to the `official` role: migration 19's ₹4,000 row names that role and no
+booking type, so it cannot be deleted and would otherwise stay on the sheet and be offered to the
+desk for a personal or alumni stay at Hamsanandi. The mock seed has no such row, so no test catches
+this; it was found by running the sheet and the desk list over the hosted row shape.

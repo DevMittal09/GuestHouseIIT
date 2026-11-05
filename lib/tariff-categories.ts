@@ -227,7 +227,8 @@ export function tariffCategoriesFrom(
  *
  * Nothing here is filtered by eligibility, unlike the requester's list: the
  * manager may already book outside the guest house and meals policies, and
- * this is a question about money rather than about who may stay.
+ * this is a question about money rather than about who may stay. It is
+ * filtered by **booking type** since 4 Nov 2026 - see the loop below.
  */
 export type DeskTariffCategory = {
   /** `tariffScopeKey(scope)` - what the radio's value is, and what is stored. */
@@ -292,6 +293,12 @@ export function deskTariffCategories(
   for (const row of tariffs) {
     if (!items.includes(row.item)) continue;
     if (row.guest_house_id !== null && row.guest_house_id !== guestHouse.id) continue;
+    // **Never across booking types** (4 Nov 2026, the owner's sixteenth
+    // list): the manager "cannot directly change a booking type from
+    // Official to Personal (or vice versa)" - a request of the wrong type is
+    // rejected and raised again. A category scoped to the other type would
+    // be exactly that change, made through the price.
+    if (row.booking_type !== null && row.booking_type !== own.booking_type) continue;
     const scope: TariffScope = {
       booking_type: row.booking_type ?? own.booking_type,
       requester_role: row.requester_role ?? own.requester_role,
@@ -350,4 +357,103 @@ export function deskCategoryFor(
 ): DeskTariffCategory | null {
   const scope = parseTariffScope(key);
   return scope ? (categories.find((c) => c.key === tariffScopeKey(scope)) ?? null) : null;
+}
+
+// ---------------------------------------------- the published sheet (4 Nov 2026)
+
+/**
+ * **The tariff as the office publishes it** - one row per category, one
+ * column per guest house, the room rate per day in each cell (4 Nov 2026, the
+ * owner's sixteenth list: "the Tariff Table ... must be displayed on the
+ * right side of the booking page so users can view the rates").
+ *
+ * Read straight off the rate sheet, so it is the office's own categories in
+ * the office's own words: every room rate in force today at a guest house is
+ * a cell, and its `note` names the row it sits in ("Category II: institute
+ * guests on official duty"). Two rows with the same note at one guest house -
+ * the sheet scopes a category by more than one qualifier - are one cell.
+ *
+ * This is what the requester **reads**; which row applies to their stay is
+ * the Guest House Manager's decision (`deskTariffCategories`).
+ */
+export type TariffSheetRow = {
+  /** "Category II" - the note up to its first colon, or the whole note. */
+  title: string;
+  /** What follows the colon, if anything. */
+  description: string | null;
+  /**
+   * Rate by guest house id; absent where the charge does not arise there,
+   * null where it does and the office has not published a rate.
+   */
+  rates: Record<string, number | null>;
+};
+
+export function roomTariffSheet(
+  tariffs: Tariff[],
+  guestHouses: { id: string }[],
+  date: string
+): TariffSheetRow[] {
+  const rows: TariffSheetRow[] = [];
+  for (const house of guestHouses) {
+    // The row in force for each set of qualifiers at this house - a later
+    // row with the same qualifiers replaces an earlier one, and a house's own
+    // row shadows a sheet-wide one with the same booking type and role.
+    const inForce = new Map<string, Tariff>();
+    for (const t of tariffs) {
+      if (t.item !== "room" || t.effective_from > date) continue;
+      if (t.guest_house_id !== null && t.guest_house_id !== house.id) continue;
+      if (t.room_type !== null && t.room_type !== "double_sharing") continue;
+      const key = `${t.booking_type ?? "*"}|${t.requester_role ?? "*"}`;
+      const current = inForce.get(key);
+      const replaces =
+        !current ||
+        (t.guest_house_id !== null && current.guest_house_id === null) ||
+        ((t.guest_house_id === null) === (current.guest_house_id === null) &&
+          (t.effective_from > current.effective_from ||
+            (t.effective_from === current.effective_from && t.created_at > current.created_at)));
+      if (replaces) inForce.set(key, t);
+    }
+    for (const t of inForce.values()) {
+      const note = t.note?.trim() || "Room";
+      const colon = note.indexOf(":");
+      const title = colon > 0 ? note.slice(0, colon).trim() : note;
+      const description = colon > 0 ? note.slice(colon + 1).trim() || null : null;
+      let row = rows.find((r) => r.title === title);
+      if (!row) {
+        row = { title, description, rates: {} };
+        rows.push(row);
+      }
+      if (!(house.id in row.rates)) row.rates[house.id] = t.rate;
+    }
+  }
+  return rows.sort((a, b) => a.title.localeCompare(b.title, "en", { numeric: true }));
+}
+
+/**
+ * **The other charges** under the sheet: an extra bed, and each meal where a
+ * guest house serves them - at the rates this requester would be quoted
+ * (`previews`, resolved for their own role, so a student reads meals as free
+ * and is shown no kitchen). The office asked on 7 Oct 2026 for the rates of
+ * the guest house being booked, meals included, and the sheet alone is rooms.
+ * One row per charge, one column per guest house, the first published rate
+ * found for that house - the extra bed and meals are not priced by category.
+ */
+export function otherChargesFrom(previews: TariffPreview[]): TariffSheetRow[] {
+  const rows: TariffSheetRow[] = [];
+  for (const preview of previews) {
+    for (const line of preview.lines) {
+      // Unpublished is said, not hidden - "Not published", never a zero.
+      if (line.item === "room") continue;
+      let row = rows.find((r) => r.title === line.label);
+      if (!row) {
+        row = { title: line.label, description: null, rates: {} };
+        rows.push(row);
+      }
+      if (!(preview.guest_house_id in row.rates)) row.rates[preview.guest_house_id] = line.rate;
+    }
+  }
+  const order = ["extra_bed", "breakfast", "lunch", "dinner"].map((item) =>
+    previews.flatMap((p) => p.lines).find((l) => l.item === item)?.label
+  );
+  return rows.sort((a, b) => order.indexOf(a.title) - order.indexOf(b.title));
 }

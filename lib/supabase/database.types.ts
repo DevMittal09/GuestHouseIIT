@@ -1,3 +1,4 @@
+import type { UserGroup } from "@/lib/user-groups";
 import type {
   Booking,
   BookingGuest,
@@ -343,6 +344,12 @@ export interface Database {
         Row: AcademicRecordRow;
         Insert: Insertable<AcademicRecordRow, "id" | "created_at" | "updated_at">;
         Update: Partial<AcademicRecordRow>;
+        Relationships: [];
+      };
+      user_groups: {
+        Row: UserGroup;
+        Insert: Insertable<UserGroup, "id" | "created_at">;
+        Update: Partial<UserGroup>;
         Relationships: [];
       };
       user_import_batches: {

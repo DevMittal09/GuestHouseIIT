@@ -1,3 +1,4 @@
+import type { NewUserGroup, UserGroup } from "../user-groups";
 import type {
   Booking,
   BookingFilter,
@@ -56,6 +57,7 @@ import type {
 } from "@/lib/invoice";
 
 export type NewProfileInput = Omit<Profile, "id">;
+export type { NewUserGroup, UserGroup };
 
 /**
  * A profile created with an id the caller already knows.
@@ -234,6 +236,14 @@ export interface DataStore {
   updateProfile(id: string, patch: Partial<NewProfileInput>): Promise<void>;
   /** Throws if the user still has bookings. */
   deleteProfile(id: string): Promise<void>;
+  /** The same change to many accounts in one write: a whole batch graduating. */
+  updateProfiles(ids: string[], patch: Partial<NewProfileInput>): Promise<void>;
+  // ---- user groups (migration 36) --------------------------------------
+  listUserGroups(): Promise<UserGroup[]>;
+  createUserGroup(input: NewUserGroup): Promise<UserGroup>;
+  updateUserGroup(id: string, patch: Partial<NewUserGroup>): Promise<void>;
+  /** The caller has already refused a group with members or a route naming it. */
+  deleteUserGroup(id: string): Promise<void>;
 
   // ---- user import batches: the undo record (migration 32) -------------
   /**

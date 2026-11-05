@@ -37,7 +37,7 @@ const CTX = async () => ({
 });
 
 describe("approving with a tariff category", () => {
-  it("offers the office's own two Hamsanandi rates, and stores the one chosen", async () => {
+  it("offers the official categories, II and III, and stores the one chosen", async () => {
     const tariffs = await store.listTariffs();
     const houses = await store.listGuestHouses();
     const hamsanandi = houses.find((h) => h.name === "Hamsanandi")!;
@@ -53,10 +53,13 @@ describe("approving with a tariff category", () => {
       service: booking.service_type,
       date: toInstituteDateValue(new Date(booking.check_in)),
     });
-    // The seeded sheet: ₹2,000 generally, ₹4,000 for government officers.
-    expect(categories.map((c) => c.headline?.rate)).toEqual([2000, 4000]);
+    // The seeded sheet (4 Nov 2026): an official stay at Hamsanandi is
+    // Category III at ₹2,500 by the department's own facts, or Category II at
+    // ₹2,000 - and never Category I, which is a personal stay's.
+    expect(categories.map((c) => c.headline?.rate)).toEqual([2500, 2000]);
+    expect(categories.map((c) => c.label.split(":")[0])).toEqual(["Category III", "Category II"]);
     const officer = categories[1];
-    expect(officer.label).toContain("government officers");
+    expect(officer.label).toContain("official duty");
 
     const rooms = await store.listRooms(booking.guest_house_id);
     await store.updateBookingStatus(
@@ -85,15 +88,15 @@ describe("approving with a tariff category", () => {
     // And the invoice follows it, with the office's wording on the snapshot.
     const ctx = await CTX();
     const priced = buildInvoiceDocument({ ...stored!, status: "VACATED" }, ctx);
-    expect(priced.room_lines[0].rate_incl).toBe(400_000);
-    expect(priced.tariff_category).toContain("government officers");
+    expect(priced.room_lines[0].rate_incl).toBe(200_000);
+    expect(priced.tariff_category).toContain("Category II");
 
     // The same stay with no category recorded is priced as it always was.
     const legacy = buildInvoiceDocument(
       { ...stored!, status: "VACATED", tariff_booking_type: null, tariff_requester_role: null },
       ctx
     );
-    expect(legacy.room_lines[0].rate_incl).toBe(200_000);
+    expect(legacy.room_lines[0].rate_incl).toBe(250_000);
     expect(legacy.tariff_category).toBeNull();
 
     // The price it was approved at is in the trail, which is where it belongs:

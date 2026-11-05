@@ -2,6 +2,8 @@ import { splitCsvLine } from "./academic/stored";
 import { isValidLdapUid, normalizeLdapUid } from "./ldap/uid";
 import { ROLE_LABELS, type Profile, type Role, type StaffCategory } from "./types";
 import type { Unit } from "./units";
+import { isInstituteEmail } from "./site";
+import { emailFormatError, programmeMismatches, rollNumberFromEmail, type UserGroup } from "./user-groups";
 
 /**
  * Bulk-loading accounts from a spreadsheet (8 Oct 2026, the office's ninth
@@ -89,6 +91,11 @@ export type UserImportRow = {
   ldap_uid: string | null;
   staff_category: StaffCategory | null;
   unit_id: string | null;
+  /**
+   * Only on a row that has a group (migration 36), so a plain import writes no
+   * such column, and keeps working on a database that has not got it yet.
+   */
+  group_id?: string;
 };
 
 export type UserImportPlan = {
@@ -107,6 +114,8 @@ export type UserImportPlan = {
    * imported.**
    */
   problems: string[];
+  /** Roll numbers that do not read as the group's programme. Nothing is refused. */
+  warnings?: string[];
 };
 
 const EMAIL = /^[^@\s,]+@[^@\s,.]+(\.[^@\s,.]+)+$/;
@@ -183,7 +192,8 @@ function sameProfile(before: Profile, row: UserImportRow): boolean {
     (before.roll_number ?? null) === row.roll_number &&
     (before.ldap_uid ?? null) === row.ldap_uid &&
     (before.staff_category ?? null) === row.staff_category &&
-    (before.unit_id ?? null) === row.unit_id
+    (before.unit_id ?? null) === row.unit_id &&
+    (before.group_id ?? null) === (row.group_id ?? null)
   );
 }
 
@@ -196,6 +206,14 @@ export type UserImportContext = {
   units: Unit[];
   /** Accounts this console user may not edit at all (`userEditError`). */
   locked?: (profile: Profile) => string | null;
+  /**
+   * The group this list is being loaded into (5 Nov 2026). Everyone on it joins
+   * the group and takes its role, so the sheet needs no role column, and every
+   * address has to be on the institute's domain.
+   */
+  group?: Pick<UserGroup, "id" | "role" | "programme">;
+  /** Refuse any address off the institute's domain: nobody else can sign in. */
+  instituteOnly?: boolean;
 };
 
 /**
@@ -279,6 +297,10 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
       problems.push(`Line ${n}: "${email}" is not an email address.`);
       return;
     }
+    if ((context.group || context.instituteOnly) && !isInstituteEmail(email)) {
+      problems.push(`Line ${n}: ${email} is not an IIT Palakkad address.`);
+      return;
+    }
     const key = email.toLowerCase();
     const earlier = seen.get(key);
     if (earlier !== undefined) {
@@ -302,7 +324,16 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
     }
 
     const roleWord = value("role");
-    const role = roleWord ? roles.get(roleWord.trim().toLowerCase()) : (current?.role ?? "student");
+    const named = roleWord ? roles.get(roleWord.trim().toLowerCase()) : (current?.role ?? "student");
+    const role = context.group?.role ?? named;
+    if (context.group && !assignable.includes(context.group.role)) {
+      problems.push(`Line ${n}: this console cannot assign the ${ROLE_LABELS[context.group.role]} role that this group's members hold.`);
+      return;
+    }
+    if (context.group && roleWord && named !== context.group.role) {
+      problems.push(`Line ${n}: ${email} says "${roleWord}", but this group's members are ${ROLE_LABELS[context.group.role]}.`);
+      return;
+    }
     if (!role) {
       problems.push(
         `Line ${n}: "${roleWord}" is not a role this console can assign - use one of ${assignable
@@ -310,6 +341,20 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
           .join(", ")}.`
       );
       return;
+    }
+
+    // A student's roll number is in their address, so a sheet need not repeat it.
+    const strict = Boolean(context.group || context.instituteOnly);
+    const rollNumber =
+      value("roll_number") ??
+      current?.roll_number ??
+      (strict && role === "student" ? rollNumberFromEmail(email) : null);
+    if (strict) {
+      const wrong = emailFormatError(role, email, rollNumber);
+      if (wrong) {
+        problems.push(`Line ${n}: ${wrong}.`);
+        return;
+      }
     }
 
     const hostelWord = value("hostel_name");
@@ -351,7 +396,7 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
       role,
       hostel_name: hostel,
       department_or_club: value("department_or_club") ?? current?.department_or_club ?? null,
-      roll_number: value("roll_number") ?? current?.roll_number ?? null,
+      roll_number: rollNumber,
       ldap_uid: uid,
       staff_category:
         role === "employee"
@@ -360,6 +405,13 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
             null)
           : null,
       unit_id: unitId,
+      // A plain import leaves someone's group as it is, and says nothing at all
+      // about the group of someone who has none.
+      ...(context.group
+        ? { group_id: context.group.id }
+        : current?.group_id
+          ? { group_id: current.group_id }
+          : {}),
     };
 
     if (!current) added.push(row);
@@ -404,7 +456,10 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
   if (problems.length > 0) {
     return { added: [], updated: [], unchanged, columns, hadHeader, problems };
   }
-  return { added, updated, unchanged, columns, hadHeader, problems };
+  const warnings = context.group
+    ? programmeMismatches(context.group, [...added, ...updated.map((u) => u.row)])
+    : [];
+  return { added, updated, unchanged, columns, hadHeader, problems, warnings };
 }
 
 /** "12 added, 3 updated, 40 unchanged" - for the toast and the audit log. */
@@ -430,6 +485,7 @@ export function changedFields(before: Profile, row: UserImportRow): string[] {
     ["LDAP username", (before.ldap_uid ?? null) !== row.ldap_uid],
     ["Category", (before.staff_category ?? null) !== row.staff_category],
     ["Unit", (before.unit_id ?? null) !== row.unit_id],
+    ["Group", (before.group_id ?? null) !== (row.group_id ?? null)],
   ];
   return labels.filter(([, changed]) => changed).map(([label]) => label);
 }

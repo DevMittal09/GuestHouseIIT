@@ -372,12 +372,9 @@ one.
   the ad-hoc JSON export kept outside the repo does not, and must not be
   mistaken for a backup. The undo record is a safety net for one import, **not**
   a substitute for this.
-- **No deactivation story for people who leave.** `profiles` has no
-  `is_active`, and `deleteProfile` refuses anyone with a booking (correctly -
-  it would orphan the history), so repeated imports only accumulate. Wanted:
-  a flag that hides someone from pickers and refuses them a session without
-  touching their bookings. Not urgent until the first graduation after
-  go-live.
+- ~~**No deactivation story for people who leave.**~~ **Built on 5 Nov 2026:**
+  `profiles.login_disabled_at` (migration 36), set from Console -> User Groups.
+  It does not yet hide a blocked person from the approver pickers: see §2r.
 - **`MAX_USER_IMPORT_ROWS` is 2000 and the institute is larger.** The paste has
   to be split anyway while the updates are sequential, so this is a ceiling to
   remember rather than a bug.
@@ -762,7 +759,7 @@ No code changed in the application. What the review of the auth seam turned up:
 
 ## 2o. Asked on 31 Oct 2026 - spouse eligibility for MS and PhD students
 
-**Nothing is built.** The rule and the roll-number scheme it reads are written
+**Built on 4 Nov 2026**, as `scholar_only_relationships` rather than the `spouse_relationships` sketched here; the sixteenth list also refuses a spouse from anyone else. The denominator item below is done too. The rule and the roll-number scheme it reads are written
 up in [11-booking-forms.md](11-booking-forms.md#the-roll-number-encodes-the-programme-31-oct-2026);
 this is what building it would touch.
 
@@ -838,6 +835,62 @@ this is what building it would touch.
   can search by debitable head but not by tariff category, and neither CSV nor
   PDF carries it. The column exists, so both are a small addition - ask
   whether the office wants to report on it before adding a filter nobody uses.
+
+## 2q. Opened by the 4 Nov 2026 round - the sixteenth list
+
+- **Confirm the assumptions.** The owner has not answered these:
+  - **The 14-room pool** reads as one pool across both guest houses and is
+    display only. With both empty, Bageshri shows 10 and Hamsanandi 8, adding to
+    18; any one figure is at most 14.
+  - **C1 and C2 are at Hamsanandi**, which the list does not say.
+  - **Category III** is told from II by the `requester_role` part of the scope,
+    so a faculty official request defaults to III and an office's to II. Both are
+    offered and the desk must choose.
+  - **A research scholar** is MS (`3`) or PhD (`4`); M.Tech and M.Sc are regular.
+  - **"Full override"** does not reach a VIP room for a non-VIP requester; the
+    manager's own booking is the way round. An alumni booking counts as not
+    personal, so only the manager invoices it.
+- **The office's mapping for Hamsanandi's thirteen rooms to ten.** Part 2 of
+  `supabase/repairs/2026-11-04-room-naming.sql` is commented out until then.
+- **The office's own Dos and Don'ts.** The hardcoded list is drawn from house
+  rules still marked provisional.
+- **No persona holds a VIP address or a PhD roll number**, so no browser journey
+  signs in as either. Adding them means `lib/ldap/mock-directory.ts` and
+  [05-credentials-and-security.md](05-credentials-and-security.md).
+- **Playwright fills forms before hydration in places.** Found twice this round;
+  [22-running-and-testing.md](22-running-and-testing.md) Part 2.
+- **The cap's arithmetic reads every guest house's occupancy** on each availability
+  request from a general requester. Harmless at two houses.
+- **Shortening does not mail the requester.** They hear the dates when rooms are
+  allocated, and the reason is in the log.
+
+## 2r. Opened by the 5 Nov 2026 round - user groups
+
+- **Migration 36 is not applied to the hosted project.** It ships with the group
+  features; [04-production.md](04-production.md) §5.
+- **The CSV format is ours, not the institute's.** A real sheet may need its
+  header renamed to match the template.
+- **A blocked approver is warned about, not replaced.** Their stage waits until
+  someone else is appointed, and the approver pickers still list them.
+- **Blocking does not cancel a live booking or tell its requester.** The manager is
+  warned and decides. Their mail keeps going to an address that may stop existing
+  once they graduate.
+- **Copy to outside a group is still unrestricted**, because outside addresses are
+  in use and tested. The owner's answer of 5 Nov 2026 was about signing in, which is
+  now institute-only for everyone; whether Copy to follows is still theirs to say. If
+  it should, the rule moves from the group to the schema's default.
+- **A hosted account on any other address can no longer sign in.** Nobody has looked:
+  `select email, role from public.profiles where lower(split_part(email, '@', 2)) not in ('iitpkd.ac.in', 'smail.iitpkd.ac.in');`
+- **Existing hosted students may break the format** (`<roll>@smail...`). Editing such an
+  account is now refused until it is right; signing in is not.
+- **`listProfiles` pages since 5 Nov 2026**, so gate 12's truncation is gone for accounts,
+  though sign-in still reads the whole list to find one person. That is correct and slow,
+  and a `findProfileByEmail` over the existing index is still worth doing. **`listBookings`
+  has the same 1000-row cap**, so a block's booking warnings could miss some once there
+  are more bookings than that. Untested against a real Supabase.
+- **A group is one per person.** Someone in two kinds of group is not expressible.
+- **`IMPORTING-USERS.md` describes the older paste import in full**; groups have a
+  short section at its head.
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 

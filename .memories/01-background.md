@@ -64,6 +64,8 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **28 Oct** (second) | **The landing page again, and Taramani named a second time.** The owner: the hero type "is blending with the background too much", and the page "overall looks very basic... make it look creative and aesthetic". The wash goes **66% -> 78%**, the `<h1>` becomes **Guest House Portal** in **bold** (the institute's name is kept, in full, as the tracked saffron line above it), and the lead loses `font-light`. Below it the page gains **an opening statement computed from the store** where it used to drop straight from a photograph into six icons; the amenities move **onto ink with saffron icons** - the page's one dark band; the gallery becomes a **twelve-column mosaic**; and the two guest houses become **one ruled plate** with their names at display size. Still no shadow, gradient, pill or 16px radius: all of it bought with composition, ground, type and one accent colour. **Public site only - no migration, no store operation, no booking rule.** |
 | **28 Oct** (third) | **The Google sign-in plan - no application code.** The owner asked how to set up Google OAuth, given that the institute's **email data for every user is being collected**. The review found the flow **already built and verified** (Phase 8: `lib/oidc.ts` and `app/api/auth/google/*` - PKCE, state, nonce, the `id_token` checked against Google's JWKS, the `hd` claim and `isInstituteEmail`, then a profile that must already exist) and **three places saying it was not**, each of which would have sent the next session to build it again. Output: **[`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md)** at the repo root, and corrections to `lib/env.ts`, `lib/site.ts`, `AGENTS.md` and `.env.example` (which also pointed at a memory file deleted on 10 Oct). Two defects recorded rather than fixed: the callback finds the account by scanning **every** profile, which Supabase truncates at **1000 rows silently** (roadmap **gate 12** - it breaks the institute's account import too, and migration 31's `lower(email)` index has been unused since 13 Oct), and `hd=iitpkd.ac.in` on the start leg is narrower than the return leg's own rule, so it may hide every `@smail` student from Google's account chooser. **No migration, no store operation, no booking rule, no permission and no route.** |
 | **31 Oct** | **The tariff category becomes the Guest House Manager's.** Three items. The booking page keeps its tariff table and **loses every control in it** - the requester reads the prices and decides nothing. The **desk is asked which category applies as it approves** (the allocation dialog, and Approve meals for a dining booking, which has no rooms), from a list **enumerated out of the office's own rate sheet** and named in the office's own words; **Confirm & Allocate stays disabled until it is answered**, and an approval carrying a key the sheet does not publish is refused. The **invoice is priced at it** - one substitution in the single `base` object every charge is resolved from - and **snapshots and prints it**. A category is the pair `resolveTariff` already keys on (**booking type, requester role**), so **migration 35** is two nullable text columns with the same checks `tariffs` uses and nothing was added to `resolveTariff`; **no rate is stored**, because a stay crossing a rate change is priced night by night - the figure lives in the booking's log and on the issued invoice. A booking approved before today keeps being priced from its own facts and prints no category line, so **no invoice version changed**. |
+| **4 Nov** | **The owner's sixteenth list.** VIP rooms and a manager's console section for them, a 14-room pool for requesters, no total rooms anywhere, the booking window back to one month, official stays uncapped, first come first served at the desk, cancellation 24 hours ahead, the caretaker invoicing personal bookings only, a research scholar's spouse, the rooms renamed, Categories I-III, shortening a stay at approval, and the booking page's sidebar. See the section at the foot of this file. |
+| **5 Nov** | **User groups.** A batch loaded from a CSV, three lists per group (members, addresses filled in on Copy to, addresses they may type), an approval route that can be limited to a group, and accounts blocked from signing in by roll number rather than deleted. Migration 36. See the section at the foot of this file. |
 
 ## The problem
 
@@ -1439,3 +1441,45 @@ Lint, `tsc --noEmit`, **627 unit tests in 37 files**, a production build, the
 **51 Playwright journeys**, and `npm run check:memories`. Migration 35 was
 applied twice in a throwaway `postgres:16-alpine` and its refusals checked -
 half a category either way, and a value outside the enum.
+
+## Round of 4 November 2026 - the owner's sixteenth list
+
+Sent as one pasted specification in six sections. Nothing was asked back;
+assumptions are in [03-roadmap.md](03-roadmap.md) §2q until the owner confirms them.
+
+| # | Asked | Status |
+| --- | --- | --- |
+| 1a | Hostel on record: warden. None: straight to the manager | **Already done** (17 Oct 2026) |
+| 1b | Regular students cannot book for a spouse; research scholars, by roll number, can | **Done.** Sixth character `3` or `4` |
+| 1c | VIP access for director@, office_director@, adadmin@ | **Done.** Fixed in code, the manager adds others |
+| 1d | The manager has full override and approval | **Stands**, with one reading to confirm: a VIP room is not overridable for a non-VIP requester |
+| 1e | The caretaker marks rooms and invoices personal bookings only | **Done.** Official and alumni are the manager's |
+| 2a | Hamsanandi A1-A4, D1-D4; Bageshri B1-B10 | **Done in the seeds.** Hosted: Bageshri in the repair, Hamsanandi awaits the office's mapping |
+| 2b | C1 and C2 are VIP; the manager changes which, and who | **Done**, Console -> VIP Rooms & Guidelines. Placed at Hamsanandi by assumption |
+| 2c | At most 14 rooms shown; the manager's bookings reduce it | **Done** as a pool across both guest houses, display only. To confirm |
+| 2d | Remove Total Rooms; show Available Rooms | **Done** |
+| 3a | Book at most one month ahead | **Done**, reversing 14 Oct 2026 |
+| 3b | 14 days generally; official and manager's bookings unlimited | **Done.** The cap was already 14; official bookings by anyone are now exempt |
+| 3c | First come, first served at the desk | **Done** |
+| 3d | Requester cancels 24 hours ahead; the manager at any time | **Done** |
+| 4a | Booking type on the form; category at approval | **Already done** (31 Oct 2026) |
+| 4b | The manager cannot switch Official and Personal | **Done.** No control ever did; the category list now cannot do it through the price |
+| 4c | The manager can reduce the days before or while approving | **Done.** The action existed with no screen; added to the allocation dialog |
+| 5a | Tariff table and catering timings on the right | **Done** |
+| 5b | Hardcoded Dos and Don'ts; Guidelines button to a Drive link the manager edits | **Done.** The wording is drawn from provisional house rules, not supplied by the office |
+| 6 | The official tariff and catering tables | **Done.** Breakfast moved to 08:00 |
+
+## Round of 5 November 2026 - user groups
+
+Asked by the owner in their own words, with the questions invited. **Four were put
+and answered:** a group is **programme + batch**; "what emails are allowed" means
+**all three lists**; a group's copy list is **pre-filled and removable**; a blocked
+person's bookings **stay, with a warning to the manager**.
+
+| # | Asked | Status |
+| --- | --- | --- |
+| 1 | The admin adds a group of users from a CSV in a set format | **Done.** Template download, file upload, a preview, all-or-nothing, and the import's existing undo |
+| 2 | Bulk removal by roll number, not deleting anyone: they just cannot log in | **Done.** Blocked on every request; restorable; bookings stay. A whole group is one button |
+| 3 | The manager selects a group and says who is copied | **Done.** Console -> User Groups |
+| 4 | What emails are allowed in that group, all on the IIT Palakkad domain | **Done** for group members. People in no group are unchanged, because outside addresses are in use: to confirm |
+| 5 | Different approval patterns per kind of user | **Done** as a condition on the existing routes, and shown on the group's page. The default student route is still the Assistant Warden: the "associate dean" the owner mentioned is a route for the manager to set, not assumed |

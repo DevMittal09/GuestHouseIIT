@@ -12,7 +12,7 @@
  * override rather than a loophole: the audit trail names who did it and why.
  */
 
-import type { Profile, Role } from "./types";
+import type { BookingType, Profile, Role } from "./types";
 
 /**
  * Roles with unrestricted access to every booking. The developer is included
@@ -111,12 +111,14 @@ export function canViewAllOccupancy(role: Role): boolean {
  */
 export type ConsoleSection =
   | "users"
+  | "groups"
   | "units"
   | "workflow"
   | "academic"
   | "projects"
   | "billing"
   | "guest_houses"
+  | "policy"
   | "forms"
   | "mail_templates"
   | "mail_outbox"
@@ -135,6 +137,13 @@ export const CONSOLE_SECTIONS: Record<
     href: "/admin/users",
     roles: ["gh_manager", "developer"],
     blurb: "Accounts and what each one may do, including other managers.",
+  },
+  groups: {
+    label: "User Groups",
+    href: "/admin/groups",
+    roles: ["gh_manager", "developer"],
+    blurb:
+      "Load a batch from a CSV, say who its bookings copy, and stop people signing in when they graduate.",
   },
   units: {
     label: "Departments & Clubs",
@@ -173,6 +182,13 @@ export const CONSOLE_SECTIONS: Record<
     href: "/admin/guest-houses",
     roles: ["gh_manager", "developer"],
     blurb: "Guest houses, their rooms, and which of them serve meals.",
+  },
+  policy: {
+    label: "VIP Rooms & Guidelines",
+    href: "/admin/policy",
+    roles: ["gh_manager", "developer"],
+    blurb:
+      "Which rooms are VIP and who may have them, how many rooms requesters are shown, and the Guidelines document's link.",
   },
   forms: {
     label: "Form Builder",
@@ -270,6 +286,20 @@ export function userEditError(actor: Profile, target: Profile): string | null {
  */
 export function canIssueInvoices(role: Role): boolean {
   return role === "gh_manager" || role === "gh_caretaker" || role === "developer";
+}
+
+/**
+ * **Who may invoice this booking** (4 Nov 2026, the owner's sixteenth list):
+ * the caretaker invoices **personal** bookings only; an official booking's
+ * invoice - which is mailed to Accounts and charged to a budget - is the
+ * Guest House Manager's alone. Null when they may, else why not.
+ */
+export function invoiceRoleError(role: Role, bookingType: BookingType): string | null {
+  if (!canIssueInvoices(role)) return "Only the guest house desk can work with invoices";
+  if (role === "gh_caretaker" && bookingType !== "personal") {
+    return "Only the Guest House Manager can invoice an official booking - the caretaker invoices personal bookings.";
+  }
+  return null;
 }
 
 /**

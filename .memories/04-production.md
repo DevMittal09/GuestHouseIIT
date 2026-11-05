@@ -29,8 +29,8 @@ switches. In rough order of what breaks worst if skipped:
 1. Connect the institute LDAP, and **close Mock Authentication**.
 2. Load the real people into **Users & Roles** (now a spreadsheet paste).
 3. Apply every migration to the production database, and **check with
-   `npm run check:migrations`** rather than writing the answer down. (On the
-   current hosted project, 1 – 30 were verified applied on 9 Oct 2026.)
+   `npm run check:migrations`** rather than writing the answer down. (For the
+   current hosted project, see the 5 Nov 2026 note under "Ask the database".)
 4. Change the console password off `0000`; delete the demo accounts.
 5. Unset `MAIL_REDIRECT_ALL_TO`; set `CRON_SECRET`, `APP_URL`,
    `ID_ENCRYPTION_KEY`, the Supabase keys.
@@ -255,7 +255,9 @@ can be done in thirty seconds right now, before any migration:
    open-signup path immediately and needs no schema change, so do it first
    even though the migration is the real fix.
 2. **Apply migrations 31, 32, 33, 34 and 35 to the hosted project, in
-   order.** Needs approval; it is a schema change on live data. None rewrites
+   order.** *(The owner reported this done on 5 Nov 2026; 31, 33 and 34 are not
+   yet verified - see the note under "Ask the database".)* Needs approval; it is
+   a schema change on live data. None rewrites
    a table or needs downtime: 31 drops a constraint and policies and adds
    indexes, 32 creates one empty table, 33 adds a trigger and corrects two
    counts, 34 adds 20 indexes, **35 adds two nullable columns and three
@@ -807,7 +809,7 @@ left alone.
 **Defaults that are policy choices, not guesses — the office should review each
 once.** The value, the meaning and who may change it are in
 [12-settings-and-defaults.md](12-settings-and-defaults.md): the advance-booking
-window (6 months), the longest stay (14 nights), the turnaround buffer (4 h), the
+window (1 month), the cancellation notice (24 hours), the longest stay (14 nights), the turnaround buffer (4 h), the
 no-show release (off), the day basis and grace hours, "rates include GST" (yes),
 the GST percentages and SAC codes, the meal serving windows, the kitchen's 30 per
 sitting, room capacity, the debitable heads per category, ID retention (365 days)
@@ -815,6 +817,14 @@ and audit retention (180 days, which cannot be set lower).
 
 **Also outside Settings:** the wording of every automatic mail
 (Console → Mail Templates).
+
+**From the 4 Nov 2026 round, on the hosted project:** a saved `rules.booking`
+or `rules.meals` row keeps its old values, so check the window and breakfast in
+Settings. Rates in force cannot be edited, so Categories I-III are **new rows, from
+the day the repair is run**, and rooms are renamed, both in
+`supabase/repairs/2026-11-04-room-naming.sql` - whose Hamsanandi part awaits the
+office's mapping. The manager then checks Console -> VIP Rooms & Guidelines and
+pastes the Guidelines link. The three VIP addresses must exist as accounts.
 
 ## 4. Secrets and switches
 
@@ -841,6 +851,11 @@ Two scheduled routes, both guarded by `CRON_SECRET`:
 (`30 2 * * *` UTC). Without the second there are no digests, no check-in
 reminders, no day-wise log and **nothing marks a request Missed**.
 
+**Migration 36** (user groups, blocked accounts) ships with Console -> User Groups.
+Before it, the page says so, and everyone reads as in no group and not blocked.
+It is additive and was tested in a throwaway in-memory Postgres. **Applied to the
+hosted project on 5 Nov 2026** and confirmed by the migration check the same day.
+
 ---
 
 ## 5. Migrations
@@ -863,22 +878,32 @@ read tables and columns but not `pg_proc`, `pg_constraint`, `pg_policies`,
 `pg_trigger` or `pg_indexes`. For each it says so and prints the SQL to paste
 in the editor.
 
-> **Migration 35 (31 Oct 2026) is written, tested and not applied**, like 31,
-> 33 and 34. `npm run check:migrations` **can** probe it - it is a column - so
-> it will simply report it missing until it is applied. The desk cannot
-> approve a booking without it.
+**The script reads `.env.local` only.** Where the credentials live in `.env`,
+plain `npm run check:migrations` says no project is configured and **exits 0,
+which is not a pass**. Run `node --env-file=.env scripts/check-migrations.mjs`
+instead.
+
+> **The current hosted project, 5 Nov 2026.** The owner applied the outstanding
+> migrations in the SQL editor and reported all of them done.
 >
-> **The current hosted project has 1 – 30 *and 32*, re-verified 27 Oct 2026**
-> by `npm run check:migrations`, which now reports **32 as present** -
-> `user_import_batches` exists - and names 17, 23, 31, 33 and 34 as the five it
-> cannot probe. **32 was applied some time between 14 and 27 Oct 2026**; this
-> file had recorded all four of 31 - 34 as deliberately not applied, which is
-> no longer true of 32.
+> * **Confirmed by the script (exit 0):** 1 - 16, 18 - 22, 24 - 30, 32, **35 and
+>   36**.
+> * **On the owner's report only:** 17, 23, **31**, 33 and 34, which the script
+>   cannot probe. Their SQL results have not been recorded here.
+> * **Not recorded as run:**
+>   `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql` (§1a.1 step 3) and
+>   `supabase/repairs/2026-11-04-room-naming.sql`, which the owner is running
+>   themselves.
 >
-> **Whether 31, 33 and 34 are applied is not known from here**, and it matters
-> most for **31**: without it `createProfile` fails outright and the 38
-> `authenticated` policies are still in place. Do not infer it from 32 being
-> in. Paste the four queries the script prints (they are also reproduced in
+> A check straight after applying reported 35 as missing, and one about a minute
+> later reported it present. Why is not established (PostgREST's schema cache
+> refreshing is the likely reason), so re-run the check before re-applying
+> anything.
+>
+> **Until its two counts are recorded, treat 31 as reported, not verified**: it
+> matters most, because without it `createProfile` fails outright and the 38
+> `authenticated` policies are still in place. Paste the four queries the script
+> prints (they are also reproduced in
 > [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §3.2) and
 > record the answer here. Applying any of them is a production change needing
 > the owner's approval - see §1a.1 for the order.

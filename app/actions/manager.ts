@@ -18,6 +18,7 @@ import {
 import { notifyCancelled } from "@/lib/mail/notify";
 import { getStore } from "@/lib/store";
 import { getRules } from "@/lib/settings-server";
+import { vipAllocationError } from "@/lib/vip";
 import { instituteDate, instituteIso, toInstituteDateTimeValue } from "@/lib/tz";
 import type { BookingStatus, MealDietCounts, MealPlan } from "@/lib/types";
 import { includesMeals, RoomClashError, STATUS_LABELS } from "@/lib/types";
@@ -220,6 +221,9 @@ export async function reassignRooms(
       return { ok: false, error: "Selected rooms do not belong to this guest house" };
     }
     const selected = roomIds.map((id) => roomsById.get(id)!);
+    // A VIP room only for a requester with VIP access (4 Nov 2026).
+    const vipProblem = vipAllocationError(roomIds, rooms, booking.requester, (await getRules()).policy);
+    if (vipProblem) return { ok: false, error: vipProblem };
     const capacityProblem = allocationCapacityError(countBedGuests(booking.guests), selected);
     if (capacityProblem) return { ok: false, error: capacityProblem };
     for (const [i, card] of booking.rooms.entries()) {

@@ -858,9 +858,8 @@ user typed and rendering it back are zoned.
 
 ### Advance-booking window
 
-Check-in must be within **six months** of today by default (14 Oct 2026, the
-office: "allow users to make bookings more than 30 days in advance"; it was
-one month) — a Setting (`rules.booking.advance_booking_months`, 1-24, zero
+Check-in must be within **one month** of today by default (4 Nov 2026, the
+owner's sixteenth list; it was six months from 14 Oct) — a Setting (`rules.booking.advance_booking_months`, 1-24, zero
 refused), passed as `latestCheckIn(role, from, months)`; the 14-night maximum stay is `rules.booking.max_stay_nights` (0 = no
 limit). `latestCheckIn` in `lib/workflow.ts` is the single source of truth; `isAdvanceWindowExempt()`
 exempts **`official`, `gh_manager` and `developer`**, because dignitary visits
@@ -2060,6 +2059,33 @@ restore. First and so far only: **`archive/privacy-notice/`**.
 - **Deleting a route leaves `.next/dev/types` stale**, exactly as moving one
   does: `rm -rf .next/dev/types` or the next `typecheck` fails on a module it
   cannot find. See the traps below.
+
+## The sixteenth list's rules (4 Nov 2026)
+
+- **VIP rooms:** `lib/vip.ts` is the one rule. `rules.policy.vip_room_ids` null
+  means rooms numbered C1 and C2. Availability, `createBooking`, `allocateRooms`
+  and `reassignRooms` all apply it.
+- **The 14-room pool is display only.** It never refuses a request.
+- **The desk's tariff list never crosses booking types** (`deskTariffCategories`).
+- **The caretaker invoices personal bookings only** (`invoiceRoleError`).
+- **Spouse is `scholar_only_relationships`:** sixth roll-number character `3` or
+  `4`, computed from the requester, never the payload.
+- **A requester cancels 24 hours ahead;** `managerCancelBooking` is not held to it.
+
+## User groups and blocked accounts (5 Nov 2026)
+
+- **`lib/user-groups.ts` is the rule.** One group per person, none is allowed, and none
+  means nothing changes. A student group's name and year are derived, never typed.
+- **`profileOrNull` in `lib/auth.ts` refuses, on every request, whatever `signInRefusal`
+  does:** a blocked account, or any address off the institute's domain. Nobody is deleted
+  for leaving: use the block.
+- **MS and PhD batches have an intake** (January or August); nobody else's does.
+- **Two domains only.** A student is `<roll>@smail.iitpkd.ac.in`, everyone else
+  `<name>@iitpkd.ac.in` (`emailFormatError`). Test accounts in a plain planner call are
+  exempt; anything through the console is not.
+- **A group's role goes through `assignableRoles`** at save and at import.
+- **Import rows carry `group_id` only when there is one,** so a plain import works before
+  migration 36.
 
 ## Traps that already cost time
 

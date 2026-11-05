@@ -1,5 +1,6 @@
 "use server";
 
+import { signInRefusal } from "@/lib/user-groups";
 import { redirect } from "next/navigation";
 import { recordAudit } from "@/lib/audit-server";
 import { getSessionUser } from "@/lib/auth";
@@ -83,6 +84,12 @@ export async function signInWithLdap(
     };
   }
 
+  const refusal = signInRefusal(profile);
+  if (refusal) {
+    await recordAudit(profile, "signin.failure", profile.email, { method: "ldap", reason: refusal });
+    return { ok: false, error: refusal };
+  }
+
   await startSession(profile.id);
   await recordAudit(profile, "signin.success", profile.email, { method: "ldap" });
   // Outside any try/catch - `redirect()` signals by throwing.
@@ -99,6 +106,8 @@ export async function loginAs(userId: string, next?: string | null): Promise<voi
   if (!mockLoginEnabled()) throw new Error("Mock authentication is disabled");
   const profile = await getStore().getProfile(userId);
   if (!profile) throw new Error("Unknown user");
+  const refusal = signInRefusal(profile);
+  if (refusal) throw new Error(refusal);
   await startSession(userId, { verified: true });
   redirect(safeNextPath(next) ?? homeForRole(profile.role));
 }

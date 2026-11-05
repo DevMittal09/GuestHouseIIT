@@ -543,7 +543,7 @@ beforeAll(async () => {
 });
 afterAll(() => db.cleanup());
 
-const ROOM = "gh-bageshri-203";
+const ROOM = "gh-bageshri-B3";
 const LOG = { action_by: "gh-manager", action_by_name: "Manager", new_status: "APPROVED" as const, remarks: "test" };
 const input = (checkIn: string, checkOut: string, patch: Partial<NewBookingInput> = {}): NewBookingInput => ({
   user_id: "employee-priya", guest_house_id: "gh-bageshri", user_role: "employee", status: "APPROVED",

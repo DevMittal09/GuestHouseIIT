@@ -41,7 +41,7 @@ matters: the APIs differ from older versions, and the docs are in
 
 **What it is.** A booking and multi-stage approval portal for IIT Palakkad's
 two guest houses, **Bageshri** (10 rooms, no kitchen) and **Hamsanandi**
-(13 rooms, serves meals), plus the guest house's public website. Requesters —
+(10 rooms, serves meals), plus the guest house's public website. Requesters —
 students, faculty and staff, institute offices, the two IAR offices, and
 (through their Faculty Advisor) clubs and councils — submit bookings; each goes
 through its own approval chain — **which the Guest House Manager edits from the
@@ -59,6 +59,8 @@ by one ([01-background.md](01-background.md)). Repository
 Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · Supabase (optional — a
 JSON mock store otherwise) · nodemailer · jsPDF · ldapts · Vitest · Playwright.
 **Node 20** via nvm; the machine default is 18.
+
+**Latest round, 5 Nov 2026:** user groups - a batch loaded from a CSV, per-group Copy to lists and approval routes, and blocking accounts rather than deleting them ([99-recent-changes.md](99-recent-changes.md)). **4 Nov 2026:** the owner's sixteenth list - VIP rooms, a 14-room pool, the one-month window, Categories I-III; its assumptions await confirmation ([03-roadmap.md](03-roadmap.md) §2q).
 
 **Status, 31 Oct 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme, **twelve** rounds of the
@@ -141,10 +143,10 @@ scans **every** profile and Supabase truncates that at **1000 rows silently**
 import too), and the start leg's `hd` hint may keep every `@smail` student out
 of Google's account chooser.
 
-**Numbers.** 35 migrations · 10 one-off repairs · 12 roles (10 active) ·
+**Numbers (5 Nov 2026).** 36 migrations · 11 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
-19 demo personas · 6 demo bookings · 23 real rooms · **25 photographs** ·
-627 unit tests · 51 end-to-end journeys · 15 console sections ·
+19 demo personas · 6 demo bookings · 20 rooms · **25 photographs** ·
+692 unit tests · 55 end-to-end journeys · 17 console sections ·
 **5 invoice layout versions**.
 
 ---
@@ -168,7 +170,7 @@ plans, `1x` is the product as configured, `2x` is engineering, `99` is now.
 | [13-billing-and-dining.md](13-billing-and-dining.md) | Tariffs, invoices, GST per section, payments, additional charges, dining |
 | [14-public-site-and-ui.md](14-public-site-and-ui.md) | The public website, the design tokens and primitives, the copy rules, sign-in pages, photographs, the map |
 | [20-architecture.md](20-architecture.md) | **How it is put together and why** (two stores, one auth seam, config-driven forms, institute time, holds in the database) and **where the code for each feature lives** |
-| [21-database.md](21-database.md) | Tables, enums, RLS, storage, **all 35 migrations**, the one-off repairs, resetting data |
+| [21-database.md](21-database.md) | Tables, enums, RLS, storage, **all 36 migrations**, the one-off repairs, resetting data |
 | [22-running-and-testing.md](22-running-and-testing.md) | Running locally, mock vs hosted database, the test suites, every way of verifying a change — and **every error already hit, with its cause and fix** |
 | [99-recent-changes.md](99-recent-changes.md) | **Only the most recent round** — replaced, never appended |
 
@@ -277,7 +279,7 @@ heads, mapped per requester by the office's list of 8 Oct 2026 and, for an
 the funds are approved and available**. **Copy to** is optional (≤ 25, CC on
 every mail to the requester); **there is no privacy notice and no consent**
 (14 Oct 2026 - the whole feature is withdrawn and kept in
-`archive/privacy-notice/`, which is also the restore); check-in within **6 months**, at most **14 nights**; a room card holds **4 people, at most 3
+`archive/privacy-notice/`, which is also the restore); check-in within **1 month**, at most **14 nights** (an official booking uncapped), cancelled at least **24 hours** ahead; a room card holds **4 people, at most 3
 needing a bed, at most 3 infants** (under 5); meals only at a guest house that
 serves them and **never for a student or an alumni booking**, booked **before
 the previous meal finishes being served**, with **each person's own veg /

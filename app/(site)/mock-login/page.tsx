@@ -1,3 +1,4 @@
+import { signInRefusal } from "@/lib/user-groups";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Container, PageTitle } from "@/components/site/site-ui";
@@ -40,7 +41,8 @@ export default async function MockLoginPage({
   const user = await getCurrentUser();
   if (user) redirect(next ?? homeForRole(user.role));
 
-  const profiles = await getStore().listProfiles();
+  // Nobody can continue as an account that may not sign in.
+  const profiles = (await getStore().listProfiles()).filter((p) => !signInRefusal(p));
   // Split by where the persona *works*, not by whether it can book: the IAR
   // Office both approves and books, and belongs with the reviewers.
   const isStaff = (p: Profile) => REVIEWER_ROLES.includes(p.role) || p.role === "developer";

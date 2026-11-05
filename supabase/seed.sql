@@ -130,14 +130,14 @@ where p.email = v.email and p.ldap_uid is null;
 -- Meals are served at Hamsanandi only (migration 8); editable in the console.
 insert into public.guest_houses (id, name, total_rooms, serves_meals) values
   ('22222222-2222-2222-2222-222222222201', 'Bageshri', 10, false),
-  ('22222222-2222-2222-2222-222222222202', 'Hamsanandi', 13, true)
+  ('22222222-2222-2222-2222-222222222202', 'Hamsanandi', 10, true)
 on conflict (name) do nothing;
 
 -- ---------------------------------------------------------------- rooms
--- The rooms the office actually has (23 Sep 2026). Bageshri numbers by floor
--- and skips 205, 301 and 304; Hamsanandi is four blocks, A to D, with only A4
--- in A. These replaced the dummy B-101../H-101.. blocks — an existing database
--- is corrected by supabase/repairs/2026-09-23-real-room-numbers.sql, not here.
+-- The naming convention of 4 Nov 2026: Bageshri B1-B10; Hamsanandi A1-A4 and
+-- D1-D4, with C1 and C2 the VIP rooms. It replaced the numbers of 23 Sep 2026
+-- (Bageshri 201-307, Hamsanandi A4, B1-B4, C1-C4, D1-D4) - an existing
+-- database is renamed by supabase/repairs/2026-11-04-room-naming.sql, not here.
 --
 -- Every room in both guest houses is double sharing: the office confirmed
 -- there is no single room, which is why the booking form and the developer
@@ -145,12 +145,12 @@ on conflict (name) do nothing;
 -- tariffs and the invoice are priced per type.
 insert into public.rooms (guest_house_id, room_number, room_type)
 select '22222222-2222-2222-2222-222222222201', n, 'double_sharing'::public.room_type
-from unnest(array['201','202','203','204','206','302','303','305','306','307']) n
+from unnest(array['B1','B2','B3','B4','B5','B6','B7','B8','B9','B10']) n
 on conflict do nothing;
 
 insert into public.rooms (guest_house_id, room_number, room_type)
 select '22222222-2222-2222-2222-222222222202', n, 'double_sharing'::public.room_type
-from unnest(array['A4','B1','B2','B3','B4','C1','C2','C3','C4','D1','D2','D3','D4']) n
+from unnest(array['A1','A2','A3','A4','C1','C2','D1','D2','D3','D4']) n
 on conflict do nothing;
 
 -- ---------------------------------------------------------------- phase 4
@@ -164,3 +164,19 @@ insert into public.projects (id, project_number, title, pi_name, active) values
   ('55555555-5555-5555-5555-555555555502', 'CP/2026/004', 'Machine vision for crop health', 'Prof. R. Venkatesh', true),
   ('55555555-5555-5555-5555-555555555503', 'SP/2022/031', 'Completed: water quality sensors', null, false)
 on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------- user groups
+-- Demo groups (migration 36): the students' batches, and the faculty.
+insert into public.user_groups (name, role, programme, batch_year, intake) values
+  ('B.Tech 2022 batch', 'student', 'BTech', 2022, null),
+  ('M.Tech 2022 batch', 'student', 'MTech', 2022, null),
+  ('MS Aug 2022 batch', 'student', 'MS', 2022, 'aug'),
+  ('Faculty', 'employee', null, null, null)
+on conflict do nothing;
+
+update public.profiles p set group_id = g.id
+from public.user_groups g
+where (p.roll_number = '112201001' and g.name = 'B.Tech 2022 batch')
+   or (p.roll_number = '142202014' and g.name = 'M.Tech 2022 batch')
+   or (p.roll_number = '122203099' and g.name = 'MS Aug 2022 batch')
+   or (p.email = 'priya@iitpkd.ac.in' and g.name = 'Faculty');

@@ -1,5 +1,6 @@
 "use client";
 
+import { isInstituteEmail } from "@/lib/site";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -315,6 +316,16 @@ export function UsersManager({
                 <TableCell>
                   <span className="font-medium">{p.full_name}</span>
                   <span className="block text-xs text-muted-foreground">{p.email}</span>
+                  {!isInstituteEmail(p.email) && (
+                    <span className="block text-xs font-semibold text-vermilion-deep">
+                      Cannot sign in - not an IIT Palakkad address
+                    </span>
+                  )}
+                  {p.login_disabled_at && (
+                    <span className="block text-xs font-semibold text-vermilion-deep">
+                      Cannot sign in{p.login_disabled_reason ? ` - ${p.login_disabled_reason}` : ""}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell className="text-meta whitespace-normal">
                   {p.role === "developer" ? (

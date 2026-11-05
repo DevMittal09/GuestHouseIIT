@@ -150,6 +150,31 @@ export type BookingStep = { title: string; body: string };
  * who reviews a request depends on who raised it, and that is the portal's
  * business, not the public page's.
  */
+/**
+ * **The general Dos and Don'ts** (4 Nov 2026, the owner's sixteenth list:
+ * "general Dos and Don'ts must be hardcoded directly onto the website
+ * interface"). Fixed copy, here rather than in Settings on purpose - the
+ * office's fuller, changing policy is the Guidelines document on Google
+ * Drive, whose link the manager keeps (`rules.policy.guidelines_url`).
+ * Shown on the Guidelines page and beside the booking form.
+ */
+export const DOS_AND_DONTS: { dos: string[]; donts: string[] } = {
+  dos: [
+    "Carry a photo identity document for every adult guest",
+    "Check in and check out at reception, at the times on the booking",
+    "Cancel at least 24 hours before check-in if plans change",
+    "Switch off lights, fans and air-conditioning when leaving the room",
+    "Report a fault or damage in the room to reception",
+  ],
+  donts: [
+    "Do not let anyone not named on the booking stay in the room",
+    "Do not smoke, or bring alcohol or intoxicants onto the premises",
+    "Do not bring pets",
+    "Do not cook or use heaters or other high-load appliances in the rooms",
+    "Do not move furniture, linen or fittings out of the room",
+  ],
+};
+
 export const BOOKING_STEPS: BookingStep[] = [
   { title: "Sign in", body: "With your institute account." },
   { title: "Request", body: "The dates of the stay, and each guest." },
@@ -259,7 +284,9 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
       id: "cancellation",
       title: "Cancellation",
       items: [
-        "A request can be cancelled from My Bookings at any time, with a reason",
+        rules.booking.cancellation_notice_hours > 0
+          ? `A request can be cancelled from My Bookings, with a reason, up to ${plural(rules.booking.cancellation_notice_hours, "hour")} before check-in; after that, contact the Guest House Office`
+          : "A request can be cancelled from My Bookings at any time, with a reason",
         "The Guest House Office confirms the cancellation, and the rooms are released then",
         "Once a guest has checked in, the stay is ended at reception instead",
       ],
