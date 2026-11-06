@@ -28,13 +28,24 @@ const MARKERS = [
   { n: 13, kind: "column", table: "mail_templates", column: "event_key", what: "editable mail wording" },
   { n: 14, kind: "column", table: "room_holds", column: "guard", what: "the turnover guard range" },
   { n: 15, kind: "column", table: "units", column: "head_id", what: "units and debitable heads" },
-  { n: 16, kind: "column", table: "institute_hostels", column: "hostel_name", what: "settings, hostels and the audit table" },
+  { n: 16, kind: "column", table: "hostels", column: "name", what: "settings, hostels and the audit table" },
   {
     n: 17, kind: "function", fn: "set_booking_buffer",
     what: "the turnaround buffer",
     sql: "SELECT count(*)::int AS c FROM pg_proc WHERE proname = 'set_booking_buffer' AND pronamespace = 'public'::regnamespace",
   },
-  { n: 18, kind: "column", table: "units", column: "hod_unit_id", what: "HOD approval and projects" },
+  {
+    n: 18,
+    kind: "sql",
+    what: "HOD approval and projects",
+    // Migration 18 added `units.hod_unit_id`; migration 37 renames it to
+    // `hod_approval_from_id`. Either name means 18 is applied.
+    sql:
+      "SELECT count(*)::int AS c FROM information_schema.columns " +
+      "WHERE table_schema = 'public' AND table_name = 'units' " +
+      "AND column_name IN ('hod_unit_id', 'hod_approval_from_id')",
+    check: (row) => row.c >= 1,
+  },
   { n: 19, kind: "column", table: "invoices", column: "document", what: "tariffs and invoices" },
   { n: 20, kind: "column", table: "room_blocks", column: "reason", what: "operational states" },
   { n: 21, kind: "column", table: "sessions", column: "token_hash", what: "sessions and security" },
@@ -82,7 +93,26 @@ const MARKERS = [
       "'sessions_rotated_from_idx')",
     check: (row) => row.c >= 19,
   },
-  { n: 35, kind: "table", table: "institute_students", what: "institute data tables (students, employees, offices, fcc, hostels, wardens)" },
+  {
+    n: 35,
+    kind: "column",
+    table: "bookings",
+    column: "tariff_booking_type",
+    what: "the manager's tariff category on a booking",
+  },
+  {
+    n: 36,
+    kind: "column",
+    table: "profiles",
+    column: "login_disabled_at",
+    what: "user groups, and accounts that may no longer sign in",
+  },
+  {
+    n: 37,
+    kind: "table",
+    table: "institute_students",
+    what: "the institute's own tables (students, employees, offices, councils, hostels, wardens) and profiles_v",
+  },
 ];
 
 function env() {
@@ -183,7 +213,7 @@ async function main() {
 
   console.log("");
   if (missing.length > 0) {
-    console.log(`${missing.length} schema element(s) appear to be missing. Apply the matching sections from scripts/init-postgres.sql:`);
+    console.log(`${missing.length} schema element(s) appear to be missing. Apply the matching files from supabase/migrations/ in order:`);
     for (const m of missing) {
       console.log(`  ${String(m.n).padStart(2)}  ${m.what}`);
     }

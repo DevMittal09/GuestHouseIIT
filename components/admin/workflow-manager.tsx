@@ -81,8 +81,9 @@ export function WorkflowManager({ data }: { data: WorkflowConsoleData }) {
     () => ({
       units: data.units,
       profiles: data.people.map((p) => ({ id: p.id, full_name: p.name })),
+      groups: data.groups,
     }),
-    [data.units, data.people]
+    [data.units, data.people, data.groups]
   );
   // In words, not as a JSON diff: inserting one stage produced a dozen lines
   // of `stages.1.approver.kind` that nobody could read, and a dialog taller
@@ -465,6 +466,14 @@ function Conditions({
           options={data.hostels.map((h) => ({ value: h, label: h }))}
           selected={rule.when.hostels ?? []}
           onChange={(v) => set("hostels", v)}
+        />
+      )}
+      {data.groups.length > 0 && (
+        <CheckRow
+          label="Requester's group"
+          options={data.groups.map((g) => ({ value: g.id, label: g.name }))}
+          selected={rule.when.group_ids ?? []}
+          onChange={(v) => set("group_ids", v)}
         />
       )}
       <div className="space-y-1.5">

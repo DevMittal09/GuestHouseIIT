@@ -214,6 +214,9 @@ export function FormConfigEditor({
                       unique_relationships: config.unique_relationships.filter((r) =>
                         offered.has(r)
                       ),
+                      scholar_only_relationships: config.scholar_only_relationships.filter((r) =>
+                        offered.has(r)
+                      ),
                     });
                   }}
                 />
@@ -283,6 +286,29 @@ export function FormConfigEditor({
                       unique_relationships: checked
                         ? [...config.unique_relationships, option]
                         : config.unique_relationships.filter((r) => r !== option),
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-3 sm:col-span-2 lg:col-span-3">
+                <div>
+                  <Label>Research scholars only</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Relationships only an MS or PhD student may book - read from the sixth
+                    character of the roll number (3 MS, 4 PhD). Anyone else submitting one is
+                    refused.
+                  </p>
+                </div>
+                <RelationshipPicker
+                  title="Research scholars only (e.g. Spouse)"
+                  options={config.relationship_options}
+                  selected={config.scholar_only_relationships}
+                  disabledOptions={[]}
+                  onToggle={(option, checked) =>
+                    update({
+                      scholar_only_relationships: checked
+                        ? [...config.scholar_only_relationships, option]
+                        : config.scholar_only_relationships.filter((r) => r !== option),
                     })
                   }
                 />

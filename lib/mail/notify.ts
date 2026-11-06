@@ -236,7 +236,7 @@ async function safely(what: string, run: () => Promise<unknown>): Promise<void> 
   } catch (error) {
     console.error(
       `[mail] could not queue ${what}. ` +
-        "Has scripts/init-postgres.sql been applied? (table: email_outbox)",
+        "Has migration 10 been applied? (table: email_outbox)",
       error
     );
   }

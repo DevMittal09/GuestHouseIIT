@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { addDaysToDateValue, formatDateValue, parseDateValue } from "./tz";
-import type { BookingType, MealKey, Role, RoomType, ServiceType } from "./types";
+import {
+  BOOKING_TYPE_LABELS,
+  ROLE_LABELS,
+  type BookingType,
+  type MealKey,
+  type Role,
+  type RoomType,
+  type ServiceType,
+} from "./types";
 
 /**
  * The guest house tariff (Phase 5): what a room night, an extra bed and each
@@ -191,6 +199,141 @@ export function describeTariffScope(
     t.requester_role ? `requester: ${names.role(t.requester_role)}` : null,
   ];
   return parts.filter(Boolean).join(" · ");
+}
+
+// ------------------------------------------------- the scope a stay is priced at
+
+/**
+ * **The part of a tariff's scope the Guest House Manager chooses** (31 Oct
+ * 2026, the owner: "the final authority for determining the applicable tariff
+ * category must rest with the GHM").
+ *
+ * A rate is scoped by guest house, room type, booking type and requester role.
+ * The guest house is where the guest actually sleeps and the room type is the
+ * room they are actually given, so neither is anybody's decision. The other
+ * two are: the office's sheet prices Hamsanandi's rooms at one rate generally
+ * and another "for government officers" - a row scoped by `requester_role` -
+ * and which of those a visitor falls under is a judgement about the visit, not
+ * a fact about the account that typed the form in.
+ *
+ * So this pair **is** the tariff category: the two dimensions of
+ * `resolveTariff` that the desk decides. Storing the pair rather than a rupee
+ * figure is deliberate - a stay crossing a rate change is still priced night
+ * by night, and a rate stored on the booking would be a second source of
+ * truth for money the moment the office published a new row.
+ */
+export type TariffScope = {
+  booking_type: BookingType;
+  requester_role: Role;
+};
+
+/** Stable, storable, and what a radio's value is. */
+export function tariffScopeKey(scope: TariffScope): string {
+  return `${scope.booking_type}:${scope.requester_role}`;
+}
+
+/**
+ * A stored or submitted key back as a scope, or null when it is not one.
+ *
+ * Checked against the unions themselves, because the key arrives from a
+ * client: the desk's own radio writes it, and nothing else may.
+ */
+export function parseTariffScope(key: string | null | undefined): TariffScope | null {
+  if (!key) return null;
+  const parts = key.split(":");
+  if (parts.length !== 2) return null;
+  const [bookingType, role] = parts;
+  if (!Object.hasOwn(BOOKING_TYPE_LABELS, bookingType)) return null;
+  if (!Object.hasOwn(ROLE_LABELS, role)) return null;
+  return { booking_type: bookingType as BookingType, requester_role: role as Role };
+}
+
+/**
+ * **The scope a booking's charges are resolved at**: the category the manager
+ * chose, else the booking's own facts.
+ *
+ * The fallback is what the portal did before the category existed, which is
+ * what a booking approved before this round has to go on being priced at -
+ * there is no decision recorded for it, and inventing one would be the
+ * "default tariff" this change exists to rule out. Every booking approved
+ * since carries the manager's choice, because the approval asks for it.
+ */
+export function pricingScopeFor(
+  booking: {
+    booking_type: BookingType;
+    user_role: Role;
+    tariff_booking_type?: BookingType | null;
+    tariff_requester_role?: Role | null;
+  }
+): TariffScope {
+  return booking.tariff_booking_type && booking.tariff_requester_role
+    ? {
+        booking_type: booking.tariff_booking_type,
+        requester_role: booking.tariff_requester_role,
+      }
+    : { booking_type: booking.booking_type, requester_role: booking.user_role };
+}
+
+/**
+ * The charge a tariff category is **about**: the room on a stay, the meals on
+ * a dining booking. A guest house with no kitchen has no dining charge at
+ * all, so a dining booking there has no category to choose - and no dining
+ * section on its invoice either (`invoicePrintsDining`).
+ */
+export function tariffCategoryItems(service: ServiceType, servesMeals: boolean): TariffItem[] {
+  if (service === "meals_only") return servesMeals ? [...MEAL_TARIFF_ITEMS] : [];
+  return ["room"];
+}
+
+/** "Official · Employee (Faculty & Staff)" - a scope in plain words. */
+export function describeTariffCategoryScope(scope: TariffScope): string {
+  return `${BOOKING_TYPE_LABELS[scope.booking_type]} · ${ROLE_LABELS[scope.requester_role]}`;
+}
+
+/**
+ * **What the office calls this category**, and what the scope says in plain
+ * words - one implementation, read by the desk's list of categories
+ * (`deskTariffCategories`) and by the invoice that records the one chosen.
+ *
+ * The name is the `note` on the row that actually prices the category's
+ * defining charge, because that is where the office writes its own words:
+ * "Tariff sheet: Hamsanandi type 3, government officers". An unnamed row
+ * leaves the scope to speak for itself rather than inventing a name for it.
+ */
+export function describeTariffCategory(
+  tariffs: Tariff[],
+  q: {
+    guestHouseId: string;
+    scope: TariffScope;
+    service?: ServiceType;
+    servesMeals: boolean;
+    roomType?: RoomType;
+    date: string;
+  }
+): { label: string; scope_label: string } {
+  const { guestHouseId, scope, service = "room", servesMeals, roomType = "double_sharing", date } = q;
+  const scopeLabel = describeTariffCategoryScope(scope);
+  for (const item of tariffCategoryItems(service, servesMeals)) {
+    const row = resolveTariff(tariffs, {
+      guest_house_id: guestHouseId,
+      item,
+      room_type: item === "room" || item === "extra_bed" ? roomType : null,
+      booking_type: scope.booking_type,
+      requester_role: scope.requester_role,
+      date,
+    });
+    const note = row?.note?.trim();
+    if (note) return { label: note, scope_label: scopeLabel };
+  }
+  return { label: scopeLabel, scope_label: scopeLabel };
+}
+
+/** Whether the manager has recorded a category against this booking. */
+export function hasChosenTariffCategory(booking: {
+  tariff_booking_type?: BookingType | null;
+  tariff_requester_role?: Role | null;
+}): boolean {
+  return Boolean(booking.tariff_booking_type && booking.tariff_requester_role);
 }
 
 // ------------------------------------------------------------- the preview

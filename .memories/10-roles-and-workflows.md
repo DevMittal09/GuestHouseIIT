@@ -144,7 +144,7 @@ Everything a requester can do with a booking they own (or raised for a club):
 - **Special rules:** relationship dropdown with the parent rule (siblings and
   grandparents only alongside Mother / Father / Guardian) and one-of-each
   (one Mother, one Father…); the banner "Double shared rooms will get first
-  preference"; booking window 6 months (1 until 14 Oct 2026); at most
+  preference"; booking window 1 month (6 from 14 Oct to 4 Nov 2026); **a spouse only on an MS or PhD roll number**; at most
   14 nights.
 - **Menu:** My Bookings · Room Booking · Room Availability · Booking History.
   (No Meal Booking: a student's booking can never include meals.)
@@ -345,13 +345,30 @@ Faculty Advisor raises.
   own dates only: green free, red taken (disabled), hatched turnaround (a gap
   shorter than the buffer), amber soft overlap (≤ 2 h); the manager may accept
   the last two. Capacity, extra beds needed and a formal occupancy line are
-  shown. **Confirm & Allocate** holds the rooms and approves in one step.
-  **Reject** needs a reason.
+  shown. The dialog also asks **which tariff category the booking is charged
+  under** (31 Oct 2026 — see below); **Confirm & Allocate** holds the rooms,
+  records the category and approves in one step, and is **disabled until the
+  category is answered**. **Reject** needs a reason.
 - **Incoming meal bookings** — their own section since 1 Oct 2026, because a
   meal booking has no check-in, no check-out and nothing to allocate: the days
   and sittings, the head count and the vegetarian / non-vegetarian split, and
-  **Review & Approve**, which is the whole decision. **Reject** needs a reason
-  there too.
+  **Review & Approve**, which is the whole decision — **including the tariff
+  category**, which is why the question is in that dialog too. **Reject**
+  needs a reason there too.
+
+> **The tariff category is the manager's, and only the manager's** (31 Oct
+> 2026, the owner: "the final authority for determining the applicable tariff
+> category must rest with the GHM"). A category is the pair a tariff is
+> scoped by that is a judgement rather than a fact — **(booking type,
+> requester role)** — and the list offered is **enumerated from the office's
+> own rate sheet**, named in the office's own words. The requester reads the
+> rates on the booking page and chooses nothing. Nobody else is ever asked:
+> an intermediate approver forwards a request, they do not price it, and
+> `reviewBooking` refuses the parameter on any other stage. The invoice is
+> priced at what the manager chose, and prints it. Where the sheet publishes
+> one category it is stated rather than asked; where it publishes several, an
+> approval without an answer is refused rather than defaulted.
+> [13-billing-and-dining.md](13-billing-and-dining.md).
 - **Checking out today**, **Current occupants**, **Awaiting check-out**,
   **Checked out — to bill** (vacated in the last 30 days, unpaid),
   **Upcoming stays**, **Missed requests** (nobody decided them in time; the
@@ -463,6 +480,28 @@ Every section's actions re-check the role and the unlock on the server
 
 ---
 
+### What the sixteenth list changed (4 Nov 2026)
+
+- **VIP access:** `director@`, `office_director@`, `adadmin@` and whoever the
+  manager adds. They alone are counted the VIP rooms, among requesters, and only
+  their bookings or the manager's own may be given one. The desk sees every room.
+- **Caretaker:** invoices personal bookings only (`invoiceRoleError`).
+- **Manager:** the queue is first come, first served; **Shorten this stay** in the
+  allocation dialog; a new console section, VIP Rooms & Guidelines, the twelfth.
+- **Requester:** cancels up to 24 hours before check-in, after which the manager
+  does it.
+
+### User groups and blocked accounts (5 Nov 2026)
+
+- **Console -> User Groups**, manager and developer: load a batch from a CSV, its copy
+  lists, its approval path, and who may sign in.
+- **A route may be limited to a group** ("Requester's group" in Approval Workflow). It
+  is matched like any other condition, first active match wins, so a group's own route
+  must stand above the shared one.
+- **A blocked account** cannot sign in by any door and its open session stops working.
+  Its bookings, invoices and mail go on as before. The manager cannot block themself or
+  the last manager or developer. A blocked approver's stage waits: the preview warns.
+
 ## Part 2 — The pipelines and the states
 
 **The chain is the office's** (12 Oct 2026). `rules.approval` is an **ordered
@@ -521,7 +560,9 @@ from the four intermediate statuses that exist (`PENDING_WARDEN`,
 page and the navigation link read that name back, unless two routes name one
 status differently, in which case the status's own name is the only honest
 heading for a queue holding both. `PENDING_GH_MANAGER` is **not**
-configurable: approval there is room allocation.
+configurable: approval there is room allocation - and, since 31 Oct 2026,
+the choice of **tariff category**, which is the other thing only the desk can
+answer.
 
 **A stage nobody can decide is skipped**, and the booking's log names it - the
 rule the HOD stage has had since Phase 4, now applied to every stage. So a
@@ -779,6 +820,7 @@ log, as a row whose `previous_status` is MISSED.
 | Is this office asked how its booking is approved? | `asksOfficeApproval` (`lib/workflow.ts`) - read by the form, the schema and `createBooking` |
 | May this role open this page? | `lib/access.ts`, and each page's own guard |
 | What may be charged? | `invoiceBlocker`, `buildInvoiceDocument` (`lib/invoice.ts`) |
+| At **which rate**? | `pricingScopeFor` (`lib/tariffs.ts`) - the category the manager chose, else the booking's own facts - then `resolveTariff`. The categories offered are `deskTariffCategories` (`lib/tariff-categories.ts`) |
 | How long may a stay be, how far ahead? | `lib/settings.ts` (`rules.booking`), applied by `lib/booking-schema.ts` |
 | When may the desk check someone in? | `occupancyNotStartedError` (`lib/workflow.ts`) |
 | Which rooms are free? | `room_holds` and `room_blocks` in the database, `lib/availability.ts` on top |

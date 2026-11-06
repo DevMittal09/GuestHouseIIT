@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { allocateRooms, getRoomConflicts } from "@/app/actions/bookings";
 import { Button } from "@/components/ui/button";
+import { TariffCategoryChoice } from "@/components/tariff-category-choice";
 import { formatDateTime } from "@/lib/format";
 import {
   allocationCapacityError,
@@ -24,8 +25,10 @@ import {
   type ConflictKind,
 } from "@/lib/turnover";
 import { cn } from "@/lib/utils";
-import { DEFAULT_RULES, type CapacityRules } from "@/lib/settings";
+import { DEFAULT_RULES, type CapacityRules, type PolicyRules } from "@/lib/settings";
+import type { DeskTariffCategory } from "@/lib/tariff-categories";
 import type { BookingWithDetails, Room } from "@/lib/types";
+import { requesterMayHaveVipRooms, vipRoomIds } from "@/lib/vip";
 
 /**
  * Cinema-style room allocation grid for one booking.
@@ -39,17 +42,32 @@ import type { BookingWithDetails, Room } from "@/lib/types";
 export function RoomGrid({
   booking,
   rooms,
+  tariffCategories = [],
   occupancyVersion,
   onAllocated,
   capacity = DEFAULT_RULES.capacity,
   bufferMinutes = DEFAULT_RULES.booking.buffer_minutes,
+  policy = DEFAULT_RULES.policy,
 }: {
+  /**
+   * Which rooms are VIP and who may have them (4 Nov 2026) - the same
+   * `rules.policy` `allocateRooms` checks. A VIP room is marked, and cannot
+   * be picked for a requester without VIP access.
+   */
+  policy?: PolicyRules;
   /** The turnaround buffer from Settings, for the legend and the override notice. */
   bufferMinutes?: number;
   booking: BookingWithDetails;
   rooms: Room[];
   /** Room capacity from Settings - the same values `allocateRooms` checks. */
   capacity?: CapacityRules;
+  /**
+   * **The categories this stay may be charged under** (31 Oct 2026) - the
+   * office's rate sheet, resolved on the server
+   * (`deskCategoriesFor`), so the list offered here is the list the action
+   * re-derives and checks the answer against.
+   */
+  tariffCategories?: DeskTariffCategory[];
   /**
    * Changes whenever any booking's room holds change, server-side. The grid
    * loads occupancy once when the dialog opens, so without this it never
@@ -72,6 +90,8 @@ export function RoomGrid({
   // any part of this stay is never selectable.
   const checkIn = booking.check_in;
   const checkOut = booking.check_out;
+  const vip = useMemo(() => vipRoomIds(rooms, policy), [rooms, policy]);
+  const vipAllowed = requesterMayHaveVipRooms(booking.requester, policy);
   /**
    * Each room's worst conflict with this stay. A `hard` room is unpickable;
    * a `soft` one overlaps by no more than the turnover grace and can be taken
@@ -86,6 +106,14 @@ export function RoomGrid({
    * so - the manager needs to see which party ends up where.
    */
   const [selected, setSelected] = useState<string[]>([]);
+  /**
+   * **The tariff category the manager is approving at.** Unanswered until
+   * they say, except where the sheet publishes one - which is stated rather
+   * than asked, and is what the server takes as given too.
+   */
+  const [category, setCategory] = useState<string | null>(
+    tariffCategories.length === 1 ? tariffCategories[0].key : null
+  );
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isPending, startTransition] = useTransition();
@@ -130,7 +158,7 @@ export function RoomGrid({
 
   const confirm = () =>
     startTransition(async () => {
-      const result = await allocateRooms(booking.id, selected, overridden);
+      const result = await allocateRooms(booking.id, selected, overridden, category);
       if (result.ok) {
         toast.success(`${booking.booking_reference_id} approved - rooms allocated`);
         onAllocated?.();
@@ -180,6 +208,9 @@ export function RoomGrid({
   // Counted against the rooms actually picked: two guests in one single room
   // need an extra bed, which the pre-selection estimate (doubles) would miss.
   const extraBeds = extraBedsFor(bedGuests, selectedRooms, capacity);
+  // The button says why it is disabled, in the control itself rather than in
+  // a sentence above the form - and the server refuses it either way.
+  const categoryMissing = tariffCategories.length > 1 && category === null;
 
   return (
     <div className="space-y-4">
@@ -225,6 +256,8 @@ export function RoomGrid({
             conflicts={conflicts}
             selected={selected}
             onToggle={toggle}
+            vip={vip}
+            vipAllowed={vipAllowed}
           />
           <RoomSection
             title={`${ROOM_TYPE_LABELS.single} rooms`}
@@ -235,6 +268,8 @@ export function RoomGrid({
             conflicts={conflicts}
             selected={selected}
             onToggle={toggle}
+            vip={vip}
+            vipAllowed={vipAllowed}
           />
         </>
       ) : (
@@ -249,6 +284,8 @@ export function RoomGrid({
           conflicts={conflicts}
           selected={selected}
           onToggle={toggle}
+          vip={vip}
+          vipAllowed={vipAllowed}
         />
       )}
 
@@ -325,6 +362,17 @@ export function RoomGrid({
           </ul>
         )}
 
+        {/* **The rate this stay is approved at**, asked here because
+            approval is where it is decided: a requester reads the rates and
+            the desk says which of them applies (31 Oct 2026). Above the
+            override notice and the button, both of which are about rooms. */}
+        <TariffCategoryChoice
+          categories={tariffCategories}
+          value={category}
+          onChange={(chosen) => setCategory(chosen.key)}
+          name={`tariff_category_${booking.id}`}
+        />
+
         {/* Overriding must be a decision, not a side effect of clicking a
             yellow tile - so it is spelled out, with the rooms named, before
             the button that records it against the booking. */}
@@ -343,13 +391,21 @@ export function RoomGrid({
         <div className="flex flex-wrap items-center justify-between gap-3">
           {capacityProblem ? (
             <p className="text-sm text-destructive">{capacityProblem}</p>
+          ) : categoryMissing ? (
+            <p className="text-sm text-muted-foreground">
+              Choose the tariff category this booking is charged under.
+            </p>
           ) : (
             <span />
           )}
           <Button
             onClick={confirm}
             disabled={
-              isPending || selected.length === 0 || capacityProblem !== null || cardProblem
+              isPending ||
+              selected.length === 0 ||
+              capacityProblem !== null ||
+              cardProblem ||
+              categoryMissing
             }
           >
             {isPending
@@ -401,10 +457,15 @@ function RoomSection({
   onToggle,
   capacity,
   bufferMinutes,
+  vip,
+  vipAllowed,
 }: {
   title: string;
   description: string;
   rooms: Room[];
+  /** The VIP rooms' ids, and whether this booking may be given one. */
+  vip: Set<string>;
+  vipAllowed: boolean;
   capacity: CapacityRules;
   bufferMinutes: number;
   conflicts: Record<string, ConflictKind>;
@@ -425,6 +486,8 @@ function RoomSection({
           const isOccupied = conflict === "hard";
           const isTurnover = conflict === "soft";
           const isTurnaround = conflict === "turnaround";
+          const isVip = vip.has(room.id);
+          const vipLocked = isVip && !vipAllowed;
           const pickedAt = selected.indexOf(room.id);
           const isSelected = pickedAt >= 0;
           return (
@@ -432,9 +495,11 @@ function RoomSection({
               key={room.id}
               type="button"
               onClick={() => onToggle(room)}
-              disabled={isOccupied}
+              disabled={isOccupied || vipLocked}
               title={
-                isOccupied
+                vipLocked
+                  ? `${room.room_number} - a VIP room, only for a requester with VIP access`
+                  : isOccupied
                   ? `${room.room_number} - already allotted for these dates`
                   : isTurnover
                     ? `${room.room_number} - another stay overlaps by up to ${TURNOVER_GRACE_HOURS} hours. Pick it to accept the changeover.`
@@ -444,7 +509,9 @@ function RoomSection({
               }
               className={cn(
                 "flex h-14 cursor-pointer items-center justify-center rounded border text-sm font-semibold tabular-nums transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
-                isOccupied
+                vipLocked
+                  ? "cursor-not-allowed border-dashed border-border-strong bg-band text-muted-foreground"
+                  : isOccupied
                   ? cn(SEAT.hard, "cursor-not-allowed line-through decoration-white/60")
                   : isSelected
                     ? cn(SEAT.selected, (isTurnover || isTurnaround) && "outline-2 outline-offset-2 outline-amber-500")
@@ -457,6 +524,9 @@ function RoomSection({
             >
               <span className="flex flex-col items-center leading-tight">
                 {room.room_number}
+                {isVip && !isSelected && (
+                  <span className="text-[10px] font-normal tracking-wide uppercase opacity-90">VIP</span>
+                )}
                 {isSelected && (
                   <span className="text-[10px] font-normal opacity-90">
                     Room {pickedAt + 1}

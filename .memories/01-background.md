@@ -63,6 +63,9 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **28 Oct** | **The Taramani pass, and the sign-in.** Two briefs. The first names the [Taramani Guest House](https://tgh.iitm.ac.in/) as the standard: a stronger hero (saffron kicker, a 66% wash, a **solid saffron** second door), **one opaque charcoal header on every page** with the links **centred**, Amenities / Our guest houses / Contact us **centred**, the gallery recomposed into two unequal bands - and, application-wide, **no rule under any heading** (`rule-title` deleted) and **everything selected filled rather than underlined**. The second is functional: **LDAP comes off the sign-in page** (one button, the mock account picker; the action and directory untouched), the advance-window and stay-cap sentences come **off the booking form** (no rule changed), a count reads **"Current bookings: 1"**, and the manager's console **stops drawing a list with nothing in it** - the index at the top is where a zero is reported. Reception got the same. **No migration.** |
 | **28 Oct** (second) | **The landing page again, and Taramani named a second time.** The owner: the hero type "is blending with the background too much", and the page "overall looks very basic... make it look creative and aesthetic". The wash goes **66% -> 78%**, the `<h1>` becomes **Guest House Portal** in **bold** (the institute's name is kept, in full, as the tracked saffron line above it), and the lead loses `font-light`. Below it the page gains **an opening statement computed from the store** where it used to drop straight from a photograph into six icons; the amenities move **onto ink with saffron icons** - the page's one dark band; the gallery becomes a **twelve-column mosaic**; and the two guest houses become **one ruled plate** with their names at display size. Still no shadow, gradient, pill or 16px radius: all of it bought with composition, ground, type and one accent colour. **Public site only - no migration, no store operation, no booking rule.** |
 | **28 Oct** (third) | **The Google sign-in plan - no application code.** The owner asked how to set up Google OAuth, given that the institute's **email data for every user is being collected**. The review found the flow **already built and verified** (Phase 8: `lib/oidc.ts` and `app/api/auth/google/*` - PKCE, state, nonce, the `id_token` checked against Google's JWKS, the `hd` claim and `isInstituteEmail`, then a profile that must already exist) and **three places saying it was not**, each of which would have sent the next session to build it again. Output: **[`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md)** at the repo root, and corrections to `lib/env.ts`, `lib/site.ts`, `AGENTS.md` and `.env.example` (which also pointed at a memory file deleted on 10 Oct). Two defects recorded rather than fixed: the callback finds the account by scanning **every** profile, which Supabase truncates at **1000 rows silently** (roadmap **gate 12** - it breaks the institute's account import too, and migration 31's `lower(email)` index has been unused since 13 Oct), and `hd=iitpkd.ac.in` on the start leg is narrower than the return leg's own rule, so it may hide every `@smail` student from Google's account chooser. **No migration, no store operation, no booking rule, no permission and no route.** |
+| **31 Oct** | **The tariff category becomes the Guest House Manager's.** Three items. The booking page keeps its tariff table and **loses every control in it** - the requester reads the prices and decides nothing. The **desk is asked which category applies as it approves** (the allocation dialog, and Approve meals for a dining booking, which has no rooms), from a list **enumerated out of the office's own rate sheet** and named in the office's own words; **Confirm & Allocate stays disabled until it is answered**, and an approval carrying a key the sheet does not publish is refused. The **invoice is priced at it** - one substitution in the single `base` object every charge is resolved from - and **snapshots and prints it**. A category is the pair `resolveTariff` already keys on (**booking type, requester role**), so **migration 35** is two nullable text columns with the same checks `tariffs` uses and nothing was added to `resolveTariff`; **no rate is stored**, because a stay crossing a rate change is priced night by night - the figure lives in the booking's log and on the issued invoice. A booking approved before today keeps being priced from its own facts and prints no category line, so **no invoice version changed**. |
+| **4 Nov** | **The owner's sixteenth list.** VIP rooms and a manager's console section for them, a 14-room pool for requesters, no total rooms anywhere, the booking window back to one month, official stays uncapped, first come first served at the desk, cancellation 24 hours ahead, the caretaker invoicing personal bookings only, a research scholar's spouse, the rooms renamed, Categories I-III, shortening a stay at approval, and the booking page's sidebar. See the section at the foot of this file. |
+| **5 Nov** | **User groups.** A batch loaded from a CSV, three lists per group (members, addresses filled in on Copy to, addresses they may type), an approval route that can be limited to a group, and accounts blocked from signing in by roll number rather than deleted. Migration 36. See the section at the foot of this file. |
 | **30 Oct** | **The deployment guide.** The owner asked for a whole-code implementation overview, dependencies and migration-by-migration deployment instructions. Added root [`setup.md`](../setup.md), covering architecture, runtime/package requirements, local setup, environment variables, sign-in gates, all 34 Supabase migrations, verification limits, Vercel schedules, operational safeguards and troubleshooting. Updated the root README to point at the guide and remove outdated deployment guidance. **Documentation only; no application behavior changed.** |
 | **2 Nov** | **Six institute data tables** (migration 35). The user provided the institute's spreadsheet structures for Students (27 fields, Aadhar encrypted), Employees (13), Offices (11), Fest/Council/Clubs (8), Hostels (5) and Wardens (9). New types in `lib/institute/types.ts`, 30 `DataStore` methods, implementations in both stores with generic CRUD helpers, seed data for all six. **No console UI yet — store API only.** |
 | **2 Nov** (second) | **Rewired Academic Records to institute tables.** Adapter layer converts institute_* rows to `AcademicRecord`. `StoreAcademicSource` reads institute tables. Console rewritten for per-kind import/view/delete. `splitCsvLine` moved to `lib/csv.ts`. Seed data aligned with mock-source. Tests rewritten. **The old `academic_records` table is no longer read or written by any code path.** |
@@ -979,7 +982,7 @@ first.
 
 | # | Item | Status |
 | --- | --- | --- |
-| 1 | Tariff categories on the right, selectable, and gone from the form | **Done.** A category is one (guest house, booking type) pair the requester is eligible for, shown with the rate those two resolve to; choosing one writes both fields, which is what `resolveTariff` reads, so the quote cannot drift from the invoice (`lib/tariff-categories.ts`, `components/tariff-panel.tsx`). The rates card is deleted from the form, and the form now owns the two-column grid because the panel asks a question. **Open as a question for the office:** a *named* category stored on the booking would need a column on `tariffs` too - [03-roadmap.md](03-roadmap.md) §2j |
+| 1 | Tariff categories on the right, selectable, and gone from the form | **Done - and the "selectable" half was reversed on 31 Oct 2026**, when the choice became the Guest House Manager's; the panel is a price list now. The rest stands. **As built on 17 Oct:** a category is one (guest house, booking type) pair the requester is eligible for, shown with the rate those two resolve to; choosing one writes both fields, which is what `resolveTariff` reads, so the quote cannot drift from the invoice (`lib/tariff-categories.ts`, `components/tariff-panel.tsx`). The rates card is deleted from the form, and the form now owns the two-column grid because the panel asks a question. ~~**Open as a question for the office:** a *named* category stored on the booking would need a column on `tariffs` too~~ - **answered on 31 Oct 2026**, and it needed neither: the office's wording is already on the row (`tariffs.note`), so the desk reads that while the engine resolves a scope |
 | 2 | Guest Details before Meal Booking | **Done.** The kitchen's head count on a stay *is* the guests entered above, and the diet counts have to add up to it, so the old order asked about a number nobody had given yet. A role with no meal booking (a student, Bageshri) still sees no meal section at all |
 | 3 | Ask whether meals are required | **Done.** "Do you require meals?", **No** by default - which is what the form already did (`NO_MEALS`). One gate (`mealsRequested` -> `mealPlan`), so on No the service type stays `room`, no diet split is sent and no meal rule can fire; the ticks are kept, so Yes restores them. A dining booking is never asked |
 | 4 | The caretaker sentence in the meal section | **Done**, word for word, as `MEAL_CHANGE_NOTICE` (`lib/meals.ts`), at the foot of the meal section on both doors and nowhere else |
@@ -1412,6 +1415,105 @@ Both recorded, neither fixed - the ask was a plan:
   callers, and the e2e suite that configuring Google would delete the door
   out from under.
 
+## Round of 31 October 2026 - the tariff category becomes the manager's
+
+The owner's fifteenth list. Three items about who decides what a stay costs,
+and one about keeping this folder true:
+
+> 1. Keep the tariff table on the right of the New Booking page, showing the
+>    prices for each guest/booking category, but **remove all interactive
+>    selection functionality** - users may only view the categories and their
+>    prices, and must not "decide or assign the applicable tariff category
+>    while creating a booking request".
+> 2. **The final authority for determining the applicable tariff category must
+>    rest with the GHM.** When a request reaches them they are presented with
+>    the available categories and their prices and select the appropriate one
+>    "based on the actual nature of the booking". The selected category and its
+>    price must be used for invoice generation and stored against the booking
+>    so the decision is consistent and traceable.
+> 3. Integrate it into the existing pipeline - submit, approve, **GHM picks the
+>    category**, GHM approves, invoice generated from it - with no invoice
+>    generated for a rejected or still-waiting request, no accidental fall-back
+>    to a default or to an outdated user-side selection, and the category and
+>    amount clear to the GHM when reviewing approved bookings and invoices.
+> 4. Update `.memories/` to match, including the documentation that describes
+>    the old user-side selection.
+
+### What was asked, and the status of each item
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | The tariff table informational only | **Done.** `components/tariff-panel.tsx` has no `<input>`, no handler and no state - it is a server component again - and draws **every** eligible category with its full charge table rather than waiting for one to be picked. One line says who confirms which applies, because without it four categories read as four options. The guest house and the kind of booking are still questions **on the form**, where they were before 17 Oct: they decide eligibility, routing and the debitable heads, not only the rate |
+| 2 | The GHM selects the category | **Done.** `deskTariffCategories` **enumerates the list from the office's rate sheet** - every row that could price the booking's defining charge contributes the scope that selects it, named by that row's own `note` ("Tariff sheet: Hamsanandi type 3, government officers"). Asked in the allocation dialog, and in **Approve meals** for a dining booking, which has no rooms and whose approval *is* the decision. **Confirm & Allocate is disabled until it is answered**; the server re-derives the list and refuses a key the sheet does not publish, refuses an approval with several categories and no answer, and refuses the parameter on anyone else's approval. Stored as `bookings.tariff_booking_type` / `tariff_requester_role` (**migration 35**) |
+| 3 | The invoice is priced from it | **Done.** `buildInvoiceDocument` resolves every charge at `pricingScopeFor(booking)` - **one substitution, in the single `base` object the rooms, the extra beds and the meals are all priced from**. `InvoiceDocument.tariff_category` snapshots the office's wording and `invoiceFacts` prints it. Nothing is invoiced early: `invoiceBlocker` already required `OCCUPIED` / `VACATED` for a stay and an approved dining booking from its first meal day. **No fall-back to a default**: where the sheet publishes several categories an approval without one is refused outright |
+| 3a | "and its **price** should be stored against the booking" | **Done differently, deliberately.** No rupee figure is stored on the booking: a stay crossing a rate change is priced night by night (`splitByRate`), so one figure would be wrong for it, and an amount beside `tariffs` would be a second source of truth for money. The price is kept where it cannot be mistaken for the authority - the **booking's log**, recording what the category stood at on the day it was chosen, and the **issued invoice's snapshot**. [02-decisions.md](02-decisions.md) |
+| 4 | `.memories/` brought up to date | **Done**, including the two things this round reverses: 17 Oct's radios, and its "a named category stored on the booking is deliberately not built". [03-roadmap.md](03-roadmap.md) §2j's open question is **answered** |
+
+### The thing worth carrying forward
+
+The office prices Hamsanandi's rooms **two ways** - ₹2,000 generally and
+₹4,000 "for government officers", the second a row scoped by
+`requester_role`. Nothing was wrong with how that resolved; what was wrong was
+**who selected it**. A dignitary booked for by a department's faculty resolved
+the faculty member's own role and was charged ₹2,000, and the ₹4,000 row was
+reachable only by an office's own account. 17 October had made it worse by
+turning the pair into a radio on the form: the requester was being asked, in as
+many words, which published rate they would like.
+
+So the category is **the pair `resolveTariff` already keys on**, and the desk
+answers it. The roadmap had predicted that giving the office its own wording
+would cost a column on `tariffs`, a column on `bookings`, and a new dimension
+in `resolveTariff` and `specificity()`. It cost two nullable columns and
+nothing else: the wording was already on the row, in `tariffs.note`.
+
+### Verified
+
+Lint, `tsc --noEmit`, **627 unit tests in 37 files**, a production build, the
+**51 Playwright journeys**, and `npm run check:memories`. Migration 35 was
+applied twice in a throwaway `postgres:16-alpine` and its refusals checked -
+half a category either way, and a value outside the enum.
+
+## Round of 4 November 2026 - the owner's sixteenth list
+
+Sent as one pasted specification in six sections. Nothing was asked back;
+assumptions are in [03-roadmap.md](03-roadmap.md) §2q until the owner confirms them.
+
+| # | Asked | Status |
+| --- | --- | --- |
+| 1a | Hostel on record: warden. None: straight to the manager | **Already done** (17 Oct 2026) |
+| 1b | Regular students cannot book for a spouse; research scholars, by roll number, can | **Done.** Sixth character `3` or `4` |
+| 1c | VIP access for director@, office_director@, adadmin@ | **Done.** Fixed in code, the manager adds others |
+| 1d | The manager has full override and approval | **Stands**, with one reading to confirm: a VIP room is not overridable for a non-VIP requester |
+| 1e | The caretaker marks rooms and invoices personal bookings only | **Done.** Official and alumni are the manager's |
+| 2a | Hamsanandi A1-A4, D1-D4; Bageshri B1-B10 | **Done in the seeds.** Hosted: Bageshri in the repair, Hamsanandi awaits the office's mapping |
+| 2b | C1 and C2 are VIP; the manager changes which, and who | **Done**, Console -> VIP Rooms & Guidelines. Placed at Hamsanandi by assumption |
+| 2c | At most 14 rooms shown; the manager's bookings reduce it | **Done** as a pool across both guest houses, display only. To confirm |
+| 2d | Remove Total Rooms; show Available Rooms | **Done** |
+| 3a | Book at most one month ahead | **Done**, reversing 14 Oct 2026 |
+| 3b | 14 days generally; official and manager's bookings unlimited | **Done.** The cap was already 14; official bookings by anyone are now exempt |
+| 3c | First come, first served at the desk | **Done** |
+| 3d | Requester cancels 24 hours ahead; the manager at any time | **Done** |
+| 4a | Booking type on the form; category at approval | **Already done** (31 Oct 2026) |
+| 4b | The manager cannot switch Official and Personal | **Done.** No control ever did; the category list now cannot do it through the price |
+| 4c | The manager can reduce the days before or while approving | **Done.** The action existed with no screen; added to the allocation dialog |
+| 5a | Tariff table and catering timings on the right | **Done** |
+| 5b | Hardcoded Dos and Don'ts; Guidelines button to a Drive link the manager edits | **Done.** The wording is drawn from provisional house rules, not supplied by the office |
+| 6 | The official tariff and catering tables | **Done.** Breakfast moved to 08:00 |
+
+## Round of 5 November 2026 - user groups
+
+Asked by the owner in their own words, with the questions invited. **Four were put
+and answered:** a group is **programme + batch**; "what emails are allowed" means
+**all three lists**; a group's copy list is **pre-filled and removable**; a blocked
+person's bookings **stay, with a warning to the manager**.
+
+| # | Asked | Status |
+| --- | --- | --- |
+| 1 | The admin adds a group of users from a CSV in a set format | **Done.** Template download, file upload, a preview, all-or-nothing, and the import's existing undo |
+| 2 | Bulk removal by roll number, not deleting anyone: they just cannot log in | **Done.** Blocked on every request; restorable; bookings stay. A whole group is one button |
+| 3 | The manager selects a group and says who is copied | **Done.** Console -> User Groups |
+| 4 | What emails are allowed in that group, all on the IIT Palakkad domain | **Done** for group members. People in no group are unchanged, because outside addresses are in use: to confirm |
+| 5 | Different approval patterns per kind of user | **Done** as a condition on the existing routes, and shown on the group's page. The default student route is still the Assistant Warden: the "associate dean" the owner mentioned is a route for the manager to set, not assumed |
 ---
 
 ## Round of 30 October 2026 - the deployment setup guide

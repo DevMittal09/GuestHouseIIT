@@ -673,15 +673,21 @@ Two panels sit between the stay details and the guest list:
   (`components/occupancy-chart.tsx`, shared with `/availability`).
 - **The tariff** (`components/tariff-panel.tsx`, `lib/tariff-categories.ts`,
   17 Oct 2026; the table inside it is `components/tariff-table.tsx` from
-  7 Oct 2026, unchanged) — **in the right-hand column, and a question**. The
-  categories are the (guest house, booking type) pairs this requester may
-  book; choosing one writes those two fields, which is what the rate is
-  resolved from. Resolved on the server by `tariffPreviews()`
-  (`lib/tariffs.ts`) through the **same `resolveTariff` the invoice prices
-  from**, so the figure quoted and the figure charged cannot drift. Because
-  the panel *asks*, `BookingForm` lays out the page's two-column grid and
-  takes the Requester details card as its `aside`; the `<form>` element is the
-  left column, so `numbered-sections` still counts the questions alone.
+  7 Oct 2026) — **in the right-hand column, and since 31 Oct 2026 a price
+  list rather than a question**. It draws **every** category this requester
+  could be charged under - the (guest house, booking type) pairs they may
+  book - each with its full charge table, and one line saying that the Guest
+  House Manager confirms which applies. Resolved on the server by
+  `tariffPreviews()` (`lib/tariffs.ts`) through the **same `resolveTariff`
+  the invoice prices from**, so the figures shown and the figures charged
+  cannot drift. It had a radio per category from 17 to 31 Oct, and picking one
+  wrote the guest house and the booking type; **the desk's own question is
+  `components/tariff-category-choice.tsx`**, in the approval dialogs.
+  `BookingForm` still lays out the page's two-column grid and takes the
+  Requester details card as its `aside` (it did so because the panel asked;
+  it stays because the grid belongs with the form's own responsive rules);
+  the `<form>` element is the left column, so `numbered-sections` still counts
+  the questions alone.
 - **Meals** — asked **after the guests** (17 Oct 2026: the head count is the
   guests, and the diet split has to add up to it), and behind a **Yes / No**
   that starts at No - the grid and the preferences are rendered only on Yes,
@@ -1133,7 +1139,13 @@ Guest Houses & Rooms.
 | `lib/missed-server.ts` | `runMissedSweep` — the nightly job that marks a request nobody decided in time as MISSED, logs it and mails the requester (migration 29). |
 | `lib/meals.ts` | Meal keys and windows, `stayMealDays`, the notice period (`isMealBookable`, `mealLeadTimeError`, `firstBookableMealDate`), `normalizeMeals` (the only reader), the form's slot helpers, `kitchenHeadCount`, `MEAL_CHANGE_NOTICE` (the caretaker line in the meal section, 17 Oct 2026). |
 | `lib/invoice.ts`, `lib/tariffs.ts`, `lib/invoice-pdf.ts` | Invoices (see [13-billing-and-dining.md](13-billing-and-dining.md)). |
-| `lib/tariff-categories.ts` | **The tariff categories the booking page offers** (17 Oct 2026): `tariffCategories` (one per eligible guest house × booking type, labelled, carrying the lines the page already resolved), `tariffCategoriesFrom` (the same from a rate sheet), `selectedCategory`, `tariffCategoryKey`. Pure. Eligibility is the form's own rules - `bookingTypesFor`, `guestHousesForBookingType`, `mealsAllowedFor` - so the panel cannot offer what the server refuses, and the **rate is never computed here**: it comes from `resolveTariff` by way of `tariffPreviews`. |
+| `lib/user-groups.ts` | **User groups and who may sign in** (5 Nov 2026): the group schema, `studyYear`, `copyToRuleFor`, `parseIdentifiers`, `planAccessChange`, `planGroupMembers`. Pure. `app/actions/groups.ts` is the writes, `components/admin/groups-manager.tsx` the screen, and `profileOrNull` in `lib/auth.ts` the per-request block |
+| `lib/vip.ts` | **VIP rooms and the visible-room pool** (4 Nov 2026): `vipRoomIds`, `hasVipAccess`, `roomsVisibleTo`, `vipAllocationError`, `cappedFree`, `capCounts`. Pure; the policy comes from `rules.policy` |
+| `components/booking-sidebar.tsx` | The booking page's right column: `TariffSheet`, `CateringTimings`, `GuidelinesLinks` |
+| `components/shorten-stay.tsx` | The manager's **Shorten this stay**, over `updateBookingStay` |
+| `components/admin/policy-manager.tsx` | Console -> VIP Rooms & Guidelines |
+| `lib/tariff-categories.ts` | **Two lists of tariff categories, for the two people who see them.** The requester's (17 Oct 2026): `tariffCategories` (one per eligible guest house × booking type, labelled, carrying the lines the page already resolved), `tariffCategoriesFrom`, `selectedCategory`, `tariffCategoryKey` - now read-only on the page. The **desk's** (31 Oct 2026): `deskTariffCategories`, **enumerated from the rate sheet** - every row that could price the booking's defining charge (the room on a stay, the meals on a dining booking) contributes the `TariffScope` that selects it, named by that row's own `note`, scopes that price identically collapsed, the booking's own first; plus `deskCategoryFor`. Pure, and the **rate is never computed here**: it comes from `resolveTariff` by way of `tariffPreviewLines`. |
+| `lib/tariff-categories-server.ts` | The server reader (31 Oct 2026): `deskCategoriesFor` (one booking, quoted as of **its own first day**, not today) and `deskCategoriesByBooking` (a screenful, one query for the sheet). The same shape as `lib/settings-server.ts` and `lib/approval-routes-server.ts` - a page reads once and hands the same list to the dialog that asks and to the action that records the answer. |
 | `lib/my-bookings.ts` | **Which section of My Bookings a booking belongs to** (17 Oct 2026): `myBookingSection` (status first, then `stayPhase`), `isFinishedBooking`, `groupMyBookings` (the three lists, each in its reading order), `PREVIOUS_BOOKINGS_SHOWN`. Pure. |
 | `lib/operations.ts` | Extensions, no-shows, room ranges ("B-101 to B-120"), maintenance blocks. |
 | `lib/booking-search.ts` | Archive search: criteria, tokenizer, pure matchers, faceting, sorting, paging, date presets. Shared by both stores. |

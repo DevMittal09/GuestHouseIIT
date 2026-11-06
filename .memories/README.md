@@ -41,7 +41,7 @@ matters: the APIs differ from older versions, and the docs are in
 
 **What it is.** A booking and multi-stage approval portal for IIT Palakkad's
 two guest houses, **Bageshri** (10 rooms, no kitchen) and **Hamsanandi**
-(13 rooms, serves meals), plus the guest house's public website. Requesters —
+(10 rooms, serves meals), plus the guest house's public website. Requesters —
 students, faculty and staff, institute offices, the two IAR offices, and
 (through their Faculty Advisor) clubs and councils — submit bookings; each goes
 through its own approval chain — **which the Guest House Manager edits from the
@@ -61,14 +61,24 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · PostgreSQL (direct via
 **Node 22 or newer**; see the root [`setup.md`](../setup.md) for runtime and
 deployment requirements.
 
-**Status, 30 Oct 2026.** Feature-complete for every workflow specified; taken
+**Latest round, 5 Nov 2026:** user groups - a batch loaded from a CSV, per-group Copy to lists and approval routes, and blocking accounts rather than deleting them ([99-recent-changes.md](99-recent-changes.md)). **4 Nov 2026:** the owner's sixteenth list - VIP rooms, a 14-room pool, the one-month window, Categories I-III; its assumptions await confirmation ([03-roadmap.md](03-roadmap.md) §2q).
+
+**Status, 31 Oct 2026.** Feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme, **twelve** rounds of the
-office's corrections and the owner's **thirteenth and fourteenth lists**,
-**five** design passes,
+office's corrections and the owner's **thirteenth, fourteenth and fifteenth
+lists**, **five** design passes,
 the round that put **the approval workflow itself in the manager's hands**
 (Console -> Approval Workflow), and two rounds preparing the institute's
 **user import** - which closed a GoTrue door the portal had never used and
-gave the import an **undo**. **The previous no-code round was the plan for turning
+gave the import an **undo**. **The last round made the tariff category the
+Guest House Manager's**: the booking page's tariff table loses every control
+and becomes a price list, the desk is asked which category applies **as it
+approves** - from a list enumerated out of the office's own rate sheet, in the
+office's own words - and the invoice is priced at that and prints it. A
+category is the pair `resolveTariff` already keys on, so **migration 35** is
+two nullable columns and nothing was added to the resolver; no rate is stored
+on a booking, because a stay crossing a rate change is priced night by night.
+**The round before it was no code at all: the plan for turning
 Google sign-in on** ([`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md)), which found
 the flow already built, three places in the repository saying it was not, and
 two defects worth fixing before it is switched on. **The current documentation-only
@@ -94,9 +104,9 @@ the landing page cinematic: a **full-viewport hero** with no visible controls
 (click the photograph to pause). The round before it was no code at all -
 [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md), what to ask the
 institute for per kind of user. The one before that was nine items about the booking page: the
-**tariff categories move to a panel on the right and become a question**
-(choosing one writes the guest house and the booking type, which is what the
-rate is resolved from), **Guest Details stands above Meal Booking**, meals are
+**tariff categories move to a panel on the right** (and became a question
+there, until 31 Oct 2026 took the choice to the desk), **Guest Details stands
+above Meal Booking**, meals are
 asked as **Yes / No**, the nav offers **Room Booking** and **Meal Booking**
 separately, My Bookings is **Current, Upcoming and Previous**, and a student
 whose **hostel is NULL** goes straight to the Guest House Manager - explicitly,
@@ -129,10 +139,10 @@ scans **every** profile (inefficient at scale — [03-roadmap.md](03-roadmap.md)
 gate 12), and the start leg's `hd` hint may keep every `@smail` student out
 of Google's account chooser.
 
-**Numbers.** 12 roles (10 active) ·
+**Numbers (5 Nov 2026).** 36 migrations · 11 one-off repairs · 12 roles (10 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
-19 demo personas · 6 demo bookings · 23 real rooms · **25 photographs** ·
-599 unit tests · 50 end-to-end journeys · 15 console sections ·
+19 demo personas · 6 demo bookings · 20 rooms · **25 photographs** ·
+692 unit tests · 55 end-to-end journeys · 17 console sections ·
 **5 invoice layout versions**.
 
 ---
@@ -156,7 +166,7 @@ plans, `1x` is the product as configured, `2x` is engineering, `99` is now.
 | [13-billing-and-dining.md](13-billing-and-dining.md) | Tariffs, invoices, GST per section, payments, additional charges, dining |
 | [14-public-site-and-ui.md](14-public-site-and-ui.md) | The public website, the design tokens and primitives, the copy rules, sign-in pages, photographs, the map |
 | [20-architecture.md](20-architecture.md) | **How it is put together and why** (two stores, one auth seam, config-driven forms, institute time, holds in the database) and **where the code for each feature lives** |
-| [21-database.md](21-database.md) | Tables, enums, RLS, storage, **all 34 migrations**, the one-off repairs, resetting data |
+| [21-database.md](21-database.md) | Tables, enums, RLS, storage, **all 36 migrations**, the one-off repairs, resetting data |
 | [22-running-and-testing.md](22-running-and-testing.md) | Running locally, mock vs hosted database, the test suites, every way of verifying a change — and **every error already hit, with its cause and fix** |
 | [99-recent-changes.md](99-recent-changes.md) | **Only the most recent round** — replaced, never appended |
 
@@ -253,7 +263,7 @@ actually lives").
 | IAR Student Cell | Books **for an alumnus** only → **IAR Office** → manager |
 | IAR Office | Books (official / alumni) **and** approves the Student Cell |
 | Assistant Warden, HOD, council secretary | Approve by queue; an HOD or secretary is **an appointment in the console, not a role**. The warden sees each student's academic record and a check of the parents on the request against it |
-| **Guest House Manager** | Final approval by **allocating rooms**; the whole desk, including an earlier or later check-in; books for guests; invoices with additional charges; reinstates a **Missed** request; **edits the approval workflow itself**; 11 console sections |
+| **Guest House Manager** | Final approval by **allocating rooms** and **choosing the tariff category** the stay is charged under (31 Oct 2026); the whole desk, including an earlier or later check-in; books for guests; invoices with additional charges; reinstates a **Missed** request; **edits the approval workflow itself**; 11 console sections |
 | Guest House Caretaker | Reception: check-in and check-out, moving a stay's dates, invoices |
 | Developer | The whole console (15 sections), behind a password and TOTP |
 
@@ -265,7 +275,7 @@ heads, mapped per requester by the office's list of 8 Oct 2026 and, for an
 the funds are approved and available**. **Copy to** is optional (≤ 25, CC on
 every mail to the requester); **there is no privacy notice and no consent**
 (14 Oct 2026 - the whole feature is withdrawn and kept in
-`archive/privacy-notice/`, which is also the restore); check-in within **6 months**, at most **14 nights**; a room card holds **4 people, at most 3
+`archive/privacy-notice/`, which is also the restore); check-in within **1 month**, at most **14 nights** (an official booking uncapped), cancelled at least **24 hours** ahead; a room card holds **4 people, at most 3
 needing a bed, at most 3 infants** (under 5); meals only at a guest house that
 serves them and **never for a student or an alumni booking**, booked **before
 the previous meal finishes being served**, with **each person's own veg /
@@ -273,9 +283,10 @@ non-veg preference** and at most **30 people at one sitting** counting who is
 already booked. A **turnaround buffer** of 4 h separates stays. A student's
 **father and mother come from their academic record and are locked**, and need
 no ID. The form shows **how many rooms are free** - the room-by-room chart is the
-desk's - and **the tariff is a panel beside it, where the requester picks the
-category that applies** (17 Oct 2026: a category is the guest house and the
-kind of booking, which is what the rate is resolved from). **The form does not state the rules it
+desk's - and **the tariff is a price list in a panel beside it, which asks
+nothing** (31 Oct 2026: the requester reads every category's rates, and the
+**Guest House Manager chooses which applies when they approve**; the invoice
+is priced at that and prints it). **The form does not state the rules it
 enforces** (9 Oct 2026): those belong on the Guidelines page, in the error when
 it fires, or in the control itself - **nor the house rules it does not**
 (11 Oct 2026: the pets notice is the Guidelines' and the mail's). What it does

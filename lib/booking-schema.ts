@@ -1,3 +1,4 @@
+import { copyToAddressError, type CopyToRule } from "./user-groups";
 import { z } from "zod";
 import {
   bookingTypeError,
@@ -28,6 +29,7 @@ import {
   duplicateRelationshipError,
   duplicateRelationships,
   parentDependencyError,
+  scholarOnlyRelationshipError,
   type FieldMode,
   type RoleFormConfig,
 } from "./form-config";
@@ -298,6 +300,20 @@ export interface BookingSchemaContext {
   mealsAvailable: boolean;
   /** The requester's address, for the duration exemptions in `lib/policy.ts`. */
   requesterEmail?: string | null;
+  /**
+   * Whether the requester is a research scholar (MS or PhD), read off their
+   * own roll number (`isResearchScholar`) on the page and again in
+   * `createBooking` - **never from the payload**, since it decides what the
+   * request may contain. Absent means no: `scholar_only_relationships` are
+   * refused (4 Nov 2026).
+   */
+  researchScholar?: boolean;
+  /**
+   * What the requester's user group allows in Copy to (5 Nov 2026), from their
+   * own account - never the payload. Absent: any address, as for someone in no
+   * group.
+   */
+  copyTo?: CopyToRule;
   /**
    * The office's Settings (`lib/settings.ts`). The booking page reads them
    * once and hands the same object to the form, so the client and the server
@@ -954,7 +970,8 @@ export function bookingPayloadSchema(
         instituteDate(v.check_out),
         config.role,
         context.requesterEmail,
-        rules.booking.max_stay_nights
+        rules.booking.max_stay_nights,
+        v.booking_type
       );
       if (message) ctx.addIssue({ code: "custom", message, path: ["check_out"] });
     })
@@ -999,6 +1016,30 @@ export function bookingPayloadSchema(
               message,
               path: ["rooms", i, "guests", j, "relationship"],
             });
+          }
+        });
+      });
+    })
+    .superRefine((v, ctx) => {
+      const rule = context.copyTo;
+      if (!rule) return;
+      (v.copy_to_emails ?? []).forEach((address, i) => {
+        const message = copyToAddressError(address, rule);
+        if (message) ctx.addIssue({ code: "custom", message, path: ["copy_to_emails", i] });
+      });
+    })
+    .superRefine((v, ctx) => {
+      // A spouse only on a research scholar's request (4 Nov 2026).
+      const message = scholarOnlyRelationshipError(
+        config,
+        v.rooms.flatMap((r) => r.guests).map((g) => g.relationship),
+        context.researchScholar === true
+      );
+      if (!message) return;
+      v.rooms.forEach((room, i) => {
+        room.guests.forEach((g, j) => {
+          if (g.relationship && config.scholar_only_relationships.includes(g.relationship.trim())) {
+            ctx.addIssue({ code: "custom", message, path: ["rooms", i, "guests", j, "relationship"] });
           }
         });
       });

@@ -28,6 +28,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDate, formatDateTime, toDatetimeLocal } from "@/lib/format";
+import { canStillCancel } from "@/lib/policy";
+import { DEFAULT_RULES } from "@/lib/settings";
 import type { BookingStatus, BookingWithDetails } from "@/lib/types";
 import { EmptyState, SectionHeading } from "@/components/section-heading";
 import { groupMyBookings, PREVIOUS_BOOKINGS_SHOWN } from "@/lib/my-bookings";
@@ -56,7 +58,10 @@ export function MyBookings({
   bookings,
   invoices = {},
   previousShown = PREVIOUS_BOOKINGS_SHOWN,
+  cancellationNoticeHours = DEFAULT_RULES.booking.cancellation_notice_hours,
 }: {
+  /** Settings' cancellation cut-off, hours before check-in (4 Nov 2026). */
+  cancellationNoticeHours?: number;
   bookings: BookingWithDetails[];
   /** By booking id: the live issued invoice, if any. */
   invoices?: Record<string, MyInvoice>;
@@ -87,7 +92,7 @@ export function MyBookings({
         {sections.current.length === 0 ? (
           <EmptyState>Nothing in progress today.</EmptyState>
         ) : (
-          <BookingTable bookings={sections.current} invoices={invoices} />
+          <BookingTable bookings={sections.current} invoices={invoices} noticeHours={cancellationNoticeHours} />
         )}
       </section>
 
@@ -96,7 +101,7 @@ export function MyBookings({
         {sections.upcoming.length === 0 ? (
           <EmptyState>No bookings ahead.</EmptyState>
         ) : (
-          <BookingTable bookings={sections.upcoming} invoices={invoices} />
+          <BookingTable bookings={sections.upcoming} invoices={invoices} noticeHours={cancellationNoticeHours} />
         )}
       </section>
 
@@ -118,7 +123,7 @@ export function MyBookings({
           <>
             {/* Compact: a finished booking is read for what it was, so the
                 two date columns become one and the rooms come off. */}
-            <BookingTable bookings={previous} invoices={invoices} compact />
+            <BookingTable bookings={previous} invoices={invoices} noticeHours={cancellationNoticeHours} compact />
             {hiddenPrevious > 0 && (
               <div className="mt-2.5">
                 <Button
@@ -143,8 +148,10 @@ export function MyBookings({
 function BookingTable({
   bookings,
   invoices,
+  noticeHours,
   compact = false,
 }: {
+  noticeHours: number;
   bookings: BookingWithDetails[];
   invoices: Record<string, MyInvoice>;
   compact?: boolean;
@@ -175,6 +182,7 @@ function BookingTable({
               key={b.id}
               booking={b}
               invoice={invoices[b.id] ?? null}
+              noticeHours={noticeHours}
               compact={compact}
             />
           ))}
@@ -187,8 +195,10 @@ function BookingTable({
 function BookingRow({
   booking,
   invoice,
+  noticeHours,
   compact = false,
 }: {
+  noticeHours: number;
   booking: BookingWithDetails;
   invoice: MyInvoice | null;
   compact?: boolean;
@@ -200,6 +210,9 @@ function BookingRow({
   const router = useRouter();
 
   const canCancel = CANCELLABLE.includes(booking.status);
+  // Inside the notice period (24 h) the button gives way to who to ask -
+  // the manager can still cancel it (4 Nov 2026).
+  const tooLateToCancel = canCancel && !canStillCancel(booking.check_in, noticeHours);
   const needsManagerApproval = booking.status === "APPROVED" || booking.status === "OCCUPIED";
 
   const cancel = () =>
@@ -300,7 +313,14 @@ function BookingRow({
               </div>
             )}
 
-            {canCancel && !showCancelDialog && (
+            {tooLateToCancel && (
+              <p className="text-right text-sm text-muted-foreground">
+                Check-in is less than {noticeHours} hours away - contact the Guest House Manager to
+                cancel.
+              </p>
+            )}
+
+            {canCancel && !tooLateToCancel && !showCancelDialog && (
               <div className="flex justify-end">
                 <Button variant="destructive" onClick={() => setShowCancelDialog(true)}>
                   {needsManagerApproval ? "Request cancellation" : "Cancel booking"}
@@ -308,7 +328,7 @@ function BookingRow({
               </div>
             )}
 
-            {canCancel && showCancelDialog && (
+            {canCancel && !tooLateToCancel && showCancelDialog && (
               <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                 <p className="text-sm font-medium">
                   {needsManagerApproval

@@ -1,3 +1,4 @@
+import type { NewUserGroup, UserGroup } from "../user-groups";
 import type {
   Booking,
   BookingFilter,
@@ -48,7 +49,7 @@ import type {
   UserImportBatch,
   UserImportSettlement,
 } from "@/lib/users-import-undo";
-import type { NewTariffInput, Tariff } from "@/lib/tariffs";
+import type { NewTariffInput, Tariff, TariffScope } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import type { NewSessionInput, Session } from "@/lib/sessions";
 import type { PreparedUpload } from "@/lib/uploads";
@@ -67,7 +68,31 @@ import type {
   PaymentMode,
 } from "@/lib/invoice";
 
-export type NewProfileInput = Omit<Profile, "id" | "hostel_name" | "department_or_club" | "roll_number" | "staff_category" | "account_status"> & { account_status?: Profile["account_status"] };
+/**
+ * What a caller may write to `profiles`.
+ *
+ * `hostel_name`, `department_or_club`, `roll_number` and `ldap_uid` are
+ * **optional, not absent**: `profiles_v` resolves them from the institute
+ * tables where those hold a row and from these columns where they do not
+ * (migration 37), so they are still live data and still what the console and
+ * the spreadsheet import write - but nothing has to name one to create an
+ * account. `account_status` defaults to `active` in the database.
+ *
+ * Dropping them altogether is the *contract* half of migration 37's
+ * expand-and-contract, and waits on the institute data being loaded and
+ * checked - see `.memories/04-production.md`.
+ */
+export type NewProfileInput = Omit<
+  Profile,
+  "id" | "account_status" | "hostel_name" | "department_or_club" | "roll_number" | "ldap_uid"
+> & {
+  account_status?: Profile["account_status"];
+  hostel_name?: string | null;
+  department_or_club?: string | null;
+  roll_number?: string | null;
+  ldap_uid?: string | null;
+};
+export type { NewUserGroup, UserGroup };
 
 /**
  * A profile created with an id the caller already knows.
@@ -103,6 +128,13 @@ export interface StatusUpdate {
   override_by?: string | null;
   /** Mark the stay released as a no-show (migration 20). */
   no_show_released_at?: string | null;
+  /**
+   * **The tariff category the Guest House Manager chose** (migration 35,
+   * 31 Oct 2026), written with the approval that records it. One field here
+   * and two columns on the table, because a category is a pair and half of
+   * one prices nothing - the stores write both or neither.
+   */
+  tariff_scope?: TariffScope | null;
 }
 
 /**
@@ -133,9 +165,13 @@ export type NewLogInput = Omit<BookingLog, "id" | "booking_id" | "timestamp" | "
 export interface DataStore {
   listProfiles(): Promise<Profile[]>;
   getProfile(id: string): Promise<Profile | null>;
+  /**
+   * One account by address, looked up in the database rather than by scanning
+   * `listProfiles()` (which Supabase's PostgREST truncates at 1000 rows
+   * silently - `GOOGLE-SIGN-IN.md`'s first defect). The Google callback and
+   * the spreadsheet import both go through this.
+   */
   getProfileByEmail(email: string): Promise<Profile | null>;
-  getPasswordHash(email: string): Promise<string | null>;
-  setPasswordHash(email: string, hash: string): Promise<void>;
 
   listGuestHouses(): Promise<GuestHouse[]>;
   getGuestHouse(id: string): Promise<GuestHouse | null>;
@@ -244,6 +280,14 @@ export interface DataStore {
   bulkUpdateAccountStatus(emails: string[], status: import("@/lib/types").AccountStatus): Promise<number>;
   /** Throws if the user still has bookings. */
   deleteProfile(id: string): Promise<void>;
+  /** The same change to many accounts in one write: a whole batch graduating. */
+  updateProfiles(ids: string[], patch: Partial<NewProfileInput>): Promise<void>;
+  // ---- user groups (migration 36) --------------------------------------
+  listUserGroups(): Promise<UserGroup[]>;
+  createUserGroup(input: NewUserGroup): Promise<UserGroup>;
+  updateUserGroup(id: string, patch: Partial<NewUserGroup>): Promise<void>;
+  /** The caller has already refused a group with members or a route naming it. */
+  deleteUserGroup(id: string): Promise<void>;
 
   // ---- user import batches: the undo record (migration 32) -------------
   /**

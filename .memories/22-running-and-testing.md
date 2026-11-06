@@ -49,8 +49,8 @@ form, all approval tiers, the room grid, invoices, the desk and the console.
 | --- | --- | --- |
 | `npm run lint` | ESLint incl. the strict React Compiler rules | must stay clean |
 | `npm run typecheck` | `next typegen && tsc --noEmit` | `npm run build` also typechecks |
-| `npm test` | Vitest, `tests/` — 35 files, 603 checks (27 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
-| `npm run test:e2e` | Playwright, `e2e/` — 50 journeys (about 4 min) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
+| `npm test` | Vitest, `tests/` — 37 files, 627 checks (31 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
+| `npm run test:e2e` | Playwright, `e2e/` — 51 journeys (about 2.5 min) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
 | `npm run check:migrations` | Which migrations the project in `.env.local` actually has | **Read-only** (`GET`, one row, shape only). Exits 1 if any marker is missing. Migrations 17 and 23 are function-only and cannot be seen — it says so and gives the SQL. **Not a CI step** — CI runs with no secrets, where it prints "no project configured" and exits 0. Run it against a deployment, before relying on one |
 | `npm run check:lockfile` | The npm optional-dependency bug that breaks `npm ci` | Runs in CI |
 
@@ -75,12 +75,19 @@ moves who can book), `room-party` (2 guests + 2 infants in a room),
 help line's number), `public-site` (320 px, desktop and phone; the hero
 advancing by itself and stopping when the photograph is clicked; the four
 sections under it), and
-`fourteenth-round` (17 Oct 2026: the tariff panel's categories setting the
-form's own guest house and booking type; the guests card above the meals card;
+`fourteenth-round` (17 Oct 2026, its first test rewritten 31 Oct: the tariff
+panel listing **every** category's rates and holding **no control at all**;
+the guests card above the meals card;
 the meal Yes/No with nothing left behind on No; the two nav doors and which
 one is current; the three sections of My Bookings; a **day scholar's** request
 reaching the desk with no warden stage while a hostelled student's still
 reaches the warden), and
+`fifteenth-round` (31 Oct 2026: a faculty **personal** stay at Hamsanandi -
+straight to the desk - where the allocation dialog offers both of the office's
+room rates by the office's own names, **Confirm & Allocate stays disabled
+until one is chosen**, and the invoice afterwards prints
+"Tariff sheet: Hamsanandi type 3, government officers" and charges **₹3,389.83
+before GST, which is ₹4,000 inclusive** rather than ₹2,000's ₹1,694.92), and
 `fifth-round` (25 Sep 2026, rewritten 7 and 16 Oct: a student's Father **taken
 from the record and locked**, the infant card, the warden's "✓ Matches
 record"; reception moving a check-in both ways; a **Bageshri** invoice with
@@ -1349,3 +1356,52 @@ Two lessons:
   purpose, is deleted rather than left to be believed.
 - **A test that depends on the order of a list is depending on a layout.**
   Nothing about the booking flow changed in that round; a heading did.
+### Two tables with the same caption (31 Oct 2026)
+
+The tariff panel became a price list and drew **one `TariffTable` per
+category** instead of one for the chosen one. Playwright failed on an
+assertion that had not changed:
+
+```
+strict mode violation: getByRole("table", { name: /Rates at Hamsanandi, in force today/ })
+resolved to 2 elements
+```
+
+A faculty member has four categories, two of them at Hamsanandi (official and
+personal), so two tables now carried the identical `<caption>`. The reflex is
+`.first()`; the right fix was the caption, because the complaint is real
+outside the test too: a screen reader's list of tables on that page read
+"Rates at Hamsanandi" twice with no way to tell which rates. `TariffTable`
+takes a `categoryLabel` where more than one is drawn, and captions itself
+"Rates for Hamsanandi - Official booking, in force today".
+
+A second, smaller one in the same round: `getByText("Bageshri - Official
+booking")` then matched both the category's heading **and** the caption that
+now names it. `getByRole("heading", { name: … })` says which was meant.
+
+**The lesson is the one strict mode exists to teach.** A locator that resolves
+to two elements is usually telling you the page has two things a person cannot
+tell apart either - the caption, the accessible name, the heading. Fix the
+page before narrowing the locator.
+
+### Playwright: a submit that does nothing, with no error on screen (4 Nov 2026)
+
+**Symptom:** `submittedReference` times out, the form is still there, no POST
+followed the click, and the failure snapshot shows no message. The availability
+panel still says "Pick a guest house".
+**Cause, inferred from the trace rather than proved:** the journey typed straight
+after `page.goto("/book")`, before hydration, so a student's stated guest house
+was missing at submit. That error has no visible field, and the toast had gone by
+the time of the snapshot. It failed about one run in two.
+**Fix:** wait for the page heading and the guest house line before typing, as
+`e2e/fourteenth-round.spec.ts` and `e2e/fifth-round.spec.ts` now do. Other journeys
+that type straight after opening `/book` may share the race.
+
+The repair of a stale local database: `.local-db.json` keeps the rooms and rates
+it was seeded with. Delete it to pick up the room names and Categories I-III.
+
+### Testing a migration with no Docker on the machine (5 Nov 2026)
+
+`npm install @electric-sql/pglite` in a scratch folder, stub the tables the migration
+references, and run the file twice. It is real Postgres in WebAssembly and needs nothing
+installed. It tests one migration against stubs, not the whole chain.

@@ -57,8 +57,9 @@ aged under 5 (code constant). Both guest houses are all double sharing.
 
 | Setting | Default | Notes |
 | --- | --- | --- |
-| Advance booking window (`advance_booking_months`) | **6 months** | Check-in only. Official, GH Manager, developer exempt. **1 month until 14 Oct 2026**, when the office asked for more than 30 days; 1-24 months, zero refused. A deployment that saved this card before then keeps its own figure - a saved row beats a changed default |
-| Longest stay (`max_stay_nights`) | **14 nights** | 0 = no limit. Official, GH Manager, developer, `director.office@` exempt |
+| Advance booking window (`advance_booking_months`) | **1 month** | Check-in only. Official, GH Manager, developer exempt. **6 months from 14 Oct to 4 Nov 2026**, when the sixteenth list put it back; 1-24 months, zero refused. A deployment that saved this card before then keeps its own figure - a saved row beats a changed default |
+| Longest stay (`max_stay_nights`) | **14 nights** | 0 = no limit. Official role, **any official booking**, GH Manager, developer, `director.office@` exempt |
+| Cancellation notice (`cancellation_notice_hours`) | **24 hours** | Before check-in, for a requester; 0 = off. The manager is never held to it |
 | Turnaround buffer (`buffer_minutes`) | **240 (4 h)** | Least gap between one stay's check-out and the next check-in on a room; 0 = off. Changing it rebuilds every hold, refused if two stays would clash |
 | No-show release (`no_show_release_hours`) | **0 (off)** | Hours after check-in at which an unclaimed approved stay is released by the daily cron (mail to the requester) |
 
@@ -212,6 +213,18 @@ and disables Add with the reason on screen (`tariffStartError`,
 | Meals on alumni bookings | ₹0 | booking type `alumni` |
 | **Extra bed** | **none seeded** | An invoice with an extra bed cannot be issued until one is added |
 
+> **A rate's scope is also the office's list of tariff categories** (31 Oct
+> 2026). The Guest House Manager picks one when they approve a booking, and
+> the list is **enumerated from this table**: every row that could price the
+> booking's defining charge contributes the (booking type, requester role)
+> pair that selects it, named by that row's own **note** - which is why
+> "government officers" above is worth writing in the note box and not only
+> in the scope. So the office adds a category by publishing a rate; there is
+> no separate list and no console section for one. Both guest houses'
+> **room** rates are what a stay's categories come from, the three meal rates
+> what a dining booking's do.
+> [13-billing-and-dining.md](13-billing-and-dining.md).
+
 ### Invoice settings — `rules.invoice`
 
 | Setting | Default |
@@ -226,6 +239,22 @@ and disables Add with the reason on screen (`tariffStartError`,
 | Contact on the invoice | Kanjikode West, Palakkad, **Keralam** · +91 491 209 2016 · ghm@iitpkd.ac.in (phone and email default to `GUEST_HOUSE_CONTACT`). The spelling was corrected on 7 Oct 2026, and a saved row's address is rewritten **once** by `upgradeInvoiceRules` revision 3 — whole word, so "Keralam" is never made "Keralamm" |
 
 ---
+
+## Console → VIP Rooms & Guidelines (manager and developer) — `rules.policy`
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| VIP rooms (`vip_room_ids`) | **null: rooms numbered C1 and C2** | Room ids. The first save replaces the default for good, even if empty |
+| Other VIP accounts (`vip_emails`) | **none** | Beyond the three fixed in `FIXED_VIP_EMAILS` (`lib/vip.ts`) |
+| Rooms shown at most (`visible_room_cap`) | **14** | A pool across every guest house, display only; 0 = off |
+| Guidelines link (`guidelines_url`) | **empty** | `https://` only; empty hides the button |
+
+Breakfast's default start is **08:00** since 4 Nov 2026 (`rules.meals`).
+
+## Console → User Groups (manager and developer) — `user_groups`
+
+A table, not a Setting. Each group has a role, a programme and batch (students), an
+intake of January or August (MS and PhD only), and two Copy to lists. Nothing is seeded on the hosted project except by `supabase/seed.sql`.
 
 ## Configured elsewhere in the console
 

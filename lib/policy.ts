@@ -38,8 +38,17 @@ export const BOOKING_DURATION_EXEMPT_ROLES: Role[] = ["official", "gh_manager", 
  */
 export const DIRECTOR_OFFICE_EMAILS = ["director.office@iitpkd.ac.in"];
 
-export function isDurationExempt(role: Role, email?: string | null): boolean {
+export function isDurationExempt(
+  role: Role,
+  email?: string | null,
+  bookingType?: BookingType | null
+): boolean {
   if (BOOKING_DURATION_EXEMPT_ROLES.includes(role)) return true;
+  // **An official booking is never capped** (4 Nov 2026, the owner's
+  // sixteenth list: "Official / GHM bookings: unlimited duration"), whoever
+  // raises it - a department's external examiner stays as long as the
+  // examination does. The 14 nights are a personal stay's.
+  if (bookingType === "official") return true;
   return Boolean(email && DIRECTOR_OFFICE_EMAILS.includes(email.toLowerCase()));
 }
 
@@ -76,9 +85,10 @@ export function stayLengthError(
   checkOut: Date,
   role: Role,
   email?: string | null,
-  maxNights: number = MAX_BOOKING_NIGHTS
+  maxNights: number = MAX_BOOKING_NIGHTS,
+  bookingType?: BookingType | null
 ): string | null {
-  if (isDurationExempt(role, email) || maxNights <= 0) return null;
+  if (isDurationExempt(role, email, bookingType) || maxNights <= 0) return null;
   const nights = stayNights(checkIn, checkOut);
   if (nights <= maxNights) return null;
   return `Bookings are limited to a maximum of ${maxNights} nights - this stay is ${nights} nights. ${CONTACT_FOR_LONGER_STAYS}`;
@@ -105,11 +115,44 @@ export function latestCheckOutDate(
   checkInDate: string,
   role: Role,
   email?: string | null,
-  maxNights: number = MAX_BOOKING_NIGHTS
+  maxNights: number = MAX_BOOKING_NIGHTS,
+  bookingType?: BookingType | null
 ): string | null {
-  if (isDurationExempt(role, email) || maxNights <= 0) return null;
+  if (isDurationExempt(role, email, bookingType) || maxNights <= 0) return null;
   if (!parseDateValue(checkInDate)) return null;
   return addDaysToDateValue(checkInDate, maxNights);
+}
+
+// ------------------------------------------------------------- cancellation
+
+/**
+ * **A requester cancels at least 24 hours before check-in** (4 Nov 2026, the
+ * owner's sixteenth list). Inside that the stay is the desk's to call off -
+ * the Guest House Manager can cancel any booking at any time
+ * (`managerCancelBooking`), and this is never applied to them.
+ *
+ * `noticeHours` is Settings (`rules.booking.cancellation_notice_hours`), and
+ * 0 turns the cut-off off. Measured from the booked check-in instant.
+ */
+export function cancellationNoticeError(
+  checkInIso: string,
+  noticeHours: number = DEFAULT_RULES.booking.cancellation_notice_hours,
+  now: Date = new Date()
+): string | null {
+  if (noticeHours <= 0) return null;
+  const checkIn = new Date(checkInIso).getTime();
+  if (Number.isNaN(checkIn)) return null;
+  if (checkIn - now.getTime() >= noticeHours * 3_600_000) return null;
+  return `A booking can be cancelled up to ${noticeHours} hours before check-in. It is now too close to the check-in - contact the Guest House Manager to cancel it.`;
+}
+
+/** Whether the requester may still ask to cancel, for the button's state. */
+export function canStillCancel(
+  checkInIso: string,
+  noticeHours: number = DEFAULT_RULES.booking.cancellation_notice_hours,
+  now: Date = new Date()
+): boolean {
+  return cancellationNoticeError(checkInIso, noticeHours, now) === null;
 }
 
 // ------------------------------------------------------------------ alumni

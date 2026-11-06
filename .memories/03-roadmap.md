@@ -367,6 +367,19 @@ one.
   but it is personal data with no retention rule - unlike `security_audit`,
   which has `purge_security_audit`. Wanted: the same, never below whatever
   period the office wants an undo for.
+- **The undo is not offered for the academic-records import.** That importer is
+  all-or-nothing and keyed on `(kind, lower(email))` the same way, and it
+  overwrites a student's parents' names - which is what the booking form locks
+  a guest to. Migration 32's table is deliberately shaped to take a `kind`
+  column if this is wanted.
+- **Add `profiles` and `academic_records` to whatever is used as a pre-import
+  snapshot.** The documented drill - `supabase db dump` - already covers them;
+  the ad-hoc JSON export kept outside the repo does not, and must not be
+  mistaken for a backup. The undo record is a safety net for one import, **not**
+  a substitute for this.
+- ~~**No deactivation story for people who leave.**~~ **Built on 5 Nov 2026:**
+  `profiles.login_disabled_at` (migration 36), set from Console -> User Groups.
+  It does not yet hide a blocked person from the approver pickers: see §2r.
 - **The undo is not offered for the institute-records import.** That importer
   (`lib/institute/import.ts`) is all-or-nothing and keyed on `lower(email)` the
   same way, and it overwrites a student's parents' names - which is what the
@@ -560,21 +573,22 @@ All three items closed. What they opened:
 
 All nine items closed. What they opened:
 
-- **A *named* tariff category on the booking is a question for the office.**
-  The panel offers the pair the rate is resolved from - the guest house and
-  the kind of booking - because that is what a requester can honestly choose
-  and what `resolveTariff` reads. If the office wants the requester to pick
-  from the sheet's own wording ("parents", "government officer", "Hamsanandi
-  type 3"), that is a **column on `tariffs` and a column on `bookings`**, a
-  new dimension in `resolveTariff` and in `specificity()`, and a Form Builder
-  or Settings control for which categories a role may claim. Ask before
-  building it: the sheet currently expresses those categories as scope, which
-  needs nothing stored.
+- ~~**A *named* tariff category on the booking is a question for the
+  office.**~~ **Answered, 31 Oct 2026** - and it cost almost none of what
+  this entry predicted. The office did want the sheet's own wording, and it
+  wanted the **Guest House Manager** to pick it, not the requester. It needed
+  **no column on `tariffs`**, no new dimension in `resolveTariff` and nothing
+  in `specificity()`: the wording is already on the row (`tariffs.note`), so
+  the desk reads that while the engine resolves a scope. What it did need was
+  two nullable columns on `bookings` (**migration 35**) holding the pair the
+  desk chose. §2p below is what that opened.
 - **The office cannot edit the categories, because there is nothing to
   edit.** They are derived. The only way to change what a requester is
   offered is to change the rate sheet, the Form Builder's allowed guest
   houses, or `bookingTypesFor` - which is the same list of levers as before,
-  stated in one more place.
+  stated in one more place. **Still true on 31 Oct 2026, and now the point
+  rather than a limitation**: the desk's categories are enumerated from the
+  rate sheet, so publishing a rate is how the office adds a category.
 - **The caretaker sentence is on the form only.** Not in the booking mail and
   not on `BookingDetails`, where reviewers and the desk would read it too.
   `lib/mail/templates.ts` is where it would go if the office asks - beside
@@ -753,6 +767,140 @@ No code changed in the application. What the review of the auth seam turned up:
   naming the office's address from `GUEST_HOUSE_CONTACT` would give the
   person somewhere to go. [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §9.
 
+## 2o. Asked on 31 Oct 2026 - spouse eligibility for MS and PhD students
+
+**Built on 4 Nov 2026**, as `scholar_only_relationships` rather than the `spouse_relationships` sketched here; the sixteenth list also refuses a spouse from anyone else. The denominator item below is done too. The rule and the roll-number scheme it reads are written
+up in [11-booking-forms.md](11-booking-forms.md#the-roll-number-encodes-the-programme-31-oct-2026);
+this is what building it would touch.
+
+- **MS and PhD students may book for a spouse with no parent on the
+  request** - an exemption from the parent-dependency rule, for a **spouse
+  only**. Programme comes from the **sixth character of the roll number**
+  (`3` MS, `4` PhD), not from a new field and not from the academic record's
+  free-text `program`.
+- **It is config, like the two rules beside it.** `parent_relationships`,
+  `dependent_relationships` and `unique_relationships` are all
+  `RoleFormConfig` arrays the Form Builder can rename, so a relationship
+  named in code would be the first thing to drift. The exemption wants the
+  same shape - a `spouse_relationships`-style list, defaulted for `student`
+  and empty for everyone else - and `Spouse` added to
+  `STUDENT_RELATIONSHIPS`, `STUDENT_UNIQUE_RELATIONSHIPS` (one spouse) and
+  the saved-row backfill in `sanitizeFormConfig`. A student row saved in the
+  Form Builder before it will not have `Spouse` until it is added there or
+  reset, exactly as happened with `Self` on 30 Sep.
+- **One matcher, both sides.** `parentDependencyError(config,
+  relationships)` is called by the form *and* `bookingPayloadSchema`, so the
+  programme has to reach both - a field on `BookingSchemaContext`, computed
+  once per page and again in `createBooking` from the requester's own
+  profile, the way `guestNames` carries the locked parent names. **Never
+  from the payload**: the programme decides what the request may contain.
+- **The widening to avoid.** The exemption must excuse a **spouse** and
+  nothing else: a sibling or a grandparent on an MS student's request still
+  needs a parent. Tests for both directions, plus a roll number that is
+  null, short or non-numeric reading as **no exemption**.
+- **No persona is on `4` or `5`.** Testing PhD eligibility needs a seeded
+  student with a `4` in the sixth place, and the dummy academic record to
+  match - [11-booking-forms.md](11-booking-forms.md) Part 2 §3 and
+  `lib/academic/mock-source.ts` are kept in step by hand.
+- **Arrived with two other items**, recorded here so the next session does not
+  re-derive their status: the **NULL-hostel student bypassing the warden** is
+  **already done** (17 Oct 2026 - `approverNotApplicable`, with the day
+  scholar persona), and **dropping the denominator from every room-availability
+  figure** (`5/20` to `5`) is **open** - `components/availability-counts.tsx`
+  still prints `/{total}` and "of {total} rooms free all day".
+
+## 2p. Opened by the 31 Oct 2026 round - the manager's tariff category
+
+- **A category cannot be corrected after approval.** There is one writer and
+  it is the approval (`allocateRooms`, and `reviewBooking` for a dining
+  booking). If the desk picks the wrong category, cancelling and reissuing the
+  invoice reprices at the **same** category, because the invoice reads the
+  booking. The deliberate reason is in
+  [02-decisions.md](02-decisions.md): a second writer needs its own
+  authorisation, its own audit wording and an answer to "what about the
+  invoice already issued", and none of that was asked for. The cheapest honest
+  fix is a manager-only `setTariffCategory` on an **un-invoiced** booking,
+  audited in the same words the dialog showed, refused once an invoice is
+  issued - a correction then being the existing cancel-and-reissue. Worth
+  doing before the desk has priced a term's stays.
+- **The question grows with the rate sheet.** Hamsanandi publishes two room
+  rates, so nothing there can be approved without an answer; Bageshri
+  publishes one, so the desk is only told. A third Hamsanandi rate appears on
+  the desk's screen on its own - the point of enumerating from the sheet - but
+  so does more to read on every approval. If the office ever publishes many,
+  the list wants an order the office controls rather than "the booking's own
+  first, then by what it costs".
+- **`extra_bed` rows do not make a category.** The defining charge is the room
+  on a stay and the meals on a dining booking, so a rate scoped *only* on an
+  extra bed ("extra bed for government officers") would be priced correctly by
+  `resolveTariff` but would not appear as a category of its own. The office's
+  sheet has **no extra-bed rate at all** today, so nothing is wrong yet;
+  `tariffCategoryItems` is the one place to widen it.
+- **Nothing shows the desk what the *old* category would have cost.** The
+  dialog lists each category's rates, which is enough to choose; it does not
+  put the chosen one's total for *this stay* beside the alternatives. An
+  invoice preview at approval time was not asked for and would duplicate
+  `priceInvoiceDraft`.
+- **The category is not in the archive's filters or exports.** `/history`
+  can search by debitable head but not by tariff category, and neither CSV nor
+  PDF carries it. The column exists, so both are a small addition - ask
+  whether the office wants to report on it before adding a filter nobody uses.
+
+## 2q. Opened by the 4 Nov 2026 round - the sixteenth list
+
+- **Confirm the assumptions.** The owner has not answered these:
+  - **The 14-room pool** reads as one pool across both guest houses and is
+    display only. With both empty, Bageshri shows 10 and Hamsanandi 8, adding to
+    18; any one figure is at most 14.
+  - **C1 and C2 are at Hamsanandi**, which the list does not say.
+  - **Category III** is told from II by the `requester_role` part of the scope,
+    so a faculty official request defaults to III and an office's to II. Both are
+    offered and the desk must choose.
+  - **A research scholar** is MS (`3`) or PhD (`4`); M.Tech and M.Sc are regular.
+  - **"Full override"** does not reach a VIP room for a non-VIP requester; the
+    manager's own booking is the way round. An alumni booking counts as not
+    personal, so only the manager invoices it.
+- **The office's mapping for Hamsanandi's thirteen rooms to ten.** Part 2 of
+  `supabase/repairs/2026-11-04-room-naming.sql` is commented out until then.
+- **The office's own Dos and Don'ts.** The hardcoded list is drawn from house
+  rules still marked provisional.
+- **No persona holds a VIP address or a PhD roll number**, so no browser journey
+  signs in as either. Adding them means `lib/ldap/mock-directory.ts` and
+  [05-credentials-and-security.md](05-credentials-and-security.md).
+- **Playwright fills forms before hydration in places.** Found twice this round;
+  [22-running-and-testing.md](22-running-and-testing.md) Part 2.
+- **The cap's arithmetic reads every guest house's occupancy** on each availability
+  request from a general requester. Harmless at two houses.
+- **Shortening does not mail the requester.** They hear the dates when rooms are
+  allocated, and the reason is in the log.
+
+## 2r. Opened by the 5 Nov 2026 round - user groups
+
+- **Migration 36 is not applied to the hosted project.** It ships with the group
+  features; [04-production.md](04-production.md) §5.
+- **The CSV format is ours, not the institute's.** A real sheet may need its
+  header renamed to match the template.
+- **A blocked approver is warned about, not replaced.** Their stage waits until
+  someone else is appointed, and the approver pickers still list them.
+- **Blocking does not cancel a live booking or tell its requester.** The manager is
+  warned and decides. Their mail keeps going to an address that may stop existing
+  once they graduate.
+- **Copy to outside a group is still unrestricted**, because outside addresses are
+  in use and tested. The owner's answer of 5 Nov 2026 was about signing in, which is
+  now institute-only for everyone; whether Copy to follows is still theirs to say. If
+  it should, the rule moves from the group to the schema's default.
+- **A hosted account on any other address can no longer sign in.** Nobody has looked:
+  `select email, role from public.profiles where lower(split_part(email, '@', 2)) not in ('iitpkd.ac.in', 'smail.iitpkd.ac.in');`
+- **Existing hosted students may break the format** (`<roll>@smail...`). Editing such an
+  account is now refused until it is right; signing in is not.
+- **`listProfiles` pages since 5 Nov 2026**, so gate 12's truncation is gone for accounts,
+  though sign-in still reads the whole list to find one person. That is correct and slow,
+  and a `findProfileByEmail` over the existing index is still worth doing. **`listBookings`
+  has the same 1000-row cap**, so a block's booking warnings could miss some once there
+  are more bookings than that. Untested against a real Supabase.
+- **A group is one per person.** Someone in two kinds of group is not expressible.
+- **`IMPORTING-USERS.md` describes the older paste import in full**; groups have a
+  short section at its head.
 ### From the unit column rename (3 Nov 2026)
 
 - **Rename columns on existing Postgres databases.** The code now expects

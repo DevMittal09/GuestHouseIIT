@@ -25,12 +25,20 @@ export function TariffTable({
   guestHouseId,
   bookingType,
   guestHouseName,
+  categoryLabel,
   pricesIncludeGst,
 }: {
   previews: TariffPreview[];
   guestHouseId: string;
   bookingType: BookingType;
   guestHouseName?: string;
+  /**
+   * The category these rates belong to, where the panel is drawing more than
+   * one table (31 Oct 2026). Two tables captioned "Rates at Hamsanandi" is
+   * ambiguous to anyone reading the captions on their own, which is what a
+   * screen reader's table list is.
+   */
+  categoryLabel?: string;
   /** Settings → Tariffs & Invoicing: whether the office's rates include GST. */
   pricesIncludeGst: boolean;
 }) {
@@ -59,7 +67,9 @@ export function TariffTable({
       <div className="overflow-x-auto rounded-md border">
         <table className="w-full text-sm">
           <caption className="sr-only">
-            Rates at {guestHouseName ?? "this guest house"}, in force today
+            {categoryLabel
+              ? `Rates for ${categoryLabel}, in force today`
+              : `Rates at ${guestHouseName ?? "this guest house"}, in force today`}
           </caption>
           <thead className="bg-band text-left">
             <tr>

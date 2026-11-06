@@ -8,6 +8,8 @@ import { getStore } from "./store";
 import type { Tariff } from "./tariffs";
 import type { Profile } from "./types";
 import { hodApproversFor, type Unit } from "./units";
+import { copyToRuleFor, type CopyToRule } from "./user-groups";
+import { defaultCopyToFor } from "./club-booking";
 
 /**
  * Everything the booking form and `createBooking` need to judge a request
@@ -42,17 +44,22 @@ export type BookingContext = {
    * reads as "no rates published" rather than as an error.
    */
   tariffs: Tariff[];
+  /** What the requester's group says about Copy to (5 Nov 2026). */
+  copyToRule: CopyToRule;
 };
 
 export const bookingContextFor = cache(async (user: Profile): Promise<BookingContext> => {
   const store = getStore();
-  const [rules, units, allProjects, profiles, tariffs] = await Promise.all([
+  const [rules, units, allProjects, profiles, tariffs, groups] = await Promise.all([
     getRules(),
     store.listUnits().catch(() => [] as Unit[]),
     store.listProjects().catch(() => [] as Project[]),
     store.listProfiles().catch(() => [] as Profile[]),
     store.listTariffs().catch(() => [] as Tariff[]),
+    // Before migration 36 there are none, and nobody's Copy to is limited.
+    user.group_id ? store.listUserGroups().catch(() => []) : Promise.resolve([]),
   ]);
+  const group = groups.find((g) => g.id === user.group_id) ?? null;
   const types = bookingTypesFor(user.role);
   const byId = new Map(profiles.map((p) => [p.id, p]));
   return {
@@ -71,5 +78,6 @@ export const bookingContextFor = cache(async (user: Profile): Promise<BookingCon
       .filter((name): name is string => Boolean(name)),
     profiles,
     tariffs,
+    copyToRule: copyToRuleFor(group, defaultCopyToFor(user, units)),
   };
 });

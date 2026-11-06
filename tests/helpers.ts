@@ -36,6 +36,7 @@ export function profile(patch: Partial<Profile> = {}): Profile {
     hostel_name: null,
     department_or_club: null,
     roll_number: null,
+    ldap_uid: null,
     unit_id: null,
     staff_category: null,
     ...patch,
@@ -178,11 +179,12 @@ function resolveComputed(input: SeededProfileInput): Partial<Profile> {
 export function asProfile(input: SeededProfileInput, patch?: Partial<Profile>): Profile {
   return {
     account_status: "active",
-    ...input,
     hostel_name: null,
     department_or_club: null,
     roll_number: null,
+    ldap_uid: null,
     staff_category: null,
+    ...input,
     ...resolveComputed(input),
     ...patch,
   };

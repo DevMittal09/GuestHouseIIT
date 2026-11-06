@@ -39,15 +39,24 @@ import type { ActionResult } from "./bookings";
 
 /**
  * The invoice group is priced and run by the office, so it belongs to the
- * Tariffs & Invoicing section (manager and developer); every other group is
- * Settings (developer only). The `approval` group never reaches here - it has
+ * Tariffs & Invoicing section (manager and developer); the policy group - VIP
+ * rooms, the visible-room cap, the Guidelines link - to VIP Rooms &
+ * Guidelines (manager and developer); every other group is Settings
+ * (developer only). The `approval` group never reaches here - it has
  * its own section and its own action (`app/actions/workflow.ts`).
  */
 async function requireConsoleFor(group: RuleGroup): Promise<Profile> {
-  if (group !== "invoice") return requireSettingsConsole();
+  if (group !== "invoice" && group !== "policy") return requireSettingsConsole();
   const user = await requireUser();
-  if (!canUseConsoleSection(user.role, "billing")) {
-    throw new Error("Only the Guest House Manager or a developer can change invoice settings");
+  // The VIP rooms and the Guidelines link are the manager's too (4 Nov 2026),
+  // at Console -> VIP Rooms & Guidelines.
+  const section = group === "invoice" ? "billing" : "policy";
+  if (!canUseConsoleSection(user.role, section)) {
+    throw new Error(
+      group === "invoice"
+        ? "Only the Guest House Manager or a developer can change invoice settings"
+        : "Only the Guest House Manager or a developer can change the VIP rooms and the Guidelines link"
+    );
   }
   if (!(await isAdminUnlocked())) {
     throw new Error("The console is locked - enter the console password again");
@@ -72,7 +81,7 @@ function fail(e: unknown): ActionResult {
     return {
       ok: false,
       error:
-        "The settings tables are not there yet - apply scripts/init-postgres.sql (table: app_settings).",
+        "The settings tables are not there yet - apply migration 5 (table: app_settings).",
     };
   }
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };

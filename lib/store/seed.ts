@@ -1,3 +1,4 @@
+import type { UserGroup } from "../user-groups";
 import type { Tariff } from "@/lib/tariffs";
 import { normalizeMeals, stayMealDays } from "@/lib/meals";
 import type {
@@ -29,13 +30,15 @@ export const GH_HAMSANANDI = "gh-hamsanandi";
 // Meals are served at Hamsanandi only, as in migration 8.
 export const seedGuestHouses: GuestHouse[] = [
   { id: GH_BAGESHRI, name: "Bageshri", total_rooms: 10, serves_meals: false },
-  { id: GH_HAMSANANDI, name: "Hamsanandi", total_rooms: 13, serves_meals: true },
+  { id: GH_HAMSANANDI, name: "Hamsanandi", total_rooms: 10, serves_meals: true },
 ];
 
 /**
- * The rooms the office actually has (23 Sep 2026) - these replaced the dummy
- * B-101…/H-101… blocks. Bageshri numbers its rooms by floor and skips 205,
- * 301 and 304; Hamsanandi is four blocks, A to D, and only A4 exists in A.
+ * **The naming convention of 4 Nov 2026** (the owner's sixteenth list):
+ * Bageshri is **B1-B10**; Hamsanandi is **A1-A4 and D1-D4**, with **C1 and
+ * C2** the VIP rooms. It replaced the numbers of 23 Sep 2026 (Bageshri
+ * 201-307 by floor, Hamsanandi A4, B1-B4, C1-C4, D1-D4); a database seeded
+ * with those is renamed by `supabase/repairs/2026-11-04-room-naming.sql`.
  *
  * Both guest houses are **all double sharing** - the office confirmed there is
  * no single room, which is why the booking form and the developer console no
@@ -44,14 +47,13 @@ export const seedGuestHouses: GuestHouse[] = [
  * single created before this.
  */
 export const BAGESHRI_ROOM_NUMBERS = [
-  "201", "202", "203", "204", "206",
-  "302", "303", "305", "306", "307",
+  "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10",
 ];
 
+/** C1 and C2 are the default VIP rooms (`DEFAULT_VIP_ROOM_NUMBERS`, `lib/vip.ts`). */
 export const HAMSANANDI_ROOM_NUMBERS = [
-  "A4",
-  "B1", "B2", "B3", "B4",
-  "C1", "C2", "C3", "C4",
+  "A1", "A2", "A3", "A4",
+  "C1", "C2",
   "D1", "D2", "D3", "D4",
 ];
 
@@ -72,22 +74,29 @@ export const seedRooms: Room[] = [
 
 export const seedProfiles: SeededProfileInput[] = [
   // ----- Requesters -----
-  // hostel_name, department_or_club, roll_number and staff_category are
-  // resolved at read time from institute tables via profiles_v / withComputed.
-  { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student" },
-  { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student" },
+  { id: "student-anjali", email: "112201001@smail.iitpkd.ac.in", full_name: "Anjali Menon", role: "student", hostel_name: "Malhar", department_or_club: null, roll_number: "112201001", ldap_uid: "112201001", group_id: "group-btech-2022" },
+  { id: "student-rahul", email: "142202014@smail.iitpkd.ac.in", full_name: "Rahul Nair", role: "student", hostel_name: "Saveri", department_or_club: null, roll_number: "142202014", ldap_uid: "142202014", group_id: "group-mtech-2022" },
   /**
    * A day scholar: hostel is **genuinely null** in `institute_students`, which
    * is what makes this persona the test of the 17 Oct 2026 rule - a student
    * with no hostel has no Assistant Warden, so their request enters at the
    * Guest House Manager (`approverNotApplicable`).
    */
-  { id: "student-day-scholar", email: "122203099@smail.iitpkd.ac.in", full_name: "Devika Iyer (day scholar - no hostel)", role: "student" },
-  { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", unit_id: "unit-cse" },
-  { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", unit_id: "unit-director-office" },
-  { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", unit_id: "unit-petrichor" },
-  { id: "council-cultural", email: "sec_arts@iitpkd.ac.in", full_name: "Cultural Affairs Council", role: "club", unit_id: "unit-cultural" },
-  { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell" },
+  { id: "student-day-scholar", email: "122203099@smail.iitpkd.ac.in", full_name: "Devika Iyer (day scholar - no hostel)", role: "student", hostel_name: null, department_or_club: null, roll_number: "122203099", ldap_uid: "122203099", group_id: "group-ms-2022" },
+  // Faculty in CSE: her official bookings go to the CSE HOD first.
+  { id: "employee-priya", email: "priya@iitpkd.ac.in", full_name: "Dr. Priya Sharma", role: "employee", hostel_name: null, department_or_club: "Computer Science & Engineering", roll_number: null, ldap_uid: "priya", unit_id: "unit-cse", staff_category: "faculty", group_id: "group-faculty" },
+  // An officer office: its bookings are debited to the Institute Grant.
+  { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", hostel_name: null, department_or_club: "Administration", roll_number: null, ldap_uid: "admin", unit_id: "unit-director-office" },
+  // Belongs to Petrichor, which sits under the Cultural Affairs Council. It
+  // raises no bookings itself: its Faculty Advisor books for it (24 Sep 2026).
+  { id: "club-petrichor", email: "petrichor@iitpkd.ac.in", full_name: "Petrichor Fest Council", role: "club", hostel_name: null, department_or_club: "Petrichor", roll_number: null, ldap_uid: "petrichor", unit_id: "unit-petrichor" },
+  // The council's own account is its secretary's mailbox, which outlives any
+  // one secretary. Like a club, it is booked for by the council's Faculty
+  // Advisor, and it is the address copied on the council's clubs' bookings.
+  { id: "council-cultural", email: "sec_arts@iitpkd.ac.in", full_name: "Cultural Affairs Council", role: "club", hostel_name: null, department_or_club: "Cultural Affairs", roll_number: null, ldap_uid: "sec_arts", unit_id: "unit-cultural" },
+  // No alumni persona: alumni have no institute login, so the IAR Office and
+  // the IAR Student Cell raise those bookings for them (migration 9).
+  { id: "iar-student-cell", email: "alumnicell@iitpkd.ac.in", full_name: "IAR Student Cell", role: "iar_student_cell", hostel_name: null, department_or_club: "International & Alumni Relations", roll_number: null, ldap_uid: "alumnicell" },
   // ----- Unit heads (migration 15) -----
   // Approvers by appointment rather than by role: the HOD is an employee, the
   // council secretary a student. Change who heads a unit in the console and
@@ -170,10 +179,30 @@ function tariff(
   };
 }
 
+/** The office's three categories, as each row's note names them. */
+export const TARIFF_CATEGORY_NOTES = {
+  I: "Category I: guests and relatives of employees, parents of students on a personal visit",
+  II: "Category II: institute guests on official duty - ministers, directors, BOG, selection committees, external examiners, official guests",
+  III: "Category III: academic visitors",
+} as const;
+
 export const seedTariffs: Tariff[] = [
-  tariff("tariff-bageshri-room", GH_BAGESHRI, "room", 1000, {}, "Tariff sheet: Bageshri, per room per day"),
-  tariff("tariff-hamsanandi-room", GH_HAMSANANDI, "room", 2000, {}, "Tariff sheet: Hamsanandi types 1 and 2"),
-  tariff("tariff-hamsanandi-official", GH_HAMSANANDI, "room", 4000, { requester_role: "official" }, "Tariff sheet: Hamsanandi type 3, government officers"),
+  // **Categories I, II and III** (4 Nov 2026, the owner's sixteenth list,
+  // from the official policy). Each category is a row's note, which is what
+  // the booking page's sheet and the desk's list both read. Category I is
+  // the house-wide rate, so a personal or alumni stay resolves to it; II and
+  // III are official, told apart by the requester-role pseudo-scope the desk
+  // chooses (`deskTariffCategories`): an office's own account reads as II, a
+  // department's as III, and the manager picks whichever the visit is.
+  ...([
+    [GH_HAMSANANDI, "hamsanandi", 1500, 2000, 2500],
+    [GH_BAGESHRI, "bageshri", 1000, 1500, 2000],
+  ] as const).flatMap(([gh, slug, one, two, three]) => [
+    tariff(`tariff-${slug}-cat1`, gh, "room", one, {}, TARIFF_CATEGORY_NOTES.I),
+    tariff(`tariff-${slug}-cat2`, gh, "room", two, { booking_type: "official" }, TARIFF_CATEGORY_NOTES.II),
+    tariff(`tariff-${slug}-cat2-office`, gh, "room", two, { booking_type: "official", requester_role: "official" }, TARIFF_CATEGORY_NOTES.II),
+    tariff(`tariff-${slug}-cat3`, gh, "room", three, { booking_type: "official", requester_role: "employee" }, TARIFF_CATEGORY_NOTES.III),
+  ]),
   tariff("tariff-breakfast", null, "breakfast", 80, {}, "Tariff sheet: per head"),
   tariff("tariff-lunch", null, "lunch", 120, {}, "Tariff sheet: per head"),
   tariff("tariff-dinner", null, "dinner", 100, {}, "Tariff sheet: per head"),
@@ -188,6 +217,30 @@ export const seedProjects: Project[] = [
   { id: "proj-storage", project_number: "SP/2025/017", title: "Grid-scale energy storage", pi_name: "Dr. Priya Sharma", active: true },
   { id: "proj-vision", project_number: "CP/2026/004", title: "Machine vision for crop health", pi_name: "Prof. R. Venkatesh", active: true },
   { id: "proj-old", project_number: "SP/2022/031", title: "Completed: water quality sensors", pi_name: null, active: false },
+];
+
+/**
+ * Demo user groups (migration 36). The students' are their batches; the digits
+ * after the first two of a roll number happen to be the year here, but nothing
+ * reads them: membership is `profiles.group_id`.
+ */
+const demoGroup = (id: string, name: string, role: UserGroup["role"], programme: UserGroup["programme"], batch_year: number | null, intake: UserGroup["intake"] = null): UserGroup => ({
+  id,
+  name,
+  role,
+  programme,
+  batch_year,
+  intake,
+  prefill_copy_to: [],
+  allowed_copy_to: [],
+  created_at: "2026-11-05T00:00:00.000Z",
+});
+
+export const seedUserGroups: UserGroup[] = [
+  demoGroup("group-btech-2022", "B.Tech 2022 batch", "student", "BTech", 2022),
+  demoGroup("group-mtech-2022", "M.Tech 2022 batch", "student", "MTech", 2022),
+  demoGroup("group-ms-2022", "MS Aug 2022 batch", "student", "MS", 2022, "aug"),
+  demoGroup("group-faculty", "Faculty", "employee", null, null),
 ];
 
 /** Hostels the demo personas live in (migration 16's `hostels` table). */
@@ -342,7 +395,7 @@ const demoBookings: DemoBooking[] = [
     check_in: iso(6, 12),
     check_out: iso(9, 11),
     rooms_requested: 2,
-    assigned_room_ids: [`${GH_BAGESHRI}-201`, `${GH_BAGESHRI}-202`],
+    assigned_room_ids: [`${GH_BAGESHRI}-B1`, `${GH_BAGESHRI}-B2`],
     rejection_reason: null,
     alumni_id_url: null,
     custom_fields: null,
@@ -482,8 +535,8 @@ export const seedBookingRooms: BookingRoom[] = [
   { id: "br-3", booking_id: "bk-demo-2", room_index: 2, room_type: null, assigned_room_id: null },
   { id: "br-4", booking_id: "bk-demo-3", room_index: 1, room_type: null, assigned_room_id: null },
   { id: "br-5", booking_id: "bk-demo-4", room_index: 1, room_type: null, assigned_room_id: null },
-  { id: "br-6", booking_id: "bk-demo-5", room_index: 1, room_type: null, assigned_room_id: `${GH_BAGESHRI}-201` },
-  { id: "br-7", booking_id: "bk-demo-5", room_index: 2, room_type: null, assigned_room_id: `${GH_BAGESHRI}-202` },
+  { id: "br-6", booking_id: "bk-demo-5", room_index: 1, room_type: null, assigned_room_id: `${GH_BAGESHRI}-B1` },
+  { id: "br-7", booking_id: "bk-demo-5", room_index: 2, room_type: null, assigned_room_id: `${GH_BAGESHRI}-B2` },
 ];
 
 export const seedGuests: BookingGuest[] = [

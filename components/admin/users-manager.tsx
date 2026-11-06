@@ -1,5 +1,6 @@
 "use client";
 
+import { isInstituteEmail } from "@/lib/site";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -11,7 +12,6 @@ import {
   importUsersAction,
   previewUserImport,
   revertUserImportAction,
-  setUserPasswordAction,
   updateUserAction,
   type UserFormInput,
   type UserImportSummary,
@@ -58,6 +58,11 @@ const EMPTY: UserFormInput = {
   email: "",
   full_name: "",
   role: "student",
+  hostel_name: "",
+  department_or_club: "",
+  roll_number: "",
+  staff_category: "",
+  ldap_uid: "",
   unit_id: "",
   account_status: "active",
 };
@@ -86,7 +91,6 @@ export function UsersManager({
   const [editing, setEditing] = useState<Profile | null>(null);
   const [values, setValues] = useState<UserFormInput>(EMPTY);
   const [toDelete, setToDelete] = useState<Profile | null>(null);
-  const [newPassword, setNewPassword] = useState("");
   /**
    * Bulk loading accounts from a spreadsheet (8 Oct 2026). `plan` is what the
    * paste would do, fetched by a read-only action: the office presses Check
@@ -119,7 +123,6 @@ export function UsersManager({
   const openCreate = () => {
     setEditing(null);
     setValues(EMPTY);
-    setNewPassword("");
     setDialogOpen(true);
   };
 
@@ -129,24 +132,16 @@ export function UsersManager({
       email: p.email,
       full_name: p.full_name,
       role: p.role,
+      hostel_name: p.hostel_name ?? "",
+      department_or_club: p.department_or_club ?? "",
+      roll_number: p.roll_number ?? "",
+      staff_category: p.staff_category ?? "",
+      ldap_uid: p.ldap_uid ?? "",
       unit_id: p.unit_id ?? "",
       account_status: p.account_status ?? "active",
     });
-    setNewPassword("");
     setDialogOpen(true);
   };
-
-  const savePassword = () =>
-    startTransition(async () => {
-      if (!editing || !newPassword) return;
-      const result = await setUserPasswordAction(editing.id, newPassword);
-      if (result.ok) {
-        toast.success("Password set");
-        setNewPassword("");
-      } else {
-        toast.error(result.error ?? "Failed to set password");
-      }
-    });
 
   const save = () =>
     startTransition(async () => {
@@ -318,6 +313,16 @@ export function UsersManager({
                 <TableCell>
                   <span className="font-medium">{p.full_name}</span>
                   <span className="block text-xs text-muted-foreground">{p.email}</span>
+                  {!isInstituteEmail(p.email) && (
+                    <span className="block text-xs font-semibold text-vermilion-deep">
+                      Cannot sign in - not an IIT Palakkad address
+                    </span>
+                  )}
+                  {p.login_disabled_at && (
+                    <span className="block text-xs font-semibold text-vermilion-deep">
+                      Cannot sign in{p.login_disabled_reason ? ` - ${p.login_disabled_reason}` : ""}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell className="text-meta whitespace-normal">
                   {p.role === "developer" ? (
@@ -674,27 +679,6 @@ export function UsersManager({
               </NativeSelect>
             </div>
           </div>
-          {editing && (
-            <div className="border-t border-border pt-4 mt-2">
-              <p className="text-[13.5px] font-medium text-ink mb-2">Set login password</p>
-              <div className="flex gap-2 items-end">
-                <input
-                  type="text"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="New password"
-                  className="flex-1 rounded border border-border-strong bg-white px-3 py-2 text-[14px] text-ink placeholder:text-muted-foreground focus:border-vermilion focus:outline-none focus:ring-1 focus:ring-vermilion"
-                />
-                <Button
-                  size="sm"
-                  onClick={savePassword}
-                  disabled={isPending || !newPassword || newPassword.length < 4}
-                >
-                  Set password
-                </Button>
-              </div>
-            </div>
-          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel

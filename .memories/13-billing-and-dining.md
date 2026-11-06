@@ -5,10 +5,13 @@ section, additional charges, live repricing), the **7 Oct** ones (version 4,
 cash retired, a personal stay settled at check-out, Awaiting payment), the
 **9 Oct** one (a dining booking is quoted meal rates only) and the **16 Oct**
 ones (**a new rate starts in the future**, the guest house named in every desk
-list, and **version 5 — no dining section where there is no kitchen**).
-**Checked against the code on 16 Oct 2026** — `lib/invoice.ts`,
-`lib/tariffs.ts`, `lib/invoice-pdf.ts`, `app/actions/invoices.ts`,
-`components/invoice-dialog.tsx`, `components/awaiting-payment.tsx`,
+list, and **version 5 — no dining section where there is no kitchen**) - and
+the **31 Oct** one, which moved **who decides the tariff category** to the
+Guest House Manager and made the invoice read their decision.
+**Checked against the code on 31 Oct 2026** — `lib/invoice.ts`,
+`lib/tariffs.ts`, `lib/tariff-categories.ts`, `lib/invoice-pdf.ts`,
+`app/actions/invoices.ts`, `components/invoice-dialog.tsx`,
+`components/tariff-category-choice.tsx`, `components/awaiting-payment.tsx`,
 `components/stays-table.tsx`, `components/checkouts-today.tsx`,
 `lib/access.ts`.
 
@@ -16,6 +19,7 @@ list, and **version 5 — no dining section where there is no kitchen**).
 
 | Action | Manager | Caretaker | Developer | Requester |
 | --- | --- | --- | --- | --- |
+| **Choose the tariff category** the booking is charged under, at approval (31 Oct 2026) | ✓ | — | — | — |
 | Preview, correct meal counts, **add additional charges**, issue & print | ✓ | ✓ | ✓ | — |
 | **Mark paid** — **UPI + transaction id, or transfer + UTR** (cash withdrawn 7 Oct 2026; both now require a reference) | ✓ | ✓ | ✓ | — |
 | **Check out a personal stay** — issue, pay, then Mark as Vacated, in one dialog (7 Oct 2026) | ✓ | ✓ | ✓ | — |
@@ -248,26 +252,78 @@ total, and issuing uses exactly those figures. **Preview PDF** prints the
   stands on its own now: the paragraph under it about rates in force, GST
   percentages and night-by-night pricing came off the same day, and those facts
   are on the Guidelines page.
-- **And since 17 Oct 2026 they are a panel beside the form, with the
-  category chosen in it** (the owner: keep the categories and their rates on
-  the right-hand side and let the user select the one that applies).
-  **A category is one (guest house, booking type) pair** the requester is
-  eligible for, labelled ("Hamsanandi - Official booking") and carrying the
-  room rate those two resolve to; choosing it writes `guest_house_id` and
-  `booking_type`, which is what `resolveTariff` reads - so the selection
-  changes what will be charged and **cannot drift from the invoice**. One
-  category is stated rather than asked. `lib/tariff-categories.ts` builds the
-  list (eligibility from `bookingTypesFor`, `guestHousesForBookingType`, the
-  Form Builder's allowed houses, kitchens only on a dining booking and
-  `mealsAllowedFor`); `components/tariff-panel.tsx` draws it and keeps
-  `TariffTable` underneath, unchanged, for the chosen one. The rates card is
-  **gone from the form**.
-  > **A *named* category stored on the booking is not built**, deliberately:
-  > the office's sheet already expresses "parents" and "government officers"
-  > as scope (`requester_role: official` on the ₹4,000 Hamsanandi row), and a
-  > name on the booking would be a second source of truth for money unless
-  > `tariffs` carried the same column and `resolveTariff` a new dimension.
-  > [03-roadmap.md](03-roadmap.md) §2j.
+- **And since 17 Oct 2026 they are a panel beside the form** (the owner: keep
+  the categories and their rates on the right-hand side). **A category there
+  is one (guest house, booking type) pair** the requester is eligible for,
+  labelled ("Hamsanandi - Official booking") and carrying the room rate those
+  two resolve to, with its full charge table under it.
+  `lib/tariff-categories.ts` builds the list (eligibility from
+  `bookingTypesFor`, `guestHousesForBookingType`, the Form Builder's allowed
+  houses, kitchens only on a dining booking and `mealsAllowedFor`);
+  `components/tariff-panel.tsx` draws it with `TariffTable`, unchanged, once
+  per category. The rates card is **gone from the form**.
+  > **The panel asks nothing** (31 Oct 2026, the owner: "remove all
+  > interactive selection functionality from this table ... users should only
+  > be able to view the different tariff categories and their corresponding
+  > prices"). It had a radio per category from 17 Oct, and picking one wrote
+  > `guest_house_id` and `booking_type` - which made the requester the person
+  > who decided which published rate they would be charged at. **The decision
+  > is the Guest House Manager's**, taken at approval, and the panel carries
+  > one line saying so. The guest house and the kind of booking are still
+  > questions on the form itself.
+
+### The tariff category is the manager's (31 Oct 2026, migration 35)
+
+**What the desk chooses.** A tariff row is scoped by guest house, room type,
+booking type and requester role. The first two are facts - where the guest
+sleeps, which room the party was given - so what is left to decide is the
+pair **(booking type, requester role)**, a `TariffScope` (`lib/tariffs.ts`).
+That pair *is* the tariff category, and the Guest House Manager answers it as
+they approve.
+
+- **Asked where approval happens**: in the allocation dialog
+  (`components/room-grid.tsx`, above the override notice) and in **Approve
+  meals** (`components/manager-queue.tsx`) - a dining booking has no rooms, so
+  that approval is the whole decision. **Confirm & Allocate and Approve meals
+  stay disabled until it is answered**, and the server refuses the approval
+  too. Nobody else is ever asked: an intermediate approver forwards a request,
+  they do not price it, and `reviewBooking` refuses the parameter on any other
+  stage.
+- **The list is the office's rate sheet**, enumerated (`deskTariffCategories`):
+  every row that could price the booking's **defining charge** - the room on a
+  stay, the meals on a dining booking - contributes the scope that selects it,
+  named by that row's own `note` ("Tariff sheet: Hamsanandi type 3, government
+  officers") and falling back to the scope in plain words. So a rate published
+  this afternoon is a category on the desk's screen this afternoon, with no
+  second list to maintain. Two scopes that price identically are collapsed.
+  **One category is stated, not asked** - Bageshri has one room rate;
+  Hamsanandi has two, so there the question is compulsory.
+- **Stored as the pair**, `bookings.tariff_booking_type` /
+  `tariff_requester_role`, both or neither (the database checks it).
+  **They are not facts about the requester**: who asked is still `user_role`
+  and what kind of stay it is is still `booking_type`, and routing, debitable
+  heads and every scoping rule read those two.
+- **The invoice is priced at it.** `buildInvoiceDocument` resolves every
+  charge at `pricingScopeFor(booking)` - the manager's category, else the
+  booking's own facts - which is **one substitution in the single `base`
+  object** the rooms, the extra beds and the meals are all resolved from.
+  `InvoiceDocument.tariff_category` snapshots the office's wording and
+  `invoiceFacts` prints it, so a later renaming of the rate cannot rewrite an
+  issued invoice.
+- **No rate is stored on the booking**, although the ask said "the selected
+  tariff category and price". A stay crossing a rate change is priced night by
+  night (`splitByRate`), so one figure would be wrong for it, and a rupee
+  amount beside `tariffs` would be a second source of truth for money. The
+  price is recorded where it cannot be mistaken for the authority: the
+  **booking's log**, which carries what the category stood at the day it was
+  chosen, and the **issued invoice**.
+- **A booking approved before 31 Oct 2026 has no category** and is priced from
+  its own facts exactly as it always was; its invoice prints no category line.
+  That absence is how a reader tells the two apart, which is why **no document
+  version changed** - `version` governs the lettering of the money table, and
+  this round touched no figure in it.
+- Open: **a category cannot be corrected after approval**
+  ([03-roadmap.md](03-roadmap.md) §2p).
 - **Issuing** (`app/actions/invoices.ts` → `store.issueInvoice` →
   `issue_invoice()`) takes the financial year's next serial
   (`GH/2026-27/0001`, prefix and width are Settings) and stores the whole
@@ -325,6 +381,21 @@ total, and issuing uses exactly those figures. **Preview PDF** prints the
   check-in/out, rooms, infants and primary guest, has no room table, and its
   totals read Total / Grand Total (including GST) rather than A+B
   (`invoiceTotalLabels`). The accounts mail follows the same rules.
+
+### Categories I, II and III (4 Nov 2026)
+
+| Category | Who | Hamsanandi | Bageshri | Row's scope |
+| --- | --- | --- | --- | --- |
+| I | Guests and relatives of employees, parents of students on a personal visit | ₹1,500 | ₹1,000 | The house's general row |
+| II | Institute guests on official duty | ₹2,000 | ₹1,500 | `official`, any role, and `official` + role `official` |
+| III | Academic visitors | ₹2,500 | ₹2,000 | `official` + role `employee` |
+
+These are the demo seed; the hosted rows are in the repair. A row's `note` names
+its category, and the text before the colon is what the sidebar's Table 1 groups
+by. **The desk's list stays within the booking's type**, so a personal stay is
+Category I and is told rather than asked. **The caretaker invoices personal
+bookings only**; `invoiceRoleError` refuses the draft and the issue, and the
+invoice dialog shows it as the blocker.
 
 ## Dining (Phase 6)
 

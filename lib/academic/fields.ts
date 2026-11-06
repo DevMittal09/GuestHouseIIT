@@ -20,8 +20,6 @@ const KIND_FOR_ROLE: Record<Role, AcademicRecordKind | null> = {
   // "two roles, Office and Alumni" for IAR.
   iar_student_cell: "alumni_office",
   warden: "warden",
-  deputy_warden: "warden",
-  assistant_warden: "warden",
   // Retired, and alumni never had an institute login.
   alumni: null,
   faculty_advisor: null,

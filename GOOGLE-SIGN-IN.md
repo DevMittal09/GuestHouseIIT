@@ -249,6 +249,10 @@ happy path cannot be driven without a real Google account.
 
 ## 5. The two domains — and the one setting that can lock students out
 
+> **Done on 5 Nov 2026:** the start leg sends `hd=*`, and the return leg accepts exactly
+> `iitpkd.ac.in` and `smail.iitpkd.ac.in`, no other subdomain. Still test a real student.
+> §7.1's `listProfiles` pages now too, so §7.3(a) is no longer required for accounts.
+
 Staff are `name@iitpkd.ac.in`. **Students are `<roll>@smail.iitpkd.ac.in`.**
 
 The two legs of the flow treat that differently, and the asymmetry is

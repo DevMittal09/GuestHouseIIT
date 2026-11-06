@@ -1,3 +1,4 @@
+import { getRules } from "@/lib/settings-server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, BedDouble, UsersRound, UtensilsCrossed, type LucideIcon } from "lucide-react";
@@ -112,7 +113,11 @@ export default async function DashboardPage() {
       {/* Three sections of its own since 17 Oct 2026 - current, upcoming and
           previous - so the single "Your requests" heading that used to stand
           over one long table has gone with it. */}
-      <MyBookings bookings={bookings} invoices={invoices} />
+      <MyBookings
+        bookings={bookings}
+        invoices={invoices}
+        cancellationNoticeHours={(await getRules()).booking.cancellation_notice_hours}
+      />
       {/* DPDP (Phase 8): take a copy, or ask the office to erase it. A quiet
           line at the foot of the page, not a notice (9 Oct 2026).
 

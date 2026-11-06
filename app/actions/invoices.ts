@@ -6,6 +6,7 @@ import {
   canExportCollections,
   canIssueInvoices,
   canUseConsoleSection,
+  invoiceRoleError,
 } from "@/lib/access";
 import { isAdminUnlocked } from "@/lib/admin-lock";
 import { recordAudit } from "@/lib/audit-server";
@@ -50,9 +51,9 @@ import type { ActionResult } from "./bookings";
  */
 
 const MIGRATION_HINT =
-  "Invoices are not set up yet - apply scripts/init-postgres.sql (table: invoices).";
+  "Invoices are not set up yet - apply migration 19 (table: invoices).";
 const EXTRA_CHARGES_HINT =
-  "Additional charges are not set up yet - apply scripts/init-postgres.sql (column: invoices.extra_charges).";
+  "Additional charges are not set up yet - apply migration 26 (column: invoices.extra_charges).";
 
 function fail(e: unknown): { ok: false; error: string } {
   if (e instanceof InvoiceStateError) return { ok: false, error: e.message };
@@ -172,7 +173,10 @@ export async function getInvoicePanel(
         gstMealPercent: rules.gst_meal_percent,
         kind: invoiceKind(document),
         servesMeals: invoicePrintsDining(document),
-        blocker: live && live.status !== "draft" ? null : invoiceBlocker(booking, document),
+        blocker:
+          live && live.status !== "draft"
+            ? null
+            : (invoiceRoleError(user.role, booking.booking_type) ?? invoiceBlocker(booking, document)),
         history: invoices.filter((i) => i.status === "cancelled"),
         canCancel: canCancelInvoices(user.role),
       },
@@ -218,6 +222,8 @@ export async function saveInvoiceDraftAction(
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
+    const roleProblem = invoiceRoleError(user.role, booking.booking_type);
+    if (roleProblem) return { ok: false, error: roleProblem };
     await store.saveInvoiceDraft(bookingId, cleanCounts(counts), user.id, cleanCharges(booking, charges));
     return { ok: true };
   } catch (e) {
@@ -240,6 +246,9 @@ export async function issueInvoiceAction(
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
+    // The caretaker invoices personal bookings only (4 Nov 2026).
+    const roleProblem = invoiceRoleError(user.role, booking.booking_type);
+    if (roleProblem) return { ok: false, error: roleProblem };
     const mealCounts = cleanCounts(counts);
     const extraCharges = cleanCharges(booking, charges);
     const now = new Date().toISOString();

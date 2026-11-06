@@ -7,75 +7,148 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 4 November 2026 - remove department_or_club, roll_number and staff_category from profiles
+## Round of 6 November 2026 - integrating `main` into `production_migration`
 
-Continuation of the "computed fields" pattern established on 3 Nov 2026 for
-`hostel_name`. The three remaining derived columns - `department_or_club`,
-`roll_number` and `staff_category` - are removed from the `profiles` table and
-computed at read time, like `hostel_name` already was.
+Two branches had diverged for a week: **3 commits on `main`** (the owner's
+sixteenth list, the MS/PhD spouse rule, user groups and login blocking) and
+**13 on `production_migration`** (another developer's rewrite of the data layer
+from the Supabase JS client to direct PostgreSQL over `pg`, plus the
+institute's own data tables, a CSV/XLSX import and a security pass). The merge
+base is `fb696f6`, 28 Oct 2026.
 
-### What was delivered
+The owner's brief: `production_migration` becomes the one working branch; keep
+**Supabase as the database host**; keep **every existing row**; lose nothing
+from either side; and treat the hosted project as production, never as a test
+database.
 
-**DB schema** (`scripts/init-postgres.sql`): the three columns dropped from
-`CREATE TABLE profiles`. The `profiles_v` view expanded to compute all four
-fields: `hostel_name` from `institute_students`/`institute_wardens`,
-`department_or_club` from `units.name` via `unit_id`, `roll_number` from
-`institute_students`, and `staff_category` from `institute_employees.employee_type`
-(Teaching Staff -> `faculty`, Non Teaching Staff -> `staff`).
+The work is on **`integration/main-into-production`**, a real merge commit with
+both parents. `main` and `production_migration` are untouched, and
+`backup/main-pre-integration` / `backup/production_migration-pre-integration`
+tag where each stood. Nothing has been pushed, and nothing has been run against
+the hosted project.
 
-**Type system** (`lib/types.ts`): `NewProfileInput` now excludes all four
-computed fields: `Omit<Profile, "id" | "hostel_name" | "department_or_club" |
-"roll_number" | "staff_category">`. `Profile` type unchanged - all four fields
-remain on the read type.
+### What the two branches actually disagreed about
 
-**Both stores**: `PostgresStore` writes no longer include the three fields.
-`MockStore`'s `withComputed()` (renamed from `withHostel()`) resolves all four
-fields at read time from the in-memory institute tables: students for
-`hostel_name` and `roll_number`, wardens for `hostel_name`, `units.name` for
-`department_or_club`, and `institute_employees.employee_type` for
-`staff_category`. Seed profiles (`SeededProfileInput`) carry none of the four
-fields; two `as Profile` casts in mock.ts bridge the type gap at insertion.
+36 files were touched by both. Eleven content conflicts and four
+delete-against-modify ones; each resolution is in
+[02-decisions.md](02-decisions.md). Four things mattered more than the rest,
+and three of them were **silent**:
 
-**User import** (`lib/users-import.ts`): `department_or_club`, `roll_number` and
-`staff_category` removed from `UserImportRow`, `DEFAULT_COLUMNS`,
-`KNOWN_COLUMNS`, `sameProfile()` and `changedFields()`. Import now handles
-only `email`, `full_name`, `role` and `unit_id`. `staffCategoryFrom()` deleted.
+1. **Git took `production_migration`'s deletion of the entire migration
+   history.** All 34 files in `supabase/migrations/`, all ten in
+   `supabase/repairs/` and `supabase/seed.sql` had been deleted there and
+   replaced by one consolidated `scripts/init-postgres.sql`; `main` had not
+   touched them, so the merge removed them **without reporting a conflict**.
+   They are the applied history of the live database. **Restored, all 45
+   files.**
 
-**Import undo** (`lib/users-import-undo.ts`): `UserImportFields` reduced to
-`full_name`, `role` and `unit_id`. `FIELD_LABELS` reduced accordingly.
+2. **`scripts/init-postgres.sql` could not run the application.** It declared
+   `booking_status` with `PENDING_WARDEN_REVIEW`, `PENDING_FA_REVIEW` and
+   `PENDING_IAR_REVIEW`; the code on **both** branches writes
+   `PENDING_WARDEN`, `PENDING_FA`, `PENDING_IAR`. Checked against a throwaway
+   Postgres: `select 'PENDING_WARDEN'::booking_status` is an error on a
+   database built from that file, so **no student, club or IAR booking could be
+   stored at all**. It had also lost `bookings_debit_head_check`,
+   `bookings_meals_shape` and `projects_title_check`; turned
+   `bookings.project_id` from `on delete restrict` into `on delete set null`
+   (deleting a project would silently blank the debit reference on every
+   booking charged to it); replaced `room_holds`' `(booking_id, room_id)`
+   primary key with a surrogate `id`; and dropped `NOT NULL` from
+   `booking_guests.gender` and `bookings.copy_to_emails`. **The file is
+   deleted.** A hand-maintained second copy of 37 migrations will drift again;
+   the migrations are the one source of truth, and the 19 "apply
+   scripts/init-postgres.sql" messages in the code now name the migration that
+   adds the thing.
 
-**Actions** (`app/actions/admin.ts`): `userSchema` no longer includes the three
-fields. `createProfileAction` and `updateProfileAction` no longer write them.
+3. **`profiles_v` would have emptied every warden's scope.** The rewrite drops
+   `hostel_name`, `department_or_club`, `roll_number` and `staff_category` from
+   `profiles` and resolves them from the institute tables at read time - which
+   is the better design, and is where this is going. But those tables are
+   **empty on this project**, and `profiles.hostel_name` is what `canReview()`
+   and `routeFor()` scope a warden and a student's approval route by. A view
+   reading the institute tables alone would have returned NULL for all of it,
+   with no error anywhere: a student's booking would simply have stopped
+   routing to their Assistant Warden. The columns are **kept**, the view
+   `COALESCE`s institute-first-stored-second, and migration 37 backfills.
 
-**Components** (`components/admin/users-manager.tsx`): form and table no longer
-show Department/Club, Roll Number or Staff Category columns. The admin Users &
-Roles page removed its unused imports.
+4. **An email + password sign-in door had been added**, with
+   `setUserPasswordAction` requiring `requireConsole("users")` but **not** the
+   TOTP step-up that `deleteUserAction` requires - so the console unlock (a
+   shared secret, default `0000`) was enough to set the developer's password
+   and sign in as them: a shorter path to every protected operation than the
+   one the step-up exists to guard. Minimum length was 4 characters. The
+   owner's decision was to **drop it**, Google only.
+   [`archive/password-sign-in/`](../archive/password-sign-in/) keeps it
+   verbatim, with the two defects named and the restore written out.
 
-**Business logic**: `lib/debit-heads.ts` and `lib/office-debit-heads.ts`
-unchanged - they read `staff_category` from the `Profile` type, which still
-carries it (computed at read time).
+### The architecture now
 
-**Test helpers** (`tests/helpers.ts`): new `resolveComputed()` function mirrors
-the `profiles_v` / `withComputed()` logic for test data: resolves all four
-fields from seed institute tables. `asProfile()` and `asProfiles()` helpers
-promote `SeededProfileInput` to full `Profile` with computed fields.
+| Concern | Before | Now |
+| --- | --- | --- |
+| SQL | Supabase JS → PostgREST | **`pg` straight to Supabase Postgres** (`lib/db/client.ts`) |
+| Documents | Supabase Storage | **Supabase Storage** (`lib/storage/`) - *not* the local folder the rewrite used |
+| Sign-in | Google / LDAP / account picker | **Google / LDAP / account picker** - the password door is withdrawn |
+| Live updates | Realtime websocket | **Polling, 30 s** - which also takes the anon key out of the browser |
+| RLS | enabled, `authenticated` surface closed by migration 31 | **unchanged, and it still matters**: PostgREST is still listening on the project and the anon key is public |
+| Academic data | `academic_records`, one flat table | **six institute tables**, with `academic_records` kept and backfilled from |
 
-**All 10 affected test files** updated: `approval-routes`, `faculty-advisor`,
-`fourteenth-round`, `workflow-hod`, `ninth-round`, `user-import-idempotency`,
-`user-import-undo`, `store-settings`, `fourth-round`, `office-debit-heads`.
+The one new seam is `lib/storage/`: `getDocumentStore()` picks the Supabase
+bucket when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set and a local
+folder otherwise - the same shape of decision as `getStore()` and
+`getMailer()`. `assertEnv()` refuses to start a production server with no
+storage configured, so the folder cannot be reached by accident in production.
 
-### Validation
+`PostgresStore` also gained everything `main` had added to `SupabaseStore`:
+`tariff_scope` on a status update (migration 35), the four user-group methods
+and `updateProfiles` (migration 36), and `profileWriteError`'s mapping of the
+LDAP-uniqueness and group-not-found cases. Its three profile writers build
+their column list from the keys of the object they are handed, so they now go
+through a `PROFILE_COLUMNS` allow-list: an unexpected key would become an
+identifier in SQL, and identifiers cannot be parameterised.
 
-`npm run lint` (0 errors, 0 warnings), `npm run typecheck`, `npm test`
-(604 tests, 34 files), `npm run build` all clean.
+### Migration 37
 
-### What is left open
+One migration,
+[`00000000000037_institute_tables_and_profiles_view.sql`](../supabase/migrations/00000000000037_institute_tables_and_profiles_view.sql),
+in eleven guarded sections. Expand only - **nothing is dropped**:
 
-- Existing Postgres databases with the old columns need
-  `ALTER TABLE profiles DROP COLUMN department_or_club`,
-  `ALTER TABLE profiles DROP COLUMN roll_number`,
-  `ALTER TABLE profiles DROP COLUMN staff_category`.
-  Or they can be left in place - the view shadows them on reads and writes
-  ignore them. The `hostel_name` column (dropped 3 Nov) is the same.
-- The `profiles_v` view must be created or replaced on any database that has
-  the institute tables (migration 35) but not the view yet.
+- the six institute tables (`institute_hostels`, `institute_students`,
+  `institute_employees`, `institute_offices`, `institute_fcc`,
+  `institute_wardens`), each with RLS enabled and no `authenticated` policy;
+- **backfilled from `academic_records`**, which is kept intact, and then from
+  `profiles` for the people the portal knows but the office has not pasted in -
+  a student's hostel and roll number, a warden's hostel, an employee's
+  department and staff category;
+- `profiles.account_status` (the office's word for *why* an account has gone),
+  defaulted to `active`, with accounts already blocked under migration 36 given
+  `relieved` so a status and a timestamp cannot disagree;
+- the four `units` column renames the rewrite needs (`kind` → `category`,
+  `office_class` → `office_type`, `parent_id` → `parent_department_id`,
+  `hod_unit_id` → `hod_approval_from_id`) - renames, so no data moves, and
+  `units` is empty on this project anyway;
+- `profiles_v`, `security_invoker`, with the COALESCE described above.
+
+**Verified on a throwaway `postgres:16-alpine`**, never on the hosted project:
+migrations 1-36 applied, a production-like fixture loaded (10 profiles
+including a day scholar with no hostel and an account blocked under migration
+36, 8 academic records, 2 bookings with holds, guests and logs), then 37
+applied. Row counts in every pre-existing table **identical** before and after;
+`profiles_v` reproduces the old `profiles` scope row for row; and with the four
+`profiles` columns deliberately blanked inside a transaction, the institute
+tables alone still resolve every hostel, roll number and staff category -
+which is what makes the later contract step safe. 37 runs three times with no
+error.
+
+### Left open
+
+[03-roadmap.md](03-roadmap.md) has the list. The two that block a deployment:
+
+- **`DATABASE_URL` is not set anywhere yet.** `.env.local` has the Supabase
+  project URL and the service-role key but no connection string, so the portal
+  still runs on the mock store. Which pooler to use, and the TLS note, are in
+  `lib/db/client.ts`.
+- **Migrations 31, 33, 34, 35, 36 and 37 are not applied to the hosted
+  project** (1-30 and 32 are, re-verified 27 Oct 2026). 31 and 37 are the two
+  that are *not optional once this branch is deployed*. Running them is a
+  production change and needs the owner's go-ahead, a backup and the order in
+  [04-production.md](04-production.md).

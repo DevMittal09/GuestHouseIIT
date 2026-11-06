@@ -12,8 +12,9 @@ import type {
   RoomOccupancySegment,
   RoomType,
 } from "@/lib/types";
-import { BufferClashError, RoomClashError } from "@/lib/types";
+import { ACCOUNT_STATUS_LABELS, BufferClashError, RoomClashError } from "@/lib/types";
 import { parseRuleGroup } from "@/lib/settings";
+import { getDocumentStore } from "@/lib/storage";
 import { bufferMs } from "@/lib/turnover";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
@@ -42,6 +43,7 @@ import {
   type AuditFilter,
   type NewAuditEvent,
 } from "@/lib/audit";
+import type { NewUserGroup, UserGroup } from "@/lib/user-groups";
 import type { NewProjectInput, Project } from "@/lib/projects";
 import type {
   InstituteStudent,
@@ -90,14 +92,10 @@ import type {
   UserImportStatus,
 } from "@/lib/users-import-undo";
 import type { Pool, PoolClient } from "pg";
-import * as fs from "fs";
-import * as path from "path";
 
 type Queryable = Pick<Pool | PoolClient, "query">;
 
 const SEARCH_SCAN_LIMIT = 1000;
-
-const UPLOAD_DIR = path.join(process.cwd(), ".uploads");
 
 function withMealsFlag(row: GuestHouse): GuestHouse {
   return { ...row, serves_meals: row.serves_meals ?? false };
@@ -113,18 +111,80 @@ function parseRange(literal: string): [string, string] {
   return [new Date(m[1]).toISOString(), new Date(m[2]).toISOString()];
 }
 
+const USER_GROUP_COLUMNS = new Set([
+  "name",
+  "role",
+  "programme",
+  "batch_year",
+  "intake",
+  "prefill_copy_to",
+  "allowed_copy_to",
+]);
+
+const GROUPS_MIGRATION =
+  "Apply migration 36 first (supabase/migrations/00000000000036_user_groups_and_login_access.sql)";
+
 function profileWriteError(error: { code?: string; message: string }): Error | typeof error {
+  if (error.code === "42703" && /group_id|login_disabled/.test(error.message)) {
+    return new Error(GROUPS_MIGRATION);
+  }
+  if (error.code === "23505" && error.message.includes("ldap_uid")) {
+    return new Error("Another user already has this LDAP username");
+  }
+  // Migration 16: `profiles.hostel_name` must name a hostel on the list.
   if (error.code === "23503" && error.message.includes("profiles_hostel_fk")) {
     return new Error("That hostel is not on the list - add it in Settings first");
   }
+  if (error.code === "23503" && error.message.includes("profiles_group_id_fkey")) {
+    return new Error("That group no longer exists");
+  }
   return error;
+}
+
+function userGroupWriteError(error: { code?: string; message: string }): Error | typeof error {
+  if (error.code === "23505") return new Error("A group with this name already exists");
+  if (error.code === "42P01") return new Error(GROUPS_MIGRATION);
+  return error;
+}
+
+/**
+ * The columns a profile write may name.
+ *
+ * `createProfile` / `updateProfile` build their column list out of the keys of
+ * the object they are handed, so the list has to be an **allow-list** rather
+ * than a comment: an unexpected key becomes an identifier in SQL, and
+ * identifiers cannot be parameterised. Every caller builds its patch from a
+ * zod schema today, which is why nothing has gone wrong; this makes that a
+ * property of the store rather than of each of its callers.
+ */
+const PROFILE_COLUMNS = new Set([
+  "email",
+  "full_name",
+  "role",
+  "hostel_name",
+  "department_or_club",
+  "roll_number",
+  "ldap_uid",
+  "unit_id",
+  "staff_category",
+  "account_status",
+  "group_id",
+  "login_disabled_at",
+  "login_disabled_reason",
+]);
+
+function assertProfileColumns(cols: string[]): void {
+  const unexpected = cols.filter((c) => c !== "id" && !PROFILE_COLUMNS.has(c));
+  if (unexpected.length > 0) {
+    throw new Error(`Refusing to write unknown profile column(s): ${unexpected.join(", ")}`);
+  }
 }
 
 function importBatchError(error: { code?: string; message: string }): Error {
   if (error.code === "42P01") {
     return new Error(
       "Cannot import accounts until migration 32 is applied " +
-        "(scripts/init-postgres.sql, table: user_import_batches) - " +
+        "(supabase/migrations/00000000000032_user_import_batches.sql) - " +
         "it is the table that records what an import changed, so it can be undone"
     );
   }
@@ -229,23 +289,10 @@ export class PostgresStore implements DataStore {
     return rows[0] ?? null;
   }
 
-  async getPasswordHash(email: string): Promise<string | null> {
-    const { rows } = await this.pool.query(
-      "SELECT password_hash FROM profiles WHERE lower(email) = lower($1)",
-      [email.trim()]
-    );
-    return rows[0]?.password_hash ?? null;
-  }
-
-  async setPasswordHash(email: string, hash: string): Promise<void> {
-    await this.pool.query(
-      "UPDATE profiles SET password_hash = $1 WHERE lower(email) = lower($2)",
-      [hash, email.trim()]
-    );
-  }
 
   async createProfile(input: NewProfileInput): Promise<Profile> {
     const cols = Object.keys(input);
+    assertProfileColumns(cols);
     const vals = Object.values(input);
     const placeholders = vals.map((_, i) => `$${i + 1}`).join(", ");
     try {
@@ -266,6 +313,7 @@ export class PostgresStore implements DataStore {
   async updateProfile(id: string, patch: Partial<NewProfileInput>): Promise<void> {
     const entries = Object.entries(patch).filter(([, v]) => v !== undefined);
     if (entries.length === 0) return;
+    assertProfileColumns(entries.map(([col]) => col));
     const sets = entries.map(([col], i) => `${col} = $${i + 2}`);
     const vals = entries.map(([, v]) => v);
     try {
@@ -279,15 +327,90 @@ export class PostgresStore implements DataStore {
     }
   }
 
-  async bulkUpdateAccountStatus(emails: string[], status: import("@/lib/types").AccountStatus): Promise<number> {
+  async bulkUpdateAccountStatus(
+    emails: string[],
+    status: import("@/lib/types").AccountStatus
+  ): Promise<number> {
     if (emails.length === 0) return 0;
     const lower = emails.map((e) => e.trim().toLowerCase());
-    const placeholders = lower.map((_, i) => `$${i + 2}`).join(", ");
+    const placeholders = lower.map((_, i) => `$${i + 3}`).join(", ");
+    // `account_status` says *why*; `login_disabled_at` says *when*
+    // (migration 36). One statement writes both, so `signInRefusal` stays the
+    // only thing that answers "may this person sign in".
     const { rowCount } = await this.pool.query(
-      `UPDATE profiles SET account_status = $1 WHERE lower(email) IN (${placeholders})`,
-      [status, ...lower]
+      `UPDATE profiles
+          SET account_status = $1,
+              login_disabled_at = case when $1 = 'active' then null
+                                       else coalesce(login_disabled_at, now()) end,
+              login_disabled_reason = case when $1 = 'active' then null
+                                           else coalesce(login_disabled_reason, $2) end
+        WHERE lower(email) IN (${placeholders})`,
+      [status, ACCOUNT_STATUS_LABELS[status], ...lower]
     );
     return rowCount ?? 0;
+  }
+
+  /** The same change to many accounts in one write: a whole batch graduating. */
+  async updateProfiles(ids: string[], patch: Partial<NewProfileInput>): Promise<void> {
+    const entries = Object.entries(patch).filter(([, v]) => v !== undefined);
+    if (entries.length === 0 || ids.length === 0) return;
+    assertProfileColumns(entries.map(([col]) => col));
+    const sets = entries.map(([col], i) => `${col} = $${i + 2}`);
+    try {
+      await this.pool.query(
+        `UPDATE profiles SET ${sets.join(", ")} WHERE id = ANY($1)`,
+        [ids, ...entries.map(([, v]) => v)]
+      );
+    } catch (err: unknown) {
+      throw profileWriteError(err as { code?: string; message: string });
+    }
+  }
+
+  // ---- user groups (migration 36) --------------------------------------
+
+  async listUserGroups(): Promise<UserGroup[]> {
+    const { rows } = await this.pool.query("SELECT * FROM user_groups ORDER BY name");
+    return rows as UserGroup[];
+  }
+
+  async createUserGroup(input: NewUserGroup): Promise<UserGroup> {
+    const cols = Object.keys(input);
+    if (cols.some((c) => !USER_GROUP_COLUMNS.has(c))) {
+      throw new Error("Refusing to write an unknown user_groups column");
+    }
+    const vals = cols.map((c) => (input as Record<string, unknown>)[c]);
+    try {
+      const { rows } = await this.pool.query(
+        `INSERT INTO user_groups (${cols.join(", ")})
+         VALUES (${vals.map((_, i) => `$${i + 1}`).join(", ")}) RETURNING *`,
+        vals
+      );
+      return rows[0] as UserGroup;
+    } catch (err: unknown) {
+      throw userGroupWriteError(err as { code?: string; message: string });
+    }
+  }
+
+  async updateUserGroup(id: string, patch: Partial<NewUserGroup>): Promise<void> {
+    const entries = Object.entries(patch).filter(([, v]) => v !== undefined);
+    if (entries.length === 0) return;
+    if (entries.some(([col]) => !USER_GROUP_COLUMNS.has(col))) {
+      throw new Error("Refusing to write an unknown user_groups column");
+    }
+    const sets = entries.map(([col], i) => `${col} = $${i + 2}`);
+    try {
+      await this.pool.query(
+        `UPDATE user_groups SET ${sets.join(", ")} WHERE id = $1`,
+        [id, ...entries.map(([, v]) => v)]
+      );
+    } catch (err: unknown) {
+      throw userGroupWriteError(err as { code?: string; message: string });
+    }
+  }
+
+  /** The caller has already refused a group with members or a route naming it. */
+  async deleteUserGroup(id: string): Promise<void> {
+    await this.pool.query("DELETE FROM user_groups WHERE id = $1", [id]);
   }
 
   async deleteProfile(id: string): Promise<void> {
@@ -303,6 +426,7 @@ export class PostgresStore implements DataStore {
   async createProfiles(inputs: SeededProfileInput[]): Promise<void> {
     if (inputs.length === 0) return;
     const cols = Object.keys(inputs[0]);
+    assertProfileColumns(cols);
     const params: unknown[] = [];
     const valueRows: string[] = [];
     for (const input of inputs) {
@@ -827,6 +951,18 @@ export class PostgresStore implements DataStore {
       if (update.no_show_released_at !== undefined) {
         sets.push(`no_show_released_at = $${pi}`); vals.push(update.no_show_released_at); pi++;
       }
+      // The manager's tariff category (migration 35). Named only when the
+      // approval carried one, so a database still on migration 34 refuses
+      // nothing it used to accept - and both columns move together, because
+      // half a category prices nothing.
+      if (update.tariff_scope !== undefined) {
+        sets.push(`tariff_booking_type = $${pi}`);
+        vals.push(update.tariff_scope?.booking_type ?? null);
+        pi++;
+        sets.push(`tariff_requester_role = $${pi}`);
+        vals.push(update.tariff_scope?.requester_role ?? null);
+        pi++;
+      }
       await client.query(`UPDATE bookings SET ${sets.join(", ")} WHERE id = $1`, vals);
 
       if (!ROOM_HOLDING_STATUSES.includes(update.status)) {
@@ -1024,19 +1160,19 @@ export class PostgresStore implements DataStore {
     }
   }
 
-  // ---- documents (local filesystem) -------------------------------------
+  // ---- documents (Supabase Storage; a local folder in development) -------
+  //
+  // SQL goes through `pg`, but the private `documents` bucket is kept: it
+  // already holds the production uploads, and a signed URL with an expiry is
+  // a better answer than a path under the working directory. See
+  // `lib/storage/`.
 
   async saveDocument(file: PreparedUpload, folder: string): Promise<string> {
-    const dir = path.join(UPLOAD_DIR, folder);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, file.name), Buffer.from(file.bytes));
-    return `${folder}/${file.name}`;
+    return getDocumentStore().save(file, folder);
   }
 
-  async documentUrl(storedPath: string, _seconds: number): Promise<string | null> {
-    void _seconds;
-    const onDisk = path.join(UPLOAD_DIR, storedPath);
-    return fs.existsSync(onDisk) ? `/api/documents/${storedPath}` : null;
+  async documentUrl(storedPath: string, seconds: number): Promise<string | null> {
+    return getDocumentStore().signedUrl(storedPath, seconds);
   }
 
   async findDocumentOwner(storedPath: string): Promise<{ bookingId: string } | null> {
@@ -1053,8 +1189,7 @@ export class PostgresStore implements DataStore {
   }
 
   async deleteDocument(storedPath: string): Promise<void> {
-    const onDisk = path.join(UPLOAD_DIR, storedPath);
-    try { fs.rmSync(onDisk, { force: true }); } catch { /* already gone */ }
+    await getDocumentStore().remove(storedPath);
   }
 
   // ---- settings ---------------------------------------------------------

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   ACCOUNTS,
   chooseGuestHouse,
+  chooseTariffCategory,
   kitchenName,
   localDate,
   nextDay,
@@ -152,6 +153,10 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   await row.getByRole("button", { name: /Review & Approve/ }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: /Approve meals/ })).toBeVisible();
+  // The rate these meals are charged at is the desk's decision, taken with
+  // the approval (31 Oct 2026) - the kitchen's sheet has a general per-head
+  // rate and free meals for students and alumni.
+  await chooseTariffCategory(dialog);
   await dialog.getByRole("button", { name: /Approve|Confirm/ }).last().click();
   await expect(dialog).toBeHidden({ timeout: 30_000 });
 
@@ -243,7 +248,9 @@ test("the availability console counts rooms for a requester and charts them for 
    * rather than the class, so a missing theme token fails here too.
    */
   const colour = await page
-    .locator('li[aria-label*="rooms free"] span.tabular-nums')
+    // "N rooms available" since 4 Nov 2026 - no denominator. A past day's
+    // label ends "not available to book", so the match is on the end.
+    .locator('li[aria-label$=" available"] span.tabular-nums')
     .first()
     .evaluate((el) => getComputedStyle(el).color);
   expect(colour).toBe("rgb(0, 112, 60)");

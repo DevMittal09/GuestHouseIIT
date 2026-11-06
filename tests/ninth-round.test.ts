@@ -276,13 +276,14 @@ describe("loading the accounts from a spreadsheet", () => {
   const context = (profiles: Profile[] = [], assignable: Role[] = ["student", "employee", "warden"]) => ({
     profiles,
     assignable,
+    hostels: ["Malhar", "Saveri"],
     units,
   });
 
   it("reads a paste with no header in the default column order", () => {
     expect(USER_CSV_HEADER).toBe(DEFAULT_COLUMNS.join(", "));
     const plan = planUserImport(
-      "112201001@smail.iitpkd.ac.in, A. Student, student, ",
+      "112201001@smail.iitpkd.ac.in, A. Student, student, Malhar, , 112201001, 112201001",
       context()
     );
     expect(plan.problems).toEqual([]);
@@ -292,6 +293,11 @@ describe("loading the accounts from a spreadsheet", () => {
         email: "112201001@smail.iitpkd.ac.in",
         full_name: "A. Student",
         role: "student",
+        hostel_name: "Malhar",
+        department_or_club: null,
+        roll_number: "112201001",
+        ldap_uid: "112201001",
+        staff_category: null,
         unit_id: null,
       },
     ]);

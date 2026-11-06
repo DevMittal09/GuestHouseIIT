@@ -1,3 +1,4 @@
+import type { NewUserGroup, UserGroup } from "@/lib/user-groups";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -16,7 +17,7 @@ import type {
   RoomHold,
   RoomOccupancySegment,
 } from "@/lib/types";
-import { BufferClashError, RoomClashError } from "@/lib/types";
+import { ACCOUNT_STATUS_LABELS, BufferClashError, RoomClashError } from "@/lib/types";
 import type { Role, RoomType } from "@/lib/types";
 import { mealsOn, normalizeMeals } from "@/lib/meals";
 import { isInfantAge } from "@/lib/occupancy";
@@ -71,6 +72,7 @@ import {
   seedLogs,
   seedProfiles,
   seedRoomHolds,
+  seedUserGroups,
   seedOfficialEmails,
   seedProjects,
   seedTariffs,
@@ -149,15 +151,15 @@ interface Db {
   units?: Unit[];
   /** Migration 32: one row per spreadsheet import - what it changed, so it can be undone. */
   user_import_batches?: UserImportBatch[];
-  /** Migration 35: institute data tables. */
+  /** Migration 37: the institute's own data tables. */
   institute_students?: InstituteStudent[];
   institute_employees?: InstituteEmployee[];
   institute_offices?: InstituteOffice[];
   institute_fcc?: InstituteFCC[];
   institute_hostels?: InstituteHostel[];
   institute_wardens?: InstituteWarden[];
-  /** Email+password login (for testing). Keyed by lower(email). */
-  password_hashes?: Record<string, string>;
+  /** Migration 36: user groups. */
+  user_groups?: UserGroup[];
 }
 
 // `MOCK_DB_PATH` lets the test suite run against a throwaway file instead of
@@ -512,7 +514,12 @@ function loadDb(): Db {
       db.user_import_batches = [];
       dirty = true;
     }
-    // Migration 35: institute data tables.
+    // Migration 36.
+    if (!db.user_groups) {
+      db.user_groups = [...seedUserGroups];
+      dirty = true;
+    }
+    // Migration 37: the institute's own data tables.
     if (!db.institute_students) {
       db.institute_students = seedInstituteStudents;
       dirty = true;
@@ -554,6 +561,7 @@ function loadDb(): Db {
     units: seedUnits,
     official_emails: [...seedOfficialEmails],
     projects: [...seedProjects],
+    user_groups: [...seedUserGroups],
     security_audit: [],
     tariffs: [...seedTariffs],
     invoices: [],
@@ -665,18 +673,6 @@ export class MockStore implements DataStore {
     const db = loadDb();
     const p = db.profiles.find((x) => x.email.toLowerCase() === email.toLowerCase());
     return p ? withComputed(db, p) : null;
-  }
-
-  async getPasswordHash(email: string): Promise<string | null> {
-    const db = loadDb();
-    return db.password_hashes?.[email.trim().toLowerCase()] ?? null;
-  }
-
-  async setPasswordHash(email: string, hash: string): Promise<void> {
-    const db = loadDb();
-    if (!db.password_hashes) db.password_hashes = {};
-    db.password_hashes[email.trim().toLowerCase()] = hash;
-    saveDb(db);
   }
 
   async listGuestHouses(): Promise<GuestHouse[]> {
@@ -904,6 +900,12 @@ export class MockStore implements DataStore {
     b.status = update.status;
     if (update.rejection_reason !== undefined) b.rejection_reason = update.rejection_reason;
     if (update.no_show_released_at !== undefined) b.no_show_released_at = update.no_show_released_at;
+    // The tariff category the manager chose with this approval (migration 35).
+    // Both columns or neither: half a category prices nothing.
+    if (update.tariff_scope !== undefined) {
+      b.tariff_booking_type = update.tariff_scope?.booking_type ?? null;
+      b.tariff_requester_role = update.tariff_scope?.requester_role ?? null;
+    }
     // A hold exists exactly while the booking holds the room, so leaving
     // ROOM_HOLDING_STATUSES releases the rooms with no caller involvement.
     // The room *cards* are not a hold: they record which room the party was
@@ -1158,6 +1160,58 @@ export class MockStore implements DataStore {
     saveDb(db);
   }
 
+  async updateProfiles(ids: string[], patch: Partial<NewProfileInput>): Promise<void> {
+    const db = loadDb();
+    const wanted = new Set(ids);
+    for (const profile of db.profiles) {
+      if (wanted.has(profile.id)) Object.assign(profile, patch);
+    }
+    saveDb(db);
+  }
+
+  // ---- user groups (migration 36) --------------------------------------
+
+  async listUserGroups(): Promise<UserGroup[]> {
+    return [...(loadDb().user_groups ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async createUserGroup(input: NewUserGroup): Promise<UserGroup> {
+    const db = loadDb();
+    const groups = (db.user_groups ??= []);
+    if (groups.some((g) => g.name.toLowerCase() === input.name.toLowerCase())) {
+      throw new Error("A group with this name already exists");
+    }
+    const group: UserGroup = { ...input, id: randomUUID(), created_at: new Date().toISOString() };
+    groups.push(group);
+    saveDb(db);
+    return group;
+  }
+
+  async updateUserGroup(id: string, patch: Partial<NewUserGroup>): Promise<void> {
+    const db = loadDb();
+    const groups = db.user_groups ?? [];
+    const group = groups.find((g) => g.id === id);
+    if (!group) throw new Error("That group no longer exists");
+    if (
+      patch.name &&
+      groups.some((g) => g.id !== id && g.name.toLowerCase() === patch.name!.toLowerCase())
+    ) {
+      throw new Error("A group with this name already exists");
+    }
+    Object.assign(group, patch);
+    saveDb(db);
+  }
+
+  async deleteUserGroup(id: string): Promise<void> {
+    const db = loadDb();
+    db.user_groups = (db.user_groups ?? []).filter((g) => g.id !== id);
+    // As the foreign key does: on delete set null.
+    for (const profile of db.profiles) {
+      if (profile.group_id === id) profile.group_id = null;
+    }
+    saveDb(db);
+  }
+
   async createProfiles(inputs: SeededProfileInput[]): Promise<void> {
     if (inputs.length === 0) return;
     const db = loadDb();
@@ -1177,12 +1231,22 @@ export class MockStore implements DataStore {
   async bulkUpdateAccountStatus(emails: string[], status: import("@/lib/types").AccountStatus): Promise<number> {
     const db = loadDb();
     const lower = new Set(emails.map((e) => e.toLowerCase()));
+    const now = new Date().toISOString();
     let count = 0;
     for (const p of db.profiles) {
-      if (lower.has(p.email.toLowerCase())) {
-        (p as Record<string, unknown>).account_status = status;
-        count++;
+      if (!lower.has(p.email.toLowerCase())) continue;
+      p.account_status = status;
+      // `account_status` says *why*; `login_disabled_at` says *when*
+      // (migration 36). They are written together so `signInRefusal` stays
+      // the one reader of "may this person sign in".
+      if (status === "active") {
+        p.login_disabled_at = null;
+        p.login_disabled_reason = null;
+      } else {
+        p.login_disabled_at = p.login_disabled_at ?? now;
+        p.login_disabled_reason = p.login_disabled_reason ?? ACCOUNT_STATUS_LABELS[status];
       }
+      count++;
     }
     if (count > 0) saveDb(db);
     return count;

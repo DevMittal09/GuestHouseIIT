@@ -66,7 +66,7 @@ async function storedRecord(): Promise<string | null> {
   } catch (e) {
     console.error(
       "admin-lock: could not read the console password - falling back to the default. " +
-        "Has scripts/init-postgres.sql been applied? (table: app_settings)",
+        "Has migration 5 been applied? (table: app_settings)",
       e
     );
     return null;

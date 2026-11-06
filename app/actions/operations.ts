@@ -34,7 +34,7 @@ function fail(e: unknown, what: string): { ok: false; error: string } {
   if (e instanceof RoomClashError) return { ok: false, error: e.message };
   const code = (e as { code?: string } | null)?.code;
   if (code === "42P01" || code === "PGRST205" || code === "42703") {
-    return { ok: false, error: "Apply scripts/init-postgres.sql first (table: room_blocks)." };
+    return { ok: false, error: "Apply migration 20 first (table: room_blocks)." };
   }
   console.error(`[operations] ${what} failed`, e);
   return { ok: false, error: e instanceof Error ? e.message : `Something went wrong while ${what}` };

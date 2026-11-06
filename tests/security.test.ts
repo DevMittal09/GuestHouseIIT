@@ -95,10 +95,61 @@ describe("session rules", () => {
 });
 
 describe("the environment gate", () => {
-  const base = { NODE_ENV: "production", APP_URL: "https://gh.iitpkd.ac.in", CRON_SECRET: "0123456789abcdef", DATABASE_URL: "postgresql://u:p@localhost/gh", ID_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"), GOOGLE_CLIENT_ID: "123.apps.googleusercontent.com", GOOGLE_CLIENT_SECRET: "GOCSPX-test" } as NodeJS.ProcessEnv;
+  // A production environment is complete only with somewhere to put an ID
+  // document and a database reached over TLS (6 Nov 2026). Without the two
+  // storage variables `getDocumentStore()` falls back to a folder under the
+  // working directory, which a redeployed container loses, so the server
+  // refuses to start rather than accepting uploads it cannot keep.
+  const base = { NODE_ENV: "production", APP_URL: "https://gh.iitpkd.ac.in", CRON_SECRET: "0123456789abcdef", DATABASE_URL: "postgresql://u:p@localhost/gh?sslmode=require", ID_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"), GOOGLE_CLIENT_ID: "123.apps.googleusercontent.com", GOOGLE_CLIENT_SECRET: "GOCSPX-test", SUPABASE_URL: "https://project.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "service-role-key" } as NodeJS.ProcessEnv;
 
   it("passes a complete production environment", () => {
     expect(envProblems(base)).toEqual([]);
+  });
+
+  it("refuses production with no document storage", () => {
+    const withoutStorage = { ...base };
+    delete withoutStorage.SUPABASE_URL;
+    delete withoutStorage.SUPABASE_SERVICE_ROLE_KEY;
+    expect(envProblems(withoutStorage).map((p) => p.variable)).toEqual([
+      "SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY",
+    ]);
+  });
+
+  it("refuses a database connection that is not over TLS", () => {
+    const plain = { ...base, DATABASE_URL: "postgresql://u:p@localhost/gh" };
+    expect(envProblems(plain).map((p) => p.variable)).toEqual(["DATABASE_URL"]);
+    // An explicit DATABASE_SSL=true is the other way to say it.
+    expect(envProblems({ ...plain, DATABASE_SSL: "true" })).toEqual([]);
+  });
+
+  it("exempts a mock-store test server from the backing services, and nothing else", () => {
+    // What the Playwright suite and CI run: NODE_ENV=production on the JSON
+    // mock store, with no database, no bucket and no Google client. The
+    // journeys stopped being runnable once Google became a production
+    // requirement and ALLOW_MOCK_STORE exempted DATABASE_URL alone.
+    const testServer = {
+      NODE_ENV: "production",
+      ALLOW_MOCK_STORE: "true",
+      APP_URL: "http://127.0.0.1:3100",
+      CRON_SECRET: "e2e-cron-secret-0123456789",
+      ID_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+    } as NodeJS.ProcessEnv;
+    expect(envProblems(testServer)).toEqual([]);
+    // The exemption is for services, not for the sign-in doors.
+    expect(envProblems({ ...testServer, DEV_LOGIN: "true" }).map((p) => p.variable)).toEqual([
+      "DEV_LOGIN",
+    ]);
+    // Nor for the things that are not secrets.
+    expect(
+      envProblems({ ...testServer, CRON_SECRET: "short" }).map((p) => p.variable)
+    ).toEqual(["CRON_SECRET"]);
+  });
+
+  it("refuses production with the account picker forced open", () => {
+    expect(envProblems({ ...base, MOCK_LOGIN: "true" }).map((p) => p.variable)).toEqual([
+      "MOCK_LOGIN",
+    ]);
   });
 
   it("refuses production without the secrets, and with the developer door open", () => {

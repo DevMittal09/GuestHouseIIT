@@ -1,0 +1,765 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  bulkUpdateAccountStatusAction,
+  createUserAction,
+  deleteUserAction,
+  deleteUsersAction,
+  importUsersAction,
+  previewUserImport,
+  revertUserImportAction,
+  setUserPasswordAction,
+  updateUserAction,
+  type UserFormInput,
+  type UserImportSummary,
+} from "@/app/actions/admin";
+import { FileUploadInput } from "@/components/admin/file-upload-input";
+import { RequiredFieldsNote } from "@/components/required-fields-note";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ACCOUNT_STATUS_LABELS, ROLE_LABELS, type AccountStatus, type Profile, type Role } from "@/lib/types";
+import { UNIT_CATEGORY_LABELS, type Unit } from "@/lib/units";
+import { USER_CSV_HEADER } from "@/lib/users-import";
+import { describeBatch, revertBlocker, type UserImportBatch } from "@/lib/users-import-undo";
+import { SectionHeading } from "@/components/section-heading";
+import { formatInstituteDateTime } from "@/lib/tz";
+
+const ALL_ROLES = Object.keys(ROLE_LABELS) as Role[];
+
+/** Accounts this console user may not touch - see `userEditError`. */
+function isLocked(actorRole: Role, target: Profile): boolean {
+  return actorRole !== "developer" && target.role === "developer";
+}
+
+const EMPTY: UserFormInput = {
+  email: "",
+  full_name: "",
+  role: "student",
+  unit_id: "",
+  account_status: "active",
+};
+
+const ALL_STATUSES = Object.keys(ACCOUNT_STATUS_LABELS) as AccountStatus[];
+
+export function UsersManager({
+  profiles,
+  units = [],
+  roles = ALL_ROLES,
+  actorRole = "developer",
+  imports = [],
+}: {
+  profiles: Profile[];
+  /** Departments, clubs and offices a person can be placed in. */
+  units?: Unit[];
+  /** The roles this console user may hand out - see `assignableRoles`. */
+  roles?: Role[];
+  actorRole?: Role;
+  /** The newest spreadsheet imports, each of them undoable (migration 32). */
+  imports?: UserImportBatch[];
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Profile | null>(null);
+  const [values, setValues] = useState<UserFormInput>(EMPTY);
+  const [toDelete, setToDelete] = useState<Profile | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  /**
+   * Bulk loading accounts from a spreadsheet (8 Oct 2026). `plan` is what the
+   * paste would do, fetched by a read-only action: the office presses Check
+   * the paste, reads it, then Import - the same two steps as the academic
+   * records console, and for the same reason.
+   */
+  const [usersOpen, setUsersOpen] = useState(false);
+  const [usersText, setUsersText] = useState("");
+  const [plan, setPlan] = useState<UserImportSummary | null>(null);
+  /** Rows ticked for deletion, by id. */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  /** The import whose undo is being confirmed. */
+  const [toUndo, setToUndo] = useState<UserImportBatch | null>(null);
+  /** Bulk account status update dialog. */
+  const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
+  const [bulkStatusEmails, setBulkStatusEmails] = useState("");
+  const [bulkStatusTarget, setBulkStatusTarget] = useState<AccountStatus>("relieved");
+
+  const deletable = profiles.filter((p) => !isLocked(actorRole, p));
+  const selectedProfiles = deletable.filter((p) => selected.has(p.id));
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const openCreate = () => {
+    setEditing(null);
+    setValues(EMPTY);
+    setNewPassword("");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (p: Profile) => {
+    setEditing(p);
+    setValues({
+      email: p.email,
+      full_name: p.full_name,
+      role: p.role,
+      unit_id: p.unit_id ?? "",
+      account_status: p.account_status ?? "active",
+    });
+    setNewPassword("");
+    setDialogOpen(true);
+  };
+
+  const savePassword = () =>
+    startTransition(async () => {
+      if (!editing || !newPassword) return;
+      const result = await setUserPasswordAction(editing.id, newPassword);
+      if (result.ok) {
+        toast.success("Password set");
+        setNewPassword("");
+      } else {
+        toast.error(result.error ?? "Failed to set password");
+      }
+    });
+
+  const save = () =>
+    startTransition(async () => {
+      const result = editing
+        ? await updateUserAction(editing.id, values)
+        : await createUserAction(values);
+      if (result.ok) {
+        toast.success(editing ? "User updated" : "User created");
+        setDialogOpen(false);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+
+  const remove = (p: Profile) =>
+    startTransition(async () => {
+      const result = await deleteUserAction(p.id);
+      if (result.ok) {
+        toast.success("User deleted");
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+
+  const openUsersImport = () => {
+    setUsersText("");
+    setPlan(null);
+    setUsersOpen(true);
+  };
+
+  const checkUsers = () =>
+    startTransition(async () => {
+      try {
+        setPlan(await previewUserImport(usersText));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not read the paste");
+      }
+    });
+
+  const runUsersImport = () =>
+    startTransition(async () => {
+      const result = await importUsersAction(usersText);
+      if (result.ok) {
+        toast.success(`Users imported - ${result.summary}`);
+        setUsersOpen(false);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+
+  /**
+   * Undo an import: put back what it changed, remove what it added. Whatever
+   * could not be undone is named, one toast each, the same way a bulk delete
+   * names whoever it could not remove - an account somebody has corrected by
+   * hand since the import is deliberately left as it is.
+   */
+  const undoImport = (batch: UserImportBatch) =>
+    startTransition(async () => {
+      const result = await revertUserImportAction(batch.id);
+      for (const problem of result.conflicts ?? []) toast.error(problem);
+      if (result.ok) {
+        toast.success(`Import undone - ${result.summary}`);
+        setToUndo(null);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+
+  const removeSelected = () =>
+    startTransition(async () => {
+      const result = await deleteUsersAction([...selected]);
+      // Whatever could not go is named rather than swallowed: a person with
+      // bookings is refused by the store, and the office needs to know which.
+      for (const problem of result.refused ?? []) toast.error(problem);
+      if (result.ok) {
+        toast.success(`${result.deleted} account${result.deleted === 1 ? "" : "s"} deleted`);
+        setSelected(new Set());
+        router.refresh();
+      } else if ((result.refused ?? []).length === 0) {
+        toast.error(result.error);
+      }
+    });
+
+  const runBulkStatus = () =>
+    startTransition(async () => {
+      const result = await bulkUpdateAccountStatusAction(bulkStatusEmails, bulkStatusTarget);
+      if (result.ok) {
+        const parts = [`${result.updated} account${result.updated === 1 ? "" : "s"} set to ${ACCOUNT_STATUS_LABELS[bulkStatusTarget]}`];
+        if (result.notFound && result.notFound.length > 0) {
+          parts.push(`${result.notFound.length} not found: ${result.notFound.slice(0, 5).join(", ")}${result.notFound.length > 5 ? "..." : ""}`);
+        }
+        toast.success(parts.join(". "));
+        setBulkStatusOpen(false);
+        setBulkStatusEmails("");
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+
+  const set = (key: keyof UserFormInput) => (v: string) =>
+    setValues((prev) => ({ ...prev, [key]: v }));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">{profiles.length} accounts</p>
+        <div className="flex flex-wrap justify-end gap-2">
+          {selected.size > 0 && (
+            <Button variant="destructive" onClick={() => setBulkDeleteOpen(true)} disabled={isPending}>
+              Delete {selected.size} selected
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => setBulkStatusOpen(true)}>
+            Bulk update status
+          </Button>
+          <Button variant="outline" onClick={openUsersImport}>
+            Import from spreadsheet
+          </Button>
+          <Button onClick={openCreate}>+ Add user</Button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10">
+                <input
+                  type="checkbox"
+                  aria-label="Select every account that can be deleted"
+                  className="size-4 cursor-pointer accent-vermilion-deep"
+                  checked={deletable.length > 0 && selected.size === deletable.length}
+                  onChange={(e) =>
+                    setSelected(e.target.checked ? new Set(deletable.map((p) => p.id)) : new Set())
+                  }
+                />
+              </TableHead>
+              {/* Name over email in one cell (11 Oct 2026), the way every
+                  requester cell in the portal is already set. Eight columns
+                  pushed Actions past the right edge of the page, so the two
+                  buttons every row exists for were reachable only by
+                  scrolling the table sideways. */}
+              <TableHead>Account</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Hostel</TableHead>
+              <TableHead>Dept / Club</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {profiles.map((p) => (
+              <TableRow key={p.id}>
+                <TableCell>
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${p.email}`}
+                    className="size-4 cursor-pointer accent-vermilion-deep"
+                    disabled={isLocked(actorRole, p)}
+                    checked={selected.has(p.id)}
+                    onChange={() => toggle(p.id)}
+                  />
+                </TableCell>
+                <TableCell>
+                  <span className="font-medium">{p.full_name}</span>
+                  <span className="block text-xs text-muted-foreground">{p.email}</span>
+                </TableCell>
+                <TableCell className="text-meta whitespace-normal">
+                  {p.role === "developer" ? (
+                    <span className="font-semibold text-ink">{ROLE_LABELS[p.role]}</span>
+                  ) : (
+                    ROLE_LABELS[p.role]
+                  )}
+                </TableCell>
+                <TableCell className="text-meta whitespace-nowrap">
+                  {(p.account_status ?? "active") === "active" ? (
+                    <span className="text-green-700">Active</span>
+                  ) : (
+                    <span className="text-vermilion-deep font-medium">{ACCOUNT_STATUS_LABELS[(p.account_status ?? "active") as AccountStatus]}</span>
+                  )}
+                </TableCell>
+                <TableCell>{p.hostel_name ?? "-"}</TableCell>
+                <TableCell>{p.department_or_club ?? "-"}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    {/* A manager cannot edit or remove a developer account -
+                        the server refuses it, and offering the button anyway
+                        would only produce an error. */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isLocked(actorRole, p)}
+                      title={
+                        isLocked(actorRole, p)
+                          ? "Only a developer can change a developer account"
+                          : undefined
+                      }
+                      onClick={() => openEdit(p)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={isPending || isLocked(actorRole, p)}
+                      onClick={() => setToDelete(p)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Recent imports (14 Oct 2026). An import updates everybody it matches
+          by email, so a stale sheet overwrites corrections the office has made
+          by hand - and until migration 32 the previous values were kept
+          nowhere. Each batch here can be put back. A batch still reading
+          "applying" is an import that did not finish, which nothing used to
+          report. */}
+      {imports.length > 0 && (
+        <section className="space-y-3">
+          <SectionHeading title="Recent imports" count={imports.length} />
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>By</TableHead>
+                  <TableHead>What it did</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {imports.map((batch) => {
+                  const blocked = revertBlocker(batch);
+                  return (
+                    <TableRow key={batch.id}>
+                      <TableCell className="whitespace-nowrap">
+                        {formatInstituteDateTime(batch.at)}
+                      </TableCell>
+                      <TableCell>{batch.actor_name}</TableCell>
+                      <TableCell className="text-meta whitespace-normal">
+                        {describeBatch(batch)}
+                        {batch.status !== "applied" && (
+                          <span className="block text-xs font-medium text-vermilion-deep">
+                            {batch.status === "applying"
+                              ? "Did not finish"
+                              : batch.status === "failed"
+                                ? `Stopped part-way${batch.error ? ` - ${batch.error}` : ""}`
+                                : `Undone${
+                                    batch.reverted_actor_name
+                                      ? ` by ${batch.reverted_actor_name}`
+                                      : ""
+                                  }`}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isPending || blocked !== null}
+                          title={blocked ?? undefined}
+                          onClick={() => setToUndo(batch)}
+                        >
+                          Undo
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
+      )}
+
+      <ConfirmDialog
+        open={toUndo !== null}
+        onOpenChange={(open) => !open && setToUndo(null)}
+        title="Undo this import?"
+        description={
+          toUndo
+            ? `This puts back what the import of ${formatInstituteDateTime(
+                toUndo.at
+              )} changed, and removes the accounts it added.`
+            : ""
+        }
+        consequences={
+          toUndo
+            ? [
+                toUndo.updated.length > 0
+                  ? `${toUndo.updated.length} account${
+                      toUndo.updated.length === 1 ? "" : "s"
+                    } restored to what they held before the import`
+                  : null,
+                toUndo.added.length > 0
+                  ? `${toUndo.added.length} account${
+                      toUndo.added.length === 1 ? "" : "s"
+                    } deleted - anyone with a booking is kept and named`
+                  : null,
+                "An account changed by hand since the import is left as it is",
+              ].filter((line): line is string => line !== null)
+            : []
+        }
+        confirmPhrase="UNDO"
+        confirmLabel="Undo the import"
+        pending={isPending}
+        onConfirm={() => toUndo && undoImport(toUndo)}
+      />
+
+      <ConfirmDialog
+        open={toDelete !== null}
+        onOpenChange={(open) => !open && setToDelete(null)}
+        title={toDelete ? `Delete ${toDelete.full_name}?` : ""}
+        description={
+          toDelete
+            ? `This permanently removes the ${ROLE_LABELS[toDelete.role]} account ${toDelete.email}.`
+            : ""
+        }
+        consequences={[
+          "The person can no longer sign in to the portal.",
+          "Blocked if they have any bookings - those must be deleted or reassigned first.",
+          "Past approvals stay in the audit trail, which records the name separately.",
+        ]}
+        confirmPhrase={toDelete?.email}
+        confirmLabel="Delete user"
+        pending={isPending}
+        onConfirm={() => {
+          const p = toDelete;
+          setToDelete(null);
+          if (p) remove(p);
+        }}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title={`Delete ${selectedProfiles.length} account${selectedProfiles.length === 1 ? "" : "s"}?`}
+        description={selectedProfiles.map((p) => p.email).join(", ")}
+        consequences={[
+          "Those people can no longer sign in to the portal.",
+          "Any of them who has bookings is kept, and named back to you.",
+          "Past approvals stay in the audit trail, which records the name separately.",
+        ]}
+        confirmPhrase={`delete ${selectedProfiles.length}`}
+        confirmLabel="Delete accounts"
+        pending={isPending}
+        onConfirm={() => {
+          setBulkDeleteOpen(false);
+          removeSelected();
+        }}
+      />
+
+      {/* Add the data of all users from a spreadsheet (8 Oct 2026). Paste,
+          check the plan, import - all or nothing, and the header line says
+          what the columns are, so the office's own sheet need not be
+          rearranged. */}
+      <Dialog open={usersOpen} onOpenChange={setUsersOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Import users from a spreadsheet</DialogTitle>
+            <DialogDescription>
+              Paste the columns straight out of Excel. Lead with a header line to say what they
+              are, in any order - <code className="font-mono">{USER_CSV_HEADER}</code> is read
+              when there is none. A person already on the list is updated; a column the paste
+              does not carry is left as it is. If any line is wrong, nothing is changed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <FileUploadInput
+              disabled={isPending}
+              onLoaded={(csv) => {
+                setUsersText(csv);
+                setPlan(null);
+              }}
+            />
+            <Label htmlFor="users-import">Or paste</Label>
+            <Textarea
+              id="users-import"
+              rows={9}
+              spellCheck={false}
+              className="font-mono text-xs"
+              placeholder={
+                "email, name, role, hostel, roll number\n" +
+                "112201001@smail.iitpkd.ac.in, A. Student, student, Malhar, 112201001\n" +
+                "priya@iitpkd.ac.in, Dr. Priya N, faculty, , EMP0142"
+              }
+              value={usersText}
+              onChange={(e) => {
+                setUsersText(e.target.value);
+                setPlan(null);
+              }}
+            />
+            {plan && plan.problems.length > 0 && (
+              <ul
+                role="alert"
+                className="max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-sm text-destructive"
+              >
+                {plan.problems.map((problem, i) => (
+                  <li key={i}>{problem}</li>
+                ))}
+              </ul>
+            )}
+            {plan && plan.problems.length === 0 && (
+              <div className="space-y-2 rounded-md border border-border-strong bg-band/40 p-3 text-sm">
+                <p className="font-medium">
+                  {plan.added} added, {plan.updated} updated, {plan.unchanged} unchanged
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Read as {plan.columns.join(", ")}
+                  {plan.hadHeader ? " (from your header line)" : " (no header line)"}.
+                </p>
+                {plan.changes.length > 0 && (
+                  <ul className="max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5 text-xs">
+                    {plan.changes.map((change, i) => (
+                      <li key={i}>{change}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUsersOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={checkUsers}
+              disabled={isPending || usersText.trim() === ""}
+            >
+              Check the paste
+            </Button>
+            <Button
+              onClick={runUsersImport}
+              disabled={isPending || plan === null || plan.problems.length > 0}
+            >
+              {isPending ? "Importing…" : "Import"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editing ? `Edit ${editing.full_name}` : "Add user"}</DialogTitle>
+            <DialogDescription>
+              Hostel, department/club, roll number and staff category are resolved from institute records.
+            </DialogDescription>
+          </DialogHeader>
+          <RequiredFieldsNote />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Full name *</Label>
+              <Input value={values.full_name} onChange={(e) => set("full_name")(e.target.value)} />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Email *</Label>
+              <Input
+                type="email"
+                value={values.email}
+                onChange={(e) => set("email")(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role *</Label>
+              <NativeSelect
+                value={values.role}
+                onChange={(e) => set("role")(e.target.value)}
+              >
+                {roles.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="space-y-2">
+              <Label>Hostel</Label>
+              <p className="text-sm text-muted-foreground">
+                {editing ? (profiles.find((p) => p.id === editing.id)?.hostel_name ?? "None") : "Resolved from institute records"}
+              </p>
+            </div>
+            {/* The unit is what their approver is found through, so it is a
+                pick from the list rather than free text - a typo here used
+                to mean nobody could approve their bookings. */}
+            <div className="space-y-2">
+              <Label htmlFor="user-unit">Belongs to</Label>
+              <NativeSelect
+                id="user-unit"
+                value={values.unit_id ?? ""}
+                onChange={(e) => set("unit_id")(e.target.value)}
+              >
+                <option value="">No department or club</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({UNIT_CATEGORY_LABELS[u.category]})
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="user-status">Account status</Label>
+              <NativeSelect
+                id="user-status"
+                value={values.account_status ?? "active"}
+                onChange={(e) => set("account_status")(e.target.value)}
+              >
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {ACCOUNT_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+          </div>
+          {editing && (
+            <div className="border-t border-border pt-4 mt-2">
+              <p className="text-[13.5px] font-medium text-ink mb-2">Set login password</p>
+              <div className="flex gap-2 items-end">
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New password"
+                  className="flex-1 rounded border border-border-strong bg-white px-3 py-2 text-[14px] text-ink placeholder:text-muted-foreground focus:border-vermilion focus:outline-none focus:ring-1 focus:ring-vermilion"
+                />
+                <Button
+                  size="sm"
+                  onClick={savePassword}
+                  disabled={isPending || !newPassword || newPassword.length < 4}
+                >
+                  Set password
+                </Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={save} disabled={isPending}>
+              {isPending ? "Saving…" : editing ? "Save changes" : "Create user"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkStatusOpen} onOpenChange={setBulkStatusOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Bulk update account status</DialogTitle>
+            <DialogDescription>
+              Paste or type email addresses (one per line or comma-separated). Each matching account
+              will be set to the chosen status.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="bulk-status-target">Set status to</Label>
+              <NativeSelect
+                id="bulk-status-target"
+                value={bulkStatusTarget}
+                onChange={(e) => setBulkStatusTarget(e.target.value as AccountStatus)}
+              >
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {ACCOUNT_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bulk-status-emails">Email addresses</Label>
+              <Textarea
+                id="bulk-status-emails"
+                rows={8}
+                spellCheck={false}
+                className="font-mono text-xs"
+                placeholder={"user1@iitpkd.ac.in\nuser2@iitpkd.ac.in"}
+                value={bulkStatusEmails}
+                onChange={(e) => setBulkStatusEmails(e.target.value)}
+              />
+            </div>
+            <FileUploadInput
+              disabled={isPending}
+              onLoaded={(csv) => setBulkStatusEmails(csv)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkStatusOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={runBulkStatus}
+              disabled={isPending || bulkStatusEmails.trim() === ""}
+            >
+              {isPending ? "Updating…" : "Update status"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

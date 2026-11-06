@@ -145,6 +145,8 @@ export type ApprovalRouteWhen = {
   unit_ids?: string[];
   /** The requester's hostel, by name, as the warden scoping reads it. */
   hostels?: string[];
+  /** The requester's user group (migration 36). */
+  group_ids?: string[];
 };
 
 export type ApprovalRouteRule = {
@@ -306,6 +308,7 @@ export type RequestFacts = {
   /** The requester's own unit and hostel, for the two conditions that name them. */
   unitId?: string | null;
   hostelName?: string | null;
+  groupId?: string | null;
 };
 
 function matchesList<T>(wanted: readonly T[] | undefined, value: T | null | undefined): boolean {
@@ -324,6 +327,7 @@ export function ruleMatches(rule: ApprovalRouteRule, facts: RequestFacts): boole
   if (!matchesList(w.office_approval, facts.officeApproval)) return false;
   if (!matchesList(w.unit_ids, facts.unitId)) return false;
   if (!matchesList(w.hostels, facts.hostelName)) return false;
+  if (!matchesList(w.group_ids, facts.groupId)) return false;
   if (w.raised_by_advisor != null && w.raised_by_advisor !== Boolean(facts.raisedByFacultyInCharge))
     return false;
   return true;
@@ -549,6 +553,7 @@ function legacyAdvisorMatch(reviewer: Profile, requester: Profile): boolean {
 export type NamedDirectory = {
   units?: { id: string; name: string }[];
   profiles?: { id: string; full_name: string }[];
+  groups?: { id: string; name: string }[];
 };
 
 /** One stage in words, for the console, a page heading and the audit log. */
@@ -615,6 +620,12 @@ export function describeConditions(
         .join(" or ")
     );
   if (w.hostels?.length) parts.push(w.hostels.join(" or "));
+  if (w.group_ids?.length)
+    parts.push(
+      w.group_ids
+        .map((id) => directory.groups?.find((g) => g.id === id)?.name ?? "a deleted group")
+        .join(" or ")
+    );
   return parts;
 }
 
@@ -720,6 +731,7 @@ const whenSchema = z.object({
     .transform((v) => (v == null ? undefined : v)),
   unit_ids: optionalList(z.string().trim().min(1)),
   hostels: optionalList(z.string().trim().min(1)),
+  group_ids: optionalList(z.string().trim().min(1)),
 }) as unknown as z.ZodType<ApprovalRouteWhen, ApprovalRouteWhen>;
 
 const ruleSchema = z

@@ -10,6 +10,17 @@ the two ever disagree, §1a is right and this file needs fixing.
 
 ---
 
+## Loading a batch: use Console -> User Groups (5 Nov 2026)
+
+For a batch of students or any one kind of person, this is now the short way. Pick or
+create the group, download its CSV template, fill it in, upload it, read the preview,
+import. Everyone joins the group with its role, so the sheet has no role column, and every
+address must be on the IIT Palakkad domain. It is the same importer as below, with the same
+matching by email and the same undo. **The header must start with `email`.** Everything
+below still applies, including §0.
+
+To stop a batch signing in when it graduates, use **Who may sign in** on the same page.
+
 ## 0. The one thing to understand first
 
 **An import does not only add people. It updates whoever it already finds.**

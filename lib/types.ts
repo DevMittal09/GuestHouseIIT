@@ -11,8 +11,6 @@ export type Role =
    */
   | "alumni"
   | "warden"
-  | "deputy_warden"
-  | "assistant_warden"
   | "faculty_advisor"
   /** The IAR Office: approves IAR Student Cell requests, and books directly. */
   | "iar_cell"
@@ -198,6 +196,10 @@ export const STUDENT_RELATIONSHIPS = [
   // "Fill in from saved details" offers them as "Yourself". Neither a parent
   // nor a dependent, so it neither needs a parent nor lets a sibling in.
   "Self",
+  // A research scholar's (MS or PhD) husband or wife (4 Nov 2026). Offered
+  // on every student's form, accepted only from a research scholar - see
+  // `scholar_only_relationships` in `lib/form-config.ts`. Needs no parent.
+  "Spouse",
 ] as const;
 
 export type AccountStatus = "active" | "relieved" | "graduated" | "suspended" | "retired";
@@ -215,21 +217,60 @@ export type Profile = {
   email: string;
   full_name: string;
   role: Role;
+  /**
+   * Why this account is or is not in use, in the office's own vocabulary
+   * (migration 37). Anything but `active` refuses sign-in - but through
+   * `signInRefusal()` (`lib/user-groups.ts`), never by a comparison written
+   * out again at a call site, because `login_disabled_at` below is the other
+   * half of the same question.
+   */
   account_status: AccountStatus;
-  /** Computed from institute_students/institute_wardens via profiles_v. */
+  /**
+   * Read from `institute_students` / `institute_wardens` through `profiles_v`,
+   * falling back to the column stored on `profiles` (migration 37).
+   *
+   * **This is a warden's scope and a student's approval route**, so it must
+   * resolve on a project where the institute tables have not been loaded yet -
+   * which is why the view coalesces rather than reading the institute tables
+   * alone. See migration 37 section 11.
+   */
   hostel_name: string | null;
-  /** Computed from units.name via profiles_v. */
+  /** From `units.name` through `profiles_v`, else the stored column. */
   department_or_club: string | null;
-  /** Computed from institute_students via profiles_v. */
+  /** From `institute_students` through `profiles_v`, else the stored column. */
   roll_number: string | null;
+  /**
+   * The person's institute LDAP username (migration 12) - what the LDAP
+   * sign-in action matches against. `null` means they cannot sign in that way
+   * until a developer sets it. Unique, compared lowercased.
+   *
+   * The LDAP *form* is off the sign-in page (28 Oct 2026) but the action, the
+   * directory and `Import LDAP usernames` are all intact, so this column is
+   * live data and is not derived from anything.
+   */
+  ldap_uid: string | null;
   /**
    * The department, club or office this person belongs to (migration 15). It
    * is what their approver is found through - see `lib/units.ts`. Optional
    * because profiles written before migration 15 have none.
    */
   unit_id?: string | null;
-  /** Computed from institute_employees.employee_type via profiles_v. */
+  /**
+   * Faculty or non-teaching staff, for employees only. Both need their HOD's
+   * approval for an official booking (Phase 4), and the category decides the
+   * debitable heads offered. From `institute_employees.employee_type` through
+   * `profiles_v`, else the stored column.
+   */
   staff_category?: StaffCategory | null;
+  /** The user group they belong to (migration 36, `lib/user-groups.ts`). */
+  group_id?: string | null;
+  /**
+   * Set when the account may no longer sign in - graduated, left the institute
+   * (migration 36). Nobody is deleted: bookings and invoices stay. Null or
+   * absent means they may sign in.
+   */
+  login_disabled_at?: string | null;
+  login_disabled_reason?: string | null;
 }
 
 export type StaffCategory = "faculty" | "staff";
@@ -447,6 +488,28 @@ export type Booking = {
    * before the question existed.
    */
   fund_declaration_at?: string | null;
+  /**
+   * **The tariff category the Guest House Manager chose when they approved
+   * it** (migration 35, 31 Oct 2026) - the two dimensions of a tariff's scope
+   * that are a judgement about the visit rather than a fact about it, so the
+   * invoice is priced at the rate the desk decided applies and not at
+   * whatever the requester's own account resolved to.
+   *
+   * **Not facts about the requester**: `tariff_requester_role` is the role
+   * whose *rate* applies, which is how an ordinary employee's guest is
+   * charged the office's government-officer rate. Who asked is still
+   * `user_role`, and what kind of stay it is is still `booking_type`; routing,
+   * debitable heads and every scoping rule read those.
+   *
+   * Both set or both null, and null on a booking approved before the question
+   * existed - `pricingScopeFor` then prices it from the booking's own facts,
+   * which is what the portal did until this round. There is deliberately no
+   * stored rate beside them: a stay crossing a rate change is priced night by
+   * night, and a rupee figure on the booking would be a second source of
+   * truth for money.
+   */
+  tariff_booking_type?: BookingType | null;
+  tariff_requester_role?: Role | null;
   created_at: string;
   updated_at: string;
 }
@@ -727,8 +790,6 @@ export const ROLE_LABELS: Record<Role, string> = {
   // category anyone can still submit under.
   alumni: "Alumni (via IAR, legacy)",
   warden: "Assistant Warden",
-  deputy_warden: "Deputy Warden",
-  assistant_warden: "Assistant Warden",
   faculty_advisor: "Faculty Advisor",
   iar_cell: "IAR Office",
   iar_student_cell: "IAR Student Cell",

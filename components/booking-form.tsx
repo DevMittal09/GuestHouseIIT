@@ -56,8 +56,10 @@ import {
   MAX_COPY_TO_EMAILS,
 } from "@/lib/booking-schema";
 import { DEFAULT_RULES, type CapacityRules, type Rules } from "@/lib/settings";
+import { NO_COPY_TO_RULE, type CopyToRule } from "@/lib/user-groups";
 import {
   hasQualifyingParent,
+  isResearchScholar,
   usedUniqueRelationships,
   validateCustomValue,
   type CustomField,
@@ -248,10 +250,21 @@ export function BookingForm({
   hodApprovers = [],
   forClub = null,
   defaultCopyTo = [],
+  copyToRule = NO_COPY_TO_RULE,
   tariffPreviews = [],
   guestNames = NO_GUEST_NAME_RULE,
   aside = null,
+  tariffSheet = null,
+  asideAfter = null,
 }: {
+  /**
+   * The published room tariff (4 Nov 2026, `TariffSheet`), drawn in place of
+   * the per-category panel on a room booking. A dining booking keeps the
+   * panel, which quotes the meal rates.
+   */
+  tariffSheet?: React.ReactNode;
+  /** What stands under the tariff: the catering timings and the Guidelines. */
+  asideAfter?: React.ReactNode;
   /**
    * What the requester's academic record fixes about their guests (7 Oct
    * 2026): a student's father's and mother's names, which the form shows
@@ -291,6 +304,8 @@ export function BookingForm({
    * requester may clear it or add more.
    */
   defaultCopyTo?: string[];
+  /** What the requester's user group allows here (5 Nov 2026). */
+  copyToRule?: CopyToRule;
   /**
    * The debitable heads this requester may use per booking type, for rooms and
    * for dining - computed on the server (`bookingContextFor`) from Settings, so
@@ -749,11 +764,15 @@ export function BookingForm({
   };
 
   /**
-   * The tariff categories this requester may book, each with the rate it
-   * resolves to (17 Oct 2026). One category is one (guest house, booking
-   * type) pair - the two answers the rate is resolved from - so choosing one
-   * in the panel writes exactly those two fields, and the figure quoted
-   * cannot drift from the one the invoice prices.
+   * **The tariff categories this requester could be charged under**, each with
+   * the rates it resolves to (17 Oct 2026; read-only since 31 Oct 2026).
+   *
+   * One category is one (guest house, booking type) pair. It was a radio in
+   * the panel, which made the requester the person who decided which
+   * published rate applied to them; the decision is the Guest House
+   * Manager's now, taken when they approve, and this list is the price list
+   * the requester reads while filling the form in. The guest house and the
+   * kind of booking are still questions on the form.
    *
    * Computed from the same `guestHousesForBookingType` the guest house
    * dropdown narrows itself with, so neither can offer what the other
@@ -767,14 +786,6 @@ export function BookingForm({
     service: mealsOnly ? "meals_only" : "room",
     allowAnyGuestHouse: canOverrideHouse,
   });
-  const chooseCategory = (category: TariffCategory) => {
-    if (category.booking_type !== bookingType) {
-      setValue("booking_type", category.booking_type, { shouldValidate: false });
-    }
-    if (category.guest_house_id !== selectedGuestHouseId) {
-      setValue("guest_house_id", category.guest_house_id, { shouldValidate: false });
-    }
-  };
 
   // The kitchen's limit per sitting (Settings). One booking cannot be larger
   // than it; how much of a sitting is already taken is checked on the server,
@@ -803,7 +814,7 @@ export function BookingForm({
   // and for the same reason as the one above.
   const maxNights = rules.booking.max_stay_nights;
   const latestCheckOut = checkInDate
-    ? latestCheckOutDate(checkInDate, config.role, user.email, maxNights)
+    ? latestCheckOutDate(checkInDate, config.role, user.email, maxNights, bookingType)
     : null;
 
   // The room count is its own text state rather than being read off
@@ -962,6 +973,8 @@ export function BookingForm({
     const parsed = bookingPayloadSchema(config, {
       mealsAvailable,
       requesterEmail: user.email,
+      researchScholar: isResearchScholar(user.roll_number),
+      copyTo: copyToRule,
       rules,
       // So the client does not demand a route the form did not offer.
       hasHodApprover: hodApprovers.length > 0,
@@ -1125,21 +1138,23 @@ export function BookingForm({
       {/* Sticky from `lg`: the questions run to about 2800px, and both panels
           are things a requester checks a field against rather than reads once.
           **Outside the `<form>` element on purpose** - neither panel holds a
-          registered field (the tariff radios are controlled and write through
-          `setValue`), so keeping them out leaves the form exactly the element
-          it was: `numbered-sections` counts its own cards, and nothing beside
-          the questions is numbered as a step. */}
+          field or asks anything (the tariff panel is a price list, read-only
+          since 31 Oct 2026), so keeping them out leaves the form exactly the
+          element it was: `numbered-sections` counts its own cards, and
+          nothing beside the questions is numbered as a step. */}
       <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 lg:col-span-4 lg:col-start-9 lg:row-start-1 lg:self-start">
         {aside}
-        <TariffPanel
-          categories={categories}
-          previews={tariffPreviews}
-          guestHouseId={selectedGuestHouseId}
-          bookingType={bookingType}
-          pricesIncludeGst={rules.invoice.prices_include_gst}
-          onSelect={chooseCategory}
-          mealsOnly={mealsOnly}
-        />
+        {tariffSheet && !mealsOnly ? (
+          tariffSheet
+        ) : (
+          <TariffPanel
+            categories={categories}
+            previews={tariffPreviews}
+            pricesIncludeGst={rules.invoice.prices_include_gst}
+            mealsOnly={mealsOnly}
+          />
+        )}
+        {asideAfter}
       </aside>
       <form
         onSubmit={onSubmit}
@@ -1643,11 +1658,11 @@ export function BookingForm({
       {/* **The rates are not a section of the form** (17 Oct 2026, the
           owner: keep the tariff categories and their rates on the right-hand
           side). They were a numbered card here, between the stay and the
-          meals, which read as a step with nothing to answer - the rate was
-          already settled by the guest house and the kind of booking chosen
-          above it. They are now the panel in the right-hand column, where
-          choosing a category *is* that choice (`components/tariff-panel.tsx`).
-          Don't put a second copy back on the form. */}
+          meals, which read as a step with nothing to answer. They are the
+          panel in the right-hand column now, and since 31 Oct 2026 it asks
+          nothing either: the category is the Guest House Manager's to choose
+          when they approve (`components/tariff-panel.tsx`). Don't put a
+          second copy back on the form, and don't make this one a question. */}
 
       {wantsRooms && (
         <Card>
@@ -1956,7 +1971,9 @@ export function BookingForm({
           <CardTitle>Copy to (optional)</CardTitle>
           <CardDescription>
             Copied on every mail you get about this booking.
-            {defaultCopyTo.length > 0 && " The secretary's mailbox is filled in; clear it to remove."}
+            {forClub && defaultCopyTo.length > 0 && " The secretary's mailbox is filled in; clear it to remove."}
+            {!forClub && defaultCopyTo.length > 0 && " Your group's addresses are filled in; remove any you do not want."}
+            {copyToRule.allowed && " Only the addresses your group allows can be copied."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -1971,7 +1988,8 @@ export function BookingForm({
                   type="email"
                   inputMode="email"
                   autoComplete="off"
-                  placeholder="name@example.com"
+                  placeholder={copyToRule.instituteOnly ? "name@iitpkd.ac.in" : "name@example.com"}
+                  list={copyToRule.allowed ? "copy-to-allowed" : undefined}
                   {...register(`copy_to.${i}.email`)}
                 />
                 {copyToFields.length > 1 && (
@@ -1989,6 +2007,13 @@ export function BookingForm({
               <FieldError message={err(`copy_to.${i}.email`)} />
             </div>
           ))}
+          {copyToRule.allowed && (
+            <datalist id="copy-to-allowed">
+              {copyToRule.allowed.map((address) => (
+                <option key={address} value={address} />
+              ))}
+            </datalist>
+          )}
           <FieldError message={err("copy_to_emails")} />
           <Button
             type="button"

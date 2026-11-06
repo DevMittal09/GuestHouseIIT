@@ -1,6 +1,9 @@
 import { splitCsvLine } from "./csv";
-import { ROLE_LABELS, type Profile, type Role } from "./types";
+import { isValidLdapUid, normalizeLdapUid } from "./ldap/uid";
+import { ROLE_LABELS, type Profile, type Role, type StaffCategory } from "./types";
 import type { Unit } from "./units";
+import { isInstituteEmail } from "./site";
+import { emailFormatError, programmeMismatches, rollNumberFromEmail, type UserGroup } from "./user-groups";
 
 /**
  * Bulk-loading accounts from a spreadsheet (8 Oct 2026, the office's ninth
@@ -37,6 +40,11 @@ export type UserColumn =
   | "email"
   | "full_name"
   | "role"
+  | "hostel_name"
+  | "department_or_club"
+  | "roll_number"
+  | "ldap_uid"
+  | "staff_category"
   | "unit";
 
 /**
@@ -48,7 +56,10 @@ export const DEFAULT_COLUMNS: UserColumn[] = [
   "email",
   "full_name",
   "role",
-  "unit",
+  "hostel_name",
+  "department_or_club",
+  "roll_number",
+  "ldap_uid",
 ];
 
 /** Every column that may be named in a header, and what a header may call it. */
@@ -56,6 +67,11 @@ export const KNOWN_COLUMNS: Record<UserColumn, string[]> = {
   email: ["email", "email address", "e-mail", "institute email", "mail"],
   full_name: ["full_name", "full name", "name", "person"],
   role: ["role", "portal role"],
+  hostel_name: ["hostel_name", "hostel", "hostel name"],
+  department_or_club: ["department_or_club", "department", "dept", "club", "department / club", "dept / club"],
+  roll_number: ["roll_number", "roll number", "roll no", "roll no.", "roll", "employee id"],
+  ldap_uid: ["ldap_uid", "ldap", "ldap username", "ldap uid", "username", "uid"],
+  staff_category: ["staff_category", "staff category", "category", "faculty or staff"],
   unit: ["unit", "unit_id", "unit name", "department unit"],
 };
 
@@ -69,7 +85,17 @@ export type UserImportRow = {
   email: string;
   full_name: string;
   role: Role;
+  hostel_name: string | null;
+  department_or_club: string | null;
+  roll_number: string | null;
+  ldap_uid: string | null;
+  staff_category: StaffCategory | null;
   unit_id: string | null;
+  /**
+   * Only on a row that has a group (migration 36), so a plain import writes no
+   * such column, and keeps working on a database that has not got it yet.
+   */
+  group_id?: string;
 };
 
 export type UserImportPlan = {
@@ -88,6 +114,8 @@ export type UserImportPlan = {
    * imported.**
    */
   problems: string[];
+  /** Roll numbers that do not read as the group's programme. Nothing is refused. */
+  warnings?: string[];
 };
 
 const EMAIL = /^[^@\s,]+@[^@\s,.]+(\.[^@\s,.]+)+$/;
@@ -145,12 +173,27 @@ function roleIndex(assignable: Role[]): Map<string, Role> {
   return index;
 }
 
+function staffCategoryFrom(value: string | null, roleWord: string): StaffCategory | null {
+  const text = (value ?? roleWord).trim().toLowerCase();
+  if (/^(faculty|teaching)$/.test(text)) return "faculty";
+  if (/^(staff|non-teaching staff|non teaching staff|non-faculty|non faculty)$/.test(text)) {
+    return "staff";
+  }
+  return null;
+}
+
 /** Whether two rows say the same thing about a person. */
 function sameProfile(before: Profile, row: UserImportRow): boolean {
   return (
     before.full_name === row.full_name &&
     before.role === row.role &&
-    (before.unit_id ?? null) === row.unit_id
+    (before.hostel_name ?? null) === row.hostel_name &&
+    (before.department_or_club ?? null) === row.department_or_club &&
+    (before.roll_number ?? null) === row.roll_number &&
+    (before.ldap_uid ?? null) === row.ldap_uid &&
+    (before.staff_category ?? null) === row.staff_category &&
+    (before.unit_id ?? null) === row.unit_id &&
+    (before.group_id ?? null) === (row.group_id ?? null)
   );
 }
 
@@ -158,9 +201,19 @@ export type UserImportContext = {
   profiles: Profile[];
   /** The roles this console user may hand out (`assignableRoles`). */
   assignable: Role[];
+  /** Hostels on record, so a warden's scoping cannot be set to a typo. */
+  hostels: string[];
   units: Unit[];
   /** Accounts this console user may not edit at all (`userEditError`). */
   locked?: (profile: Profile) => string | null;
+  /**
+   * The group this list is being loaded into (5 Nov 2026). Everyone on it joins
+   * the group and takes its role, so the sheet needs no role column, and every
+   * address has to be on the institute's domain.
+   */
+  group?: Pick<UserGroup, "id" | "role" | "programme">;
+  /** Refuse any address off the institute's domain: nobody else can sign in. */
+  instituteOnly?: boolean;
 };
 
 /**
@@ -173,9 +226,10 @@ export type UserImportContext = {
  * not wipe everyone's hostel.
  */
 export function planUserImport(text: string, context: UserImportContext): UserImportPlan {
-  const { profiles, assignable, units } = context;
+  const { profiles, assignable, hostels, units } = context;
   const byEmail = new Map(profiles.map((p) => [p.email.trim().toLowerCase(), p]));
   const roles = roleIndex(assignable);
+  const hostelByName = new Map(hostels.map((h) => [h.toLowerCase(), h]));
   const unitByName = new Map<string, Unit>();
   for (const unit of units) {
     unitByName.set(unit.name.toLowerCase(), unit);
@@ -189,6 +243,7 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
   let columns = DEFAULT_COLUMNS;
   let hadHeader = false;
   const seen = new Map<string, number>();
+  const uidLine = new Map<string, number>();
   let rows = 0;
 
   const lines = text.split(/\r?\n/);
@@ -242,6 +297,10 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
       problems.push(`Line ${n}: "${email}" is not an email address.`);
       return;
     }
+    if ((context.group || context.instituteOnly) && !isInstituteEmail(email)) {
+      problems.push(`Line ${n}: ${email} is not an IIT Palakkad address.`);
+      return;
+    }
     const key = email.toLowerCase();
     const earlier = seen.get(key);
     if (earlier !== undefined) {
@@ -265,7 +324,16 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
     }
 
     const roleWord = value("role");
-    const role = roleWord ? roles.get(roleWord.trim().toLowerCase()) : (current?.role ?? "student");
+    const named = roleWord ? roles.get(roleWord.trim().toLowerCase()) : (current?.role ?? "student");
+    const role = context.group?.role ?? named;
+    if (context.group && !assignable.includes(context.group.role)) {
+      problems.push(`Line ${n}: this console cannot assign the ${ROLE_LABELS[context.group.role]} role that this group's members hold.`);
+      return;
+    }
+    if (context.group && roleWord && named !== context.group.role) {
+      problems.push(`Line ${n}: ${email} says "${roleWord}", but this group's members are ${ROLE_LABELS[context.group.role]}.`);
+      return;
+    }
     if (!role) {
       problems.push(
         `Line ${n}: "${roleWord}" is not a role this console can assign - use one of ${assignable
@@ -273,6 +341,31 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
           .join(", ")}.`
       );
       return;
+    }
+
+    // A student's roll number is in their address, so a sheet need not repeat it.
+    const strict = Boolean(context.group || context.instituteOnly);
+    const rollNumber =
+      value("roll_number") ??
+      current?.roll_number ??
+      (strict && role === "student" ? rollNumberFromEmail(email) : null);
+    if (strict) {
+      const wrong = emailFormatError(role, email, rollNumber);
+      if (wrong) {
+        problems.push(`Line ${n}: ${wrong}.`);
+        return;
+      }
+    }
+
+    const hostelWord = value("hostel_name");
+    let hostel = current?.hostel_name ?? null;
+    if (hostelWord) {
+      const match = hostelByName.get(hostelWord.toLowerCase());
+      if (!match) {
+        problems.push(`Line ${n}: "${hostelWord}" is not a hostel on record.`);
+        return;
+      }
+      hostel = match;
     }
 
     const unitWord = value("unit");
@@ -286,11 +379,39 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
       unitId = unit.id;
     }
 
+    const uidWord = value("ldap_uid");
+    let uid = current?.ldap_uid ?? null;
+    if (uidWord) {
+      const normalized = normalizeLdapUid(uidWord);
+      if (!isValidLdapUid(normalized)) {
+        problems.push(`Line ${n}: "${uidWord}" is not a valid LDAP username.`);
+        return;
+      }
+      uid = normalized;
+    }
+
     const row: UserImportRow = {
       email,
       full_name: name,
       role,
+      hostel_name: hostel,
+      department_or_club: value("department_or_club") ?? current?.department_or_club ?? null,
+      roll_number: rollNumber,
+      ldap_uid: uid,
+      staff_category:
+        role === "employee"
+          ? (staffCategoryFrom(value("staff_category"), roleWord ?? "") ??
+            current?.staff_category ??
+            null)
+          : null,
       unit_id: unitId,
+      // A plain import leaves someone's group as it is, and says nothing at all
+      // about the group of someone who has none.
+      ...(context.group
+        ? { group_id: context.group.id }
+        : current?.group_id
+          ? { group_id: current.group_id }
+          : {}),
     };
 
     if (!current) added.push(row);
@@ -298,13 +419,47 @@ export function planUserImport(text: string, context: UserImportContext): UserIm
     else unchanged += 1;
   });
 
+  /**
+   * An LDAP username is unique across accounts, so the paste is checked
+   * against the state it would leave behind - the same rule as
+   * `planLdapUidImport`, so swapping two people's usernames in one paste is
+   * allowed and giving two people the same one is not.
+   */
+  const wanted = new Map<string, UserImportRow>();
+  for (const row of added) wanted.set(row.email.toLowerCase(), row);
+  for (const { row } of updated) wanted.set(row.email.toLowerCase(), row);
+  const owner = new Map<string, string>();
+  for (const profile of profiles) {
+    const row = wanted.get(profile.email.toLowerCase());
+    const uid = (row ? row.ldap_uid : profile.ldap_uid)?.toLowerCase();
+    if (uid) owner.set(uid, profile.email);
+  }
+  for (const row of wanted.values()) {
+    const uid = row.ldap_uid?.toLowerCase();
+    if (!uid) continue;
+    const held = owner.get(uid);
+    if (held && held.toLowerCase() !== row.email.toLowerCase()) {
+      problems.push(`LDAP username ${uid} for ${row.email} already belongs to ${held}.`);
+    } else {
+      const line = uidLine.get(uid);
+      if (line !== undefined) {
+        problems.push(`LDAP username ${uid} is given to more than one person in this paste.`);
+      }
+      uidLine.set(uid, 1);
+      owner.set(uid, row.email);
+    }
+  }
+
   if (rows === 0 && problems.length === 0) {
     problems.push("Nothing to import - paste one person per line.");
   }
   if (problems.length > 0) {
     return { added: [], updated: [], unchanged, columns, hadHeader, problems };
   }
-  return { added, updated, unchanged, columns, hadHeader, problems };
+  const warnings = context.group
+    ? programmeMismatches(context.group, [...added, ...updated.map((u) => u.row)])
+    : [];
+  return { added, updated, unchanged, columns, hadHeader, problems, warnings };
 }
 
 /** "12 added, 3 updated, 40 unchanged" - for the toast and the audit log. */
@@ -324,7 +479,13 @@ export function changedFields(before: Profile, row: UserImportRow): string[] {
   const labels: [string, boolean][] = [
     ["Name", before.full_name !== row.full_name],
     ["Role", before.role !== row.role],
+    ["Hostel", (before.hostel_name ?? null) !== row.hostel_name],
+    ["Dept / Club", (before.department_or_club ?? null) !== row.department_or_club],
+    ["Roll No.", (before.roll_number ?? null) !== row.roll_number],
+    ["LDAP username", (before.ldap_uid ?? null) !== row.ldap_uid],
+    ["Category", (before.staff_category ?? null) !== row.staff_category],
     ["Unit", (before.unit_id ?? null) !== row.unit_id],
+    ["Group", (before.group_id ?? null) !== (row.group_id ?? null)],
   ];
   return labels.filter(([, changed]) => changed).map(([label]) => label);
 }

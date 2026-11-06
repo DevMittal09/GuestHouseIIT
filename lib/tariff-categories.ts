@@ -1,6 +1,23 @@
 import { guestHousesForBookingType, mealsAllowedFor } from "./policy";
-import { tariffPreviewLines, type Tariff, type TariffPreview, type TariffPreviewLine } from "./tariffs";
-import { BOOKING_TYPE_LABELS, type BookingType, type GuestHouse, type Role, type RoomType, type ServiceType } from "./types";
+import {
+  describeTariffCategory,
+  parseTariffScope,
+  tariffCategoryItems,
+  tariffPreviewLines,
+  tariffScopeKey,
+  type Tariff,
+  type TariffPreview,
+  type TariffPreviewLine,
+  type TariffScope,
+} from "./tariffs";
+import {
+  BOOKING_TYPE_LABELS,
+  type BookingType,
+  type GuestHouse,
+  type Role,
+  type RoomType,
+  type ServiceType,
+} from "./types";
 
 /**
  * **The tariff categories a requester may choose from, and what each costs**
@@ -171,4 +188,272 @@ export function tariffCategoriesFrom(
     }))
   );
   return tariffCategories({ ...options, previews });
+}
+
+// ------------------------------------------- the desk's categories (31 Oct 2026)
+
+/**
+ * **The categories the Guest House Manager picks from, and what each costs**
+ * (31 Oct 2026, the owner: the requester only reads the tariff table, and
+ * "the final authority for determining the applicable tariff category must
+ * rest with the GHM", whose choice prices the invoice).
+ *
+ * ## Why these are not the requester's categories above
+ *
+ * A requester's category is one (guest house, booking type) pair, because
+ * those are the two things *they* answer. The manager's is one
+ * **`TariffScope`** - (booking type, requester role) - because the guest
+ * house is settled by then (the rooms are in it) and what is left to decide
+ * is which published rate the visit falls under. The office's own sheet is
+ * written that way: "Hamsanandi types 1 and 2" at one rate and "Hamsanandi
+ * type 3, government officers" at another, the second being a row scoped by
+ * `requester_role`. Until this round nobody could pick it - it was only ever
+ * what an office's own account happened to resolve to.
+ *
+ * ## The list is the rate sheet, not a list beside it
+ *
+ * The categories are **enumerated from `tariffs`**: every row that could
+ * price this booking's defining charge contributes the scope that selects it.
+ * So the office publishes a new rate "for visiting faculty" and it is on the
+ * desk's list that afternoon, with no code, no migration and no second table
+ * of category names to keep in step. A scope that prices identically to one
+ * already listed is dropped - two scopes resolving to one row are one
+ * category to the eye.
+ *
+ * The **defining charge** is the room for a stay and the meals for a dining
+ * booking: the thing the category is about. Were every item's rows
+ * enumerated, a faculty stay at Hamsanandi would offer "meals free to
+ * students" as a category, because that row exists and is scoped by a role.
+ *
+ * Nothing here is filtered by eligibility, unlike the requester's list: the
+ * manager may already book outside the guest house and meals policies, and
+ * this is a question about money rather than about who may stay. It is
+ * filtered by **booking type** since 4 Nov 2026 - see the loop below.
+ */
+export type DeskTariffCategory = {
+  /** `tariffScopeKey(scope)` - what the radio's value is, and what is stored. */
+  key: string;
+  scope: TariffScope;
+  /** The office's own words for it: the note on the row that prices it. */
+  label: string;
+  /** The scope in plain words, for where the note does not say it. */
+  scope_label: string;
+  /** Every charge this category resolves to, as the invoice would price it today. */
+  lines: TariffPreviewLine[];
+  /** The room rate, which is the figure beside the label. Null on a dining booking. */
+  headline: TariffPreviewLine | null;
+  /**
+   * The scope the booking's own facts resolve to - what it would be priced at
+   * if nobody chose. Offered first, and marked, because it is the answer in
+   * most cases and the one a reviewer can check against the request.
+   */
+  requesters: boolean;
+};
+
+/**
+ * The charge a category is **about**: the room on a stay, the meals on a
+ * dining booking. A guest house with no kitchen has no dining charge at all,
+ * so a dining booking there has no categories - and no invoice section for
+ * them either (`invoicePrintsDining`).
+ */
+/** Sums what is published, so the list reads as a price list. Null-only last. */
+function rateTotal(lines: TariffPreviewLine[]): number {
+  const known = lines.filter((l) => l.rate !== null);
+  return known.length === 0
+    ? Number.POSITIVE_INFINITY
+    : known.reduce((sum, l) => sum + (l.rate ?? 0), 0);
+}
+
+export function deskTariffCategories(
+  tariffs: Tariff[],
+  options: {
+    guestHouse: { id: string; serves_meals: boolean };
+    /** The booking's own facts: one of the categories, and the default. */
+    booking: { booking_type: BookingType; user_role: Role };
+    /** What is being booked: a dining booking's categories are its meal rates. */
+    service?: ServiceType;
+    /** Both guest houses are double sharing; only the room rate reads it. */
+    roomType?: RoomType;
+    /** Institute calendar date the rates are quoted for - today, at the desk. */
+    date: string;
+  }
+): DeskTariffCategory[] {
+  const { guestHouse, booking, service = "room", roomType = "double_sharing", date } = options;
+  const own: TariffScope = {
+    booking_type: booking.booking_type,
+    requester_role: booking.user_role,
+  };
+  const items = tariffCategoryItems(service, guestHouse.serves_meals);
+  if (items.length === 0) return [];
+
+  // The booking's own scope first, then one per rate row that could price it.
+  // A row leaves a dimension blank to mean "any", so the scope that selects
+  // it keeps the booking's own answer there.
+  const scopes: TariffScope[] = [own];
+  for (const row of tariffs) {
+    if (!items.includes(row.item)) continue;
+    if (row.guest_house_id !== null && row.guest_house_id !== guestHouse.id) continue;
+    // **Never across booking types** (4 Nov 2026, the owner's sixteenth
+    // list): the manager "cannot directly change a booking type from
+    // Official to Personal (or vice versa)" - a request of the wrong type is
+    // rejected and raised again. A category scoped to the other type would
+    // be exactly that change, made through the price.
+    if (row.booking_type !== null && row.booking_type !== own.booking_type) continue;
+    const scope: TariffScope = {
+      booking_type: row.booking_type ?? own.booking_type,
+      requester_role: row.requester_role ?? own.requester_role,
+    };
+    const key = tariffScopeKey(scope);
+    if (!scopes.some((s) => tariffScopeKey(s) === key)) scopes.push(scope);
+  }
+
+  const seen = new Set<string>();
+  const categories: DeskTariffCategory[] = [];
+  for (const scope of scopes) {
+    const lines = tariffPreviewLines(tariffs, {
+      guestHouseId: guestHouse.id,
+      bookingType: scope.booking_type,
+      role: scope.requester_role,
+      roomType,
+      servesMeals: guestHouse.serves_meals,
+      date,
+      service,
+    });
+    // Two scopes that resolve to the same figures are one category: the sheet
+    // does not distinguish them, so neither should the screen.
+    const signature = lines.map((l) => `${l.item}=${l.rate ?? "-"}`).join("|");
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+    const { label, scope_label } = describeTariffCategory(tariffs, {
+      guestHouseId: guestHouse.id,
+      scope,
+      service,
+      servesMeals: guestHouse.serves_meals,
+      roomType,
+      date,
+    });
+    categories.push({
+      key: tariffScopeKey(scope),
+      scope,
+      label,
+      scope_label,
+      lines,
+      headline: lines.find((l) => l.item === "room") ?? null,
+      requesters: tariffScopeKey(scope) === tariffScopeKey(own),
+    });
+  }
+
+  return categories.sort((a, b) => {
+    if (a.requesters !== b.requesters) return a.requesters ? -1 : 1;
+    const byRate = rateTotal(a.lines) - rateTotal(b.lines);
+    return byRate !== 0 ? byRate : a.label.localeCompare(b.label);
+  });
+}
+
+/** The desk's category a key names, or null when the key is not on the list. */
+export function deskCategoryFor(
+  categories: DeskTariffCategory[],
+  key: string | null | undefined
+): DeskTariffCategory | null {
+  const scope = parseTariffScope(key);
+  return scope ? (categories.find((c) => c.key === tariffScopeKey(scope)) ?? null) : null;
+}
+
+// ---------------------------------------------- the published sheet (4 Nov 2026)
+
+/**
+ * **The tariff as the office publishes it** - one row per category, one
+ * column per guest house, the room rate per day in each cell (4 Nov 2026, the
+ * owner's sixteenth list: "the Tariff Table ... must be displayed on the
+ * right side of the booking page so users can view the rates").
+ *
+ * Read straight off the rate sheet, so it is the office's own categories in
+ * the office's own words: every room rate in force today at a guest house is
+ * a cell, and its `note` names the row it sits in ("Category II: institute
+ * guests on official duty"). Two rows with the same note at one guest house -
+ * the sheet scopes a category by more than one qualifier - are one cell.
+ *
+ * This is what the requester **reads**; which row applies to their stay is
+ * the Guest House Manager's decision (`deskTariffCategories`).
+ */
+export type TariffSheetRow = {
+  /** "Category II" - the note up to its first colon, or the whole note. */
+  title: string;
+  /** What follows the colon, if anything. */
+  description: string | null;
+  /**
+   * Rate by guest house id; absent where the charge does not arise there,
+   * null where it does and the office has not published a rate.
+   */
+  rates: Record<string, number | null>;
+};
+
+export function roomTariffSheet(
+  tariffs: Tariff[],
+  guestHouses: { id: string }[],
+  date: string
+): TariffSheetRow[] {
+  const rows: TariffSheetRow[] = [];
+  for (const house of guestHouses) {
+    // The row in force for each set of qualifiers at this house - a later
+    // row with the same qualifiers replaces an earlier one, and a house's own
+    // row shadows a sheet-wide one with the same booking type and role.
+    const inForce = new Map<string, Tariff>();
+    for (const t of tariffs) {
+      if (t.item !== "room" || t.effective_from > date) continue;
+      if (t.guest_house_id !== null && t.guest_house_id !== house.id) continue;
+      if (t.room_type !== null && t.room_type !== "double_sharing") continue;
+      const key = `${t.booking_type ?? "*"}|${t.requester_role ?? "*"}`;
+      const current = inForce.get(key);
+      const replaces =
+        !current ||
+        (t.guest_house_id !== null && current.guest_house_id === null) ||
+        ((t.guest_house_id === null) === (current.guest_house_id === null) &&
+          (t.effective_from > current.effective_from ||
+            (t.effective_from === current.effective_from && t.created_at > current.created_at)));
+      if (replaces) inForce.set(key, t);
+    }
+    for (const t of inForce.values()) {
+      const note = t.note?.trim() || "Room";
+      const colon = note.indexOf(":");
+      const title = colon > 0 ? note.slice(0, colon).trim() : note;
+      const description = colon > 0 ? note.slice(colon + 1).trim() || null : null;
+      let row = rows.find((r) => r.title === title);
+      if (!row) {
+        row = { title, description, rates: {} };
+        rows.push(row);
+      }
+      if (!(house.id in row.rates)) row.rates[house.id] = t.rate;
+    }
+  }
+  return rows.sort((a, b) => a.title.localeCompare(b.title, "en", { numeric: true }));
+}
+
+/**
+ * **The other charges** under the sheet: an extra bed, and each meal where a
+ * guest house serves them - at the rates this requester would be quoted
+ * (`previews`, resolved for their own role, so a student reads meals as free
+ * and is shown no kitchen). The office asked on 7 Oct 2026 for the rates of
+ * the guest house being booked, meals included, and the sheet alone is rooms.
+ * One row per charge, one column per guest house, the first published rate
+ * found for that house - the extra bed and meals are not priced by category.
+ */
+export function otherChargesFrom(previews: TariffPreview[]): TariffSheetRow[] {
+  const rows: TariffSheetRow[] = [];
+  for (const preview of previews) {
+    for (const line of preview.lines) {
+      // Unpublished is said, not hidden - "Not published", never a zero.
+      if (line.item === "room") continue;
+      let row = rows.find((r) => r.title === line.label);
+      if (!row) {
+        row = { title: line.label, description: null, rates: {} };
+        rows.push(row);
+      }
+      if (!(preview.guest_house_id in row.rates)) row.rates[preview.guest_house_id] = line.rate;
+    }
+  }
+  const order = ["extra_bed", "breakfast", "lunch", "dinner"].map((item) =>
+    previews.flatMap((p) => p.lines).find((l) => l.item === item)?.label
+  );
+  return rows.sort((a, b) => order.indexOf(a.title) - order.indexOf(b.title));
 }

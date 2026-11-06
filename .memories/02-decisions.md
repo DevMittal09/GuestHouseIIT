@@ -5976,6 +5976,15 @@ than a new rule.
 
 ### A tariff category is the pair the requester decides, not a field on the booking
 
+> **Superseded (31 October 2026).** The requester decides **nothing** about
+> the tariff now: the panel is a price list and the **Guest House Manager**
+> chooses the category when they approve. The reasoning below about *what a
+> category is* held - it is still a scope on `tariffs`, not a label, and there
+> is still no stored rate and no new dimension in `resolveTariff` - but the
+> person who answers it changed, and so did the half of this entry about the
+> panel asking a question. See "The tariff category is the desk's, and it is a
+> scope" under 31 October 2026.
+
 **Decision.** The categories and their rates live in a panel on the
 **right-hand side** of the booking page, under the requester's own details,
 and **one of them is chosen**. A category is one (guest house, booking type)
@@ -6814,6 +6823,232 @@ collected **email column must be the Google *primary* address** - an alias or
 an HR-sheet address never matches, and the whole support load of a rollout
 lands on that one column.
 
+---
+
+## 31 October 2026 — the owner's fifteenth list: the tariff category is the manager's
+
+Three items ([01-background.md](01-background.md)), and they are one change
+read from three sides: the requester stops choosing, the desk starts, and the
+invoice follows the desk.
+
+### The tariff category is the desk's, and it is a scope
+
+**Decision.** A tariff is scoped by guest house, room type, booking type and
+requester role. The first two are **facts** - where the guest sleeps, which
+room the party was given. The other two are a **judgement about the visit**,
+and that judgement is the Guest House Manager's, taken when they approve.
+`TariffScope` is that pair; `bookings.tariff_booking_type` and
+`tariff_requester_role` store it (migration 35); `pricingScopeFor` is the one
+reader, and `buildInvoiceDocument` substitutes it into the single `base` object
+every charge on the invoice is priced from.
+
+**Why it had to move.** The office's sheet prices Hamsanandi's rooms at ₹2,000
+generally and ₹4,000 "for government officers" - a row scoped by
+`requester_role`. Nothing was wrong with the resolution; what was wrong was
+who selected it. A dignitary booked for by a department's faculty resolved the
+faculty's own role and was charged ₹2,000, and the ₹4,000 row was reachable
+only by an office's own account. 17 October had made that worse by turning the
+pair into an explicit radio on the booking form: the requester was being asked,
+in as many words, which published rate they would like.
+
+**Why the category is *still* not a label.** This is the part 17 October got
+right and this round kept. [03-roadmap.md](03-roadmap.md) §2j predicted that
+the sheet's own wording ("government officer", "Hamsanandi type 3") would cost
+"a column on `tariffs` and a column on `bookings`, a new dimension in
+`resolveTariff` and in `specificity()`". It cost none of that, because the
+sheet's wording is already **on the row**: `tariffs.note` is where the office
+writes "Tariff sheet: Hamsanandi type 3, government officers".
+`describeTariffCategory` reads the note off the row that actually prices the
+category's defining charge, so the desk sees the office's words while the
+engine goes on resolving a scope. **Nothing was added to `resolveTariff` or to
+`specificity()`.**
+
+**Why the list is enumerated from the rate sheet.** `deskTariffCategories`
+walks `tariffs`: every row that could price this booking's defining charge
+contributes the scope that selects it. So a rate the office publishes this
+afternoon is a category on the desk's screen this afternoon - no second table
+of category names, nothing to keep in step, and no console section to build.
+Two scopes that resolve to identical figures are collapsed: the sheet does not
+distinguish them, so the screen must not pretend to.
+
+**Why the defining charge is the room on a stay and the meals on a dining
+booking.** Enumerating from *every* item's rows offered "Tariff sheet: meals
+free to students" as a category for a faculty stay, because that row exists
+and is scoped by a role. A category is about the charge it prices.
+
+**Why there is no stored rate**, although the ask said "the selected tariff
+category **and price** should be stored against the booking". A stay crossing
+a rate change is priced night by night (`splitByRate`), so a single figure
+would be wrong for it; and a rupee amount on `bookings` would be a second
+source of truth for money the moment the office published a new row - the
+exact thing 17 October refused. The price is kept in the two places that
+cannot be mistaken for the authority: the **booking's log**, append-only,
+recording what the category stood at on the day it was chosen, and the
+**issued invoice's snapshot**, which is what was actually charged. The office
+asked for traceability and that is what a log entry is for.
+
+### Approval is the only writer
+
+**Decision.** The category is written by the approval that records it, in
+`StatusUpdate` beside the rooms - `allocateRooms` for a stay,
+`reviewBooking` for a dining booking, which has no rooms and whose approval
+*is* the decision. There is no separate "set the category" action.
+
+**Why.** It keeps the decision atomic with the thing it is part of: a booking
+cannot come out of approval approved and unpriced, and one status change plus
+one log line is the whole audit trail. A second writer would need its own
+authorisation, its own audit wording and its own answer to "what happens to an
+invoice already issued" - and none of that was asked for. The cost is recorded
+honestly: **a category cannot be corrected afterwards**
+([03-roadmap.md](03-roadmap.md) §2p).
+
+**Refuse, don't adjust.** The key arrives from the desk's radio, so
+`categoryForApproval` re-derives the list from the rate sheet and matches
+against it: a key the office never published is refused, not priced. Where
+several categories exist and none was chosen the approval is **refused** -
+that is the whole point of the round, and a default would undo it. Where the
+sheet publishes exactly one, it is taken as given and recorded anyway, so
+every booking approved from now on carries an explicit category rather than a
+silence to be interpreted. And a `tariffCategory` on anyone *else's* approval
+is refused outright: an intermediate approver forwards a request, they do not
+price it.
+
+### A booking approved before today is priced exactly as it was
+
+**Decision.** `pricingScopeFor` falls back to the booking's own
+`booking_type` and `user_role`. Nothing is backfilled, and such an invoice
+prints **no** category line.
+
+**Why.** No decision was recorded for those bookings, and inventing one would
+be precisely the "default tariff" this change rules out. The absence is also
+the only honest way for a reader to tell "priced at the requester's own
+category" from "priced at the one the desk picked" - which is why the printed
+fact is conditional rather than a line reading "not recorded".
+
+**Why no new invoice version.** `InvoiceDocument.version` governs the
+**lettering of the money table**, and this round did not touch a single
+figure or label in it. The category is a header fact that no snapshot issued
+before today carries, so every reprint of an older invoice is unchanged. It
+is still `version: 5`.
+
+### The panel is a price list, and a server component again
+
+**Decision.** `components/tariff-panel.tsx` renders **every** eligible
+category with its full charge table and nothing selectable - no radios, no
+`onSelect`, no state, no `"use client"`. The guest house and the kind of
+booking are still questions on the form, where they were before 17 October:
+they decide eligibility, routing and the debitable heads, not just the rate.
+
+**The one line of prose on it** - "The Guest House Manager confirms which
+category applies." - is a deliberate exception to nothing. The rules of 9 and
+11 October are about not restating what the form *enforces* or what a house
+rule says; this states who answers a question the form has stopped asking,
+and without it four categories read as four options. One fact, one line, no
+second clause.
+
+**Each table's caption names its category** ("Rates for Hamsanandi - Official
+booking, in force today") where more than one is drawn. Four tables captioned
+"Rates at Hamsanandi" are indistinguishable in a screen reader's table list -
+and were indistinguishable to Playwright, which is how it was noticed.
+
+## 4 November 2026 - the owner's sixteenth list
+
+**VIP rooms are a Setting, not a column.** `rules.policy` is one `app_settings`
+row, so the round needed no migration, and the manager owns it through a console
+section of its own rather than the developer's Settings. The cost: a stored
+list of room ids cannot have a default, because the database issues the ids.
+So `vip_room_ids` is **null until saved**, which resolves to rooms numbered C1
+and C2, and saving even an empty list replaces that for good. Rejected: an
+`is_vip` column, which would have needed a migration on a hosted project whose
+state is partly unknown, for a flag nothing queries in SQL.
+
+**The fixed VIP addresses are code**, so the console cannot take the Director's
+own rooms away from the Director.
+
+**The 14 is a pool across both guest houses.** With 18 non-VIP rooms, a plain
+ceiling of 14 per figure would never bind, since no house has 14, and "if the
+GHM books some of these, the visible count decreases" would be false. So a
+figure is its own free rooms clamped to `cap - held everywhere`. It is
+**display only**: refusing a request on a number the requester was merely shown
+would turn a visibility rule into a capacity rule nobody asked for.
+
+**Availability still counts VIP rooms out at submission.** A requester whose
+request only a VIP room could satisfy is refused by `createBooking`, because the
+manager could not allocate it to them afterwards.
+
+**A category is still a scope, so Category III borrows `requester_role`.** The
+31 Oct 2026 design keys a category on (booking type, requester role), and II and
+III are both official. A third scope dimension would have meant another column on
+both `tariffs` and `bookings`, and a change to `resolveTariff`; the role was
+already standing in for "government officers". The role here is a label for the
+desk's choice and not a claim about the requester, which is worth remembering
+when reading the rate sheet.
+
+**The desk's list never crosses booking types.** This is the sixteenth list's
+"cannot change Official to Personal" applied to the one place it could still
+happen: a category scoped to the other type would be that change, made through
+the price.
+
+**Why the requester's panel gave way to a sheet.** The panel resolves rates for
+one role, so a faculty member would have seen Category III and never II. Table 1
+reads the rows themselves and groups them by `note`, the office's wording. The
+extra bed and meals stay under it at the requester's own rates, because the
+office asked for those on 7 Oct 2026; an unpublished charge reads "Not
+published", as it did before.
+
+**Superseded:** the six-month window (14 Oct 2026), official-first ordering
+(`sortOfficialFirst`), and the real room numbers of 23 Sep 2026. The owner's
+sixteenth list is later than each and names the new value.
+
+## 5 November 2026 - user groups, and blocking rather than deleting
+
+**A table, not a Setting.** Groups are referenced by `profiles.group_id` and members
+are found from it, so unlike the VIP rooms this wanted a foreign key. Migration 36.
+
+**One group per person, by the owner's choice of programme + batch.** The year is
+computed (`studyYear`), because storing it means moving every student each July and
+the rules going wrong if nobody does. Rejected, with the owner: programme alone (no
+per-batch rules), programme + current year (the July chore), free-form (overlaps).
+
+**The block is checked on every request, in `profileOrNull`,** not only at the three
+sign-in doors, so a browser already signed in stops working at once. Sessions are also
+revoked, so a later restore does not revive an old browser.
+
+**Restricting Copy to is scoped to group members.** The owner said everything is on the
+institute's domain, but `tests/fourth-round.test.ts` and the club journey pin an outside
+address as deliberate, and a person in no group has had no such rule. Applying it to all
+would have silently changed bookings nobody asked about. On the roadmap to confirm.
+
+**A group's role cannot be a way round `assignableRoles`.** A CSV into a group takes the
+group's role, which would have skipped the check the role column gets. So the schema
+refuses `developer`, the save action checks what this console may assign, and the planner
+checks again. Found in review, before anything shipped.
+
+**Reused rather than rebuilt:** the plan-then-import and its undo, the approval routes,
+and the booking's own Copy to, which already carries through to the requester's mail. A
+second CSV format was deliberately not added: a group upload is the existing importer with
+the role and the group decided by the screen.
+
+**Why `group_id` is optional on import rows.** A plain import writes no such key, so it
+keeps working on a database that has not had migration 36. The undo record follows the
+same rule and old records read as no group.
+
+**The same day, the owner's answers.** Signing in is institute-only for everyone, as one
+function at every door and on every request rather than a check per door, because Google
+already had it and LDAP and the picker did not. It also stops new accounts on other
+addresses, since one could never be used. MS and PhD get an `intake` rather than a
+two-per-year batch number, so the name, the year and the check constraint all say the
+same thing. Migration 36 was edited rather than followed by a 37, because it has not left
+this working tree.
+
+**Categories I-III start the day the repair is run, not on a future date (5 Nov 2026, the
+owner: implemented "today itself").** The future-date rule is `tariffStartError`, in the console
+action only, and `tariffs_guard` covers update and delete, so the repair's insert is allowed. There
+are no real bookings to re-price. The cost is that the rows lock at once. The repair also adds
+Category I rows scoped to the `official` role: migration 19's ₹4,000 row names that role and no
+booking type, so it cannot be deleted and would otherwise stay on the sheet and be offered to the
+desk for a personal or alumni stay at Hamsanandi. The mock seed has no such row, so no test catches
+this; it was found by running the sheet and the desk list over the hosted row shape.
 ## A root deployment guide, with the project memory remaining authoritative (30 October 2026)
 
 The deployment request needed one file a new operator could follow without

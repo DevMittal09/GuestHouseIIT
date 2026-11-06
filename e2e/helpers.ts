@@ -1,4 +1,4 @@
-import { expect, type Cookie, type Page } from "@playwright/test";
+import { expect, type Cookie, type Locator, type Page } from "@playwright/test";
 import path from "node:path";
 
 /**
@@ -173,6 +173,25 @@ export async function chooseGuestHouse(page: Page): Promise<void> {
     options.map((o) => (o as HTMLOptionElement).value).filter(Boolean)
   );
   await house.selectOption(values[0]);
+}
+
+/**
+ * **The tariff category the desk is approving at** (31 Oct 2026).
+ *
+ * The question appears in the allocation and the approve-meals dialogs
+ * wherever the office's rate sheet publishes more than one category for the
+ * booking; where it publishes one, the dialog states it and there is nothing
+ * to click. Either way this leaves the dialog ready to confirm.
+ *
+ * The booking's own category - the rate it would have been charged at before
+ * the manager was asked - is always the first option, which is what the
+ * journeys want: they are checking the pipeline, not the office's pricing.
+ */
+export async function chooseTariffCategory(dialog: Locator): Promise<void> {
+  const radios = dialog
+    .locator("fieldset", { hasText: "Tariff category" })
+    .locator('input[type="radio"]');
+  if ((await radios.count()) > 0) await radios.first().check();
 }
 
 /**

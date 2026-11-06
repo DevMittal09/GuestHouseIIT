@@ -62,14 +62,17 @@ test("a student's form states one guest house, no meals, no debitable head, and 
   await expect(page.locator('[name="debit_head"]')).toHaveCount(0);
   await expect(page.getByText(/settled at the time of checkout/)).toBeVisible();
 
-  // And the rates for that guest house, from the office's own rate sheet.
-  const rates = page.getByRole("table", { name: /Rates at Bageshri, in force today/ });
-  await expect(rates).toBeVisible();
-  await expect(rates.getByRole("cell", { name: "Room, per day" })).toBeVisible();
-  // Bageshri has no kitchen, so no meal rates are quoted.
-  await expect(rates.getByRole("cell", { name: "Lunch, per head" })).toHaveCount(0);
-  // A figure or an honest "Not published", never a silent zero.
-  await expect(rates.getByText(/₹|Not published/).first()).toBeVisible();
+  // And the rates, from the office's own rate sheet: the room tariff by
+  // category (4 Nov 2026), then the extra bed and meals at this requester's
+  // own rates.
+  const sheet = page.locator('section[aria-labelledby="tariff-sheet-heading"]');
+  const rooms = sheet.getByRole("table", { name: /Room tariff per day/ });
+  await expect(rooms).toBeVisible();
+  await expect(rooms.getByRole("columnheader", { name: "Bageshri" })).toBeVisible();
+  const extras = sheet.getByRole("table", { name: "Extra bed and meals" });
+  await expect(extras.getByRole("rowheader", { name: "Extra bed, per day" })).toBeVisible();
+  // Bageshri has no kitchen, and a student books no meals: none are quoted.
+  await expect(extras.getByRole("rowheader", { name: "Lunch, per head" })).toHaveCount(0);
 });
 
 test("a faculty member sees the meal rates at the kitchen and is still asked on an official booking", async ({
@@ -86,10 +89,13 @@ test("a faculty member sees the meal rates at the kitchen and is still asked on 
   const hamsanandi = await house.locator("option", { hasText: "Hamsanandi" }).getAttribute("value");
   await house.selectOption(hamsanandi!);
 
-  const rates = page.getByRole("table", { name: /Rates at Hamsanandi, in force today/ });
-  await expect(rates).toBeVisible();
-  await expect(rates.getByRole("cell", { name: "Room, per day" })).toBeVisible();
-  await expect(rates.getByRole("cell", { name: "Lunch, per head" })).toBeVisible();
+  // The room tariff by category, and under it the extra bed and the meals
+  // the kitchen serves (4 Nov 2026).
+  const sheet = page.locator('section[aria-labelledby="tariff-sheet-heading"]');
+  await expect(sheet.getByRole("table", { name: /Room tariff per day/ })).toBeVisible();
+  const extras = sheet.getByRole("table", { name: "Extra bed and meals" });
+  await expect(extras.getByRole("columnheader", { name: "Hamsanandi" })).toBeAttached();
+  await expect(extras.getByRole("rowheader", { name: "Lunch, per head" })).toBeVisible();
   // The table and nothing beside it (9 Oct 2026): the paragraph about rates in
   // force, GST and night-by-night pricing is on the Guidelines page.
   await expect(page.getByText(/the same ones your invoice is priced from/)).toHaveCount(0);

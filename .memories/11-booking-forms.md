@@ -129,13 +129,71 @@ its form is not in the Form Builder and every guest field is required.
 
 ---
 
+### The roll number encodes the programme (31 Oct 2026)
+
+**The sixth character of a student's roll number** is their programme. The
+office writes the pattern `xxxxxNxxx`. `profiles.roll_number` holds the
+string (the academic record carries the same one, with a free-text
+`program` beside it).
+
+| Sixth character | Programme | Seeded example |
+| --- | --- | --- |
+| `1` | B.Tech | `112201001` - Anjali Menon |
+| `2` | M.Tech | `142202014` - Rahul Nair |
+| `3` | MS | `122203099` - Devika Iyer (the day scholar) |
+| `4` | PhD | none |
+| `5` | M.Sc | none |
+
+The seeded students already agree with the scheme, and so does the dummy
+academic record's own `program` string (`lib/academic/mock-source.ts`):
+`112201001` reads B.Tech there and `142202014` M.Tech. **No persona is on `4`
+or `5`**, so a PhD or M.Sc roll number has to be created to test anything that
+turns on one.
+
+**What it is for.** The office asked on 31 Oct 2026 that **MS and PhD students
+be able to book for a spouse with no parent on the request** - an exemption
+from the parent-dependency rule above, for a **spouse only**. B.Tech, M.Tech
+and M.Sc students are unchanged, and an MS or PhD student still needs a parent
+on the request for a sibling or a grandparent.
+
+**Why the roll number and not a field.** The programme is already in the
+identifier the institute issues, so deriving it needs no column, no migration
+and nothing for the office to maintain - and a hand-kept programme field is
+exactly how a student's eligibility would drift from the programme they are
+actually on. The academic record's `program` is **not** the source of truth
+for it: it is free text somebody pasted in, it is absent for anyone with no
+record, and `academicRecordFor()` falls back to the profile on an outage - a
+down academic database must never change what a form allows.
+
+**Where it can read as nothing.** `roll_number` is **nullable** and is not
+guaranteed to be nine digits or even numeric: a transfer, a legacy account or
+a hand-typed profile can hold anything. A value shorter than six characters,
+or whose sixth character is not one of the five above, has **no programme and
+therefore no exemption** - the existing rules apply unmodified. That is the
+safe direction, and the only safe one: an unreadable roll number must never
+widen what a student may book.
+
+> **Status: built on 4 Nov 2026.** `isResearchScholar` reads the sixth character
+> and `scholar_only_relationships` (Spouse, for students) is refused from anyone
+> else, by the form and by `createBooking`, and not offered to them. It is not a
+> dependent relationship, so a spouse needs no parent. A student row saved in the
+> Form Builder before the rule gains Spouse once, in `sanitizeFormConfig`.
+> An **official** booking is also now exempt from the 14-night cap, whoever
+> raises it (`isDurationExempt`).
+
+---
+
 ### What every booking is asked, top to bottom
 
 > **The page is two columns, laid out by `BookingForm`** (17 Oct 2026). The
 > questions run down the left - they *are* the `<form>` element - and in the
 > right-hand column, sticky from `lg`, stand the **requester's details** and
-> the **tariff panel**, which is where the rates now live and where the
-> **tariff category is chosen**. The numbers below are the questions' own:
+> the **tariff panel**, which is where the rates live. **The panel asks
+> nothing** (31 Oct 2026): it lists every category this requester could be
+> charged under, with its charges, and the **Guest House Manager chooses which
+> applies when they approve** ([10-roles-and-workflows.md](10-roles-and-workflows.md)).
+> It had radios from 17 to 31 Oct 2026, and picking one wrote the guest house
+> and the booking type. The numbers below are the questions' own:
 > `numbered-sections` is on the form, so nothing beside it is counted as a
 > step. On a phone both panels come first, as the record always did.
 >
@@ -172,7 +230,7 @@ its form is not in the Form Builder and every guest field is required.
 | 17 | ~~Pets notice~~ — **off the form** (11 Oct 2026, the office: "only required in the guidelines no need to show it here"). It is a house rule, not a rule the form enforces, so it keeps its other two homes: the Guidelines page ("During your stay") and the **"Pets" line in every booking mail**. It was a room-booking-only card from 1 Oct 2026, and displayed-only (no tick box) before that | — | — |
 | 18 | **Privacy consent** tick | Everyone | **Yes** |
 | 18a | **Confirm your meal booking** — kitchen, people, preferences, each day and its sittings, who pays, remarks | Meals only | Read-only, live |
-| — | **Tariff** — **in the right-hand panel, not the form** (17 Oct 2026, the owner). The **categories** this requester may book, each labelled and carrying its room rate ("Hamsanandi - Official booking", ₹2,000 per room per day), and **one of them is chosen**: a category is one (guest house, booking type) pair, so choosing it writes those two fields and the rate follows. Then the full table of charges for it - room per day, extra bed per day, and each meal where the kitchen serves them, **the meals alone on a dining booking** (9 Oct 2026, `previewItemsFor`). One category is **stated, not asked**. Resolved through the **same function the invoice prices from** (`resolveTariff`), so the figure quoted is the figure charged; an unpriced charge reads "Not published". `lib/tariff-categories.ts`, `components/tariff-panel.tsx` | Everyone | The category, where there is more than one |
+| — | **Tariff** — **in the right-hand panel, not the form, and not a question** (17 Oct 2026, the owner, for the panel; **31 Oct 2026**, the owner, for taking the choice out of it). **Every** category this requester could be charged under, each labelled and carrying its room rate ("Hamsanandi - Official booking", ₹2,000 per room per day) and its full table of charges - room per day, extra bed per day, and each meal where the kitchen serves them, **the meals alone on a dining booking** (9 Oct 2026, `previewItemsFor`). A category here is one (guest house, booking type) pair; **which one applies is the Guest House Manager's decision, taken at approval**, and one line on the panel says so. Resolved through the **same function the invoice prices from** (`resolveTariff`), so the figures shown are the figures the office charges; an unpriced charge reads "Not published". Each table's caption names its category where more than one is drawn. `lib/tariff-categories.ts`, `components/tariff-panel.tsx` | Everyone | **Nothing - it is a price list** |
 | — | Room availability panel — **how many rooms are free**, as a labelled strip of figures per day (redrawn 9 Oct 2026), or a headline figure and hour chips on a single day. The room-by-room chart is the **desk's** only | Room bookings | Read-only |
 
 ---
@@ -183,8 +241,8 @@ its form is not in the Form Builder and every guest field is required.
 
 - Check-in in the **future** (skipped for meals only — its "check-in" is
   midnight on the first meal day).
-- Check-in within **6 months** of today (`advance_booking_months`; one month
-  until 14 Oct 2026). **Exempt:** Official, GH Manager, developer. Applies to
+- Check-in within **1 month** of today (`advance_booking_months`; six months
+  from 14 Oct to 4 Nov 2026). **Exempt:** Official, GH Manager, developer. Applies to
   check-in only.
 - Check-out after check-in — the message names both times as read, and points
   at the AM/PM dropdowns when they are on the same day.
@@ -323,7 +381,8 @@ head) is skipped, and the submission log says so.
 | Whether a booking type is asked which budget pays | `asksForDebitHead` (`lib/debit-heads.ts`) |
 | A student's locked parent names | Console → **Academic records** (migration 28); the rule is `guestNameRule` (`lib/academic/guest-names.ts`) |
 | Copy-to cap (25) | `MAX_COPY_TO_EMAILS` (`lib/booking-schema.ts`) and migration 24's check |
-| Which **tariff categories** a requester is offered | Nothing of its own: they are derived (`tariffCategories`, `lib/tariff-categories.ts`) from the rate sheet (Console → Tariffs & Invoicing), the Form Builder's allowed guest houses, `bookingTypesFor` and `mealsAllowedFor` |
+| Which **tariff categories** a requester is **shown** | Nothing of its own: they are derived (`tariffCategories`, `lib/tariff-categories.ts`) from the rate sheet (Console → Tariffs & Invoicing), the Form Builder's allowed guest houses, `bookingTypesFor` and `mealsAllowedFor`. The requester chooses none of them (31 Oct 2026) |
+| Which **tariff category a booking is charged under** | The **Guest House Manager**, when they approve it - from `deskTariffCategories`, enumerated out of the same rate sheet. Stored on the booking (migration 35) and read by the invoice through `pricingScopeFor`. [13-billing-and-dining.md](13-billing-and-dining.md) |
 | The **caretaker line** in the meal section | `MEAL_CHANGE_NOTICE` (`lib/meals.ts`) |
 | Whether the meal section is **offered** at all on a stay | `mealsAllowedFor` + the guest house's "Serves meals" tick; whether it is **shown** is the requester's own Yes / No, which starts at No |
 
@@ -765,3 +824,12 @@ booking, and filling the profile from it at sign-in, are listed in
 
 The scripts are not in the repo. Re-create them from this list if you touch
 `lib/academic/`.
+
+---
+
+## Copy to, for someone in a user group (5 Nov 2026)
+
+Their group's `prefill_copy_to` is already in the box and **may be removed**. What they
+may add is `allowed_copy_to` where that is non-empty, else any IIT Palakkad address
+(`copyToAddressError`, applied by the form and again in `createBooking` from the
+requester's own account). **Someone in no group is unchanged:** any address.

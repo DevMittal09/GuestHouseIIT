@@ -1,3 +1,4 @@
+import { signInRefusal } from "@/lib/user-groups";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { recordAudit } from "@/lib/audit-server";
@@ -68,9 +69,16 @@ export async function GET(request: Request): Promise<Response> {
     return back("That account is not registered on the guest house portal. Please contact the guest house office.", base);
   }
 
-  if (profile.account_status !== "active") {
-    await recordAudit(profile, "signin.failure", identity.email, { method: "google", reason: "account inactive", status: profile.account_status });
-    return back("Your account is not active. Please contact the guest house office.", base);
+  // One gate for every door: the institute's domain, a blocked account, and an
+  // account_status that is no longer active (`signInRefusal`).
+  const refusal = signInRefusal(profile);
+  if (refusal) {
+    await recordAudit(profile, "signin.failure", profile.email, {
+      method: "google",
+      reason: refusal,
+      status: profile.account_status,
+    });
+    return back(refusal, base);
   }
 
   await startSession(profile.id);

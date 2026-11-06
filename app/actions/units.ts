@@ -34,7 +34,7 @@ function fail(e: unknown): ActionResult {
     return {
       ok: false,
       error:
-        "The units table is not there yet - apply scripts/init-postgres.sql (table: units).",
+        "The units table is not there yet - apply migration 15 (table: units).",
     };
   }
   // 42703 / PGRST204: a column the database does not have yet - the Faculty
@@ -43,7 +43,7 @@ function fail(e: unknown): ActionResult {
     return {
       ok: false,
       error:
-        "Faculty Advisors are not in the database yet - apply scripts/init-postgres.sql (column: units.faculty_advisor_id).",
+        "Faculty Advisors are not in the database yet - apply migration 25 (column: units.faculty_advisor_id).",
     };
   }
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };

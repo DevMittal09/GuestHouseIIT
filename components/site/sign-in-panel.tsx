@@ -1,10 +1,30 @@
 import Link from "next/link";
 import { logout } from "@/app/actions/auth";
+import { googleOauth, mockLoginEnabled } from "@/lib/env";
 import { LoginForm } from "@/components/login-form";
 import { Container, PageTitle, siteButton } from "@/components/site/site-ui";
 import { type SitePhoto } from "@/lib/site";
 import { ROLE_LABELS, type Profile } from "@/lib/types";
 
+/**
+ * The gated entry points of the public site (`/book-room`, `/book-meal`,
+ * `/sign-in`). Someone already signed in is offered a way through instead of
+ * a second form. Renders its own `Container`.
+ *
+ * **One shape since 27 Oct 2026: a narrow panel, centred.** The owner asked
+ * for the photograph off `/sign-in` too ("remove the image currently
+ * displayed on the right side of the sign-in portal... centre-align the
+ * sign-in content"), which is what `/book-room` and `/book-meal` were given
+ * on 15 Oct 2026. The three doors are now the same panel.
+ *
+ * `photo` is **kept and unused**: the split-screen shape is three lines away
+ * if the office asks for it back, and `SIGN_IN_PHOTOS` still holds the
+ * photographs - all of which are in the Gallery regardless.
+ *
+ * There is nothing left to left-align: the panel holds a heading, one
+ * button and two short lines, so the old rule about labels sitting left of
+ * a centred panel no longer has a field to apply to.
+ */
 export function SignInPanel({
   title,
   intro,
@@ -19,20 +39,28 @@ export function SignInPanel({
 }: {
   title: string;
   intro: React.ReactNode;
+  /** Beside the form from `lg`. Leave it out for a centred, narrow panel. */
   photo?: SitePhoto;
   user: Profile | null;
+  /** Where a signed-in visitor should go, already resolved for their role. */
   continueTo: string;
   continueLabel: string;
   next?: string;
   submitLabel?: string;
   footnote?: React.ReactNode;
+  /** A failed sign-in's message, e.g. coming back from Google. */
   notice?: string | null;
 }) {
+  // `photo` is accepted and deliberately not drawn - see the note above.
   void photo;
 
   return (
     <div className="border-b border-border bg-band">
       <Container className="py-[clamp(24px,5vw,72px)]">
+        {/* Split-screen, but contained: one bordered panel with the form on
+            white in five columns and the photograph filling the other seven
+            (from `lg`; phones get the form alone). Without a photograph the
+            same panel is simply narrow and centred. */}
         <div
           className="mx-auto w-full max-w-[560px] overflow-hidden rounded-lg border border-border-strong bg-white"
         >
@@ -65,19 +93,16 @@ export function SignInPanel({
                   <LoginForm
                     next={next}
                     submitLabel={submitLabel}
+                    footnote={footnote}
                     center
+                    googleSignIn={googleOauth() ? "google" : mockLoginEnabled() ? "mock" : "none"}
                     notice={notice}
                   />
                 )}
               </div>
-
-              {footnote && (
-                <p className="mt-5 text-center text-sm leading-normal text-muted-foreground">
-                  {footnote}
-                </p>
-              )}
             </div>
           </div>
+
         </div>
       </Container>
     </div>

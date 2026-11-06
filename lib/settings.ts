@@ -81,6 +81,13 @@ export type BookingRules = {
    * by the daily cron, which mails the requester.
    */
   no_show_release_hours: number;
+  /**
+   * How many hours before the booked check-in a requester may still cancel
+   * (4 Nov 2026, the owner's sixteenth list: "must cancel at least 24 hours
+   * before the check-in date"); 0 turns the cut-off off. The Guest House
+   * Manager is never held to it - `managerCancelBooking` cancels at any time.
+   */
+  cancellation_notice_hours: number;
 };
 
 export type MealWindow = { start: string; end: string };
@@ -175,6 +182,40 @@ export type PrivacyRules = {
   audit_retention_days: number;
 };
 
+/**
+ * **The Guest House Manager's own policy settings** (4 Nov 2026, the owner's
+ * sixteenth list), edited at Console -> VIP Rooms & Guidelines - not in the
+ * developer's Settings, because every one of them is the office's day-to-day
+ * call. `lib/vip.ts` applies them.
+ */
+export type PolicyRules = {
+  /**
+   * The rooms held back as VIP rooms, by room id. **Null means "not chosen
+   * yet"**: the default is whichever rooms are numbered C1 and C2
+   * (`DEFAULT_VIP_ROOM_NUMBERS`), resolved against the rooms that exist,
+   * because a default cannot name an id the database has not issued. Saving
+   * the list once, even empty, replaces the default for good.
+   */
+  vip_room_ids: string[] | null;
+  /**
+   * Accounts that see and may be given the VIP rooms, **beyond** the three
+   * fixed ones (`FIXED_VIP_EMAILS`: the Director, the Director's office and
+   * the Administration office). Addresses, lower-cased.
+   */
+  vip_emails: string[];
+  /**
+   * The most rooms a general requester is ever told are free (14). The
+   * figure is a pool across every guest house: a room the desk has given
+   * away comes off it, and it never reads above this ceiling. 0 turns it off.
+   */
+  visible_room_cap: number;
+  /**
+   * The Guidelines document the office keeps on Google Drive, linked from
+   * the Guidelines page and the booking page. Empty: no link is shown.
+   */
+  guidelines_url: string;
+};
+
 export type Rules = {
   capacity: CapacityRules;
   booking: BookingRules;
@@ -191,6 +232,7 @@ export type Rules = {
   approval: ApprovalRules;
   invoice: InvoiceRules;
   privacy: PrivacyRules;
+  policy: PolicyRules;
 };
 
 export type RuleGroup = keyof Rules;
@@ -203,6 +245,7 @@ export const RULE_GROUPS: RuleGroup[] = [
   "approval",
   "invoice",
   "privacy",
+  "policy",
 ];
 
 /** The `app_settings` key a group is stored under. */
@@ -230,28 +273,26 @@ export const DEFAULT_RULES: Rules = {
   },
   booking: {
     /**
-     * **Six months** (14 Oct 2026, the office: "allow users to make bookings
-     * more than 30 days in advance"). It was **one month**, which refused a
-     * parent booking for convocation, a conference guest invited a term
-     * ahead, and anyone whose own travel is booked before the guest house
-     * will take them - and left the office entering those by hand, which is
-     * the thing the portal exists to stop.
-     *
-     * Six rather than no limit at all: the office can still set anything from
-     * 1 to 24 months here without code (`bookingRulesSchema`), and a window
-     * of zero is deliberately refused, so the figure is always a figure the
-     * Guidelines page can print. Official / dignitary bookings, the manager
-     * and the developer remain exempt from it entirely
-     * (`isAdvanceWindowExempt`).
+     * **One month** again (4 Nov 2026, the owner's sixteenth list: "users
+     * can only book a maximum of 1 month in advance, similar to railway
+     * booking rules"). It was six from 14 Oct 2026, when the office asked
+     * for bookings "more than 30 days in advance"; the sixteenth list
+     * reverses that - [02-decisions.md] has both. The office can still set
+     * anything from 1 to 24 months here without code (`bookingRulesSchema`).
+     * Official / dignitary bookings, the manager and the developer remain
+     * exempt from it entirely (`isAdvanceWindowExempt`).
      */
-    advance_booking_months: 6,
+    advance_booking_months: 1,
     max_stay_nights: 14,
     buffer_minutes: 240,
     no_show_release_hours: 0,
+    cancellation_notice_hours: 24,
   },
   meals: {
     windows: {
-      breakfast: { start: "07:30", end: "09:30" },
+      // 08:00 since 4 Nov 2026: the catering timings the owner's sixteenth
+      // list took from the official policy (it was 07:30).
+      breakfast: { start: "08:00", end: "09:30" },
       lunch: { start: "12:30", end: "14:00" },
       dinner: { start: "19:30", end: "21:00" },
     },
@@ -300,6 +341,12 @@ export const DEFAULT_RULES: Rules = {
     // past stay; the office can shorten it.
     id_retention_days: 365,
     audit_retention_days: 180,
+  },
+  policy: {
+    vip_room_ids: null,
+    vip_emails: [],
+    visible_room_cap: 14,
+    guidelines_url: "",
   },
 };
 
@@ -353,6 +400,7 @@ export const bookingRulesSchema = z.object({
   max_stay_nights: whole("Maximum stay", 0, 365),
   buffer_minutes: whole("Turnaround buffer", 0, 1440),
   no_show_release_hours: whole("No-show release", 0, 168),
+  cancellation_notice_hours: whole("Cancellation notice", 0, 720),
 });
 
 const windowSchema = (label: string) =>
@@ -437,6 +485,20 @@ export const privacyRulesSchema = z.object({
   audit_retention_days: whole("Audit retention", 180, 3650),
 });
 
+export const policyRulesSchema = z.object({
+  vip_room_ids: z.array(z.string().min(1)).max(200).nullable(),
+  vip_emails: z
+    .array(z.string().trim().toLowerCase().email("A VIP address is not an email address"))
+    .max(100, "Keep the VIP list under 100 addresses")
+    .transform((list) => [...new Set(list)]),
+  visible_room_cap: whole("Rooms shown to requesters", 0, 500),
+  guidelines_url: z
+    .string()
+    .trim()
+    .max(500, "The Guidelines link is too long")
+    .refine((v) => v === "" || /^https:\/\/\S+$/.test(v), "The Guidelines link must start with https://"),
+});
+
 export const RULE_SCHEMAS = {
   capacity: capacityRulesSchema,
   booking: bookingRulesSchema,
@@ -445,6 +507,7 @@ export const RULE_SCHEMAS = {
   approval: approvalRulesSchema,
   invoice: invoiceRulesSchema,
   privacy: privacyRulesSchema,
+  policy: policyRulesSchema,
 } as const satisfies Record<RuleGroup, z.ZodType>;
 
 /**

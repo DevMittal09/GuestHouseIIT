@@ -1,7 +1,14 @@
 import { mealDayCounts, MEAL_KEYS, MEAL_LABELS } from "./meals";
 import { countBedGuests, countInfants, ROOM_TYPE_LABELS } from "./occupancy";
 import { invoiceHeadLabel, needsProject } from "./debit-heads";
-import { resolveTariff, type Tariff, type TariffItem } from "./tariffs";
+import {
+  describeTariffCategory,
+  hasChosenTariffCategory,
+  pricingScopeFor,
+  resolveTariff,
+  type Tariff,
+  type TariffItem,
+} from "./tariffs";
 import {
   addDaysToDateValue,
   formatDateValue,
@@ -623,6 +630,15 @@ export type InvoiceDocument = {
   bank: InvoiceRules["bank"];
   contact: InvoiceRules["contact"];
   day_basis: InvoiceRules["day_basis"];
+  /**
+   * **The tariff category this invoice was priced at**, in the office's own
+   * words (31 Oct 2026). Absent on a snapshot issued before the manager was
+   * asked, and on a booking approved before then - which is priced at the
+   * requester's own category, exactly as every invoice was until this round,
+   * and prints no line for it. A snapshot, so the office renaming a rate
+   * later cannot rewrite what an issued invoice says it charged.
+   */
+  tariff_category?: string | null;
   /** What stops it being issued - a charge no tariff covers. Empty when it can be. */
   problems: string[];
 };
@@ -659,10 +675,19 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
   const stay = actualStayTimes(booking);
   const house = booking.guest_house?.name ?? "";
   const mealsOnly = booking.service_type === "meals_only";
+  /**
+   * **What the rates are resolved at**: the tariff category the Guest House
+   * Manager chose when they approved it, else the booking's own facts
+   * (`pricingScopeFor`, 31 Oct 2026). One substitution, in the one place every
+   * charge on this invoice is priced from - so the manager's decision reaches
+   * the rooms, the extra beds and the meals without any of them knowing about
+   * it, and no second price list exists to drift from this one.
+   */
+  const scope = pricingScopeFor(booking);
   const base = {
     guest_house_id: booking.guest_house_id,
-    booking_type: booking.booking_type,
-    requester_role: booking.user_role,
+    booking_type: scope.booking_type,
+    requester_role: scope.requester_role,
   };
   const rules = ctx.rules;
   const inclusive = rules.prices_include_gst;
@@ -850,6 +875,18 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     gst_breakdown: gstBreakdown,
     prices_include_gst: inclusive,
     grand_total: grandTotal,
+    // The category the manager chose, in the office's words, as a snapshot:
+    // absent where nobody was asked, which is how a reader tells "priced at
+    // the requester's own category" from "priced at the one the desk picked".
+    tariff_category: hasChosenTariffCategory(booking)
+      ? describeTariffCategory(ctx.tariffs, {
+          guestHouseId: booking.guest_house_id,
+          scope,
+          service: booking.service_type,
+          servesMeals: booking.guest_house?.serves_meals ?? false,
+          date: toInstituteDateValue(stay.checkIn),
+        }).label
+      : null,
     gstin: ctx.rules.gstin,
     bank: ctx.rules.bank,
     contact: ctx.rules.contact,
@@ -934,6 +971,11 @@ export function invoiceFacts(doc: InvoiceDocument): { left: [string, string][]; 
   if (doc.debit_head === "special_budget" && doc.special_fund) {
     left.push(["Special Fund: ", doc.special_fund]);
   }
+  // The category the desk charged under, where one was recorded. Conditional
+  // rather than a new document version: no snapshot issued before 31 Oct 2026
+  // carries it, so every reprint of one is unchanged, and the lettering of
+  // the money table - which is what `version` governs - is untouched.
+  if (doc.tariff_category) left.push(["Tariff category: ", doc.tariff_category]);
   const right: [string, string][] = [
     ["Invoice No.: ", doc.invoice_number ?? "DRAFT - not yet issued"],
     ["Invoice Date: ", formatInvoiceDate(doc.invoice_date)],

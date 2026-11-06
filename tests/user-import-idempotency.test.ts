@@ -59,6 +59,7 @@ async function context(): Promise<UserImportContext> {
   return {
     profiles: await store.listProfiles(),
     assignable: ["student", "employee", "warden"],
+    hostels: await store.listHostels(),
     units: await store.listUnits(),
   };
 }

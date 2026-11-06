@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { BookingForm } from "@/components/booking-form";
 import { getCurrentUser } from "@/lib/auth";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
+import { isResearchScholar } from "@/lib/form-config";
 import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { isWhitelistedOfficial } from "@/lib/settings";
 import { getOfficialEmails } from "@/lib/settings-server";
@@ -14,6 +15,10 @@ import { REQUESTER_ROLES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/ty
 import { firstBookableMealDate } from "@/lib/meals";
 import { bookingTypesFor, serviceTypesFor } from "@/lib/booking-types";
 import { tariffPreviews } from "@/lib/tariffs";
+import { otherChargesFrom, roomTariffSheet } from "@/lib/tariff-categories";
+import { CateringTimings, GuidelinesLinks, TariffSheet } from "@/components/booking-sidebar";
+import { mealTimetable } from "@/lib/site-content";
+import { GUIDELINES_PDF_URL } from "@/lib/site";
 import { academicRecordFor } from "@/lib/academic";
 import { guestNameRule } from "@/lib/academic/guest-names";
 import { toInstituteDateValue } from "@/lib/tz";
@@ -104,21 +109,34 @@ export async function BookingRequestPage({
   // …and the requester's academic record, which fixes a student's parents'
   // names (7 Oct 2026) - the form shows them read-only and does not offer a
   // relationship the record rules out.
-  const [config, context, lookup] = await Promise.all([
+  const [rawConfig, context, lookup] = await Promise.all([
     getEffectiveFormConfig(requester.role),
     bookingContextFor(requester),
     academicRecordFor(requester),
   ]);
+  // A relationship only a research scholar may book (Spouse) is not offered
+  // to anyone else (4 Nov 2026); `createBooking` refuses it regardless.
+  const config = isResearchScholar(requester.roll_number)
+    ? rawConfig
+    : {
+        ...rawConfig,
+        relationship_options: rawConfig.relationship_options.filter(
+          (r) => !rawConfig.scholar_only_relationships.includes(r)
+        ),
+      };
   const guestNames = guestNameRule(
     lookup.status === "found" ? lookup.record : null,
     config.relationship_options
   );
-  const guestHouses = (await getStore().listGuestHouses()).filter((g) =>
-    config.allowed_guest_house_ids.includes(g.id)
-  );
+  const allGuestHouses = await getStore().listGuestHouses();
+  const guestHouses = allGuestHouses.filter((g) => config.allowed_guest_house_ids.includes(g.id));
   // Booking as Faculty Advisor, Copy to starts with the council secretary's
   // mailbox; the advisor may remove it or add more.
-  const defaultCopyTo = club ? defaultCopyToFor(club, context.units) : [];
+  // A group's own addresses are filled in the same way (5 Nov 2026): a default
+  // the requester may remove, not a rule.
+  const defaultCopyTo = [
+    ...new Set([...(club ? defaultCopyToFor(club, context.units) : []), ...context.copyToRule.prefill]),
+  ];
 
   // Meals and rooms are two doors onto the same form. `?service=meals_only`
   // is what the portal home's "Meal / Dining booking" button links to; an
@@ -212,8 +230,25 @@ export async function BookingRequestPage({
         debitHeads={context.debitHeads}
         hodApprovers={context.hodApprovers}
         defaultCopyTo={defaultCopyTo}
+        copyToRule={context.copyToRule}
         tariffPreviews={rates}
         guestNames={guestNames}
+        tariffSheet={
+          <TariffSheet
+            rows={roomTariffSheet(context.tariffs, allGuestHouses, toInstituteDateValue(new Date()))}
+            otherCharges={otherChargesFrom(rates)}
+            guestHouses={allGuestHouses}
+            pricesIncludeGst={context.rules.invoice.prices_include_gst}
+          />
+        }
+        asideAfter={
+          <>
+            <CateringTimings rows={mealTimetable(context.rules)} />
+            <GuidelinesLinks
+              documentUrl={context.rules.policy.guidelines_url || GUIDELINES_PDF_URL}
+            />
+          </>
+        }
         aside={
           /* Who is asking, from the academic database. Read-only, so it is
              rendered here and passed in. For a club's booking, that is the

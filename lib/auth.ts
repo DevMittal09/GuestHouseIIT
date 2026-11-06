@@ -2,6 +2,7 @@ import { cache } from "react";
 import { currentSession, steppedUp, type Session } from "@/lib/sessions";
 import { getStore } from "@/lib/store";
 import type { Profile } from "@/lib/types";
+import { signInRefusal } from "@/lib/user-groups";
 
 export type SessionUser = {
   user: Profile;
@@ -19,7 +20,11 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
 
 async function profileOrNull(id: string): Promise<Profile | null> {
   try {
-    return await getStore().getProfile(id);
+    const profile = await getStore().getProfile(id);
+    // Blocked, or not on the institute's domain: treated as signed out on
+    // **every request**, so this holds for a session that began earlier,
+    // whichever door it came through.
+    return profile && signInRefusal(profile) ? null : profile;
   } catch {
     // A session cookie left over from the other backend does not merely miss,
     // it throws: mock profile ids are strings like "official-admin" and
