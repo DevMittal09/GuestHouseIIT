@@ -695,6 +695,21 @@ export class MockStore implements DataStore {
     return published ? hashSecret(published) : null;
   }
 
+  /**
+   * **Always false.** The mock store keeps no password on a profile - the
+   * record `getPasswordHash` returns is derived from the dummy directory, so
+   * a persona can use the password door without a password being *set on the
+   * account*. Which means the account picker goes on offering all nineteen of
+   * them, which is what it is for on a deployment with no database.
+   */
+  async hasStoredPassword(): Promise<boolean> {
+    return false;
+  }
+
+  async listProfilesWithoutPassword(): Promise<Profile[]> {
+    return this.listProfiles();
+  }
+
   async listGuestHouses(): Promise<GuestHouse[]> {
     return loadDb().guest_houses;
   }

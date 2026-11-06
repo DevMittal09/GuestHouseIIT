@@ -202,6 +202,13 @@ export async function loginAs(userId: string, next?: string | null): Promise<voi
   if (!mockLoginEnabled()) throw new Error("Mock authentication is disabled");
   const profile = await getStore().getProfile(userId);
   if (!profile) throw new Error("Unknown user");
+  // **An account with a password is not a picker account** (6 Nov 2026). The
+  // page already leaves it out of the list, and that is never the boundary:
+  // the picker signs anyone in with no secret at all, so an account that has
+  // a real credential must not be reachable through it by a crafted request.
+  if (await getStore().hasStoredPassword(profile.email)) {
+    throw new Error("This account signs in with its email and password");
+  }
   const refusal = signInRefusal(profile);
   if (refusal) throw new Error(refusal);
   await startSession(userId, { verified: true });

@@ -366,6 +366,17 @@ only by a crafted request while its form is withdrawn:
   `lib/ldap/mock-directory.ts` in step), which also covers how to switch to
   the institute's real directory and usernames.
 - **"Mock Authentication"** → `/mock-login` (the persona picker) → `loginAs()`.
+  **It offers only accounts with no password set on them** (6 Nov 2026, the
+  owner: *"mock authentication should have the original dummy accounts I
+  created not the new ones. The new dummy accounts we can login through login
+  page"*). `listProfilesWithoutPassword()` builds the list and **`loginAs`
+  refuses an account with a password** - a list is not a boundary, and this is
+  the door that asks for no secret at all. The predicate is
+  `hasStoredPassword`, which is **not** `getPasswordHash() !== null`: on the
+  mock store the record is derived from the dummy directory, so nothing has a
+  password *set on it* and all nineteen personas stay in the picker, which is
+  what a fresh clone and the Playwright suite need. Don't filter by an email
+  pattern or a list of addresses - the office will send more accounts.
   A **placeholder** for Google OAuth and the one-click role switcher. It is open
   while `googleOauth()` is null (`mockLoginEnabled()` in `lib/env.ts`) — **not**
   gated on `DEV_LOGIN`, which is how it once vanished from the office's
@@ -2411,7 +2422,12 @@ without it (`.memories/22-running-and-testing.md`) — never the hosted project.
 `supabase/repairs/` holds one-off data fixes that are **not** migrations and are
 not applied automatically. Read the header of each before running it.
 
-Then `supabase/seed.sql`. Locally: `supabase db reset`.
+Then `supabase/seed.sql` - which holds a **second copy of the schema's
+shape**, so after any migration that renames a column, grep it for the old
+name. It used migration 37's four old `units` names until 6 Nov 2026 and
+aborted at line 71, leaving a database with profiles and no units, guest
+houses or rooms. Always run it with `-v ON_ERROR_STOP=1`: without it psql
+reports the error, carries on and exits **0**. Locally: `supabase db reset`.
 Hosted: paste both migrations + seed into the SQL editor. Fill `.env.local` and
 restart the dev server; the store switches automatically. See README.md for the
 full walkthrough.

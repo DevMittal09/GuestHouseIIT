@@ -27,6 +27,15 @@ import { REVIEWER_ROLES, ROLE_LABELS, type Profile } from "@/lib/types";
  * `loginAs` together - `mockLoginEnabled()` closes the door as soon as
  * `GOOGLE_CLIENT_ID` and friends are set. `next` arrives from the sign-in
  * card, so "Book a room" still lands on `/book` through this door.
+ *
+ * **It offers only accounts with no password of their own** (6 Nov 2026, the
+ * owner). The office's 29 test accounts have one and sign in at the form; the
+ * demo personas do not, and this is the only way in for them. On the mock
+ * store nothing has a password *set on it* - the record `getPasswordHash`
+ * returns is derived from the dummy directory - so all nineteen personas are
+ * still offered there, which is what a fresh clone and the Playwright suite
+ * need. `loginAs` refuses an account with a password whatever this page
+ * lists.
  */
 export default async function MockLoginPage({
   searchParams,
@@ -41,8 +50,14 @@ export default async function MockLoginPage({
   const user = await getCurrentUser();
   if (user) redirect(next ?? homeForRole(user.role));
 
-  // Nobody can continue as an account that may not sign in.
-  const profiles = (await getStore().listProfiles()).filter((p) => !signInRefusal(p));
+  // Nobody can continue as an account that may not sign in, and **nobody with
+  // a password of their own**: those sign in at the form on `/sign-in`
+  // (6 Nov 2026, the owner - "mock authentication should have the original
+  // dummy accounts I created not the new ones"). `loginAs` enforces the same
+  // rule, because a list is not a boundary.
+  const profiles = (await getStore().listProfilesWithoutPassword()).filter(
+    (p) => !signInRefusal(p)
+  );
   // Split by where the persona *works*, not by whether it can book: the IAR
   // Office both approves and books, and belongs with the reviewers.
   const isStaff = (p: Profile) => REVIEWER_ROLES.includes(p.role) || p.role === "developer";
@@ -65,9 +80,11 @@ export default async function MockLoginPage({
         </div>
 
         {profiles.length === 0 && (
-          <p className="rounded-[2px] border border-dashed border-border-strong p-6 text-center text-[15px] text-muted-foreground">
-            No portal accounts exist in this database yet. Run <code>supabase/seed.sql</code>, or
-            delete <code>.local-db.json</code> to reseed the mock store.
+          <p className="border-t border-border pt-6 text-center text-[15px] text-muted-foreground">
+            No accounts here. Either every account in this database has a
+            password of its own, so they sign in at the form instead, or none
+            has been seeded yet - run <code>supabase/seed.sql</code>, or delete{" "}
+            <code>.local-db.json</code> to reseed the mock store.
           </p>
         )}
 

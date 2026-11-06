@@ -126,6 +126,40 @@ argued in the file's own header:
 stand-ins a plain PostgreSQL server needs before migration 1, which until now
 lived only as a recipe in [22-running-and-testing.md](22-running-and-testing.md).
 
+### Part 3 - which door an account belongs to
+
+> The owner, once the test accounts were in: *"mock authentication should have
+> the original dummy accounts I created not the new ones. The new dummy
+> accounts we can login through login page."*
+
+Seeding 29 accounts into the database put all 29 into the **account picker**,
+which reads `listProfiles()`. The rule that separates them is already in the
+data: **an account with a password signs in at the form; the picker is for the
+ones with no other way in.**
+
+- **`hasStoredPassword(email)`** and **`listProfilesWithoutPassword()`** on
+  `DataStore`. The first is deliberately *not* the same question as
+  `getPasswordHash`: on PostgreSQL they coincide (`password_hash is not
+  null`), but on the **mock store nothing has a password set on it** - the
+  record is derived from the dummy directory - so it returns false for all
+  nineteen personas and the picker goes on offering them. A fresh clone and
+  the Playwright suite need exactly that.
+- **`loginAs` refuses an account with a password**, not just the page. The
+  picker signs anyone in with no secret at all, so leaving the test accounts
+  off the list while `loginAs` still accepted their id would have been a
+  hidden button, not a boundary.
+- A database still on migration 37 has no column to read, so nothing has a
+  password and the picker behaves exactly as it did before the door existed.
+
+**`supabase/seed.sql` was broken and is fixed.** It still used the `units`
+column names migration 37 renamed four days earlier (`kind`, `parent_id`,
+`office_class`), so it **aborted at line 71**: a database seeded with it got
+the profiles and then nothing - no units, no guest houses, no rooms. That is
+why the owner's local database had 29 test accounts and no demo personas at
+all. With the renames applied it runs clean, and the local database now holds
+**48 profiles: 19 without a password (the picker) and 29 with (the form)**, 6
+units, 2 guest houses and 20 rooms.
+
 ### What was verified, and how
 
 - **All 29 accounts against a real PostgreSQL 16**: stubs, 38 migrations, the
@@ -136,10 +170,17 @@ lived only as a recipe in [22-running-and-testing.md](22-running-and-testing.md)
   absent from `profiles_v` by query.
 - **`test@gh` verifies against the backup's own hash** under the application's
   `verifySecret`, so no hash was replaced and no plaintext was stored.
+- **The door split, against the owner's own database**: 48 profiles, the
+  picker offers **19** and all of them are the demo personas, the other **29**
+  are offered nowhere but the form, and the rule was checked in both
+  directions (nothing in the picker has a password; nothing excluded lacks
+  one).
 - **Playwright: 56 passed** (55 before, plus a new journey that signs a
   persona in with a password, is refused twice without the page naming the
-  account, keeps the session across a navigation and signs out).
-- **`npm test` 708 passed** (699 before, plus 9), lint and typecheck clean, a
+  account, keeps the session across a navigation and signs out). The picker
+  journeys still pass, which is the check that the mock store kept all
+  nineteen personas.
+- **`npm test` 710 passed** (699 before, plus 11), lint and typecheck clean, a
   production build clean.
 
 ### Two pieces of drift found and corrected

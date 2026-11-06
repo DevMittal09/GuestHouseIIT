@@ -556,6 +556,28 @@ stay, say), `npx vite-node --config vitest.config.ts script.ts` resolves the
 
 Each of these cost real time.
 
+### `supabase/seed.sql` stops halfway and nothing says so (6 Nov 2026)
+
+A freshly migrated database seeded with `supabase/seed.sql` came out with
+**profiles and nothing else** - no units, no guest houses, no rooms. The error
+was one line, near the top of a 182-line file:
+
+```
+ERROR:  column "kind" of relation "units" does not exist
+```
+
+Migration 37 renamed four `units` columns (`kind` -> `category`, `parent_id`
+-> `parent_department_id`, `office_class` -> `office_type`,
+`hod_unit_id` -> `hod_approval_from_id`) and the seed was not updated with it.
+The inserts run in order and are not wrapped in a transaction, so everything
+before line 71 had already committed.
+
+**Two habits this is an argument for.** Always seed with
+`-v ON_ERROR_STOP=1`: without it psql prints the error, carries on, and exits
+**0**, so a script or a CI step reports success over a half-seeded database.
+And after any migration that renames or drops a column, grep the seed for the
+old name - it is the one file that holds a second copy of the schema's shape.
+
 ### A pg_dump the office sent will not load (6 Nov 2026)
 
 `database_backup.sql` failed three ways before a single SQL statement ran, and

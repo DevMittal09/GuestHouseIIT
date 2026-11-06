@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { DataStore } from "@/lib/store/types";
+import { useThrowawayMockDb } from "./helpers";
 import { hashSecret, verifySecret } from "@/lib/crypto";
 import { mockDirectoryPassword, SAMPLE_ACCOUNT } from "@/lib/ldap/mock-directory";
 import { passwordLoginEnabled } from "@/lib/env";
@@ -93,5 +95,46 @@ describe("the door's configuration", () => {
   it("is throttled per address, no looser than the LDAP door", () => {
     expect(RATE_LIMITS.passwordLogin.limit).toBeLessThanOrEqual(RATE_LIMITS.signIn.limit);
     expect(RATE_LIMITS.passwordLogin.windowSeconds).toBeGreaterThan(0);
+  });
+});
+
+
+describe("which door an account belongs to", () => {
+  /**
+   * 6 Nov 2026, the owner: *"mock authentication should have the original
+   * dummy accounts I created not the new ones. The new dummy accounts we can
+   * login through login page."* The separator is whether a password is **set
+   * on the account**, which is `password_hash` on PostgreSQL and, on the mock
+   * store, nothing at all - its records come from the dummy directory, so all
+   * nineteen personas stay in the picker. That is what these assertions pin:
+   * the mock store must not start excluding its own personas.
+   */
+  let store: DataStore;
+  let db: ReturnType<typeof useThrowawayMockDb>;
+
+  beforeAll(async () => {
+    db = useThrowawayMockDb();
+    const { MockStore } = await import("@/lib/store/mock");
+    store = new MockStore();
+  });
+  afterAll(() => db.cleanup());
+
+  it("keeps every seeded persona in the picker, because none has a password set on it", async () => {
+    const all = await store.listProfiles();
+    const picker = await store.listProfilesWithoutPassword();
+    expect(all.length).toBeGreaterThan(0);
+    expect(picker.map((p) => p.id).sort()).toEqual(all.map((p) => p.id).sort());
+
+    for (const p of all) {
+      expect(await store.hasStoredPassword(p.email)).toBe(false);
+    }
+  });
+
+  it("still lets those personas use the password door", async () => {
+    // "No password set on the account" and "cannot sign in with a password"
+    // are different claims, and only the first is true of the mock store.
+    const record = await store.getPasswordHash("priya@iitpkd.ac.in");
+    expect(record).not.toBeNull();
+    expect(verifySecret("Priya@2026", record!)).toBe(true);
   });
 });

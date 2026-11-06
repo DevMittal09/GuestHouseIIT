@@ -61,7 +61,13 @@ on conflict (id) do nothing;
 -- Migrations 15 and 16: a department with its HOD, a council with its
 -- secretary and a fest under it, and two officer offices. The same demo
 -- units as lib/store/seed.ts.
-insert into public.units (id, name, kind, parent_id, head_id, office_class) values
+--
+-- **Column names are migration 37's** (6 Nov 2026): `kind` -> `category`,
+-- `parent_id` -> `parent_department_id`, `office_class` -> `office_type`.
+-- This file still used the old ones until then, so the seed aborted here and
+-- left a database with profiles but no units, guest houses, rooms or demo
+-- bookings - and `ON_ERROR_STOP` is what made that visible rather than silent.
+insert into public.units (id, name, category, parent_department_id, head_id, office_type) values
   ('33333333-3333-3333-3333-333333333301', 'Computer Science & Engineering', 'department', null, '11111111-1111-1111-1111-111111111115', null),
   ('33333333-3333-3333-3333-333333333302', 'Cultural Affairs Council', 'council', null, '11111111-1111-1111-1111-111111111116', null),
   ('33333333-3333-3333-3333-333333333303', 'Petrichor', 'club', '33333333-3333-3333-3333-333333333302', null, null),

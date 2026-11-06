@@ -7594,3 +7594,59 @@ what the PDF lists. And the dump's `app_settings`, `form_configs` and
 spec defaults, so seeding three-key placeholders would have quietly replaced
 the booking forms - checked against the real parsers before deciding, which is
 how it is known they reduce to the defaults anyway.
+
+---
+
+## A password decides which door an account uses (6 November 2026)
+
+> The owner, after the office's 29 test accounts were seeded: *"mock
+> authentication should have the original dummy accounts I created not the new
+> ones. The new dummy accounts we can login through login page."*
+
+The obvious implementation is a list of addresses, or a pattern over
+`test\d+@`. Both rot: the office will send more accounts, and the next person
+to add one has to know about the filter. **The data already answers the
+question** - an account with a password has a way in that does not need the
+picker, and an account without one does not. So the rule is
+`password_hash is null`, and it maintains itself: give an account a password
+and it moves to the form, take it away and it comes back to the picker.
+
+**Why `hasStoredPassword` is not `getPasswordHash() !== null`.** They are
+different questions and only on PostgreSQL do they have the same answer. The
+mock store **derives** a record from the published dummy directory, so every
+demo persona can use the password door without a password being *set on the
+account*. Had the picker asked `getPasswordHash`, it would have emptied itself
+on the mock store - all nineteen personas gone from a fresh clone, and the
+Playwright suite with them. `hasStoredPassword` returns false there, which is
+the honest answer: **the mock store stores no passwords.** The distinction is
+worth the second method.
+
+**The gate is in `loginAs`, not only in the page.** The picker signs a person
+in with no secret whatsoever; it is the one door where leaving an account off
+a list and calling it protected would be plainly wrong. `loginAs` asks
+`hasStoredPassword` and refuses, so a crafted request carrying a test
+account's id gets nothing. Hiding a button is never the boundary - the same
+rule the console actions follow.
+
+**Degrading on migration 37.** A database without the column has no account
+with a password, so the picker offers everything, exactly as it did before the
+door existed. That falls out of the rule rather than being special-cased.
+
+---
+
+## `supabase/seed.sql` had been broken for four days (6 November 2026)
+
+Migration 37 renamed four `units` columns on 6 Nov; the seed still used three
+of the old names and **aborted at line 71**. Because the inserts run in order
+and not in a transaction, a database seeded with it got the profiles and then
+stopped: no units, no guest houses, no rooms, no demo bookings. The owner's
+local database had exactly that shape, which is why it held the 29 test
+accounts and not one of the demo personas they had asked for.
+
+Two things worth keeping from it. **The file is a second copy of a schema**,
+and this is the drift a second copy always produces - the same argument that
+deleted `scripts/init-postgres.sql` in the integration. It survives because
+it is seed *data* rather than a schema, but it has to be run after a
+migration that renames anything. And **`ON_ERROR_STOP=1` is what made it
+visible**: without it psql would have reported the error, carried on, and
+left the same half-seeded database with a zero exit code.
