@@ -160,6 +160,46 @@ all. With the renames applied it runs clean, and the local database now holds
 **48 profiles: 19 without a password (the picker) and 29 with (the form)**, 6
 units, 2 guest houses and 20 rooms.
 
+### Part 4 - three bugs that made every room booking fail
+
+The owner submitted a room booking against the new local database and got
+*"Something went wrong while submitting the booking"*. The real error goes to
+the server's log, not the browser, and there were **three in a row** - each
+only visible once the one before it was fixed. All three are in
+`PostgresStore.createBooking`, none of them reachable by the test suite,
+which runs on the mock store.
+
+1. **`pg` renders a JS array as a PostgreSQL array literal, not as JSON.**
+   `meals: []` went down the wire as `{}`, which a `jsonb` column stores as
+   the empty **object**, so `jsonb_typeof` answered `object` and
+   `bookings_meals_shape` refused the row. The error named the constraint, not
+   the cause. `custom_fields` had it too; `meal_diet_counts` escaped only
+   because it is an object, which `pg` does serialise as JSON. Every other
+   jsonb write in the file already called `JSON.stringify` - including
+   `updateBookingDetails` on the *same column* - so this was the one path that
+   missed it. Now `lib/store/jsonb.ts`: `jsonbParam`, `serializeJsonbColumns`
+   and `BOOKING_JSONB_COLUMNS`, in their own module with no imports so a test
+   can reach them (`postgres.ts` pulls in `pg` and `server-only`).
+   `saveUserMfa` had the same bug on `recovery_codes` and is fixed with it -
+   TOTP enrolment would have failed the same way.
+2. **`room_index` was 0-based.** The insert passed the loop counter, and
+   migration 11 declares `check (room_index >= 1)` with the comment
+   *"1-based, and it is what the requester saw: Room 2 is room_index 2"*.
+   `MockStore` has always written `index + 1`.
+3. **`action_by_name` was given `on_behalf_of_name`** - the *guest's* name on
+   a desk booking, and null on every other booking - into a NOT NULL column.
+   It is now resolved in the statement
+   (`coalesce((select full_name from profiles where id = $2), 'Unknown')`),
+   which matches `MockStore` and needs no second round trip. The default
+   remark was null where the mock store writes "Booking submitted"; now both
+   do.
+
+**What this says about the suites.** All three survived a clean lint,
+typecheck, build, 710 unit tests and 56 Playwright journeys, because every one
+of those runs on the mock store. The two stores are only as equivalent as
+something checks, and nothing checks `PostgresStore` against a real
+PostgreSQL. That is now [03-roadmap.md](03-roadmap.md) §2s item 6.
+
 ### What was verified, and how
 
 - **All 29 accounts against a real PostgreSQL 16**: stubs, 38 migrations, the
@@ -180,7 +220,13 @@ units, 2 guest houses and 20 rooms.
   account, keeps the session across a navigation and signs out). The picker
   journeys still pass, which is the check that the mock store kept all
   nineteen personas.
-- **`npm test` 710 passed** (699 before, plus 11), lint and typecheck clean, a
+- **A real room booking, end to end against PostgreSQL**: created, then read
+  back through `getBooking` - `room_index` 1, `meals` a jsonb **array**, the
+  log reading *PENDING_WARDEN by "BB" - Booking submitted*, guests and the
+  derived flags right. Then a stay **with** a two-day meal plan, diet counts
+  and a custom field, to exercise the jsonb paths with content in them. Both
+  test bookings were deleted afterwards.
+- **`npm test` 715 passed** (699 before, plus 16), lint and typecheck clean, a
   production build clean.
 
 ### Two pieces of drift found and corrected

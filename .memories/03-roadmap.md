@@ -961,6 +961,23 @@ this is what building it would touch.
    migrations and nothing in the code reads them, so both were left out of the
    seed. If the other developer meant them, they need a migration and a reason.
 
+6. **Nothing checks `PostgresStore` against a real PostgreSQL.** Three bugs in
+   `createBooking` - a jsonb array bound as a Postgres array, a 0-based
+   `room_index` against a `>= 1` check, and a NOT NULL `action_by_name` given
+   a null - made **every room booking fail**, and all three survived lint,
+   typecheck, a production build, 710 unit tests and 56 Playwright journeys.
+   Every suite runs on the mock store, so the two backends are only as
+   equivalent as something checks, and nothing does.
+
+   The cheap version is a parity suite: start `postgres:16-alpine`, apply the
+   migrations, and run the same handful of store operations against both
+   implementations asserting the same results - create a booking, read it
+   back, allocate, cancel, issue an invoice. It would have caught all three in
+   the first one. `.memories/22-running-and-testing.md` Part 1 has the
+   container recipe, and `tests/profiles-view-parity.test.ts` is the shape to
+   copy. Until then, **any change to `PostgresStore` needs a manual run
+   against a real database** - the suites will not tell you.
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the

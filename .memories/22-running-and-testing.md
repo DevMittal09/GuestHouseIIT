@@ -556,6 +556,32 @@ stay, say), `npx vite-node --config vitest.config.ts script.ts` resolves the
 
 Each of these cost real time.
 
+### "Something went wrong while submitting the booking" (6 Nov 2026)
+
+The browser gets that sentence for **any** failure in `createBooking`: the
+action catches everything and returns one message, because the real error must
+not reach a requester. The real one is on the server, from
+`console.error("createBooking failed", e)` - so read the terminal running
+`next dev`, not the page.
+
+Faster than reading a terminal, and what found three bugs in a row here: call
+the store directly against the real database and print the error's **fields**,
+not just its message. A PostgreSQL error carries far more than `e.message`:
+
+```ts
+const err = e as { message?: string; code?: string; detail?: string;
+                   constraint?: string; table?: string; column?: string };
+```
+
+`constraint` and `detail` are what identify it - `detail` prints the whole
+failing row, which is how `meals` was seen to be `{}` rather than `[]`. Run it
+with `npx tsx --tsconfig ./tsconfig.json --env-file=.env.local <file>.ts` and
+`NODE_OPTIONS=--conditions=react-server` so `server-only` resolves.
+
+**Each fix reveals the next.** An insert stops at its first failing
+constraint, so three bugs in one statement take three runs to find. Don't stop
+at the first green.
+
 ### `supabase/seed.sql` stops halfway and nothing says so (6 Nov 2026)
 
 A freshly migrated database seeded with `supabase/seed.sql` came out with

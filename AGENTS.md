@@ -266,7 +266,29 @@ port 3000 before launching your own.
 | otherwise | `lib/store/mock.ts` | `.local-db.json`, `public/uploads/` |
 
 **Any new data operation must be added to the interface and to both
-implementations**, or one backend silently breaks. `searchBookings` is the
+implementations**, or one backend silently breaks. On 6 Nov 2026 three bugs in
+`PostgresStore.createBooking` made **every room booking fail** and all three
+survived lint, typecheck, a build, 710 unit tests and 56 Playwright journeys -
+because every suite runs on the **mock** store. Nothing checks `PostgresStore`
+against a real PostgreSQL, so **a change there needs a manual run against
+one**; the recipe is in `.memories/22-running-and-testing.md` Part 1.
+
+> **Bind a `jsonb` value through `lib/store/jsonb.ts`.** `pg` renders a JS
+> **array** as a PostgreSQL array literal, not as JSON: `[]` arrives as `{}`,
+> which a `jsonb` column stores as the empty *object*, and every check
+> constraint asking for an array refuses the row. `jsonbParam` /
+> `serializeJsonbColumns` are the one answer, and `BOOKING_JSONB_COLUMNS`
+> names the three a booking insert carries (`meals`, `custom_fields`,
+> `meal_diet_counts`). `null` and `undefined` must pass through untouched, or
+> a nullable column stores the JSON literal `null` instead of SQL NULL. A real
+> `text[]` column such as `copy_to_emails` is the opposite case - leave its
+> array alone.
+
+> **`booking_rooms.room_index` is 1-based** (migration 11: *"Room 2 is
+> room_index 2"*, `check (room_index >= 1)`), and
+> **`booking_logs.action_by_name` is NOT NULL** and holds **the submitter's**
+> name - `created_by ?? user_id` - not `on_behalf_of_name`, which is the
+> guest's and is null on most bookings. `searchBookings` is the
 trap-laden one — see the approval-log section below. The email outbox
 (`enqueueEmails` / `claimQueuedEmails` / `settleEmail` / `listEmails` /
 `countEmailsByStatus` / `requeueEmail`) is the newest, and the one where the
