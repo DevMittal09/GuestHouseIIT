@@ -9,6 +9,7 @@ import {
   previewProjectImport,
   setProjectActive,
 } from "@/app/actions/projects";
+import { FileUploadInput } from "@/components/admin/file-upload-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -83,10 +84,19 @@ export function ProjectsManager({ projects }: { projects: (Project & { bookings:
       <div className="space-y-3 rounded-lg border p-4">
         <Label htmlFor="project-import">Import from a spreadsheet</Label>
         <p className="text-xs text-muted-foreground">
-          Paste rows of <span className="font-mono">project number, title, principal investigator</span>{" "}
+          Upload a CSV or Excel file, or paste rows of{" "}
+          <span className="font-mono">project number, title, principal investigator</span>{" "}
           - copied straight from Excel (tab separated) or comma separated. A number already on the
           list updates its title and PI. Any bad line and nothing is imported.
         </p>
+        <FileUploadInput
+          disabled={isPending}
+          onLoaded={(csv) => {
+            setText(csv);
+            setPlan(null);
+          }}
+        />
+        <Label htmlFor="project-import">Or paste</Label>
         <Textarea
           id="project-import"
           rows={5}

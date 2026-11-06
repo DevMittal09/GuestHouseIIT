@@ -1,43 +1,18 @@
 /**
- * Which migrations does the configured Supabase project actually have?
+ * Which migrations does the configured PostgreSQL database actually have?
  *
- * This exists because the answer used to be a sentence in the notes that
- * nobody could check. The notes said migrations 24-30 were outstanding on the
- * hosted project for weeks after they had been applied, because the check
- * recipe in `.memories/22-running-and-testing.md` listed markers only up to
- * migration 25 - so 26 onwards could not be verified, and the claim was
- * carried forward by hand instead. A missing migration fails writes quietly,
- * and a migration wrongly believed missing sends somebody to the SQL editor to
- * re-apply files that were already there. Both are cheap to end: ask the
- * database.
- *
- *     node scripts/check-migrations.mjs          # the project in .env.local
+ *     node scripts/check-migrations.mjs          # uses DATABASE_URL from .env.local
  *     npm run check:migrations
  *
- * **Read-only.** Every request is a `GET` of at most one row, and the only
- * thing read is whether the column, table or enum value the migration added
- * exists at all - never anybody's data. Nothing is written, and the service
- * role key is sent only to the project it belongs to.
- *
- * Each migration is identified by a **marker**: something it created that
- * nothing else did. Two cannot be seen this way at all - 17 and 23 only add or
- * replace a plpgsql function, and PostgREST cannot read `pg_proc` - so they
- * are reported as such with the one-line SQL to run in the editor instead.
- * Calling them would be a write, which this script will not do.
+ * **Read-only.** Every query checks only whether a table, column, function,
+ * trigger, index or enum value the migration added exists at all - never
+ * anybody's data. Nothing is written.
  *
  * Exit code 1 when a marker is missing, so CI or a deploy step can gate on it.
  */
 
 import { readFileSync } from "node:fs";
 
-/**
- * One per migration whose effect is visible to PostgREST: a table, a column,
- * or an enum value. `kind` says how to probe it.
- *
- * `column` and `table` are both "select this and see whether it errors"; the
- * difference is only which error a missing one gives. `enum` filters on the
- * value, which PostgREST refuses outright when the label is not on the type.
- */
 const MARKERS = [
   { n: 1, kind: "table", table: "bookings", what: "the initial schema" },
   { n: 2, kind: "enum", table: "bookings", column: "status", value: "OCCUPIED", what: "the lifecycle statuses" },
@@ -50,68 +25,73 @@ const MARKERS = [
   { n: 9, kind: "column", table: "bookings", column: "booking_type", what: "booking types and two roles" },
   { n: 10, kind: "column", table: "email_outbox", column: "idempotency_key", what: "the email outbox" },
   { n: 11, kind: "column", table: "booking_rooms", column: "booking_id", what: "room-scoped guests" },
-  { n: 12, kind: "column", table: "profiles", column: "ldap_uid", what: "LDAP usernames on profiles" },
   { n: 13, kind: "column", table: "mail_templates", column: "event_key", what: "editable mail wording" },
   { n: 14, kind: "column", table: "room_holds", column: "guard", what: "the turnover guard range" },
   { n: 15, kind: "column", table: "units", column: "head_id", what: "units and debitable heads" },
   { n: 16, kind: "column", table: "hostels", column: "name", what: "settings, hostels and the audit table" },
-  { n: 17, kind: "function", fn: "set_booking_buffer", what: "the turnaround buffer" },
-  { n: 18, kind: "column", table: "units", column: "hod_unit_id", what: "HOD approval and projects" },
+  {
+    n: 17, kind: "function", fn: "set_booking_buffer",
+    what: "the turnaround buffer",
+    sql: "SELECT count(*)::int AS c FROM pg_proc WHERE proname = 'set_booking_buffer' AND pronamespace = 'public'::regnamespace",
+  },
+  {
+    n: 18,
+    kind: "sql",
+    what: "HOD approval and projects",
+    // Migration 18 added `units.hod_unit_id`; migration 37 renames it to
+    // `hod_approval_from_id`. Either name means 18 is applied.
+    sql:
+      "SELECT count(*)::int AS c FROM information_schema.columns " +
+      "WHERE table_schema = 'public' AND table_name = 'units' " +
+      "AND column_name IN ('hod_unit_id', 'hod_approval_from_id')",
+    check: (row) => row.c >= 1,
+  },
   { n: 19, kind: "column", table: "invoices", column: "document", what: "tariffs and invoices" },
   { n: 20, kind: "column", table: "room_blocks", column: "reason", what: "operational states" },
   { n: 21, kind: "column", table: "sessions", column: "token_hash", what: "sessions and security" },
   { n: 22, kind: "column", table: "bookings", column: "search_text", what: "search and indexes" },
-  { n: 23, kind: "function", fn: "check_room_occupancy", what: "the room-occupancy combination" },
+  {
+    n: 23, kind: "function", fn: "check_room_occupancy",
+    what: "the room-occupancy combination",
+    sql: "SELECT count(*)::int AS c FROM pg_proc WHERE proname = 'check_room_occupancy' AND pronamespace = 'public'::regnamespace",
+  },
   { n: 24, kind: "column", table: "bookings", column: "copy_to_emails", what: "Copy to and the project sub-head" },
   { n: 25, kind: "column", table: "units", column: "faculty_advisor_id", what: "Faculty Advisors" },
   { n: 26, kind: "column", table: "invoices", column: "extra_charges", what: "additional charges on invoices" },
   { n: 27, kind: "column", table: "bookings", column: "meal_diet_counts", what: "each person's meal preference" },
-  { n: 28, kind: "table", table: "academic_records", what: "the institute's academic records" },
   { n: 29, kind: "enum", table: "bookings", column: "status", value: "MISSED", what: "the MISSED status" },
   { n: 30, kind: "column", table: "bookings", column: "fund_declaration_at", what: "the funds declaration" },
-  // Migration 31 drops a foreign key and 38 policies and adds indexes. None of
-  // that is a table or a column, and PostgREST can read neither pg_constraint
-  // nor pg_policies - so, like 17 and 23, it is checked by hand. Both counts
-  // must come back 0.
   {
-    n: 31,
-    kind: "sql",
+    n: 31, kind: "sql",
     what: "profiles decoupled from auth.users, and the authenticated RLS surface closed",
     sql:
-      "select (select count(*) from pg_constraint where conrelid='public.profiles'::regclass " +
-      "and contype='f' and confrelid='auth.users'::regclass) as auth_fk_expect_0, " +
-      "(select count(*) from pg_policies where 'authenticated' = any(roles) " +
-      "and schemaname in ('public','storage')) as authenticated_policies_expect_0;",
+      "SELECT (SELECT count(*)::int FROM pg_constraint WHERE conrelid = 'public.profiles'::regclass " +
+      "AND contype = 'f' AND confrelid = 'auth.users'::regclass) AS auth_fk, " +
+      "(SELECT count(*)::int FROM pg_policies WHERE 'authenticated' = ANY(roles) " +
+      "AND schemaname IN ('public','storage')) AS authenticated_policies",
+    check: (row) => row.auth_fk === 0 && row.authenticated_policies === 0,
   },
   { n: 32, kind: "table", table: "user_import_batches", what: "the undo record for a user import" },
-  // Migration 33 adds a function and a trigger, so like 17, 23 and 31 it
-  // cannot be probed through PostgREST. The count must come back 1.
   {
-    n: 33,
-    kind: "sql",
+    n: 33, kind: "sql",
     what: "guest_houses.total_rooms maintained by a trigger",
-    sql:
-      "select count(*) as recount_trigger_expect_1 from pg_trigger " +
-      "where tgname = 'rooms_recount_total' and not tgisinternal;",
+    sql: "SELECT count(*)::int AS c FROM pg_trigger WHERE tgname = 'rooms_recount_total' AND NOT tgisinternal",
+    check: (row) => row.c >= 1,
   },
-  // Migration 34 adds 20 indexes and nothing else. PostgREST cannot read
-  // pg_indexes either, so it is checked by hand like 17, 23, 31 and 33. The
-  // count must come back 20.
   {
-    n: 34,
-    kind: "sql",
+    n: 34, kind: "sql",
     what: "indexes on the foreign keys a delete has to check",
     sql:
-      "select count(*) as fk_indexes_expect_20 from pg_indexes " +
-      "where schemaname = 'public' and indexname in ('booking_logs_action_by_idx'," +
-      "'bookings_created_by_idx','invoices_created_by_idx','invoices_issued_by_idx'," +
-      "'invoices_paid_by_idx','invoices_cancelled_by_idx','privacy_requests_user_idx'," +
-      "'privacy_requests_handled_by_idx','room_blocks_created_by_idx'," +
+      "SELECT count(*)::int AS c FROM pg_indexes WHERE schemaname = 'public' AND indexname IN (" +
+      "'booking_logs_action_by_idx','bookings_created_by_idx','invoices_created_by_idx'," +
+      "'invoices_issued_by_idx','invoices_paid_by_idx','invoices_cancelled_by_idx'," +
+      "'privacy_requests_user_idx','privacy_requests_handled_by_idx','room_blocks_created_by_idx'," +
       "'room_holds_override_by_idx','tariffs_created_by_idx','units_head_idx'," +
-      "'units_acting_head_idx','academic_records_imported_by_idx'," +
+      "'units_acting_head_idx'," +
       "'user_import_batches_actor_idx','user_import_batches_reverted_by_idx'," +
       "'units_parent_idx','units_hod_unit_idx','tariffs_guest_house_idx'," +
-      "'sessions_rotated_from_idx');",
+      "'sessions_rotated_from_idx')",
+    check: (row) => row.c >= 19,
   },
   {
     n: 35,
@@ -127,17 +107,15 @@ const MARKERS = [
     column: "login_disabled_at",
     what: "user groups, and accounts that may no longer sign in",
   },
+  {
+    n: 37,
+    kind: "table",
+    table: "institute_students",
+    what: "the institute's own tables (students, employees, offices, councils, hostels, wardens) and profiles_v",
+  },
 ];
 
-/** The SQL to paste in the editor for the two function-only migrations. */
-const FUNCTION_SQL =
-  "select proname from pg_proc where proname in ('set_booking_buffer','check_room_occupancy');";
-
 function env() {
-  // Read `.env.local` rather than `process.env`, so the script reports on the
-  // project the dev server would use and needs no exports. Keys are trimmed:
-  // `.env.local` has been written with a space before the `=` before now, and
-  // dotenv accepts it, so this has to as well.
   let text = "";
   try {
     text = readFileSync(new URL("../.env.local", import.meta.url), "utf8");
@@ -161,101 +139,86 @@ function env() {
   return out;
 }
 
-/** The query string that asks the smallest possible question about a marker. */
-function path(marker) {
-  if (marker.kind === "enum") {
-    return `${marker.table}?select=${encodeURIComponent(marker.column)}&${marker.column}=eq.${marker.value}&limit=1`;
-  }
-  const column = marker.kind === "column" ? marker.column : "*";
-  return `${marker.table}?select=${encodeURIComponent(column)}&limit=1`;
-}
-
 async function main() {
   const vars = env();
-  const url = (vars.NEXT_PUBLIC_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/+$/, "");
-  const key =
-    vars.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    vars.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    "";
-  if (!url || !key) {
+  const connectionString =
+    vars.DATABASE_URL ?? process.env.DATABASE_URL ?? "";
+  if (!connectionString) {
     console.log(
-      "No Supabase project is configured (NEXT_PUBLIC_SUPABASE_URL and a key in .env.local),\n" +
+      "No database is configured (DATABASE_URL in .env.local),\n" +
         "so there is nothing to check - the app would use the mock store, which self-heals."
     );
     return 0;
   }
-  // Enough of the host to tell two projects apart, and no more: the ref is the
-  // project's public name but there is no reason to print all of it.
-  const ref = url.replace(/^https?:\/\//, "").split(".")[0];
-  console.log(`Project ${ref.slice(0, 4)}… (${url.replace(ref, `${ref.slice(0, 4)}…`)})\n`);
+
+  // Dynamic import so the script fails with a clear message if pg is missing.
+  const { default: pg } = await import("pg");
+  const client = new pg.Client({ connectionString });
+  try {
+    await client.connect();
+  } catch (err) {
+    console.error("Cannot connect to the database:", err.message);
+    return 1;
+  }
+
+  const host = connectionString.replace(/^postgresql:\/\/[^@]*@/, "").split(/[/?]/)[0];
+  console.log(`Database: ${host}\n`);
 
   const missing = [];
-  const unknown = [];
   for (const marker of MARKERS) {
-    if (marker.kind === "function" || marker.kind === "sql") {
-      unknown.push(marker);
-      const why = marker.kind === "function" ? "a function" : "no table or column to probe";
-      console.log(`  ?  ${String(marker.n).padStart(2)}  ${marker.what} - ${why}; see below`);
-      continue;
-    }
-    let line;
+    let ok = false;
+    let detail = "";
     try {
-      const response = await fetch(`${url}/rest/v1/${path(marker)}`, {
-        headers: { apikey: key, Authorization: `Bearer ${key}` },
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (response.ok) {
-        line = `  ok ${String(marker.n).padStart(2)}  ${marker.what}`;
-      } else {
-        const body = await response.text();
-        const detail = (() => {
-          try {
-            return JSON.parse(body).message ?? body;
-          } catch {
-            return body;
-          }
-        })();
-        missing.push(marker);
-        line = `  NO ${String(marker.n).padStart(2)}  ${marker.what}\n         ${String(detail).slice(0, 160)}`;
+      if (marker.kind === "table") {
+        const res = await client.query(
+          `SELECT count(*)::int AS c FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`,
+          [marker.table]
+        );
+        ok = res.rows[0].c > 0;
+        if (!ok) detail = `table "${marker.table}" does not exist`;
+      } else if (marker.kind === "column") {
+        const res = await client.query(
+          `SELECT count(*)::int AS c FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+          [marker.table, marker.column]
+        );
+        ok = res.rows[0].c > 0;
+        if (!ok) detail = `column "${marker.table}.${marker.column}" does not exist`;
+      } else if (marker.kind === "enum") {
+        const res = await client.query(
+          `SELECT count(*)::int AS c FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE e.enumlabel = $1`,
+          [marker.value]
+        );
+        ok = res.rows[0].c > 0;
+        if (!ok) detail = `enum value "${marker.value}" does not exist`;
+      } else if (marker.kind === "function") {
+        const res = await client.query(marker.sql);
+        ok = res.rows[0].c > 0;
+        if (!ok) detail = `function "${marker.fn}" does not exist`;
+      } else if (marker.kind === "sql") {
+        const res = await client.query(marker.sql);
+        ok = marker.check(res.rows[0]);
+        if (!ok) detail = `check failed: ${JSON.stringify(res.rows[0])}`;
       }
-    } catch (error) {
-      // A timeout or a DNS failure is not a missing migration, and must not be
-      // reported as one - that is the mistake this script exists to stop.
-      unknown.push(marker);
-      line = `  ?  ${String(marker.n).padStart(2)}  ${marker.what} - could not reach the project (${
-        error instanceof Error ? error.message : error
-      })`;
+    } catch (err) {
+      detail = err.message;
     }
-    console.log(line);
+
+    const label = ok ? "ok" : "NO";
+    const line = `  ${label.padEnd(3)} ${String(marker.n).padStart(2)}  ${marker.what}`;
+    console.log(detail && !ok ? `${line}\n         ${detail.slice(0, 160)}` : line);
+    if (!ok) missing.push(marker);
   }
+
+  await client.end();
 
   console.log("");
   if (missing.length > 0) {
-    console.log(`${missing.length} migration(s) appear to be missing. Apply them in order:`);
+    console.log(`${missing.length} schema element(s) appear to be missing. Apply the matching files from supabase/migrations/ in order:`);
     for (const m of missing) {
-      console.log(`  supabase/migrations/${String(m.n).padStart(14, "0")}_*.sql`);
+      console.log(`  ${String(m.n).padStart(2)}  ${m.what}`);
     }
-    console.log("Every migration from 6 onwards is safe to re-run.");
   } else {
-    console.log("Every migration this script can see has been applied.");
-  }
-  if (unknown.length > 0) {
-    const ns = unknown.map((m) => m.n).join(", ");
-    console.log(
-      `\n${unknown.length} could not be checked from here (${ns}). PostgREST can read tables and\n` +
-        "columns, but not pg_proc, pg_constraint or pg_policies. Run these in the SQL editor:\n"
-    );
-    if (unknown.some((m) => m.kind === "function")) {
-      console.log(
-        "  -- 17 and 23 (functions). Both names present means both are applied,\n" +
-          "  -- and either is safe to re-run if in doubt.\n" +
-          `  ${FUNCTION_SQL}\n`
-      );
-    }
-    for (const m of unknown.filter((x) => x.kind === "sql")) {
-      console.log(`  -- ${m.n}: ${m.what}\n  ${m.sql}\n`);
-    }
+    console.log("Every migration has been applied.");
   }
   return missing.length > 0 ? 1 : 0;
 }

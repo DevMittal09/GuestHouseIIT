@@ -25,10 +25,11 @@ import {
   nextStatusAfter,
   routeFor,
 } from "@/lib/workflow";
-import { booking, GH } from "./helpers";
+import { asProfiles, booking, GH } from "./helpers";
 
-const P = (id: string) => seedProfiles.find((p) => p.id === id)!;
-const units: Unit[] = seedUnits.map((u) => ({ ...u, hod_unit_id: u.hod_unit_id ?? null }));
+const allProfiles = asProfiles(seedProfiles);
+const P = (id: string) => allProfiles.find((p) => p.id === id)!;
+const units: Unit[] = seedUnits.map((u) => ({ ...u, hod_approval_from_id: u.hod_approval_from_id ?? null }));
 
 describe("routeFor - every pipeline", () => {
   const hod = { hasHodApprover: true };
@@ -75,7 +76,7 @@ describe("the HOD, scoped to their department", () => {
   });
 
   it("and not another department's", () => {
-    const mech: Unit = { id: "unit-mech", name: "Mechanical", kind: "department", parent_id: null, head_id: "someone", acting_head_id: null };
+    const mech: Unit = { id: "unit-mech", name: "Mechanical", category: "department", parent_department_id: null, head_id: "someone", acting_head_id: null };
     const outsider = { ...priya, id: "p-mech", unit_id: "unit-mech" };
     expect(canReview(hodCse, "PENDING_HOD", outsider, [...units, mech])).toBe(false);
   });
@@ -121,7 +122,7 @@ describe("the HOD, scoped to their department", () => {
 
 describe("club: advisor or council secretary first, then the HOD it answers to", () => {
   const club = P("club-petrichor");
-  const withHod = units.map((u) => (u.id === "unit-petrichor" ? { ...u, hod_unit_id: "unit-cse" } : u));
+  const withHod = units.map((u) => (u.id === "unit-petrichor" ? { ...u, hod_approval_from_id: "unit-cse" } : u));
 
   it("with no HOD unit, FA → manager", () => {
     const stages = approvalStagesFor({ user_role: "club", booking_type: "official" }, club, units);

@@ -29,10 +29,12 @@ import {
   routeFor,
   skippedStages,
 } from "@/lib/workflow";
-import { booking, GH, profile } from "./helpers";
+import { asProfile, booking, GH, profile } from "./helpers";
 
-const P = (id: string) => seedProfiles.find((p) => p.id === id)!;
-const units: Unit[] = seedUnits.map((u) => ({ ...u, hod_unit_id: u.hod_unit_id ?? null }));
+const HOSTEL_MAP: Record<string, string> = { "student-anjali": "Malhar", "student-rahul": "Saveri", "warden-malhar": "Malhar", "warden-saveri": "Saveri" };
+const patchedProfiles: Profile[] = seedProfiles.map((p) => asProfile(p, HOSTEL_MAP[p.id] ? { hostel_name: HOSTEL_MAP[p.id] } : undefined));
+const P = (id: string) => patchedProfiles.find((p) => p.id === id)!;
+const units: Unit[] = seedUnits.map((u) => ({ ...u, hod_approval_from_id: u.hod_approval_from_id ?? null }));
 
 /** Every route rule the office starts with, as a mutable draft. */
 const draft = (): ApprovalRules => JSON.parse(JSON.stringify(DEFAULT_APPROVAL_RULES));
@@ -226,7 +228,7 @@ describe("the office edits the chain", () => {
 
 describe("a stage nobody can decide is skipped, not stranded", () => {
   const priya = P("student-anjali");
-  const directory = { units, profiles: seedProfiles };
+  const directory = { units, profiles: patchedProfiles };
 
   it("drops the warden stage when the hostel has no warden", () => {
     const orphan: Profile = { ...priya, hostel_name: "Nowhere" };
@@ -261,7 +263,7 @@ describe("a stage nobody can decide is skipped, not stranded", () => {
 
 describe("who decides a stage", () => {
   const priya = P("student-anjali");
-  const directory = { units, profiles: seedProfiles };
+  const directory = { units, profiles: patchedProfiles };
 
   it("resolves each kind of approver", () => {
     expect(stageApproverIds({ kind: "warden" }, priya, directory)).toContain("warden-malhar");
@@ -280,7 +282,7 @@ describe("who decides a stage", () => {
       { status: "PENDING_WARDEN", approver: { kind: "profile", profile_id: "hod-cse" }, label: "Dean" },
     ];
     const request = { role: "student" as Role, service: "room" as ServiceType };
-    const ctx = { rules, request, profiles: seedProfiles };
+    const ctx = { rules, request, profiles: patchedProfiles };
     expect(canReview(P("hod-cse"), "PENDING_WARDEN", priya, units, ctx)).toBe(true);
     // ...and takes it away from the warden who used to have it.
     expect(canReview(P("warden-malhar"), "PENDING_WARDEN", priya, units, ctx)).toBe(false);
@@ -295,7 +297,7 @@ describe("who decides a stage", () => {
       canReview(P("warden-malhar"), "PENDING_WARDEN", priya, units, {
         rules,
         request,
-        profiles: seedProfiles,
+        profiles: patchedProfiles,
       })
     ).toBe(true);
     expect(BUILT_IN_STAGE_APPROVERS.PENDING_WARDEN).toEqual({ kind: "warden" });
@@ -310,7 +312,7 @@ describe("who decides a stage", () => {
       canReview(priya, "PENDING_WARDEN", priya, units, {
         rules,
         request: { role: "student", service: "room" },
-        profiles: seedProfiles,
+        profiles: patchedProfiles,
       })
     ).toBe(false);
     expect(decidesStage(priya, { kind: "profile", profile_id: priya.id }, priya, directory)).toBe(false);
@@ -343,15 +345,15 @@ describe("who decides a stage", () => {
       }),
       requester: priya,
     } as BookingWithDetails;
-    expect(canReviewBooking(P("warden-malhar"), stored, units, { profiles: seedProfiles })).toBe(true);
+    expect(canReviewBooking(P("warden-malhar"), stored, units, { profiles: patchedProfiles })).toBe(true);
     const rules = draft();
     rules.rules.find((r) => r.id === "student")!.stages = [
       { status: "PENDING_WARDEN", approver: { kind: "profile", profile_id: "hod-cse" } },
     ];
     expect(
-      canReviewBooking(P("warden-malhar"), stored, units, { rules, profiles: seedProfiles })
+      canReviewBooking(P("warden-malhar"), stored, units, { rules, profiles: patchedProfiles })
     ).toBe(false);
-    expect(canReviewBooking(P("hod-cse"), stored, units, { rules, profiles: seedProfiles })).toBe(true);
+    expect(canReviewBooking(P("hod-cse"), stored, units, { rules, profiles: patchedProfiles })).toBe(true);
   });
 });
 
@@ -422,7 +424,7 @@ describe("a change that would strand a waiting request is refused", () => {
   it("names the request whose stage the new routes drop", () => {
     const rules = draft();
     rules.rules.find((r) => r.id === "student")!.stages = [];
-    const blockers = approvalRouteBlockers(rules, [waiting], units, seedProfiles);
+    const blockers = approvalRouteBlockers(rules, [waiting], units, patchedProfiles);
     expect(blockers.join(" ")).toContain(waiting.booking_reference_id);
   });
 
@@ -431,8 +433,8 @@ describe("a change that would strand a waiting request is refused", () => {
     const headless: Unit = {
       id: "unit-empty",
       name: "Empty Office",
-      kind: "office",
-      parent_id: null,
+      category: "office",
+      parent_department_id: null,
       head_id: null,
       acting_head_id: null,
     };
@@ -440,20 +442,20 @@ describe("a change that would strand a waiting request is refused", () => {
       { status: "PENDING_WARDEN", approver: { kind: "unit", unit_id: headless.id } },
     ];
     expect(
-      approvalRouteBlockers(rules, [], [...units, headless], seedProfiles).join(" ")
+      approvalRouteBlockers(rules, [], [...units, headless], patchedProfiles).join(" ")
     ).toContain("nobody heads Empty Office");
 
     const gone = draft();
     gone.rules.find((r) => r.id === "student")!.stages = [
       { status: "PENDING_WARDEN", approver: { kind: "profile", profile_id: "nobody" } },
     ];
-    expect(approvalRouteBlockers(gone, [], units, seedProfiles).join(" ")).toContain(
+    expect(approvalRouteBlockers(gone, [], units, patchedProfiles).join(" ")).toContain(
       "no longer exists"
     );
   });
 
   it("passes the defaults against the seeded data", () => {
-    expect(approvalRouteBlockers(DEFAULT_APPROVAL_RULES, [waiting], units, seedProfiles)).toEqual([]);
+    expect(approvalRouteBlockers(DEFAULT_APPROVAL_RULES, [waiting], units, patchedProfiles)).toEqual([]);
   });
 });
 

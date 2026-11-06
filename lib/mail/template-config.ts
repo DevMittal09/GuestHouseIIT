@@ -200,7 +200,7 @@ export function firstInvalidAddress(addresses: string[]): string | null {
  */
 export const MAIL_TEMPLATES_MIGRATION_HINT =
   "The email templates table is not there yet - apply " +
-  "supabase/migrations/00000000000013_mail_templates.sql, then reload this page.";
+  "migration 13 (table: mail_templates), then reload this page.";
 
 export function mailEventLabel(key: MailEventKey): string {
   return MAIL_EVENT_LABELS[key] ?? key;

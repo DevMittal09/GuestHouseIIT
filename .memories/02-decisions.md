@@ -758,9 +758,8 @@ a read-only link to `/availability`, not the pickers back.
 ## Per-tab session guard — built, then reverted
 
 > **Updated.** `components/auto-refresh.tsx` was replaced by
-> `components/live-updates.tsx` in Phase 9 (realtime where Supabase is
-> configured, a 30 s poll otherwise). The advice — don't rebuild the guard —
-> stands.
+> `components/live-updates.tsx` in Phase 9 (a 30 s poll). The advice — don't
+> rebuild the guard — stands.
 
 **Decision.** Do **not** try to make browser tabs behave like independent
 sessions. `components/tab-session-guard.tsx` was written and removed the same
@@ -7056,6 +7055,351 @@ Category I rows scoped to the `official` role: migration 19's ₹4,000 row names
 booking type, so it cannot be deleted and would otherwise stay on the sheet and be offered to the
 desk for a personal or alumni stay at Hamsanandi. The mock seed has no such row, so no test catches
 this; it was found by running the sheet and the desk list over the hosted row shape.
+## A root deployment guide, with the project memory remaining authoritative (30 October 2026)
+
+The deployment request needed one file a new operator could follow without
+assembling the architecture, package requirements, environment variables,
+migrations and hosting steps from several notes. Put that walkthrough in the
+repo-root [`setup.md`](../setup.md), and point to it from the root README.
+
+The guide is an entry point, not a second source of truth: the production
+checklist and institute-specific prerequisites stay in
+[`04-production.md`](04-production.md), the complete secret and environment
+inventory in [`05-credentials-and-security.md`](05-credentials-and-security.md),
+and unresolved work in [`03-roadmap.md`](03-roadmap.md). Migration state must
+still be checked against the target database, not inferred from the guide.
+
+The README's former Supabase and sign-in instructions described an older
+schema and UI. They were replaced by a pointer to the current guide; the
+generic frequent-dispatch cron example is explicitly distinguished from the
+daily Vercel schedule.
+
+Running the required memory check on Windows exposed a parser issue:
+`anchorsOf()` split only on LF, so CRLF headings were reported as missing. Its
+line split now accepts either line ending; this fixes the validator rather
+than rewriting sound links throughout the memory files.
+
+## 2 November 2026 — six institute data tables, separate from the portal
+
+**Decision.** The institute's own records — students, employees, offices,
+fests/councils/clubs, hostels and wardens — get **six dedicated tables** in
+`institute_*`, separate from the portal's `profiles`, `units`, `hostels` and
+`academic_records`.
+
+**Why separate tables, not columns on `profiles`.** The portal's tables model
+**portal accounts and their authorisation** — who may book, which chain their
+request takes, who may approve. The institute's records model **the directory
+as the administration keeps it**: a student's batch year, programme, branch,
+parents' Aadhar numbers, a hostel's warden assignment history. These are
+different entities with different lifecycles (an employee record exists whether
+or not that person has a portal account), different field sets (27 columns on a
+student vs 8 on `profiles`), and different access patterns (bulk CSV import
+from the administration's spreadsheets vs one-at-a-time profile edits).
+Cramming them into `profiles` would have meant 30+ nullable columns, most of
+which are meaningless for most roles, and a `profiles` row that serves two
+masters — the portal's FK graph and the administration's record keeping.
+
+**Why a separate `institute_hostels` rather than reusing `hostels`.** The
+portal's `hostels` table is a **name-keyed lookup** for `profiles.hostel_name`
+with `ON UPDATE CASCADE / ON DELETE RESTRICT` — renaming it moves every
+student's assignment, and it exists so the warden dropdown has a list. The
+institute's hostel record carries a `hostel_id` (like "HOS1"), a warden name,
+email and phone — fields the portal's table does not have and should not
+acquire, because they describe the institute's directory, not the portal's
+configuration.
+
+**Why Aadhar numbers are encrypted.** Five columns on `institute_students`
+hold family members' Aadhar numbers — the same PII class as
+`booking_guests.id_number`, which is already encrypted at rest with
+`encryptValue()` / `decryptValue()` from `lib/crypto.ts`. The same pattern was
+applied: encrypt on write in `studentRowOf`, decrypt on read in
+`hydrateStudent`, transparent to the rest of the application.
+
+**Why the generic helpers.** Six tables × five operations = 30 store methods.
+Both stores use private generic helpers (`instituteFind` / `instituteList` /
+`instituteSave` / `instituteDelete` / `instituteDeleteAll` in PostgresStore;
+`mockFind` / `mockList` / `mockSave` / `mockDelete` / `mockDeleteAll` in
+MockStore) to avoid repeating the same CRUD boilerplate six times. The student
+entity gets custom find/list (not generic) because of the Aadhar
+encryption/decryption step.
+
+**Why `imported_by` on five of the six tables.** Every table except
+`institute_hostels` has `imported_by uuid references profiles(id) on delete
+set null`, following `academic_records`' pattern: the office pastes records in
+through the console, and knowing who did it is the audit trail. Hostels are
+configuration rather than an import, so they skip it.
+
+**Cost.** Thirty new methods on the `DataStore` interface — the largest single
+addition to it. No console page yet to drive them, so the data is reachable
+only through the store API.
+
+## Rewire academic records to institute tables (2 Nov 2026, second session)
+
+**Decision.** Build an adapter layer (`lib/institute/academic-adapter.ts`) that
+converts each institute_* row into the existing `AcademicRecord` union, rewire
+`StoreAcademicSource` to read institute tables through it, rewrite the console
+and its import logic for the new table shapes, and move the shared
+`splitCsvLine` to `lib/csv.ts`.
+
+**Why the adapter, not rewriting downstream.** The `AcademicRecord` union is
+read by the booking form's parent locking (`guestNameRule`), the warden's
+family check (`checkFamily`, `studentRecordPanels`), the Copy-to chain
+(`copyToAddresses`), and the requester-details card. Rewriting all of those to
+read institute_* types directly would be a large change with high risk of
+regression. The adapter keeps all of them working unchanged. The conversion is
+five pure functions, one per table kind.
+
+**Why `splitCsvLine` moved to `lib/csv.ts`.** It was defined in
+`lib/academic/stored.ts`, but `lib/projects.ts` and `lib/users-import.ts` also
+imported it. With the academic console rewritten to use `lib/institute/import.ts`,
+all three importers would have depended on a file whose primary exports
+(`planAcademicImport` etc.) are dead code. Moving the shared utility to
+`lib/csv.ts` (which already held `csvCell` and `csvLine`) breaks that coupling.
+A re-export from `stored.ts` keeps any remaining callers working.
+
+**Why seed data was aligned with mock-source.** `StoreAcademicSource` reads
+institute_* tables first and falls through to `MockAcademicSource` (the dummy
+records) only when a record is not found. If the seed data for Anjali Menon
+said "Suresh Menon" for father but mock-source said "Ramesh Menon", tests and
+the dev form would show different names depending on whether the mock store had
+been seeded. One source of truth: the seed data matches mock-source exactly.
+
+**Why the console component manages its own loading.** The old component
+received all records from the server page and filtered client-side. The new
+tables have different column shapes per kind, so server-side filtering by kind
+is necessary. The component fetches per-kind via a server action when the user
+switches the dropdown, and maintains per-kind counts in state.
+
+**What was not done.** The dead code in `lib/academic/stored.ts` was left in
+place: it still compiles and the re-export of `splitCsvLine` keeps backward
+compatibility. Deleting it is the next step once the old `academic_records`
+table is confirmed retired. The old migration 28 and its Supabase file are
+untouched.
+
+**Cost.** One new module (`lib/institute/import.ts`), one new module
+(`lib/institute/academic-adapter.ts`), a rewritten console component, six
+modified files. All 606 tests pass.
+
+## Auth cleanup: Google OAuth only (2 Nov 2026, third session)
+
+> **Supersedes:** "Mock authentication with one swap point" (the original
+> standing decision). The mock-login swap and the LDAP swap are both deleted.
+> Google OAuth is the single sign-in door.
+
+The owner's instruction: "Keep only Google OAuth only. Remove rest." Scope
+confirmed as removing password_hash, the dev-sign-in route, the entire
+`lib/ldap/` directory, and Mock Authentication.
+
+**Why delete LDAP entirely rather than leaving it dormant.** It had been
+"withdrawn from the interface" since 28 Oct 2026, with the code intact as a
+revert path. The owner now asked for removal, not just withdrawal. The LDAP
+directory (`ldapts`), the dummy accounts, the search-then-bind flow, the
+`signInWithLdap` server action, the bulk username import UI and its planner were
+all deleted. Cost: the LDAP door is now a rebuild, not a revert.
+
+**Why keep `ldap_uid`.** *Superseded 2 Nov 2026 — see "Remove ldap_uid from
+the codebase" below. The column was removed from the code and schema.* The
+column was referenced in 37 files (the `Profile` type, both stores, the user
+import system, seeds, Supabase seed SQL, migration 12's unique index).
+Dropping it would need a migration and changes across ~20 files with high
+regression risk. The column is harmless as a nullable profile attribute -
+hidden from the console UI, still handled by user imports (a spreadsheet can
+still carry it). The uid validation functions needed by user import were
+inlined (3 lines) rather than kept in a module.
+
+**Why a new test-sign-in route rather than keeping dev-sign-in.** The old
+`dev-sign-in` route imported `lib/password.ts` and checked `password_hash` on
+the profile - both deleted. It was also gated by `!isProduction()`, but
+Playwright runs against a production build (`next start`). The replacement
+`app/api/auth/test-sign-in/route.ts` is gated only by `E2E_TEST_SECRET` env
+var (no isProduction check), accepts `{ email, secret }` and starts a session.
+The secret is set in `playwright.config.ts`'s webServer env and documented in
+`.env.example`.
+
+**Why remove `password_hash` from Profile.** It was used only by `dev-sign-in`
+(deleted) and seed data. No Supabase migration needed: the column was in
+`scripts/init-postgres.sql` (the mock/Postgres store's init) but not in any
+numbered migration file.
+
+**Cost.** 7 files deleted (`lib/ldap/*`), 2 more deleted (`lib/password.ts`,
+`app/api/auth/dev-sign-in/route.ts`), 1 created (`app/api/auth/test-sign-in/`),
+10 modified. The `ldapts` dependency removed. All 606 tests pass.
+
+## Remove the Supabase directory and all references (2 Nov 2026, fourth session)
+
+**Decision.** Delete the `supabase/` directory (35 migration SQL files, 10
+repair scripts, `seed.sql`, `.temp/`), delete `tests/rls-surface.test.ts`, and
+clean up every remaining "supabase" reference in source files. The two data
+stores are now `PostgresStore` (direct `pg`) and `MockStore` (JSON file).
+
+**Why.** The owner asked for "only Postgres". `lib/store/supabase.ts` and the
+`@supabase/supabase-js` dependency had already been removed in prior sessions.
+`lib/store/index.ts` already selected only Postgres or Mock. The `supabase/`
+directory was 393 KB of SQL files that no code path executed — the consolidated
+schema is `scripts/init-postgres.sql`, and the Postgres store talks directly
+to the database through the `pg` driver.
+
+**Why delete `rls-surface.test.ts`.** It read `supabase/migrations/` to assert
+that no `authenticated` RLS policy survived. With direct Postgres and no
+Supabase Auth, the `authenticated` role is not reachable — the test's invariant
+is structurally guaranteed. The RLS policies, the `auth.users` foreign key, and
+the seeded Auth passwords it guarded against are all absent from
+`init-postgres.sql`.
+
+**Why keep `check-migrations.mjs`.** The script probes the live database with
+SQL queries for schema markers (tables, columns, enum values, functions). It
+never read migration files. It is still useful for verifying a production
+deployment has the expected schema. Only its output message was updated.
+
+**Cost.** The `supabase/` directory (393 KB) deleted, 1 test file deleted
+(174 lines), 6 files had comments cleaned. Tests went from 606 (35 files)
+to 599 (34 files) — the 7 lost are all from the deleted RLS test file.
+All remaining tests pass.
+
+## Remove ldap_uid from the codebase (2 Nov 2026, fourth session continued)
+
+**Decision.** Remove the `ldap_uid` column from the `Profile` type, both
+stores, user import, import undo, seed data, the Postgres schema, and all
+tests.
+
+**Why.** The owner noticed it was still in the profile table and asked for its
+removal. LDAP sign-in was already deleted; the column served no purpose. The
+complexity it caused — the `assertLdapUidFree` constraint emulation in the
+mock store, the two-pass uid clearing in imports, the `uidsToRelease` function
+in undo — was all about a unique constraint on a column that had no meaning
+any more.
+
+**Why now and not earlier.** The first session kept it to limit blast radius
+(37 references across ~20 files). With the Supabase store and `supabase/`
+directory already removed, the reference count was lower and the risk bounded
+to files this session had already touched.
+
+**What about existing databases.** A Postgres database that still has the
+column is unaffected — the code simply no longer reads or writes it. A
+migration to `ALTER TABLE profiles DROP COLUMN ldap_uid` is not written yet;
+the column is harmless.
+
+**Cost.** 14 files modified, 2 test cases deleted, 3 tests dropped (596 from
+599). The user import system is simpler: no uid validation, no collision
+checking, no two-pass writes, no uid-swap handling in undo.
+
+## Consolidate hostels into institute_hostels (2 Nov 2026, fifth session)
+
+**Decision.** Drop the legacy `hostels` table from `scripts/init-postgres.sql` and both stores. Unify all hostel references to `public.institute_hostels`. Update `profiles.hostel_name` foreign key to reference `institute_hostels (hostel_name)` (`on update cascade on delete restrict`). Wire Settings -> Hostels and `assertHostelExists` to `institute_hostels`. Resolve `w.hostel_id` -> `hostel_name` in `StoreAcademicSource` / `wardenToRecord`.
+
+**Why.** Having two distinct hostel tables (`hostels` with `name` and `institute_hostels` with `hostel_id` + `hostel_name`) created a dual source of truth and a logic disconnect. Profiles referenced `hostels` while imported wardens referenced `institute_hostels`, leaving `institute_hostels` largely unused. Consolidating them ensures that hostel records imported or managed in Settings share a single table, with proper FK constraints and deletion protection when accounts are assigned.
+
+## Remove year_of_admission, make institute import header-aware (3 Nov 2026, sixth session)
+
+**Decision.** Drop `year_of_admission` from `institute_students`; it is the same data as `batch_year`. Add header aliases `KNOWN_*_COLUMNS` for all six institute table kinds and make `planInstituteImport` detect and use a header row, mapping columns by name. Unknown header cells are skipped rather than rejected.
+
+**Why.** The office's actual spreadsheet has columns in a different order from `STUDENT_COLUMNS` and includes columns the DB does not have (like `role`). A positional-only import would reject the paste or silently map fields to the wrong columns. The `users-import.ts` pattern (aliases + header detection + positional fallback) already solved this for profile imports. `year_of_admission` was redundant with `batch_year` — it was confirmed by the office that they are the same field.
+
+**Cost.** 7 files modified. 10 tests added (596 -> 606). No migration needed — schema-only change in `init-postgres.sql`. The `year_of_admission` header alias maps to `batch_year`, so existing spreadsheets with that column name continue to work.
+
+## Eliminate hostel_name from profiles table (3 Nov 2026, seventh session)
+
+> *Supersedes* "Consolidate hostels into institute_hostels" (2 Nov 2026,
+> fifth session) which kept `hostel_name` on the profiles table with an FK
+> to `institute_hostels`. This round removes it entirely.
+
+**Decision.** Remove `hostel_name` as a stored column on `profiles`. Hostel
+information comes from `institute_students.hostel` (students) and
+`institute_wardens.hostel_id` -> `institute_hostels.hostel_name` (wardens).
+The `Profile` TypeScript type keeps `hostel_name` as a computed field.
+PostgresStore reads from a SQL view `profiles_v` that JOINs the three
+tables. MockStore uses `resolveHostel()` / `withHostel()` helpers. The
+profile import system (`lib/users-import.ts`) no longer accepts hostel as a
+column. `NewProfileInput` is `Omit<Profile, "id" | "hostel_name">`.
+
+**Why.** Single source of truth. `institute_students` already carries hostel
+data from the office's imported spreadsheets. Duplicating it on profiles
+meant two places to update and two places that could disagree. Employees
+have no hostel; only students and wardens do. The institute data tables are
+the authoritative source.
+
+**Why the routing functions still work.** `hasHostel`, `approverNotApplicable`,
+`routeFor`, `decidesStage` and friends take `Pick<Profile, "hostel_name">`
+and are pure/synchronous. Making them async to look up hostels would cascade
+through every caller. By resolving hostel at profile load time (in the store),
+every consumer sees the computed field as before.
+
+**Cost.** ~20 files modified. 2 tests removed (606 -> 604: the hostel FK
+write test on profiles, and a hostel-on-record refusal test in user import).
+No migration for existing databases — the column is harmless if still
+present.
+
+### Rename unit columns for clarity (3 Nov 2026)
+
+`units.kind` -> `category`, `units.parent_id` -> `parent_department_id`,
+`units.office_class` -> `office_type`, `units.hod_unit_id` ->
+`hod_approval_from_id`. Also `institute_offices.office_class` -> `office_type`.
+
+**Why.** The owner asked for column names that non-technical people can read
+without explanation. `kind` is a generic programming word; `parent_id` says
+nothing about what the parent is; `office_class` suggests OOP; `hod_unit_id`
+describes an internal concept rather than the business purpose.
+
+**Why these names.** `category` is the word the console's dropdown already
+uses. `parent_department_id` says what the relationship means (a club sits
+under a department). `office_type` matches common business vocabulary.
+`hod_approval_from_id` names the purpose: whose HOD stage does this unit
+inherit from.
+
+**Why the label values changed too.** "Officer office" is tautological;
+"Independent office (Director, Registrar, Deans...)" names the distinction.
+"Department office" could mean "an office *in* a department" or "an office
+*that is* a department"; "Under a department" is unambiguous.
+
+**What stayed.** The enum values (`department`, `club`, `council`, `office`,
+`officer`, `department`) are unchanged — only the column names and display
+labels moved. `KNOWN_OFFICE_COLUMNS` keeps `"office_class"` as an import
+alias so old spreadsheets still work.
+
+**Cost.** ~25 files touched (schema, types, both stores, seed, 5 action/page
+files, 2 business-logic files, 1 institute-import file, 10 test files).
+604 tests unchanged. Existing databases need four `ALTER TABLE RENAME COLUMN`
+statements — the values are unchanged, so no data migration.
+
+### Remove department_or_club, roll_number and staff_category from profiles (4 Nov 2026)
+
+> Continues the pattern established for `hostel_name` on 3 Nov 2026.
+
+**Why.** The three fields duplicate data already in institute tables:
+`department_or_club` is `units.name` (reachable via `profiles.unit_id`),
+`roll_number` is `institute_students.roll_number`, and `staff_category` is
+derived from `institute_employees.employee_type`. Storing them on profiles
+meant two sources of truth - a renamed unit or a corrected employee type
+would not propagate unless profiles were also updated. The same reasoning
+that moved `hostel_name` to the view on 3 Nov applies to all three.
+
+**Why all three at once.** Each follows the identical pattern (drop from
+table, add to view, remove from writes, keep on reads), so splitting them
+into separate rounds would triple the churn for no new information. One
+round, one review, one test pass.
+
+**How `staff_category` is derived.** `institute_employees.employee_type`
+holds free text from the institute's HR system. The SQL view uses
+`CASE WHEN employee_type ILIKE '%non%teaching%' THEN 'staff' ELSE 'faculty'
+END`. The mock store's `withComputed()` does the same check in JS. A null
+employee type or a missing employee record yields null, which business logic
+treats as "assume faculty" (the existing `canBeFacultyAdvisor` rule).
+
+**What stayed on the `Profile` type.** All four computed fields. Code that
+reads `profile.department_or_club`, `profile.roll_number` or
+`profile.staff_category` needed no changes - the values are resolved at
+store level before any consumer sees the profile.
+
+**What was removed from user import.** `department_or_club`, `roll_number`
+and `staff_category` are no longer importable columns. The import handles
+only `email`, `full_name`, `role` and `unit_id`. `staffCategoryFrom()` is
+deleted. This is safe because the three fields are now always derived from
+their authoritative sources; importing them would just be a third copy.
+
+**Cost.** ~30 files touched (schema, types, both stores, seed, 2 action
+files, 2 component files, 2 import modules, 10 test files). 604 tests
+unchanged. Existing databases can drop the three columns or leave them -
+the view shadows them on reads and writes ignore them.
 
 ---
 

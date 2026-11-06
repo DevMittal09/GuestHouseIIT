@@ -1,0 +1,1019 @@
+"use server";
+
+import { revalidateConsole } from "@/lib/revalidate";
+import { recordAudit } from "@/lib/audit-server";
+import { z } from "zod";
+import { requireUser, stepUpProblem } from "@/lib/auth";
+import {
+  checkAdminPassword,
+  grantAdminUnlock,
+  isAdminUnlocked,
+  isDefaultAdminPassword,
+  revokeAdminUnlock,
+  setAdminPassword,
+  throttleCheck,
+  validatePasswordChoice,
+} from "@/lib/admin-lock";
+import type { RoleFormConfig } from "@/lib/form-config";
+import {
+  changedFields,
+  describeUserImport,
+  planUserImport,
+  type UserImportPlan,
+} from "@/lib/users-import";
+import {
+  describeRevert,
+  importFieldsOf,
+  planUserImportRevert,
+  revertBlocker,
+  type UserImportBatch,
+} from "@/lib/users-import-undo";
+import { randomUUID } from "crypto";
+import { mailConfig } from "@/lib/mail/config";
+import { dispatchOutbox, drainOutbox } from "@/lib/mail/dispatch";
+import { queueMessages } from "@/lib/mail/notify";
+import type { MailStatus } from "@/lib/mail/types";
+import { getStore } from "@/lib/store";
+import type { AccountStatus, BookingStatus, Profile, Role, RoomType } from "@/lib/types";
+import { ACCOUNT_STATUS_LABELS, REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
+import { occupancyNotStartedError } from "@/lib/workflow";
+import {
+  assignableRoles,
+  canUseConsole,
+  canUseConsoleSection,
+  CONSOLE_SECTIONS,
+  userEditError,
+  type ConsoleSection,
+} from "@/lib/access";
+import type { ActionResult } from "./bookings";
+
+/**
+ * Every console mutation funnels through here, so both gates are enforced on
+ * the **actions**, not merely by hiding the UI: a crafted request with the
+ * right cookie but no unlock, or with a manager's cookie against a
+ * developer-only section, still gets nothing.
+ *
+ * The section is named at each call site rather than inferred, so adding an
+ * action without deciding who may run it is not possible.
+ */
+async function requireConsole(
+  section: ConsoleSection,
+  { stepUp = false }: { stepUp?: boolean } = {}
+): Promise<Profile> {
+  const user = await requireUser();
+  if (!canUseConsoleSection(user.role, section)) {
+    throw new Error(`You do not have access to ${CONSOLE_SECTIONS[section].label}`);
+  }
+  if (!(await isAdminUnlocked())) {
+    throw new Error("The console is locked - enter the console password again");
+  }
+  if (process.env.NODE_ENV === "production" && section !== "console_access" && await isDefaultAdminPassword()) {
+    throw new Error("The console password is still the factory default — change it in Console Access before using the console in production");
+  }
+  // Phase 8: changing who may do what, or deleting records, asks a developer
+  // for a fresh second factor. Anyone else is already behind the console
+  // password (`stepUpProblem` returns null for them).
+  if (stepUp) {
+    const problem = await stepUpProblem();
+    if (problem) throw new Error(problem);
+  }
+  return user;
+}
+
+function fail(e: unknown): ActionResult {
+  return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
+}
+
+function done(): ActionResult {
+  revalidateConsole();
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------- console lock
+
+/** Exchange the console password for an unlock cookie. */
+export async function unlockAdminConsole(password: string): Promise<ActionResult> {
+  try {
+    const user = await requireUser();
+    // Anyone with a console section may unlock it; which sections they then
+    // see is `consoleSectionsFor`. The password is the door, not the roles.
+    if (!canUseConsole(user.role)) return { ok: false, error: "Console access required" };
+
+    // Counted before the check, so a wrong password costs an attempt.
+    const gate = await throttleCheck(`console:${user.id}`);
+    if (!gate.allowed) {
+      await recordAudit(user, "signin.failure", "console", { reason: "throttled" });
+      return {
+        ok: false,
+        error: `Too many attempts - try again in ${gate.retryInSeconds}s`,
+      };
+    }
+
+    if (!(await checkAdminPassword(password))) {
+      await recordAudit(user, "signin.failure", "console", { reason: "wrong console password" });
+      return { ok: false, error: "Incorrect console password" };
+    }
+
+    await grantAdminUnlock();
+    revalidateConsole();
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Drop the unlock without switching persona. */
+export async function lockAdminConsole(): Promise<ActionResult> {
+  await revokeAdminUnlock();
+  revalidateConsole();
+  return { ok: true };
+}
+
+/**
+ * Change the console password. Requires the current one even though the caller
+ * is already unlocked - an unlocked console left open should not let a passer-by
+ * lock the real developer out.
+ */
+export async function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<ActionResult> {
+  try {
+    await requireConsole("console_access", { stepUp: true });
+
+    if (!(await checkAdminPassword(currentPassword))) {
+      return { ok: false, error: "Current password is incorrect" };
+    }
+    const problem = validatePasswordChoice(newPassword);
+    if (problem) return { ok: false, error: problem };
+    if (await checkAdminPassword(newPassword)) {
+      return { ok: false, error: "That is already the current password" };
+    }
+
+    await setAdminPassword(newPassword);
+    // The unlock cookie is signed with the old hash, so it is now invalid -
+    // mint a fresh one so the developer is not thrown out of their own session.
+    await grantAdminUnlock();
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---------------------------------------------------------------- form configs
+
+const fieldMode = z.enum(["required", "optional", "hidden"]);
+
+const formConfigSchema = z.object({
+  role: z.enum(REQUESTER_ROLES as [Role, ...Role[]]),
+  allowed_guest_house_ids: z.array(z.string()),
+  guest_fields: z.object({
+    name: fieldMode,
+    age: fieldMode,
+    gender: fieldMode,
+    relationship: fieldMode,
+    id_number: fieldMode,
+    id_document: fieldMode,
+  }),
+  relationship_style: z.enum(["dropdown", "free_text"]),
+  relationship_options: z.array(z.string().trim().min(1)).max(30),
+  parent_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
+  dependent_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
+  unique_relationships: z.array(z.string().trim().min(1)).max(30).default([]),
+  alumni_card: fieldMode,
+  banner_text: z.string().trim().max(200).nullable(),
+  custom_fields: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().trim().min(1, "Custom fields need a label").max(120),
+        type: z.enum(["text", "textarea", "number", "date", "select", "checkbox"]),
+        options: z.array(z.string().trim().min(1)).max(30),
+        required: z.boolean(),
+      })
+    )
+    .max(20),
+});
+
+export async function saveRoleFormConfig(config: RoleFormConfig): Promise<ActionResult> {
+  try {
+    await requireConsole("forms");
+    const parsed = formConfigSchema.safeParse(config);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid configuration" };
+    }
+    for (const f of parsed.data.custom_fields) {
+      if (f.type === "select" && f.options.length === 0) {
+        return { ok: false, error: `Dropdown field “${f.label}” needs at least one option` };
+      }
+    }
+    if (
+      parsed.data.relationship_style === "dropdown" &&
+      parsed.data.guest_fields.relationship !== "hidden" &&
+      parsed.data.relationship_options.length === 0
+    ) {
+      return { ok: false, error: "The relationship dropdown needs at least one option" };
+    }
+    // A dependency the requester cannot satisfy would make those options
+    // permanently unselectable.
+    if (parsed.data.dependent_relationships.length > 0 && parsed.data.parent_relationships.length === 0) {
+      return {
+        ok: false,
+        error: "Pick at least one relationship that unlocks the restricted ones",
+      };
+    }
+    const offered = new Set(parsed.data.relationship_options);
+    const stray = [
+      ...parsed.data.parent_relationships,
+      ...parsed.data.dependent_relationships,
+      ...parsed.data.unique_relationships,
+    ].find((r) => !offered.has(r));
+    if (stray) {
+      return { ok: false, error: `“${stray}” is not one of the relationship dropdown options` };
+    }
+    const overlap = parsed.data.parent_relationships.find((r) =>
+      parsed.data.dependent_relationships.includes(r)
+    );
+    if (overlap) {
+      return { ok: false, error: `“${overlap}” cannot both unlock and be restricted` };
+    }
+    await getStore().saveFormConfig(parsed.data);
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function resetRoleFormConfig(role: Role): Promise<ActionResult> {
+  try {
+    await requireConsole("forms");
+    await getStore().deleteFormConfig(role);
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---------------------------------------------------------------- guest houses & rooms
+
+export async function createGuestHouseAction(name: string): Promise<ActionResult> {
+  try {
+    await requireConsole("guest_houses");
+    const trimmed = name.trim();
+    if (trimmed.length < 2) return { ok: false, error: "Guest house name is too short" };
+    await getStore().createGuestHouse(trimmed);
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function renameGuestHouseAction(id: string, name: string): Promise<ActionResult> {
+  try {
+    await requireConsole("guest_houses");
+    const trimmed = name.trim();
+    if (trimmed.length < 2) return { ok: false, error: "Guest house name is too short" };
+    await getStore().updateGuestHouse(id, { name: trimmed });
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Whether requesters booking this guest house may choose meals. */
+export async function setGuestHouseMealsAction(
+  id: string,
+  servesMeals: boolean
+): Promise<ActionResult> {
+  try {
+    await requireConsole("guest_houses");
+    await getStore().updateGuestHouse(id, { serves_meals: servesMeals === true });
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteGuestHouseAction(id: string): Promise<ActionResult> {
+  try {
+    await requireConsole("guest_houses", { stepUp: true });
+    await getStore().deleteGuestHouse(id);
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function createRoomAction(
+  guestHouseId: string,
+  roomNumber: string,
+  roomType: RoomType
+): Promise<ActionResult> {
+  try {
+    await requireConsole("guest_houses");
+    const trimmed = roomNumber.trim();
+    if (!trimmed) return { ok: false, error: "Room number is required" };
+    await getStore().createRoom(guestHouseId, trimmed, roomType);
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setRoomActiveAction(id: string, isActive: boolean): Promise<ActionResult> {
+  try {
+    await requireConsole("guest_houses");
+    await getStore().updateRoom(id, { is_active: isActive });
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteRoomAction(id: string): Promise<ActionResult> {
+  try {
+    await requireConsole("guest_houses", { stepUp: true });
+    await getStore().deleteRoom(id);
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---------------------------------------------------------------- users
+
+const userSchema = z.object({
+  email: z.string().trim().email("Enter a valid email"),
+  full_name: z.string().trim().min(2, "Name is required"),
+  // Derived from ROLE_LABELS rather than written out again: a hand-kept copy
+  // of the role list silently rejected every newly added role.
+  role: z.enum(Object.keys(ROLE_LABELS) as [Role, ...Role[]]),
+  // The unit decides who approves for this person (lib/units.ts); blank means
+  // they belong to none, and their requests route as if nobody were set.
+  unit_id: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.trim() ? v.trim() : null)),
+  account_status: z
+    .enum(Object.keys(ACCOUNT_STATUS_LABELS) as [AccountStatus, ...AccountStatus[]])
+    .optional()
+    .default("active"),
+});
+
+export type UserFormInput = z.input<typeof userSchema>;
+
+export async function createUserAction(input: UserFormInput): Promise<ActionResult> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    const parsed = userSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid user" };
+    // A manager may appoint another manager - that is the point of giving
+    // them this section - but not a developer. Otherwise "add an admin" is a
+    // route to becoming one, and the section split would be decoration.
+    const roleError = assignRoleError(actor, parsed.data.role);
+    if (roleError) return { ok: false, error: roleError };
+    await getStore().createProfile(parsed.data);
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function updateUserAction(id: string, input: UserFormInput): Promise<ActionResult> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    const parsed = userSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid user" };
+    if (id === actor.id && parsed.data.role !== actor.role) {
+      return { ok: false, error: "You cannot change your own role" };
+    }
+    // Both halves matter: a manager may not *edit* a developer's account, and
+    // may not promote anyone into one.
+    const target = await getStore().getProfile(id);
+    if (!target) return { ok: false, error: "User not found" };
+    const editError = userEditError(actor, target);
+    if (editError) return { ok: false, error: editError };
+    const roleError = assignRoleError(actor, parsed.data.role);
+    if (roleError) return { ok: false, error: roleError };
+    await getStore().updateProfile(id, parsed.data);
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Why this console user may not hand out that role, or null when they may. */
+function assignRoleError(actor: Profile, role: Role): string | null {
+  const allowed = assignableRoles(actor.role, Object.keys(ROLE_LABELS) as Role[]);
+  if (allowed.includes(role)) return null;
+  return `Only a developer can assign the ${ROLE_LABELS[role]} role`;
+}
+
+/**
+ * Bulk-loading accounts from a spreadsheet paste (8 Oct 2026).
+ *
+ * Two actions, deliberately: `previewUserImport` is read-only and shows what
+ * the paste would do; `importUsersAction` applies exactly that. The office
+ * asked to add "the data of all users" at once, and the plan is what makes
+ * that safe to press - a paste of six hundred people is not something anyone
+ * can check by reading the dialog.
+ *
+ * `planUserImport` is pure and does the deciding, including the roles this
+ * console user may hand out and the accounts they may not touch, so a manager
+ * cannot import a developer into existence.
+ */
+export type UserImportSummary = {
+  added: number;
+  updated: number;
+  unchanged: number;
+  columns: string[];
+  hadHeader: boolean;
+  /** A line per changed account, for the plan's preview. */
+  changes: string[];
+  problems: string[];
+};
+
+async function userImportContext(actor: Profile) {
+  const store = getStore();
+  const [profiles, units] = await Promise.all([
+    store.listProfiles(),
+    store.listUnits(),
+  ]);
+  return {
+    profiles,
+    assignable: assignableRoles(actor.role, Object.keys(ROLE_LABELS) as Role[]),
+    units,
+    locked: (target: Profile) => userEditError(actor, target),
+  };
+}
+
+function summarise(plan: UserImportPlan): UserImportSummary {
+  return {
+    added: plan.added.length,
+    updated: plan.updated.length,
+    unchanged: plan.unchanged,
+    columns: plan.columns,
+    hadHeader: plan.hadHeader,
+    changes: [
+      ...plan.added.map((row) => `${row.email} - new ${ROLE_LABELS[row.role]}`),
+      ...plan.updated.map(
+        ({ before, row }) => `${row.email} - ${changedFields(before, row).join(", ")}`
+      ),
+    ].slice(0, 200),
+    problems: plan.problems,
+  };
+}
+
+export async function previewUserImport(text: string): Promise<UserImportSummary> {
+  const actor = await requireConsole("users");
+  return summarise(planUserImport(text, await userImportContext(actor)));
+}
+
+/** Accounts created per insert. Keeps one chunk's payload well inside any body limit. */
+const IMPORT_CHUNK = 250;
+
+export async function importUsersAction(
+  text: string
+): Promise<ActionResult & { summary?: string; batchId?: string }> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    const store = getStore();
+    const plan = planUserImport(text, await userImportContext(actor));
+    if (plan.problems.length > 0) {
+      return { ok: false, error: `Nothing was changed - ${plan.problems[0]}` };
+    }
+    // Nothing to write, so nothing to record and nothing that could need
+    // undoing. Re-pasting a sheet that is already loaded lands here, which is
+    // the idempotency check §1a.7 asks the office to run.
+    if (plan.added.length === 0 && plan.updated.length === 0) {
+      return { ok: true, summary: describeUserImport(plan) };
+    }
+
+    /**
+     * The ids are minted here rather than by the database, so the undo record
+     * written on the next line already names every account this import is
+     * about to create. Learning them afterwards would mean an import that died
+     * in between left rows the undo could not find.
+     */
+    const added = plan.added.map((row) => ({ ...row, id: randomUUID() }));
+
+    /**
+     * Written **before** the first profile is touched (migration 32). This is
+     * the whole safety net: an import updates people matched on their email,
+     * and until this record existed their previous values were kept nowhere -
+     * so a stale sheet silently overwrote every correction the office had made
+     * by hand, with no way back. It is also what makes a **failed** import
+     * recoverable: the record does not depend on the import finishing.
+     */
+    const batch = await store.recordUserImport({
+      actor_id: actor.id,
+      actor_name: actor.full_name,
+      status: "applying",
+      columns_used: plan.columns.join(", "),
+      added: added.map(({ id, email }) => ({ id, email })),
+      updated: plan.updated.map(({ id, before, row }) => ({
+        id,
+        email: row.email,
+        before: importFieldsOf(before),
+        after: importFieldsOf(row),
+      })),
+      unchanged_count: plan.unchanged,
+      error: null,
+    });
+
+    try {
+      // Chunked, so the common case - a sheet of people none of whom have an
+      // account yet - is a handful of round trips instead of one per person.
+      for (let at = 0; at < added.length; at += IMPORT_CHUNK) {
+        await store.createProfiles(added.slice(at, at + IMPORT_CHUNK));
+      }
+      for (const { id, row } of plan.updated) await store.updateProfile(id, row);
+    } catch (e) {
+      const why = e instanceof Error ? e.message : "the import stopped part-way";
+      // The batch is left on record as `failed`, which is what the console's
+      // Undo acts on. Settling must not throw over the real error.
+      await store
+        .settleUserImport(batch.id, { status: "failed", error: why })
+        .catch(() => undefined);
+      await recordAudit(actor, "settings.changed", "profiles", {
+        what: "user import failed",
+        batch: batch.id,
+        error: why,
+      });
+      revalidateConsole();
+      return {
+        ok: false,
+        error: `The import stopped part-way - ${why}. It is on record under Recent imports and can be undone from there.`,
+        batchId: batch.id,
+      };
+    }
+
+    await store.settleUserImport(batch.id, { status: "applied" });
+    const summary = describeUserImport(plan);
+    await recordAudit(actor, "settings.changed", "profiles", {
+      what: "user import",
+      batch: batch.id,
+      added: plan.added.length,
+      updated: plan.updated.length,
+      unchanged: plan.unchanged,
+      columns: plan.columns.join(", "),
+    });
+    revalidateConsole();
+    return { ok: true, summary, batchId: batch.id };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Undo a spreadsheet import (14 Oct 2026).
+ *
+ * The office asked for "the option to delete data" and got it a row at a time;
+ * what was missing was putting back what an import **changed**. This restores
+ * the previous values from the batch written before the import ran, and
+ * deletes the accounts it created.
+ *
+ * Two rules it does not bend, both in `planUserImportRevert`:
+ *
+ *   * **an account changed since the import is left alone and named.** The
+ *     undo takes back what this import did; it does not roll the directory
+ *     back to a date. If somebody has corrected an account by hand since,
+ *     reverting it would throw away the newer, better value;
+ *   * **the console's own per-account rule still applies** (`userEditError`),
+ *     so a manager cannot reach a developer's account through an undo.
+ *
+ * Partial by design, like `deleteUsersAction`: whatever cannot be undone is
+ * named back and the rest still is.
+ */
+export async function revertUserImportAction(
+  batchId: string
+): Promise<ActionResult & { summary?: string; conflicts?: string[] }> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    const store = getStore();
+    const batch = await store.getUserImport(batchId);
+    if (!batch) return { ok: false, error: "That import is no longer on record" };
+    const blocked = revertBlocker(batch);
+    if (blocked) return { ok: false, error: blocked };
+
+    const profiles = await store.listProfiles();
+    const plan = planUserImportRevert(batch, profiles, (target) =>
+      userEditError(actor, target)
+    );
+    const conflicts = [...plan.conflicts];
+    let restored = 0;
+    let removed = 0;
+
+    for (const account of plan.remove) {
+      try {
+        await store.deleteProfile(account.id);
+        removed += 1;
+      } catch (e) {
+        conflicts.push(
+          `${account.email} - ${e instanceof Error ? e.message : "could not be removed"}`
+        );
+      }
+    }
+
+    for (const row of plan.restore) {
+      try {
+        await store.updateProfile(row.id, row.to);
+        restored += 1;
+      } catch (e) {
+        conflicts.push(
+          `${row.email} - ${e instanceof Error ? e.message : "could not be restored"}`
+        );
+      }
+    }
+
+    await store.settleUserImport(batchId, {
+      status: "reverted",
+      reverted_by: actor.id,
+      reverted_actor_name: actor.full_name,
+    });
+    const summary = describeRevert({ restored, removed });
+    await recordAudit(actor, "settings.changed", "profiles", {
+      what: "user import undone",
+      batch: batchId,
+      restored,
+      removed,
+      conflicts: conflicts.length,
+    });
+    revalidateConsole();
+    return { ok: true, summary, conflicts };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** The newest imports, for the console's Recent imports list. */
+export async function listUserImportsAction(): Promise<UserImportBatch[]> {
+  await requireConsole("users");
+  return getStore().listUserImports(10);
+}
+
+/**
+ * Delete several accounts at once - the other half of "add from Excel" (the
+ * office, 8 Oct 2026). An import of the wrong sheet is undone by selecting
+ * those rows and removing them, which one-at-a-time deletion made a long
+ * afternoon.
+ *
+ * Every per-account rule still applies, checked here and not only in the UI:
+ * not your own account, not a developer's if you are a manager, and the store
+ * refuses anyone who has bookings. Whatever cannot go is **named** and the
+ * rest still go - the opposite choice from the import, because a delete has
+ * no half-applied state to be confused about and stopping the whole batch for
+ * one person with a booking would leave the office stuck.
+ */
+export async function deleteUsersAction(
+  ids: string[]
+): Promise<ActionResult & { deleted?: number; refused?: string[] }> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    const store = getStore();
+    const refused: string[] = [];
+    let deleted = 0;
+    for (const id of ids) {
+      if (id === actor.id) {
+        refused.push("You cannot delete your own account");
+        continue;
+      }
+      const target = await store.getProfile(id);
+      if (!target) {
+        refused.push(`${id} - no such account`);
+        continue;
+      }
+      const editError = userEditError(actor, target);
+      if (editError) {
+        refused.push(`${target.email} - ${editError}`);
+        continue;
+      }
+      try {
+        await store.deleteProfile(id);
+        deleted += 1;
+      } catch (e) {
+        refused.push(`${target.email} - ${e instanceof Error ? e.message : "could not be deleted"}`);
+      }
+    }
+    if (deleted > 0) {
+      await recordAudit(actor, "user.deleted", "profiles", { deleted, refused: refused.length });
+    }
+    revalidateConsole();
+    if (deleted === 0) {
+      return { ok: false, error: refused[0] ?? "Nothing was selected", refused };
+    }
+    return { ok: true, deleted, refused };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteUserAction(id: string): Promise<ActionResult> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    if (id === actor.id) return { ok: false, error: "You cannot delete your own account" };
+    const target = await getStore().getProfile(id);
+    if (!target) return { ok: false, error: "User not found" };
+    const editError = userEditError(actor, target);
+    if (editError) return { ok: false, error: editError };
+    await getStore().deleteProfile(id);
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setUserPasswordAction(
+  id: string,
+  password: string
+): Promise<ActionResult> {
+  try {
+    const { hashSecret } = await import("@/lib/crypto");
+    await requireConsole("users");
+    if (!password || password.length < 4) {
+      return { ok: false, error: "Password must be at least 4 characters" };
+    }
+    const target = await getStore().getProfile(id);
+    if (!target) return { ok: false, error: "User not found" };
+    await getStore().setPasswordHash(target.email, hashSecret(password));
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export type BulkStatusResult = ActionResult & { updated?: number; notFound?: string[] };
+
+export async function bulkUpdateAccountStatusAction(
+  emailsCsv: string,
+  status: AccountStatus
+): Promise<BulkStatusResult> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    if (!ACCOUNT_STATUS_LABELS[status]) return { ok: false, error: "Invalid status" };
+    const emails = emailsCsv
+      .split(/[\n,]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (emails.length === 0) return { ok: false, error: "No emails provided" };
+    const unique = [...new Set(emails)];
+
+    const store = getStore();
+    const profiles = await store.listProfiles();
+    const knownEmails = new Set(profiles.map((p) => p.email.toLowerCase()));
+    const notFound = unique.filter((e) => !knownEmails.has(e));
+
+    const toUpdate = unique.filter((e) => knownEmails.has(e));
+    if (toUpdate.length === 0) {
+      return { ok: false, error: "None of those emails match an account", notFound };
+    }
+
+    const updated = await store.bulkUpdateAccountStatus(toUpdate, status);
+    await recordAudit(actor, "bulk_status_update", `${updated} accounts`, {
+      status,
+      emails: toUpdate,
+    });
+    revalidateConsole();
+    return { ok: true, updated, notFound };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---------------------------------------------------------------- bookings
+
+export async function adminDeleteBookingAction(id: string): Promise<ActionResult> {
+  try {
+    await requireConsole("bookings", { stepUp: true });
+    await getStore().deleteBooking(id);
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+const OVERRIDABLE: BookingStatus[] = [
+  "PENDING_WARDEN", "PENDING_FA", "PENDING_IAR", "PENDING_GH_MANAGER",
+  "APPROVED", "REJECTED", "CANCELLED",
+  "OCCUPIED", "VACATED", "CANCELLATION_REQUESTED", "CANCELLATION_APPROVED",
+  // Migration 29. The manager's own Reinstate is the ordinary way out of
+  // MISSED; this is the repair tool, and it can reach every status.
+  "MISSED",
+];
+
+/** Force a booking into any status (audit-logged) - for unsticking workflows. */
+export async function adminSetBookingStatusAction(
+  id: string,
+  status: BookingStatus,
+  remark: string
+): Promise<ActionResult> {
+  try {
+    const dev = await requireConsole("bookings", { stepUp: true });
+    if (!OVERRIDABLE.includes(status)) return { ok: false, error: "Unknown status" };
+    if (!remark.trim()) return { ok: false, error: "A remark is required for status overrides" };
+
+    // The override exists to unstick a workflow, not to state something that
+    // cannot be true. A guest cannot be in a room before their stay begins,
+    // and a booking forced to OCCUPIED early is exactly how future bookings
+    // came to read as occupied on the manager's console.
+    if (status === "OCCUPIED") {
+      const booking = await getStore().getBooking(id);
+      if (!booking) return { ok: false, error: "Booking not found" };
+      const tooEarly = occupancyNotStartedError(booking);
+      if (tooEarly) return { ok: false, error: tooEarly };
+    }
+    await getStore().updateBookingStatus(
+      id,
+      { status },
+      {
+        action_by: dev.id,
+        action_by_name: `${dev.full_name} (developer override)`,
+        new_status: status,
+        remarks: remark.trim(),
+      }
+    );
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---------------------------------------------------------------- mail outbox
+
+/**
+ * The mail log, for the developer console.
+ *
+ * Developer-only, like everything else in this file - rendered bodies quote
+ * guest names, purposes of visit and rejection reasons verbatim, so the outbox
+ * is more sensitive than the bookings it describes.
+ *
+ * Bodies are deliberately **not** returned: the list answers "was this sent,
+ * to whom, and did it fail", which needs a subject and a status, not 20 KB of
+ * HTML per row.
+ */
+export async function listMailOutbox(
+  status?: MailStatus
+): Promise<
+  | {
+      ok: true;
+      rows: MailOutboxSummary[];
+      counts: Record<MailStatus, number>;
+      transport: string;
+      /**
+       * `MAIL_REDIRECT_ALL_TO`, when it is set. Reported because it is
+       * invisible from everywhere else and changes who actually receives
+       * mail: the redirect replaces To and **drops CC entirely**, so a
+       * booking's Copy-to addresses get nothing. That is exactly what the
+       * office reported on 1 Oct 2026 as "copy to mail is not working", and
+       * it is a deployment setting, not a bug in the addressing.
+       */
+      redirectAllTo: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  try {
+    await requireConsole("mail_outbox");
+    const store = getStore();
+    const [rows, counts] = await Promise.all([
+      store.listEmails({ status, limit: 200 }),
+      store.countEmailsByStatus(),
+    ]);
+    return {
+      ok: true,
+      counts,
+      transport: mailConfig().transport,
+      redirectAllTo: mailConfig().redirectAllTo,
+      rows: rows.map((row) => ({
+        id: row.id,
+        booking_id: row.booking_id,
+        event_key: row.event_key,
+        to_emails: row.to_emails,
+        cc_emails: row.cc_emails,
+        subject: row.subject,
+        status: row.status,
+        attempts: row.attempts,
+        last_error: row.last_error,
+        scheduled_for: row.scheduled_for,
+        sent_at: row.sent_at,
+        created_at: row.created_at,
+      })),
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
+  }
+}
+
+export type MailOutboxSummary = {
+  id: string;
+  booking_id: string | null;
+  event_key: string;
+  to_emails: string[];
+  cc_emails: string[];
+  subject: string;
+  status: MailStatus;
+  attempts: number;
+  last_error: string | null;
+  scheduled_for: string;
+  sent_at: string | null;
+  created_at: string;
+};
+
+/** Put a failed message back in the queue and try it immediately. */
+export async function retryMailMessage(id: string): Promise<ActionResult> {
+  try {
+    await requireConsole("mail_outbox");
+    await getStore().requeueEmail(id);
+    await dispatchOutbox();
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Send whatever is queued now, rather than waiting for the cron. */
+export async function flushMailOutbox(): Promise<
+  { ok: true; sent: number; failed: number } | { ok: false; error: string }
+> {
+  try {
+    await requireConsole("mail_outbox");
+    const result = await drainOutbox();
+    revalidateConsole();
+    return { ok: true, sent: result.sent, failed: result.failed };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
+  }
+}
+
+/**
+ * Prove the SMTP credentials and the route before trusting them.
+ *
+ * Goes through the queue like everything else rather than calling the
+ * transport directly, so a successful test proves the *whole* path -
+ * enqueue, claim, render, send - and not merely that a password is accepted.
+ */
+export async function sendTestEmail(): Promise<ActionResult> {
+  try {
+    const dev = await requireConsole("mail_outbox");
+    const config = mailConfig();
+    const now = new Date();
+
+    const queued = await queueMessages([
+      {
+        eventKey: "desk.daily_report",
+        booking: null,
+        to: [dev.email],
+        subjectText: "Guest house portal - mail test",
+        standalone: true,
+        // The instant, so a second test is a second message rather than a
+        // duplicate the idempotency key swallows.
+        stamp: `test:${now.toISOString()}`,
+        doc: {
+          heading: "Mail is configured correctly",
+          preheader: `Test message sent via ${config.transport}.`,
+          blocks: [
+            {
+              kind: "paragraph",
+              text: "If you are reading this, the portal can queue, render and deliver mail. This message went through the outbox exactly like a real notification.",
+            },
+            {
+              kind: "facts",
+              rows: [
+                ["Transport", config.transport],
+                ["SMTP host", `${config.host}:${config.port}`],
+                ["From", config.from],
+                ["Reply-To", config.replyTo],
+                ["Redirecting all mail to", config.redirectAllTo ?? "(not set - real recipients)"],
+                ["Portal base URL", config.baseUrl],
+                ["Requested by", `${dev.full_name} <${dev.email}>`],
+              ],
+            },
+            ...(config.redirectAllTo
+              ? []
+              : [
+                  {
+                    kind: "callout" as const,
+                    tone: "warning" as const,
+                    title: "No redirect is set",
+                    lines: [
+                      "MAIL_REDIRECT_ALL_TO is empty, so notifications go to real requesters, wardens and parents. That is correct for production and wrong for anything else.",
+                    ],
+                  },
+                ]),
+          ],
+        },
+      },
+    ]);
+
+    if (queued === 0) return { ok: false, error: "Could not queue the test message" };
+    // Queued messages normally leave via `after()`; here the developer is
+    // waiting on the answer, so send within the action.
+    const result = await dispatchOutbox();
+    if (result.sent === 0 && result.failed > 0) {
+      const [row] = await getStore().listEmails({ status: "FAILED", limit: 1 });
+      return { ok: false, error: row?.last_error ?? "The test message could not be sent" };
+    }
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}

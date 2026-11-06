@@ -10,13 +10,15 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and sign in with any of the dummy LDAP accounts (listed
-in `.memories/05-credentials-and-security.md` — e.g. `priya` / `Priya@2026`). With no Supabase
-env vars set, the app runs against a local mock data layer:
+Open http://localhost:3000. With no Supabase env vars set, the app runs against
+a local mock data layer. The sign-in button opens the mock account picker while
+Google is unconfigured; this is for local/demo use only and must not be exposed
+on a deployment with real data.
 
 - **Database** → `.local-db.json` (auto-seeded on first run; delete it to reset demo data)
-- **Auth** → a real session row with an opaque cookie, opened by the dummy LDAP
-  directory. One-click persona switching is a developer door: `DEV_LOGIN=true npm run dev`
+- **Auth** → a real session row with an opaque cookie; the local sign-in button
+  opens the mock account picker. The legacy one-click persona cookie is available
+  with `DEV_LOGIN=true npm run dev`.
 - **Uploads** → saved outside `public/`, served only through an authorised, audited route
 - **Email** → written to `.local-mail/*.eml` instead of being sent (open one in any mail
   client to see exactly what a recipient would have received)
@@ -108,63 +110,12 @@ Sign in as **Portal Developer** (`developer@iitpkd.ac.in`) to open `/admin`:
 Form configs are stored per role (`form_configs` table / mock JSON) and validated on both client
 and server, so form rules can't be bypassed by crafted requests.
 
-## Switching to Supabase
+## Deployment and database setup
 
-### Option A — local Supabase (needs Docker)
-
-```bash
-npm install -g supabase        # or: brew install supabase/tap/supabase
-supabase start                 # boots local Postgres/Auth/Storage in Docker
-supabase db reset              # applies supabase/migrations + supabase/seed.sql
-supabase status                # prints API URL, anon key and service_role key
-```
-
-### Option B — hosted Supabase (supabase.com)
-
-1. Create a project at https://supabase.com/dashboard (free tier is fine).
-2. In the project's **SQL Editor**, paste and run **every file in
-   `supabase/migrations/` in numerical order** (`00000000000001_init.sql` through
-   the highest-numbered file — 22 as of September 2026), then `supabase/seed.sql`.
-   An existing project does not pick up new migrations by itself — after pulling
-   changes, run the ones you have not applied yet, in order. Every migration from
-   6 onwards is safe to re-run.
-   (Or link the CLI: `supabase link --project-ref <ref>` then `supabase db push`.)
-3. Copy the keys from **Project Settings → API**.
-
-### Then fill `.env.local` and restart `npm run dev`
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...   # required for the developer console's user management
-```
-
-The migration creates all tables, enums, RLS policies and the private `documents` storage
-bucket; the seed creates the demo personas (password `password123`), guest houses and rooms.
-Users created from the developer console get Supabase Auth accounts (password `password123`)
-via the admin API, which needs the service-role key.
-
-The data layer is a single interface (`lib/store/types.ts`) with two implementations —
-`MockStore` and `SupabaseStore` — selected automatically in `lib/store/index.ts`.
-
-**Signing in.** The sign-in page takes an **LDAP username and password**, checked against
-dummy accounts (one per demo persona — listed in `.memories/05-credentials-and-security.md`, e.g.
-`priya` / `Priya@2026`) until `LDAP_URL` points it at the institute directory (see
-`.env.example`). The second button is **"Sign in with Google"** — the real OpenID Connect
-flow, restricted to institute domains — once `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
-`APP_URL` are set; until then it reads **"Mock Authentication"** and opens a one-click
-persona picker (`/mock-login`). That door is open in production too while Google is unset,
-so a deployment with real data must configure Google or set `MOCK_LOGIN=false`. The `password123` above is not a portal login. Apply migration
-12 so profiles can carry their LDAP username (`profiles.ldap_uid`); real usernames are
-loaded from the developer console (Users & Roles → Import LDAP usernames).
-
-The session is a **row** (`sessions`, migration 21) with an opaque token in the cookie —
-30 minutes idle, 12 hours absolute, revocable, rotated when a session gains privilege.
-Guests' ID numbers are encrypted at rest and shown as their last four digits. Uploaded
-documents live in the private `documents` bucket and are served only through
-`/api/documents/…`, which checks who is asking, writes an audit row, and signs a
-five-minute link. In production the server refuses to start without `APP_URL`,
-`CRON_SECRET` and `ID_ENCRYPTION_KEY`, and refuses outright if `DEV_LOGIN` is set. See `.memories/05-credentials-and-security.md`.
+Follow [setup.md](setup.md) for the current runtime requirements, configuration,
+Supabase migration sequence, security gates, and Vercel deployment steps. The
+older migration and sign-in instructions previously in this README no longer
+match the current schema or sign-in page.
 
 ## Email notifications
 
@@ -218,8 +169,8 @@ broken mail host can never fail a booking or make a requester wait.
 
 ### Scheduling
 
-Two routes do the timed work. Point any cron at them with the `CRON_SECRET` as a bearer
-token:
+Two routes do the timed work. A scheduler that supports frequent jobs can drain the
+dispatch queue every five minutes and run the daily job at 08:00 IST:
 
 ```cron
 */5 * * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/mail/dispatch
@@ -229,6 +180,8 @@ token:
 `30 2` UTC is 08:00 IST. The dispatch route is only a safety net — mail normally leaves
 within a second of the action that caused it. Every daily job is idempotent per institute
 calendar day, so a missed run still delivers on the next one and a double run sends nothing.
+The checked-in Vercel schedule runs the daily job at 08:00 IST and the dispatch safety net
+at 08:30 IST; see [setup.md](setup.md#vercel) for plan constraints and the exact schedule.
 
 ## Project map
 

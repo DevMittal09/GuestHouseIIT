@@ -14,33 +14,22 @@ import path from "node:path";
  */
 
 /**
- * The seeded accounts, by the name the account picker prints.
- *
- * **The suite signs in the way a person now does** (27 Oct 2026): the sign-in
- * page has one button, and it opens the account picker at `/mock-login`. The
- * LDAP form is gone from the interface, so `uid` and `password` are no longer
- * typed anywhere - they are kept here because they are still the dummy
- * directory's credentials (`lib/ldap/mock-directory.ts`), which
- * `signInWithLdap` and *Import LDAP usernames* still use, and because `uid`
- * is this map's key for the session cache.
+ * The seeded accounts. Each has an email for the test sign-in route, and the
+ * `uid` key for the session cache.
  */
 export const ACCOUNTS = {
-  student: { uid: "112201001", password: "Anjali@2026", name: "Anjali Menon" },
-  // A day scholar: no hostel on the profile, so no Assistant Warden stage
-  // (17 Oct 2026). The test account for that route.
-  dayScholar: { uid: "122203099", password: "Devika@2026", name: "Devika Iyer" },
-  faculty: { uid: "priya", password: "Priya@2026", name: "Dr. Priya Sharma" },
-  hod: { uid: "hod.cse", password: "HodCse@2026", name: "Prof. R. Venkatesh" },
-  warden: { uid: "warden.malhar", password: "Malhar@2026", name: "Dr. Suresh Kumar" },
-  manager: { uid: "guesthouse", password: "Manager@2026", name: "Guest House Manager" },
-  caretaker: { uid: "gh.reception", password: "Reception@2026", name: "Guest House Caretaker" },
-  developer: { uid: "developer", password: "Developer@2026", name: "Portal Developer" },
-  iarStudentCell: { uid: "alumnicell", password: "AlumniCell@2026", name: "IAR Student Cell" },
-  iarOffice: { uid: "iar", password: "IarOffice@2026", name: "IAR Office" },
-  // Two offices that differ in one thing: the Director's Office has no HOD,
-  // the CSE Department Office answers to the CSE HOD (11 Oct 2026).
-  directorOffice: { uid: "admin", password: "Director@2026", name: "Director's Office" },
-  departmentOffice: { uid: "cse.office", password: "CseOffice@2026", name: "CSE Department Office" },
+  student: { uid: "112201001", email: "112201001@smail.iitpkd.ac.in", name: "Anjali Menon" },
+  dayScholar: { uid: "122203099", email: "122203099@smail.iitpkd.ac.in", name: "Devika Iyer" },
+  faculty: { uid: "priya", email: "priya@iitpkd.ac.in", name: "Dr. Priya Sharma" },
+  hod: { uid: "hod.cse", email: "hod.cse@iitpkd.ac.in", name: "Prof. R. Venkatesh" },
+  warden: { uid: "warden.malhar", email: "warden.malhar@iitpkd.ac.in", name: "Dr. Suresh Kumar" },
+  manager: { uid: "guesthouse", email: "guesthouse@iitpkd.ac.in", name: "Guest House Manager" },
+  caretaker: { uid: "gh.reception", email: "gh.reception@iitpkd.ac.in", name: "Guest House Caretaker" },
+  developer: { uid: "developer", email: "developer@iitpkd.ac.in", name: "Portal Developer" },
+  iarStudentCell: { uid: "alumnicell", email: "alumnicell@iitpkd.ac.in", name: "IAR Student Cell" },
+  iarOffice: { uid: "iar", email: "iar@iitpkd.ac.in", name: "IAR Office" },
+  directorOffice: { uid: "admin", email: "admin@iitpkd.ac.in", name: "Director's Office" },
+  departmentOffice: { uid: "cse.office", email: "cse.office@iitpkd.ac.in", name: "CSE Department Office" },
 } as const;
 
 /** A 1×1 PNG that passes the upload sniffer, for guest ID documents. */
@@ -49,38 +38,29 @@ export const ID_DOCUMENT = path.join(process.cwd(), "e2e", "fixtures", "id-docum
 /**
  * Each account's session cookies, kept for the rest of the run.
  *
- * The sign-in throttle counts every attempt - 8 per username per 15 minutes
- * (`RATE_LIMITS.signIn`) - and by 25 Sep 2026 the suite needed the manager
- * more often than that, so the journeys that came last were locked out with
- * "Too many attempts". A person at the desk stays signed in, and so does the
- * suite now: the **first** sign-in of each account goes through the form, and
- * later ones reuse its session. If the server no longer knows the session,
- * `/sign-in` shows the form again and the form is used.
+ * The first sign-in of each account goes through `/api/auth/test-sign-in`
+ * (gated by `E2E_TEST_SECRET`), and later ones reuse its session. If the
+ * server no longer knows the session, the sign-in endpoint is called again.
  */
 const sessions = new Map<string, Cookie[]>();
 
-export async function signIn(page: Page, account: { uid: string; name: string }): Promise<void> {
+export async function signIn(page: Page, account: { uid: string; email: string; name: string }): Promise<void> {
   await page.context().clearCookies();
   const saved = sessions.get(account.uid);
   if (saved) {
     await page.context().addCookies(saved);
-    // A live session is sent on from /sign-in to its home.
     await page.goto("/sign-in");
     if (!new URL(page.url()).pathname.startsWith("/sign-in")) return;
     await page.context().clearCookies();
   }
+  const secret = process.env.E2E_TEST_SECRET;
+  if (!secret) throw new Error("E2E_TEST_SECRET is not set - the test server needs it");
+  const res = await page.request.post("/api/auth/test-sign-in", {
+    data: { email: account.email, secret },
+  });
+  if (!res.ok()) throw new Error(`test-sign-in failed for ${account.email}: ${res.status()}`);
   await page.goto("/sign-in");
-  // Scoped to the page: the header carries a "Sign in" link of its own.
-  await page.getByRole("main").getByRole("link", { name: "Sign in", exact: true }).click();
-  await page.waitForURL((url) => url.pathname.startsWith("/mock-login"), { timeout: 30_000 });
-  // Each persona's button reads "<name> <email> <role>", so the name is
-  // anchored: "Guest House Manager" is also a role badge on nobody else's
-  // button, but a bare substring would have matched it there one day.
-  await page
-    .getByRole("button", { name: new RegExp(`^${account.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`) })
-    .first()
-    .click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/mock-login"), { timeout: 30_000 });
+  await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"), { timeout: 30_000 });
   sessions.set(account.uid, await page.context().cookies());
 }
 
@@ -96,7 +76,19 @@ export async function signIn(page: Page, account: { uid: string; name: string })
  * tests met "Too many attempts". An operator at the desk unlocks once a day;
  * so does the suite now.
  */
-const ADMIN_UNLOCK_COOKIE = "gh_admin_unlock";
+/**
+ * Either spelling of the unlock cookie.
+ *
+ * `lib/admin-lock.ts` names it `__Host-gh_admin_unlock` when **the server** is
+ * in production and `gh_admin_unlock` otherwise. This file runs in the *test
+ * runner*, whose `NODE_ENV` is not the server's: deriving the name from
+ * `process.env.NODE_ENV` here looked for the unprefixed one against a
+ * production server, so `unlockCookie` was never captured, every console spec
+ * typed the password again, and the manager hit the 6-per-15-minutes unlock
+ * throttle part way through the suite - which showed up as eight unrelated
+ * console journeys failing on a lock screen that would not go away.
+ */
+const ADMIN_UNLOCK_COOKIES = ["__Host-gh_admin_unlock", "gh_admin_unlock"];
 let unlockCookie: Cookie | null = null;
 
 /**
@@ -113,7 +105,9 @@ export async function unlockConsole(page: Page, password = "0000"): Promise<void
   await field.fill(password);
   await page.getByRole("button", { name: "Unlock console" }).click();
   await expect(field).toBeHidden();
-  const cookie = (await page.context().cookies()).find((c) => c.name === ADMIN_UNLOCK_COOKIE);
+  const cookie = (await page.context().cookies()).find((c) =>
+    ADMIN_UNLOCK_COOKIES.includes(c.name)
+  );
   if (cookie) unlockCookie = cookie;
 }
 

@@ -40,7 +40,7 @@ const EMPTY = {
   booking_logs: [],
   hostels: ["Malhar", "Saveri"],
   units: [
-    { id: "u-cse", name: "Computer Science", kind: "department", parent_id: null, head_id: null, acting_head_id: null },
+    { id: "u-cse", name: "Computer Science", category: "department", parent_department_id: null, head_id: null, acting_head_id: null },
   ],
 };
 
@@ -81,10 +81,10 @@ const C = "imp.faculty@iitpkd.ac.in";
 const D = "imp.newcomer@iitpkd.ac.in";
 
 const SHEET = [
-  "email, full_name, role, hostel_name, roll_number, ldap_uid",
-  `${A}, Anjali Menon, student, Malhar, 112201001, imp001`,
-  `${B}, Rahul Nair, student, Saveri, 142202014, imp002`,
-  `${C}, Dr Priya Sharma, employee, , , impfaculty`,
+  "email, full_name, role",
+  `${A}, Anjali Menon, student`,
+  `${B}, Rahul Nair, student`,
+  `${C}, Dr Priya Sharma, employee`,
 ].join("\n");
 
 /** Only the rows this file is about. */
@@ -118,13 +118,13 @@ describe("importing the same sheet twice", () => {
   it("keeps every id stable, which is what the foreign keys need", async () => {
     const before = new Map((await mine()).map((p) => [p.email, p.id]));
 
-    // An updated sheet: a corrected name, a new hostel, and one new person.
+    // An updated sheet: a corrected name and one new person.
     const updated = [
-      "email, full_name, role, hostel_name, roll_number, ldap_uid",
-      `${A}, Anjali R Menon, student, Saveri, 112201001, imp001`,
-      `${B}, Rahul Nair, student, Saveri, 142202014, imp002`,
-      `${C}, Dr Priya Sharma, employee, , , impfaculty`,
-      `${D}, New Comer, student, Malhar, 112301099, impnewcomer`,
+      "email, full_name, role",
+      `${A}, Anjali R Menon, student`,
+      `${B}, Rahul Nair, student`,
+      `${C}, Dr Priya Sharma, employee`,
+      `${D}, New Comer, student`,
     ].join("\n");
 
     const plan = await apply(updated);
@@ -140,14 +140,13 @@ describe("importing the same sheet twice", () => {
 
     const anjali = (await mine()).find((p) => p.email === A)!;
     expect(anjali.full_name).toBe("Anjali R Menon");
-    expect(anjali.hostel_name).toBe("Saveri");
   });
 
   it("matches on the email case-insensitively, so a re-cased sheet is not a new person", async () => {
     const count = (await mine()).length;
     const recased = [
-      "email, full_name, role, hostel_name, roll_number, ldap_uid",
-      `${C.toUpperCase()}, Dr Priya Sharma, employee, , , impfaculty`,
+      "email, full_name, role",
+      `${C.toUpperCase()}, Dr Priya Sharma, employee`,
     ].join("\n");
 
     const plan = planUserImport(recased, await context());
@@ -161,7 +160,7 @@ describe("importing the same sheet twice", () => {
 describe("what a partial sheet may and may not do", () => {
   it("leaves a column the paste does not carry alone, rather than clearing it", async () => {
     // A sheet of email and name only - the case that would otherwise wipe
-    // everyone's hostel, roll number and LDAP username.
+    // everyone's role.
     const thin = ["email, full_name", `${A}, Anjali R Menon`].join("\n");
 
     const plan = planUserImport(thin, await context());
@@ -170,18 +169,7 @@ describe("what a partial sheet may and may not do", () => {
     expect(plan.unchanged).toBe(1);
 
     const anjali = (await mine()).find((p) => p.email === A)!;
-    expect(anjali.hostel_name).toBe("Saveri");
-    expect(anjali.roll_number).toBe("112201001");
-    expect(anjali.ldap_uid).toBe("imp001");
-  });
-
-  it("refuses a hostel that is not on record rather than inventing one", async () => {
-    const plan = planUserImport(
-      ["email, full_name, role, hostel_name", "x@iitpkd.ac.in, X Y, student, Nowhere"].join("\n"),
-      await context()
-    );
-    expect(plan.problems.join(" ")).toMatch(/"Nowhere" is not a hostel on record/);
-    expect(plan.added).toEqual([]);
+    expect(anjali.role).toBe("student");
   });
 
   it("refuses a unit that is not on record rather than inventing one", async () => {
@@ -206,29 +194,9 @@ describe("the store's own duplicate guard, behind the plan", () => {
         email: C.toUpperCase(),
         full_name: "Impostor",
         role: "student",
-        hostel_name: null,
-        department_or_club: null,
-        roll_number: null,
-        ldap_uid: null,
         unit_id: null,
-        staff_category: null,
       })
     ).rejects.toThrow(/already exists/i);
   });
 
-  it("refuses to give one LDAP username to two accounts", async () => {
-    await expect(
-      store.createProfile({
-        email: "someone.else@iitpkd.ac.in",
-        full_name: "Someone Else",
-        role: "employee",
-        hostel_name: null,
-        department_or_club: null,
-        roll_number: null,
-        ldap_uid: "impfaculty",
-        unit_id: null,
-        staff_category: null,
-      })
-    ).rejects.toThrow();
-  });
 });

@@ -7,7 +7,7 @@ import type { AcademicFind, AcademicRecord, AcademicRecordKind, AcademicSource }
  * two in step.
  *
  * Matched by institute email, so these line up with the profiles in
- * `lib/store/seed.ts` and `supabase/seed.sql`. Every value is invented; the
+ * `lib/store/seed.ts`. Every value is invented; the
  * phone numbers are the obviously fake `+91 90000 …` range.
  *
  * Rahul has no parents' names on record, so his card shows the guardian

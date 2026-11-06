@@ -8,7 +8,7 @@ import { homeForRole } from "@/lib/routes";
 import { startSession } from "@/lib/sessions";
 import { isInstituteEmail, LOGIN_DOMAIN } from "@/lib/site";
 import { getStore } from "@/lib/store";
-import { OAUTH_COOKIE } from "../start/route";
+import { OAUTH_COOKIE } from "@/lib/oidc";
 
 export const dynamic = "force-dynamic";
 
@@ -63,15 +63,21 @@ export async function GET(request: Request): Promise<Response> {
     return back(`Use your @${LOGIN_DOMAIN} account - personal Google accounts cannot sign in.`, base);
   }
 
-  const profile = (await getStore().listProfiles()).find((p) => p.email.toLowerCase() === identity.email);
+  const profile = await getStore().getProfileByEmail(identity.email);
   if (!profile) {
     await recordAudit(null, "signin.failure", identity.email, { method: "google", reason: "no portal account" });
     return back("That account is not registered on the guest house portal. Please contact the guest house office.", base);
   }
 
+  // One gate for every door: the institute's domain, a blocked account, and an
+  // account_status that is no longer active (`signInRefusal`).
   const refusal = signInRefusal(profile);
   if (refusal) {
-    await recordAudit(profile, "signin.failure", profile.email, { method: "google", reason: refusal });
+    await recordAudit(profile, "signin.failure", profile.email, {
+      method: "google",
+      reason: refusal,
+      status: profile.account_status,
+    });
     return back(refusal, base);
   }
 

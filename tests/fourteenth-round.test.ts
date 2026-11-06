@@ -33,7 +33,7 @@ import { tariffPreviews, type Tariff } from "@/lib/tariffs";
 import { addDaysToDateValue, toInstituteDateValue } from "@/lib/tz";
 import type { BookingStatus, GuestHouse, Profile } from "@/lib/types";
 import { canReview, droppedStages, initialStatusFor, routeFor } from "@/lib/workflow";
-import { booking, profile } from "./helpers";
+import { asProfiles, booking, profile } from "./helpers";
 
 /**
  * The owner's fourteenth list (17 Oct 2026):
@@ -407,8 +407,12 @@ describe("a requester's own list is three sections", () => {
 // ------------------------- 8, 9. a student with no hostel, and the test account
 
 describe("a student with no hostel has no Assistant Warden", () => {
-  const profiles = seedProfiles as Profile[];
-  const units: Unit[] = seedUnits.map((u) => ({ ...u, hod_unit_id: u.hod_unit_id ?? null }));
+  const profiles = asProfiles(seedProfiles).map((p) => {
+    if (p.id === "student-anjali") return { ...p, hostel_name: "Malhar" };
+    if (p.id === "warden-malhar") return { ...p, hostel_name: "Malhar" };
+    return p;
+  });
+  const units: Unit[] = seedUnits.map((u) => ({ ...u, hod_approval_from_id: u.hod_approval_from_id ?? null }));
   const anjali = profiles.find((p) => p.id === "student-anjali")!;
   const dayScholar = profiles.find((p) => p.id === "student-day-scholar")!;
   const warden = profiles.find((p) => p.id === "warden-malhar")!;
@@ -531,16 +535,6 @@ describe("a student with no hostel has no Assistant Warden", () => {
     expect(dayScholar.role).toBe("student");
     expect(dayScholar.hostel_name).toBeNull();
     expect(dayScholar.roll_number).toBe("122203099");
-    // It signs in like every other persona: a dummy LDAP account whose uid is
-    // on the profile (`lib/ldap/mock-directory.ts`).
-    expect(dayScholar.ldap_uid).toBe("122203099");
-    const directoryFile = fs.readFileSync("lib/ldap/mock-directory.ts", "utf8");
-    expect(directoryFile).toContain('uid: "122203099"');
-    // And on Supabase, where the hostel column references the hostels table -
-    // null is the only way to say "no hostel" there.
-    const seed = fs.readFileSync("supabase/seed.sql", "utf8");
-    expect(seed).toContain("122203099@smail.iitpkd.ac.in");
-    expect(seed).toMatch(/'122203099@smail\.iitpkd\.ac\.in'.*'student', null/);
   });
 
   it("gives the account a name that says what it is for", () => {

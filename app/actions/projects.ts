@@ -32,7 +32,7 @@ function fail(e: unknown): ActionResult {
   if (code === "42P01" || code === "PGRST205") {
     return {
       ok: false,
-      error: "The projects table is not there yet - apply supabase/migrations/00000000000018_hod_approval_and_projects.sql.",
+      error: "The projects table is not there yet - apply migration 18 (table: projects).",
     };
   }
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };

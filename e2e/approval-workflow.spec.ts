@@ -27,7 +27,7 @@ import { ACCOUNTS, rowFor, signIn, submitRoomBooking, unlockConsole } from "./he
  * head of any unit. So he has no approval queue at all until a step names
  * him - which is exactly what this journey is about.
  */
-const DEAN = { uid: "arun.prasad", name: "Dr. Arun Prasad" };
+const DEAN = { uid: "arun.prasad", email: "arun.prasad@iitpkd.ac.in", password: "Arun@2026", name: "Dr. Arun Prasad" };
 
 async function openWorkflowConsole(page: Page) {
   await signIn(page, ACCOUNTS.manager);

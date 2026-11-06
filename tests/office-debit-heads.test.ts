@@ -69,7 +69,7 @@ describe("the offices' debitable heads, per office", () => {
   });
 
   /**
-   * The reason this is per mailbox and not per `office_class`: both of these
+   * The reason this is per mailbox and not per `office_type`: both of these
    * are offices, and they draw on different budgets. A class boundary cuts
    * the list in the wrong place.
    */

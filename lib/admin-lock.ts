@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import { isProduction } from "@/lib/env";
 import { getStore } from "@/lib/store";
 import { RATE_LIMITS } from "@/lib/security";
 
@@ -15,7 +16,7 @@ import { RATE_LIMITS } from "@/lib/security";
  */
 
 const SETTING_KEY = "admin_console_password";
-export const ADMIN_UNLOCK_COOKIE = "gh_admin_unlock";
+export const ADMIN_UNLOCK_COOKIE = isProduction() ? "__Host-gh_admin_unlock" : "gh_admin_unlock";
 
 /** Used until a developer sets one. Deliberately trivial and flagged in the UI. */
 export const DEFAULT_ADMIN_PASSWORD = "0000";
@@ -23,7 +24,7 @@ export const DEFAULT_ADMIN_PASSWORD = "0000";
 /** How long one unlock lasts before the password is asked for again. */
 const UNLOCK_TTL_MS = 8 * 60 * 60 * 1000;
 
-const MIN_PASSWORD_LENGTH = 4;
+const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 128;
 
 // ---------------------------------------------------------------- hashing
@@ -65,7 +66,7 @@ async function storedRecord(): Promise<string | null> {
   } catch (e) {
     console.error(
       "admin-lock: could not read the console password - falling back to the default. " +
-        "Has supabase/migrations/00000000000005_app_settings.sql been applied?",
+        "Has migration 5 been applied? (table: app_settings)",
       e
     );
     return null;
@@ -174,14 +175,14 @@ export async function revokeAdminUnlock(): Promise<void> {
  */
 export async function throttleCheck(
   who: string,
-  limit = RATE_LIMITS.consoleUnlock.limit,
-  windowSeconds = RATE_LIMITS.consoleUnlock.windowSeconds
+  limit: number = RATE_LIMITS.consoleUnlock.limit,
+  windowSeconds: number = RATE_LIMITS.consoleUnlock.windowSeconds
 ): Promise<{ allowed: boolean; retryInSeconds: number }> {
   try {
     const result = await getStore().hitRateLimit(who, limit, windowSeconds);
     return { allowed: result.allowed, retryInSeconds: result.retryAfter };
-  } catch {
-    // Migration 21 not applied: do not lock the office out of its own console.
+  } catch (e) {
+    console.warn("[security] Rate-limit check failed — allowing request through. Has migration 21 been applied?", e);
     return { allowed: true, retryInSeconds: 0 };
   }
 }

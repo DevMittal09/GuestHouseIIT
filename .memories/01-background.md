@@ -66,6 +66,15 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **31 Oct** | **The tariff category becomes the Guest House Manager's.** Three items. The booking page keeps its tariff table and **loses every control in it** - the requester reads the prices and decides nothing. The **desk is asked which category applies as it approves** (the allocation dialog, and Approve meals for a dining booking, which has no rooms), from a list **enumerated out of the office's own rate sheet** and named in the office's own words; **Confirm & Allocate stays disabled until it is answered**, and an approval carrying a key the sheet does not publish is refused. The **invoice is priced at it** - one substitution in the single `base` object every charge is resolved from - and **snapshots and prints it**. A category is the pair `resolveTariff` already keys on (**booking type, requester role**), so **migration 35** is two nullable text columns with the same checks `tariffs` uses and nothing was added to `resolveTariff`; **no rate is stored**, because a stay crossing a rate change is priced night by night - the figure lives in the booking's log and on the issued invoice. A booking approved before today keeps being priced from its own facts and prints no category line, so **no invoice version changed**. |
 | **4 Nov** | **The owner's sixteenth list.** VIP rooms and a manager's console section for them, a 14-room pool for requesters, no total rooms anywhere, the booking window back to one month, official stays uncapped, first come first served at the desk, cancellation 24 hours ahead, the caretaker invoicing personal bookings only, a research scholar's spouse, the rooms renamed, Categories I-III, shortening a stay at approval, and the booking page's sidebar. See the section at the foot of this file. |
 | **5 Nov** | **User groups.** A batch loaded from a CSV, three lists per group (members, addresses filled in on Copy to, addresses they may type), an approval route that can be limited to a group, and accounts blocked from signing in by roll number rather than deleted. Migration 36. See the section at the foot of this file. |
+| **30 Oct** | **The deployment guide.** The owner asked for a whole-code implementation overview, dependencies and migration-by-migration deployment instructions. Added root [`setup.md`](../setup.md), covering architecture, runtime/package requirements, local setup, environment variables, sign-in gates, all 34 Supabase migrations, verification limits, Vercel schedules, operational safeguards and troubleshooting. Updated the root README to point at the guide and remove outdated deployment guidance. **Documentation only; no application behavior changed.** |
+| **2 Nov** | **Six institute data tables** (migration 35). The user provided the institute's spreadsheet structures for Students (27 fields, Aadhar encrypted), Employees (13), Offices (11), Fest/Council/Clubs (8), Hostels (5) and Wardens (9). New types in `lib/institute/types.ts`, 30 `DataStore` methods, implementations in both stores with generic CRUD helpers, seed data for all six. **No console UI yet — store API only.** |
+| **2 Nov** (second) | **Rewired Academic Records to institute tables.** Adapter layer converts institute_* rows to `AcademicRecord`. `StoreAcademicSource` reads institute tables. Console rewritten for per-kind import/view/delete. `splitCsvLine` moved to `lib/csv.ts`. Seed data aligned with mock-source. Tests rewritten. **The old `academic_records` table is no longer read or written by any code path.** |
+| **2 Nov** (third) | **Auth cleanup: Google OAuth only.** The owner: "Keep only Google OAuth only. Remove rest." Deleted `lib/ldap/` (7 files), `lib/password.ts`, `app/api/auth/dev-sign-in/`. Removed `password_hash` from Profile, seeds and init SQL. Removed `ldapts` dependency. Rewrote `auth.ts` (logout only) and `login-form.tsx` (Google button only). Removed LDAP import UI and username column from Users & Roles. Created `app/api/auth/test-sign-in/` for e2e (gated by `E2E_TEST_SECRET`). `ldap_uid` column kept (37 references, no migration). **No migration.** |
+| **2 Nov** (fourth) | **Supabase removal: Postgres only.** The owner: "I want only postgres." Deleted `supabase/` directory (35 migrations, 10 repairs, seed SQL - 393 KB). Deleted `tests/rls-surface.test.ts` (read migration files). Cleaned up supabase references in 6 source files. `scripts/check-migrations.mjs` updated (probes live DB, not migration files). The two stores are `PostgresStore` (direct `pg`) and `MockStore`. **No migration.** |
+| **3 Nov** | **Header-aware institute import and `year_of_admission` removal.** The user's student spreadsheet had columns in a different order and with different names than the positional import expected. Added header detection to `lib/institute/import.ts` (modelled on `lib/users-import.ts`): the import now detects a header row automatically and maps columns by name using `KNOWN_*_COLUMNS` alias maps in `lib/institute/types.ts`. Unknown columns are silently skipped, and without a header the positional fallback is unchanged. Removed `year_of_admission` from `institute_students` (redundant with `batch_year`; the alias ensures old spreadsheets still import). UI feedback in the console preview. 10 new tests. **No migration** (column removed from `init-postgres.sql`; existing DBs need `ALTER TABLE institute_students DROP COLUMN IF EXISTS year_of_admission`). |
+| **3 Nov** (second) | **Eliminate `hostel_name` from the profiles table.** Hostel is now a computed field: PostgresStore reads from a SQL view `profiles_v` that JOINs `profiles` to `institute_students` (students) and `institute_wardens` -> `institute_hostels` (wardens). MockStore uses `resolveHostel()` / `withHostel()` helpers. `NewProfileInput` excludes `hostel_name`. User import no longer accepts hostel as a column. FK added on `institute_students.hostel` -> `institute_hostels(hostel_name)`. All 22+ downstream consumers unchanged. ~20 files modified, 604 tests pass. **No migration** (column removed from `init-postgres.sql`). |
+| **3 Nov** (third) | **Rename unit columns for clarity.** `units.kind` -> `category`, `parent_id` -> `parent_department_id`, `office_class` -> `office_type`, `hod_unit_id` -> `hod_approval_from_id`. Also `institute_offices.office_class` -> `office_type`. Label values updated: "Officer office" -> "Independent office", "Department office" -> "Under a department". ~25 files, 604 tests pass. **No migration** (columns renamed in `init-postgres.sql`; existing DBs need four `ALTER TABLE RENAME COLUMN`). |
+| **4 Nov** | **Remove `department_or_club`, `roll_number` and `staff_category` from profiles.** Continues the computed-fields pattern from 3 Nov. All three are now computed at read time by `profiles_v` / `withComputed()`: `department_or_club` from `units.name`, `roll_number` from `institute_students`, `staff_category` from `institute_employees.employee_type`. User import reduced to email/name/role/unit. ~30 files, 604 tests pass. **No migration** (columns removed from `init-postgres.sql`). |
 | **6 Nov** | **Mock authentication beside Google.** The owner put the Google client id and secret into `.env.local` and the account picker vanished - which is what `mockLoginEnabled()` was written to do on 28 Oct. The rule becomes **where** rather than **whether**: outside production both doors are drawn (Google solid with its mark, **Mock Authentication** outlined beneath it), and **in production nothing changed**. `MOCK_LOGIN=true` was deliberately not made the switch - a flag that forces the picker open is the one that gets copied into production. The round also found the **e2e suite broken by those credentials**: Next loads `.env.local` for `next start`, so all 55 journeys had been failing at sign-in; `playwright.config.ts` now pins `GOOGLE_CLIENT_ID=""`. **No migration, no store operation, no booking rule.** |
 
 ## The problem
@@ -1193,6 +1202,28 @@ opening statement sitting in a column half its width.
 
 ---
 
+## Institute data tables - 2 November 2026
+
+The user provided the actual spreadsheet column structures for six institute
+data tables with sample data and asked for them to be implemented.
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | `institute_students` table with 27 fields including roll number, batch year, programme, branch, hostel, five Aadhar columns (encrypted at rest) | **Done** |
+| 2 | `institute_employees` table with 13 fields: name, designation, department, employee type, phone, address | **Done** |
+| 3 | `institute_offices` table with 11 fields: office name, department, head, contact, address | **Done** |
+| 4 | `institute_fcc` table with 8 fields: council/club/fest name, type, faculty advisor, secretary | **Done** |
+| 5 | `institute_hostels` table with 5 fields: hostel_id, name, warden name/email/phone | **Done** |
+| 6 | `institute_wardens` table with 9 fields: name, phone, designation, hostel_id FK | **Done** |
+| 7 | TypeScript types and column arrays for all six | **Done** - `lib/institute/types.ts` |
+| 8 | Migration 35 | **Done** - `supabase/migrations/00000000000035_institute_tables.sql` |
+| 9 | DataStore interface + both implementations | **Done** - 30 methods, generic CRUD helpers |
+| 10 | Seed data | **Done** - 2 students, 3 employees, 2 offices, 2 FCCs, 2 hostels, 2 wardens |
+| 11 | Console UI for managing these tables | **Not yet built** |
+| 12 | Integration with portal workflows | **Not yet built** |
+
+---
+
 ## Branches
 
 - **`main`** — everything above.
@@ -1484,6 +1515,91 @@ person's bookings **stay, with a warning to the manager**.
 | 3 | The manager selects a group and says who is copied | **Done.** Console -> User Groups |
 | 4 | What emails are allowed in that group, all on the IIT Palakkad domain | **Done** for group members. People in no group are unchanged, because outside addresses are in use: to confirm |
 | 5 | Different approval patterns per kind of user | **Done** as a condition on the existing routes, and shown on the group's page. The default student route is still the Assistant Warden: the "associate dean" the owner mentioned is a route for the manager to set, not assumed |
+---
+
+## Round of 30 October 2026 - the deployment setup guide
+
+The owner asked for an implementation overview, all required dependencies,
+and deployment instructions that include the database migration dependencies.
+
+### What was asked, and the status of each item
+
+| § | Asked | Status |
+|---|---|---|
+| 1 | Explain how the application is implemented | **Done.** Root [`setup.md`](../setup.md) describes the Next.js app, server actions, auth and authorization, data-store adapters, Supabase, uploads, mail and scheduled routes. |
+| 2 | List dependencies and local requirements | **Done.** The guide records the Node/npm requirements, package stack, integrations, local setup and test/build commands. |
+| 3 | Document deployment and migration dependencies | **Done.** It covers required production configuration, all 34 ordered migrations, manual migration verification, the migration 31 rollout and Vercel schedules. |
+| 4 | Make the guide discoverable and keep project memory current | **Done.** The root README links to it; this index, the roadmap, production checklist and recent-change record point to it. |
+
+Documentation-only apart from a CRLF-safe line split in the memory-link
+checker, so running the required validation on Windows reads existing headings
+correctly. No application behavior, schema, permissions, routes or runtime
+dependencies changed.
+
+---
+
+## Round of 2 November 2026 (second session) - rewire Academic Records to institute tables
+
+Continuation of the institute data tables round. The first session created six
+`institute_*` tables (migration 35) with 30 `DataStore` methods. This session
+rewires all dependent code so the portal reads from those tables instead of
+`academic_records`.
+
+### What was asked, and the status of each item
+
+| # | Asked | Status |
+|---|---|---|
+| 1 | Rewire `StoreAcademicSource` to read institute_* tables | **Done.** Adapter in `lib/institute/academic-adapter.ts` converts rows; `store-source.ts` reads via adapter. Falls through to mock-source for alumni_office and missing tables. |
+| 2 | Rewrite Academic Records console for institute tables | **Done.** `components/admin/academic-records-manager.tsx` fully rewritten, `app/actions/academic.ts` has all CRUD + import actions per kind. |
+| 3 | Create import planning for new table shapes | **Done.** `lib/institute/import.ts` with `planInstituteImport`, `describeImport`, per-kind column arrays. |
+| 4 | Move `splitCsvLine` to shared location | **Done.** Now in `lib/csv.ts`; `lib/projects.ts` and `lib/users-import.ts` import it directly. Re-exported from `stored.ts`. |
+| 5 | Align seed data with mock-source | **Done.** `lib/store/seed.ts` institute_students records match `lib/academic/mock-source.ts` exactly. |
+| 6 | Update tests | **Done.** `tests/academic-records.test.ts` rewritten for new store methods and import planning. 606 tests pass. |
+
+The old `academic_records` table is no longer read or written by any code path.
+Dead code in `lib/academic/stored.ts` (`planAcademicImport` etc.) remains for
+backward compatibility but is not imported by any production module.
+
+---
+
+## Round of 3 November 2026 (third session) - rename unit columns for clarity
+
+The owner asked for column names that non-technical people can understand
+without explanation.
+
+### What was asked, and the status of each item
+
+| # | Asked | Status |
+|---|---|---|
+| 1 | Rename `units.kind` to `category` | **Done.** DB schema, type, both stores, seed, 5 source files, 10 test files. |
+| 2 | Rename `units.parent_id` to `parent_department_id` | **Done.** Same scope as above. |
+| 3 | Rename `units.office_class` to `office_type` | **Done.** Plus `institute_offices.office_class` and `KNOWN_OFFICE_COLUMNS` (keeps old name as import alias). |
+| 4 | Rename `units.hod_unit_id` to `hod_approval_from_id` | **Done.** |
+| 5 | Update label values | **Done.** "Officer office" -> "Independent office (Director, Registrar, Deans...)", "Department office" -> "Under a department". |
+
+Enum values unchanged. `WorkflowConsoleData.units` DTO field also renamed
+from `kind` to `category`. All 604 tests pass, build clean.
+
+---
+
+## Round of 4 November 2026 - remove department_or_club, roll_number and staff_category from profiles
+
+Continues the computed-fields pattern from the hostel_name round (3 Nov).
+The three remaining derived columns are removed from the `profiles` table
+and computed at read time by the `profiles_v` SQL view (Postgres) or
+`withComputed()` (mock store).
+
+### What was asked, and the status of each item
+
+| # | Asked | Status |
+|---|---|---|
+| 1 | Remove `department_or_club` from profiles table | **Done.** Computed from `units.name` via `unit_id` in `profiles_v` and `withComputed()`. |
+| 2 | Remove `roll_number` from profiles table | **Done.** Computed from `institute_students.roll_number` by email match. |
+| 3 | Remove `staff_category` from profiles table | **Done.** Derived from `institute_employees.employee_type` (Teaching -> faculty, Non Teaching -> staff). |
+| 4 | Update user import to stop writing the three fields | **Done.** `UserImportRow` reduced to email/name/role/unit. `staffCategoryFrom()` deleted. |
+| 5 | Update all test files | **Done.** 10 test files updated with `asProfile`/`asProfiles` helpers. 604 tests pass. |
+
+Build clean: lint, typecheck, tests (604), build all pass.
 
 ---
 

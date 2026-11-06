@@ -1,4 +1,4 @@
-import { splitCsvLine } from "./academic/stored";
+import { splitCsvLine } from "./csv";
 import { isValidLdapUid, normalizeLdapUid } from "./ldap/uid";
 import { ROLE_LABELS, type Profile, type Role, type StaffCategory } from "./types";
 import type { Unit } from "./units";

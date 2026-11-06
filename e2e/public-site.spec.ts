@@ -12,7 +12,7 @@ test("the public site reads on a 320 px phone", async ({ page }) => {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 
-  for (const path of ["/guidelines", "/gallery", "/contact", "/book-room", "/book-meal", "/sign-in", "/mock-login"]) {
+  for (const path of ["/guidelines", "/gallery", "/contact", "/book-room", "/book-meal", "/sign-in"]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

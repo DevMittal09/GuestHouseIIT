@@ -12,25 +12,25 @@ place, and what protects the portal.
 > the host's environment settings. Never paste a real key into this folder, an
 > issue, a commit or a log.
 
-Verified against `lib/ldap/mock-directory.ts`, `lib/store/seed.ts`,
-`supabase/seed.sql`, `lib/env.ts`, `lib/oidc.ts`, `proxy.ts` and `.env.example`
-on 10 Oct 2026. The reasoning behind these choices is in
-[02-decisions.md](02-decisions.md); what production must still change is
-[04-production.md](04-production.md).
+Verified against `lib/store/seed.ts`, `supabase/seed.sql`, `lib/env.ts`,
+`lib/oidc.ts` and `.env.example` on 2 Nov 2026 (LDAP removed). The reasoning
+behind these choices is in [02-decisions.md](02-decisions.md); what production
+must still change is [04-production.md](04-production.md).
 
 ---
 
 ## Part 1 — Every login that exists today
 
-### Demo logins (dummy LDAP directory)
+### Demo logins (historical — LDAP removed 2 Nov 2026)
 
-Used whenever `LDAP_URL` is **unset**. **Since 28 Oct 2026 the sign-in page
-has no form**, so these are reached through `signInWithLdap` only; the way in
-through the interface is the account picker, one click per persona, which is
-also how the e2e suite signs in. Sign in on `/sign-in` with the LDAP
-username and password below — or, while Google is unconfigured, press **Mock
-Authentication** and pick the persona with one click (no password).
-**Keep this table and `lib/ldap/mock-directory.ts` in step.**
+> **LDAP sign-in was removed on 2 Nov 2026.** `lib/ldap/` is deleted, `ldapts`
+> is removed, `signInWithLdap` no longer exists. The only sign-in door is
+> **Google OAuth** (or the `test-sign-in` endpoint with `E2E_TEST_SECRET` for
+> Playwright). The table below is kept as the **reference for the demo
+> personas** — their emails, profile ids and roles — which are still seeded
+> and used by the e2e suite. The LDAP usernames and passwords are historical.
+> The e2e suite signs in via `POST /api/auth/test-sign-in` with email +
+> `E2E_TEST_SECRET`.
 
 | Persona | Role | LDAP username | Password | Email | Mock profile id | Demonstrates |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -75,15 +75,15 @@ Authentication** and pick the persona with one click (no password).
 | **Console password** (`/admin`, manager and developer) | `0000` | Default until changed in Console Access; stored as a scrypt hash in `app_settings`. **Must be changed before go-live.** |
 | **Developer second factor** | *enrol your own* | First console use as `developer`: Console → Security → set up an authenticator (TOTP), keep the ten recovery codes. Needed before any role change, Settings change or delete. Stored in the database the portal is using — deleting `.local-db.json` removes it |
 | Supabase **Auth** password for seeded / console-created users | *gone* | **Removed in code on 13 Oct 2026** (migration 31). `createProfile` no longer creates a Supabase Auth user, and `supabase/seed.sql` no longer creates 18 of them with `password123`. Nothing in the repository mints a Supabase password any more, and `tests/rls-surface.test.ts` fails if something starts. **The rows already on the hosted project are still there** until `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql` is run - a production action needing the owner's approval. See Part 4, "The second door" |
-| Sample shown on the sign-in card | `priya` / `Priya@2026` | Only while the dummy directory is in use |
+| Sample shown on the sign-in card | — | No sample shown (LDAP form removed 28 Oct; credentials box removed 15 Oct) |
 
 
 ### How to sign in quickly for a check
 
-
-- **Browser:** `/sign-in` → Mock Authentication → pick a persona. Or type an
-  LDAP username and password from the table above.
-- **Playwright:** `e2e/helpers.ts` has `ACCOUNTS` and `signIn()`.
+- **Browser:** `/sign-in` → Sign in with Google (once configured).
+- **Playwright:** `e2e/helpers.ts` has `ACCOUNTS` and `signIn()`. Uses
+  `POST /api/auth/test-sign-in` with `E2E_TEST_SECRET` (set in
+  `playwright.config.ts`).
 - **curl in development:** `DEV_LOGIN=true npm run dev`, then
   `curl -b "gh_mock_user=<mock profile id>" localhost:3000/<page>`. Only
   honoured with `DEV_LOGIN=true` outside production.
@@ -94,57 +94,26 @@ Authentication** and pick the persona with one click (no password).
 
 ### How sign-in works
 
-> **The LDAP form is off the page** (28 Oct 2026, the owner: "we will not be
-> using LDAP. The intended authentication method is Google authentication,
-> but for now, clicking the sign-in button should initiate a mock
-> authentication flow"). `/sign-in`, `/book-room` and `/book-meal` show
-> **one button**, which opens the account picker at `/mock-login` - or the
-> real Google flow once `GOOGLE_CLIENT_ID` and friends are set.
+> **LDAP and Mock Authentication were removed on 2 Nov 2026** (the owner:
+> "Keep only Google OAuth only. Remove rest"). `lib/ldap/` is deleted,
+> `signInWithLdap` no longer exists, `loginAs` and `/mock-login` are gone,
+> `lib/password.ts` is deleted. The only sign-in door is **Google OAuth**.
 >
-> **Everything in this section still exists and still works.**
-> `signInWithLdap`, the throttle, the error wording, the dummy directory and
-> the real-directory switch below are untouched; nothing in the interface
-> calls the first of them. Two consequences worth knowing:
->
-> - **the door is a form away**, so this is the section to re-read if the
->   institute asks for its directory back;
-> - **the only thing standing in front of the account picker is
->   `mockLoginEnabled()`** - configure Google, or set `MOCK_LOGIN=false`,
->   before a real deployment. That was already a production gate; it is now
->   the *only* one at the door.
+> To restore LDAP sign-in, the entire `lib/ldap/` directory, `lib/password.ts`,
+> the `signInWithLdap` action, and the form fields in `login-form.tsx` would
+> need to be rebuilt. The `ldap_uid` column and its migration 12 index are
+> still in the database.
 
 ```
-LDAP form (withdrawn 28 Oct 2026) ─▶ signInWithLdap() (app/actions/auth.ts)
-              1. normalise the uid; reject blanks, "@" (unless the directory uses email usernames), bad characters
-              2. throttle: 8 attempts / 15 min per `ldap:<uid>` (a row in the database — RATE_LIMITS.signIn)
-              3. getDirectory().authenticate(uid, password)      ← "is this the password?"
-                   LDAP_URL set → LdapDirectory (ldapts, search-then-bind)
-                   otherwise    → MockDirectory (accounts in 05-credentials-and-security.md)
-              4. profileForDirectoryEntry(entry) (lib/ldap/link.ts) ← "which portal account?"
-                   profiles.ldap_uid match, else (opt-in) link by email
-              5. create a session row (opaque cookie), redirect to safe `next` or homeForRole()
-
-The one button, Google unconfigured ─▶ "Sign in"             ─▶ /mock-login?next=… ─▶ loginAs(profileId, next)
-The one button, Google configured   ─▶ "Sign in with Google" ─▶ /api/auth/google/start ─▶ callback (lib/oidc.ts)
+The one button ─▶ "Sign in with Google" ─▶ /api/auth/google/start ─▶ callback (lib/oidc.ts)
+E2E tests     ─▶ POST /api/auth/test-sign-in { email, secret } (gated by E2E_TEST_SECRET)
 ```
-
-Two questions, two systems. **The directory checks the password. The portal's
-`profiles.ldap_uid` says who you are:** role, hostel, club. So a valid LDAP
-login with no matching profile gets in nowhere.
-
-Error messages:
-
-- **"Incorrect username or password"** covers both an unknown user and a wrong
-  password, so the page cannot be used to find out which usernames exist.
-- **"Not registered"** is only shown *after* the password is proven.
-- **A directory outage** reads "could not be reached …", and the real error
-  is logged.
 
 Session: a row in `sessions` since Phase 8, with an opaque token in the cookie
-(`lib/sessions.ts`; 30 min idle, 12 h absolute). LDAP proves who typed the
-password; the session row is what proves, on every later request, that the
-person holding the cookie is the one who did. The unsigned `gh_mock_user`
-cookie it replaced is honoured only with `DEV_LOGIN=true` outside production.
+(`lib/sessions.ts`; 30 min idle, 12 h absolute). Google proves who the person
+is; the session row is what proves, on every later request, that the person
+holding the cookie is the one who signed in. The unsigned `gh_mock_user`
+cookie is honoured only with `DEV_LOGIN=true` outside production.
 
 ### Google sign-in - built, verified, unconfigured
 
@@ -203,59 +172,18 @@ students out of Google's account chooser.
 **Configuring it deletes `/mock-login`**, which is how the Playwright suite
 signs in - so never set these variables in CI.
 
-### Moving to the real LDAP accounts
+### LDAP — removed 2 Nov 2026
 
-Nothing in the code changes. Three steps:
-
-1. **Apply migration 12** (`supabase/migrations/00000000000012_profile_ldap_uid.sql`)
-   to the Supabase project. It adds `profiles.ldap_uid` plus a unique index on
-   `lower(ldap_uid)`. Until then, LDAP sign-in finds nobody on Supabase and
-   saving a user in the console fails. Then re-run `supabase/seed.sql`, or just
-   its `update … set ldap_uid` block, to give the demo personas their
-   usernames.
-2. **Put the real usernames on the profiles.** Any one of these:
-   - **Developer console → Users & Roles → Import LDAP usernames.** Paste
-     `email, ldap username` pairs, one per line. A two-column spreadsheet
-     paste works, and a header row and `#` comments are skipped. It matches by
-     email and is **all or nothing**: an unknown email, a bad or duplicated
-     username, or a username already on another account refuses the whole
-     paste and lists each problem. Swaps within one paste are allowed. The
-     planning code is `planLdapUidImport` in `lib/ldap/import.ts`.
-   - **The Edit dialog, one user at a time** (the "LDAP username" field).
-   - **SQL, for a bulk load straight into Postgres:**
-     ```sql
-     update public.profiles p set ldap_uid = v.uid
-     from (values ('142301026@smail.iitpkd.ac.in', '142301026')) as v(email, uid)
-     where p.email = v.email;
-     -- students only, if the username is always the roll number:
-     -- update public.profiles set ldap_uid = roll_number
-     --   where role = 'student' and ldap_uid is null and roll_number is not null;
-     ```
-   - **`LDAP_LINK_BY_EMAIL=true`** (below): each person links on first sign-in.
-3. **Point the portal at the directory** (all in `.env.example`):
-   ```
-   LDAP_URL=ldaps://<institute ldap host>:636   # or ldap:// + LDAP_STARTTLS=true
-   LDAP_BASE_DN=dc=iitpkd,dc=ac,dc=in           # required; subtree search
-   LDAP_BIND_DN=…  LDAP_BIND_PASSWORD=…          # read-only service account, if anonymous search is refused
-   LDAP_UID_ATTRIBUTE=uid                        # sAMAccountName on AD; mail / userPrincipalName if people log in with addresses
-   ```
-   - **Setting `LDAP_URL` turns the dummy accounts off entirely.**
-   - **`LDAP_URL` without `LDAP_BASE_DN` fails sign-in** rather than falling
-     back to the published dummy passwords.
-   - **A certificate signed by the institute's own CA** needs
-     `NODE_EXTRA_CA_CERTS=<ca.pem>`.
-
-**`LDAP_LINK_BY_EMAIL=true`** (off by default) covers a login whose username is
-on no profile yet. It links to the profile whose `email` equals the directory
-entry's `mail`, provided that profile has no LDAP username of its own, and
-records the username on it. It never overwrites an existing `ldap_uid`.
-
-Only enable it after the LDAP admins confirm that users **cannot edit their
-own `mail`** in the directory. Otherwise anyone could claim anyone's profile.
-
-**Questions for the institute's LDAP admins:**
-
-- the host and port, and ldaps vs StartTLS
+> **The entire LDAP directory was removed** on 2 Nov 2026: `lib/ldap/` (7
+> files), `lib/password.ts`, `ldapts` dependency, the `signInWithLdap` action,
+> the "Import LDAP usernames" UI, and the LDAP username field in the edit
+> dialog. The `ldap_uid` column and migration 12's unique index remain in the
+> database as a profile attribute. The user import system (`lib/users-import.ts`)
+> still handles `ldap_uid` as a spreadsheet column.
+>
+> The section below is kept as historical context. Rebuilding LDAP sign-in
+> would require recreating `lib/ldap/`, restoring the `ldapts` dependency,
+> writing a new `signInWithLdap` action, and adding form fields.
 - the base DN and the OUs students and staff live in
 - whether anonymous search is allowed, or a service account is needed
 - the username attribute

@@ -5,10 +5,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  bulkUpdateAccountStatusAction,
   createUserAction,
   deleteUserAction,
   deleteUsersAction,
-  importLdapUidsAction,
   importUsersAction,
   previewUserImport,
   revertUserImportAction,
@@ -16,6 +16,7 @@ import {
   type UserFormInput,
   type UserImportSummary,
 } from "@/app/actions/admin";
+import { FileUploadInput } from "@/components/admin/file-upload-input";
 import { RequiredFieldsNote } from "@/components/required-fields-note";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,8 +40,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ROLE_LABELS, STAFF_CATEGORY_LABELS, type Profile, type Role } from "@/lib/types";
-import { UNIT_KIND_LABELS, type Unit } from "@/lib/units";
+import { ACCOUNT_STATUS_LABELS, ROLE_LABELS, type AccountStatus, type Profile, type Role } from "@/lib/types";
+import { UNIT_CATEGORY_LABELS, type Unit } from "@/lib/units";
 import { USER_CSV_HEADER } from "@/lib/users-import";
 import { describeBatch, revertBlocker, type UserImportBatch } from "@/lib/users-import-undo";
 import { SectionHeading } from "@/components/section-heading";
@@ -60,22 +61,22 @@ const EMPTY: UserFormInput = {
   hostel_name: "",
   department_or_club: "",
   roll_number: "",
+  staff_category: "",
   ldap_uid: "",
   unit_id: "",
-  staff_category: "",
+  account_status: "active",
 };
+
+const ALL_STATUSES = Object.keys(ACCOUNT_STATUS_LABELS) as AccountStatus[];
 
 export function UsersManager({
   profiles,
   units = [],
-  hostels = [],
   roles = ALL_ROLES,
   actorRole = "developer",
   imports = [],
 }: {
   profiles: Profile[];
-  /** Hostels on the Settings list - the only values `hostel_name` may take. */
-  hostels?: string[];
   /** Departments, clubs and offices a person can be placed in. */
   units?: Unit[];
   /** The roles this console user may hand out - see `assignableRoles`. */
@@ -90,9 +91,6 @@ export function UsersManager({
   const [editing, setEditing] = useState<Profile | null>(null);
   const [values, setValues] = useState<UserFormInput>(EMPTY);
   const [toDelete, setToDelete] = useState<Profile | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
-  const [importText, setImportText] = useState("");
-  const [importProblems, setImportProblems] = useState<string[]>([]);
   /**
    * Bulk loading accounts from a spreadsheet (8 Oct 2026). `plan` is what the
    * paste would do, fetched by a read-only action: the office presses Check
@@ -107,6 +105,10 @@ export function UsersManager({
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   /** The import whose undo is being confirmed. */
   const [toUndo, setToUndo] = useState<UserImportBatch | null>(null);
+  /** Bulk account status update dialog. */
+  const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
+  const [bulkStatusEmails, setBulkStatusEmails] = useState("");
+  const [bulkStatusTarget, setBulkStatusTarget] = useState<AccountStatus>("relieved");
 
   const deletable = profiles.filter((p) => !isLocked(actorRole, p));
   const selectedProfiles = deletable.filter((p) => selected.has(p.id));
@@ -133,9 +135,10 @@ export function UsersManager({
       hostel_name: p.hostel_name ?? "",
       department_or_club: p.department_or_club ?? "",
       roll_number: p.roll_number ?? "",
+      staff_category: p.staff_category ?? "",
       ldap_uid: p.ldap_uid ?? "",
       unit_id: p.unit_id ?? "",
-      staff_category: p.staff_category ?? "",
+      account_status: p.account_status ?? "active",
     });
     setDialogOpen(true);
   };
@@ -164,12 +167,6 @@ export function UsersManager({
         toast.error(result.error);
       }
     });
-
-  const openImport = () => {
-    setImportText("");
-    setImportProblems([]);
-    setImportOpen(true);
-  };
 
   const openUsersImport = () => {
     setUsersText("");
@@ -232,18 +229,19 @@ export function UsersManager({
       }
     });
 
-  const runImport = () =>
+  const runBulkStatus = () =>
     startTransition(async () => {
-      const result = await importLdapUidsAction(importText);
+      const result = await bulkUpdateAccountStatusAction(bulkStatusEmails, bulkStatusTarget);
       if (result.ok) {
-        toast.success(
-          `LDAP usernames set for ${result.updated} user${result.updated === 1 ? "" : "s"}` +
-            (result.unchanged ? ` (${result.unchanged} already up to date)` : "")
-        );
-        setImportOpen(false);
+        const parts = [`${result.updated} account${result.updated === 1 ? "" : "s"} set to ${ACCOUNT_STATUS_LABELS[bulkStatusTarget]}`];
+        if (result.notFound && result.notFound.length > 0) {
+          parts.push(`${result.notFound.length} not found: ${result.notFound.slice(0, 5).join(", ")}${result.notFound.length > 5 ? "..." : ""}`);
+        }
+        toast.success(parts.join(". "));
+        setBulkStatusOpen(false);
+        setBulkStatusEmails("");
         router.refresh();
       } else {
-        setImportProblems(result.problems ?? []);
         toast.error(result.error);
       }
     });
@@ -261,11 +259,11 @@ export function UsersManager({
               Delete {selected.size} selected
             </Button>
           )}
+          <Button variant="outline" onClick={() => setBulkStatusOpen(true)}>
+            Bulk update status
+          </Button>
           <Button variant="outline" onClick={openUsersImport}>
             Import from spreadsheet
-          </Button>
-          <Button variant="outline" onClick={openImport}>
-            Import LDAP usernames
           </Button>
           <Button onClick={openCreate}>+ Add user</Button>
         </div>
@@ -293,10 +291,9 @@ export function UsersManager({
                   scrolling the table sideways. */}
               <TableHead>Account</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Hostel</TableHead>
               <TableHead>Dept / Club</TableHead>
-              <TableHead>Roll No.</TableHead>
-              <TableHead>LDAP username</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -334,10 +331,15 @@ export function UsersManager({
                     ROLE_LABELS[p.role]
                   )}
                 </TableCell>
+                <TableCell className="text-meta whitespace-nowrap">
+                  {(p.account_status ?? "active") === "active" ? (
+                    <span className="text-green-700">Active</span>
+                  ) : (
+                    <span className="text-vermilion-deep font-medium">{ACCOUNT_STATUS_LABELS[(p.account_status ?? "active") as AccountStatus]}</span>
+                  )}
+                </TableCell>
                 <TableCell>{p.hostel_name ?? "-"}</TableCell>
                 <TableCell>{p.department_or_club ?? "-"}</TableCell>
-                <TableCell className="font-mono text-xs">{p.roll_number ?? "-"}</TableCell>
-                <TableCell className="font-mono text-xs">{p.ldap_uid ?? "-"}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     {/* A manager cannot edit or remove a developer account -
@@ -529,6 +531,13 @@ export function UsersManager({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
+            <FileUploadInput
+              disabled={isPending}
+              onLoaded={(csv) => {
+                setUsersText(csv);
+                setPlan(null);
+              }}
+            />
             <Label htmlFor="users-import">People</Label>
             <Textarea
               id="users-import"
@@ -596,57 +605,12 @@ export function UsersManager({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Import LDAP usernames</DialogTitle>
-            <DialogDescription>
-              Links institute LDAP logins to existing accounts, matched by email. One{" "}
-              <code className="font-mono">email, LDAP username</code> pair per line - a two-column
-              spreadsheet paste works. If any line is wrong, nothing is changed.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="ldap-import">Email and LDAP username</Label>
-            <Textarea
-              id="ldap-import"
-              rows={8}
-              spellCheck={false}
-              className="font-mono text-xs"
-              placeholder={"112201001@smail.iitpkd.ac.in, 112201001\npriya@iitpkd.ac.in, priya"}
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-              aria-describedby={importProblems.length ? "ldap-import-problems" : undefined}
-            />
-            {importProblems.length > 0 && (
-              <ul
-                id="ldap-import-problems"
-                role="alert"
-                className="max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-sm text-destructive"
-              >
-                {importProblems.map((problem, i) => (
-                  <li key={i}>{problem}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setImportOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={runImport} disabled={isPending || importText.trim() === ""}>
-              {isPending ? "Importing…" : "Import"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? `Edit ${editing.full_name}` : "Add user"}</DialogTitle>
             <DialogDescription>
-              Hostel scopes wardens/students; Dept/Club scopes faculty advisors and club accounts.
+              Hostel, department/club, roll number and staff category are resolved from institute records.
             </DialogDescription>
           </DialogHeader>
           <RequiredFieldsNote />
@@ -678,30 +642,9 @@ export function UsersManager({
             </div>
             <div className="space-y-2">
               <Label>Hostel</Label>
-              {/* A pick from the Settings list: wardens are scoped by this
-                  name, so a typo here used to leave a student outside every
-                  warden's queue. */}
-              <NativeSelect
-                value={values.hostel_name}
-                onChange={(e) => set("hostel_name")(e.target.value)}
-              >
-                <option value="">None</option>
-                {[...new Set([...hostels, ...(values.hostel_name ? [values.hostel_name] : [])])].map(
-                  (h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  )
-                )}
-              </NativeSelect>
-            </div>
-            <div className="space-y-2">
-              <Label>Department / Club</Label>
-              <Input
-                placeholder="e.g. Petrichor"
-                value={values.department_or_club}
-                onChange={(e) => set("department_or_club")(e.target.value)}
-              />
+              <p className="text-sm text-muted-foreground">
+                {editing ? (profiles.find((p) => p.id === editing.id)?.hostel_name ?? "None") : "Resolved from institute records"}
+              </p>
             </div>
             {/* The unit is what their approver is found through, so it is a
                 pick from the list rather than free text - a typo here used
@@ -716,51 +659,24 @@ export function UsersManager({
                 <option value="">No department or club</option>
                 {units.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.name} ({UNIT_KIND_LABELS[u.kind]})
+                    {u.name} ({UNIT_CATEGORY_LABELS[u.category]})
                   </option>
                 ))}
               </NativeSelect>
             </div>
-            {values.role === "employee" && (
-              <div className="space-y-2">
-                <Label htmlFor="user-staff-category">Faculty or staff</Label>
-                <NativeSelect
-                  id="user-staff-category"
-                  value={values.staff_category ?? ""}
-                  onChange={(e) => set("staff_category")(e.target.value)}
-                >
-                  <option value="">Not set (treated as faculty)</option>
-                  <option value="faculty">{STAFF_CATEGORY_LABELS.faculty}</option>
-                  <option value="staff">{STAFF_CATEGORY_LABELS.staff}</option>
-                </NativeSelect>
-                <p className="text-xs text-muted-foreground">
-                  Faculty official bookings need their HOD&apos;s approval; staff bookings go
-                  straight to the Guest House Manager.
-                </p>
-              </div>
-            )}
             <div className="space-y-2">
-              <Label>Roll number</Label>
-              <Input
-                value={values.roll_number}
-                onChange={(e) => set("roll_number")(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="user-ldap-uid">LDAP username</Label>
-              <Input
-                id="user-ldap-uid"
-                autoCapitalize="none"
-                spellCheck={false}
-                className="font-mono"
-                value={values.ldap_uid}
-                onChange={(e) => set("ldap_uid")(e.target.value)}
-                aria-describedby="user-ldap-uid-help"
-              />
-              <p id="user-ldap-uid-help" className="text-xs text-muted-foreground">
-                The institute LDAP login this account signs in with. Leave blank and the
-                person can only use Google sign-in.
-              </p>
+              <Label htmlFor="user-status">Account status</Label>
+              <NativeSelect
+                id="user-status"
+                value={values.account_status ?? "active"}
+                onChange={(e) => set("account_status")(e.target.value)}
+              >
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {ACCOUNT_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </NativeSelect>
             </div>
           </div>
           <DialogFooter>
@@ -769,6 +685,61 @@ export function UsersManager({
             </Button>
             <Button onClick={save} disabled={isPending}>
               {isPending ? "Saving…" : editing ? "Save changes" : "Create user"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkStatusOpen} onOpenChange={setBulkStatusOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Bulk update account status</DialogTitle>
+            <DialogDescription>
+              Paste or type email addresses (one per line or comma-separated). Each matching account
+              will be set to the chosen status.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="bulk-status-target">Set status to</Label>
+              <NativeSelect
+                id="bulk-status-target"
+                value={bulkStatusTarget}
+                onChange={(e) => setBulkStatusTarget(e.target.value as AccountStatus)}
+              >
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {ACCOUNT_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bulk-status-emails">Email addresses</Label>
+              <Textarea
+                id="bulk-status-emails"
+                rows={8}
+                spellCheck={false}
+                className="font-mono text-xs"
+                placeholder={"user1@iitpkd.ac.in\nuser2@iitpkd.ac.in"}
+                value={bulkStatusEmails}
+                onChange={(e) => setBulkStatusEmails(e.target.value)}
+              />
+            </div>
+            <FileUploadInput
+              disabled={isPending}
+              onLoaded={(csv) => setBulkStatusEmails(csv)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkStatusOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={runBulkStatus}
+              disabled={isPending || bulkStatusEmails.trim() === ""}
+            >
+              {isPending ? "Updating…" : "Update status"}
             </Button>
           </DialogFooter>
         </DialogContent>

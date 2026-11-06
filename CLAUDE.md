@@ -2,6 +2,8 @@
 
 # Read `.memories/` before you start, and update it before you finish
 
+
+#
 `AGENTS.md` (imported above) is the terse list of hard rules. **`.memories/` is
 the project's memory** — fifteen files, one subject each: the problem and every
 requirement list the institute sent, why each decision was taken, what is open,

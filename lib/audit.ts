@@ -46,7 +46,8 @@ export type AuditEventKind =
   | "twofa.reset"
   | "stepup.verified"
   | "stepup.failed"
-  | "rate_limited";
+  | "rate_limited"
+  | "bulk_status_update";
 
 export const AUDIT_EVENT_LABELS: Record<AuditEventKind, string> = {
   "signin.success": "Signed in",
@@ -82,6 +83,7 @@ export const AUDIT_EVENT_LABELS: Record<AuditEventKind, string> = {
   "stepup.verified": "Step-up re-authentication",
   "stepup.failed": "Step-up re-authentication failed",
   rate_limited: "Rate limit hit",
+  bulk_status_update: "Bulk account status update",
 };
 
 export type AuditEvent = {

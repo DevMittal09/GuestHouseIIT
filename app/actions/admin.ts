@@ -1,5 +1,8 @@
 "use server";
 
+import { getHostels } from "@/lib/settings-server";
+import { isRealDeployment } from "@/lib/env";
+import { isValidLdapUid, LDAP_UID_ERROR, normalizeLdapUid } from "@/lib/ldap/uid";
 import { revalidateConsole } from "@/lib/revalidate";
 import { recordAudit } from "@/lib/audit-server";
 import { z } from "zod";
@@ -8,13 +11,13 @@ import {
   checkAdminPassword,
   grantAdminUnlock,
   isAdminUnlocked,
+  isDefaultAdminPassword,
   revokeAdminUnlock,
   setAdminPassword,
   throttleCheck,
   validatePasswordChoice,
 } from "@/lib/admin-lock";
 import type { RoleFormConfig } from "@/lib/form-config";
-import { planLdapUidImport } from "@/lib/ldap/import";
 import {
   changedFields,
   describeUserImport,
@@ -26,12 +29,9 @@ import {
   importFieldsOf,
   planUserImportRevert,
   revertBlocker,
-  uidsToRelease,
   type UserImportBatch,
 } from "@/lib/users-import-undo";
 import { randomUUID } from "crypto";
-import { getHostels } from "@/lib/settings-server";
-import { isValidLdapUid, LDAP_UID_ERROR, normalizeLdapUid } from "@/lib/ldap/uid";
 import { mailConfig } from "@/lib/mail/config";
 import { dispatchOutbox, drainOutbox } from "@/lib/mail/dispatch";
 import { queueMessages } from "@/lib/mail/notify";
@@ -39,8 +39,8 @@ import type { MailStatus } from "@/lib/mail/types";
 import { isInstituteEmail } from "@/lib/site";
 import { emailFormatError, rollNumberFromEmail } from "@/lib/user-groups";
 import { getStore } from "@/lib/store";
-import type { BookingStatus, Profile, Role, RoomType } from "@/lib/types";
-import { REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
+import type { AccountStatus, BookingStatus, Profile, Role, RoomType } from "@/lib/types";
+import { ACCOUNT_STATUS_LABELS, REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
 import { occupancyNotStartedError } from "@/lib/workflow";
 import {
   assignableRoles,
@@ -71,6 +71,16 @@ async function requireConsole(
   }
   if (!(await isAdminUnlocked())) {
     throw new Error("The console is locked - enter the console password again");
+  }
+  // A deployment holding real records must not be operated from behind the
+  // published factory password (`0000`). Console Access itself is exempt, or
+  // there would be no way in to change it. `isRealDeployment()` rather than
+  // `isProduction()`: the e2e suite runs a production build on the mock store
+  // with the factory password, and it has no records to protect.
+  if (isRealDeployment() && section !== "console_access" && (await isDefaultAdminPassword())) {
+    throw new Error(
+      "The console password is still the factory default - change it in Console Access before using the console"
+    );
   }
   // Phase 8: changing who may do what, or deleting records, asks a developer
   // for a fresh second factor. Anyone else is already behind the console
@@ -358,25 +368,35 @@ const userSchema = z.object({
   // Derived from ROLE_LABELS rather than written out again: a hand-kept copy
   // of the role list silently rejected every newly added role.
   role: z.enum(Object.keys(ROLE_LABELS) as [Role, ...Role[]]),
+  // These four are still written here, and `profiles_v` reads them where the
+  // institute tables hold no row for the person (migration 37). `hostel_name`
+  // in particular is a warden's whole scope and a student's approval route:
+  // taking it off this form would leave the office no way to set it until the
+  // institute data is loaded.
   hostel_name: z.string().trim().transform((v) => v || null),
   department_or_club: z.string().trim().transform((v) => v || null),
   roll_number: z.string().trim().transform((v) => v || null),
+  // Only meaningful for employees: faculty official bookings wait for the HOD.
+  staff_category: z
+    .enum(["", "faculty", "staff"])
+    .optional()
+    .transform((v) => (v ? v : null)),
   // The unit decides who approves for this person (lib/units.ts); blank means
   // they belong to none, and their requests route as if nobody were set.
   unit_id: z
     .string()
     .optional()
     .transform((v) => (v && v.trim() ? v.trim() : null)),
-  // Only meaningful for employees: faculty official bookings wait for the HOD.
-  staff_category: z
-    .enum(["", "faculty", "staff"])
-    .optional()
-    .transform((v) => (v ? v : null)),
   // Optional: without one the person signs in only through the Google door.
   ldap_uid: z
     .string()
-    .transform((v) => normalizeLdapUid(v) || null)
+    .optional()
+    .transform((v) => normalizeLdapUid(v ?? "") || null)
     .refine((v) => v === null || isValidLdapUid(v), LDAP_UID_ERROR),
+  account_status: z
+    .enum(Object.keys(ACCOUNT_STATUS_LABELS) as [AccountStatus, ...AccountStatus[]])
+    .optional()
+    .default("active"),
 });
 
 export type UserFormInput = z.input<typeof userSchema>;
@@ -435,39 +455,6 @@ function assignRoleError(actor: Profile, role: Role): string | null {
   const allowed = assignableRoles(actor.role, Object.keys(ROLE_LABELS) as Role[]);
   if (allowed.includes(role)) return null;
   return `Only a developer can assign the ${ROLE_LABELS[role]} role`;
-}
-
-export type LdapImportResult =
-  | { ok: true; updated: number; unchanged: number }
-  | { ok: false; error: string; problems?: string[] };
-
-/**
- * Bulk-load LDAP usernames onto existing accounts - how the institute's real
- * LDAP logins get into the portal. Planned by `planLdapUidImport` (all or
- * nothing); see there for the accepted format.
- */
-export async function importLdapUidsAction(text: string): Promise<LdapImportResult> {
-  try {
-    await requireConsole("users");
-    const store = getStore();
-    const plan = planLdapUidImport(text, await store.listProfiles());
-    if (plan.problems.length) {
-      return { ok: false, error: "Nothing was changed - fix these lines and try again", problems: plan.problems };
-    }
-    if (plan.changes.length === 0 && plan.unchanged === 0) {
-      return { ok: false, error: "No \"email, LDAP username\" lines found" };
-    }
-    // Two passes, so a uid moving from one account to another (a swap, or a
-    // correction) never collides with itself under the unique index.
-    for (const c of plan.changes) {
-      if (c.from !== null) await store.updateProfile(c.id, { ldap_uid: null });
-    }
-    for (const c of plan.changes) await store.updateProfile(c.id, { ldap_uid: c.to });
-    revalidateConsole();
-    return { ok: true, updated: plan.changes.length, unchanged: plan.unchanged };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
-  }
 }
 
 /**
@@ -598,21 +585,6 @@ export async function importUsersAction(
     });
 
     try {
-      /**
-       * An LDAP username is unique on `lower()`, and `planUserImport`
-       * deliberately allows one paste to move a username from one account to
-       * another (a swap, or a correction). Applied one row at a time that
-       * collides with itself: the account being given the username is written
-       * before the account giving it up. So the old holder releases it first -
-       * the same two passes as `importLdapUidsAction`, over the rows whose
-       * username actually moves, and before the inserts as well as the updates
-       * because a *new* account can be the one taking it.
-       */
-      for (const { id, before, row } of plan.updated) {
-        if (before.ldap_uid && (before.ldap_uid ?? null) !== row.ldap_uid) {
-          await store.updateProfile(id, { ldap_uid: null });
-        }
-      }
       // Chunked, so the common case - a sheet of people none of whom have an
       // account yet - is a handful of round trips instead of one per person.
       for (let at = 0; at < added.length; at += IMPORT_CHUNK) {
@@ -695,12 +667,6 @@ export async function revertUserImportAction(
     let restored = 0;
     let removed = 0;
 
-    /**
-     * The accounts the import created go first. One of them may hold an LDAP
-     * username that a restore is about to ask for - the import gave a new
-     * person the username an existing account was giving up - and the unique
-     * index would refuse the restore while that row is still there.
-     */
     for (const account of plan.remove) {
       try {
         await store.deleteProfile(account.id);
@@ -712,13 +678,6 @@ export async function revertUserImportAction(
       }
     }
 
-    // Then the same two passes the import itself needs, for the same unique
-    // index: two accounts that swapped usernames cannot be restored one at a
-    // time unless the current holder releases it first.
-    const fresh = await store.listProfiles();
-    for (const id of uidsToRelease(plan.restore, fresh)) {
-      await store.updateProfile(id, { ldap_uid: null }).catch(() => undefined);
-    }
     for (const row of plan.restore) {
       try {
         await store.updateProfile(row.id, row.to);
@@ -822,6 +781,44 @@ export async function deleteUserAction(id: string): Promise<ActionResult> {
     if (editError) return { ok: false, error: editError };
     await getStore().deleteProfile(id);
     return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export type BulkStatusResult = ActionResult & { updated?: number; notFound?: string[] };
+
+export async function bulkUpdateAccountStatusAction(
+  emailsCsv: string,
+  status: AccountStatus
+): Promise<BulkStatusResult> {
+  try {
+    const actor = await requireConsole("users", { stepUp: true });
+    if (!ACCOUNT_STATUS_LABELS[status]) return { ok: false, error: "Invalid status" };
+    const emails = emailsCsv
+      .split(/[\n,]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (emails.length === 0) return { ok: false, error: "No emails provided" };
+    const unique = [...new Set(emails)];
+
+    const store = getStore();
+    const profiles = await store.listProfiles();
+    const knownEmails = new Set(profiles.map((p) => p.email.toLowerCase()));
+    const notFound = unique.filter((e) => !knownEmails.has(e));
+
+    const toUpdate = unique.filter((e) => knownEmails.has(e));
+    if (toUpdate.length === 0) {
+      return { ok: false, error: "None of those emails match an account", notFound };
+    }
+
+    const updated = await store.bulkUpdateAccountStatus(toUpdate, status);
+    await recordAudit(actor, "bulk_status_update", `${updated} accounts`, {
+      status,
+      emails: toUpdate,
+    });
+    revalidateConsole();
+    return { ok: true, updated, notFound };
   } catch (e) {
     return fail(e);
   }

@@ -12,7 +12,7 @@ import type { DataStore } from "@/lib/store/types";
 import type { Profile } from "@/lib/types";
 import { facultyAdvisorOf, secretaryEmailOf, type Unit } from "@/lib/units";
 import { approvalStagesFor, initialStatusFor, routeFor } from "@/lib/workflow";
-import { profile, useThrowawayMockDb } from "./helpers";
+import { asProfiles, profile, useThrowawayMockDb } from "./helpers";
 
 /**
  * Faculty Advisors (24 Sep 2026, migration 25). The student bodies are a
@@ -23,14 +23,15 @@ import { profile, useThrowawayMockDb } from "./helpers";
  * House Manager, with the secretary's mailbox in Copy to.
  */
 
-const P = (id: string) => seedProfiles.find((p) => p.id === id)!;
+const allProfiles = asProfiles(seedProfiles);
+const P = (id: string) => allProfiles.find((p) => p.id === id)!;
 
 describe("who the Faculty Advisor is", () => {
   const units: Unit[] = [
-    { id: "tech", name: "Technical Affairs", kind: "council", parent_id: null, head_id: "sec", acting_head_id: null, faculty_advisor_id: "prof-a", secretary_email: "sec_tech@iitpkd.ac.in" },
-    { id: "robotics", name: "Robotics Club", kind: "club", parent_id: "tech", head_id: null, acting_head_id: null },
-    { id: "fest", name: "Fest", kind: "club", parent_id: "tech", head_id: null, acting_head_id: null, faculty_advisor_id: "prof-b", secretary_email: " fest@iitpkd.ac.in " },
-    { id: "loose", name: "Unattached Club", kind: "club", parent_id: null, head_id: null, acting_head_id: null },
+    { id: "tech", name: "Technical Affairs", category: "council", parent_department_id: null, head_id: "sec", acting_head_id: null, faculty_advisor_id: "prof-a", secretary_email: "sec_tech@iitpkd.ac.in" },
+    { id: "robotics", name: "Robotics Club", category: "club", parent_department_id: "tech", head_id: null, acting_head_id: null },
+    { id: "fest", name: "Fest", category: "club", parent_department_id: "tech", head_id: null, acting_head_id: null, faculty_advisor_id: "prof-b", secretary_email: " fest@iitpkd.ac.in " },
+    { id: "loose", name: "Unattached Club", category: "club", parent_department_id: null, head_id: null, acting_head_id: null },
   ];
 
   it("is the unit's own, else its council's - the clubs under a council share its advisor", () => {
@@ -50,8 +51,8 @@ describe("who the Faculty Advisor is", () => {
 
   it("survives a parent loop someone typed in", () => {
     const loop: Unit[] = [
-      { id: "a", name: "A", kind: "club", parent_id: "b", head_id: null, acting_head_id: null },
-      { id: "b", name: "B", kind: "club", parent_id: "a", head_id: null, acting_head_id: null },
+      { id: "a", name: "A", category: "club", parent_department_id: "b", head_id: null, acting_head_id: null },
+      { id: "b", name: "B", category: "club", parent_department_id: "a", head_id: null, acting_head_id: null },
     ];
     expect(facultyAdvisorOf("a", loop)).toBeNull();
   });
@@ -82,25 +83,25 @@ describe("the demo: Dr. Arun Prasad advises the Cultural Affairs Council and Pet
 
   it("is an ordinary faculty account, not a Faculty Advisor role", () => {
     expect(arun.role).toBe("employee");
-    expect(arun.staff_category).toBe("faculty");
-    expect(seedProfiles.some((p) => p.role === "faculty_advisor")).toBe(false);
+    // staff_category is computed from institute_employees at runtime
+    expect(allProfiles.some((p) => p.role === "faculty_advisor")).toBe(false);
   });
 
   it("books for the council's account and for the fest - nobody else does", () => {
-    expect(clubsBookableBy(arun, seedProfiles, units).map((c) => c.id)).toEqual([
+    expect(clubsBookableBy(arun, allProfiles, units).map((c) => c.id)).toEqual([
       "council-cultural",
       "club-petrichor",
     ]);
     for (const id of ["employee-priya", "hod-cse", "secretary-cultural", "club-petrichor", "gh-manager"]) {
-      expect(clubsBookableBy(P(id), seedProfiles, units)).toEqual([]);
+      expect(clubsBookableBy(P(id), allProfiles, units)).toEqual([]);
     }
   });
 
   it("changing the advisor in the console moves the booking rights with it", () => {
     const next = units.map((u) => (u.id === "unit-cultural" ? { ...u, faculty_advisor_id: "employee-priya" } : u));
     // Petrichor has its own advisor, so it stays with Arun; the council moves.
-    expect(clubsBookableBy(arun, seedProfiles, next).map((c) => c.id)).toEqual(["club-petrichor"]);
-    expect(clubsBookableBy(P("employee-priya"), seedProfiles, next).map((c) => c.id)).toEqual(["council-cultural"]);
+    expect(clubsBookableBy(arun, allProfiles, next).map((c) => c.id)).toEqual(["club-petrichor"]);
+    expect(clubsBookableBy(P("employee-priya"), allProfiles, next).map((c) => c.id)).toEqual(["council-cultural"]);
   });
 
   it("Copy to starts with the secretary's mailbox - not when the booking is the secretary's own account", () => {
@@ -124,7 +125,7 @@ describe("a booking by the Faculty Advisor needs no forwarding", () => {
 
   it("a club request stored before the rule keeps its old route", () => {
     const petrichor = P("club-petrichor");
-    const withHod = seedUnits.map((u) => (u.id === "unit-petrichor" ? { ...u, hod_unit_id: "unit-cse" } : u));
+    const withHod = seedUnits.map((u) => (u.id === "unit-petrichor" ? { ...u, hod_approval_from_id: "unit-cse" } : u));
     const legacy = { user_role: "club" as const, user_id: petrichor.id, created_by: null, booking_type: "official" };
     expect(approvalStagesFor(legacy, petrichor, withHod)).toEqual(["PENDING_FA", "PENDING_HOD"]);
     expect(approvalStagesFor({ ...legacy, created_by: "faculty-arun" }, petrichor, withHod)).toEqual([]);
@@ -148,7 +149,7 @@ describe("the mock store", () => {
       delete u.faculty_advisor_id;
       delete u.secretary_email;
     }
-    old.units.push({ id: "unit-other", name: "Other Club", kind: "club", parent_id: null, head_id: null, acting_head_id: null, office_class: null, hod_unit_id: null });
+    old.units.push({ id: "unit-other", name: "Other Club", category: "club", parent_department_id: null, head_id: null, acting_head_id: null, office_type: null, hod_approval_from_id: null });
     old.profiles = old.profiles.filter((p: Profile) => p.id !== "faculty-arun");
     fs.writeFileSync(db.file, JSON.stringify(old));
 

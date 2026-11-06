@@ -44,12 +44,12 @@ export default async function ApprovalsPage() {
 
   const headed = units.filter(
     (u) =>
-      (u.kind === "club" || u.kind === "council") &&
+      (u.category === "club" || u.category === "council") &&
       (u.head_id === user.id || u.acting_head_id === user.id)
   );
   const roles = headed.map(
     (u) =>
-      `${u.acting_head_id === user.id && u.head_id !== user.id ? "Acting " : ""}${UNIT_HEAD_TITLES[u.kind]}, ${u.name}`
+      `${u.acting_head_id === user.id && u.head_id !== user.id ? "Acting " : ""}${UNIT_HEAD_TITLES[u.category]}, ${u.name}`
   );
 
   // A faculty in-charge raises the club's bookings themselves (24 Sep 2026),

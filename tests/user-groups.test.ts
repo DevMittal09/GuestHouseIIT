@@ -34,10 +34,11 @@ import { useThrowawayMockDb } from "./helpers";
 const person = (over: Partial<Profile> & { id: string; email: string }): Profile => ({
   full_name: over.id,
   role: "student",
+  account_status: "active",
+  ldap_uid: null,
   hostel_name: null,
   department_or_club: null,
   roll_number: null,
-  ldap_uid: null,
   ...over,
 });
 
@@ -307,7 +308,7 @@ describe("blocking", () => {
     const plan = planAccessChange("block", `${warden.email}\n${hod.email}`, {
       ...CONTEXT,
       profiles: [...PROFILES, warden, hod],
-      units: [{ id: "u", name: "CSE", kind: "department", parent_id: null, head_id: "h", acting_head_id: null }],
+      units: [{ id: "u", name: "CSE", category: "department", parent_department_id: null, head_id: "h", acting_head_id: null }],
     });
     expect(plan.warnings.join(" ")).toContain("Assistant Warden");
     expect(plan.warnings.join(" ")).toContain("heads CSE");
@@ -473,30 +474,41 @@ describe("through the store", () => {
   });
 });
 
-describe("reading every account from Supabase", () => {
-  /** Answers like PostgREST: never more than `cap` rows, and no error when truncated. */
-  const fakeDb = (rows: Profile[], cap: number) => {
-    const ranges: [number, number][] = [];
-    const query = {
-      select: () => query,
-      order: () => query,
-      range: async (from: number, to: number) => {
-        ranges.push([from, to]);
-        return { data: rows.slice(from, Math.min(to + 1, from + cap)), error: null };
-      },
-    };
-    return { from: () => query, ranges };
-  };
+describe("reading every account", () => {
+  /**
+   * The defect this guards used to be PostgREST's: a `select` returned at most
+   * 1000 rows and **said nothing**, so `listProfiles()` silently lost everyone
+   * past the first thousand - which would have broken the Google callback's
+   * account lookup and the institute's account import
+   * (`GOOGLE-SIGN-IN.md`, defect 1). The paging loop that worked around it
+   * went with the Supabase client on 6 Nov 2026.
+   *
+   * The test stays, against the new mechanism, because the *property* is what
+   * matters: one statement, no cap, every row returned. A `LIMIT` added here
+   * by someone optimising a slow page would reintroduce exactly the old bug.
+   */
   const accounts = Array.from({ length: 2345 }, (_, i) =>
     person({ id: `p${i}`, email: `${i}@smail.iitpkd.ac.in` })
   );
 
-  it.each([1000, 500, 5000])("finds all 2345 past a cap of %i", async (cap) => {
-    const { SupabaseStore } = await import("@/lib/store/supabase");
-    const store = Object.create(SupabaseStore.prototype) as InstanceType<typeof SupabaseStore>;
-    Object.defineProperty(store, "db", { value: fakeDb(accounts, cap) });
+  it("issues one uncapped statement and returns all 2345", async () => {
+    const { PostgresStore } = await import("@/lib/store/postgres");
+    const statements: string[] = [];
+    const store = Object.create(PostgresStore.prototype) as InstanceType<typeof PostgresStore>;
+    Object.defineProperty(store, "pool", {
+      value: {
+        query: async (sql: string) => {
+          statements.push(sql);
+          return { rows: accounts, rowCount: accounts.length };
+        },
+      },
+    });
+
     const found = await store.listProfiles();
     expect(found).toHaveLength(2345);
     expect(new Set(found.map((p) => p.id)).size).toBe(2345);
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).not.toMatch(/\blimit\b/i);
+    expect(statements[0]).not.toMatch(/\boffset\b/i);
   });
 });

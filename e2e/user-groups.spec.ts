@@ -57,7 +57,7 @@ test("a batch is loaded from a CSV, copies who the manager says, and can be bloc
   await expect(page.getByText(/Assistant Warden|Guest House Manager/).first()).toBeVisible();
 
   // ------------------------------------------------------ the requester's form
-  const student = { uid: roll, name };
+  const student = { uid: roll, email, name };
   await signIn(page, student);
   await page.goto("/book");
   await expect(page.getByRole("heading", { name: /New Booking/i })).toBeVisible();

@@ -202,18 +202,51 @@ export const STUDENT_RELATIONSHIPS = [
   "Spouse",
 ] as const;
 
+export type AccountStatus = "active" | "relieved" | "graduated" | "suspended" | "retired";
+
+export const ACCOUNT_STATUS_LABELS: Record<AccountStatus, string> = {
+  active: "Active",
+  relieved: "Relieved",
+  graduated: "Graduated",
+  suspended: "Suspended",
+  retired: "Retired",
+};
+
 export type Profile = {
   id: string;
   email: string;
   full_name: string;
   role: Role;
+  /**
+   * Why this account is or is not in use, in the office's own vocabulary
+   * (migration 37). Anything but `active` refuses sign-in - but through
+   * `signInRefusal()` (`lib/user-groups.ts`), never by a comparison written
+   * out again at a call site, because `login_disabled_at` below is the other
+   * half of the same question.
+   */
+  account_status: AccountStatus;
+  /**
+   * Read from `institute_students` / `institute_wardens` through `profiles_v`,
+   * falling back to the column stored on `profiles` (migration 37).
+   *
+   * **This is a warden's scope and a student's approval route**, so it must
+   * resolve on a project where the institute tables have not been loaded yet -
+   * which is why the view coalesces rather than reading the institute tables
+   * alone. See migration 37 section 11.
+   */
   hostel_name: string | null;
+  /** From `units.name` through `profiles_v`, else the stored column. */
   department_or_club: string | null;
+  /** From `institute_students` through `profiles_v`, else the stored column. */
   roll_number: string | null;
   /**
    * The person's institute LDAP username (migration 12) - what the LDAP
-   * sign-in form matches against. `null` means they cannot sign in with LDAP
+   * sign-in action matches against. `null` means they cannot sign in that way
    * until a developer sets it. Unique, compared lowercased.
+   *
+   * The LDAP *form* is off the sign-in page (28 Oct 2026) but the action, the
+   * directory and `Import LDAP usernames` are all intact, so this column is
+   * live data and is not derived from anything.
    */
   ldap_uid: string | null;
   /**
@@ -223,10 +256,10 @@ export type Profile = {
    */
   unit_id?: string | null;
   /**
-   * Faculty or non-teaching staff, for employees only. Both need their
-   * HOD's approval for an official booking (Phase 4); the category decides
-   * the debitable heads offered (faculty: Department / Project / PDF; staff:
-   * Department).
+   * Faculty or non-teaching staff, for employees only. Both need their HOD's
+   * approval for an official booking (Phase 4), and the category decides the
+   * debitable heads offered. From `institute_employees.employee_type` through
+   * `profiles_v`, else the stored column.
    */
   staff_category?: StaffCategory | null;
   /** The user group they belong to (migration 36, `lib/user-groups.ts`). */
@@ -313,8 +346,7 @@ export type Booking = {
   rooms_requested: number;
   /**
    * Derived from `room_holds` on read - there is no such column. Holds are the
-   * source of truth for which rooms a booking occupies; see
-   * `supabase/migrations/00000000000003_room_holds_and_infants.sql`.
+   * source of truth for which rooms a booking occupies.
    */
   assigned_room_ids: string[];
   rejection_reason: string | null;

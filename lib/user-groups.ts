@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { splitCsvLine } from "./academic/stored";
+import { splitCsvLine } from "./csv";
 import { isInstituteEmail, LOGIN_DOMAIN, STUDENT_EMAIL_DOMAIN } from "./site";
 import { toInstituteDateValue } from "./tz";
 import { ROLE_LABELS, type BookingStatus, type Profile, type Role } from "./types";
@@ -259,11 +259,37 @@ export const LOGIN_DOMAIN_MESSAGE =
  * refused however it got there - Google checked this already, LDAP and the
  * account picker did not.
  */
-export function signInRefusal(profile: Pick<Profile, "email" | "login_disabled_at">): string | null {
+export function signInRefusal(
+  profile: Pick<Profile, "email" | "login_disabled_at"> & {
+    account_status?: Profile["account_status"] | null;
+  }
+): string | null {
   if (!isInstituteEmail(profile.email)) return LOGIN_DOMAIN_MESSAGE;
   if (isLoginBlocked(profile)) return LOGIN_BLOCKED_MESSAGE;
+  // `account_status` is the office's word for *why* somebody has gone -
+  // relieved, graduated, suspended, retired - and `login_disabled_at` is
+  // *when*. Either on its own is enough to refuse, and both are read here so
+  // that this stays the single answer to "may this person sign in": a status
+  // set by SQL or by a repair script, with no timestamp beside it, still
+  // closes the account. Absent (a database before the column, the mock store's
+  // older rows) reads as active.
+  if (profile.account_status && profile.account_status !== "active") {
+    return ACCOUNT_STATUS_REFUSAL[profile.account_status] ?? LOGIN_BLOCKED_MESSAGE;
+  }
   return null;
 }
+
+/**
+ * What an account that is no longer active is told. Each one says enough for
+ * the person to know who to ask and no more - a sign-in page must not report
+ * an account's history to whoever is typing at it.
+ */
+const ACCOUNT_STATUS_REFUSAL: Record<string, string> = {
+  relieved: LOGIN_BLOCKED_MESSAGE,
+  graduated: LOGIN_BLOCKED_MESSAGE,
+  retired: LOGIN_BLOCKED_MESSAGE,
+  suspended: LOGIN_BLOCKED_MESSAGE,
+};
 
 /**
  * Why this address is wrong for this kind of account, or null when it is right
