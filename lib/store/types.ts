@@ -185,6 +185,31 @@ export interface DataStore {
    */
   getPasswordHash(email: string): Promise<string | null>;
 
+  /**
+   * Whether a password is **set on this account**, which is a different
+   * question from whether the account can use the password door.
+   *
+   * On PostgreSQL the two coincide: `password_hash is not null`. On the mock
+   * store they do not - `getPasswordHash` derives a record from the published
+   * dummy directory, so every demo persona can sign in with a password that
+   * is not *set on it*, and this returns false for all of them. That is the
+   * honest answer: the mock store stores no passwords.
+   *
+   * It is what separates the two doors (6 Nov 2026, the owner: "mock
+   * authentication should have the original dummy accounts I created not the
+   * new ones. The new dummy accounts we can login through login page"). An
+   * account given a password is signed in at the form; the account picker is
+   * for the ones that have no other way in.
+   */
+  hasStoredPassword(email: string): Promise<boolean>;
+
+  /**
+   * The accounts the account picker may offer - those with no password set on
+   * them. Scoping it here rather than filtering `listProfiles()` in the page
+   * keeps it one query, and keeps `Profile` free of a password field.
+   */
+  listProfilesWithoutPassword(): Promise<Profile[]>;
+
   listGuestHouses(): Promise<GuestHouse[]>;
   getGuestHouse(id: string): Promise<GuestHouse | null>;
   listRooms(guestHouseId: string): Promise<Room[]>;

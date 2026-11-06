@@ -318,6 +318,39 @@ export class PostgresStore implements DataStore {
     }
   }
 
+  /**
+   * A database still on migration 37 has no such column, so **nothing has a
+   * password** - which is the right answer there: the picker goes on offering
+   * every account, exactly as it did before the door existed.
+   */
+  async hasStoredPassword(email: string): Promise<boolean> {
+    try {
+      const { rows } = await this.pool.query(
+        "SELECT password_hash IS NOT NULL AS has FROM profiles WHERE lower(email) = lower($1)",
+        [email.trim()]
+      );
+      return rows[0]?.has ?? false;
+    } catch (e) {
+      if ((e as { code?: string }).code === "42703") return false;
+      throw e;
+    }
+  }
+
+  async listProfilesWithoutPassword(): Promise<Profile[]> {
+    try {
+      const { rows } = await this.pool.query(
+        `SELECT v.* FROM profiles_v v
+           JOIN profiles p ON p.id = v.id
+          WHERE p.password_hash IS NULL
+          ORDER BY v.role`
+      );
+      return rows;
+    } catch (e) {
+      if ((e as { code?: string }).code === "42703") return this.listProfiles();
+      throw e;
+    }
+  }
+
 
   async createProfile(input: NewProfileInput): Promise<Profile> {
     const cols = Object.keys(input);

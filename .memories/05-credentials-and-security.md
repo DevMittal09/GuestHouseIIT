@@ -124,6 +124,16 @@ characters, so they are seeded **"Student A"** and **"Student B"**.
 `profiles.full_name` in the backup carried a junk suffix ("AA" stored as
 "AAAAAA") and was taken from the institute tables instead.
 
+**These 29 accounts sign in at the form only.** The account picker
+(`/mock-login`) offers **accounts with no password set on them**, which is the
+nineteen demo personas and none of these (6 Nov 2026, the owner: *"mock
+authentication should have the original dummy accounts I created not the new
+ones"*). `listProfilesWithoutPassword()` builds the list and `loginAs` refuses
+an account with a password whatever the list says. So on a database holding
+both sets: **the picker is the demo personas, the form is these 29** - and on
+the mock store, which stores no password on anything, the picker still offers
+all nineteen.
+
 **The hashes were not replaced.** `test@gh` was verified against the backup's
 own record with the application's `verifySecret` before anything was written,
 and the record is seeded unchanged. No plaintext password is stored.
