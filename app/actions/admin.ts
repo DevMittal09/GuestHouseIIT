@@ -1,6 +1,7 @@
 "use server";
 
 import { getHostels } from "@/lib/settings-server";
+import { isRealDeployment } from "@/lib/env";
 import { isValidLdapUid, LDAP_UID_ERROR, normalizeLdapUid } from "@/lib/ldap/uid";
 import { revalidateConsole } from "@/lib/revalidate";
 import { recordAudit } from "@/lib/audit-server";
@@ -71,8 +72,15 @@ async function requireConsole(
   if (!(await isAdminUnlocked())) {
     throw new Error("The console is locked - enter the console password again");
   }
-  if (process.env.NODE_ENV === "production" && section !== "console_access" && await isDefaultAdminPassword()) {
-    throw new Error("The console password is still the factory default — change it in Console Access before using the console in production");
+  // A deployment holding real records must not be operated from behind the
+  // published factory password (`0000`). Console Access itself is exempt, or
+  // there would be no way in to change it. `isRealDeployment()` rather than
+  // `isProduction()`: the e2e suite runs a production build on the mock store
+  // with the factory password, and it has no records to protect.
+  if (isRealDeployment() && section !== "console_access" && (await isDefaultAdminPassword())) {
+    throw new Error(
+      "The console password is still the factory default - change it in Console Access before using the console"
+    );
   }
   // Phase 8: changing who may do what, or deleting records, asks a developer
   // for a fresh second factor. Anyone else is already behind the console

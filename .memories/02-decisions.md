@@ -6555,6 +6555,12 @@ the action is still correct if a form is ever rendered again. What went is the
 **form**: two fields, a submit button and the sentence naming the two kinds of
 account. One button is left, and it points at `/mock-login`.
 
+> **Partly superseded, 6 Nov 2026.** "One button" was never the point - the
+> point was no password and no LDAP, and both still hold. What changed is that
+> Google configured no longer *closes* the picker: outside production both
+> doors are drawn, Google solid and **Mock Authentication** outlined beneath
+> it. See *Mock authentication stands beside Google* at the foot of this file.
+
 Three things were weighed and decided deliberately:
 
 - **The button does not say "Google" while it opens the picker.** The rule
@@ -7394,3 +7400,69 @@ their authoritative sources; importing them would just be a third copy.
 files, 2 component files, 2 import modules, 10 test files). 604 tests
 unchanged. Existing databases can drop the three columns or leave them -
 the view shadows them on reads and writes ignore them.
+
+---
+
+## Mock authentication stands beside Google (6 Nov 2026)
+
+> The owner: *"Can you add mock authentication along with google oauth in the
+> sign in page for now. Right now its only google oauth."*
+
+The owner had just put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in
+`.env.local`, and the account picker vanished - because that is precisely what
+`mockLoginEnabled()` was written to do (28 Oct 2026): *"Configure Google and
+the door closes on its own - there is no flag to remember to unset, which is
+the failure mode a `DEV_LOGIN`-style switch has."* The reasoning was sound and
+the consequence was not: configuring Google on a **development** machine also
+took away the one-click way of becoming each of the nineteen demo personas,
+which is how almost every change in this project gets looked at, and which is
+how the Playwright suite signs in.
+
+So the rule is now **where** rather than **whether**:
+
+```ts
+if (process.env.MOCK_LOGIN === "false") return false;
+if (process.env.NODE_ENV !== "production") return true;   // both doors
+return googleOauth() === null;                            // as before
+```
+
+- **Outside production, the picker is always there.** Google configured or
+  not, `MOCK_LOGIN` set or not.
+- **In production, nothing changed at all.** Google configured closes it;
+  Google unconfigured leaves it open because the button has to lead somewhere
+  (and that remains [03-roadmap.md](03-roadmap.md)'s first gate);
+  `MOCK_LOGIN=false` closes it outright in either environment.
+
+Three things decided along the way:
+
+- **`MOCK_LOGIN=true` was considered and rejected** as the switch. It would
+  have been a flag that forces the picker open, and a flag like that gets set
+  on a staging box, copied into production's environment and forgotten - the
+  exact failure the 28 Oct design avoided. `NODE_ENV` is not a flag anybody
+  sets by hand, so the dangerous case cannot be reached by forgetting
+  something. The integration round of the same day went further and made
+  `MOCK_LOGIN=true` a **startup error** in production (`envProblems`).
+- **The mock door is outlined, not solid, when Google is beside it.**
+  `LoginForm` takes `doors: { google, mock }` in place of the old
+  three-valued `googleSignIn`. Two solid vermilion buttons would read as two
+  equal choices; the real door is the one the institute will use. When the
+  picker is the only door it is solid again, because then it is the only thing
+  to press. **The Google mark is still never drawn on it** - that rule
+  predates both rounds, and a "G" on a button that does not talk to Google
+  claims something untrue.
+- **The line underneath says which door this is.** "Google sign-in is not
+  connected yet" when the picker is alone, "Mock authentication is for testing"
+  when it stands beside Google. One sentence either way; the page does not
+  explain the architecture.
+
+**What this cost, and what it bought.** It cost a hole in the e2e suite that
+had been open since the credentials went into `.env.local`: Next loads that
+file for `next start` as well, so the Playwright run had silently become a
+*Google-configured* deployment - the picker was closed, `signIn()` could not
+get in, and every one of the 55 journeys failed at the first step with no hint
+why. `playwright.config.ts` now sets `GOOGLE_CLIENT_ID: ""` and
+`GOOGLE_CLIENT_SECRET: ""` explicitly, the same trick
+`NEXT_PUBLIC_SUPABASE_URL=""` already used to select the mock store, so the
+suite tests the deployment it means to test whatever is in a developer's
+environment. That is the real gain: the tests no longer depend on a
+gitignored file.

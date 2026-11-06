@@ -190,10 +190,19 @@ test("a record pasted into the console locks the student's parents on the bookin
   // The real paste: this student's father is not the one the dummy record
   // gives, so the form has to be reading the import rather than the dummy.
   await paste.fill(
-    "112201001@smail.iitpkd.ac.in, 112201001, Anjali Menon, B.Tech, Computer Science and Engineering, +91 90000 00101, Ramesh Krishnan Menon, Sreeja Menon, , Malhar"
+    [
+      // Named, not positional: the institute sheet (migration 37) carries 22
+      // columns and the office pastes the ones it has.
+      "email, roll_number, full_name, programme, department, phone, father_name, mother_name, hostel",
+      "112201001@smail.iitpkd.ac.in, 112201001, Anjali Menon, B.Tech, Computer Science and Engineering, +91 90000 00101, Ramesh Krishnan Menon, Sreeja Menon, Malhar",
+    ].join("\n")
   );
   await page.getByRole("button", { name: "Check the paste" }).click();
-  await expect(page.getByText("1 added.")).toBeVisible();
+  // "updated", not "added": `seedInstituteStudents` (migration 37) already
+  // holds a row for this student, so the office's paste corrects it. That is
+  // the point of the test either way - the form below has to read what was
+  // imported rather than the published dummy record.
+  await expect(page.getByText("1 updated.")).toBeVisible();
   await page.getByRole("button", { name: "Import" }).click();
   await expect(page.getByRole("cell", { name: "Ramesh Krishnan Menon" })).toBeVisible();
 
@@ -223,13 +232,15 @@ test("a record pasted into the console locks the student's parents on the bookin
   await expect(name).not.toHaveAttribute("readonly", "");
   await expect(page.getByText("Aadhaar number *")).toBeVisible();
 
-  // Put the database back as the other journeys expect it.
+  // Put the database back as the other journeys expect it. The console is one
+  // tab per institute table since migration 37, so the button and the phrase
+  // name the table being cleared.
   await openConsole(page, "/admin/academic", "Employees & Students");
-  await page.getByRole("button", { name: "Clear every record" }).click();
+  await page.getByRole("button", { name: "Clear all students" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox").fill("CLEAR ALL");
+  await dialog.getByRole("textbox").fill("CLEAR");
   await dialog.getByRole("button", { name: "Clear" }).click();
-  await expect(page.getByText(/Nothing imported for this kind yet/)).toBeVisible();
+  await expect(page.getByText("0 stored")).toBeVisible();
 });
 
 /**

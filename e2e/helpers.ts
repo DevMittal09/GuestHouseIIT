@@ -76,7 +76,19 @@ export async function signIn(page: Page, account: { uid: string; email: string; 
  * tests met "Too many attempts". An operator at the desk unlocks once a day;
  * so does the suite now.
  */
-const ADMIN_UNLOCK_COOKIE = process.env.NODE_ENV === "production" ? "__Host-gh_admin_unlock" : "gh_admin_unlock";
+/**
+ * Either spelling of the unlock cookie.
+ *
+ * `lib/admin-lock.ts` names it `__Host-gh_admin_unlock` when **the server** is
+ * in production and `gh_admin_unlock` otherwise. This file runs in the *test
+ * runner*, whose `NODE_ENV` is not the server's: deriving the name from
+ * `process.env.NODE_ENV` here looked for the unprefixed one against a
+ * production server, so `unlockCookie` was never captured, every console spec
+ * typed the password again, and the manager hit the 6-per-15-minutes unlock
+ * throttle part way through the suite - which showed up as eight unrelated
+ * console journeys failing on a lock screen that would not go away.
+ */
+const ADMIN_UNLOCK_COOKIES = ["__Host-gh_admin_unlock", "gh_admin_unlock"];
 let unlockCookie: Cookie | null = null;
 
 /**
@@ -93,7 +105,9 @@ export async function unlockConsole(page: Page, password = "0000"): Promise<void
   await field.fill(password);
   await page.getByRole("button", { name: "Unlock console" }).click();
   await expect(field).toBeHidden();
-  const cookie = (await page.context().cookies()).find((c) => c.name === ADMIN_UNLOCK_COOKIE);
+  const cookie = (await page.context().cookies()).find((c) =>
+    ADMIN_UNLOCK_COOKIES.includes(c.name)
+  );
   if (cookie) unlockCookie = cookie;
 }
 

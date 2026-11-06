@@ -39,11 +39,42 @@ export function devLoginEnabled(): boolean {
  */
 export function mockLoginEnabled(): boolean {
   if (process.env.MOCK_LOGIN === "false") return false;
-  return devLoginEnabled() || googleOauth() === null;
+  // **Outside production the picker is always there**, Google configured or
+  // not (6 Nov 2026, the owner: "add mock authentication along with google
+  // oauth in the sign in page for now"). Configuring Google used to close it,
+  // which meant a developer who had just set the client id lost the one-click
+  // way of becoming each of the nineteen demo personas - and the Playwright
+  // suite signs in through it.
+  if (process.env.NODE_ENV !== "production") return true;
+  // In production it exists only while Google is unconfigured, exactly as
+  // before: the button has to lead somewhere, and there is no flag to
+  // remember to unset, which is the failure mode a `DEV_LOGIN`-style switch
+  // has. Closing it is `MOCK_LOGIN=false`, or configuring Google.
+  return googleOauth() === null;
 }
 
 export function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
+}
+
+/**
+ * A production build **with real backing services behind it**.
+ *
+ * `NODE_ENV === "production"` alone is not that: the Playwright suite and CI
+ * run a production build on the JSON mock store, with no database, no bucket
+ * and no Google client, which is what `ALLOW_MOCK_STORE=true` declares. Guards
+ * that exist to protect real data - the factory-password refusal in
+ * `requireConsole`, and `REQUIRED_SERVICES_IN_PRODUCTION` below - ask this
+ * question rather than `isProduction()`, so a test server is not held to
+ * promises about data it does not have.
+ *
+ * Everything that is not about data still asks `isProduction()`: the
+ * `DEV_LOGIN` and `MOCK_LOGIN` bans, `APP_URL`, `CRON_SECRET` and the
+ * encryption key are required of a test server too, because none of them is a
+ * secret somebody has to hold.
+ */
+export function isRealDeployment(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV === "production" && env.ALLOW_MOCK_STORE !== "true";
 }
 
 /** The site's own origin, used for OAuth redirects and server-action origins. */
@@ -121,11 +152,10 @@ export function envProblems(env: NodeJS.ProcessEnv = process.env): EnvProblem[] 
     });
   }
   if (production) {
-    const allowMock = env.ALLOW_MOCK_STORE === "true";
     for (const [name, why] of REQUIRED_IN_PRODUCTION) {
       if (!env[name]) problems.push({ variable: name, problem: `is required in production - ${why}` });
     }
-    if (!allowMock) {
+    if (isRealDeployment(env)) {
       for (const [name, why] of REQUIRED_SERVICES_IN_PRODUCTION) {
         // `SUPABASE_URL` is also accepted under its older public name, which
         // the deployments that predate `lib/storage/` already set.

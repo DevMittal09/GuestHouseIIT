@@ -95,7 +95,7 @@ export function SignInPanel({
                     submitLabel={submitLabel}
                     footnote={footnote}
                     center
-                    googleSignIn={googleOauth() ? "google" : mockLoginEnabled() ? "mock" : "none"}
+                    doors={{ google: googleOauth() !== null, mock: mockLoginEnabled() }}
                     notice={notice}
                   />
                 )}

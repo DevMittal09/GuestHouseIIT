@@ -207,7 +207,7 @@ function ImportSection({
       </div>
 
       <div className="relative space-y-1.5">
-        <Label htmlFor="academic-paste">Or paste records</Label>
+        <Label htmlFor="academic-paste">Records</Label>
         <Textarea
           id="academic-paste"
           rows={8}

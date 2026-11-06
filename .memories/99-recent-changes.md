@@ -7,7 +7,39 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 6 November 2026 - integrating `main` into `production_migration`
+## Round of 6 November 2026
+
+Two pieces of work the same day. The sign-in one is **on `main` and pushed**
+(`c62cb5f`); the integration is on **`integration/main-into-production`** and
+has that commit merged in.
+
+### Part 1 - mock authentication beside Google (on `main`)
+
+> The owner: *"Can you add mock authentication along with google oauth in the
+> sign in page for now. Right now its only google oauth."*
+
+The owner had put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` into
+`.env.local` and the account picker vanished - which is what
+`mockLoginEnabled()` was written to do on 28 Oct 2026. The rule became **where**
+rather than **whether**: outside production both doors are drawn (Google solid
+with its mark, **Mock Authentication** outlined beneath), and in production
+nothing changed. `MOCK_LOGIN=true` is now a startup error rather than a way to
+force the picker open. `LoginForm` takes `doors: { google, mock }`.
+
+It also found the **e2e suite broken by those credentials**: Next loads
+`.env.local` for `next start`, so the Playwright run had become a
+Google-configured deployment and all 55 journeys were failing at sign-in.
+`playwright.config.ts` now pins `GOOGLE_CLIENT_ID=""`, and on this branch
+**`DATABASE_URL`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as well** -
+without those the suite would have selected `PostgresStore` against the real
+project and put every e2e ID document into the production `documents` bucket.
+`ALLOW_MOCK_STORE` only tells `assertEnv()` not to insist on them; it does not
+unset them.
+
+Reasoning in [02-decisions.md](02-decisions.md), *Mock authentication stands
+beside Google*.
+
+### Part 2 - integrating `main` into `production_migration`
 
 Two branches had diverged for a week: **3 commits on `main`** (the owner's
 sixteenth list, the MS/PhD spouse rule, user groups and login blocking) and
@@ -138,6 +170,49 @@ applied. Row counts in every pre-existing table **identical** before and after;
 tables alone still resolve every hostel, roll number and staff category -
 which is what makes the later contract step safe. 37 runs three times with no
 error.
+
+### What the e2e suite found, once it could run at all
+
+The 55 journeys had not been runnable on `production_migration` since its
+security pass, so they were the first real check of the merged tree. Six
+defects, all of them in the rewrite and none visible from a build:
+
+1. **`ALLOW_MOCK_STORE=true` exempted `DATABASE_URL` and nothing else**, so
+   `next start` refused to boot once Google became a production requirement and
+   the only symptom was Playwright timing out on its own web server.
+   `isRealDeployment()` (`lib/env.ts`) is now the one name for "a production
+   build with real services behind it", and the whole set is exempted together.
+2. **`E2E_TEST_SECRET` was set for the server only.** `signIn()` reads it in
+   the *runner* to put in the request body, so every journey failed before
+   opening a page. `playwright.config.ts` now assigns it in both.
+3. **The factory-password guard refused the suite.** The same pass added "no
+   console action in production while the password is still `0000`" - right,
+   but it asked `NODE_ENV` rather than `isRealDeployment()`, and a mock-store
+   server has no records to protect. (Its message also carried an em dash,
+   which `AGENTS.md` bans in source.)
+4. **`e2e/helpers.ts` derived the unlock cookie's name from the runner's
+   `NODE_ENV`**, so against a production server it looked for the unprefixed
+   name, never cached the unlock, re-typed the password in every console spec
+   and hit the 6-per-15-minutes throttle. It showed up as **eight unrelated
+   console journeys** failing on a lock screen that would not go away.
+5. **`resolveComputed()` in the mock store had the `profiles_v` bug**, which is
+   why it is worth saying twice: it read the institute tables *only*. A roll
+   number written by the import read back as null, so re-pasting the same sheet
+   reported every row as changed. `tests/profiles-view-parity.test.ts` is new
+   and asserts the property directly - a profile reads back what was written to
+   it - because `tests/user-import-idempotency.test.ts` missed it (its sheet
+   carries no roll number).
+6. **The import's undo had been cut from eight restorable fields to four**,
+   dropping hostel, department, roll number, LDAP username and staff category.
+   An undo would have reported success and silently not restored a warden's
+   hostel. `AGENTS.md` names eight; all of them are back.
+
+Two smaller ones: the academic-records console's textarea had been relabelled
+"Or paste", which names the field's relationship to its neighbour rather than
+its content (a screen reader announced nothing useful, and the file picker's
+own button already carries the contrast), and the seeded institute row for the
+**day scholar** named neither parent - which `guestNameRule` reads as "withhold
+Father and Mother", leaving the demo day scholar unable to book for a parent.
 
 ### Left open
 

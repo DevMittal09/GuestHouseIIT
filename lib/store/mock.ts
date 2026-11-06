@@ -2402,7 +2402,33 @@ function makeReference(): string {
  * Mirrors the `profiles_v` SQL view: hostel_name, department_or_club,
  * roll_number and staff_category are no longer stored on profiles.
  */
-function resolveComputed(db: Db, p: { email: string; role: string; unit_id?: string | null }): {
+/**
+ * The four fields `profiles_v` resolves, resolved the same way here.
+ *
+ * **This must stay a mirror of migration 37's `profiles_v`**, including its
+ * COALESCE: the institute tables win where they hold a row for this person,
+ * and the column stored on the profile answers where they do not. Reading the
+ * institute tables *only* is the bug this comment exists to prevent, and it
+ * has been written twice already - once in the SQL view and once here. What it
+ * looks like: a value the console or the spreadsheet import has just written
+ * reads back as `null`, so the next import sees every row as changed, the
+ * warden's queue empties, and nothing anywhere reports an error.
+ *
+ * `p` carries the stored row, so the fallbacks are read off it rather than
+ * passed in separately.
+ */
+function resolveComputed(
+  db: Db,
+  p: {
+    email: string;
+    role: string;
+    unit_id?: string | null;
+    hostel_name?: string | null;
+    department_or_club?: string | null;
+    roll_number?: string | null;
+    staff_category?: string | null;
+  }
+): {
   hostel_name: string | null;
   department_or_club: string | null;
   roll_number: string | null;
@@ -2443,15 +2469,22 @@ function resolveComputed(db: Db, p: { email: string; role: string; unit_id?: str
   const unit = p.unit_id
     ? (db.units ?? []).find((u) => u.id === p.unit_id)
     : null;
-  const department_or_club = unit?.name ?? null;
 
-  return { hostel_name, department_or_club, roll_number, staff_category };
+  return {
+    hostel_name: hostel_name ?? p.hostel_name ?? null,
+    department_or_club: unit?.name ?? p.department_or_club ?? null,
+    roll_number: roll_number ?? p.roll_number ?? null,
+    staff_category: staff_category ?? p.staff_category ?? null,
+  };
 }
 
-/** Return a Profile with computed fields resolved from institute tables. */
+/**
+ * A Profile as the application reads one: the stored row with the four fields
+ * of `profiles_v` resolved over it. The mock store's answer to that view.
+ */
 function withComputed(db: Db, p: Record<string, unknown>): Profile {
-  const computed = resolveComputed(db, p as { email: string; role: string; unit_id?: string | null });
-  return { account_status: "active", ...p, ...computed } as Profile;
+  const computed = resolveComputed(db, p as Parameters<typeof resolveComputed>[1]);
+  return { ldap_uid: null, account_status: "active", ...p, ...computed } as Profile;
 }
 
 

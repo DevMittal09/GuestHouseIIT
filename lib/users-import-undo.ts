@@ -1,4 +1,4 @@
-import type { Profile, Role } from "./types";
+import type { Profile, Role, StaffCategory } from "./types";
 
 /**
  * Undoing a user import (14 Oct 2026).
@@ -49,6 +49,11 @@ import type { Profile, Role } from "./types";
 export type UserImportFields = {
   full_name: string;
   role: Role;
+  hostel_name: string | null;
+  department_or_club: string | null;
+  roll_number: string | null;
+  ldap_uid: string | null;
+  staff_category: StaffCategory | null;
   unit_id: string | null;
   /** Only where there is one; older records have no such field (migration 36). */
   group_id?: string | null;
@@ -110,12 +115,22 @@ export type UserImportSettlement = {
 export function importFieldsOf(source: {
   full_name: string;
   role: Role;
+  hostel_name?: string | null;
+  department_or_club?: string | null;
+  roll_number?: string | null;
+  ldap_uid?: string | null;
+  staff_category?: StaffCategory | null;
   unit_id?: string | null;
   group_id?: string | null;
 }): UserImportFields {
   return {
     full_name: source.full_name,
     role: source.role,
+    hostel_name: source.hostel_name ?? null,
+    department_or_club: source.department_or_club ?? null,
+    roll_number: source.roll_number ?? null,
+    ldap_uid: source.ldap_uid ?? null,
+    staff_category: source.staff_category ?? null,
     unit_id: source.unit_id ?? null,
     ...(source.group_id ? { group_id: source.group_id } : {}),
   };
@@ -124,11 +139,16 @@ export function importFieldsOf(source: {
 const FIELD_LABELS: [keyof UserImportFields, string][] = [
   ["full_name", "Name"],
   ["role", "Role"],
+  ["hostel_name", "Hostel"],
+  ["department_or_club", "Dept / Club"],
+  ["roll_number", "Roll No."],
+  ["ldap_uid", "LDAP username"],
+  ["staff_category", "Category"],
   ["unit_id", "Unit"],
   ["group_id", "Group"],
 ];
 
-/** Which of the eight differ, by the label the console already uses for each. */
+/** Which of the nine differ, by the label the console already uses for each. */
 export function differingFields(a: UserImportFields, b: UserImportFields): string[] {
   return FIELD_LABELS.filter(([key]) => (a[key] ?? null) !== (b[key] ?? null)).map(([, label]) => label);
 }

@@ -538,7 +538,7 @@ export function UsersManager({
                 setPlan(null);
               }}
             />
-            <Label htmlFor="users-import">Or paste</Label>
+            <Label htmlFor="users-import">People</Label>
             <Textarea
               id="users-import"
               rows={9}
