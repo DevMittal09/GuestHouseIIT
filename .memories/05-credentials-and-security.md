@@ -336,8 +336,8 @@ must set.
 | `CRON_SECRET` | Guards `/api/mail/cron` and `/api/mail/dispatch` (≥ 16 chars) | **Required** |
 | `ID_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEYS_OLD` | Encrypt ID numbers / TOTP secrets; old keys for rotation (`v1:…,v2:…`) | **Required** (the key) |
 | `LDAP_URL`, `LDAP_BASE_DN`, `LDAP_BIND_DN`, `LDAP_BIND_PASSWORD`, `LDAP_UID_ATTRIBUTE`, `LDAP_STARTTLS`, `LDAP_LINK_BY_EMAIL` | Real directory; without `LDAP_URL` the dummy accounts above work | **Required for any real deployment** |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Real Google sign-in (with `APP_URL`); closes Mock Authentication. The flow is built - [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) | Recommended |
-| `MOCK_LOGIN` | `false` closes Mock Authentication | **Set to `false` unless Google is configured** |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Real Google sign-in (with `APP_URL`); closes Mock Authentication **in production only** (6 Nov 2026). The flow is built - [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md). **Put them in `.env.local` and `next start` picks them up too**, which is why `playwright.config.ts` pins them empty | Recommended |
+| `MOCK_LOGIN` | `false` closes Mock Authentication in any environment. `true` is **refused in production** — it would force the picker open beside a configured Google | **Set to `false` unless Google is configured** |
 | `DEV_LOGIN` | Development-only developer doors (the legacy `gh_mock_user` cookie) | **Never** — the server refuses to start |
 | `ALLOW_MOCK_STORE` | Lets a production build run on the JSON store (e2e only) | **Never** |
 | `MAIL_USER`, `MAIL_APP_PASSWORD` / `MAIL_PASSWORD`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_FROM`, `MAIL_FROM_NAME`, `MAIL_REPLY_TO`, `MAIL_MESSAGE_ID_DOMAIN` | SMTP transport; otherwise `.local-mail/*.eml` | Needed to send mail |
@@ -399,12 +399,18 @@ never exposed to the browser, never logged, and never committed.
   once, rotated whenever a session gains privilege. `__Host-gh_session` in
   production. `lib/auth.ts` is the only reader.
 - **Mock Authentication** — the one-click persona picker (`/mock-login`,
-  `loginAs`) — is open **whenever Google sign-in is not configured, production
-  included** (`mockLoginEnabled()`, 23 Sep 2026: the office's demo deployment
-  needs it). Configuring Google closes it; `MOCK_LOGIN=false` closes it early.
-  **Anyone who reaches it can become any account**, so a deployment holding
-  real bookings must do one or the other. `lib/env.ts` separately refuses to
-  boot production with `DEV_LOGIN` set (the legacy `gh_mock_user` cookie door).
+  `loginAs`) — is open **always outside production**, and in production
+  **whenever Google sign-in is not configured** (`mockLoginEnabled()`; the
+  production half is 23 Sep 2026, the office's demo deployment needs it, and
+  the development half is 6 Nov 2026, so a developer who configures Google
+  keeps the nineteen personas and the Playwright suite keeps its door).
+  `MOCK_LOGIN=false` closes it in either environment; configuring Google
+  closes it in production. **Anyone who reaches it can become any account**,
+  so a deployment holding real bookings must configure Google or set
+  `MOCK_LOGIN=false`. `MOCK_LOGIN=true` cannot be used to force it open in
+  production — `lib/env.ts` refuses to boot — and the same file separately
+  refuses to boot production with `DEV_LOGIN` set (the legacy `gh_mock_user`
+  cookie door).
 - Sign-in attempts: 8 per username per 15 minutes; console unlock 6 per 15
   minutes; second-factor codes 10 per 10 minutes — all counted in the database.
 

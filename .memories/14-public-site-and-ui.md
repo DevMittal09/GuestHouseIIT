@@ -869,13 +869,21 @@ would go stale until the next build.
 
 ## Sign-in: what changed and what did not
 
-> **Current state (28 Oct 2026): one button, and no password.** The owner
-> withdrew LDAP from the interface - "we will not be using LDAP. The intended
-> authentication method is Google authentication, but for now, clicking the
-> sign-in button should initiate a mock authentication flow" - so all three
-> doors (`/sign-in`, `/book-room`, `/book-meal`) are the **same centred
-> panel**: the kicker, the title, one line of lead, one button, one line
-> under it.
+> **Current state (6 Nov 2026): no password, and up to two buttons.** LDAP
+> came off the interface on 28 Oct 2026 - "we will not be using LDAP. The
+> intended authentication method is Google authentication, but for now,
+> clicking the sign-in button should initiate a mock authentication flow" - and
+> on 6 Nov the owner asked for mock authentication to stand **beside** Google
+> rather than be replaced by it. So all three doors (`/sign-in`,
+> `/book-room`, `/book-meal`) are the **same centred panel**: the kicker, the
+> title, one line of lead, **one button per open door**, one line under them.
+>
+> `LoginForm` takes `doors: { google, mock }`. Google is **solid vermilion
+> with the Google mark**; the picker is **outlined** when Google is beside it
+> and **solid** when it is alone, because then it is the only thing to press.
+> **The Google mark is never drawn on the mock button.** The line underneath
+> says which door this is - "Google sign-in is not connected yet" when the
+> picker is alone, "Mock authentication is for testing" when it is not.
 >
 > | Configured | The button |
 > | --- | --- |

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { envProblems } from "@/lib/env";
+import { envProblems, mockLoginEnabled } from "@/lib/env";
 import { sessionLive, steppedUp, hashToken, type Session } from "@/lib/sessions";
 import {
   base32Decode,
@@ -91,6 +91,71 @@ describe("session rules", () => {
     expect(hash).toHaveLength(64);
     expect(hash).not.toContain("a-token");
     expect(hashToken("a-token")).toBe(hash);
+  });
+});
+
+describe("the two sign-in doors", () => {
+  /**
+   * **Both doors may be open at once** (6 Nov 2026, the owner). The question
+   * this guards is not which buttons are drawn - that is `LoginForm` - but
+   * whether the account picker can ever be open on a production deployment
+   * that has Google configured. Anyone who can reach `/mock-login` can become
+   * any account on it, so the answer has to stay no.
+   */
+  const env = process.env;
+  afterEach(() => {
+    process.env = env;
+  });
+  const set = (vars: Record<string, string | undefined>) => {
+    process.env = { ...env, ...vars } as NodeJS.ProcessEnv;
+  };
+
+  it("keeps the picker beside Google outside production", () => {
+    set({
+      NODE_ENV: "development",
+      GOOGLE_CLIENT_ID: "123.apps.googleusercontent.com",
+      GOOGLE_CLIENT_SECRET: "GOCSPX-test",
+      APP_URL: "http://localhost:3000",
+      MOCK_LOGIN: undefined,
+    });
+    expect(mockLoginEnabled()).toBe(true);
+  });
+
+  it("closes the picker in production once Google is configured", () => {
+    set({
+      NODE_ENV: "production",
+      GOOGLE_CLIENT_ID: "123.apps.googleusercontent.com",
+      GOOGLE_CLIENT_SECRET: "GOCSPX-test",
+      APP_URL: "https://gh.iitpkd.ac.in",
+      MOCK_LOGIN: undefined,
+    });
+    expect(mockLoginEnabled()).toBe(false);
+  });
+
+  it("leaves it open in production while Google is unconfigured - the button has to lead somewhere", () => {
+    set({ NODE_ENV: "production", GOOGLE_CLIENT_ID: undefined, GOOGLE_CLIENT_SECRET: undefined, MOCK_LOGIN: undefined });
+    expect(mockLoginEnabled()).toBe(true);
+  });
+
+  it("refuses to start production with the picker forced open", () => {
+    expect(
+      envProblems({
+        NODE_ENV: "production",
+        APP_URL: "https://gh.iitpkd.ac.in",
+        CRON_SECRET: "0123456789abcdef",
+        NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "k",
+        ID_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+        MOCK_LOGIN: "true",
+      } as NodeJS.ProcessEnv).map((p) => p.variable)
+    ).toEqual(["MOCK_LOGIN"]);
+  });
+
+  it("is closed outright by MOCK_LOGIN=false, in either environment", () => {
+    set({ NODE_ENV: "development", MOCK_LOGIN: "false" });
+    expect(mockLoginEnabled()).toBe(false);
+    set({ NODE_ENV: "production", MOCK_LOGIN: "false" });
+    expect(mockLoginEnabled()).toBe(false);
   });
 });
 

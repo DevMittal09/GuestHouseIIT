@@ -3,16 +3,24 @@ import { expect, test } from "@playwright/test";
 /**
  * The sign-in door.
  *
- * **One button and no password** (27 Oct 2026): the owner withdrew LDAP from
- * the interface, and while `GOOGLE_CLIENT_ID` and friends are unset the
- * button opens the account picker at `/mock-login`. This runs against a
- * **production** build with no Google configuration and no `DEV_LOGIN`, which
- * is exactly the deployment the office is demonstrating from - the picker
- * used to 404 there, which is how the personas went missing once.
+ * **No password, and up to two buttons** (6 Nov 2026): the owner withdrew LDAP
+ * from the interface on 27 Oct 2026, and asked for mock authentication to
+ * stand *beside* Google rather than be replaced by it.
  *
- * When Google is configured the button becomes the real OAuth flow and the
- * picker stops existing; that is the point at which this test is expected to
- * be replaced rather than fixed.
+ * This file covers the deployment the office demonstrates from: a
+ * **production** build with **no Google configuration** and no `DEV_LOGIN`, so
+ * the only door is the account picker at `/mock-login`. The picker used to 404
+ * there, which is how the personas went missing once.
+ *
+ * `playwright.config.ts` sets `GOOGLE_CLIENT_ID=""` explicitly rather than
+ * relying on it being unset, because Next loads `.env.local` for `next start`
+ * as well: a developer with real credentials in that file would otherwise be
+ * running a different test from CI, and every journey would fail at sign-in
+ * with no hint why.
+ *
+ * The two-door case - Google solid, "Mock Authentication" outlined beneath -
+ * is covered where the decision lives: `mockLoginEnabled()` in
+ * `tests/security.test.ts`.
  */
 test("the sign-in page asks for no password, and no LDAP", async ({ page }) => {
   await page.goto("/sign-in");

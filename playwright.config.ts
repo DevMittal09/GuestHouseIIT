@@ -44,6 +44,15 @@ export default defineConfig({
     env: {
       NODE_ENV: "production",
       MOCK_DB_PATH: DB,
+      // **Google off, explicitly.** Next loads `.env.local` for `next start`
+      // too, so a developer who has put real Google credentials there used to
+      // change what this suite was testing: `googleOauth()` became non-null,
+      // the account picker closed (`mockLoginEnabled()`), and every journey
+      // failed at sign-in with no hint why. An empty value in the process
+      // environment beats `.env.local`, which is the same trick
+      // `NEXT_PUBLIC_SUPABASE_URL=` uses to select the mock store.
+      GOOGLE_CLIENT_ID: "",
+      GOOGLE_CLIENT_SECRET: "",
       NEXT_PUBLIC_SUPABASE_URL: "",
       ALLOW_MOCK_STORE: "true",
       MAIL_DRY_RUN: "true",

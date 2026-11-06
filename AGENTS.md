@@ -301,9 +301,20 @@ only reader.
 > not be using LDAP. The intended authentication method is Google
 > authentication, but for now, clicking the sign-in button should initiate a
 > mock authentication flow"). `/sign-in`, `/book-room` and `/book-meal` are
-> one centred panel with **one button**: *Sign in with Google* once Google is
-> configured, otherwise *Sign in*, which opens the account picker at
-> `/mock-login`. **Nothing was deleted below the interface** —
+> one centred panel with **one button per open door** (6 Nov 2026 - it was one
+> button until then): *Sign in with Google* solid with the Google mark, and
+> **Mock Authentication** outlined beneath it, opening the account picker at
+> `/mock-login`. `LoginForm` takes `doors: { google, mock }`; the picker is
+> solid when it is the only door. **Outside production the picker is always
+> open** - configuring Google no longer closes it, because that took the
+> nineteen demo personas away from any developer who set a client id, and the
+> Playwright suite signs in through it. **In production nothing changed**:
+> Google configured closes it, `MOCK_LOGIN=false` closes it, and
+> `MOCK_LOGIN=true` is a startup error. `playwright.config.ts` pins
+> `GOOGLE_CLIENT_ID=""` because Next loads `.env.local` for `next start` too,
+> and credentials there once closed the picker under the whole e2e suite.
+>
+> **Nothing was deleted below the interface** —
 > `signInWithLdap`, the throttle, `lib/ldap/` and *Import LDAP usernames* are
 > all as they were, and the rules below still describe them. Don't put the
 > username and password fields back without being asked; don't put Google's

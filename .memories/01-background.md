@@ -66,6 +66,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **31 Oct** | **The tariff category becomes the Guest House Manager's.** Three items. The booking page keeps its tariff table and **loses every control in it** - the requester reads the prices and decides nothing. The **desk is asked which category applies as it approves** (the allocation dialog, and Approve meals for a dining booking, which has no rooms), from a list **enumerated out of the office's own rate sheet** and named in the office's own words; **Confirm & Allocate stays disabled until it is answered**, and an approval carrying a key the sheet does not publish is refused. The **invoice is priced at it** - one substitution in the single `base` object every charge is resolved from - and **snapshots and prints it**. A category is the pair `resolveTariff` already keys on (**booking type, requester role**), so **migration 35** is two nullable text columns with the same checks `tariffs` uses and nothing was added to `resolveTariff`; **no rate is stored**, because a stay crossing a rate change is priced night by night - the figure lives in the booking's log and on the issued invoice. A booking approved before today keeps being priced from its own facts and prints no category line, so **no invoice version changed**. |
 | **4 Nov** | **The owner's sixteenth list.** VIP rooms and a manager's console section for them, a 14-room pool for requesters, no total rooms anywhere, the booking window back to one month, official stays uncapped, first come first served at the desk, cancellation 24 hours ahead, the caretaker invoicing personal bookings only, a research scholar's spouse, the rooms renamed, Categories I-III, shortening a stay at approval, and the booking page's sidebar. See the section at the foot of this file. |
 | **5 Nov** | **User groups.** A batch loaded from a CSV, three lists per group (members, addresses filled in on Copy to, addresses they may type), an approval route that can be limited to a group, and accounts blocked from signing in by roll number rather than deleted. Migration 36. See the section at the foot of this file. |
+| **6 Nov** | **Mock authentication beside Google.** The owner put the Google client id and secret into `.env.local` and the account picker vanished - which is what `mockLoginEnabled()` was written to do on 28 Oct. The rule becomes **where** rather than **whether**: outside production both doors are drawn (Google solid with its mark, **Mock Authentication** outlined beneath it), and **in production nothing changed**. `MOCK_LOGIN=true` was deliberately not made the switch - a flag that forces the picker open is the one that gets copied into production. The round also found the **e2e suite broken by those credentials**: Next loads `.env.local` for `next start`, so all 55 journeys had been failing at sign-in; `playwright.config.ts` now pins `GOOGLE_CLIENT_ID=""`. **No migration, no store operation, no booking rule.** |
 
 ## The problem
 
@@ -1483,3 +1484,19 @@ person's bookings **stay, with a warning to the manager**.
 | 3 | The manager selects a group and says who is copied | **Done.** Console -> User Groups |
 | 4 | What emails are allowed in that group, all on the IIT Palakkad domain | **Done** for group members. People in no group are unchanged, because outside addresses are in use: to confirm |
 | 5 | Different approval patterns per kind of user | **Done** as a condition on the existing routes, and shown on the group's page. The default student route is still the Assistant Warden: the "associate dean" the owner mentioned is a route for the manager to set, not assumed |
+
+---
+
+## 6 November 2026 - mock authentication beside Google
+
+**Asked:** *"Can you add mock authentication along with google oauth in the
+sign in page for now. Right now its only google oauth."*
+
+| Item | Status |
+| --- | --- |
+| Both doors on `/sign-in` - Google and Mock Authentication | **Done.** `LoginForm` takes `doors: { google, mock }`; Google solid with its mark, the picker outlined beneath |
+| The picker available while Google is configured | **Done, outside production only.** `mockLoginEnabled()` returns true whenever `NODE_ENV !== "production"`; production behaviour is unchanged |
+| The e2e suite made independent of `.env.local` | **Done, and it was broken.** `playwright.config.ts` pins `GOOGLE_CLIENT_ID=""`: the credentials in `.env.local` had silently closed the picker for `next start`, so all 55 journeys were failing at sign-in |
+
+Reasoning in [02-decisions.md](02-decisions.md) (*Mock authentication stands
+beside Google*).

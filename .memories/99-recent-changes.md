@@ -7,80 +7,57 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 5 November 2026 - user groups, and blocking rather than deleting
+## Round of 6 November 2026 - mock authentication beside Google
 
-The owner asked for this in their own words and invited questions. **Four were
-asked and answered:**
+> The owner: *"Can you add mock authentication along with google oauth in the
+> sign in page for now. Right now its only google oauth."*
 
-| Question | Answer |
-| --- | --- |
-| What is a group? | **Programme + batch** ("B.Tech 2023 batch"), or a named group for anyone else. The year is worked out, turning over in July |
-| "What emails are allowed"? | **All three lists:** members, addresses filled in on Copy to, addresses they may type |
-| How does a copy list behave? | **Pre-filled, and the requester may remove it** |
-| A blocked person's bookings? | **They stay, and the manager is warned** |
+The owner had just put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` into
+`.env.local`, and the account picker disappeared - which is exactly what
+`mockLoginEnabled()` was written to do on 28 Oct 2026. Sound rule, wrong
+consequence on a development machine: it also took away the one-click way of
+becoming each of the nineteen demo personas.
 
-### What was built
+### What changed
 
-**Console -> User Groups** (`/admin/groups`), for the manager and the developer: groups
-on the left; on the right a group's details, members, Copy to lists and approval path;
-and **Who may sign in** underneath.
+- **`mockLoginEnabled()` (`lib/env.ts`)** - outside production the picker is
+  always open, Google configured or not. **In production nothing changed**:
+  Google configured closes it, Google unconfigured leaves it open because the
+  button has to lead somewhere, `MOCK_LOGIN=false` closes it outright.
+  `MOCK_LOGIN=true` was deliberately *not* made the switch - a flag that
+  forces the picker open is the thing that gets copied into production and
+  forgotten.
+- **`LoginForm` (`components/login-form.tsx`)** takes
+  `doors: { google, mock }` in place of the three-valued `googleSignIn`, and
+  draws one button per open door: **Sign in with Google** solid with the
+  Google mark, **Mock Authentication** outlined beneath it. The picker is
+  solid when it is the only door. No Google mark on the mock button, as
+  before. The line underneath names which door it is.
+- **`SignInPanel`** passes
+  `{ google: googleOauth() !== null, mock: mockLoginEnabled() }`.
 
-| Part | What | Where |
-| --- | --- | --- |
-| Groups | Table `user_groups`, `profiles.group_id`, one per person | migration 36, `lib/user-groups.ts` |
-| CSV | Template download, file upload, preview, all or nothing, the existing undo | `importUsersAction(text, groupId)`, `lib/users-import.ts` |
-| Block | By roll number or email, from a paste, a file or a whole group. Preview, reason, reversible | `planAccessChange`, `app/actions/groups.ts` |
-| Enforcement | Refused on every request, and at all three sign-in doors; gone from the account picker | `lib/auth.ts`, `app/actions/auth.ts`, the Google callback |
-| Copy to | Filled in on the form; limited to the group's list or the institute's domain | `copyToRuleFor`, `lib/booking-schema.ts`, `components/booking-form.tsx` |
-| Routes | A **Requester's group** condition on any approval route | `lib/approval-routes.ts`, `lib/workflow.ts`, `components/admin/workflow-manager.tsx` |
+### The hole this uncovered
 
-### The owner's answers the same day
+Next loads `.env.local` for `next start` too, so the moment those credentials
+went into that file the **Playwright suite was testing a Google-configured
+deployment**: the picker was closed, `signIn()` could not get in, and all 55
+journeys failed at the first step with no hint why.
+`playwright.config.ts` now sets `GOOGLE_CLIENT_ID: ""` and
+`GOOGLE_CLIENT_SECRET: ""` explicitly - the same trick
+`NEXT_PUBLIC_SUPABASE_URL=""` already used for the mock store - so the suite
+no longer depends on a gitignored file.
 
-- **The Assistant Warden stays** the approver for students. No change.
-- **Only IIT Palakkad addresses may sign in, nobody else.** `signInRefusal` in
-  `lib/user-groups.ts` is the one rule, at all three doors and on every request. New
-  accounts and every import refuse any other address, and Users & Roles flags one that
-  already exists. This reverses nothing for Copy to, which is still open.
-- **MS and PhD join in January and August**, so each intake is its own batch ("PhD Jan
-  2024 batch") and counts its years from the month it joined. Other programmes turn over
-  in July. Migration 36 was edited in place, not having been applied anywhere.
+### Checks
 
-### The institute's two kinds of address (the owner, the same day)
+`npm run lint`, `npm run typecheck`, `npm test` (**696 pass**, 7 new in
+`tests/security.test.ts` pinning `mockLoginEnabled()` in each environment),
+`npm run build` and `npm run test:e2e` (**55 pass**) all clean. The rendered
+page was also read with `curl` against a dev server with Google configured:
+both buttons, both hrefs, the right line underneath.
 
-A student is `<roll number>@smail.iitpkd.ac.in`; everyone else `<position or
-name>@iitpkd.ac.in`. Those are now **the only two domains that may sign in**, no other
-subdomain, and `emailFormatError` holds each kind of account to its own: forms and every
-import refuse a student elsewhere, a roll number disagreeing with the address, or staff
-on `smail`. A sheet may leave a student's roll number empty, and a block by roll number
-finds an account that has none.
+### Note
 
-Checking that turned up two defects the notes already carried, both fixed:
-
-- **Google's `hd` hint** could have kept every `smail` student out of the chooser. It is
-  `*` now, which works whichever way the Workspace is set up.
-- **`listProfiles` read at most 1000 accounts** ([03-roadmap.md](03-roadmap.md) gate 12).
-  It pages now. Tested against a fake client that truncates at 500, 1000 and 5000, **not
-  against a real Supabase**: nothing here can.
-
-### Worth knowing
-
-- **Someone in no group is unchanged**, including Copy to accepting outside addresses,
-  which tests pin as deliberate. To be confirmed: [03-roadmap.md](03-roadmap.md) §2r.
-- **The default student route is still the Assistant Warden.** The owner mentioned "the
-  associate dean or someone"; that is a route the manager sets, and was not assumed.
-- **A security hole was closed before shipping:** a group's role would have skipped the
-  role check an import's column gets, handing out `developer` by CSV.
-- **Delete still exists** in Users & Roles, refusing anyone with bookings, because the
-  import's undo relies on it. The block is the answer for people who leave.
-
-### Verified
-
-Lint, typecheck, **692 unit tests in 39 files**, a production build, and **all 55
-Playwright journeys**, including `e2e/user-groups.spec.ts` (a real CSV file through to the
-form, a block and a restore). Migration 36 applied twice in PGlite against stubs, its five refusals
-checked. **Not tested on the hosted project**, and LDAP and Google refusals for a blocked
-account have no test of their own: neither door can run here.
-
-### Left open
-
-[03-roadmap.md](03-roadmap.md) §2r, and the sixteenth list's unanswered assumptions in §2q.
+A larger piece of work is in flight on **`integration/main-into-production`** -
+merging `main` into `production_migration` (the `pg` rewrite, the institute
+tables, migration 37). That branch now needs this commit merged into it; it
+was branched before this round.

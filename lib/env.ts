@@ -39,7 +39,18 @@ export function devLoginEnabled(): boolean {
  */
 export function mockLoginEnabled(): boolean {
   if (process.env.MOCK_LOGIN === "false") return false;
-  return devLoginEnabled() || googleOauth() === null;
+  // **Outside production the picker is always there**, Google configured or
+  // not (6 Nov 2026, the owner: "add mock authentication along with google
+  // oauth in the sign in page for now"). Configuring Google used to close it,
+  // which meant a developer who had just set the client id lost the one-click
+  // way of becoming each of the nineteen demo personas - and the Playwright
+  // suite signs in through it.
+  if (process.env.NODE_ENV !== "production") return true;
+  // In production it exists only while Google is unconfigured, exactly as
+  // before: the button has to lead somewhere, and there is no flag to
+  // remember to unset, which is the failure mode a `DEV_LOGIN`-style switch
+  // has. Closing it is `MOCK_LOGIN=false`, or configuring Google.
+  return googleOauth() === null;
 }
 
 export function isProduction(): boolean {
@@ -116,6 +127,16 @@ export function envProblems(env: NodeJS.ProcessEnv = process.env): EnvProblem[] 
   }
   if (env.GOOGLE_CLIENT_ID && !env.GOOGLE_CLIENT_SECRET) {
     problems.push({ variable: "GOOGLE_CLIENT_SECRET", problem: "is needed alongside GOOGLE_CLIENT_ID" });
+  }
+  // `mockLoginEnabled()` answers "not in production" to this, so the variable
+  // does nothing there - but a deployment that sets it clearly *means* to open
+  // the account picker, and anyone who reaches `/mock-login` can become any
+  // account. Better to refuse to start than to ignore the intent silently.
+  if (production && env.MOCK_LOGIN === "true") {
+    problems.push({
+      variable: "MOCK_LOGIN",
+      problem: "must never be forced on in production - the account picker is not authentication",
+    });
   }
   return problems;
 }
