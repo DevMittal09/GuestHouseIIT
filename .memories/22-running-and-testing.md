@@ -163,6 +163,65 @@ supabase db reset            # applies migrations + seed
 supabase status              # prints URL, anon key, service_role key
 ```
 
+### A local PostgreSQL development database (6 Nov 2026)
+
+The arrangement the owner asked for: the application on a **plain PostgreSQL
+16 server on the machine**, with the office's 29 test accounts on it, and the
+hosted project never touched. `DATABASE_URL` is the whole switch -
+`getStore()` returns `PostgresStore` the moment it is set.
+
+**Once, as a superuser.** An ordinary application role cannot create roles,
+and the stand-ins need that:
+
+```bash
+sudo -u postgres psql -p 5433 -c "CREATE ROLE rizwan LOGIN PASSWORD '<password>' CREATEDB CREATEROLE;"
+sudo -u postgres createdb -p 5433 -O rizwan guesthouse_dev
+```
+
+`CREATEROLE` is the one that is easy to forget: without it
+`local-postgres-stubs.sql` fails on its first statement with *"permission
+denied to create role"*, and nothing else can run.
+
+**Then, as that role.** Three steps, in this order:
+
+```bash
+export DATABASE_URL="postgresql://rizwan:<password>@127.0.0.1:5433/guesthouse_dev"
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/local-postgres-stubs.sql
+cat supabase/migrations/*.sql | psql "$DATABASE_URL" -v ON_ERROR_STOP=1
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seed-test-accounts.sql
+```
+
+The stubs are what a plain server lacks and migration 1 names - the three
+Supabase roles, `auth.users`, `auth.uid()`, the two `storage` tables. The
+migrations print a lot of `NOTICE ... skipping`: that is the idempotency
+guards, not a problem. The seed is `on conflict ... do update` throughout, so
+running it again restores the seeded values and changes nothing else.
+
+**`supabase/seed.sql` is optional and disjoint** - it adds the nineteen demo
+personas, the two guest houses, their rooms and six demo bookings. No email,
+UUID or guest house name is shared with the test-accounts seed, so both may be
+applied. The test accounts have **no guest houses or rooms of their own**, so
+without it there is nothing to book.
+
+**Checking which database the application is on**, without printing the
+credentials:
+
+```bash
+node -e 'const u=new URL(process.env.DATABASE_URL);console.log(u.hostname,u.port,u.pathname)'
+psql "$DATABASE_URL" -tAc "select current_database(), current_user, inet_server_port()"
+```
+
+**Running the application against it**, with the hosted project explicitly out
+of the way (`.env.local` still holds its URL and service-role key, and
+`lib/storage/` would otherwise reach for the real bucket):
+
+```bash
+DATABASE_URL="postgresql://rizwan:<password>@127.0.0.1:5433/guesthouse_dev" \
+  NEXT_PUBLIC_SUPABASE_URL= SUPABASE_URL= SUPABASE_SERVICE_ROLE_KEY= \
+  MAIL_DRY_RUN=true npm run dev
+```
+
 ### Hosted Supabase
 
 1. Create a project at https://supabase.com/dashboard.
@@ -496,6 +555,63 @@ stay, say), `npx vite-node --config vitest.config.ts script.ts` resolves the
 ## Part 2 — Traps and fixes
 
 Each of these cost real time.
+
+### A pg_dump the office sent will not load (6 Nov 2026)
+
+`database_backup.sql` failed three ways before a single SQL statement ran, and
+each error names something other than the cause:
+
+- **`psql` reports a syntax error on the first line, `--`.** The file is
+  **UTF-16LE with a BOM**, so every character is followed by a null byte.
+  `file` says so; `iconv -f UTF-16LE -t UTF-8` fixes it, and the UTF-8 it
+  produces still carries a BOM that psql also chokes on. Strip both:
+  ```bash
+  iconv -f UTF-16LE -t UTF-8 database_backup.sql | sed -e '1s/^\xEF\xBB\xBF//' -e 's/\r$//' > backup.sql
+  ```
+- **`invalid command \restrict`.** The dump was made by **pg_dump 18.1** and
+  `\restrict` / `\unrestrict` are psql 18 meta-commands. A psql 16 client does
+  not know them. Delete those two lines.
+- **`unrecognized configuration parameter "transaction_timeout"`.** A
+  PostgreSQL **17** GUC, in a dump being loaded into 16. Delete that line.
+
+None of the three is a sign that the dump is corrupt. What *was* wrong with it
+is in [21-database.md](21-database.md), "The office's `database_backup.sql`".
+
+**The lesson that generalises:** compare a supplied dump against the
+migrations by **building both and diffing the catalogues**, not by reading
+it. Two throwaway databases, then:
+
+```sql
+select table_name||'.'||column_name||' '||data_type
+  from information_schema.columns where table_schema='public' order by 1;
+select t.typname||': '||string_agg(e.enumlabel, ', ' order by e.enumsortorder)
+  from pg_type t join pg_enum e on e.enumtypid=t.oid
+  join pg_namespace n on n.oid=t.typnamespace and n.nspname='public'
+  group by t.typname order by t.typname;
+```
+
+`comm -23` / `comm -13` over the two, with `LC_ALL=C sort` first - without it
+`comm` warns "file 1 is not in sorted order" and silently drops rows. The enum
+query is the one that mattered: the schemas differed in three enum **labels**,
+which no column diff would have shown.
+
+### A server action under `useActionState` is a race with `fill()` (6 Nov 2026)
+
+A Playwright journey filled the sign-in form, submitted a wrong password, then
+filled it again with the right one and got "Incorrect email or password". The
+password was right; the fields were **empty**. `useActionState` re-renders the
+form when the action answers, and filling a form that is about to be
+re-rendered loses the values. The success case passed on a fresh page the
+whole time, which is what made it look like an application bug.
+
+**Reload between attempts.** It is also what a person does. The same spec also
+hit two selector traps worth knowing: Next renders its own
+`<div role="alert">` route announcer, so an unscoped `getByRole("alert")` is a
+strict-mode violation the moment the page has its own - scope it to
+`getByRole("main")`. And `/sign-in` **redirects** a signed-in visitor to their
+role's home, so "the session survived" is asserted by `waitForURL`, not by
+looking for the panel - that panel only appears on `/book-room` and
+`/book-meal`, which offer a way through instead.
 
 ### Uploads fail with an opaque `NetworkError`
 

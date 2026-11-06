@@ -993,6 +993,115 @@ hosted project on 5 Nov 2026, with migration 35, and both confirmed by the migra
 the same day.** `supabase/repairs/2026-10-14-restore-user-import.sql` restores the
 original eight fields and **not `group_id`**: the console's Undo does.
 
+### Migration 37 - the institute's tables and `profiles_v` (6 Nov 2026)
+
+Written up here late: it shipped with the integration earlier the same day and
+this section was missed. Eleven guarded sections, **expand only, nothing
+dropped**: the six institute tables (`institute_hostels`, `institute_students`,
+`institute_employees`, `institute_offices`, `institute_fcc`,
+`institute_wardens`, each RLS-on with no `authenticated` policy, each with a
+unique index on `lower(email)`); a backfill from `academic_records` (kept
+intact) and then from `profiles`; `profiles.account_status`, defaulted
+`active`, with accounts already blocked under 36 given `relieved`; four `units`
+column renames (`kind` -> `category`, `office_class` -> `office_type`,
+`parent_id` -> `parent_department_id`, `hod_unit_id` ->
+`hod_approval_from_id`); and the view `profiles_v`, `security_invoker`.
+
+**The view is the point.** It resolves `hostel_name`, `department_or_club`,
+`roll_number` and `staff_category` **institute-table first, stored column
+second**, with `coalesce`. The rewrite had dropped the stored columns and read
+the institute tables alone - which returns NULL for all of it while those
+tables are empty, with no error anywhere, and `profiles.hostel_name` is what
+`canReview()` and `routeFor()` scope a warden and a student's route by. A
+student's booking would simply have stopped reaching their Assistant Warden.
+
+### Migration 38 - a password hash on a profile (6 Nov 2026)
+
+`profiles.password_hash text`, nullable. The scrypt record `hashSecret()`
+writes and `verifySecret()` compares (`lib/crypto.ts`), which is the same pair
+the developer's TOTP recovery codes use: `scrypt$<salt hex>$<hash hex>`,
+16-byte salt, 64-byte key. Additive, **nothing backfilled**, safe to re-run.
+
+**A null hash means the door refuses that account**, which is what makes the
+column safe to add before deciding who gets a password: turning
+`PASSWORD_LOGIN` on opens nothing by itself.
+
+**Deliberately absent from `profiles_v`.** That view is what every store read
+returns as a `Profile`, so a column left out of it cannot reach a page, a
+server action's return value or a browser by accident. The view names its
+columns explicitly, so adding one to `profiles` does not widen it.
+`PostgresStore.getPasswordHash` reads the **base table** and is the only query
+in the codebase that names the column; it degrades to null on a `42703`, so a
+database still on 37 closes the door rather than throwing.
+
+It is **not** in `PROFILE_COLUMNS` (`lib/store/postgres.ts`), and that is
+deliberate: the generic profile writers build their column list from the keys
+of the object they are handed, and the allow-list is what stops an unexpected
+key becoming an identifier in SQL. A hash is written by its own statement or
+not at all, so adding it to that list would only widen what a profile write
+can reach.
+
+**Verified on a throwaway `postgres:16-alpine`**, never on the hosted project:
+stubs, migrations 1-38, then `supabase/seed-test-accounts.sql` twice. 29
+accounts, all with a hash, `password_hash` absent from `profiles_v` by query,
+and every account signing in through the application's own store code.
+
+---
+
+## `supabase/local-postgres-stubs.sql` - a plain PostgreSQL server
+
+Migration 1 was written against a Supabase project and names objects a plain
+server does not have. This file creates the stand-ins, once, **before
+migration 1**: the roles `authenticated` / `anon` / `service_role` (the RLS
+policies of migrations 1-30 are granted to them, and 31 drops all 38), the
+`auth` schema with `auth.users` (migration 1 made `profiles.id` a foreign key
+to it; 31 drops that key, so afterwards the table is vestigial and empty) and
+`auth.uid()`, and `storage.buckets` / `storage.objects` for migration 1's
+private `documents` bucket. Nothing reads any of it at run time.
+
+Creating the three roles needs **`CREATEROLE`**, which an ordinary application
+role does not have - see [03-roadmap.md](03-roadmap.md) §2s item 2. The recipe
+this file replaces is still in
+[22-running-and-testing.md](22-running-and-testing.md), Part 1.
+
+---
+
+## The office's `database_backup.sql` - why it is not the schema (6 Nov 2026)
+
+The office sent a pg_dump with `PostgreSQL.pdf` and 29 test accounts. It is a
+dump of a database built from `scripts/init-postgres.sql`, the consolidated
+file the integration deleted the same morning, and it carries that file's
+defects as data. **It cannot run this application.** Compared by building both
+schemas in throwaway databases and diffing them:
+
+| | The dump | The migrations |
+| --- | --- | --- |
+| `booking_status` | `PENDING_WARDEN_REVIEW`, `PENDING_FA_REVIEW`, `PENDING_IAR_REVIEW` | `PENDING_WARDEN`, `PENDING_FA`, `PENDING_IAR` - **what the code writes** |
+| `user_role` | no `alumni`; extra `deputy_warden`, `assistant_warden` | `alumni` present; the other two are not roles |
+| Tables | 31 | 34 - the dump has no `academic_records` (28), `hostels` (16) or `user_groups` (36) |
+| `bookings` | no `tariff_booking_type` / `tariff_requester_role` | migration 35 - **the manager's approval names both**, so nothing could be approved |
+| `profiles` | no `ldap_uid`, `group_id`, `login_disabled_*`, and none of the four stored scope columns | 12, 36, 37 |
+| `profiles_v` | reads the institute tables **only** | institute-first, stored-second `coalesce` (37) |
+| Extras | `projects.created_by`, a surrogate `room_holds.id` and `created_at` | not present; nothing reads them |
+| Operational data | **none** - bookings, guests, logs, holds, invoices, sessions and audit are all empty | - |
+
+The first row is the decisive one: **no student, club or IAR booking could be
+stored at all**, and nothing would say so until someone tried.
+
+**Three traps in reading the file itself**, none of them about the schema:
+
+- It is **UTF-16LE with a BOM and CRLF line endings**. `psql` will not read
+  it; `iconv -f UTF-16LE -t UTF-8` first.
+- It was produced by **pg_dump 18.1**, and carries `\restrict` / `\unrestrict`
+  (psql 18 meta-commands) and `SET transaction_timeout` (a PostgreSQL 17 GUC).
+  All three are errors on a 16 server, and all three are safe to strip.
+- The UTF-8 it converts to still has a **BOM on the first line**, which psql
+  reports as a syntax error on `--`.
+
+The data it does carry is seeded onto the migrations' schema by
+`supabase/seed-test-accounts.sql`; that file's header argues each of the three
+corrections it makes.
+
 ## One-off repairs — `supabase/repairs/`
 
 Not migrations, never applied automatically, each with a header explaining what

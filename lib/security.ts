@@ -57,6 +57,12 @@ export type NewPrivacyRequest = { user_id: string; kind: PrivacyRequest["kind"];
 export const RATE_LIMITS = {
   /** Per LDAP username. The directory's own lockout is the real defence. */
   signIn: { limit: 8, windowSeconds: 15 * 60 },
+  /**
+   * Per email address at the password door (migration 38). Lower than
+   * `signIn`, because here the portal holds the secret itself - there is no
+   * directory lockout behind it to be the real defence.
+   */
+  passwordLogin: { limit: 6, windowSeconds: 15 * 60 },
   /** Per developer-console password, per browser. */
   consoleUnlock: { limit: 6, windowSeconds: 15 * 60 },
   /** Per session, for the second factor. */

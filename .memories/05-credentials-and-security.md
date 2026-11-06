@@ -21,16 +21,27 @@ must still change is [04-production.md](04-production.md).
 
 ## Part 1 — Every login that exists today
 
-### Demo logins (historical — LDAP removed 2 Nov 2026)
+### Demo logins
 
-> **LDAP sign-in was removed on 2 Nov 2026.** `lib/ldap/` is deleted, `ldapts`
-> is removed, `signInWithLdap` no longer exists. The only sign-in door is
-> **Google OAuth** (or the `test-sign-in` endpoint with `E2E_TEST_SECRET` for
-> Playwright). The table below is kept as the **reference for the demo
-> personas** — their emails, profile ids and roles — which are still seeded
-> and used by the e2e suite. The LDAP usernames and passwords are historical.
-> The e2e suite signs in via `POST /api/auth/test-sign-in` with email +
-> `E2E_TEST_SECRET`.
+> **Corrected 6 Nov 2026.** This section said LDAP had been deleted on 2 Nov
+> 2026 - `lib/ldap/`, `ldapts` and `signInWithLdap` all gone. **That was true
+> only of `production_migration` before the integration**, which restored all
+> seven files, the dependency and the action; they are in the tree today. The
+> file was never brought back, so it spent four days describing a branch that
+> no longer exists.
+>
+> **The passwords in the table below are live again**, and in two ways. LDAP
+> is off the *interface* (27 Oct 2026) but `signInWithLdap` and the dummy
+> directory are intact underneath. And since 6 Nov 2026 the **mock store's
+> password door reads this same list**: `MockStore.getPasswordHash` answers
+> from `lib/ldap/mock-directory.ts`, so on a deployment with no
+> `DATABASE_URL` each persona signs in at the email and password form with
+> the password in this table. Against PostgreSQL it is
+> `profiles.password_hash` instead (migration 38) and the door cannot tell
+> the difference. Keep this table and `lib/ldap/mock-directory.ts` in step.
+>
+> The e2e suite does **not** use either door: it posts to
+> `/api/auth/test-sign-in` with `E2E_TEST_SECRET` (`e2e/helpers.ts`).
 
 | Persona | Role | LDAP username | Password | Email | Mock profile id | Demonstrates |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -76,11 +87,52 @@ must still change is [04-production.md](04-production.md).
 | **Developer second factor** | *enrol your own* | First console use as `developer`: Console → Security → set up an authenticator (TOTP), keep the ten recovery codes. Needed before any role change, Settings change or delete. Stored in the database the portal is using — deleting `.local-db.json` removes it |
 | Supabase **Auth** password for seeded / console-created users | *gone* | **Removed in code on 13 Oct 2026** (migration 31). `createProfile` no longer creates a Supabase Auth user, and `supabase/seed.sql` no longer creates 18 of them with `password123`. Nothing in the repository mints a Supabase password any more, and `tests/rls-surface.test.ts` fails if something starts. **The rows already on the hosted project are still there** until `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql` is run - a production action needing the owner's approval. See Part 4, "The second door" |
 | Sample shown on the sign-in card | — | No sample shown (LDAP form removed 28 Oct; credentials box removed 15 Oct) |
+| **Account passwords** (the email and password door, 6 Nov 2026) | *none by default* | `profiles.password_hash` (migration 38), scrypt via `hashSecret()`. **Nothing backfills it**, so an account without one is refused by the same branch that refuses a wrong password - `PASSWORD_LOGIN` opens no account by itself. Set by `supabase/seed-test-accounts.sql` or by SQL; there is deliberately **no console field** yet ([03-roadmap.md](03-roadmap.md) §2s). On the mock store the door reads the dummy directory instead |
 
+
+### The office's 29 test accounts (6 Nov 2026)
+
+The office sent `PostgreSQL.pdf` with 29 accounts, **all with the password
+`test@gh`**, and `database_backup.sql` holding their scrypt hashes. The
+password is published by the office, so it is written here; it is a **local
+and staging credential only** and must never reach the hosted project.
+Seeded by `supabase/seed-test-accounts.sql`, which needs migration 38.
+
+| Addresses | Count | Role seeded | Notes |
+| --- | --- | --- | --- |
+| `test1@smail` … `test9@smail.iitpkd.ac.in` | 9 | `student` | 4 have a hostel (Malhar Boys, Saveri Boys) and route through an Assistant Warden; **5 have none** and go straight to the desk. `test8` and `test9` are PhD, so the spouse rule applies to them |
+| `test001@`, `test002@iitpkd.ac.in` | 2 | `developer` | The console, behind its own password and TOTP |
+| `test003@` … `test009@iitpkd.ac.in` | 7 | `employee` | `staff_category` resolves from `institute_employees.employee_type`: `test003`, `test004`, `test009` faculty; the rest non-teaching staff |
+| `wardenhos1@` … `wardenhos4@iitpkd.ac.in` | 4 | `warden` | Malhar Girls, Malhar Boys, Saveri Boys, Saveri Girls |
+| `deputy_wardenhos1@` … `3@iitpkd.ac.in` | 3 | `warden` | Malhar Girls, Malhar Boys, Saveri Boys |
+| `assistant_wardenhos3@` … `6@iitpkd.ac.in` | 4 | `warden` | Saveri Boys, Saveri Girls, Tilang A Girls, Tilang B |
+
+**All 11 warden accounts hold the role `warden`.** The backup gave seven of
+them `deputy_warden` or `assistant_warden`, which this application's
+`user_role` does not have - the portal has one reviewer role, and
+`lib/types.ts` already labels it "Assistant Warden". The kind of warden is a
+property of the person and is kept in `institute_wardens.warden_role` (4
+warden, 3 deputy, 4 assistant), which is also what `profiles_v` scopes them
+by. If the office later needs the three to differ in what they may *do*, that
+is a role change across `access.ts`, `canReview`, `routeFor` and the tariffs
+constraint, not a seed change.
+
+**Two names differ from the PDF.** `test8` and `test9` are listed as "A" and
+"B"; migration 31's `profiles_full_name_present` wants at least two
+characters, so they are seeded **"Student A"** and **"Student B"**.
+`institute_students.full_name` keeps the single letter. Every other
+`profiles.full_name` in the backup carried a junk suffix ("AA" stored as
+"AAAAAA") and was taken from the institute tables instead.
+
+**The hashes were not replaced.** `test@gh` was verified against the backup's
+own record with the application's `verifySecret` before anything was written,
+and the record is seeded unchanged. No plaintext password is stored.
 
 ### How to sign in quickly for a check
 
-- **Browser:** `/sign-in` → Sign in with Google (once configured).
+- **Browser:** `/sign-in` → the email and password form (the primary door
+  since 6 Nov 2026), or **Mock Authentication** under it, or Sign in with
+  Google under that once configured.
 - **Playwright:** `e2e/helpers.ts` has `ACCOUNTS` and `signIn()`. Uses
   `POST /api/auth/test-sign-in` with `E2E_TEST_SECRET` (set in
   `playwright.config.ts`).
@@ -94,20 +146,41 @@ must still change is [04-production.md](04-production.md).
 
 ### How sign-in works
 
-> **LDAP and Mock Authentication were removed on 2 Nov 2026** (the owner:
-> "Keep only Google OAuth only. Remove rest"). `lib/ldap/` is deleted,
-> `signInWithLdap` no longer exists, `loginAs` and `/mock-login` are gone,
-> `lib/password.ts` is deleted. The only sign-in door is **Google OAuth**.
->
-> To restore LDAP sign-in, the entire `lib/ldap/` directory, `lib/password.ts`,
-> the `signInWithLdap` action, and the form fields in `login-form.tsx` would
-> need to be rebuilt. The `ldap_uid` column and its migration 12 index are
-> still in the database.
+> **Corrected 6 Nov 2026.** This said LDAP and Mock Authentication were
+> removed on 2 Nov 2026 and Google was the only door. That was
+> `production_migration` before the integration; the integration restored both,
+> and the same day the owner asked for an **email and password door as the
+> primary one, for the time being**, while the roles and workflows are tested.
+> Google OpenID Connect is unchanged and is still the intended method.
+
+**Four doors, all ending in the same `sessions` row.** The page draws the
+first three in this order, each only when it is open:
 
 ```
-The one button ─▶ "Sign in with Google" ─▶ /api/auth/google/start ─▶ callback (lib/oidc.ts)
-E2E tests     ─▶ POST /api/auth/test-sign-in { email, secret } (gated by E2E_TEST_SECRET)
+1. Email + password ─▶ signInWithPassword ─▶ profiles.password_hash (migration 38)
+                                             or, on the mock store, the dummy directory
+2. Mock Authentication ─▶ /mock-login ─▶ loginAs       (mockLoginEnabled(), no secret asked)
+3. Sign in with Google ─▶ /api/auth/google/start ─▶ callback (lib/oidc.ts)
+
+   LDAP ─▶ signInWithLdap ─▶ the directory, then profiles.ldap_uid
+           Built and intact, but its form is off the page (27 Oct 2026),
+           so it is reachable only by a crafted request.
+
+   E2E ─▶ POST /api/auth/test-sign-in { email, secret }   (gated by E2E_TEST_SECRET)
 ```
+
+**What each door proves, and what it does not.** Google and LDAP prove an
+identity held elsewhere. The password door proves one the portal holds itself,
+which is why it is throttled lower (6 per 15 min against LDAP's 8) and why the
+session it creates is **unverified** - a password is not a second factor, so a
+developer still meets `stepUpProblem()` at the console. Mock Authentication
+proves nothing at all and is closed in production by `NODE_ENV`.
+
+**All four then ask `signInRefusal`** (`lib/user-groups.ts`): an address off
+the institute's two domains, a blocked account, or a status that has moved on
+is refused whichever door it came through - and `profileOrNull` asks the same
+question again on **every later request**, so a block takes effect without
+waiting for a sign-out.
 
 Session: a row in `sessions` since Phase 8, with an opaque token in the cookie
 (`lib/sessions.ts`; 30 min idle, 12 h absolute). Google proves who the person
@@ -172,18 +245,23 @@ students out of Google's account chooser.
 **Configuring it deletes `/mock-login`**, which is how the Playwright suite
 signs in - so never set these variables in CI.
 
-### LDAP — removed 2 Nov 2026
+### LDAP — off the interface, intact underneath
 
-> **The entire LDAP directory was removed** on 2 Nov 2026: `lib/ldap/` (7
-> files), `lib/password.ts`, `ldapts` dependency, the `signInWithLdap` action,
-> the "Import LDAP usernames" UI, and the LDAP username field in the edit
-> dialog. The `ldap_uid` column and migration 12's unique index remain in the
-> database as a profile attribute. The user import system (`lib/users-import.ts`)
-> still handles `ldap_uid` as a spreadsheet column.
+> **Corrected 6 Nov 2026.** This said the entire LDAP directory had been
+> removed on 2 Nov 2026. It was, **on `production_migration`**, and the
+> integration restored it. Present today: `lib/ldap/` (`index.ts`,
+> `ldap-directory.ts`, `mock-directory.ts`, `link.ts`, `import.ts`,
+> `types.ts`, `uid.ts`), the `ldapts` dependency, `signInWithLdap` in
+> `app/actions/auth.ts`, *Import LDAP usernames* in Users & Roles, and
+> `profiles.ldap_uid` with migration 12's unique index.
 >
-> The section below is kept as historical context. Rebuilding LDAP sign-in
-> would require recreating `lib/ldap/`, restoring the `ldapts` dependency,
-> writing a new `signInWithLdap` action, and adding form fields.
+> What is true is that **the username and password fields are off the sign-in
+> page** (27 Oct 2026) and have not come back - the email and password form
+> there since 6 Nov 2026 is the portal's own password, checked against
+> `profiles.password_hash`, not a directory bind. Reopening the LDAP door is
+> rendering a form again, not a rebuild.
+>
+> The section below is the real directory's requirements, unchanged.
 - the base DN and the OUs students and staff live in
 - whether anonymous search is allowed, or a service account is needed
 - the username attribute
@@ -266,6 +344,7 @@ must set.
 | `LDAP_URL`, `LDAP_BASE_DN`, `LDAP_BIND_DN`, `LDAP_BIND_PASSWORD`, `LDAP_UID_ATTRIBUTE`, `LDAP_STARTTLS`, `LDAP_LINK_BY_EMAIL` | Real directory; without `LDAP_URL` the dummy accounts above work | **Required for any real deployment** |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Real Google sign-in (with `APP_URL`); closes Mock Authentication **in production only** (6 Nov 2026). The flow is built - [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md). **Put them in `.env.local` and `next start` picks them up too**, which is why `playwright.config.ts` pins them empty | Recommended |
 | `MOCK_LOGIN` | `false` closes Mock Authentication in any environment. `true` is **refused in production** — it would force the picker open beside a configured Google | **Set to `false` unless Google is configured** |
+| `PASSWORD_LOGIN` | `false` closes the email and password door. Open by default, including in production: it verifies a scrypt hash, throttles per address and refuses a blocked account, and **nothing backfills `password_hash`**, so it opens no account by itself | **Set to `false` once Google is live** — it is a testing convenience, not a method the institute asked for |
 | `DEV_LOGIN` | Development-only developer doors (the legacy `gh_mock_user` cookie) | **Never** — the server refuses to start |
 | `ALLOW_MOCK_STORE` | Lets a production build run on the JSON store (e2e only) | **Never** |
 | `MAIL_USER`, `MAIL_APP_PASSWORD` / `MAIL_PASSWORD`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_FROM`, `MAIL_FROM_NAME`, `MAIL_REPLY_TO`, `MAIL_MESSAGE_ID_DOMAIN` | SMTP transport; otherwise `.local-mail/*.eml` | Needed to send mail |

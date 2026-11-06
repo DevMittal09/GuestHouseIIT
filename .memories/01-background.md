@@ -76,6 +76,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **3 Nov** (third) | **Rename unit columns for clarity.** `units.kind` -> `category`, `parent_id` -> `parent_department_id`, `office_class` -> `office_type`, `hod_unit_id` -> `hod_approval_from_id`. Also `institute_offices.office_class` -> `office_type`. Label values updated: "Officer office" -> "Independent office", "Department office" -> "Under a department". ~25 files, 604 tests pass. **No migration** (columns renamed in `init-postgres.sql`; existing DBs need four `ALTER TABLE RENAME COLUMN`). |
 | **4 Nov** | **Remove `department_or_club`, `roll_number` and `staff_category` from profiles.** Continues the computed-fields pattern from 3 Nov. All three are now computed at read time by `profiles_v` / `withComputed()`: `department_or_club` from `units.name`, `roll_number` from `institute_students`, `staff_category` from `institute_employees.employee_type`. User import reduced to email/name/role/unit. ~30 files, 604 tests pass. **No migration** (columns removed from `init-postgres.sql`). |
 | **6 Nov** | **Mock authentication beside Google.** The owner put the Google client id and secret into `.env.local` and the account picker vanished - which is what `mockLoginEnabled()` was written to do on 28 Oct. The rule becomes **where** rather than **whether**: outside production both doors are drawn (Google solid with its mark, **Mock Authentication** outlined beneath it), and **in production nothing changed**. `MOCK_LOGIN=true` was deliberately not made the switch - a flag that forces the picker open is the one that gets copied into production. The round also found the **e2e suite broken by those credentials**: Next loads `.env.local` for `next start`, so all 55 journeys had been failing at sign-in; `playwright.config.ts` now pins `GOOGLE_CLIENT_ID=""`. **No migration, no store operation, no booking rule.** |
+| **6 Nov** | **Email and password becomes the primary door, for the time being**, at the owner's request: signing in as each of nineteen roles through Google OAuth is slow to set up and slower to repeat. The door the integration had withdrawn that morning comes back **with both of its defects answered** - the console action that bypassed the TOTP step-up is simply not rebuilt, and nothing writes the column from user input. **Migration 38** adds `profiles.password_hash`, nullable and not backfilled, so the door opens no account by itself; it is deliberately absent from `profiles_v`, which is what keeps a hash out of every `Profile`. The same round took the office's **`database_backup.sql`**, found that **its schema cannot run the application** (its `booking_status` labels mean no student, club or IAR booking can be stored, and six migrations are missing), and seeded the **29 test accounts** onto the migrations' schema instead - idempotently, keeping their UUIDs, with the 11 warden accounts mapped to the portal's one `warden` role. |
 
 ## The problem
 
@@ -1616,3 +1617,41 @@ sign in page for now. Right now its only google oauth."*
 
 Reasoning in [02-decisions.md](02-decisions.md) (*Mock authentication stands
 beside Google*).
+
+---
+
+## 6 November 2026 (second round) - email and password, and the office's backup
+
+> The owner, in a written brief: *"For the time being, I want to use
+> username/password authentication as the primary login method because it is
+> much easier for testing."* With the sign-in page's order fixed -
+> **password, Mock Authentication, Google** - and a standing instruction not
+> to weaken production security or remove the Google flow to get there. The
+> brief also supplied `PostgreSQL.pdf` and `database_backup.sql`, and asked
+> that the supplied accounts be made to work against a **local** PostgreSQL,
+> never production.
+
+| What was asked | Status |
+| --- | --- |
+| Username/password as the primary login method | **Done.** `signInWithPassword` + migration 38. Verified for all 29 accounts against a real PostgreSQL 16 |
+| The exact order: password, mock, Google | **Done.** The form is solid, the two links outlined beneath it; pinned by an e2e journey |
+| Keep Mock Authentication, not exposed in production | **Unchanged.** `mockLoginEnabled()` was not touched, so `NODE_ENV` and `MOCK_LOGIN=false` still close it |
+| Keep Google working when configured | **Unchanged.** `lib/oidc.ts` and `app/api/auth/google/*` are untouched; the button moved down the page and nothing else |
+| Authenticate against the existing hashes, not a new scheme | **Done.** `verifySecret` (`lib/crypto.ts`), the pair the TOTP recovery codes already use. `test@gh` verifies against the backup's own hash, so no hash was replaced |
+| Never trust a role from the browser | **Done.** The action reads the profile from the store; the browser sends two strings |
+| Rate limiting, generic errors, blocked accounts refused | **Done.** `RATE_LIMITS.passwordLogin` (6 / 15 min, lower than the LDAP door), one message for three failures with the comparison always run, and `signInRefusal` for the rest |
+| Do not expose password hashes to the client | **Done, structurally.** `password_hash` is not in `profiles_v`, which is what every store read returns |
+| Import the backup into a local database | **Changed, with reasons.** The backup's schema cannot run the application, so its **data** was seeded onto the migrations' schema instead. See [02-decisions.md](02-decisions.md), *The office's backup is data, not a schema* |
+| Make the 29 dummy accounts work | **Done for 29/29**, with three corrections to the supplied data, each argued in `supabase/seed-test-accounts.sql`'s header |
+| Do not create duplicates; keep UUIDs; keep it idempotent | **Done.** `on conflict ... do update` throughout; applied twice with no change |
+| Lint, typecheck, unit, Playwright, production build | **All clean.** 708 unit tests (was 699), 56 journeys (was 55) |
+
+**Not done, deliberately:** the console's "Set password" field. It is the
+piece that carried the privilege escalation, and rebuilding it needs
+`{ stepUp: true }` and a password policy decided rather than assumed. The
+condition is written down in [03-roadmap.md](03-roadmap.md) §2s so it cannot
+be rebuilt the old way. Until then a password is set by the seed or by SQL.
+
+Reasoning in [02-decisions.md](02-decisions.md) (*Email and password is the
+primary door, for the time being*; *The office's backup is data, not a
+schema*).

@@ -7182,6 +7182,20 @@ modified files. All 606 tests pass.
 
 ## Auth cleanup: Google OAuth only (2 Nov 2026, third session)
 
+> **Superseded, twice over.** This entry describes `production_migration`
+> before the 6 Nov 2026 integration, and none of its three deletions survive:
+>
+> * **LDAP was not deleted.** The integration restored `lib/ldap/` (seven
+>   files), the `ldapts` dependency and `signInWithLdap`, all of which are in
+>   the tree today. The claim that they are gone is also what made
+>   [05-credentials-and-security.md](05-credentials-and-security.md) wrong
+>   until 6 Nov 2026.
+> * **Mock Authentication was not deleted** - see *Mock authentication stands
+>   beside Google* at the foot of this file.
+> * **The password door came back** on 6 Nov 2026, at the owner's request and
+>   with the two defects that got it withdrawn answered - see *Email and
+>   password is the primary door, for the time being* at the foot of this file.
+>
 > **Supersedes:** "Mock authentication with one swap point" (the original
 > standing decision). The mock-login swap and the LDAP swap are both deleted.
 > Google OAuth is the single sign-in door.
@@ -7466,3 +7480,117 @@ why. `playwright.config.ts` now sets `GOOGLE_CLIENT_ID: ""` and
 suite tests the deployment it means to test whatever is in a developer's
 environment. That is the real gain: the tests no longer depend on a
 gitignored file.
+
+
+---
+
+## Email and password is the primary door, for the time being (6 November 2026)
+
+> The owner: *"For the time being, I want to use username/password
+> authentication as the primary login method because it is much easier for
+> testing... Our eventual intended authentication method is Google
+> authentication. However, we are temporarily retaining username/password
+> authentication so that we can test different roles and workflows without
+> repeatedly dealing with Google OAuth configuration."*
+
+**This reverses a decision taken the same morning.** The integration withdrew
+an email + password door into `archive/password-sign-in/` on three grounds:
+it bypassed the second factor, its whole password policy was four characters,
+and Google OpenID Connect was already built. The owner's reason for wanting it
+back answers the third directly - Google is still the intended method, and
+this is about the *cost of testing nineteen roles*, not about which door the
+institute will use. So the door is restored and **the first two grounds are
+answered rather than argued with**.
+
+**The privilege escalation is removed by not rebuilding the thing that had
+it.** The defect was never the door; it was `setUserPasswordAction`, which
+asked for the console unlock (a shared secret, default `0000`) where
+`deleteUserAction` asks for a TOTP proof inside ten minutes. So anyone holding
+the unlock could set the developer's password and sign in as them - a shorter
+path to every protected operation than the one the step-up exists to guard.
+**That action is not restored, and neither is `setPasswordHash` on the
+store.** Passwords come from the seed or from SQL. The cost is real and is
+stated plainly: there is no way to set a password from the application. The
+gain is that there is no half-built path for a later session to finish
+wrongly, and the console field now has its conditions written down beside it
+in [03-roadmap.md](03-roadmap.md) - `{ stepUp: true }` and a minimum length
+worth having - rather than being rediscovered.
+
+**Why the door is safe to leave open where the mock picker is not.**
+`mockLoginEnabled()` is closed by `NODE_ENV` because the picker asks for no
+secret at all: anyone who can reach the page can become any account.
+`passwordLoginEnabled()` is not, because this door verifies a scrypt hash,
+throttles per address and refuses a blocked account. The reason it cannot
+quietly open an account is stronger than any of those: **nothing backfills
+`password_hash`**, so an account that has never been given one is refused by
+the same branch that refuses a wrong password. Turning the door on opens
+nothing by itself.
+
+**One message, and the comparison always runs.** An unknown address, an
+account with no password and a wrong password all answer "Incorrect email or
+password". That is only true if the work is the same in each case, so the
+action compares against a per-process decoy record when there is no account:
+returning early would have made response time a usable oracle for which
+addresses are registered, which is exactly what the single message exists to
+hide. The archived version returned early.
+
+**The refusals go through `signInRefusal`.** The archived action had its own
+`account_status !== "active"` check and predated migration 36 on one of its
+two branches, so it would not have refused a blocked account. There is one
+answer to "may this person sign in", it is in `lib/user-groups.ts`, and all
+three doors ask it.
+
+**The mock store's password source is the dummy directory.** A deployment with
+no `DATABASE_URL` has no `profiles.password_hash` to read, and the alternative
+was a second set of demo passwords to keep in step with the first. So
+`MockStore.getPasswordHash` answers from `lib/ldap/mock-directory.ts` - the
+same published password the LDAP door takes. The record is derived rather than
+stored, which is why a fresh salt per call is correct: `verifySecret` reads the
+salt out of the record it is handed, so the comparison still answers "is this
+the published password". It also means the e2e suite can sign a persona in
+through the form without a fixture.
+
+**The hash is kept out of `profiles_v`.** That view is what every store read
+returns as a `Profile`, so a column left out of it cannot reach a page, a
+server action's return value or a browser by accident. `getPasswordHash` reads
+the base table and is the only query in the codebase that names the column.
+This is the same reasoning as the view's COALESCE: one place decides what a
+`Profile` is.
+
+---
+
+## The office's backup is data, not a schema (6 November 2026)
+
+The office sent `database_backup.sql` with `PostgreSQL.pdf` and 29 test
+accounts. The instinct is to restore it and point the application at it. **It
+cannot run the application**, and the reason matters more than the list:
+it is a pg_dump of a database built from `scripts/init-postgres.sql`, the
+consolidated file the integration deleted six hours earlier for exactly these
+reasons. Restoring it would have reintroduced, as data, the thing that was
+deleted as code.
+
+The decisive one: its `booking_status` declares `PENDING_WARDEN_REVIEW`,
+`PENDING_FA_REVIEW` and `PENDING_IAR_REVIEW`, and the code writes
+`PENDING_WARDEN`, `PENDING_FA`, `PENDING_IAR`. **No student, club or IAR
+booking could have been stored at all**, and nothing would have said so until
+someone tried. It is also missing migrations 12, 16, 28, 35, 36 and the four
+stored scope columns 37 keeps - 35 alone means the manager cannot approve a
+stay, because the approval names both tariff columns.
+
+**So the data was seeded onto the migrations' schema** - the migrations are
+the source of truth, which is the standing decision this round had no reason
+to revisit. It cost nothing: every operational table in the dump is empty, so
+"preserve existing data" had 29 profiles and some reference rows to preserve,
+and their UUIDs are kept.
+
+**The three corrections are each a choice about where a fact lives.** The
+seven `deputy_warden` / `assistant_warden` accounts become `warden`, because
+the portal has one reviewer role - the one `lib/types.ts` already labels
+"Assistant Warden" - and the kind of warden belongs to the person, in
+`institute_wardens.warden_role`, which is also what scopes them. The corrupted
+`profiles.full_name` values are taken from the institute tables, which carry
+what the PDF lists. And the dump's `app_settings`, `form_configs` and
+`mail_templates` are left out: a saved `form_configs` row **wins** over the
+spec defaults, so seeding three-key placeholders would have quietly replaced
+the booking forms - checked against the real parsers before deciding, which is
+how it is known they reduce to the defaults anyway.

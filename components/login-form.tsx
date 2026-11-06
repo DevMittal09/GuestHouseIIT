@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PasswordSignInForm } from "@/components/password-sign-in-form";
 
 /** The Google "G", as Google's sign-in button guidelines draw it. */
 function GoogleMark() {
@@ -15,38 +16,45 @@ function GoogleMark() {
 /**
  * The sign-in door, inside `SignInPanel` (which supplies the heading).
  *
- * **No password, and up to two buttons** (6 Nov 2026, the owner: "add mock
- * authentication along with google oauth in the sign in page for now"; it was
- * one button from 27 Oct 2026, when LDAP came off the page). Each door is
- * drawn when it is open, and the page says which is which:
+ * **Three doors, in this order** (6 Nov 2026, the owner: "the login page must
+ * present the authentication options in this exact priority order"). Each is
+ * drawn only when it is open, and the page says which is which:
  *
- * - **Google** (`GOOGLE_CLIENT_ID` and friends configured) - *Sign in with
- *   Google*, the Google mark, the real OpenID Connect flow at
- *   `/api/auth/google/start` (Phase 8). Solid vermilion: it is the real door
- *   and the one the institute will use.
- * - **Mock authentication** (`mockLoginEnabled()`) - *Mock Authentication*,
- *   opening the account picker at `/mock-login`, with one line underneath
- *   saying what it is. Outlined rather than solid when Google is beside it,
- *   because it is the lesser door; solid when it is the only one, because
- *   then it is the only thing to press.
+ * 1. **Email and password** - `PasswordSignInForm`, the primary door and the
+ *    only one with fields. Solid vermilion: it is the call to action.
+ *    Temporary, at the owner's request, because signing in as each test role
+ *    through Google is slow to set up and slower to repeat.
+ * 2. **Mock authentication** (`mockLoginEnabled()`) - *Mock Authentication*,
+ *    opening the account picker at `/mock-login`, with one line underneath
+ *    saying what it is.
+ * 3. **Google** (`GOOGLE_CLIENT_ID` and friends configured) - *Sign in with
+ *    Google*, the Google mark, the real OpenID Connect flow at
+ *    `/api/auth/google/start` (Phase 8). **Still the intended method**: it is
+ *    built and verified, and nothing about it changed when it moved down the
+ *    page. `PASSWORD_LOGIN=false` puts it back at the top.
+ *
+ * Both lower doors are **outlined**, because the form above them is the solid
+ * one: two solid vermilion buttons would be two calls to action, and the
+ * palette has one.
  *
  * **The Google mark is never drawn on the mock button.** A Google "G" on a
  * button that does not talk to Google claims something untrue, and that rule
- * predates both rounds.
+ * predates all three rounds.
  *
  * **The LDAP username and password fields are gone**, and so is every mention
- * of LDAP here. `signInWithLdap` (`app/actions/auth.ts`) and `lib/ldap/` are
- * **untouched** - the directory still backs *Import LDAP usernames* in Users
- * & Roles, and the door can be reopened by rendering a form again. Nothing
- * about sessions, roles or access control changed: every door ends in the
- * same `sessions` row that `getCurrentUser()` reads.
+ * of LDAP here - the form above is not it. `signInWithLdap`
+ * (`app/actions/auth.ts`) and `lib/ldap/` are **untouched**: the directory
+ * still backs *Import LDAP usernames* in Users & Roles, and on the mock store
+ * it is also where `getPasswordHash` reads the demo personas' published
+ * passwords from. Nothing about sessions, roles or access control changed:
+ * every door ends in the same `sessions` row that `getCurrentUser()` reads.
  */
 export function LoginForm({
   next,
   submitLabel = "Sign in",
   footnote,
   center,
-  doors = { google: false, mock: false },
+  doors = { password: false, google: false, mock: false },
   notice,
 }: {
   /** Where to land after signing in, when the page wants somewhere specific. */
@@ -56,10 +64,10 @@ export function LoginForm({
   /** Centre the prose under the buttons. */
   center?: boolean;
   /**
-   * Which doors are open. Both may be, since 6 Nov 2026; neither is the
+   * Which doors are open. Any combination may be; none at all is the
    * "sign-in is not configured" case.
    */
-  doors?: { google: boolean; mock: boolean };
+  doors?: { password: boolean; google: boolean; mock: boolean };
   /** A message from a failed sign-in (`?error=` on the way back from Google). */
   notice?: string | null;
 }) {
@@ -81,26 +89,40 @@ export function LoginForm({
         </p>
       )}
 
-      {!doors.google && !doors.mock && (
+      {!doors.password && !doors.google && !doors.mock && (
         <p className="rounded-[3px] border border-notice-border bg-notice px-4 py-3 text-[14.5px] leading-[1.55] text-ink">
           Sign-in is not configured on this deployment. Ask the guest house office.
         </p>
       )}
 
-      {doors.google && (
-        <Link href={withNext("/api/auth/google/start")} prefetch={false} className={solid}>
-          <GoogleMark />
-          Sign in with Google
-        </Link>
+      {doors.password && <PasswordSignInForm next={next} submitLabel={submitLabel} />}
+
+      {doors.password && (doors.mock || doors.google) && (
+        <div className="my-6 flex items-center" aria-hidden="true">
+          <span className="grow border-t border-border" />
+          <span className="mx-3 shrink-0 text-[13px] text-muted-foreground">or</span>
+          <span className="grow border-t border-border" />
+        </div>
       )}
 
       {doors.mock && (
         <Link
           href={withNext("/mock-login")}
           prefetch={false}
-          className={`${doors.google ? `${outline} mt-3` : solid}`}
+          className={doors.password || doors.google ? outline : solid}
         >
-          {doors.google ? "Mock Authentication" : submitLabel}
+          {doors.password || doors.google ? "Mock Authentication" : submitLabel}
+        </Link>
+      )}
+
+      {doors.google && (
+        <Link
+          href={withNext("/api/auth/google/start")}
+          prefetch={false}
+          className={`${doors.password ? outline : solid}${doors.mock ? " mt-3" : ""}`}
+        >
+          <GoogleMark />
+          Sign in with Google
         </Link>
       )}
 
@@ -108,7 +130,7 @@ export function LoginForm({
         <p
           className={`mt-3.5 text-[13.5px] leading-[1.55] text-muted-foreground${center ? " text-center" : ""}`}
         >
-          {doors.google
+          {doors.password || doors.google
             ? "Mock authentication is for testing - you will be asked to choose an account."
             : "Google sign-in is not connected yet - you will be asked to choose an account."}
         </p>

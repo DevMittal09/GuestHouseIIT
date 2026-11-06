@@ -113,6 +113,13 @@ const MARKERS = [
     table: "institute_students",
     what: "the institute's own tables (students, employees, offices, councils, hostels, wardens) and profiles_v",
   },
+  {
+    n: 38,
+    kind: "column",
+    table: "profiles",
+    column: "password_hash",
+    what: "the account password hash the email and password door reads",
+  },
 ];
 
 function env() {
