@@ -888,6 +888,22 @@ plain `npm run check:migrations` says no project is configured and **exits 0,
 which is not a pass**. Run `node --env-file=.env scripts/check-migrations.mjs`
 instead.
 
+> **Outstanding for production, 6 Nov 2026: 37 and 38.** Both arrived after
+> the note below and **neither has been applied to the hosted project** -
+> nothing in these two rounds touched it.
+>
+> * **37** (the institute tables and `profiles_v`) is **not optional once this
+>   branch is deployed**: the stores read `profiles_v`, which does not exist
+>   before it.
+> * **38** (`profiles.password_hash`) is **optional**. Without it the email
+>   and password door simply never opens - `getPasswordHash` degrades to null
+>   on the missing column and logs which migration to apply - so Google and
+>   the picker are unaffected. Apply it only if that door is wanted in
+>   production, and set `PASSWORD_LOGIN=false` if it is not.
+>
+> Apply 37 before 38; both are additive, guarded and safe to re-run. 38's
+> marker is in the script, so `npm run check:migrations` sees both.
+
 > **The current hosted project, 5 Nov 2026.** The owner applied the outstanding
 > migrations in the SQL editor and reported all of them done.
 >

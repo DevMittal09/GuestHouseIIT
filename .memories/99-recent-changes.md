@@ -7,223 +7,160 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 6 November 2026
+## Round of 6 November 2026 (second round that day)
 
-Two pieces of work the same day. The sign-in one is **on `main` and pushed**
-(`c62cb5f`); the integration is on **`integration/main-into-production`** and
-has that commit merged in.
+> The owner: *"For the time being, I want to use username/password
+> authentication as the primary login method because it is much easier for
+> testing... Our eventual intended authentication method is Google
+> authentication."* With a required order on the sign-in page: **password,
+> then Mock Authentication, then Google.**
 
-### Part 1 - mock authentication beside Google (on `main`)
+Two things, and they are connected: the door, and the test database it signs
+in against. Everything is on `production_migration` (which carries the merge);
+nothing has been pushed, and **nothing has touched the hosted project**.
 
-> The owner: *"Can you add mock authentication along with google oauth in the
-> sign in page for now. Right now its only google oauth."*
+### Part 1 - the password door is back, with its two defects fixed
 
-The owner had put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` into
-`.env.local` and the account picker vanished - which is what
-`mockLoginEnabled()` was written to do on 28 Oct 2026. The rule became **where**
-rather than **whether**: outside production both doors are drawn (Google solid
-with its mark, **Mock Authentication** outlined beneath), and in production
-nothing changed. `MOCK_LOGIN=true` is now a startup error rather than a way to
-force the picker open. `LoginForm` takes `doors: { google, mock }`.
+The integration earlier the same day **withdrew** an email + password door
+into [`archive/password-sign-in/`](../archive/password-sign-in/) on two
+grounds. The owner has now asked for it back as the primary door. It is
+restored by that archive's own plan, and **both grounds are answered rather
+than reintroduced**:
 
-It also found the **e2e suite broken by those credentials**: Next loads
-`.env.local` for `next start`, so the Playwright run had become a
-Google-configured deployment and all 55 journeys were failing at sign-in.
-`playwright.config.ts` now pins `GOOGLE_CLIENT_ID=""`, and on this branch
-**`DATABASE_URL`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as well** -
-without those the suite would have selected `PostgresStore` against the real
-project and put every e2e ID document into the production `documents` bucket.
-`ALLOW_MOCK_STORE` only tells `assertEnv()` not to insist on them; it does not
-unset them.
+1. **It bypassed the second factor.** `setUserPasswordAction` asked only for
+   the console unlock - a shared secret, default `0000` - so anyone holding it
+   could set the developer's password and sign in as them. **That action is
+   not restored at all.** Passwords are set by the seed or by SQL, so there is
+   no console path to abuse; `setPasswordHash` is not on the store either, so
+   there is no dead code waiting to be wired up wrongly. Rebuilding it with
+   `{ stepUp: true }` is [03-roadmap.md](03-roadmap.md) §2s item 1.
+2. **Four characters was the whole policy.** Nothing writes the column from
+   user input now, so there is no policy to get wrong; the one that must come
+   with the console field is named in the roadmap beside it.
 
-Reasoning in [02-decisions.md](02-decisions.md), *Mock authentication stands
-beside Google*.
+What was built:
 
-### Part 2 - integrating `main` into `production_migration`
+- **Migration 38**, `profiles.password_hash`. Additive, nullable, nothing
+  backfilled - **a null hash means the door refuses that account**, so turning
+  the door on does not by itself open anything. Deliberately **not** added to
+  `profiles_v`, which is what every store read returns as a `Profile`: a hash
+  left out of the view cannot reach a page, an action's return value or a
+  browser. Verified by query, not by assertion.
+- **`getPasswordHash(email)`** on `DataStore` and both stores. `PostgresStore`
+  reads the **base table** (the only query in the codebase naming the column)
+  and degrades to null on a `42703`, so a database still on 37 closes the door
+  instead of throwing. **`MockStore`'s password source is the published dummy
+  directory** (`lib/ldap/mock-directory.ts`): a mock deployment has no column
+  to read, and a second set of demo passwords would be a second thing to keep
+  in step, so a persona signs in with the password already listed in
+  [05-credentials-and-security.md](05-credentials-and-security.md). The record
+  is derived, which is why a fresh salt each time is correct - `verifySecret`
+  reads the salt out of the record it is given.
+- **`signInWithPassword`** in `app/actions/auth.ts`. Throttled per address
+  (`RATE_LIMITS.passwordLogin`, 6 per 15 min - **lower** than the LDAP door's
+  8, because here the portal holds the secret and there is no directory
+  lockout behind it). Audited on success and on failure. The session is
+  created **unverified**, so a developer still meets `stepUpProblem()` at the
+  console. Refusals run through **`signInRefusal`**, which the archived
+  version predated: a blocked account, a status that has moved on, and an
+  address off the institute's two domains are all refused in one place.
+- **One message for three failures.** An unknown address, an account with no
+  password, and a wrong password all answer "Incorrect email or password", and
+  the comparison is **always run** - against a per-process decoy record when
+  there is no account - so the missing-account path does not return early and
+  become a timing oracle for which addresses are registered.
+- **The page**: `PasswordSignInForm` (the only client component of the three
+  doors, because it is the only one with state), then Mock Authentication,
+  then Google, both outlined under the solid form. `submitLabel` moved to the
+  **form's submit button**, which is how `/book-room` still says "Sign in to
+  book". `PASSWORD_LOGIN=false` is the one line that ends the arrangement.
 
-Two branches had diverged for a week: **3 commits on `main`** (the owner's
-sixteenth list, the MS/PhD spouse rule, user groups and login blocking) and
-**13 on `production_migration`** (another developer's rewrite of the data layer
-from the Supabase JS client to direct PostgreSQL over `pg`, plus the
-institute's own data tables, a CSV/XLSX import and a security pass). The merge
-base is `fb696f6`, 28 Oct 2026.
+### Part 2 - the office's backup, and what it could not do
 
-The owner's brief: `production_migration` becomes the one working branch; keep
-**Supabase as the database host**; keep **every existing row**; lose nothing
-from either side; and treat the hosted project as production, never as a test
-database.
+The office sent `PostgreSQL.pdf` (29 test accounts, all with the password
+**`test@gh`**) and `database_backup.sql`. **The backup's schema cannot run
+this application**, and the data was seeded onto the migrations' schema
+instead of the dump being restored. The full comparison is in
+[21-database.md](21-database.md); the four that decide it:
 
-The work is on **`integration/main-into-production`**, a real merge commit with
-both parents. `main` and `production_migration` are untouched, and
-`backup/main-pre-integration` / `backup/production_migration-pre-integration`
-tag where each stood. Nothing has been pushed, and nothing has been run against
-the hosted project.
+1. **`booking_status` is wrong.** The dump declares `PENDING_WARDEN_REVIEW`,
+   `PENDING_FA_REVIEW`, `PENDING_IAR_REVIEW`; the code writes
+   `PENDING_WARDEN`, `PENDING_FA`, `PENDING_IAR`. **No student, club or IAR
+   booking could be stored at all.** This is the same defect the integration
+   found in `scripts/init-postgres.sql` and deleted the file over - the dump
+   is of a database built from it.
+2. **`user_role` has no `alumni`**, and has `deputy_warden` and
+   `assistant_warden`, which this application does not. 7 of the 29 accounts
+   carried a role the portal cannot read.
+3. **Six migrations are absent**: 12 (`ldap_uid`), 16 (`hostels`), 28
+   (`academic_records`), 35 (the tariff columns - **the manager could not
+   approve a stay**), 36 (user groups and blocking), and the four stored scope
+   columns 37 keeps. Its `profiles_v` reads the institute tables **only**,
+   which is the bug the integration fixed with a COALESCE.
+4. **There is no booking data.** Every operational table is empty - bookings,
+   guests, logs, holds, invoices, sessions, audit. 29 profiles and reference
+   rows is the whole of it, so nothing operational is lost by not restoring it.
 
-### What the two branches actually disagreed about
+So `supabase/seed-test-accounts.sql` seeds the **data** onto the migrations'
+schema, idempotently, keeping the backup's UUIDs. Three corrections, each
+argued in the file's own header:
 
-36 files were touched by both. Eleven content conflicts and four
-delete-against-modify ones; each resolution is in
-[02-decisions.md](02-decisions.md). Four things mattered more than the rest,
-and three of them were **silent**:
+- **The 11 warden accounts are all seeded `warden`** (the owner's decision),
+  which is the portal's one reviewer role and the one `lib/types.ts` already
+  labels "Assistant Warden". The kind of warden is a property of the person
+  and is kept in `institute_wardens.warden_role` (4 / 3 / 4), which is also
+  what `profiles_v` scopes them by. Nothing is lost and it is reversible.
+- **`profiles.full_name` is corrupted in the dump on all 29 rows** - "AA"
+  stored as "AAAAAA", "Dr. A" as "Dr. AbbAAAA". The institute tables carry the
+  names the PDF lists, and those are seeded. Two do not fit: migration 31's
+  `profiles_full_name_present` wants two characters and the PDF names `test8`
+  and `test9` "A" and "B", so those two are **"Student A"** and **"Student
+  B"**.
+- **`app_settings`, `form_configs` and `mail_templates` are left out.** They
+  are the other branch's placeholders, and a saved `form_configs` row *wins*
+  over the spec defaults, so seeding them would quietly replace the booking
+  forms with a three-key stub. Checked against the real parsers first: they
+  reduce to the defaults anyway.
 
-1. **Git took `production_migration`'s deletion of the entire migration
-   history.** All 34 files in `supabase/migrations/`, all ten in
-   `supabase/repairs/` and `supabase/seed.sql` had been deleted there and
-   replaced by one consolidated `scripts/init-postgres.sql`; `main` had not
-   touched them, so the merge removed them **without reporting a conflict**.
-   They are the applied history of the live database. **Restored, all 45
-   files.**
+`supabase/local-postgres-stubs.sql` is new - the `auth` / `storage` / role
+stand-ins a plain PostgreSQL server needs before migration 1, which until now
+lived only as a recipe in [22-running-and-testing.md](22-running-and-testing.md).
 
-2. **`scripts/init-postgres.sql` could not run the application.** It declared
-   `booking_status` with `PENDING_WARDEN_REVIEW`, `PENDING_FA_REVIEW` and
-   `PENDING_IAR_REVIEW`; the code on **both** branches writes
-   `PENDING_WARDEN`, `PENDING_FA`, `PENDING_IAR`. Checked against a throwaway
-   Postgres: `select 'PENDING_WARDEN'::booking_status` is an error on a
-   database built from that file, so **no student, club or IAR booking could be
-   stored at all**. It had also lost `bookings_debit_head_check`,
-   `bookings_meals_shape` and `projects_title_check`; turned
-   `bookings.project_id` from `on delete restrict` into `on delete set null`
-   (deleting a project would silently blank the debit reference on every
-   booking charged to it); replaced `room_holds`' `(booking_id, room_id)`
-   primary key with a surrogate `id`; and dropped `NOT NULL` from
-   `booking_guests.gender` and `bookings.copy_to_emails`. **The file is
-   deleted.** A hand-maintained second copy of 37 migrations will drift again;
-   the migrations are the one source of truth, and the 19 "apply
-   scripts/init-postgres.sql" messages in the code now name the migration that
-   adds the thing.
+### What was verified, and how
 
-3. **`profiles_v` would have emptied every warden's scope.** The rewrite drops
-   `hostel_name`, `department_or_club`, `roll_number` and `staff_category` from
-   `profiles` and resolves them from the institute tables at read time - which
-   is the better design, and is where this is going. But those tables are
-   **empty on this project**, and `profiles.hostel_name` is what `canReview()`
-   and `routeFor()` scope a warden and a student's approval route by. A view
-   reading the institute tables alone would have returned NULL for all of it,
-   with no error anywhere: a student's booking would simply have stopped
-   routing to their Assistant Warden. The columns are **kept**, the view
-   `COALESCE`s institute-first-stored-second, and migration 37 backfills.
+- **All 29 accounts against a real PostgreSQL 16**: stubs, 38 migrations, the
+  seed twice (idempotent), then the application's own `getProfileByEmail` +
+  `getPasswordHash` + `verifySecret` + `signInRefusal` for each. 29/29 accept
+  `test@gh`, reject a wrong password, carry no refusal, land on the right
+  home, and **no `Profile` carries a password field**. `password_hash` is
+  absent from `profiles_v` by query.
+- **`test@gh` verifies against the backup's own hash** under the application's
+  `verifySecret`, so no hash was replaced and no plaintext was stored.
+- **Playwright: 56 passed** (55 before, plus a new journey that signs a
+  persona in with a password, is refused twice without the page naming the
+  account, keeps the session across a navigation and signs out).
+- **`npm test` 708 passed** (699 before, plus 9), lint and typecheck clean, a
+  production build clean.
 
-4. **An email + password sign-in door had been added**, with
-   `setUserPasswordAction` requiring `requireConsole("users")` but **not** the
-   TOTP step-up that `deleteUserAction` requires - so the console unlock (a
-   shared secret, default `0000`) was enough to set the developer's password
-   and sign in as them: a shorter path to every protected operation than the
-   one the step-up exists to guard. Minimum length was 4 characters. The
-   owner's decision was to **drop it**, Google only.
-   [`archive/password-sign-in/`](../archive/password-sign-in/) keeps it
-   verbatim, with the two defects named and the restore written out.
+### Two pieces of drift found and corrected
 
-### The architecture now
-
-| Concern | Before | Now |
-| --- | --- | --- |
-| SQL | Supabase JS → PostgREST | **`pg` straight to Supabase Postgres** (`lib/db/client.ts`) |
-| Documents | Supabase Storage | **Supabase Storage** (`lib/storage/`) - *not* the local folder the rewrite used |
-| Sign-in | Google / LDAP / account picker | **Google / LDAP / account picker** - the password door is withdrawn |
-| Live updates | Realtime websocket | **Polling, 30 s** - which also takes the anon key out of the browser |
-| RLS | enabled, `authenticated` surface closed by migration 31 | **unchanged, and it still matters**: PostgREST is still listening on the project and the anon key is public |
-| Academic data | `academic_records`, one flat table | **six institute tables**, with `academic_records` kept and backfilled from |
-
-The one new seam is `lib/storage/`: `getDocumentStore()` picks the Supabase
-bucket when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set and a local
-folder otherwise - the same shape of decision as `getStore()` and
-`getMailer()`. `assertEnv()` refuses to start a production server with no
-storage configured, so the folder cannot be reached by accident in production.
-
-`PostgresStore` also gained everything `main` had added to `SupabaseStore`:
-`tariff_scope` on a status update (migration 35), the four user-group methods
-and `updateProfiles` (migration 36), and `profileWriteError`'s mapping of the
-LDAP-uniqueness and group-not-found cases. Its three profile writers build
-their column list from the keys of the object they are handed, so they now go
-through a `PROFILE_COLUMNS` allow-list: an unexpected key would become an
-identifier in SQL, and identifiers cannot be parameterised.
-
-### Migration 37
-
-One migration,
-[`00000000000037_institute_tables_and_profiles_view.sql`](../supabase/migrations/00000000000037_institute_tables_and_profiles_view.sql),
-in eleven guarded sections. Expand only - **nothing is dropped**:
-
-- the six institute tables (`institute_hostels`, `institute_students`,
-  `institute_employees`, `institute_offices`, `institute_fcc`,
-  `institute_wardens`), each with RLS enabled and no `authenticated` policy;
-- **backfilled from `academic_records`**, which is kept intact, and then from
-  `profiles` for the people the portal knows but the office has not pasted in -
-  a student's hostel and roll number, a warden's hostel, an employee's
-  department and staff category;
-- `profiles.account_status` (the office's word for *why* an account has gone),
-  defaulted to `active`, with accounts already blocked under migration 36 given
-  `relieved` so a status and a timestamp cannot disagree;
-- the four `units` column renames the rewrite needs (`kind` → `category`,
-  `office_class` → `office_type`, `parent_id` → `parent_department_id`,
-  `hod_unit_id` → `hod_approval_from_id`) - renames, so no data moves, and
-  `units` is empty on this project anyway;
-- `profiles_v`, `security_invoker`, with the COALESCE described above.
-
-**Verified on a throwaway `postgres:16-alpine`**, never on the hosted project:
-migrations 1-36 applied, a production-like fixture loaded (10 profiles
-including a day scholar with no hostel and an account blocked under migration
-36, 8 academic records, 2 bookings with holds, guests and logs), then 37
-applied. Row counts in every pre-existing table **identical** before and after;
-`profiles_v` reproduces the old `profiles` scope row for row; and with the four
-`profiles` columns deliberately blanked inside a transaction, the institute
-tables alone still resolve every hostel, roll number and staff category -
-which is what makes the later contract step safe. 37 runs three times with no
-error.
-
-### What the e2e suite found, once it could run at all
-
-The 55 journeys had not been runnable on `production_migration` since its
-security pass, so they were the first real check of the merged tree. Six
-defects, all of them in the rewrite and none visible from a build:
-
-1. **`ALLOW_MOCK_STORE=true` exempted `DATABASE_URL` and nothing else**, so
-   `next start` refused to boot once Google became a production requirement and
-   the only symptom was Playwright timing out on its own web server.
-   `isRealDeployment()` (`lib/env.ts`) is now the one name for "a production
-   build with real services behind it", and the whole set is exempted together.
-2. **`E2E_TEST_SECRET` was set for the server only.** `signIn()` reads it in
-   the *runner* to put in the request body, so every journey failed before
-   opening a page. `playwright.config.ts` now assigns it in both.
-3. **The factory-password guard refused the suite.** The same pass added "no
-   console action in production while the password is still `0000`" - right,
-   but it asked `NODE_ENV` rather than `isRealDeployment()`, and a mock-store
-   server has no records to protect. (Its message also carried an em dash,
-   which `AGENTS.md` bans in source.)
-4. **`e2e/helpers.ts` derived the unlock cookie's name from the runner's
-   `NODE_ENV`**, so against a production server it looked for the unprefixed
-   name, never cached the unlock, re-typed the password in every console spec
-   and hit the 6-per-15-minutes throttle. It showed up as **eight unrelated
-   console journeys** failing on a lock screen that would not go away.
-5. **`resolveComputed()` in the mock store had the `profiles_v` bug**, which is
-   why it is worth saying twice: it read the institute tables *only*. A roll
-   number written by the import read back as null, so re-pasting the same sheet
-   reported every row as changed. `tests/profiles-view-parity.test.ts` is new
-   and asserts the property directly - a profile reads back what was written to
-   it - because `tests/user-import-idempotency.test.ts` missed it (its sheet
-   carries no roll number).
-6. **The import's undo had been cut from eight restorable fields to four**,
-   dropping hostel, department, roll number, LDAP username and staff category.
-   An undo would have reported success and silently not restored a warden's
-   hostel. `AGENTS.md` names eight; all of them are back.
-
-Two smaller ones: the academic-records console's textarea had been relabelled
-"Or paste", which names the field's relationship to its neighbour rather than
-its content (a screen reader announced nothing useful, and the file picker's
-own button already carries the contrast), and the seeded institute row for the
-**day scholar** named neither parent - which `guestNameRule` reads as "withhold
-Father and Mother", leaving the demo day scholar unable to book for a parent.
+- **[05-credentials-and-security.md](05-credentials-and-security.md) said LDAP
+  had been deleted** on 2 Nov 2026 - `lib/ldap/` gone, `ldapts` removed,
+  `signInWithLdap` gone. All seven files, the dependency and the action are
+  **present**: the integration restored them and that file was never brought
+  back. Corrected, with the restored state named.
+- **Migration 37 was never written up in
+  [21-database.md](21-database.md).** Added, with 38.
 
 ### Left open
 
-[03-roadmap.md](03-roadmap.md) has the list. The two that block a deployment:
+[03-roadmap.md](03-roadmap.md) §2s. The two that matter:
 
-- **`DATABASE_URL` is not set anywhere yet.** `.env.local` has the Supabase
-  project URL and the service-role key but no connection string, so the portal
-  still runs on the mock store. Which pooler to use, and the TLS note, are in
-  `lib/db/client.ts`.
-- **Migrations 31, 33, 34, 35, 36 and 37 are not applied to the hosted
-  project** (1-30 and 32 are, re-verified 27 Oct 2026). 31 and 37 are the two
-  that are *not optional once this branch is deployed*. Running them is a
-  production change and needs the owner's go-ahead, a backup and the order in
-  [04-production.md](04-production.md).
+- **There is no way to set a password from the application** - only the seed
+  or SQL. That is deliberate for a temporary testing door, and the console
+  field is the named follow-up, with `{ stepUp: true }` and a real minimum
+  length as conditions of building it.
+- **The local database is not finished.** `guesthouse_dev` exists on the
+  owner's server (port 5433, role `rizwan`), but `rizwan` lacks `CREATEROLE`,
+  so the three Supabase stand-in roles cannot be created and the migrations
+  cannot be applied there yet. One `sudo` command, in the roadmap.

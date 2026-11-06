@@ -289,6 +289,35 @@ export class PostgresStore implements DataStore {
     return rows[0] ?? null;
   }
 
+  /**
+   * The base table, not `profiles_v` - the view does not select the hash, and
+   * that is what keeps it out of every `Profile` the rest of the application
+   * handles. This is the only query in the codebase that names the column.
+   *
+   * A database still on migration 37 has no such column; rather than failing
+   * the sign-in with a 42703 the door is simply closed, which is what a null
+   * hash means everywhere else.
+   */
+  async getPasswordHash(email: string): Promise<string | null> {
+    try {
+      const { rows } = await this.pool.query(
+        "SELECT password_hash FROM profiles WHERE lower(email) = lower($1)",
+        [email.trim()]
+      );
+      return rows[0]?.password_hash ?? null;
+    } catch (e) {
+      if ((e as { code?: string }).code === "42703") {
+        console.error(
+          "[store] profiles.password_hash is missing - apply migration 38 " +
+            "(supabase/migrations/00000000000038_profile_password_hash.sql) " +
+            "to use the email and password door"
+        );
+        return null;
+      }
+      throw e;
+    }
+  }
+
 
   async createProfile(input: NewProfileInput): Promise<Profile> {
     const cols = Object.keys(input);

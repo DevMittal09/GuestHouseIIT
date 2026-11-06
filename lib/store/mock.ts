@@ -1,4 +1,6 @@
 import type { NewUserGroup, UserGroup } from "@/lib/user-groups";
+import { hashSecret } from "@/lib/crypto";
+import { mockDirectoryPassword } from "@/lib/ldap/mock-directory";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -673,6 +675,24 @@ export class MockStore implements DataStore {
     const db = loadDb();
     const p = db.profiles.find((x) => x.email.toLowerCase() === email.toLowerCase());
     return p ? withComputed(db, p) : null;
+  }
+
+  /**
+   * This backend's password store is the **dummy directory**, the same list
+   * its LDAP door reads: a mock deployment has no `profiles.password_hash`,
+   * and a second set of demo passwords would be a second thing to keep in
+   * step. So a persona signs in here with the password published for it in
+   * `.memories/05-credentials-and-security.md`.
+   *
+   * The record is derived rather than stored, which is why a fresh salt each
+   * time is correct: `verifySecret` reads the salt out of the record it is
+   * given, so the comparison still answers "is this the published password".
+   * An address the directory does not know has no password, and the door
+   * refuses it.
+   */
+  async getPasswordHash(email: string): Promise<string | null> {
+    const published = mockDirectoryPassword(email);
+    return published ? hashSecret(published) : null;
   }
 
   async listGuestHouses(): Promise<GuestHouse[]> {

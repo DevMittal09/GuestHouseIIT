@@ -110,6 +110,27 @@ or your @iitpkd.ac.in account" sentence and the split-screen shape are all
 gone. See "Sign-in: what changed and what did not" below, which this round
 rewrites.
 
+> **The fields came back on 6 Nov 2026** - a form, but not that form. The
+> owner asked for **email and password as the primary door while the roles are
+> being tested**, so the panel now holds, in this order: the form (solid
+> vermilion submit), **Mock Authentication** outlined, **Sign in with Google**
+> outlined with its mark, the two links separated from the form by a ruled
+> "or". The panel is still centred, still has no photograph, and still does
+> not mention LDAP - this password is the portal's own
+> (`profiles.password_hash`), not a directory bind.
+>
+> Three house rules the round had to hold to. **One call to action**: the form
+> is the only solid button, so Google went from solid to outlined rather than
+> a second vermilion appearing beside it. **The Google mark is never drawn on
+> a button that does not talk to Google**, which is why Mock Authentication is
+> text alone. And **no field is starred**, so `RequiredFieldsNote` does not
+> apply - two obviously-required fields do not need a legend.
+>
+> `submitLabel` moved from the picker's button to the **form's** submit, which
+> is how `/book-room` still says "Sign in to book": that is the one place the
+> page can say what the sign-in is *for*, and it belongs on the door people
+> will actually use.
+
 ## The landing page becomes cinematic (27 Oct 2026)
 
 A written brief, six numbered sections, and the owner's own copy for the

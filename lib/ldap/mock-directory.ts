@@ -47,6 +47,22 @@ const ACCOUNTS: MockAccount[] = [
   { uid: "visitor", password: "Visitor@2026", mail: "visitor@iitpkd.ac.in", name: "Unregistered Visitor" },
 ];
 
+/**
+ * The published password for an address, or null where the dummy directory
+ * does not know it.
+ *
+ * This is what the **mock store** answers `getPasswordHash` from: a deployment
+ * with no `DATABASE_URL` has no `profiles.password_hash` to read, and its
+ * password store is this list, exactly as its directory is. So a demo persona
+ * signs in at the email and password door with the same credential that the
+ * LDAP door takes - one published password per persona, in one place, rather
+ * than a second set to keep in step.
+ */
+export function mockDirectoryPassword(mail: string): string | null {
+  const wanted = mail.trim().toLowerCase();
+  return ACCOUNTS.find((a) => a.mail?.toLowerCase() === wanted)?.password ?? null;
+}
+
 /** One dummy login, shown on the sign-in page as a sample while this directory is in use. */
 export const SAMPLE_ACCOUNT = (({ uid, password }) => ({ uid, password }))(
   ACCOUNTS.find((a) => a.uid === "priya")!

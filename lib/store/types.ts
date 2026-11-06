@@ -173,6 +173,18 @@ export interface DataStore {
    */
   getProfileByEmail(email: string): Promise<Profile | null>;
 
+  /**
+   * The scrypt record for an account's password, or null where it has none
+   * (migration 38). Read by `signInWithPassword` and by nothing else.
+   *
+   * It is deliberately **not** part of `Profile`: `profiles_v`, which is what
+   * every other read returns, does not select the column, so a hash cannot
+   * reach a page or a server action's return value by accident. A store that
+   * cannot answer returns null, and the door then refuses the account - the
+   * safe direction.
+   */
+  getPasswordHash(email: string): Promise<string | null>;
+
   listGuestHouses(): Promise<GuestHouse[]>;
   getGuestHouse(id: string): Promise<GuestHouse | null>;
   listRooms(guestHouseId: string): Promise<Room[]>;

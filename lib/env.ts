@@ -53,6 +53,28 @@ export function mockLoginEnabled(): boolean {
   return googleOauth() === null;
 }
 
+/**
+ * The email and password door (`signInWithPassword`, migration 38).
+ *
+ * **Open unless `PASSWORD_LOGIN=false`**, and it is the door the sign-in page
+ * draws first (6 Nov 2026, the owner: "for the time being, I want to use
+ * username/password authentication as the primary login method because it is
+ * much easier for testing"). Google OpenID Connect stays built and stays the
+ * intended method; this is a deliberately temporary arrangement, and
+ * `PASSWORD_LOGIN=false` is the one line that ends it.
+ *
+ * Unlike `mockLoginEnabled()` this is **not** closed by `NODE_ENV`. The mock
+ * picker asks for no secret at all, so it must never be open on a deployment
+ * holding real bookings; this door verifies a scrypt hash, throttles per
+ * address and refuses a blocked account, so a staging deployment can use it.
+ * An account with no `password_hash` is refused either way, and nothing
+ * backfills that column - so turning this on does not, by itself, open any
+ * account.
+ */
+export function passwordLoginEnabled(): boolean {
+  return process.env.PASSWORD_LOGIN !== "false";
+}
+
 export function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }

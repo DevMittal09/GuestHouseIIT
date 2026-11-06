@@ -40,7 +40,9 @@ test("the privacy notice is not published", async ({ page }) => {
 
 test("the booking doors ask for a sign-in rather than failing silently", async ({ page }) => {
   await page.goto("/book-room");
-  await expect(page.getByRole("main").getByRole("link", { name: /^Sign in to book$/ })).toBeVisible();
+  // The primary door is the password form, and its submit button is where the
+  // page says what the sign-in is for (6 Nov 2026).
+  await expect(page.getByRole("main").getByRole("button", { name: /^Sign in to book$/ })).toBeVisible();
 });
 
 test("the contact page shows each guest house on the map, and the footer links the institute", async ({ page }) => {

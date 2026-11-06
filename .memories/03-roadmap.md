@@ -909,6 +909,58 @@ this is what building it would touch.
   `hod_unit_id`), and `institute_offices.office_type` (was `office_class`).
   Five `ALTER TABLE … RENAME COLUMN` statements; no data changes needed.
 
+## 2s. Opened by the 6 Nov 2026 round (second) - the password door and the local database
+
+1. **There is no way to set a password from the application.** Deliberate, and
+   the one thing this round left undone on purpose. `setUserPasswordAction` is
+   what carried the privilege escalation that got the door withdrawn: it asked
+   only for the console unlock (a shared secret, default `0000`) where
+   `deleteUserAction` asks for a TOTP proof inside ten minutes, so anyone with
+   the unlock could set the developer's password and sign in as them.
+   `setPasswordHash` is not on the store either, so there is no half-built path
+   to finish wrongly. **Three conditions before it is rebuilt**, all of them
+   from the archive's own restore plan:
+   - `requireConsole("users", { stepUp: true })`, not `requireConsole("users")`;
+   - a minimum length worth having, decided rather than assumed - the old one
+     was four characters. Note that the office's published test password
+     `test@gh` is seven, so a sensible minimum will not be able to re-set it
+     from the console; the seed is how those accounts get it back;
+   - audited, like every other console mutation.
+   Until then: `supabase/seed-test-accounts.sql`, or SQL.
+
+2. **The owner's local database is not finished.** `guesthouse_dev` exists on
+   the server at port 5433 and the role `rizwan` can connect, but **`rizwan`
+   lacks `CREATEROLE`**, so `supabase/local-postgres-stubs.sql` cannot create
+   the three Supabase stand-in roles and the migrations cannot be applied
+   there. One command, as a superuser:
+
+   ```bash
+   sudo -u postgres psql -p 5433 -c "ALTER ROLE rizwan CREATEROLE;"
+   ```
+
+   Then the three steps in [22-running-and-testing.md](22-running-and-testing.md),
+   Part 1. The whole path is verified on a PostgreSQL 16 container of the same
+   version; only this grant is outstanding.
+
+3. **`PASSWORD_LOGIN` has no production warning.** The door is open unless the
+   variable says otherwise, which is what the owner asked for. It is safe -
+   nothing backfills `password_hash`, so it opens no account by itself - but
+   when Google goes live this is the line to turn off, and nothing reminds
+   anyone. A `envProblems()` notice in production would be the cheap version.
+
+4. **The e2e suite's sign-in is documented twice, differently.** `AGENTS.md`
+   and [05-credentials-and-security.md](05-credentials-and-security.md) say the
+   suite signs in through the account picker by matching a persona by name;
+   `e2e/helpers.ts` actually posts to `/api/auth/test-sign-in` with
+   `E2E_TEST_SECRET`. The code is right. Worth correcting the two files the
+   next time either is touched.
+
+5. **The dump's unexplained extras were not adopted.** `database_backup.sql`
+   carries `projects.created_by`, and a surrogate `room_holds.id` where the
+   migrations use a `(booking_id, room_id)` primary key. Neither is in the
+   migrations and nothing in the code reads them, so both were left out of the
+   seed. If the other developer meant them, they need a migration and a reason.
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the
@@ -1098,3 +1150,4 @@ is written up (all in [02-decisions.md](02-decisions.md) unless noted):
 | The owner's list (9 Oct): the rules the form **enforces** stop being **stated** on it, the availability counts redrawn, the privacy line quietened, the office's number moved into the portal footer, the log's filters rearranged with **PDF export for every role**, the meal booking's numbers typed again, and a dining booking quoted meal rates only | [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |
 | The eleventh list (11 Oct): an office with no HOD is not asked how its booking is approved, the pets notice off the form, and every starred form explaining its stars | [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |
 | White-on-amber contrast | The 19 Sep redesign |
+| Email and password as the primary sign-in door, and the office's 29 test accounts on a local PostgreSQL | 6 Nov 2026 (second round) - [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |

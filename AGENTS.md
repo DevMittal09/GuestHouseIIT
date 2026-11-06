@@ -1,6 +1,6 @@
 <!-- BEGIN:nextjs-agent-rules -->
 
-# This is NOT the Next.js you know
+## This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 
@@ -297,33 +297,65 @@ outstanding invoices instead of every booking ever made.
 whose SHA-256 keys a row in `sessions` (`lib/sessions.ts`, Phase 8). It is the
 only reader.
 
-> **The LDAP form is off the sign-in page** (28 Oct 2026, the owner: "we will
-> not be using LDAP. The intended authentication method is Google
-> authentication, but for now, clicking the sign-in button should initiate a
-> mock authentication flow"). `/sign-in`, `/book-room` and `/book-meal` are
-> one centred panel with **one button per open door** (6 Nov 2026 - it was one
-> button until then): *Sign in with Google* solid with the Google mark, and
-> **Mock Authentication** outlined beneath it, opening the account picker at
-> `/mock-login`. `LoginForm` takes `doors: { google, mock }`; the picker is
-> solid when it is the only door. **Outside production the picker is always
-> open** - configuring Google no longer closes it, because that took the
-> nineteen demo personas away from any developer who set a client id, and the
-> Playwright suite signs in through it. **In production nothing changed**:
-> Google configured closes it, `MOCK_LOGIN=false` closes it, and
-> `MOCK_LOGIN=true` is a startup error. `playwright.config.ts` pins
-> `GOOGLE_CLIENT_ID=""` because Next loads `.env.local` for `next start` too,
-> and credentials there once closed the picker under the whole e2e suite.
+> **Email and password is the primary door, for the time being** (6 Nov 2026,
+> the owner: *"I want to use username/password authentication as the primary
+> login method because it is much easier for testing... Our eventual intended
+> authentication method is Google authentication"*). `/sign-in`, `/book-room`
+> and `/book-meal` are one centred panel holding, **in this fixed order**: the
+> email and password form (solid vermilion submit), **Mock Authentication**
+> outlined, and *Sign in with Google* outlined with the Google mark, the two
+> links separated from the form by a ruled "or". `LoginForm` takes
+> `doors: { password, mock, google }` and is still a **server** component; the
+> form is `components/password-sign-in-form.tsx`, the only client one, because
+> it is the only door with state. `submitLabel` is the **form's** button, which
+> is how `/book-room` still says "Sign in to book".
 >
-> **Nothing was deleted below the interface** —
+> **This is deliberately temporary and `PASSWORD_LOGIN=false` ends it.** Google
+> OpenID Connect is untouched and is still the intended method; it moved down
+> the page and nothing else. Only one solid button on the panel, so don't make
+> Google solid again while the form is there - that would be two calls to
+> action - and never put Google's "G" on the mock button.
+>
+> **The LDAP form is still off the page** (28 Oct 2026) and the form above is
+> not it: that password is the portal's own, in `profiles.password_hash`, not
+> a directory bind. **Nothing was deleted below the interface** -
 > `signInWithLdap`, the throttle, `lib/ldap/` and *Import LDAP usernames* are
-> all as they were, and the rules below still describe them. Don't put the
-> username and password fields back without being asked; don't put Google's
-> "G" on the placeholder; and remember the **e2e suite now signs in through
-> the picker** (`signIn()` in `e2e/helpers.ts` matches a persona by name).
+> all as they were. Don't put the LDAP username and password fields back
+> without being asked.
+>
+> **Outside production the picker is always open** - configuring Google no
+> longer closes it, because that took the nineteen demo personas away from any
+> developer who set a client id. **In production nothing changed**: Google
+> configured closes it, `MOCK_LOGIN=false` closes it, and `MOCK_LOGIN=true` is
+> a startup error. `playwright.config.ts` pins `GOOGLE_CLIENT_ID=""` because
+> Next loads `.env.local` for `next start` too, and credentials there once
+> closed the picker under the whole e2e suite. The **e2e suite signs in
+> through neither door**: `signIn()` (`e2e/helpers.ts`) posts to
+> `/api/auth/test-sign-in` with `E2E_TEST_SECRET`.
 
-Three doors open a session - two server actions in `app/actions/auth.ts` and
-one pair of route handlers under `app/api/auth/google/`. The first is
-reachable only by a crafted request while the form is withdrawn:
+Four doors open a session - three server actions in `app/actions/auth.ts` and
+one pair of route handlers under `app/api/auth/google/`. LDAP is reachable
+only by a crafted request while its form is withdrawn:
+
+- **Email + password** → `signInWithPassword()`. The portal holds this secret
+  itself: `profiles.password_hash` (migration 38), scrypt, compared by
+  `verifySecret` (`lib/crypto.ts`). **A null hash refuses the account**, and
+  nothing backfills the column, so opening the door opens no account by
+  itself. Throttled per address at `RATE_LIMITS.passwordLogin` - **lower than
+  the LDAP door**, because there is no directory lockout behind it. An unknown
+  address, an account with no password and a wrong password get **one
+  message**, and the comparison is **always run** (against a per-process decoy
+  record) so the missing-account path is not a timing oracle - don't add an
+  early return. The session is created **unverified**: a password is not a
+  second factor, so a developer still meets `stepUpProblem()`.
+  **`getPasswordHash` is the only reader**, it queries the `profiles` base
+  table, and `profiles_v` deliberately does not select the column - which is
+  what keeps a hash out of every `Profile`. There is **no `setPasswordHash`
+  and no console field**: that action is what bypassed the TOTP step-up and got
+  the door withdrawn, and `.memories/03-roadmap.md` §2s holds the conditions
+  for rebuilding it. On the mock store the password source is the published
+  dummy directory (`lib/ldap/mock-directory.ts`), so the demo personas keep
+  working with the passwords they already have.
 
 - **LDAP username + password** → `signInWithLdap()`. The *directory* checks the
   password (`lib/ldap/`: `getDirectory()` returns the real `LdapDirectory`
@@ -2343,6 +2375,15 @@ Migration files, applied sequentially:
    **Not optional once the code is deployed**: the manager's approval names
    both columns, so without it nothing can be approved. Reads degrade - the
    store names them only on an approval that carried a category.
+
+38. `00000000000038_profile_password_hash.sql` — `profiles.password_hash`
+   (6 Nov 2026): the scrypt record the email and password door reads.
+   Additive, nullable, **nothing backfilled** - a null hash refuses that
+   account, so the door opens nothing by itself. **Optional**: without it
+   `getPasswordHash` degrades to null and logs which migration to apply, so
+   Google and the picker are unaffected. Deliberately **not** in `profiles_v`,
+   which is what keeps a hash out of every `Profile`, and deliberately not in
+   `PROFILE_COLUMNS`.
 
 Full notes per migration in `.memories/21-database.md`. Migrations are tested
 in a throwaway Postgres 16 — Docker, or `embedded-postgres` on a machine
