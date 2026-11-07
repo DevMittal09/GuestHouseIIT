@@ -90,6 +90,7 @@ import type {
   UserImportStatus,
 } from "@/lib/users-import-undo";
 import type { Pool, PoolClient } from "pg";
+import { BOOKING_JSONB_COLUMNS, serializeJsonbColumns } from "./jsonb";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -483,6 +484,8 @@ export class PostgresStore implements DataStore {
       ...(meal_diet_counts ? { meal_diet_counts } : {}),
     };
 
+    serializeJsonbColumns(bookingData, BOOKING_JSONB_COLUMNS);
+
     const cols = Object.keys(bookingData);
     const vals = Object.values(bookingData);
     const placeholders = vals.map((_, i) => `$${i + 1}`).join(", ");
@@ -496,8 +499,13 @@ export class PostgresStore implements DataStore {
       for (let ri = 0; ri < rooms.length; ri++) {
         const roomInput = rooms[ri];
         const { rows: [card] } = await client.query(
+          // **1-based** (migration 11): "Room 2" is `room_index` 2, which is
+          // what the requester saw on the form, and the column is
+          // `check (room_index >= 1)`. This passed `ri` and so wrote 0 for the
+          // first card, which the check refused - every room booking failed.
+          // `MockStore` has always written `index + 1`.
           `INSERT INTO booking_rooms (booking_id, room_index) VALUES ($1, $2) RETURNING id`,
-          [booking.id, ri]
+          [booking.id, ri + 1]
         );
         if (roomInput.guests.length > 0) {
           const guestCols = [
@@ -529,9 +537,14 @@ export class PostgresStore implements DataStore {
 
       await client.query(
         `INSERT INTO booking_logs (booking_id, action_by, action_by_name, previous_status, new_status, remarks)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [booking.id, input.created_by ?? input.user_id, on_behalf_of_name ?? null,
-         null, booking.status, input.submission_remarks ?? null]
+         VALUES ($1, $2, coalesce((SELECT full_name FROM profiles WHERE id = $2), 'Unknown'), $3, $4, $5)`,
+        [
+          booking.id,
+          input.created_by ?? input.user_id,
+          null,
+          booking.status,
+          input.submission_remarks ?? "Booking submitted",
+        ]
       );
 
       return booking;
@@ -1969,8 +1982,10 @@ export class PostgresStore implements DataStore {
   }
 
   async saveUserMfa(record: UserMfa): Promise<void> {
-    const cols = Object.keys(record);
-    const vals = Object.values(record);
+    // `recovery_codes` is a string[] in a jsonb column - see `jsonbParam`.
+    const row = serializeJsonbColumns({ ...record }, ["recovery_codes"]);
+    const cols = Object.keys(row);
+    const vals = Object.values(row);
     const ph = vals.map((_, i) => `$${i + 1}`).join(", ");
     const sets = cols.filter((c) => c !== "user_id").map((col, idx) => `${col} = $${idx + 2}`);
     await this.pool.query(

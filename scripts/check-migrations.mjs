@@ -34,7 +34,7 @@ const MARKERS = [
     what: "the turnaround buffer",
     sql: "SELECT count(*)::int AS c FROM pg_proc WHERE proname = 'set_booking_buffer' AND pronamespace = 'public'::regnamespace",
   },
-  { n: 18, kind: "column", table: "units", column: "hod_unit_id", what: "HOD approval and projects" },
+  { n: 18, kind: "column", table: "units", column: "hod_approval_from_id", what: "HOD approval and projects" },
   { n: 19, kind: "column", table: "invoices", column: "document", what: "tariffs and invoices" },
   { n: 20, kind: "column", table: "room_blocks", column: "reason", what: "operational states" },
   { n: 21, kind: "column", table: "sessions", column: "token_hash", what: "sessions and security" },
