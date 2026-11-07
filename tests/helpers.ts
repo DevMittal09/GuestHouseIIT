@@ -145,7 +145,8 @@ export function booking(
 function resolveComputed(input: SeededProfileInput): Partial<Profile> {
   const email = input.email.toLowerCase();
 
-  // hostel_name: from institute_students or institute_wardens
+  // hostel_name: from institute_students, or institute_wardens for any of the
+  // three hostel appointments (`HOSTEL_WARDEN_ROLES`).
   const student = seedInstituteStudents.find((s) => s.email.toLowerCase() === email);
   let hostel_name: string | null = student?.hostel ?? null;
   if (!hostel_name) {

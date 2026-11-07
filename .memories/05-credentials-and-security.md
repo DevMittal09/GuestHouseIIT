@@ -21,52 +21,107 @@ must still change is [04-production.md](04-production.md).
 
 ## Part 1 — Every login that exists today
 
-### Demo logins (historical — LDAP removed 2 Nov 2026)
+### The demo accounts — one per kind of user (7 Nov 2026)
 
-> **LDAP sign-in was removed on 2 Nov 2026.** `lib/ldap/` is deleted, `ldapts`
-> is removed, `signInWithLdap` no longer exists. The only sign-in door is
-> **Google OAuth** (or the `test-sign-in` endpoint with `E2E_TEST_SECRET` for
-> Playwright). The table below is kept as the **reference for the demo
-> personas** — their emails, profile ids and roles — which are still seeded
-> and used by the e2e suite. The LDAP usernames and passwords are historical.
-> The e2e suite signs in via `POST /api/auth/test-sign-in` with email +
+> **There are no passwords.** The portal's real door is **Google**; the way
+> every workflow is tested is **Mock authentication** at `/mock-login`, which
+> is one click per account and no password anywhere
+> (`mockLoginEnabled()` in `lib/env.ts` — always open outside production, in
+> production only while Google is unset, and closed outright by
+> `MOCK_LOGIN=false`). `signInWithPassword` and `profiles.password_hash`
+> still exist and still work; nothing in the interface calls them. The e2e
+> suite signs in through `POST /api/auth/test-sign-in` with
 > `E2E_TEST_SECRET`.
+>
+> **The set was rebuilt on 7 Nov 2026** (the owner: "accounts such that we
+> can test all kinds of users which have some difference in workflows"). It
+> replaced two overlapping sets — the old demo personas and a spreadsheet of
+> `test1@`…`test009@` / `wardenhos1@`… accounts imported with every warden
+> rank flattened to one role. **Every account below exists because it takes
+> a route no other account takes.** The set is written down in
+> `lib/store/seed.ts` for the mock store and `scripts/seed-personas.mjs` for
+> PostgreSQL, and `tests/seed-parity.test.ts` compares the two.
 
-| Persona | Role | LDAP username | Password | Email | Mock profile id | Demonstrates |
-| --- | --- | --- | --- | --- | --- | --- |
-| Anjali Menon (Malhar) | Student | `112201001` | `Anjali@2026` | `112201001@smail.iitpkd.ac.in` | `student-anjali` | Student → Malhar warden; demo booking 1 |
-| Rahul Nair (Saveri) | Student | `142202014` | `Rahul@2026` | `142202014@smail.iitpkd.ac.in` | `student-rahul` | Another hostel; no parents on record → guardian |
-| Devika Iyer (day scholar - no hostel) | Student | `122203099` | `Devika@2026` | `122203099@smail.iitpkd.ac.in` | `student-day-scholar` | **`hostel_name` is NULL**, so there is no Assistant Warden stage: the request goes straight to the GH Manager and the log says why (17 Oct 2026). No academic record either, so the form asks for the parents' names rather than locking them |
-| Dr. Priya Sharma | Employee (faculty, CSE) | `priya` | `Priya@2026` | `priya@iitpkd.ac.in` | `employee-priya` | Official → CSE HOD; personal; meals only. Shown as the sample on the sign-in card |
-| Dr. Arun Prasad | Employee (faculty, CSE) — **Faculty Advisor** of the Cultural Affairs Council and Petrichor | `arun.prasad` | `Arun@2026` | `arun.prasad@iitpkd.ac.in` | `faculty-arun` | "Booking as: Faculty Advisor — …", straight to the manager |
-| Prof. R. Venkatesh | Employee (faculty) — **HOD, CSE** by appointment | `hod.cse` | `HodCse@2026` | `hod.cse@iitpkd.ac.in` | `hod-cse` | HOD Queue (`/hod`) |
-| Ravi K. | Employee — non-teaching staff, CSE | `ravi.k` | `Ravi@2026` | `ravi.k@iitpkd.ac.in` | `staff-ravi` | Staff debit heads (**Personal Funds only**, 8 Oct 2026) |
-| Director's Office | Official — officer office, whitelisted | `admin` | `Director@2026` | `admin@iitpkd.ac.in` | `official-admin` | Direct / HOD choice; Institute Grant; exempt from window and stay cap |
-| CSE Department Office | Official — department office | `cse.office` | `CseOffice@2026` | `cse.office@iitpkd.ac.in` | `office-cse` | Department office → CSE HOD; the offices' six heads. On the whitelist through the demo seeds |
-| Petrichor Fest Council | Club (fest) | `petrichor` | `Petrichor@2026` | `petrichor@iitpkd.ac.in` | `club-petrichor` | Cannot book — told to ask its Faculty Advisor; demo booking 2 (legacy club stage) |
-| Cultural Affairs Council | Club (council's own account = secretary's mailbox) | `sec_arts` | `SecArts@2026` | `sec_arts@iitpkd.ac.in` | `council-cultural` | Booked for by its Faculty Advisor |
-| Meera Nair | Student — Cultural Affairs **secretary** (heads the council) | `112301045` | `Meera@2026` | `112301045@smail.iitpkd.ac.in` | `secretary-cultural` | Club Approvals (`/approvals`) for legacy club requests |
-| IAR Student Cell | IAR Student Cell | `alumnicell` | `AlumniCell@2026` | `alumnicell@iitpkd.ac.in` | `iar-student-cell` | Alumni booking → IAR Office; demo booking 3 |
-| IAR Office | IAR Office | `iar` | `IarOffice@2026` | `iar@iitpkd.ac.in` | `iar-cell` | IAR Queue; books official / alumni |
-| Dr. Suresh Kumar | Assistant Warden, Malhar | `warden.malhar` | `Malhar@2026` | `warden.malhar@iitpkd.ac.in` | `warden-malhar` | Warden queue |
-| Dr. Lakshmi Devi | Assistant Warden, Saveri | `warden.saveri` | `Saveri@2026` | `warden.saveri@iitpkd.ac.in` | `warden-saveri` | Scoping (sees only Saveri) |
-| Guest House Manager | GH Manager | `guesthouse` | `Manager@2026` | `guesthouse@iitpkd.ac.in` | `gh-manager` | Allocation, desk, invoices, console |
-| Guest House Caretaker | GH Caretaker | `gh.reception` | `Reception@2026` | `gh.reception@iitpkd.ac.in` | `gh-caretaker` | Reception |
-| Portal Developer | Developer | `developer` | `Developer@2026` | `developer@iitpkd.ac.in` | `developer` | Full console (needs 2FA enrolment — below) |
-| *(no portal account)* | — | `visitor` | `Visitor@2026` | `visitor@iitpkd.ac.in` | — | "Valid LDAP account, not registered on the portal" |
+**Students** — a personal stay at Bageshri, no meals, parents locked to the
+academic record.
 
-- **Retired:** `fa.petrichor` / `Advisor@2026` (the old dedicated Faculty
-  Advisor account, replaced by Dr. Arun Prasad on 24 Sep 2026) and the alumnus
-  persona (retired 16 Sep 2026). An old `.local-db.json` or a hosted database
-  may still hold those rows — seeds never delete.
-- Usernames are the local part of the email; case and surrounding spaces are
-  ignored. Passwords are case-sensitive. The real student username format is the
-  roll number (the owner gave `142301026` as an example); the staff format is
-  unconfirmed.
-- **Supabase ids:** `supabase/seed.sql` gives the same personas uuids
-  `11111111-1111-1111-1111-1111111111NN` (01–20, no 06 or 09 any more) and the
-  units `33333333-3333-3333-3333-3333333333NN`. The mock store uses the
-  readable ids above.
+| Name | Email | Mock id | Hostel | Decided by | Demonstrates |
+| --- | --- | --- | --- | --- | --- |
+| Arjun Pillai | `btech.saveri@smail.iitpkd.ac.in` | `student-btech-saveri` | Saveri Boys | **Assistant Warden** Ms. Anu George (Warden and Deputy Warden copied) | B.Tech; **both parents** on record, so both are offered and locked |
+| Nikhil Varma | `phd.malhar@smail.iitpkd.ac.in` | `student-phd-malhar` | Malhar Boys | **Assistant Warden** Mr. Sajeev Thomas (Warden and Deputy Warden copied) | PhD; **father only** on record, so Mother is not offered at all |
+| Fathima Rasheed | `ms.tilang@smail.iitpkd.ac.in` | `student-ms-tilang` | Tilang A Girls | **Warden** Dr. Shalini Rao | The hostel has **no Assistant Warden**, so the stage falls down the ranks |
+| Devika Iyer | `dayscholar@smail.iitpkd.ac.in` | `student-day-scholar` | *(none)* | GH Manager | **`hostel_name` is NULL**: a day scholar has no warden, so there is no stage and the log says why (17 Oct 2026) |
+| Meera Nair | `secretary.arts@smail.iitpkd.ac.in` | `student-secretary` | Malhar Girls | GH Manager (that hostel has nobody appointed) | Heads the Cultural Affairs Council, so she decides the legacy club stage at `/approvals` |
+
+**Faculty and staff** — official bookings go through their department's HOD.
+
+| Name | Email | Mock id | Demonstrates |
+| --- | --- | --- | --- |
+| Dr. Priya Sharma | `faculty.cse@iitpkd.ac.in` | `faculty-cse` | Teaching staff: official → CSE HOD, personal → the desk, the faculty debit heads |
+| Prof. R. Venkatesh | `hod.cse@iitpkd.ac.in` | `hod-cse` | **HOD of CSE** by appointment: the HOD Queue, and **their own** official booking skips the HOD stage |
+| Prof. S. Anand | `hod.dse@iitpkd.ac.in` | `hod-dse` | **HOD of Data Science**, for that department office's HOD route |
+| Ravi Kumar | `staff.cse@iitpkd.ac.in` | `staff-cse` | **Non-teaching** staff: the same route, but **Personal Funds only** (8 Oct 2026) |
+| Dr. Arun Prasad | `advisor.cultural@iitpkd.ac.in` | `faculty-advisor` | **Faculty Advisor** of the Cultural Affairs Council and Petrichor: "Booking as: Faculty Advisor — …", straight to the desk |
+| Dr. Mohan Das | `registrar@iitpkd.ac.in` | `registrar` | Heads the Registrar's Office, which is what makes that office's Direct / HOD question appear |
+
+**Institute offices** — the four whitelisted mailboxes, each a different row
+on the debitable-heads spreadsheet (`OFFICE_DEBIT_HEADS`, keyed on the
+mailbox before the `@`).
+
+| Name | Email | Mock id | Demonstrates |
+| --- | --- | --- | --- |
+| Director's Office | `director_iitpkd@iitpkd.ac.in` | `office-director` | An officer office with **no head**: never asked Direct or HOD (11 Oct 2026); Institute Grant; exempt from the booking window and the stay cap |
+| Registrar's Office | `ro@iitpkd.ac.in` | `office-registrar` | An officer office **with** a head: asked Direct or Requires HOD approval |
+| CSE Department Office | `office_cs@iitpkd.ac.in` | `office-cse` | A department office: HOD approval goes to the CSE HOD; Department Budget |
+| Data Science Department Office | `office_ds@iitpkd.ac.in` | `office-dse` | The same, through a different department — the two cannot be confused |
+| IAR Office | `iar@iitpkd.ac.in` | `iar-cell` | Books official / alumni **and** decides the Student Cell's requests; never `PENDING_IAR` on its own |
+| IAR Student Cell | `alumnicell@iitpkd.ac.in` | `iar-student-cell` | Books **for an alumnus** only → IAR Office → desk |
+
+**Clubs and councils** — neither account ever submits; its Faculty Advisor
+books for it and it is copied on the mail.
+
+| Name | Email | Mock id | Demonstrates |
+| --- | --- | --- | --- |
+| Cultural Affairs Council | `sec_arts@iitpkd.ac.in` | `club-cultural` | The council's own account *is* its secretary's mailbox |
+| Petrichor Fest Council | `petrichor@iitpkd.ac.in` | `club-petrichor` | A fest under the council, with the same advisor; demo booking 2 is its legacy club stage |
+
+**Hostel wardens** — three ranks per hostel, the most junior deciding
+(`HOSTEL_WARDEN_ROLES`). Their hostel comes from `institute_wardens`, never
+from the profile.
+
+| Name | Email | Mock id | Rank | Hostel |
+| --- | --- | --- | --- | --- |
+| Dr. Suresh Kumar | `warden.malharboys@iitpkd.ac.in` | `warden-malhar` | Warden | Malhar Boys |
+| Dr. Geetha Menon | `dwarden.malharboys@iitpkd.ac.in` | `dwarden-malhar` | Deputy Warden | Malhar Boys |
+| Mr. Sajeev Thomas | `awarden.malharboys@iitpkd.ac.in` | `awarden-malhar` | **Assistant Warden — decides** | Malhar Boys |
+| Dr. Lakshmi Devi | `warden.saveriboys@iitpkd.ac.in` | `warden-saveri` | Warden | Saveri Boys |
+| Dr. Vinod Raj | `dwarden.saveriboys@iitpkd.ac.in` | `dwarden-saveri` | Deputy Warden | Saveri Boys |
+| Ms. Anu George | `awarden.saveriboys@iitpkd.ac.in` | `awarden-saveri` | **Assistant Warden — decides** | Saveri Boys |
+| Dr. Shalini Rao | `warden.tilangagirls@iitpkd.ac.in` | `warden-tilang` | **Warden — decides**, there being no Assistant Warden | Tilang A Girls |
+
+**The desk and the console**
+
+| Name | Email | Mock id | Demonstrates |
+| --- | --- | --- | --- |
+| Guest House Manager | `guesthouse@iitpkd.ac.in` | `gh-manager` | Allocation, the desk, invoices, 11 console sections, the approval workflow |
+| Guest House Caretaker | `gh.reception@iitpkd.ac.in` | `gh-caretaker` | Reception: check-in, check-out, moving dates, invoices |
+| Portal Developer | `developer@iitpkd.ac.in` | `developer` | All 15 console sections (needs 2FA enrolment — below) |
+
+- **The four hostels with nobody appointed** — Malhar Girls, Saveri Girls,
+  Tilang B, Brindavani — are deliberate: a student in one of them enters at
+  the desk with the stage skipped and the reason logged, which is a fourth
+  thing worth being able to see.
+- **Retired:** every `test1@`…`test9@`, `test001@`…`test009@`,
+  `wardenhos1-4@`, `deputy_wardenhos1-3@` and `assistant_wardenhos3-6@`
+  account from the spreadsheet of 6 Nov 2026, and the older demo personas
+  (Anjali Menon, Rahul Nair, `admin@`, `cse.office@`, `priya@`,
+  `arun.prasad@`, `ravi.k@`, `warden.malhar@`, `warden.saveri@`).
+  `npm run seed:personas` deletes them where nothing points at them, and sets
+  `account_status = 'retired'` where a booking or a `security_audit` row
+  does — a retired account cannot sign in and is not on the picker, and the
+  row stays because it is part of somebody's record.
+- **Nothing is seeded with a password.** Mock authentication needs none;
+  `profiles.password_hash` is left null for every persona.
 
 ### Other demo credentials
 
@@ -74,19 +129,15 @@ must still change is [04-production.md](04-production.md).
 | --- | --- | --- |
 | **Console password** (`/admin`, manager and developer) | `0000` | Default until changed in Console Access; stored as a scrypt hash in `app_settings`. **Must be changed before go-live.** |
 | **Developer second factor** | *enrol your own* | First console use as `developer`: Console → Security → set up an authenticator (TOTP), keep the ten recovery codes. Needed before any role change, Settings change or delete. Stored in the database the portal is using — deleting `.local-db.json` removes it |
-| Supabase **Auth** password for seeded / console-created users | *gone* | **Removed in code on 13 Oct 2026** (migration 31). `createProfile` no longer creates a Supabase Auth user, and `supabase/seed.sql` no longer creates 18 of them with `password123`. Nothing in the repository mints a Supabase password any more, and `tests/rls-surface.test.ts` fails if something starts. **The rows already on the hosted project are still there** until `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql` is run - a production action needing the owner's approval. See Part 4, "The second door" |
-| Sample shown on the sign-in card | — | No sample shown (LDAP form removed 28 Oct; credentials box removed 15 Oct) |
-
+| Sample shown on the sign-in card | — | None. The dashed credentials box came off on 15 Oct 2026 and the LDAP form on 28 Oct; the card now carries only the doors that are open |
 
 ### How to sign in quickly for a check
 
-- **Browser:** `/sign-in` → Sign in with Google (once configured).
+- **Browser:** `/sign-in` → **Mock authentication** → the kind of user → the
+  account. Or **Sign in with Google**, once it is configured.
 - **Playwright:** `e2e/helpers.ts` has `ACCOUNTS` and `signIn()`. Uses
   `POST /api/auth/test-sign-in` with `E2E_TEST_SECRET` (set in
   `playwright.config.ts`).
-- **curl in development:** `DEV_LOGIN=true npm run dev`, then
-  `curl -b "gh_mock_user=<mock profile id>" localhost:3000/<page>`. Only
-  honoured with `DEV_LOGIN=true` outside production.
 
 ---
 
@@ -94,20 +145,51 @@ must still change is [04-production.md](04-production.md).
 
 ### How sign-in works
 
-> **LDAP and Mock Authentication were removed on 2 Nov 2026** (the owner:
-> "Keep only Google OAuth only. Remove rest"). `lib/ldap/` is deleted,
-> `signInWithLdap` no longer exists, `loginAs` and `/mock-login` are gone,
-> `lib/password.ts` is deleted. The only sign-in door is **Google OAuth**.
+> **LDAP was removed on 2 Nov 2026** (the owner: "Keep only Google OAuth
+> only. Remove rest"). `lib/ldap/` is deleted and `signInWithLdap` no longer
+> exists. The `ldap_uid` column and its migration 12 index are still in the
+> database; restoring LDAP means rebuilding `lib/ldap/`, the action and the
+> form fields.
 >
-> To restore LDAP sign-in, the entire `lib/ldap/` directory, `lib/password.ts`,
-> the `signInWithLdap` action, and the form fields in `login-form.tsx` would
-> need to be rebuilt. The `ldap_uid` column and its migration 12 index are
-> still in the database.
+> **Mock Authentication came back on 7 Nov 2026** (the owner: "make a mock
+> authentication for this instead of sign in with password"), rebuilt rather
+> than restored - this branch never had the version `main` carries.
+> `/mock-login` is the two-step account picker and `loginAs` is its action.
+> The **email and password form** it replaced is still underneath:
+> `signInWithPassword`, its throttle (`RATE_LIMITS.passwordLogin`) and
+> `profiles.password_hash` all work, and nothing in the interface calls
+> them. Don't put the fields back without being asked.
 
 ```
-The one button ─▶ "Sign in with Google" ─▶ /api/auth/google/start ─▶ callback (lib/oidc.ts)
+Google        ─▶ "Sign in with Google" ─▶ /api/auth/google/start ─▶ callback (lib/oidc.ts)
+Mock auth     ─▶ "Mock authentication" ─▶ /mock-login ─▶ loginAs(profileId)
 E2E tests     ─▶ POST /api/auth/test-sign-in { email, secret } (gated by E2E_TEST_SECRET)
+Password      ─▶ signInWithPassword  (built, works, not reachable from any page)
 ```
+
+### Mock Authentication - the account picker (`/mock-login`)
+
+**Where the door is open is the whole rule** (`mockLoginEnabled()` in
+`lib/env.ts`), because this is not authentication: anyone who reaches the
+page can become any account.
+
+| Environment | Google configured | Open? |
+| --- | --- | --- |
+| Anything but production | either | **yes** - a developer who has just set a client id must not lose the one-click way of becoming each persona, and the Playwright suite needs a door |
+| Production | no | yes - the sign-in button has to lead somewhere |
+| Production | yes | **no** - `/mock-login` 404s and the button is Google's |
+| Any | either, with `MOCK_LOGIN=false` | **no** |
+
+`MOCK_LOGIN=true` is deliberately **not** the switch: a flag that forces the
+picker open is the one that gets copied into production and forgotten.
+Setting it there is a **startup error** (`envProblems`).
+
+The page itself is two steps - the **kind of user** (`PERSONA_GROUPS` in
+`lib/mock-personas.ts`), then the account - and each account shows the chain
+its request would take under the routes currently configured, with the real
+people named. `loginAs` re-checks `mockLoginEnabled()` and
+`account_status === "active"` itself, because a server action is reachable
+without the page, and audits the sign-in as `method: "mock"`.
 
 Session: a row in `sessions` since Phase 8, with an opaque token in the cookie
 (`lib/sessions.ts`; 30 min idle, 12 h absolute). Google proves who the person
@@ -250,6 +332,15 @@ password, the cron secret and the encryption key. **Never commit one, never log
 one, never paste one into an issue.** Rotation procedure:
 [04-production.md](04-production.md#rotating-a-secret).
 
+> **An inline `# comment` after a value is part of the value.** The env
+> loader trims whitespace and nothing else, so
+> `MAIL_HOST=smtp.gmail.com   # default` sets the host to
+> `"smtp.gmail.com   # default"` and every send fails with a DNS error that
+> names a host nobody typed. `.env.local` carried exactly that on three
+> lines until 7 Nov 2026, with `MAIL_DRY_RUN=true  # uncomment to suppress`
+> among them - which is truthy, so the deployment had been silently sending
+> nothing. Comments go on their own line.
+
 ### Environment variables — all of them, and what each switches
 
 Every variable the code reads (`lib/env.ts`, `lib/mail/config.ts`,
@@ -265,7 +356,7 @@ must set.
 | `ID_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEYS_OLD` | Encrypt ID numbers / TOTP secrets; old keys for rotation (`v1:…,v2:…`) | **Required** (the key) |
 | `LDAP_URL`, `LDAP_BASE_DN`, `LDAP_BIND_DN`, `LDAP_BIND_PASSWORD`, `LDAP_UID_ATTRIBUTE`, `LDAP_STARTTLS`, `LDAP_LINK_BY_EMAIL` | Real directory; without `LDAP_URL` the dummy accounts above work | **Required for any real deployment** |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Real Google sign-in (with `APP_URL`); closes Mock Authentication. The flow is built - [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) | Recommended |
-| `MOCK_LOGIN` | `false` closes Mock Authentication | **Set to `false` unless Google is configured** |
+| `MOCK_LOGIN` | `false` closes Mock Authentication, anywhere. Outside production the picker is open whatever this says; `true` is a **startup error** in production (7 Nov 2026) | **Set to `false` unless Google is configured** |
 | `DEV_LOGIN` | Development-only developer doors (the legacy `gh_mock_user` cookie) | **Never** — the server refuses to start |
 | `ALLOW_MOCK_STORE` | Lets a production build run on the JSON store (e2e only) | **Never** |
 | `MAIL_USER`, `MAIL_APP_PASSWORD` / `MAIL_PASSWORD`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_FROM`, `MAIL_FROM_NAME`, `MAIL_REPLY_TO`, `MAIL_MESSAGE_ID_DOMAIN` | SMTP transport; otherwise `.local-mail/*.eml` | Needed to send mail |

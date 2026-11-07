@@ -34,27 +34,27 @@ import { GH, useThrowawayMockDb } from "./helpers";
 const ANJALI: StudentRecord = {
   kind: "student",
   roll_number: "112201001",
-  name: "Anjali Menon",
+  name: "Nikhil Varma",
   program: "B.Tech",
   department: "Computer Science and Engineering",
-  email: "112201001@smail.iitpkd.ac.in",
+  email: "phd.malhar@smail.iitpkd.ac.in",
   phone: "+91 90000 00101",
   father_name: "Ramesh Menon",
   mother_name: "Sreeja Menon",
   guardian_name: null,
-  hostel: "Malhar",
+  hostel: "Malhar Boys",
 };
 
 /** Rahul has neither parent on record - the one persona with a guardian. */
 const RAHUL: StudentRecord = {
   ...ANJALI,
   roll_number: "142202014",
-  name: "Rahul Nair",
-  email: "142202014@smail.iitpkd.ac.in",
+  name: "Arjun Pillai",
+  email: "btech.saveri@smail.iitpkd.ac.in",
   father_name: null,
   mother_name: null,
   guardian_name: "Gopinath Nair",
-  hostel: "Saveri",
+  hostel: "Saveri Boys",
 };
 
 const STUDENT_OPTIONS = ["Mother", "Father", "Guardian", "Grandmother", "Grandfather", "Siblings", "Self"];
@@ -100,7 +100,7 @@ describe("a student's parents come from the record", () => {
       department: null,
       employee_type: null,
       phone: null,
-      email: "priya@iitpkd.ac.in",
+      email: "faculty.cse@iitpkd.ac.in",
       office_number: null,
     };
     expect(guestNameRule(employee, STUDENT_OPTIONS)).toEqual(NO_GUEST_NAME_RULE);
@@ -264,7 +264,7 @@ describe("pasting institute records in", () => {
   });
 
   it("splits a spreadsheet's quoting, commas, tabs and semicolons", () => {
-    expect(splitCsvLine('a@b.c, 112, Anjali Menon')).toEqual(["a@b.c", "112", "Anjali Menon"]);
+    expect(splitCsvLine('a@b.c, 112, Nikhil Varma')).toEqual(["a@b.c", "112", "Nikhil Varma"]);
     expect(splitCsvLine('a@b.c\t112\tAnjali')).toEqual(["a@b.c", "112", "Anjali"]);
     expect(splitCsvLine('a@b.c; 112; Anjali')).toEqual(["a@b.c", "112", "Anjali"]);
     // A quoted field keeps its commas, and "" is one quote.
@@ -279,10 +279,10 @@ describe("pasting institute records in", () => {
     const existing = [
       {
         id: "row-1",
-        email: "112201001@smail.iitpkd.ac.in",
+        email: "phd.malhar@smail.iitpkd.ac.in",
         batch_year: "2022",
         roll_number: "112201001",
-        full_name: "Anjali Menon",
+        full_name: "Nikhil Varma",
         programme: "B.Tech",
         faculty_advisor_guide_name: null,
         department: "Computer Science and Engineering",
@@ -300,23 +300,23 @@ describe("pasting institute records in", () => {
         guardian_name: null,
         guardian_aadhar_number: null,
         guardian_phone_number: null,
-        hostel: "Malhar",
+        hostel: "Malhar Boys",
       },
     ];
     const text = [
       "# the office's list",
       csvHeaderFor("student"),
       "",
-      "112201001@smail.iitpkd.ac.in, 2022, 112201001, Anjali Menon, B.Tech, , Computer Science and Engineering, +91 90000 00101, , Ramesh Menon, , , Sreeja Menon, , , , , , , , , Malhar",
-      "142202014@smail.iitpkd.ac.in, 2022, 142202014, Rahul Nair, M.Tech, , Electrical Engineering, , , , , , , , , , , , Gopinath Nair, , , Saveri",
+      "phd.malhar@smail.iitpkd.ac.in, 2022, 112201001, Nikhil Varma, B.Tech, , Computer Science and Engineering, +91 90000 00101, , Ramesh Menon, , , Sreeja Menon, , , , , , , , , Malhar Boys",
+      "btech.saveri@smail.iitpkd.ac.in, 2022, 142202014, Arjun Pillai, M.Tech, , Electrical Engineering, , , , , , , , , , , , Gopinath Nair, , , Saveri Boys",
     ].join("\n");
     const plan = planInstituteImport("student", text, existing, "p-admin");
     expect(plan.problems).toEqual([]);
     expect(plan.unchanged).toBe(1);
     expect(plan.added).toHaveLength(1);
-    expect(plan.added[0].email).toBe("142202014@smail.iitpkd.ac.in");
+    expect(plan.added[0].email).toBe("btech.saveri@smail.iitpkd.ac.in");
     expect(plan.added[0].guardian_name).toBe("Gopinath Nair");
-    expect(plan.added[0].hostel).toBe("Saveri");
+    expect(plan.added[0].hostel).toBe("Saveri Boys");
     expect(plan.added[0].imported_by).toBe("p-admin");
     expect(describeImport(plan)).toBe("1 added, 1 unchanged");
   });
@@ -430,13 +430,13 @@ describe("header-aware import", () => {
   it("imports with a header in non-default column order", () => {
     const text = [
       "email, hostel_id, full_name, roll_number",
-      "a@smail.iitpkd.ac.in, Malhar, Anjali, 112201001",
+      "a@smail.iitpkd.ac.in, Malhar Boys, Anjali, 112201001",
     ].join("\n");
     const plan = planInstituteImport("student", text, [], null);
     expect(plan.problems).toEqual([]);
     expect(plan.hadHeader).toBe(true);
     expect(plan.added).toHaveLength(1);
-    expect(plan.added[0].hostel).toBe("Malhar");
+    expect(plan.added[0].hostel).toBe("Malhar Boys");
     expect(plan.added[0].full_name).toBe("Anjali");
     expect(plan.added[0].roll_number).toBe("112201001");
     expect(plan.added[0].father_name).toBeNull();
@@ -456,7 +456,7 @@ describe("header-aware import", () => {
   it("ignores unknown columns like 'role' in header mode", () => {
     const text = [
       "email, role, roll_number, full_name, hostel_id",
-      "a@smail.iitpkd.ac.in, Student, 112201001, Anjali, Malhar",
+      "a@smail.iitpkd.ac.in, Student, 112201001, Anjali, Malhar Boys",
     ].join("\n");
     const plan = planInstituteImport("student", text, [], null);
     expect(plan.problems).toEqual([]);
@@ -464,7 +464,7 @@ describe("header-aware import", () => {
     expect(plan.skippedHeaders).toEqual(["role"]);
     expect(plan.added[0].roll_number).toBe("112201001");
     expect(plan.added[0].full_name).toBe("Anjali");
-    expect(plan.added[0].hostel).toBe("Malhar");
+    expect(plan.added[0].hostel).toBe("Malhar Boys");
   });
 
   it("allows more data columns than the kind has when a header is present", () => {
@@ -533,10 +533,10 @@ describe("the institute records the office imported", () => {
     await store.saveStudents(
       [
         {
-          email: "112201001@smail.iitpkd.ac.in",
+          email: "phd.malhar@smail.iitpkd.ac.in",
           batch_year: "2022",
           roll_number: "112201001",
-          full_name: "Anjali Menon",
+          full_name: "Nikhil Varma",
           programme: "B.Tech",
           faculty_advisor_guide_name: null,
           department: "Computer Science and Engineering",
@@ -554,7 +554,7 @@ describe("the institute records the office imported", () => {
           guardian_name: null,
           guardian_aadhar_number: null,
           guardian_phone_number: null,
-          hostel: "Malhar",
+          hostel: "Malhar Boys",
           imported_by: "p-admin",
         },
       ],
@@ -563,12 +563,12 @@ describe("the institute records the office imported", () => {
     const rows = await store.listStudents();
     expect(rows).toHaveLength(1);
 
-    const found = await store.findStudent("112201001@smail.iitpkd.ac.in");
-    expect(found).toMatchObject({ full_name: "Anjali Menon", father_name: "Ramesh Menon" });
+    const found = await store.findStudent("phd.malhar@smail.iitpkd.ac.in");
+    expect(found).toMatchObject({ full_name: "Nikhil Varma", father_name: "Ramesh Menon" });
 
     // Case-insensitive lookup
-    const upper = await store.findStudent("112201001@SMAIL.IITPKD.AC.IN");
-    expect(upper).toMatchObject({ full_name: "Anjali Menon" });
+    const upper = await store.findStudent("PHD.MALHAR@SMAIL.IITPKD.AC.IN");
+    expect(upper).toMatchObject({ full_name: "Nikhil Varma" });
 
     // Not found for wrong email
     expect(await store.findStudent("nobody@iitpkd.ac.in")).toBeNull();
@@ -576,10 +576,10 @@ describe("the institute records the office imported", () => {
     // Update
     await store.saveStudents(
       [],
-      [{ id: rows[0].id, input: { ...rows[0], hostel: "Saveri", imported_by: null } }],
+      [{ id: rows[0].id, input: { ...rows[0], hostel: "Saveri Boys", imported_by: null } }],
     );
-    const updated = await store.findStudent("112201001@smail.iitpkd.ac.in");
-    expect(updated).toMatchObject({ hostel: "Saveri" });
+    const updated = await store.findStudent("phd.malhar@smail.iitpkd.ac.in");
+    expect(updated).toMatchObject({ hostel: "Saveri Boys" });
 
     // Delete
     await store.deleteStudent(rows[0].id);
@@ -590,17 +590,17 @@ describe("the institute records the office imported", () => {
     const { StoreAcademicSource } = await import("@/lib/academic/store-source");
     const source = new StoreAcademicSource();
 
-    const sample = await source.find("student", "112201001@smail.iitpkd.ac.in");
+    const sample = await source.find("student", "phd.malhar@smail.iitpkd.ac.in");
     expect(sample?.origin).toBe("sample");
-    expect(sample?.record).toMatchObject({ name: "Anjali Menon", hostel: "Malhar" });
+    expect(sample?.record).toMatchObject({ name: "Nikhil Varma", hostel: "Malhar Boys" });
 
     await store.saveStudents(
       [
         {
-          email: "112201001@smail.iitpkd.ac.in",
+          email: "phd.malhar@smail.iitpkd.ac.in",
           batch_year: "2022",
           roll_number: "112201001",
-          full_name: "Anjali Menon",
+          full_name: "Nikhil Varma",
           programme: "B.Tech",
           faculty_advisor_guide_name: null,
           department: "Computer Science and Engineering",
@@ -618,15 +618,15 @@ describe("the institute records the office imported", () => {
           guardian_name: null,
           guardian_aadhar_number: null,
           guardian_phone_number: null,
-          hostel: "Saveri",
+          hostel: "Saveri Boys",
           imported_by: null,
         },
       ],
       [],
     );
-    const imported = await source.find("student", "112201001@smail.iitpkd.ac.in");
+    const imported = await source.find("student", "phd.malhar@smail.iitpkd.ac.in");
     expect(imported?.origin).toBe("imported");
-    expect(imported?.record).toMatchObject({ father_name: "Ramesh K. Menon", hostel: "Saveri" });
+    expect(imported?.record).toMatchObject({ father_name: "Ramesh K. Menon", hostel: "Saveri Boys" });
 
     expect(await source.find("student", "999999999@smail.iitpkd.ac.in")).toBeNull();
     await store.deleteAllStudents();

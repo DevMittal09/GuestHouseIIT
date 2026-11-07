@@ -14,7 +14,7 @@ import { useThrowawayMockDb } from "./helpers";
 const OLD_DB = {
   profiles: [
     { id: "s1", email: "s1@smail.iitpkd.ac.in", full_name: "S1", role: "student", unit_id: null },
-    { id: "official-admin", email: "admin@iitpkd.ac.in", full_name: "Director's Office", role: "official", unit_id: null },
+    { id: "office-director", email: "director_iitpkd@iitpkd.ac.in", full_name: "Director's Office", role: "official", unit_id: null },
   ],
   guest_houses: [],
   rooms: [],
@@ -44,15 +44,25 @@ afterAll(() => db.cleanup());
 
 describe("self-healing an old database file", () => {
   it("seeds hostels from the accounts that name them, plus the demo hostels", async () => {
-    expect(await store.listHostels()).toEqual(["Malhar", "Saveri", "Tilang"]);
+    expect(await store.listHostels()).toEqual([
+      "Brindavani",
+      "Malhar Boys",
+      "Malhar Girls",
+      "Saveri Boys",
+      "Saveri Girls",
+      // The one the fixture's own accounts name, kept beside the seven seeded.
+      "Tilang",
+      "Tilang A Girls",
+      "Tilang B",
+    ]);
   });
 
   it("seeds the whitelist with the addresses that used to be hardcoded (and the demo office)", async () => {
     expect(await store.listOfficialEmails()).toEqual([
-      "admin@iitpkd.ac.in",
-      "cse.office@iitpkd.ac.in",
-      "director.office@iitpkd.ac.in",
-      "registrar@iitpkd.ac.in",
+      "director_iitpkd@iitpkd.ac.in",
+      "office_cs@iitpkd.ac.in",
+      "office_ds@iitpkd.ac.in",
+      "ro@iitpkd.ac.in",
     ]);
   });
 
@@ -63,7 +73,7 @@ describe("self-healing an old database file", () => {
   });
 
   it("gives a seeded persona with no unit its demo unit, and nobody else", async () => {
-    expect((await store.getProfile("official-admin"))?.unit_id).toBe("unit-director-office");
+    expect((await store.getProfile("office-director"))?.unit_id).toBe("unit-director-office");
     expect((await store.getProfile("s1"))?.unit_id).toBeNull();
   });
 

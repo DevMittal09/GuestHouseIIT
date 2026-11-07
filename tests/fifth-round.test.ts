@@ -423,15 +423,15 @@ describe("moving a stay's check-in", () => {
 const ANJALI: StudentRecord = {
   kind: "student",
   roll_number: "112201001",
-  name: "Anjali Menon",
+  name: "Nikhil Varma",
   program: "B.Tech",
   department: "CSE",
-  email: "112201001@smail.iitpkd.ac.in",
+  email: "phd.malhar@smail.iitpkd.ac.in",
   phone: null,
   father_name: "Ramesh Menon",
   mother_name: "Sreeja Menon",
   guardian_name: null,
-  hostel: "Malhar",
+  hostel: "Malhar Boys",
 };
 
 /**
@@ -478,18 +478,18 @@ describe("the Assistant Warden's check against the academic record", () => {
 
   it("builds a panel for each student request in the queue, and only those", async () => {
     const { studentRecordPanels } = await import("@/lib/academic/family-server");
-    const anjali = profile({ id: "student-anjali", role: "student", email: "112201001@smail.iitpkd.ac.in" });
+    const anjali = profile({ id: "student-phd-malhar", role: "student", email: "phd.malhar@smail.iitpkd.ac.in" });
     const panels = await studentRecordPanels([
       booking({ id: "b-s", user_role: "student", requester: anjali }, [
-        { guests: [guest({ name: "Ramesh Menon", relationship: "Father" }), guest({ name: "Baby", relationship: "Father", is_infant: true, age: 1 })] },
+        { guests: [guest({ name: "Sudhakara Varma", relationship: "Father" }), guest({ name: "Baby", relationship: "Father", is_infant: true, age: 1 })] },
       ]),
       booking({ id: "b-e", user_role: "employee" }),
     ]);
     expect(Object.keys(panels)).toEqual(["b-s"]);
     expect(panels["b-s"].status).toBe("found");
-    expect(panels["b-s"].rows.find((r) => r.label === "Father's Name")?.value).toBe("Ramesh Menon");
+    expect(panels["b-s"].rows.find((r) => r.label === "Father's Name")?.value).toBe("Sudhakara Varma");
     // The infant is not a parent, whatever was typed.
-    expect(panels["b-s"].family[0]).toMatchObject({ relationship: "Father", onRequest: ["Ramesh Menon"], verdict: "match" });
+    expect(panels["b-s"].family[0]).toMatchObject({ relationship: "Father", onRequest: ["Sudhakara Varma"], verdict: "match" });
   });
 });
 
@@ -546,7 +546,7 @@ afterAll(() => db.cleanup());
 const ROOM = "gh-bageshri-203";
 const LOG = { action_by: "gh-manager", action_by_name: "Manager", new_status: "APPROVED" as const, remarks: "test" };
 const input = (checkIn: string, checkOut: string, patch: Partial<NewBookingInput> = {}): NewBookingInput => ({
-  user_id: "employee-priya", guest_house_id: "gh-bageshri", user_role: "employee", status: "APPROVED",
+  user_id: "faculty-cse", guest_house_id: "gh-bageshri", user_role: "employee", status: "APPROVED",
   purpose_of_visit: "Visit", check_in: checkIn, check_out: checkOut, booking_type: "official", service_type: "room",
   debit_head: "department_budget", debit_details: null, debit_document_url: null, meal_preference: null, meal_diet_counts: null, meal_guest_count: null,
   pets_policy_acknowledged: true, alumni_name: null, alumni_roll_number: null, alumni_id_url: null, custom_fields: null, meals: [],

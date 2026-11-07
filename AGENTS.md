@@ -293,18 +293,29 @@ outstanding invoices instead of every booking ever made.
 whose SHA-256 keys a row in `sessions` (`lib/sessions.ts`, Phase 8). It is the
 only reader.
 
-> **The LDAP form is off the sign-in page** (28 Oct 2026, the owner: "we will
-> not be using LDAP. The intended authentication method is Google
-> authentication, but for now, clicking the sign-in button should initiate a
-> mock authentication flow"). `/sign-in`, `/book-room` and `/book-meal` are
-> one centred panel with **one button**: *Sign in with Google* once Google is
-> configured, otherwise *Sign in*, which opens the account picker at
-> `/mock-login`. **Nothing was deleted below the interface** —
-> `signInWithLdap`, the throttle, `lib/ldap/` and *Import LDAP usernames* are
-> all as they were, and the rules below still describe them. Don't put the
-> username and password fields back without being asked; don't put Google's
-> "G" on the placeholder; and remember the **e2e suite now signs in through
-> the picker** (`signIn()` in `e2e/helpers.ts` matches a persona by name).
+> **No password field is on any sign-in page** (7 Nov 2026, the owner: "make
+> a mock authentication for this instead of sign in with password"; LDAP
+> went on 28 Oct 2026). `/sign-in`, `/book-room` and `/book-meal` are one
+> centred panel with **one button per door that is open**: *Sign in with
+> Google* (solid, with the Google mark) wherever Google is configured, and
+> *Mock authentication* — or *Sign in* when it is the only door — which
+> opens the account picker at `/mock-login`. **Nothing was deleted below the
+> interface**: `signInWithPassword`, its throttle and
+> `profiles.password_hash` all still work and nothing calls them. Don't put
+> the fields back without being asked, and don't put Google's "G" on the
+> mock button.
+>
+> **`/mock-login` is two steps** — the **kind of user**
+> (`PERSONA_GROUPS` in `lib/mock-personas.ts`), then the account — and each
+> account shows **the chain its request would actually take**, computed from
+> the configured routes by `personaRoute`, never written into the page. Keep
+> it that way: a typed-in chain would be wrong the first time anyone edited
+> a route, and wrong authoritatively. `mockLoginEnabled()` (`lib/env.ts`)
+> says where the door is open: **always outside production**, in production
+> only while Google is unset, `MOCK_LOGIN=false` closes it, and
+> `MOCK_LOGIN=true` in production is a startup error. The e2e suite does
+> **not** use the picker — it posts to `/api/auth/test-sign-in` with
+> `E2E_TEST_SECRET`.
 
 Three doors open a session - two server actions in `app/actions/auth.ts` and
 one pair of route handlers under `app/api/auth/google/`. The first is
@@ -447,7 +458,7 @@ the portal did before the chain was configurable.
 
 | Requester | Booking type | Route (`routeFor`) | Debitable heads (default, Settings) |
 | --- | --- | --- | --- |
-| student | personal | Assistant Warden → GH Manager (**no hostel on the profile: direct → GH Manager**) | Personal |
+| student | personal | **Assistant Warden** of their hostel → GH Manager, with that hostel's Warden and Deputy Warden **copied** (no Assistant Warden: down the ranks; **no hostel on the profile: direct → GH Manager**) | Personal |
 | club / council / fest — **raised by its Faculty Advisor** | official | **Direct → GH Manager** — nobody forwards it, HOD included | Student Fund / Special Budget |
 | employee — faculty | official | **HOD** → GH Manager | PDF / Project / Department / Special Budget / Personal |
 | employee — staff | official | **HOD** → GH Manager | Personal |
@@ -634,7 +645,40 @@ field once by migration 25 and are gone from the code.
 - `for_club` in the form data is **re-checked** against
   `clubsBookableByUser()` — never trusted.
 
-Reviewer roles: `warden` (scoped to `profile.hostel_name`), `faculty_advisor`
+### The hostel warden office — three ranks, one stage (7 Nov 2026)
+
+The institute appoints a **Warden**, a **Deputy Warden** and an **Assistant
+Warden** per hostel (`institute_wardens.warden_role`), and the office's rule
+is that the request goes **to the Assistant Warden with the Warden copied**.
+So `warden`, `deputy_warden` and `assistant_warden` are three working roles,
+not one labelled after another.
+
+- **`HOSTEL_WARDEN_ROLES` (`lib/types.ts`) is the list, most junior first,
+  and the order is the rule.** `hostelWardenApproverIds` answers a `warden`
+  stage with the most junior rank the requester's hostel actually has;
+  `hostelWardenCopyIds` is everyone else in that office, **derived from the
+  first** so the two can never name the same person. Don't re-derive either
+  anywhere else, and don't write the copy list as "the Warden and the Deputy
+  Warden" — at a hostel with no Assistant Warden that would ask and copy the
+  same person.
+- A hostel with **nobody** appointed is still nobody: the stage is skipped
+  and the log says so, exactly as for any other unstaffed stage.
+- **They are copied, not approvers.** The CC comes from the new
+  `hostel_warden` `CopyToRule` (`lib/academic/fields.ts`), not from widening
+  `approver` — `approver` means `canReview` passes, and a Warden who is only
+  told must not start passing it.
+- **All three resolve a hostel** in `profiles_v` and the mock store's
+  `withComputed`, from `institute_wardens` by email — not from the profile.
+- **All three land on `/warden`** (`homeForRole`, the layout's queue link,
+  the page's guard) and get their hostel's archive. A Warden whose hostel
+  has an Assistant Warden sees an **empty queue**; that is the honest
+  answer, not a bug to paper over.
+- Without a directory, `decidesStage` accepts any of the three with the
+  right hostel: the rank cannot be compared without profiles, and assuming
+  the stage is staffed is what every stage does in that position.
+
+Reviewer roles: `warden` / `deputy_warden` / `assistant_warden` (all scoped
+to `profile.hostel_name`), `faculty_advisor`
 (legacy: scoped to `profile.department_or_club`, the fallback at a stored
 club request's `PENDING_FA` stage when the club's unit has no head; no demo
 persona since migration 25), `iar_cell`, `gh_manager`, `gh_caretaker`, plus
@@ -2086,20 +2130,42 @@ restore. First and so far only: **`archive/privacy-notice/`**.
   `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 22`
   before running `npm run dev` / `npm run build`.
 
-## Demo personas
+## Demo personas — one per kind of user (7 Nov 2026)
 
-Seeded in `lib/store/seed.ts` (mock) and `supabase/seed.sql` (Supabase auth
-password `password123`, which is *not* a portal login — each persona signs in
-with its dummy LDAP account, listed in `.memories/05-credentials-and-security.md`): two students in different hostels (Malhar, Saveri),
-an employee, a whitelisted official (`admin@iitpkd.ac.in`), the Petrichor club,
-the Cultural Affairs Council (`sec_arts@iitpkd.ac.in`, its secretary's mailbox),
-Dr. Arun Prasad (`arun.prasad@`, an ordinary **faculty employee** named Faculty
-Advisor of the council and of Petrichor — the old `fa.petrichor` account is
-retired), the IAR Student Cell, two wardens, the IAR Office,
-a GH manager, a GH caretaker (`gh.reception@iitpkd.ac.in`), and
-`developer@iitpkd.ac.in`. **There is no alumnus persona** — demo booking 3 is
-now the Student Cell booking for one. Six demo bookings (mock store only) seed
-every queue with something to look at.
+**29 accounts, each of which exists because it takes a route no other
+account takes.** Five students (both parents on record / father only /
+neither, so the guardian / **no hostel** / the council secretary), six
+faculty and staff (two HODs, non-teaching staff, a Faculty Advisor, the
+Registrar), four office mailboxes chosen so each lands on a different row of
+`OFFICE_DEBIT_HEADS`, the two IAR accounts, two club accounts, seven wardens
+across three hostels (two with all three ranks, one with only a Warden), and
+the desk. **Six demo bookings** (mock store only) seed every queue.
+
+**Two seeds, one set of people.** `lib/store/seed.ts` fills the JSON mock
+store; **`scripts/seed-personas.mjs`** (`npm run seed:personas`) fills a
+PostgreSQL database. The set is written twice only because a Node script
+cannot import TypeScript, and **`tests/seed-parity.test.ts` compares them**
+on every run — emails, names, roles, units, hostels, ranks, the whitelist.
+**Change a persona in one and change it in the other**, or that test fails.
+
+- The accounts and what each demonstrates:
+  `.memories/05-credentials-and-security.md` Part 1. Don't copy the list
+  into a page — `/mock-login` is where it is shown.
+- **No passwords.** Mock authentication needs none and nothing seeds a hash.
+- `npm run seed:personas` is idempotent. It **deletes** accounts outside the
+  set where nothing points at them and **retires**
+  (`account_status = 'retired'`) the ones a booking or a `security_audit`
+  row names — the latter because `security_audit` is append-only by trigger,
+  so the FK's `on delete set null` is itself refused and the delete *cannot*
+  succeed. `--dry-run`, `--keep-extra`, `--drop-orphans`.
+- A persona's **hostel is set in `seedInstituteWardens` /
+  `seedInstituteStudents`**, never on the profile: `profiles_v` and
+  `withComputed` resolve it. Same for the roll number, the department and
+  the teaching / non-teaching category.
+- The official whitelist is **exactly** the four office accounts; a parity
+  test asserts it, because an `official` account that is not whitelisted
+  cannot book at all.
+
 
 ## Supabase setup
 

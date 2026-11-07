@@ -184,7 +184,7 @@ test("a record pasted into the console locks the student's parents on the bookin
   // The real paste: this student's father is not the one the dummy record
   // gives, so the form has to be reading the import rather than the dummy.
   await paste.fill(
-    "112201001@smail.iitpkd.ac.in, 112201001, Anjali Menon, B.Tech, Computer Science and Engineering, +91 90000 00101, Ramesh Krishnan Menon, Sreeja Menon, , Malhar"
+    "phd.malhar@smail.iitpkd.ac.in, 112201001, Nikhil Varma, B.Tech, Computer Science and Engineering, +91 90000 00101, Ramesh Krishnan Menon, Sreeja Menon, , Malhar"
   );
   await page.getByRole("button", { name: "Check the paste" }).click();
   await expect(page.getByText("1 added.")).toBeVisible();

@@ -38,7 +38,7 @@ const EMPTY = {
   booking_rooms: [],
   booking_guests: [],
   booking_logs: [],
-  hostels: ["Malhar", "Saveri"],
+  hostels: ["Malhar Boys", "Saveri Boys"],
   units: [
     { id: "u-cse", name: "Computer Science", category: "department", parent_department_id: null, head_id: null, acting_head_id: null },
   ],
@@ -81,8 +81,8 @@ const D = "imp.newcomer@iitpkd.ac.in";
 
 const SHEET = [
   "email, full_name, role",
-  `${A}, Anjali Menon, student`,
-  `${B}, Rahul Nair, student`,
+  `${A}, Nikhil Varma, student`,
+  `${B}, Arjun Pillai, student`,
   `${C}, Dr Priya Sharma, employee`,
 ].join("\n");
 
@@ -121,7 +121,7 @@ describe("importing the same sheet twice", () => {
     const updated = [
       "email, full_name, role",
       `${A}, Anjali R Menon, student`,
-      `${B}, Rahul Nair, student`,
+      `${B}, Arjun Pillai, student`,
       `${C}, Dr Priya Sharma, employee`,
       `${D}, New Comer, student`,
     ].join("\n");

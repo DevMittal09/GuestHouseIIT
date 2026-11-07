@@ -7159,3 +7159,180 @@ their authoritative sources; importing them would just be a third copy.
 files, 2 component files, 2 import modules, 10 test files). 604 tests
 unchanged. Existing databases can drop the three columns or leave them -
 the view shadows them on reads and writes ignore them.
+
+---
+
+## Round of 7 November 2026 — one account per kind of user, mock authentication, and the hostel's three wardens
+
+The owner, with a PDF of the accounts then in the database: *"the dummy
+accounts i have right now is not properly assigned to the workflow. Like we
+have multiple developer accounts and all idk why. Can you please make
+accounts such that, we have one account to test each kind of user… Basically
+i want accounts such that we can test all kinds of users which have some
+difference in workflows."* Then: *"Make a mock authentication for this
+instead of sign in with password… make the mock authentication clean such
+that we can choose what kind of user and then use their account."* And:
+*"all the workflows should be correctly assigned. Like Saveri Hostel
+residing student -> request sent to Saveri Assisstant warden [Mail copied to
+Warden] -> Forwarded to GHM."*
+
+### The hostel's three ranks become three roles
+
+> **Supersedes** the single `warden` role, which had been *labelled*
+> "Assistant Warden" since the role table was written, to say which of the
+> institute's three appointments it stood for.
+
+`deputy_warden` and `assistant_warden` had been in the `Role` union and in
+`ROLE_LABELS` for months and were used by **nothing**: no route resolved
+them, `profiles_v` gave them no hostel, `homeForRole` sent them to
+`/availability`. Meanwhile the institute's own `institute_wardens` table
+carried all three per hostel, and the office's instruction names two of them
+with different jobs — the Assistant Warden **decides**, the Warden is
+**told**. One role cannot express that.
+
+So the three are three roles, and the rule is an ordered list rather than a
+condition: **`HOSTEL_WARDEN_ROLES`, most junior first**. One
+`warden` stage, `hostelWardenApproverIds` picks the most junior rank the
+requester's hostel actually has, and `hostelWardenCopyIds` is everyone else
+in that office.
+
+- **Why a fallback down the ranks at all.** A hostel with no Assistant
+  Warden appointed would otherwise skip the stage and go straight to the
+  desk, which is the behaviour for *nobody appointed* — correct there, wrong
+  here, because somebody at that hostel plainly is responsible. The fallback
+  is what makes "nobody appointed" mean nobody. Tilang A Girls has only a
+  Warden, deliberately, so this is a persona and not a paragraph.
+- **Why the copy list is derived from the approver list** rather than
+  written as "the Warden and the Deputy Warden". Two definitions of the same
+  set disagree the first time a hostel has no Assistant Warden: the Warden
+  would be asked *and* copied. `hostelWardenCopyIds` subtracts whoever
+  `hostelWardenApproverIds` named, so it cannot happen.
+- **Why a new `CopyToRule` (`hostel_warden`) rather than widening
+  `approver`.** `approver` means "can act on a stage of this request", and
+  that is what `canReview` enforces: a Warden who is only copied must not
+  start passing `canReview`. The two facts are different, so they are two
+  rules, and `COPY_TO_RULE.student` now lists both.
+- **Why all three land on `/warden`.** It is `homeForRole` for each, so
+  turning the other two away is a redirect loop. A Warden whose hostel has
+  an Assistant Warden sees an **empty queue**, which is the honest answer:
+  they are told, not asked. They keep the hostel's archive, because they are
+  named in records they would otherwise be unable to read.
+- **What this did not change.** `decidesStage` without a directory still
+  accepts any of the three with the right hostel — the rank cannot be
+  compared without profiles, and assuming the stage is staffed is what every
+  other stage does in that position. The configurable workflow is untouched:
+  `warden` is still one `ApproverRule` kind and one slot.
+
+**Cost.** `profiles_v` and the mock store's `withComputed` had to resolve a
+hostel for the two new roles, which meant **dropping and recreating the
+view** (see below). Fourteen test files named the old personas, and three
+mail-addressing assertions genuinely changed — the Warden and Deputy Warden
+are in CC now, which is the point.
+
+### One account per kind of user, and two seeds held together by a test
+
+The database held two overlapping sets: the portal's demo personas, and a
+spreadsheet of `test1@`…`test009@` / `wardenhos1@`… accounts imported with
+every warden rank flattened to `warden` and three accounts given
+`developer`. Neither set could walk a workflow: the first had no Assistant
+Wardens to speak of, the second had no units, no hostels and no advisors.
+
+The replacement is **29 accounts, each of which exists because it takes a
+route no other account takes** — five students (both parents on record, one
+parent, neither, no hostel, a council secretary), six faculty and staff (an
+HOD, a second HOD, non-teaching staff, a Faculty Advisor, the Registrar),
+four office mailboxes on four different rows of the debitable-heads
+spreadsheet, the two IAR accounts, two club accounts, seven wardens across
+three hostels, and the desk.
+
+- **Why four hostels are left with nobody appointed.** Malhar Girls, Saveri
+  Girls, Tilang B and Brindavani are in `institute_hostels` and have no
+  warden accounts, so a student in one of them enters at the desk with the
+  stage skipped and the reason logged. That is a fourth distinct outcome,
+  and it costs four rows of data to be able to see it.
+- **Why the whitelist is exactly the four office accounts.** An `official`
+  account that is not on `official_email_whitelist` cannot book at all, so
+  any other pairing is a persona that looks fine and fails on submit. A
+  parity test asserts the two lists are the same.
+- **Why the mailboxes are `director_iitpkd@`, `ro@`, `office_cs@` and
+  `office_ds@`.** `OFFICE_DEBIT_HEADS` is keyed on the mailbox before the
+  `@`, so these four get four different budgets — the Institute Grant twice,
+  a department budget twice — without a line of configuration. Inventing
+  prettier addresses would have silently given them all the category's six.
+
+**Two seeds, one set of people.** `lib/store/seed.ts` fills the mock store
+and `scripts/seed-personas.mjs` fills PostgreSQL. The set is written twice
+only because a Node script cannot import TypeScript, and
+**`tests/seed-parity.test.ts` compares them** — emails, names, roles, units,
+hostels, ranks, the whitelist. This is the same shape as
+`tests/approval-routes.test.ts` comparing `DEFAULT_APPROVAL_RULES` against
+the old `switch`: where a fact has to exist twice, a test is what keeps it
+one fact. A shared JSON file was the alternative and was rejected — JSON has
+no comments, and the reason each persona exists is the most valuable thing
+about this list.
+
+**The seeder retires rather than deletes where it must.** An account that a
+booking points at, or that has a `security_audit` row, gets
+`account_status = 'retired'` instead: it cannot sign in, it is off the
+picker, and the record stays. That is not politeness — `security_audit` is
+append-only by trigger, so `profiles`' `on delete set null` on `actor_id` is
+itself refused and the delete **cannot** succeed. See
+[22-running-and-testing.md](22-running-and-testing.md).
+
+### Mock authentication, in two steps
+
+> **Supersedes** the email-and-password form of the Postgres migration, and
+> **partly reverses** the removal of `/mock-login` on 2 Nov 2026.
+
+Nothing below the interface was deleted: `signInWithPassword`, its throttle
+and `profiles.password_hash` all still work. What changed is that no page
+calls them.
+
+- **Why two steps and not one list.** Forty accounts in two columns is the
+  thing the owner was complaining about. The question a tester actually has
+  is "what kind of person am I being next?", so that is the first screen:
+  six kinds, each with a count and one plain line about how that kind's
+  requests travel.
+- **Why the route is computed, not written down.** Each account shows the
+  chain its request would take, read from `approvalStageDetailsFor` and
+  `stageApproverIds` — the same functions that route the request. A list
+  typed into the page would be wrong the first time anyone edited a route at
+  Console → Approval Workflow, and wrong in the most expensive way: it would
+  look authoritative. It also names **the rank that actually decides**, so
+  Tilang A Girls reads "Warden (Dr. Shalini Rao)" and not "Assistant
+  Warden".
+- **Why `mockLoginEnabled()` is about *where*, not *whether*.** Outside
+  production the picker is always open, Google configured or not — a
+  developer who has just set a client id must not lose it, and it is a door
+  the suite can use. In production it exists only while Google is unset,
+  because the button has to lead somewhere. `MOCK_LOGIN=true` is a
+  **startup error** in production: a flag that forces the picker open is the
+  one that gets copied into a deployment and forgotten.
+- **Why the page is server-rendered with `?kind=`** and not a client
+  component with state: it is the page somebody reaches when something else
+  is broken, so it should not need JavaScript to work.
+
+### Mail: the From address, the redirect, and a comment that was part of a value
+
+The owner: *"keep the gmail to be redirected to student.iitpkd01@gmail.com
+but it should be sent from ghm@iitpkd.ac.in"*. Both were already the
+intent — `MAIL_USER` was `ghm@iitpkd.ac.in` and `MAIL_REDIRECT_ALL_TO` the
+test inbox — and **neither was happening**, because `MAIL_DRY_RUN` was set
+and three values in `.env.local` had trailing `# comments` that the env
+loader keeps as part of the value. `MAIL_FROM` is now stated rather than
+inferred from `MAIL_USER`, the comments are on their own lines, and
+`.env.example` says that an inline comment is part of the value, because
+that is where the three lines were copied from.
+
+### Two schema faults found on the way
+
+- **`scripts/init-postgres.sql` had `PENDING_WARDEN_REVIEW` and
+  `PENDING_FA_REVIEW`** in `booking_status` — migration 1's labels, renamed
+  by migration 15 and never used by `lib/types.ts`. A database created from
+  that file would have refused every booking at those two stages. Fixed;
+  existing databases already have the short names.
+- **`create or replace view` cannot change a column list**, so `profiles_v`
+  is dropped and recreated — keeping whichever of `ldap_uid`, `group_id`,
+  `login_disabled_at` and `login_disabled_reason` the database actually has,
+  because a seeding script must not narrow a schema another branch depends
+  on.

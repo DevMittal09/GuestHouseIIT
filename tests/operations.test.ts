@@ -69,7 +69,7 @@ afterAll(() => db.cleanup());
 
 const ROOM = "gh-bageshri-203";
 const input = (checkIn: string, checkOut: string, patch: Partial<NewBookingInput> = {}): NewBookingInput => ({
-  user_id: "employee-priya", guest_house_id: "gh-bageshri", user_role: "employee", status: "APPROVED",
+  user_id: "faculty-cse", guest_house_id: "gh-bageshri", user_role: "employee", status: "APPROVED",
   purpose_of_visit: "Visit", check_in: checkIn, check_out: checkOut, booking_type: "official", service_type: "room",
   debit_head: "department_budget", debit_details: null, debit_document_url: null, meal_preference: null, meal_diet_counts: null, meal_guest_count: null,
   pets_policy_acknowledged: true, alumni_name: null, alumni_roll_number: null, alumni_id_url: null, custom_fields: null, meals: [],

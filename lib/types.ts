@@ -175,11 +175,38 @@ export const BOOKING_CATEGORY_ROLES: Role[] = [
 
 export const REVIEWER_ROLES: Role[] = [
   "warden",
+  "deputy_warden",
+  "assistant_warden",
   "faculty_advisor",
   "iar_cell",
   "gh_manager",
   "gh_caretaker",
 ];
+
+/**
+ * The hostel's warden office, **most junior first**.
+ *
+ * The institute appoints three people per hostel (`institute_wardens`), and
+ * the order here *is* the rule: a student's request is decided by the most
+ * junior appointment the hostel actually has - the Assistant Warden where
+ * there is one, otherwise the Deputy Warden, otherwise the Warden - and
+ * everybody else in the office is **copied** on it
+ * (`hostelWardenApproverIds` / `hostelWardenCopyIds` in
+ * `lib/approval-routes.ts`).
+ *
+ * Until 7 Nov 2026 `warden` was the only one of the three the portal used,
+ * and it was *labelled* "Assistant Warden" to say so. The institute's own
+ * data has all three, with the Warden expecting to be told rather than
+ * asked, so the three are now three roles and the label is the rank.
+ *
+ * All three are hostel-scoped: `profiles_v` (and `withComputed` in the mock
+ * store) resolves `hostel_name` for each of them from `institute_wardens`.
+ */
+export const HOSTEL_WARDEN_ROLES: Role[] = ["assistant_warden", "deputy_warden", "warden"];
+
+export function isHostelWardenRole(role: Role): boolean {
+  return HOSTEL_WARDEN_ROLES.includes(role);
+}
 
 export const STUDENT_RELATIONSHIPS = [
   "Mother",
@@ -726,7 +753,10 @@ export const ROLE_LABELS: Record<Role, string> = {
   // Named as retired so an old booking in the archive is not mistaken for a
   // category anyone can still submit under.
   alumni: "Alumni (via IAR, legacy)",
-  warden: "Assistant Warden",
+  // The three hostel appointments the institute keeps (`institute_wardens`).
+  // The **Assistant Warden** decides a student's request; the Warden and the
+  // Deputy Warden are copied on it. See `HOSTEL_WARDEN_ROLES`.
+  warden: "Warden",
   deputy_warden: "Deputy Warden",
   assistant_warden: "Assistant Warden",
   faculty_advisor: "Faculty Advisor",

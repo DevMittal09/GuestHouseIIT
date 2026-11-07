@@ -830,7 +830,7 @@ app/
     gallery/            /gallery
     contact/            /contact     one map tab per guest house
     sign-in/            /sign-in     general sign-in; where every portal guard redirects
-    mock-login/         /mock-login  Mock Authentication persona picker (open while Google is unconfigured)
+    mock-login/         /mock-login  Mock Authentication: the kind of user, then the account
                                      (privacy/ withdrawn 14 Oct 2026 - archive/privacy-notice/)
   (portal)/             SIGNED-IN portal — unchanged routes, restyled shell
     layout.tsx          ink masthead + service nav + ink footer: copyright, the
@@ -867,37 +867,48 @@ would go stale until the next build.
 
 ## Sign-in: what changed and what did not
 
-> **Current state (28 Oct 2026): one button, and no password.** The owner
-> withdrew LDAP from the interface - "we will not be using LDAP. The intended
-> authentication method is Google authentication, but for now, clicking the
-> sign-in button should initiate a mock authentication flow" - so all three
-> doors (`/sign-in`, `/book-room`, `/book-meal`) are the **same centred
-> panel**: the kicker, the title, one line of lead, one button, one line
-> under it.
+> **Current state (7 Nov 2026): one button per door that is open, and no
+> password field anywhere.** All three doors (`/sign-in`, `/book-room`,
+> `/book-meal`) are the **same centred panel**: the kicker, the title, one
+> line of lead, the buttons, one line under them.
 >
-> | Configured | The button |
+> | Door | The button |
 > | --- | --- |
-> | Google (`GOOGLE_CLIENT_ID` and friends) | **Sign in with Google**, with the Google mark, to `/api/auth/google/start` - the real OpenID Connect flow of Phase 8, unchanged and still unbuilt-upon |
-> | Nothing | **Sign in**, to `/mock-login?next=…`, with "Google sign-in is not connected yet - you will be asked to choose an account" under it. **No Google mark**: a "G" on a button that does not talk to Google claims something untrue, and that rule predates this round |
+> | Google (`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `APP_URL`) | **Sign in with Google**, solid vermilion with the Google mark, to `/api/auth/google/start` - the real OpenID Connect flow of Phase 8 |
+> | Mock authentication (`mockLoginEnabled()`) | **Mock authentication**, outlined under Google, or **Sign in**, solid ink, when it is the only door. To `/mock-login?next=…`. **No Google mark**: a "G" on a button that does not talk to Google claims something untrue |
 >
-> **What went:** the LDAP username and password fields, the domain sentence
-> ("Use your institute LDAP account or your @iitpkd.ac.in account. Personal
-> email accounts cannot be used."), the photograph beside `/sign-in`, the
-> split-screen shape, and the picker's "← Back to LDAP sign in".
+> Under them, whenever the picker is open: "Mock authentication is a demo
+> door: choose a kind of user, then the account to continue as. No password
+> is needed."
 >
-> **What did not:** `signInWithLdap`, the per-uid throttle, the single message
-> for an unknown user and a wrong password, the empty-password refusal,
-> `lib/ldap/` and *Import LDAP usernames*. The door is a form away.
+> **What went on 7 Nov 2026:** the **email and password fields** (the owner:
+> "make a mock authentication for this instead of sign in with password").
+> `signInWithPassword`, its throttle and `profiles.password_hash` are all
+> still there and still work; nothing in the interface calls them.
 >
-> **The e2e suite signs in through the picker now** (`signIn()` in
-> `e2e/helpers.ts`), matching a persona by **name, anchored** - the button
-> reads "name, email, role", so an unanchored match would one day find a role
-> badge.
+> **What went on 28 Oct 2026, and stays gone:** the LDAP username and
+> password fields, the domain sentence ("Use your institute LDAP account or
+> your @iitpkd.ac.in account. Personal email accounts cannot be used."), the
+> photograph beside `/sign-in` and the split-screen shape.
+>
+> **`/mock-login` is two steps** (7 Nov 2026). A ruled grid of the **kinds of
+> user** - six cards, each with its count in the serif figure and a
+> plain-language line about how that kind's requests travel - then
+> `?kind=…`, a ruled list of the accounts in it. Each row carries the name,
+> the role, the email, the hostel or unit, and the **chain its request would
+> actually take**, named people and all. One `<form>` per row, posting
+> `loginAs`. Server-rendered throughout, with `?next=` carried through both
+> steps: no client JavaScript, so it cannot be the thing that breaks.
+>
+> **The e2e suite does not use the picker on this branch**: it signs in with
+> `POST /api/auth/test-sign-in` and `E2E_TEST_SECRET` (`signIn()` in
+> `e2e/helpers.ts`).
 >
 > **The dashed "Demo build" box is still deleted** (15 Oct 2026): it printed a
 > working dummy login on three public pages. The accounts are in
-> [05-credentials-and-security.md](05-credentials-and-security.md) and
-> `lib/ldap/mock-directory.ts`; **don't put them back on a page.**
+> [05-credentials-and-security.md](05-credentials-and-security.md); **don't
+> put them back on a sign-in page.** `/mock-login` itself is the one place
+> they are listed, which is what it is for.
 
 > **Superseded in part (19 Sep 2026, later the same day):** the card now asks
 > for an **LDAP username + password** (`signInWithLdap`) and has a **"Sign in

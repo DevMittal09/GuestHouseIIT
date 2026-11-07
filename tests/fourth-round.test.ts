@@ -401,7 +401,7 @@ afterAll(() => db.cleanup());
 
 function input(patch: Partial<NewBookingInput> = {}): NewBookingInput {
   return {
-    user_id: "employee-priya",
+    user_id: "faculty-cse",
     guest_house_id: "gh-bageshri",
     user_role: "employee",
     status: "PENDING_HOD",
@@ -449,7 +449,7 @@ describe("the mock store and the mail", () => {
     const created = await store.createBooking(input({ copy_to_emails: ["sec@iitpkd.ac.in", "guest@example.org"] }));
     await notify.notifyBookingSubmitted(created.id);
     expect(await requesterMail(created.id, "booking.submitted.requester")).toEqual([
-      { to: ["priya@iitpkd.ac.in"], cc: ["sec@iitpkd.ac.in", "guest@example.org"] },
+      { to: ["faculty.cse@iitpkd.ac.in"], cc: ["sec@iitpkd.ac.in", "guest@example.org"] },
     ]);
   });
 
@@ -459,18 +459,18 @@ describe("the mock store and the mail", () => {
         user_id: "club-petrichor",
         user_role: "club",
         status: "PENDING_GH_MANAGER",
-        created_by: "faculty-arun",
+        created_by: "faculty-advisor",
         debit_head: "department_budget",
         debit_details: null,
       })
     );
-    expect((await store.listBookingsForUser("faculty-arun")).map((b) => b.id)).toContain(created.id);
+    expect((await store.listBookingsForUser("faculty-advisor")).map((b) => b.id)).toContain(created.id);
     expect((await store.listBookingsForUser("club-petrichor")).map((b) => b.id)).toContain(created.id);
     const read = (await store.getBooking(created.id))!;
-    expect(read.logs[0].action_by).toBe("faculty-arun");
+    expect(read.logs[0].action_by).toBe("faculty-advisor");
     await notify.notifyBookingSubmitted(created.id);
     expect(await requesterMail(created.id, "booking.submitted.requester")).toEqual([
-      { to: ["petrichor@iitpkd.ac.in"], cc: ["arun.prasad@iitpkd.ac.in"] },
+      { to: ["petrichor@iitpkd.ac.in"], cc: ["advisor.cultural@iitpkd.ac.in"] },
     ]);
   });
 });

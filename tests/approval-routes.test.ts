@@ -31,7 +31,7 @@ import {
 } from "@/lib/workflow";
 import { asProfile, booking, GH, profile } from "./helpers";
 
-const HOSTEL_MAP: Record<string, string> = { "student-anjali": "Malhar", "student-rahul": "Saveri", "warden-malhar": "Malhar", "warden-saveri": "Saveri" };
+const HOSTEL_MAP: Record<string, string> = { "student-phd-malhar": "Malhar Boys", "student-btech-saveri": "Saveri Boys", "awarden-malhar": "Malhar Boys", "awarden-saveri": "Saveri Boys" };
 const patchedProfiles: Profile[] = seedProfiles.map((p) => asProfile(p, HOSTEL_MAP[p.id] ? { hostel_name: HOSTEL_MAP[p.id] } : undefined));
 const P = (id: string) => patchedProfiles.find((p) => p.id === id)!;
 const units: Unit[] = seedUnits.map((u) => ({ ...u, hod_approval_from_id: u.hod_approval_from_id ?? null }));
@@ -200,12 +200,12 @@ describe("the office edits the chain", () => {
       id: "malhar-direct",
       name: "Malhar students straight to the desk",
       active: true,
-      when: { roles: ["student"], hostels: ["Malhar"] },
+      when: { roles: ["student"], hostels: ["Malhar Boys"] },
       stages: [],
     };
     rules.rules.unshift(malhar);
-    expect(routeFor("student", "room", { rules, hostelName: "Malhar" })).toEqual([]);
-    expect(routeFor("student", "room", { rules, hostelName: "Saveri" })).toEqual([
+    expect(routeFor("student", "room", { rules, hostelName: "Malhar Boys" })).toEqual([]);
+    expect(routeFor("student", "room", { rules, hostelName: "Saveri Boys" })).toEqual([
       "PENDING_WARDEN",
     ]);
   });
@@ -227,7 +227,7 @@ describe("the office edits the chain", () => {
 });
 
 describe("a stage nobody can decide is skipped, not stranded", () => {
-  const priya = P("student-anjali");
+  const priya = P("student-phd-malhar");
   const directory = { units, profiles: patchedProfiles };
 
   it("drops the warden stage when the hostel has no warden", () => {
@@ -262,12 +262,12 @@ describe("a stage nobody can decide is skipped, not stranded", () => {
 });
 
 describe("who decides a stage", () => {
-  const priya = P("student-anjali");
+  const priya = P("student-phd-malhar");
   const directory = { units, profiles: patchedProfiles };
 
   it("resolves each kind of approver", () => {
-    expect(stageApproverIds({ kind: "warden" }, priya, directory)).toContain("warden-malhar");
-    expect(stageApproverIds({ kind: "hod" }, P("staff-ravi"), directory)).toContain("hod-cse");
+    expect(stageApproverIds({ kind: "warden" }, priya, directory)).toContain("awarden-malhar");
+    expect(stageApproverIds({ kind: "hod" }, P("staff-cse"), directory)).toContain("hod-cse");
     expect(stageApproverIds({ kind: "role", role: "iar_cell" }, priya, directory).length).toBeGreaterThan(0);
     expect(stageApproverIds({ kind: "profile", profile_id: "hod-cse" }, priya, directory)).toEqual([
       "hod-cse",
@@ -285,7 +285,7 @@ describe("who decides a stage", () => {
     const ctx = { rules, request, profiles: patchedProfiles };
     expect(canReview(P("hod-cse"), "PENDING_WARDEN", priya, units, ctx)).toBe(true);
     // ...and takes it away from the warden who used to have it.
-    expect(canReview(P("warden-malhar"), "PENDING_WARDEN", priya, units, ctx)).toBe(false);
+    expect(canReview(P("awarden-malhar"), "PENDING_WARDEN", priya, units, ctx)).toBe(false);
   });
 
   it("falls back to the stage's built-in meaning for a request no route describes", () => {
@@ -294,7 +294,7 @@ describe("who decides a stage", () => {
     // No route, so nothing configures PENDING_WARDEN - the warden keeps it,
     // which is what stops a reconfiguration stranding a waiting request.
     expect(
-      canReview(P("warden-malhar"), "PENDING_WARDEN", priya, units, {
+      canReview(P("awarden-malhar"), "PENDING_WARDEN", priya, units, {
         rules,
         request,
         profiles: patchedProfiles,
@@ -320,7 +320,7 @@ describe("who decides a stage", () => {
 
   it("keeps the manager stage out of the office's hands", () => {
     expect(canReview(P("gh-manager"), "PENDING_GH_MANAGER", priya, units)).toBe(true);
-    expect(canReview(P("warden-malhar"), "PENDING_GH_MANAGER", priya, units)).toBe(false);
+    expect(canReview(P("awarden-malhar"), "PENDING_GH_MANAGER", priya, units)).toBe(false);
     // There is no PENDING_GH_MANAGER slot to configure.
     expect(STAGE_STATUSES).not.toContain("PENDING_GH_MANAGER");
   });
@@ -332,7 +332,7 @@ describe("who decides a stage", () => {
     ];
     expect(stagesDecidedBy(P("hod-cse"), rules, directory)).toContain("PENDING_WARDEN");
     // The warden no longer decides anything under these routes.
-    expect(stagesDecidedBy(P("warden-malhar"), rules, directory)).not.toContain("PENDING_WARDEN");
+    expect(stagesDecidedBy(P("awarden-malhar"), rules, directory)).not.toContain("PENDING_WARDEN");
   });
 
   it("reads a stored booking's own route, through canReviewBooking", () => {
@@ -345,13 +345,13 @@ describe("who decides a stage", () => {
       }),
       requester: priya,
     } as BookingWithDetails;
-    expect(canReviewBooking(P("warden-malhar"), stored, units, { profiles: patchedProfiles })).toBe(true);
+    expect(canReviewBooking(P("awarden-malhar"), stored, units, { profiles: patchedProfiles })).toBe(true);
     const rules = draft();
     rules.rules.find((r) => r.id === "student")!.stages = [
       { status: "PENDING_WARDEN", approver: { kind: "profile", profile_id: "hod-cse" } },
     ];
     expect(
-      canReviewBooking(P("warden-malhar"), stored, units, { rules, profiles: patchedProfiles })
+      canReviewBooking(P("awarden-malhar"), stored, units, { rules, profiles: patchedProfiles })
     ).toBe(false);
     expect(canReviewBooking(P("hod-cse"), stored, units, { rules, profiles: patchedProfiles })).toBe(true);
   });
@@ -409,7 +409,7 @@ describe("validation refuses a workflow that cannot work", () => {
 });
 
 describe("a change that would strand a waiting request is refused", () => {
-  const priya = P("student-anjali");
+  const priya = P("student-phd-malhar");
   const waiting = {
     ...booking({
       status: "PENDING_WARDEN",

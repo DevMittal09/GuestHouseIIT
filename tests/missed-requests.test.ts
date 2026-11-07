@@ -198,7 +198,7 @@ describe("the nightly sweep", () => {
   });
   afterAll(() => db.cleanup());
 
-  const student = "student-anjali";
+  const student = "student-phd-malhar";
   const guestHouse = "gh-bageshri";
 
   const request = (patch: Partial<NewBookingInput> = {}): NewBookingInput => ({

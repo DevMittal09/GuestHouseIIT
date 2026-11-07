@@ -27,7 +27,7 @@ import { ACCOUNTS, rowFor, signIn, submitRoomBooking, unlockConsole } from "./he
  * head of any unit. So he has no approval queue at all until a step names
  * him - which is exactly what this journey is about.
  */
-const DEAN = { uid: "arun.prasad", email: "arun.prasad@iitpkd.ac.in", password: "Arun@2026", name: "Dr. Arun Prasad" };
+const DEAN = { uid: "arun.prasad", email: "advisor.cultural@iitpkd.ac.in", password: "Arun@2026", name: "Dr. Arun Prasad" };
 
 async function openWorkflowConsole(page: Page) {
   await signIn(page, ACCOUNTS.manager);
@@ -81,7 +81,7 @@ test("the manager inserts an approval step, and the next request waits for it", 
     .click();
   await student
     .getByLabel("Who decides this step")
-    .selectOption({ label: `${DEAN.name} - arun.prasad@iitpkd.ac.in` });
+    .selectOption({ label: `${DEAN.name} - advisor.cultural@iitpkd.ac.in` });
   await student.getByLabel("Call this step (optional)").fill("Dean of Students");
 
   // The chain redraws with the new step in it, named, after the warden.
@@ -91,7 +91,7 @@ test("the manager inserts an approval step, and the next request waits for it", 
   await expect(inserted).toContainText("step 2 of 2");
 
   // Try it names the people, not the rules.
-  await page.getByLabel("Requester").selectOption({ label: "Anjali Menon (Student)" });
+  await page.getByLabel("Requester").selectOption({ label: "Nikhil Varma (Student)" });
   await page.getByRole("button", { name: "Work out the route" }).click();
   await expect(page.getByText(/Dean of Students/).first()).toBeVisible();
 

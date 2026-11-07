@@ -6,6 +6,32 @@ export function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
+/**
+ * Whether the account picker at `/mock-login` is open.
+ *
+ * **Mock Authentication** is how the portal is tested: one click per demo
+ * account, grouped by the workflow each one demonstrates, with no password
+ * anywhere. The institute's real door is Google, and this is not
+ * authentication - anyone who reaches the page can become any account - so
+ * *where* it is open is the whole rule:
+ *
+ * - **Outside production it is always open**, Google configured or not. A
+ *   developer who has just set a client id must not lose the one-click way
+ *   of becoming each persona, and the Playwright suite signs in through it.
+ * - **In production it exists only while Google is unconfigured**, because
+ *   the sign-in button has to lead somewhere. Configuring Google closes it.
+ * - `MOCK_LOGIN=false` closes it outright, anywhere.
+ *
+ * `MOCK_LOGIN=true` is deliberately **not** the switch: a flag that forces
+ * the picker open is the one that gets copied into production and forgotten.
+ * Setting it there is a startup error instead (`envProblems`).
+ */
+export function mockLoginEnabled(): boolean {
+  if (process.env.MOCK_LOGIN === "false") return false;
+  if (process.env.NODE_ENV !== "production") return true;
+  return googleOauth() === null;
+}
+
 /** The site's own origin, used for OAuth redirects and server-action origins. */
 export function appUrl(): string | null {
   const raw = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? null;
@@ -71,6 +97,16 @@ export function envProblems(env: NodeJS.ProcessEnv = process.env): EnvProblem[] 
   }
   if (env.GOOGLE_CLIENT_ID && !env.GOOGLE_CLIENT_SECRET) {
     problems.push({ variable: "GOOGLE_CLIENT_SECRET", problem: "is needed alongside GOOGLE_CLIENT_ID" });
+  }
+  // `mockLoginEnabled()` answers "not in production" before it reads this, so
+  // the variable does nothing there - but a deployment that sets it clearly
+  // *means* to open the account picker, and anyone who reaches `/mock-login`
+  // can become any account. Refuse to start rather than ignore the intent.
+  if (production && env.MOCK_LOGIN === "true") {
+    problems.push({
+      variable: "MOCK_LOGIN",
+      problem: "must never be forced on in production - the account picker is not authentication",
+    });
   }
   return problems;
 }

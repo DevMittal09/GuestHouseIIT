@@ -11,7 +11,7 @@ import { ACCOUNTS, signIn, unlockConsole } from "./helpers";
  * Restores the demo appointments at the end: the journeys share one database.
  */
 
-const ADVISOR = { uid: "arun.prasad", email: "arun.prasad@iitpkd.ac.in", password: "Arun@2026", name: "Dr. Arun Prasad" };
+const ADVISOR = { uid: "arun.prasad", email: "advisor.cultural@iitpkd.ac.in", password: "Arun@2026", name: "Dr. Arun Prasad" };
 
 async function openUnitsConsole(page: Page) {
   await signIn(page, ACCOUNTS.manager);
@@ -31,7 +31,7 @@ test("changing a council's Faculty Advisor in the console moves who can book for
   await openUnitsConsole(page);
   await page
     .getByLabel("Faculty Advisor of Cultural Affairs Council", { exact: true })
-    .selectOption({ label: "Dr. Priya Sharma - priya@iitpkd.ac.in" });
+    .selectOption({ label: "Dr. Priya Sharma - faculty.cse@iitpkd.ac.in" });
   await expect(page.getByText("Dr. Priya Sharma is now Faculty Advisor of Cultural Affairs Council")).toBeVisible();
 
   // A mailbox of Petrichor's own, in place of the council's.
@@ -54,7 +54,7 @@ test("changing a council's Faculty Advisor in the console moves who can book for
   await openUnitsConsole(page);
   await page
     .getByLabel("Faculty Advisor of Cultural Affairs Council", { exact: true })
-    .selectOption({ label: "Dr. Arun Prasad - arun.prasad@iitpkd.ac.in" });
+    .selectOption({ label: "Dr. Arun Prasad - advisor.cultural@iitpkd.ac.in" });
   await expect(page.getByText("Dr. Arun Prasad is now Faculty Advisor of Cultural Affairs Council")).toBeVisible();
   await page.getByLabel("Secretary's mailbox for Petrichor", { exact: true }).fill("");
   await page.getByRole("button", { name: "Save secretary's mailbox for Petrichor" }).click();

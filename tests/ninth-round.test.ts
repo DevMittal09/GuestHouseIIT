@@ -282,14 +282,14 @@ describe("loading the accounts from a spreadsheet", () => {
   it("reads a paste with no header in the default column order", () => {
     expect(USER_CSV_HEADER).toBe(DEFAULT_COLUMNS.join(", "));
     const plan = planUserImport(
-      "112201001@smail.iitpkd.ac.in, A. Student, student, ",
+      "phd.malhar@smail.iitpkd.ac.in, A. Student, student, ",
       context()
     );
     expect(plan.problems).toEqual([]);
     expect(plan.hadHeader).toBe(false);
     expect(plan.added).toEqual([
       {
-        email: "112201001@smail.iitpkd.ac.in",
+        email: "phd.malhar@smail.iitpkd.ac.in",
         full_name: "A. Student",
         role: "student",
         unit_id: null,
@@ -309,7 +309,7 @@ describe("loading the accounts from a spreadsheet", () => {
     expect(headerColumns(["someone@iitpkd.ac.in", "A Person"])).toBeNull();
 
     const plan = planUserImport(
-      ["Name, Email, Role", "Dr. Priya N, priya@iitpkd.ac.in, faculty"].join("\n"),
+      ["Name, Email, Role", "Dr. Priya N, faculty.cse@iitpkd.ac.in, faculty"].join("\n"),
       context()
     );
     // A header has to start with the email column, so this one is not taken
@@ -317,7 +317,7 @@ describe("loading the accounts from a spreadsheet", () => {
     expect(plan.problems[0]).toMatch(/not an email address/);
 
     const ordered = planUserImport(
-      ["email, name, role", "priya@iitpkd.ac.in, Dr. Priya N, employee"].join("\n"),
+      ["email, name, role", "faculty.cse@iitpkd.ac.in, Dr. Priya N, employee"].join("\n"),
       context()
     );
     expect(ordered.problems).toEqual([]);

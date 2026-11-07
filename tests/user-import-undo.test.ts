@@ -48,7 +48,7 @@ const EMPTY = {
   booking_rooms: [],
   booking_guests: [],
   booking_logs: [],
-  hostels: ["Malhar", "Saveri"],
+  hostels: ["Malhar Boys", "Saveri Boys"],
   units: [
     {
       id: "u-cse",
@@ -146,12 +146,12 @@ async function revert(batchId: string, locked?: (p: Profile) => string | null) {
 
 const A = "undo.anjali@smail.iitpkd.ac.in";
 const B = "undo.rahul@smail.iitpkd.ac.in";
-const C = "undo.priya@iitpkd.ac.in";
+const C = "undo.faculty.cse@iitpkd.ac.in";
 
 const FIRST = [
   "email, full_name, role",
-  `${A}, Anjali Menon, student`,
-  `${B}, Rahul Nair, student`,
+  `${A}, Nikhil Varma, student`,
+  `${B}, Arjun Pillai, student`,
 ].join("\n");
 
 /** The stale sheet: it renames both Anjali and Rahul. */
@@ -190,20 +190,20 @@ describe("an import records what it is about to change", () => {
     expect(batch.added).toHaveLength(1);
     expect((await find(A))?.full_name).toBe("A. Menon");
     // Rahul was never reached, and neither was the new account.
-    expect((await find(B))?.full_name).toBe("Rahul Nair");
+    expect((await find(B))?.full_name).toBe("Arjun Pillai");
     expect(await find(C)).toBeUndefined();
 
     const result = await revert(batch.id);
     expect(result.restored).toBe(1);
     expect(result.conflicts).toEqual([]);
-    expect((await find(A))?.full_name).toBe("Anjali Menon");
+    expect((await find(A))?.full_name).toBe("Nikhil Varma");
   });
 
   it("keeps the previous value of every field it overwrites", async () => {
     const batch = await apply(STALE);
     const anjali = batch.updated.find((u) => u.email.toLowerCase() === A)!;
 
-    expect(anjali.before.full_name).toBe("Anjali Menon");
+    expect(anjali.before.full_name).toBe("Nikhil Varma");
     expect(anjali.after.full_name).toBe("A. Menon");
   });
 });
@@ -220,10 +220,10 @@ describe("undoing one", () => {
 
     expect(result).toMatchObject({ restored: 2, removed: 1, conflicts: [] });
     const after = await find(A);
-    expect(after?.full_name).toBe("Anjali Menon");
+    expect(after?.full_name).toBe("Nikhil Varma");
     // The id never moves - 19 foreign keys point at it.
     expect(after?.id).toBe(before?.id);
-    expect((await find(B))?.full_name).toBe("Rahul Nair");
+    expect((await find(B))?.full_name).toBe("Arjun Pillai");
     expect(await find(C)).toBeUndefined();
   });
 
@@ -251,7 +251,7 @@ describe("undoing one", () => {
     expect(result.conflicts[0]).toMatch(/changed since the import/);
     expect((await find(A))?.full_name).toBe("Anjali R Menon");
     // The rest of the undo still ran.
-    expect((await find(B))?.full_name).toBe("Rahul Nair");
+    expect((await find(B))?.full_name).toBe("Arjun Pillai");
     expect(await find(C)).toBeUndefined();
   });
 
@@ -271,7 +271,7 @@ describe("undoing one", () => {
     expect(result.conflicts.join(" ")).toContain(C);
     expect(result.conflicts.join(" ")).toMatch(/bookings/);
     expect(await find(C)).toBeDefined();
-    expect((await find(A))?.full_name).toBe("Anjali Menon");
+    expect((await find(A))?.full_name).toBe("Nikhil Varma");
   });
 });
 

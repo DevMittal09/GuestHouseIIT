@@ -56,11 +56,16 @@ export const ACADEMIC_KIND_LABELS: Record<AcademicRecordKind, string> = {
  * - `head_of_department`: the head of an office - the Departments & Clubs
  *   console first (the office's unit, or the unit above it), else the head
  *   named on the office's academic record.
+ * - `hostel_warden`: the rest of the requester's hostel warden office - the
+ *   Warden and the Deputy Warden where the **Assistant Warden** is the one
+ *   deciding (`hostelWardenCopyIds`). The office's rule of 7 Nov 2026: the
+ *   request is sent to the Assistant Warden and the Warden is copied. Never
+ *   whoever is deciding it, who is already here as `approver`.
  */
-export type CopyToRule = "approver" | "head_of_department";
+export type CopyToRule = "approver" | "head_of_department" | "hostel_warden";
 
 export const COPY_TO_RULE: Record<AcademicRecordKind, CopyToRule[]> = {
-  student: ["approver"],
+  student: ["approver", "hostel_warden"],
   // Only official bookings have an approver (the HOD); a personal one is
   // copied to nobody.
   employee: ["approver"],

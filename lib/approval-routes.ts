@@ -7,7 +7,14 @@ import type {
   ServiceType,
   StaffCategory,
 } from "./types";
-import { BOOKING_TYPE_LABELS, ROLE_LABELS, SERVICE_TYPE_LABELS, STATUS_LABELS } from "./types";
+import {
+  BOOKING_TYPE_LABELS,
+  HOSTEL_WARDEN_ROLES,
+  isHostelWardenRole,
+  ROLE_LABELS,
+  SERVICE_TYPE_LABELS,
+  STATUS_LABELS,
+} from "./types";
 import { approversOf, hodApproversFor, type Unit } from "./units";
 
 /**
@@ -90,7 +97,13 @@ export function isStageStatus(status: BookingStatus): status is StageStatus {
  * requests from Civil also go to the Dean of Students".
  */
 export type ApproverRule =
-  /** The Assistant Warden of the requester's own hostel. Needs a hostel on both profiles. */
+  /**
+   * The requester's own hostel: its **Assistant Warden**, falling back down
+   * the ranks (`HOSTEL_WARDEN_ROLES`) to the Deputy Warden and the Warden
+   * where the hostel has no Assistant Warden appointed. The rest of that
+   * hostel's warden office is copied instead - `hostelWardenCopyIds`.
+   * Needs a hostel on both profiles.
+   */
   | { kind: "warden" }
   /** Whoever gives HOD approval for the requester's unit (`hodApproversFor`). */
   | { kind: "hod" }
@@ -115,7 +128,7 @@ export const APPROVER_KINDS: ApproverKind[] = [
 ];
 
 export const APPROVER_KIND_LABELS: Record<ApproverKind, string> = {
-  warden: "The Assistant Warden of the requester's hostel",
+  warden: "The Assistant Warden of the requester's hostel (the Deputy Warden or Warden where there is none)",
   hod: "The HOD for the requester's department or office",
   unit_head: "The head of the requester's own unit",
   role: "Everyone holding a role",
@@ -386,6 +399,69 @@ export function hasHostel(profile: Pick<Profile, "hostel_name">): boolean {
 /** Why a `warden` stage cannot apply, in the words the booking's log uses. */
 export const NO_HOSTEL_REASON = "no hostel is recorded on the requester's account";
 
+// --------------------------------------------------- the hostel warden office
+
+/** Everyone appointed to a hostel, whatever their rank. */
+function hostelWardenOffice<T extends Pick<Profile, "role" | "hostel_name">>(
+  hostelName: string,
+  profiles: T[]
+): T[] {
+  return profiles.filter(
+    (p) => isHostelWardenRole(p.role) && hasHostel(p) && p.hostel_name === hostelName
+  );
+}
+
+/**
+ * Who actually decides a `warden` stage: **the most junior appointment the
+ * requester's hostel has** (7 Nov 2026).
+ *
+ * The institute appoints a Warden, a Deputy Warden and an Assistant Warden
+ * per hostel, and the office's instruction is that the **Assistant Warden**
+ * decides a student's request while the other two are told
+ * ({@link hostelWardenCopyIds}). The fallback down the ranks is not a
+ * convenience: a hostel that has no Assistant Warden appointed would
+ * otherwise have its students' requests enter at the Guest House Manager
+ * with nobody from the hostel ever seeing them, which is the opposite of
+ * what the chain is for. Nobody appointed at all is still nobody - the
+ * stage is skipped and the log says so, as for any other stage.
+ *
+ * Reads {@link HOSTEL_WARDEN_ROLES} in order, so the precedence is stated
+ * once and in one place.
+ */
+export function hostelWardenApproverIds(
+  requester: Pick<Profile, "hostel_name">,
+  profiles: Pick<Profile, "id" | "role" | "hostel_name">[]
+): string[] {
+  if (!hasHostel(requester)) return [];
+  const office = hostelWardenOffice(requester.hostel_name as string, profiles);
+  for (const rank of HOSTEL_WARDEN_ROLES) {
+    const atRank = office.filter((p) => p.role === rank);
+    if (atRank.length > 0) return atRank.map((p) => p.id);
+  }
+  return [];
+}
+
+/**
+ * The rest of the hostel's warden office - copied on the request, never
+ * asked to decide it.
+ *
+ * The office's rule, in the owner's words: "request sent to the Saveri
+ * Assistant Warden [mail copied to Warden]". Derived from
+ * {@link hostelWardenApproverIds} rather than from the ranks above it, so
+ * the two can never name the same person twice and a hostel with no
+ * Assistant Warden copies nobody it has just asked.
+ */
+export function hostelWardenCopyIds(
+  requester: Pick<Profile, "id" | "hostel_name">,
+  profiles: Pick<Profile, "id" | "role" | "hostel_name">[]
+): string[] {
+  if (!hasHostel(requester)) return [];
+  const deciding = new Set(hostelWardenApproverIds(requester, profiles));
+  return hostelWardenOffice(requester.hostel_name as string, profiles)
+    .map((p) => p.id)
+    .filter((id) => !deciding.has(id) && id !== requester.id);
+}
+
 /**
  * Why this approver rule cannot apply to this requester **at all**, or null
  * when it can.
@@ -437,14 +513,7 @@ export function stageApproverIds(
     case "warden":
       // Neither side may be hostel-less: a student with no hostel has no
       // warden (`approverNotApplicable`), and a warden with none is nobody's.
-      return hasHostel(requester)
-        ? profiles
-            .filter(
-              (p) => p.role === "warden" && hasHostel(p) && p.hostel_name === requester.hostel_name
-            )
-            .map((p) => p.id)
-            .filter(notRequester)
-        : [];
+      return hostelWardenApproverIds(requester, profiles).filter(notRequester);
     case "hod":
       return hodApproversFor(requester, units);
     case "unit_head":
@@ -515,8 +584,11 @@ export function decidesStage(
   }
   switch (approver.kind) {
     case "warden":
+      // Without a directory the rank cannot be compared - nothing says which
+      // appointments this hostel has - so any of the three is assumed to
+      // decide, exactly as a stage with no directory is assumed staffed.
       return (
-        reviewer.role === "warden" &&
+        isHostelWardenRole(reviewer.role) &&
         hasHostel(reviewer) &&
         reviewer.hostel_name === requester.hostel_name
       );

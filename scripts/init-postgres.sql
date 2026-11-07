@@ -37,9 +37,9 @@ create type public.user_role as enum (
 
 -- booking_status: migrations 1 + 2 + 15 + 29
 create type public.booking_status as enum (
-  'PENDING_WARDEN_REVIEW',
-  'PENDING_FA_REVIEW',
-  'PENDING_IAR_REVIEW',
+  'PENDING_WARDEN',
+  'PENDING_FA',
+  'PENDING_IAR',
   'PENDING_GH_MANAGER',
   'APPROVED',
   'REJECTED',
@@ -852,9 +852,12 @@ create or replace view public.profiles_v as
 select
   p.id, p.email, p.full_name, p.role,
   p.account_status,
+  -- All three hostel appointments are scoped by hostel, not just 'warden':
+  -- the Assistant Warden decides a student's request and the other two are
+  -- copied on it (lib/types.ts HOSTEL_WARDEN_ROLES).
   case
     when p.role = 'student' then s.hostel
-    when p.role = 'warden'  then ih.hostel_name
+    when p.role in ('warden', 'deputy_warden', 'assistant_warden') then ih.hostel_name
     else null
   end as hostel_name,
   u.name as department_or_club,
@@ -870,7 +873,8 @@ from public.profiles p
 left join public.institute_students s
   on lower(s.email) = lower(p.email) and p.role = 'student'
 left join public.institute_wardens w
-  on lower(w.warden_email) = lower(p.email) and p.role = 'warden'
+  on lower(w.warden_email) = lower(p.email)
+  and p.role in ('warden', 'deputy_warden', 'assistant_warden')
 left join public.institute_hostels ih
   on w.hostel_id = ih.hostel_id
 left join public.units u

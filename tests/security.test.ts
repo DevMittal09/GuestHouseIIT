@@ -194,7 +194,7 @@ describe("sessions and throttles in the store", () => {
   it("signs out everywhere", async () => {
     for (const token of ["a", "b", "c"]) {
       await store.createSession({
-        user_id: "employee-priya",
+        user_id: "faculty-cse",
         token_hash: hashToken(token),
         idle_expires_at: future(30),
         absolute_expires_at: future(720),
@@ -205,9 +205,9 @@ describe("sessions and throttles in the store", () => {
         user_agent: null,
       });
     }
-    expect(await store.revokeUserSessions("employee-priya")).toBe(3);
-    expect(await store.listUserSessions("employee-priya")).toHaveLength(0);
-    expect(await store.revokeUserSessions("employee-priya")).toBe(0);
+    expect(await store.revokeUserSessions("faculty-cse")).toBe(3);
+    expect(await store.listUserSessions("faculty-cse")).toHaveLength(0);
+    expect(await store.revokeUserSessions("faculty-cse")).toBe(0);
   });
 
   it("counts attempts per key and resets after the window", async () => {

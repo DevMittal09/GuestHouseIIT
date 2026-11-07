@@ -59,7 +59,7 @@ describe("Requires HOD approval is only offered where there is an HOD", () => {
   });
 
   it("is the Director's Office in the demo data, and not the CSE office", () => {
-    const director = { id: "official-admin", unit_id: "unit-director-office" };
+    const director = { id: "office-director", unit_id: "unit-director-office" };
     const cseOffice = { id: "office-cse", unit_id: "unit-cse-office" };
     expect(hodApproversFor(director, seedUnits)).toEqual([]);
     expect(hodApproversFor(cseOffice, seedUnits)).toEqual(["hod-cse"]);

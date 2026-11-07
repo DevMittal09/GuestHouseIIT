@@ -1349,3 +1349,66 @@ Two lessons:
   purpose, is deleted rather than left to be believed.
 - **A test that depends on the order of a list is depending on a layout.**
   Nothing about the booking flow changed in that round; a heading did.
+### Mail went nowhere, and the SMTP host had a comment in it (7 Nov 2026)
+
+`.env.local` carried three lines written the way `.env.example` showed them:
+
+```
+MAIL_HOST=smtp.gmail.com          # default; change for institute SMTP
+MAIL_PORT=465                     # default
+MAIL_DRY_RUN=true                 # uncomment to suppress all mail
+```
+
+**The env loader trims whitespace and nothing else.** So `MAIL_HOST` was the
+string `"smtp.gmail.com          # default; change for institute SMTP"`, and
+`MAIL_DRY_RUN` was the string `"true   # uncomment to suppress all mail"` -
+which `truthy()` does not match, so dry run was in fact **off**... except
+that the deployment had also written `MAIL_DRY_RUN=true` plainly elsewhere in
+the history of the file. Either way the symptom is the same and reads as a
+code fault: **no mail arrives and nothing in the application says why.**
+
+Two fixes, both kept:
+
+- Comments in `.env.local` and `.env.example` go on **their own line**.
+- `scripts/seed-personas.mjs` has its own loader for the same file and
+  **does** strip an inline comment from an unquoted value, because it has to
+  read `DATABASE_URL` out of a file a person has been editing by hand.
+
+To check the whole transport without sending anything: resolve the config the
+way `mailConfig()` does and call nodemailer's `verify()`. It authenticates
+against the SMTP host and returns without queueing a message, which is enough
+to tell a wrong app password from a wrong host from a dry run.
+
+### A profile with an audit row cannot be deleted (7 Nov 2026)
+
+```
+error: security_audit is append-only
+```
+
+...raised by `delete from public.profiles where id = $1`, which names neither
+table. `security_audit.actor_id` is `on delete set null`, so deleting the
+account is an **UPDATE** on `security_audit`, and that table's trigger
+refuses every update (migration 16, CERT-In). Every account that has ever
+signed in has such a row.
+
+It is not specific to a script: the console's Delete user hits the same wall.
+`npm run seed:personas` **retires** those accounts instead - `account_status
+= 'retired'`, which stops them signing in and takes them off the account
+picker - and names them on screen so the difference is visible. The real fix
+is on the roadmap: either let the guard allow an `actor_id` nullification, or
+make the column `on delete no action` and have the application retire rather
+than delete.
+
+### `create or replace view` refuses a changed column list (7 Nov 2026)
+
+```
+error: cannot drop columns from view
+```
+
+...from replacing `profiles_v`. `create or replace view` may **add** trailing
+columns and may not remove or reorder any, and the database being seeded had
+four columns on `profiles` (`ldap_uid`, `group_id`, `login_disabled_at`,
+`login_disabled_reason`) that this branch does not read. `drop view` then
+`create view` is the only way, and the seeder **keeps whichever of those
+columns the database actually has** rather than dropping them - a seeding
+script must not quietly narrow a schema another branch depends on.

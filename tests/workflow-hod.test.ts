@@ -57,7 +57,7 @@ describe("routeFor - every pipeline", () => {
   });
 
   it("staff official bookings need the HOD too (not only faculty)", () => {
-    const ravi = P("staff-ravi");
+    const ravi = P("staff-cse");
     const stages = approvalStagesFor({ user_role: "employee", booking_type: "official" }, ravi, units);
     expect(stages).toEqual(["PENDING_HOD"]);
   });
@@ -68,7 +68,7 @@ describe("routeFor - every pipeline", () => {
 });
 
 describe("the HOD, scoped to their department", () => {
-  const priya = P("employee-priya");
+  const priya = P("faculty-cse");
   const hodCse = P("hod-cse");
 
   it("the CSE HOD approves CSE faculty's official bookings", () => {
@@ -88,8 +88,8 @@ describe("the HOD, scoped to their department", () => {
   });
 
   it("an acting HOD may approve the HOD's own booking", () => {
-    const withActing = units.map((u) => (u.id === "unit-cse" ? { ...u, acting_head_id: "employee-priya" } : u));
-    expect(hodApproversFor(hodCse, withActing)).toEqual(["employee-priya"]);
+    const withActing = units.map((u) => (u.id === "unit-cse" ? { ...u, acting_head_id: "faculty-cse" } : u));
+    expect(hodApproversFor(hodCse, withActing)).toEqual(["faculty-cse"]);
     expect(canReview(priya, "PENDING_HOD", hodCse, withActing)).toBe(true);
   });
 
@@ -106,7 +106,7 @@ describe("the HOD, scoped to their department", () => {
   });
 
   it("an officer office's HOD approval is its own head - none set, so the stage is skipped", () => {
-    const director = P("official-admin");
+    const director = P("office-director");
     expect(hodUnitIdFor(director.unit_id, units)).toBe("unit-director-office");
     expect(
       approvalStagesFor({ user_role: "official", booking_type: "official", office_approval: "hod" }, director, units)
@@ -114,7 +114,7 @@ describe("the HOD, scoped to their department", () => {
   });
 
   it("the warden, the manager or a stranger cannot act at the HOD stage", () => {
-    for (const id of ["warden-malhar", "gh-manager", "faculty-arun"]) {
+    for (const id of ["awarden-malhar", "gh-manager", "faculty-advisor"]) {
       expect(canReview(P(id), "PENDING_HOD", priya, units)).toBe(false);
     }
   });
@@ -135,9 +135,9 @@ describe("club: advisor or council secretary first, then the HOD it answers to",
     expect(stages).toEqual(["PENDING_FA", "PENDING_HOD"]);
     expect(nextStatusAfter("PENDING_FA", stages)).toBe("PENDING_HOD");
     expect(nextStatusAfter("PENDING_HOD", stages)).toBe("PENDING_GH_MANAGER");
-    expect(canReview(P("secretary-cultural"), "PENDING_FA", club, withHod)).toBe(true);
+    expect(canReview(P("student-secretary"), "PENDING_FA", club, withHod)).toBe(true);
     expect(canReview(P("hod-cse"), "PENDING_HOD", club, withHod)).toBe(true);
-    expect(canReview(P("secretary-cultural"), "PENDING_HOD", club, withHod)).toBe(false);
+    expect(canReview(P("student-secretary"), "PENDING_HOD", club, withHod)).toBe(false);
   });
 
   it("the manager's approval makes it APPROVED", () => {
@@ -164,15 +164,15 @@ describe("debitable heads from the office's list, per category", () => {
   ];
   it.each<[string, Role, BookingType, string[]]>([
     // "All funds except Institute Grant, Alumni, Student Fund and Hostel."
-    ["faculty", "employee-priya" as Role, "official", ["professional_development_fund", "project_grant", "department_budget", "special_budget", "personal_funds"]],
+    ["faculty", "faculty-cse" as Role, "official", ["professional_development_fund", "project_grant", "department_budget", "special_budget", "personal_funds"]],
     // "Non faculty - Personal Funds."
-    ["staff", "staff-ravi" as Role, "official", ["personal_funds"]],
+    ["staff", "staff-cse" as Role, "official", ["personal_funds"]],
     // "Offices" is one list, not one per class of office.
-    ["officer office", "official-admin" as Role, "official", OFFICES],
+    ["officer office", "office-director" as Role, "official", OFFICES],
     ["department office", "office-cse" as Role, "official", OFFICES],
     // A personal booking is not even asked which budget pays (7 Oct 2026).
-    ["personal", "employee-priya" as Role, "personal", ["personal_funds"]],
-    ["student", "student-anjali" as Role, "personal", ["personal_funds"]],
+    ["personal", "faculty-cse" as Role, "personal", ["personal_funds"]],
+    ["student", "student-phd-malhar" as Role, "personal", ["personal_funds"]],
   ])("%s", (_label, id, type, heads) => {
     const p = P(id as string);
     const cat = debitCategoryFor(p.role, type, p, units);
@@ -192,7 +192,7 @@ describe("debitable heads from the office's list, per category", () => {
   });
 
   it("dining never offers Project; the rest of a category's list is the same", () => {
-    const priya = P("employee-priya");
+    const priya = P("faculty-cse");
     const dining = debitHeadsByType("employee", ["official"], priya, units, DEFAULT_DEBIT_RULES, "dining");
     expect(dining.official).toEqual([
       "professional_development_fund",
@@ -232,7 +232,7 @@ describe("debitable heads from the office's list, per category", () => {
         faculty: ["department_budget", "institute_grant"],
       },
     };
-    const priya = P("employee-priya");
+    const priya = P("faculty-cse");
     expect(
       debitHeadsByType("employee", ["official"], priya, units, tampered, "room").official
     ).toEqual(["department_budget"]);
@@ -257,9 +257,9 @@ describe("the schema accepts its own output for every requester role", () => {
   const checkIn = addDaysToDateValue(toInstituteDateValue(new Date()), 3);
   const checkOut = addDaysToDateValue(checkIn, 1);
   const personaFor: Record<string, string> = {
-    student: "student-anjali",
-    employee: "employee-priya",
-    official: "official-admin",
+    student: "student-phd-malhar",
+    employee: "faculty-cse",
+    official: "office-director",
     club: "club-petrichor",
     iar_cell: "iar-cell",
     iar_student_cell: "iar-student-cell",
@@ -317,7 +317,7 @@ describe("the schema accepts its own output for every requester role", () => {
 
   const config = buildDefaultFormConfig("employee", [GH]);
   const lists = {
-    room: debitHeadsByType("employee", ["official", "personal"], P("staff-ravi"), units, DEFAULT_DEBIT_RULES, "room"),
+    room: debitHeadsByType("employee", ["official", "personal"], P("staff-cse"), units, DEFAULT_DEBIT_RULES, "room"),
     dining: {},
   };
   const base = {
@@ -343,7 +343,7 @@ describe("the schema accepts its own output for every requester role", () => {
 
   it("Project is typed beside the head, and a project id is still checked if one is sent", () => {
     const faculty = {
-      room: debitHeadsByType("employee", ["official"], P("employee-priya"), units, DEFAULT_DEBIT_RULES, "room"),
+      room: debitHeadsByType("employee", ["official"], P("faculty-cse"), units, DEFAULT_DEBIT_RULES, "room"),
       dining: {},
     };
     const schema = bookingPayloadSchema(config, { mealsAvailable: true, debitHeads: faculty, projectIds: ["proj-storage"] });
@@ -418,15 +418,15 @@ describe("history scope for an HOD", () => {
     if (!scope.ok) throw new Error("scope refused");
     expect(scope.isOwnBookings).toBe(false);
     const mine = booking({ id: "own", user_id: "hod-cse", requester: hodCse });
-    const dept = booking({ id: "dept", user_id: "employee-priya", requester: P("employee-priya") });
+    const dept = booking({ id: "dept", user_id: "faculty-cse", requester: P("faculty-cse") });
     const office = booking({ id: "office", user_id: "office-cse", requester: P("office-cse") });
-    const other = booking({ id: "other", user_id: "student-anjali", requester: P("student-anjali") });
+    const other = booking({ id: "other", user_id: "student-phd-malhar", requester: P("student-phd-malhar") });
     const result = runBookingSearch([mine, dept, office, other], { ...scope.criteria });
     expect(result.rows.map((b) => b.id).sort()).toEqual(["dept", "office", "own"]);
   });
 
   it("an ordinary employee still sees only their own", () => {
-    const scope = historyScope(P("staff-ravi"), units);
+    const scope = historyScope(P("staff-cse"), units);
     expect(scope.ok && scope.isOwnBookings).toBe(true);
   });
 });

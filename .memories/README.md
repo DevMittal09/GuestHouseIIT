@@ -61,7 +61,16 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · PostgreSQL (direct via
 **Node 22 or newer**; see the root [`setup.md`](../setup.md) for runtime and
 deployment requirements.
 
-**Status, 30 Oct 2026.** Feature-complete for every workflow specified; taken
+**Status, 7 Nov 2026.** The current round rebuilt the demo accounts as
+**one per kind of user** (29 of them, seeded into both stores and held
+together by a parity test), brought back **Mock Authentication** as a
+two-step picker that computes each account's real route, and made the
+institute's three hostel appointments - **Assistant Warden, Deputy Warden,
+Warden** - three working roles: the most junior decides, the rest are
+copied. Mail now really is sent from `ghm@iitpkd.ac.in` and redirected to
+the test inbox; it had been silently off.
+
+Before that: feature-complete for every workflow specified; taken
 through a ten-phase production-readiness programme, **twelve** rounds of the
 office's corrections and the owner's **thirteenth and fourteenth lists**,
 **five** design passes,
@@ -119,9 +128,12 @@ greyed out of the week and month views, the privacy consent tick is gone, and
 Supabase). The schema is `scripts/init-postgres.sql` and `npm run
 check:migrations` verifies a live database has everything it needs.
 
-**Signing in** is **Google OAuth only** since 2 Nov 2026. LDAP and Mock
-Authentication were removed entirely -
-[05-credentials-and-security.md](05-credentials-and-security.md) Part 2.
+**Signing in** is **Google OAuth, or Mock Authentication** - the account
+picker at `/mock-login`, rebuilt on 7 Nov 2026 as two steps (the kind of
+user, then the account) with each account's **real route** computed beside
+it. LDAP was removed on 2 Nov 2026 and the email-and-password form came off
+the card on 7 Nov; both still exist below the interface.
+[05-credentials-and-security.md](05-credentials-and-security.md) Parts 1-2.
 **The Google flow is built and verified, only unconfigured** - don't rebuild
 it. Turning it on is [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) at the repo
 root, which also carries the two defects to fix first: the account lookup
@@ -129,10 +141,10 @@ scans **every** profile (inefficient at scale — [03-roadmap.md](03-roadmap.md)
 gate 12), and the start leg's `hd` hint may keep every `@smail` student out
 of Google's account chooser.
 
-**Numbers.** 12 roles (10 active) ·
+**Numbers.** 13 roles (12 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
-19 demo personas · 6 demo bookings · 23 real rooms · **25 photographs** ·
-599 unit tests · 50 end-to-end journeys · 15 console sections ·
+**29 demo accounts** · 6 demo bookings · 23 real rooms · **25 photographs** ·
+**648 unit tests** · 50 end-to-end journeys · 15 console sections ·
 **5 invoice layout versions**.
 
 ---
@@ -246,13 +258,14 @@ actually lives").
 
 | Role | Does |
 | --- | --- |
-| Student | Books family (personal), **Bageshri only and no meals**, parents taken from their academic record → **Assistant Warden** of their hostel → manager. **No hostel on the profile → straight to the manager** (17 Oct 2026): a day scholar has no warden, and the booking's log says so |
+| Student | Books family (personal), **Bageshri only and no meals**, parents taken from their academic record → the **Assistant Warden** of their hostel, with that hostel's **Warden and Deputy Warden copied** (7 Nov 2026) → manager. A hostel with no Assistant Warden falls to its Deputy Warden, then its Warden. **No hostel on the profile → straight to the manager** (17 Oct 2026): a day scholar has no warden, and the booking's log says so |
 | Faculty / staff (`employee`) | Official → **HOD** → manager; personal → manager; meals only; **as Faculty Advisor** of a council or club when named in the console → straight to the manager |
 | Official (whitelisted office) | Direct → manager, or **Requires HOD approval** - asked only where an HOD is set for the office; exempt from the booking window and the stay cap |
 | Club / fest / council account | **Cannot book** — its Faculty Advisor books for it; it sees the bookings and gets the mail |
 | IAR Student Cell | Books **for an alumnus** only → **IAR Office** → manager |
 | IAR Office | Books (official / alumni) **and** approves the Student Cell |
-| Assistant Warden, HOD, council secretary | Approve by queue; an HOD or secretary is **an appointment in the console, not a role**. The warden sees each student's academic record and a check of the parents on the request against it |
+| Assistant Warden, Deputy Warden, Warden | The institute's three hostel appointments, now three roles (`HOSTEL_WARDEN_ROLES`). The **most junior rank the hostel has decides**; the rest are **copied** on every staff mail about the request. All three land on `/warden` and see their hostel's archive. The deciding warden sees each student's academic record and a check of the parents on the request against it |
+| HOD, council secretary | Approve by queue; both are **an appointment in the console, not a role** |
 | **Guest House Manager** | Final approval by **allocating rooms**; the whole desk, including an earlier or later check-in; books for guests; invoices with additional charges; reinstates a **Missed** request; **edits the approval workflow itself**; 11 console sections |
 | Guest House Caretaker | Reception: check-in and check-out, moving a stay's dates, invoices |
 | Developer | The whole console (15 sections), behind a password and TOTP |

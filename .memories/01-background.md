@@ -72,6 +72,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **3 Nov** (second) | **Eliminate `hostel_name` from the profiles table.** Hostel is now a computed field: PostgresStore reads from a SQL view `profiles_v` that JOINs `profiles` to `institute_students` (students) and `institute_wardens` -> `institute_hostels` (wardens). MockStore uses `resolveHostel()` / `withHostel()` helpers. `NewProfileInput` excludes `hostel_name`. User import no longer accepts hostel as a column. FK added on `institute_students.hostel` -> `institute_hostels(hostel_name)`. All 22+ downstream consumers unchanged. ~20 files modified, 604 tests pass. **No migration** (column removed from `init-postgres.sql`). |
 | **3 Nov** (third) | **Rename unit columns for clarity.** `units.kind` -> `category`, `parent_id` -> `parent_department_id`, `office_class` -> `office_type`, `hod_unit_id` -> `hod_approval_from_id`. Also `institute_offices.office_class` -> `office_type`. Label values updated: "Officer office" -> "Independent office", "Department office" -> "Under a department". ~25 files, 604 tests pass. **No migration** (columns renamed in `init-postgres.sql`; existing DBs need four `ALTER TABLE RENAME COLUMN`). |
 | **4 Nov** | **Remove `department_or_club`, `roll_number` and `staff_category` from profiles.** Continues the computed-fields pattern from 3 Nov. All three are now computed at read time by `profiles_v` / `withComputed()`: `department_or_club` from `units.name`, `roll_number` from `institute_students`, `staff_category` from `institute_employees.employee_type`. User import reduced to email/name/role/unit. ~30 files, 604 tests pass. **No migration** (columns removed from `init-postgres.sql`). |
+| **7 Nov** | **One account per kind of user, mock authentication, and the hostel's three wardens.** The owner, with a PDF of the accounts then in the database: one account to test each kind of user, mock authentication in place of the password form, and *"Saveri Hostel residing student -> request sent to Saveri Assistant warden [Mail copied to Warden] -> Forwarded to GHM"*. `deputy_warden` and `assistant_warden` become working roles (`HOSTEL_WARDEN_ROLES`, most junior decides, the rest are copied through a new `hostel_warden` Copy-to rule); the persona set becomes **29 accounts** seeded by `lib/store/seed.ts` and `npm run seed:personas`, held together by `tests/seed-parity.test.ts`; `/mock-login` returns as a **two-step picker** that computes each account's route from the configured rules; mail is sent from `ghm@iitpkd.ac.in` and redirected to the test inbox, which had been silently off. Two schema faults fixed on the way. ~40 files, **648 tests** pass. **No migration file** - the seeder adds the two enum values and rebuilds `profiles_v`. |
 
 ## The problem
 
@@ -1497,3 +1498,58 @@ and computed at read time by the `profiles_v` SQL view (Postgres) or
 | 5 | Update all test files | **Done.** 10 test files updated with `asProfile`/`asProfiles` helpers. 604 tests pass. |
 
 Build clean: lint, typecheck, tests (604), build all pass.
+
+---
+
+## Round of 7 November 2026 - one account per kind of user, mock authentication, the hostel's three wardens
+
+The owner uploaded a PDF of the accounts then in the database (`test1@` …
+`test009@`, `wardenhos1-4@`, `deputy_wardenhos1-3@`,
+`assistant_wardenhos3-6@`, all with the password `test@gh`) and asked for
+them to be replaced.
+
+> *"the dummy accounts i have right now is not properly assigned to the
+> workflow. Like we have multiple developer accounts and all idk why. Can
+> you please make accounts such that, we have one account to test each kind
+> of user… one guest house manager, one guest house caretaker, one dept
+> office for something like Data Science, one office for director, one
+> student whos staying outside hostel, one MS/PhD student staying at
+> hostel[Malhar], One Btech student staying at hostel[Saveri]..etc…
+> Remove the testing accounts i have already as shown in the pdf i
+> uploaded. Make a mock authentication for this instead of sign in with
+> password. Since we may have a lot of accounts to test all conditions,
+> make the mock authentication clean such that we can choose what kind of
+> user and then use their account."*
+>
+> *"I want to test all the workflows including the gmail workflow. For now
+> keep the gmail to be redirected to student.iitpkd01@gmail.com but it
+> should be sent from ghm@iitpkd.ac.in. And make sure all the workflows are
+> correctly assigned. Like Saveri Hostel residing student -> request sent
+> to Saveri Assisstant warden[Mail copied to Warden] -> Forwarded to GHM.
+> Like that all workflows we had originally should be implemented."*
+
+### What was asked, and the status of each item
+
+| # | Asked | Status |
+|---|---|---|
+| 1 | One account per kind of user, covering every workflow difference | **Done.** 29 accounts: 5 students (both parents on record / one parent / neither / no hostel / council secretary), 6 faculty and staff (two HODs, non-teaching staff, a Faculty Advisor, the Registrar), 4 office mailboxes on 4 different debitable-head rows, the 2 IAR accounts, 2 club accounts, 7 wardens across 3 hostels, and the desk. Listed with what each demonstrates in [05-credentials-and-security.md](05-credentials-and-security.md) Part 1. |
+| 2 | A department office for something like Data Science | **Done.** Data Science Department Office (`office_ds@`), under a Data Science & Engineering department with its own HOD, beside the CSE one — so the two HOD routes cannot be confused. |
+| 3 | An office for the Director | **Done.** `director_iitpkd@`, an officer office with **no head**, which is also the case where the Direct / Requires HOD question is never asked. The Registrar's Office (`ro@`) is the officer office that *does* have a head, so both branches exist. |
+| 4 | A student staying outside hostel | **Done.** `dayscholar@smail…`, hostel genuinely NULL, straight to the Guest House Manager with the reason logged. |
+| 5 | An MS/PhD student at Malhar, a B.Tech student at Saveri | **Done.** Nikhil Varma (PhD, Malhar Boys) and Arjun Pillai (B.Tech, Saveri Boys). Fathima Rasheed (MS, Tilang A Girls) was added as well, because that hostel has no Assistant Warden and is the only way to see the fallback. |
+| 6 | Remove the accounts in the PDF | **Done.** `npm run seed:personas` deletes them where nothing points at them. Six could not be deleted — a booking or a `security_audit` row names them — and are **retired** instead: they cannot sign in and are off the picker. The reason is a real defect, now on the roadmap. |
+| 7 | Populate the tables for the new accounts | **Done.** Profiles, units (9), hostels (7), `institute_students`, `institute_employees`, `institute_offices`, `institute_fcc`, `institute_wardens` and the official whitelist, in both seeds. |
+| 8 | Mock authentication instead of the password form | **Done.** `/mock-login` rebuilt, `loginAs` added, the email and password fields removed from the sign-in card. `signInWithPassword` and `profiles.password_hash` are untouched below the interface. |
+| 9 | Clean, choose a kind of user then the account | **Done.** Two steps: six kinds with a count and a line about how that kind's requests travel, then the accounts, each showing the chain its request would actually take with the people named. |
+| 10 | Mail from `ghm@iitpkd.ac.in`, redirected to `student.iitpkd01@gmail.com` | **Done.** `MAIL_FROM` is now stated rather than inferred. Both were already intended and neither was happening: `MAIL_DRY_RUN` was on, and three `.env.local` values had trailing `# comments` that the env loader keeps as part of the value. SMTP authentication verified. |
+| 11 | Saveri student → Saveri Assistant Warden, Warden copied → GHM | **Done.** `assistant_warden` and `deputy_warden` become working roles; `hostelWardenApproverIds` picks the most junior rank the hostel has and `hostelWardenCopyIds` copies the rest, through a new `hostel_warden` Copy-to rule so they are CC on every staff mail about the request. |
+| 12 | All the original workflows correctly assigned | **Done, and nothing else changed.** `DEFAULT_APPROVAL_RULES` is untouched; what changed is who a `warden` stage resolves to, and the data behind the other routes (units with heads, offices with HOD units, a Faculty Advisor on both student bodies). The picker shows each account's resolved chain, which is how to check the rest. |
+
+Two faults found on the way and fixed: `scripts/init-postgres.sql` named two
+`booking_status` values (`PENDING_WARDEN_REVIEW`, `PENDING_FA_REVIEW`) that
+migration 15 renamed and the code has never used — a database built from
+that file would have refused every booking at those stages — and
+`profiles_v` cannot be replaced with `create or replace view` once its
+column list changes.
+
+Clean: lint, typecheck, **648 tests** (39 new), build.

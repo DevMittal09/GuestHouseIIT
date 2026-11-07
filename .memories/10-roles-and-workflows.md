@@ -42,7 +42,9 @@ file is a bug.
 | `club` | Club / Fest Council | `/dashboard` | **No** — its Faculty Advisor books for it | — | — | — |
 | `iar_student_cell` | IAR Student Cell | `/dashboard` | On behalf of an alumnus only | — | — | — |
 | `iar_cell` | IAR Office | `/iar` | Official or for an alumnus; meals only | The Student Cell's requests | — | — |
-| `warden` | Assistant Warden | `/warden` | — | Students of their hostel | — | — |
+| `assistant_warden` | Assistant Warden | `/warden` | — | **Decides** their hostel's student requests | — | — |
+| `deputy_warden` | Deputy Warden | `/warden` | — | Copied; decides where the hostel has no Assistant Warden | — | — |
+| `warden` | Warden | `/warden` | — | Copied; decides where the hostel has neither of the above | — | — |
 | `gh_manager` | Guest House Manager | `/manager` | At the desk, for a guest (official / alumni) | Final stage of everything | Everything | 11 of 15 sections |
 | `gh_caretaker` | Guest House Caretaker | `/caretaker` | — | — | Check-in/out, extend, invoices | — |
 | `developer` | Developer (Superadmin) | `/admin` → `/admin/users` | — | — | Invoices | All 15 sections |
@@ -56,23 +58,64 @@ professor named on a council or club. All three are ordinary accounts
 (`employee`, `student`) that gain a queue or a booking option because the
 console names them — change the name there and the queue or option moves.
 
+### The hostel warden office — three ranks, one stage (7 Nov 2026)
+
+The institute appoints a **Warden**, a **Deputy Warden** and an **Assistant
+Warden** to each hostel (`institute_wardens.warden_role`). Until this round
+the portal had one `warden` role, *labelled* "Assistant Warden" to say which
+of the three it stood for; the office's instruction is that the request goes
+**to the Assistant Warden** and the **Warden is copied on it**, so the three
+are now three roles.
+
+- **`HOSTEL_WARDEN_ROLES`** (`lib/types.ts`) is the list, **most junior
+  first**: `assistant_warden`, `deputy_warden`, `warden`. The order *is* the
+  rule.
+- **`hostelWardenApproverIds`** (`lib/approval-routes.ts`) answers a `warden`
+  stage: the most junior rank the requester's hostel actually has. A hostel
+  with no Assistant Warden falls to its Deputy Warden, then its Warden - not
+  because that is tidy, but because the alternative is a hostel whose
+  students' requests nobody there ever sees. A hostel with nobody appointed
+  is nobody: the stage is skipped and the log says so, as for any stage.
+- **`hostelWardenCopyIds`** is the rest of that office, and is derived from
+  the first, so the two can never name the same person. It is the
+  `hostel_warden` Copy-to rule (`lib/academic/fields.ts`), which means the
+  Warden and Deputy Warden are **CC on every staff mail about the request**
+  (Part 3), not just a line on the card.
+- **All three ranks are hostel-scoped**: `profiles_v` (and `withComputed` in
+  the mock store) resolves `hostel_name` for each of them from
+  `institute_wardens`, by email.
+- All three land on `/warden` and see their hostel's archive. A Warden whose
+  hostel has an Assistant Warden sees an **empty queue**, which is the honest
+  answer: they are told, not asked.
+- Without a directory - the mail module, the Copy-to chain - `decidesStage`
+  cannot compare ranks, so **any** of the three with the right hostel is
+  assumed to decide. That is the same assumption every other stage makes when
+  it cannot count its approvers.
+
 ---
 
 ### Signing in — every role
 
-- **One button**, on `/sign-in` and on the public `/book-room` and
-  `/book-meal` (28 Oct 2026; it was an LDAP username and password, with this
-  as the second door). It opens the one-click **account picker** at
-  `/mock-login`, which is available while Google sign-in is not configured
-  (`mockLoginEnabled()`) and closed by `MOCK_LOGIN=false`. When
-  `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `APP_URL` are set the button
-  is **Sign in with Google** (real OpenID Connect; institute domains only;
-  must match an existing portal account) and the picker 404s.
-- **LDAP still works underneath** - `signInWithLdap`, the dummy directory,
-  the `profiles.ldap_uid` match, the one message for an unknown user or a
-  wrong password, and **8 attempts per username per 15 minutes** - but
-  nothing in the interface calls it. See
+- **One button per door that is open**, on `/sign-in` and on the public
+  `/book-room` and `/book-meal`. **Sign in with Google** (real OpenID
+  Connect; institute domains only; the account must already exist) whenever
+  `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `APP_URL` are set, and
+  **Mock authentication** - the account picker at `/mock-login` - wherever
+  `mockLoginEnabled()` says so: always outside production, and in production
+  only while Google is unset. `MOCK_LOGIN=false` closes it outright.
+- **The email and password form came off on 7 Nov 2026** (the owner: "make a
+  mock authentication for this instead of sign in with password").
+  `signInWithPassword`, its throttle and `profiles.password_hash` are all
+  still there; nothing in the interface calls them. See
   [05-credentials-and-security.md](05-credentials-and-security.md) Part 2.
+- **The picker is two steps**: choose the **kind of user**
+  (`PERSONA_GROUPS` in `lib/mock-personas.ts` - students, faculty and staff,
+  institute offices, clubs and councils, hostel wardens, the desk), then the
+  account. Each account shows **the chain its request would take under the
+  routes currently configured**, with the real people named, who would be
+  copied, and what it decides for other people - all computed from
+  `approvalStageDetailsFor` and `stageApproverIds`, never written down, so
+  the page cannot promise a route the portal would not follow.
 - **Session**: a row in `sessions`, opaque cookie (`__Host-gh_session` in
   production), **30 minutes idle, 12 hours absolute**. "Switch user" signs out
   to `/sign-in`. One browser = one session: signing in as someone else in one
@@ -133,8 +176,13 @@ Everything a requester can do with a booking they own (or raised for a club):
   **No Aadhaar and no ID document** is demanded for a guest the record named.
   ("Fill in from saved details" and "Yourself" were withdrawn for every role
   on 7 Oct.)
-- **Route:** Assistant Warden of the hostel on their profile → GH Manager -
-  **unless their profile names no hostel**, in which case there is no warden
+- **Route:** **Assistant Warden** of their hostel → GH Manager, with that
+  hostel's **Warden and Deputy Warden copied** on every staff mail about it
+  (7 Nov 2026 - "Saveri Hostel residing student -> request sent to Saveri
+  Assistant warden [mail copied to Warden] -> Forwarded to GHM"). Where the
+  hostel has no Assistant Warden the stage falls to its Deputy Warden and
+  then its Warden; see *The hostel warden office* in Part 1. **Unless their
+  profile names no hostel**, in which case there is no warden
   stage at all and the request enters at the **GH Manager** (17 Oct 2026,
   `hasHostel` / `approverNotApplicable`). A day scholar is a real kind of
   student, so a null hostel is a condition and not a broken record; the
@@ -818,11 +866,25 @@ are the rules the form applies.
 
 **Two different "Copy to" lists — keep them apart.** The **approval chain**
 (`lib/academic/copy-to.ts`: everyone who approves any stage of the booking's
-route, plus an office's head) is CC on **staff** mail. The **booking's own
-Copy to** (`bookings.copy_to_emails`, typed on New Booking, ≤ 25; pre-filled
-with the council secretary when a Faculty Advisor books) is CC on
-**requester** mail, together with the Faculty Advisor who raised a club
+route, plus an office's head, plus — on a student's request since 7 Nov 2026
+— **the rest of their hostel's warden office**) is CC on **staff** mail. The
+**booking's own Copy to** (`bookings.copy_to_emails`, typed on New Booking,
+≤ 25; pre-filled with the council secretary when a Faculty Advisor books) is
+CC on **requester** mail, together with the Faculty Advisor who raised a club
 booking (`requesterCopyTo`).
+
+**The three `CopyToRule`s** (`lib/academic/fields.ts`), by kind of account:
+
+| Rule | Who | Applies to |
+| --- | --- | --- |
+| `approver` | Everyone who decides any stage of this request's chain, through `canReview()` | every kind |
+| `head_of_department` | An office's head: Departments & Clubs first, else the head on its academic record | `office` |
+| `hostel_warden` | The **Warden and Deputy Warden** of the student's hostel — the ranks the Assistant Warden's stage did *not* name (`hostelWardenCopyIds`) | `student` |
+
+So a Saveri student's request is **To** the Saveri Assistant Warden and
+**CC** that hostel's Warden and Deputy Warden; when it is forwarded, the
+desk is To and all three are CC. A day scholar's copies nobody — there is no
+hostel, so there is no office to copy.
 
 Every template's wording can be overridden in Console → Email Templates
 (subject, intro, outro, extra CC, on/off); the facts in the mail stay in code.

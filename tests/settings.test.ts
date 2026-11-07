@@ -339,7 +339,7 @@ describe("a change that would break stored data is refused", () => {
   });
 
   it("whitelist matching ignores case", () => {
-    expect(isWhitelistedOfficial("Admin@IITPKD.ac.in", ["admin@iitpkd.ac.in"])).toBe(true);
-    expect(isWhitelistedOfficial("someone@iitpkd.ac.in", ["admin@iitpkd.ac.in"])).toBe(false);
+    expect(isWhitelistedOfficial("Director_IITPKD@IITPKD.ac.in", ["director_iitpkd@iitpkd.ac.in"])).toBe(true);
+    expect(isWhitelistedOfficial("someone@iitpkd.ac.in", ["director_iitpkd@iitpkd.ac.in"])).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 import { LoginForm } from "@/components/login-form";
 import { Container, PageTitle, siteButton } from "@/components/site/site-ui";
+import { googleOauth, mockLoginEnabled } from "@/lib/env";
 import { type SitePhoto } from "@/lib/site";
 import { ROLE_LABELS, type Profile } from "@/lib/types";
 
@@ -65,7 +66,7 @@ export function SignInPanel({
                   <LoginForm
                     next={next}
                     submitLabel={submitLabel}
-                    center
+                    doors={{ google: googleOauth() !== null, mock: mockLoginEnabled() }}
                     notice={notice}
                   />
                 )}

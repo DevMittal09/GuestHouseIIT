@@ -29,8 +29,8 @@ const units = seedUnits;
 
 /** The Director's Office persona from the seed, which is the demo `official`. */
 const directorsOffice = profile({
-  id: "official-admin",
-  email: "admin@iitpkd.ac.in",
+  id: "office-director",
+  email: "director_iitpkd@iitpkd.ac.in",
   full_name: "Director's Office",
   role: "official",
   unit_id: "unit-director-office",
@@ -76,7 +76,7 @@ describe("the offices' debitable heads, per office", () => {
   it("a department office gets its department's budget, not the grant", () => {
     const cseOffice = profile({
       id: "office-cse",
-      email: "cse.office@iitpkd.ac.in",
+      email: "office_cs@iitpkd.ac.in",
       role: "official",
       unit_id: "unit-cse-office",
     });

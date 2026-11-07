@@ -79,7 +79,7 @@ describe("who the Faculty Advisor is", () => {
 
 describe("the demo: Dr. Arun Prasad advises the Cultural Affairs Council and Petrichor", () => {
   const units = seedUnits;
-  const arun = P("faculty-arun");
+  const arun = P("faculty-advisor");
 
   it("is an ordinary faculty account, not a Faculty Advisor role", () => {
     expect(arun.role).toBe("employee");
@@ -89,25 +89,25 @@ describe("the demo: Dr. Arun Prasad advises the Cultural Affairs Council and Pet
 
   it("books for the council's account and for the fest - nobody else does", () => {
     expect(clubsBookableBy(arun, allProfiles, units).map((c) => c.id)).toEqual([
-      "council-cultural",
+      "club-cultural",
       "club-petrichor",
     ]);
-    for (const id of ["employee-priya", "hod-cse", "secretary-cultural", "club-petrichor", "gh-manager"]) {
+    for (const id of ["faculty-cse", "hod-cse", "student-secretary", "club-petrichor", "gh-manager"]) {
       expect(clubsBookableBy(P(id), allProfiles, units)).toEqual([]);
     }
   });
 
   it("changing the advisor in the console moves the booking rights with it", () => {
-    const next = units.map((u) => (u.id === "unit-cultural" ? { ...u, faculty_advisor_id: "employee-priya" } : u));
+    const next = units.map((u) => (u.id === "unit-cultural" ? { ...u, faculty_advisor_id: "faculty-cse" } : u));
     // Petrichor has its own advisor, so it stays with Arun; the council moves.
     expect(clubsBookableBy(arun, allProfiles, next).map((c) => c.id)).toEqual(["club-petrichor"]);
-    expect(clubsBookableBy(P("employee-priya"), allProfiles, next).map((c) => c.id)).toEqual(["council-cultural"]);
+    expect(clubsBookableBy(P("faculty-cse"), allProfiles, next).map((c) => c.id)).toEqual(["club-cultural"]);
   });
 
   it("Copy to starts with the secretary's mailbox - not when the booking is the secretary's own account", () => {
     expect(defaultCopyToFor(P("club-petrichor"), units)).toEqual(["sec_arts@iitpkd.ac.in"]);
     // The council's account is sec_arts@ itself, and is mailed as the requester.
-    expect(defaultCopyToFor(P("council-cultural"), units)).toEqual([]);
+    expect(defaultCopyToFor(P("club-cultural"), units)).toEqual([]);
     expect(defaultCopyToFor({ email: "x@iitpkd.ac.in", unit_id: null }, units)).toEqual([]);
   });
 });
@@ -128,7 +128,7 @@ describe("a booking by the Faculty Advisor needs no forwarding", () => {
     const withHod = seedUnits.map((u) => (u.id === "unit-petrichor" ? { ...u, hod_approval_from_id: "unit-cse" } : u));
     const legacy = { user_role: "club" as const, user_id: petrichor.id, created_by: null, booking_type: "official" };
     expect(approvalStagesFor(legacy, petrichor, withHod)).toEqual(["PENDING_FA", "PENDING_HOD"]);
-    expect(approvalStagesFor({ ...legacy, created_by: "faculty-arun" }, petrichor, withHod)).toEqual([]);
+    expect(approvalStagesFor({ ...legacy, created_by: "faculty-advisor" }, petrichor, withHod)).toEqual([]);
   });
 });
 
@@ -150,26 +150,26 @@ describe("the mock store", () => {
       delete u.secretary_email;
     }
     old.units.push({ id: "unit-other", name: "Other Club", category: "club", parent_department_id: null, head_id: null, acting_head_id: null, office_type: null, hod_approval_from_id: null });
-    old.profiles = old.profiles.filter((p: Profile) => p.id !== "faculty-arun");
+    old.profiles = old.profiles.filter((p: Profile) => p.id !== "faculty-advisor");
     fs.writeFileSync(db.file, JSON.stringify(old));
 
     const units = await store.listUnits();
     expect(units.find((u) => u.id === "unit-cultural")).toMatchObject({
-      faculty_advisor_id: "faculty-arun",
+      faculty_advisor_id: "faculty-advisor",
       secretary_email: "sec_arts@iitpkd.ac.in",
     });
     expect(units.find((u) => u.id === "unit-other")).toMatchObject({ faculty_advisor_id: null, secretary_email: null });
-    expect((await store.listProfiles()).some((p) => p.id === "faculty-arun")).toBe(true);
+    expect((await store.listProfiles()).some((p) => p.id === "faculty-advisor")).toBe(true);
   });
 
   it("saves an advisor and a mailbox, and clears them", async () => {
-    await store.updateUnit("unit-petrichor", { faculty_advisor_id: "employee-priya", secretary_email: "fest@iitpkd.ac.in" });
+    await store.updateUnit("unit-petrichor", { faculty_advisor_id: "faculty-cse", secretary_email: "fest@iitpkd.ac.in" });
     let petrichor = (await store.listUnits()).find((u) => u.id === "unit-petrichor");
-    expect(petrichor).toMatchObject({ faculty_advisor_id: "employee-priya", secretary_email: "fest@iitpkd.ac.in" });
+    expect(petrichor).toMatchObject({ faculty_advisor_id: "faculty-cse", secretary_email: "fest@iitpkd.ac.in" });
     await store.updateUnit("unit-petrichor", { faculty_advisor_id: null, secretary_email: null });
     petrichor = (await store.listUnits()).find((u) => u.id === "unit-petrichor");
     // With none of its own, it takes the council's again.
-    expect(facultyAdvisorOf("unit-petrichor", await store.listUnits())).toBe("faculty-arun");
+    expect(facultyAdvisorOf("unit-petrichor", await store.listUnits())).toBe("faculty-advisor");
     expect(petrichor?.secretary_email).toBeNull();
   });
 });

@@ -13,7 +13,7 @@ import {
   SIGN_IN_PATH,
 } from "@/lib/routes";
 import { GUEST_HOUSE_CONTACT, INSTITUTE_WEBSITE } from "@/lib/site";
-import { REQUESTER_ROLES, ROLE_LABELS, type Role } from "@/lib/types";
+import { isHostelWardenRole, REQUESTER_ROLES, ROLE_LABELS, type Role } from "@/lib/types";
 import { serviceTypesFor } from "@/lib/booking-types";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import { getStore } from "@/lib/store";
@@ -59,7 +59,7 @@ export default async function PortalLayout({ children }: { children: React.React
   // the Form Builder decides which guest houses a role may book at all.
   const canBookMeals = canBook && (await offersMealBooking(user));
   const stageQueues = new Set<StageStatus>(queues);
-  if (user.role === "warden") stageQueues.add("PENDING_WARDEN");
+  if (isHostelWardenRole(user.role)) stageQueues.add("PENDING_WARDEN");
   if (user.role === "iar_cell") stageQueues.add("PENDING_IAR");
   if (user.role === "faculty_advisor") stageQueues.add("PENDING_FA");
   const queueLinks: NavItem[] = (Object.keys(STAGE_QUEUES) as StageStatus[])

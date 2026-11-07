@@ -31,10 +31,10 @@ Each of these is configuration or plumbing, not new design.
 | # | Gate | Why | How |
 | --- | --- | --- | --- |
 | 1 | ~~Connect the institute's LDAP~~ **— closed, 2 Nov 2026.** LDAP removed entirely (the owner: "Keep only Google OAuth"). `lib/ldap/` deleted, `ldapts` removed, no LDAP door exists. `ldap_uid` column removed from the code and schema | Configure Google (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APP_URL`). The flow is built and verified. [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) at the repo root |
-| 2 | ~~Close Mock Authentication~~ **— closed, 2 Nov 2026.** `/mock-login` was already deleted; `loginAs` and `mockLoginEnabled` are now gone too. The only sign-in door is Google OAuth (or the test-sign-in endpoint with `E2E_TEST_SECRET` for Playwright) | Configure Google to go live |
+| 2 | **Close Mock Authentication** — **reopened, 7 Nov 2026.** `/mock-login`, `loginAs` and `mockLoginEnabled()` came back (the owner: "make a mock authentication for this instead of sign in with password"). Outside production the picker is always open; **in production it is open while Google is unset**, so configuring Google is what closes it | Configure Google, or set `MOCK_LOGIN=false`. `MOCK_LOGIN=true` is already a startup error in production |
 | 3 | **Production secrets** | The server refuses to start without them | `APP_URL`, `CRON_SECRET`, `ID_ENCRYPTION_KEY`, `DATABASE_URL` ([05-credentials-and-security.md](05-credentials-and-security.md)) |
 | 4 | **Change the console password** | Default `0000` | Console → Console Access |
-| 5 | **Delete or disable the demo personas and demo data** | They sign in with published passwords | Users & Roles |
+| 5 | **Delete or disable the demo personas and demo data** | They are listed by name on `/mock-login`, and anyone who reaches that page can become any of them | Users & Roles, or `npm run seed:personas -- --keep-extra` against a database that has the real people. Closing the picker (gate 2) is the other half |
 | 6 | **Apply every migration to the production database** | Missing ones fail writes quietly | **`npm run check:migrations`** asks the project and names what is missing. Do not write the answer down instead — that is how 24-30 were believed missing for weeks after they were applied |
 | 7 | **The office's Settings** | Defaults are guesses: extra-bed rate (none), GSTIN, Accounts email (empty), bank details, retention days, heads of units, Faculty Advisors, hostels and wardens, whitelist | [04-production.md](04-production.md#3-data-the-office-has-to-supply) |
 | 8 | **Decide `MAIL_REDIRECT_ALL_TO`** | Unset only in production; set everywhere else | |
@@ -43,6 +43,8 @@ Each of these is configuration or plumbing, not new design.
 | **11** | ~~Make the user import atomic, or batch it~~ **- no longer a gate, 14 Oct 2026** | Two of the three problems are closed: the **inserts** are chunked (250 a request, so a first load is ~8 requests instead of ~2000), and a failure now **records where it stopped** - migration 32's undo record is written before the writes, so a part-way import is recoverable instead of a mystery | What remains is that the **updates** are still one request per person, which cannot be chunked (each row has different values). Mitigation in [04-production.md](04-production.md) §1a.6: read the plan's "updated" count, import in pieces when it is large, and undo if it times out. The remaining fix is a single upsert |
 
 | **12** | **Stop finding an account by scanning every profile** - **new, 28 Oct 2026** | The Google callback and `profileForDirectoryEntry` both do `listProfiles()` then `.find()`. With direct Postgres this is a full table scan — not truncated silently as it was under Supabase's PostgREST (which capped at 1000 rows), but still inefficient at scale. Past a few thousand accounts this becomes slow | Add `getProfileByEmail` to `DataStore` and **both** stores and use it in the callback — `init-postgres.sql` already has `profiles (lower(email))` for this. [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §7 has the code |
+
+| **13** | **A profile with a `security_audit` row cannot be deleted** - **new, 7 Nov 2026** | `security_audit.actor_id` is `on delete set null`, and that table's append-only trigger refuses every UPDATE - so `delete from profiles` fails with "security_audit is append-only" for any account that has ever signed in. The console's Delete user hits this as much as a script does, and the error names neither table | Either let `security_audit_guard()` allow an UPDATE that only nullifies `actor_id`, or make the FK `on delete no action` and have the application retire the account instead. `npm run seed:personas` already retires rather than deletes; the console should say so too |
 
 **Next security phase** (not a gate for a pilot, but the next real step):
 move request-scoped database access off the service-role key so row-level
@@ -760,6 +762,37 @@ No code changed in the application. What the review of the auth seam turned up:
   `office_type` (was `office_class`), `hod_approval_from_id` (was
   `hod_unit_id`), and `institute_offices.office_type` (was `office_class`).
   Five `ALTER TABLE … RENAME COLUMN` statements; no data changes needed.
+
+## 2o. Opened by the 7 Nov 2026 round - the personas, mock auth and the warden ranks
+
+- **A profile with an audit row cannot be deleted** - gate 13 above. This is
+  the one with real consequences: the console's Delete user fails with an
+  error that names neither table.
+- **`deputy_warden` and `assistant_warden` are not offered in Users & Roles
+  or the Form Builder.** The seeder writes them; `assignableRoles` and the
+  role dropdowns have not been checked for whether a manager may create one.
+  Until that is settled, a new Assistant Warden is added by the seeder or by
+  SQL, which is not where the office should have to go.
+- **The approval workflow console still calls the slot "Their hostel's
+  Assistant Warden"** (`components/admin/workflow-flow.tsx`), which is right
+  almost always and wrong at a hostel with no Assistant Warden. The engine
+  names the real rank (`personaRoute` does it on the picker); the console
+  could read it back the same way.
+- **No e2e journey covers the Warden / Deputy Warden ranks.** The unit tests
+  pin the resolution and the Copy-to; nothing drives the three accounts
+  through a browser, and `e2e/helpers.ts` still has one `warden` entry
+  (now the Assistant Warden of Malhar Boys).
+- **`/mock-login` loads every profile on every view.** Fine at 29 accounts,
+  and the same `listProfiles()` problem as gate 12 and §2n - it is listed
+  here only so it is not discovered twice.
+- **The four hostels with nobody appointed are deliberate**, but nothing
+  warns the office that a hostel has no warden. Departments & Clubs names a
+  unit with no head; `institute_hostels` has no equivalent.
+- **Two old test bookings are still in the owner's development database**,
+  belonging to retired accounts (`112201001@smail…`, `142301026@smail…`).
+  They are why those two accounts could not be deleted.
+  `npm run seed:personas -- --drop-orphans` clears both, and is deliberately
+  not the default.
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 

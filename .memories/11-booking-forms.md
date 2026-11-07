@@ -363,7 +363,8 @@ compile until someone decides its kind.
 - **The guardian rule.** Guardian's Name replaces the two parent rows **only
   when the database has neither parent's name**. If only one parent is
   missing, both parent rows stay and the missing one reads "Not on record".
-  Rahul's dummy record exercises this.
+  Fathima's dummy record exercises the guardian case and Nikhil's the
+  one-parent case.
 - **Office Number.** It is unconfirmed whether this means an office landline or
   a room. The label is kept as given, and the dummy value is a landline.
 
@@ -581,19 +582,38 @@ In `lib/academic/mock-source.ts`, matched by email to the seeded personas.
 **Keep that file and this table in step.** Every value is invented. Phones are
 in the obviously fake `+91 90000 …` range.
 
+**The four student records differ in what they name**, because that is what
+`guestNameRule` locks: both parents, the father only, neither (so the
+guardian), and a day scholar with no hostel.
+
 | Persona (email) | Kind | Highlights |
 | --- | --- | --- |
-| Anjali Menon (`112201001@smail…`) | Student | B.Tech, CSE, Malhar, father Ramesh Menon, mother Sreeja Menon |
-| Rahul Nair (`142202014@smail…`) | Student | M.Tech, EE, Saveri, **no parents on record → guardian Gopinath Nair** |
-| Dr. Priya Sharma (`priya@`) | Faculty / Non-faculty | FAC-1042, "Faculty — Assistant Professor", office 0491 000 1042 |
-| Dr. Arun Prasad (`arun.prasad@`) | Faculty / Non-faculty | FAC-1057, "Faculty — Associate Professor", office 0491 000 1057 |
-| Director's Office (`admin@`) | Office | Copy to: Director `director@iitpkd.ac.in` |
+| Arjun Pillai (`btech.saveri@smail…`) | Student | B.Tech, CSE, Saveri Boys; **both parents** — Mohanan and Radhika Pillai — so both are offered and locked |
+| Nikhil Varma (`phd.malhar@smail…`) | Student | PhD, Chemistry, Malhar Boys; **father only** (Sudhakara Varma), so Mother is not offered at all |
+| Fathima Rasheed (`ms.tilang@smail…`) | Student | MS, Data Science, Tilang A Girls; **neither parent → guardian Abdul Rasheed** |
+| Devika Iyer (`dayscholar@smail…`) | Student | B.Tech, Mechanical, **no hostel**; both parents on record |
+| Meera Nair (`secretary.arts@smail…`) | Student | B.Tech, CSE, Malhar Girls; the Cultural Affairs secretary |
+| Dr. Priya Sharma (`faculty.cse@`) | Faculty / Non-faculty | FAC-1042, "Faculty — Assistant Professor", office 0491 000 1042 |
+| Prof. R. Venkatesh (`hod.cse@`) | Faculty / Non-faculty | FAC-1001, "Faculty — Professor" |
+| Prof. S. Anand (`hod.dse@`) | Faculty / Non-faculty | FAC-1002, "Faculty — Professor" |
+| Dr. Arun Prasad (`advisor.cultural@`) | Faculty / Non-faculty | FAC-1057, "Faculty — Associate Professor", office 0491 000 1057 |
+| Ravi Kumar (`staff.cse@`) | Faculty / Non-faculty | STF-2210, **"Non Teaching Staff — Junior Technical Superintendent"** |
+| Dr. Mohan Das (`registrar@`) | Faculty / Non-faculty | STF-1000, "Non Teaching Staff — Registrar" |
+| Director's Office (`director_iitpkd@`) | Office | Copy to: Director `director@iitpkd.ac.in` |
+| Registrar's Office (`ro@`) | Office | Copy to: Dr. Mohan Das `registrar@iitpkd.ac.in` |
+| CSE Department Office (`office_cs@`) | Office | Copy to: Prof. R. Venkatesh `hod.cse@iitpkd.ac.in` |
+| Data Science Department Office (`office_ds@`) | Office | Copy to: Prof. S. Anand `hod.dse@iitpkd.ac.in` |
 | IAR Office (`iar@`) | Office | Copy to: Dean, International & Alumni Relations `dean.iar@iitpkd.ac.in` |
-| Petrichor (`petrichor@`) | Student Representative | "Fest Council — Petrichor", faculty in charge `arun.prasad@` |
-| Cultural Affairs Council (`sec_arts@`) | Student Representative | "Council — Cultural Affairs (Secretary)", faculty in charge `arun.prasad@` |
+| Petrichor (`petrichor@`) | Student Representative | "Fest Council — Petrichor", faculty in charge `advisor.cultural@` |
+| Cultural Affairs Council (`sec_arts@`) | Student Representative | "Council — Cultural Affairs (Secretary)", faculty in charge `advisor.cultural@` |
 | IAR Student Cell (`alumnicell@`) | Alumni Office | "International & Alumni Relations — Alumni Cell" |
-| Dr. Suresh Kumar (`warden.malhar@`) | Warden | Malhar |
-| Dr. Lakshmi Devi (`warden.saveri@`) | Warden | Saveri |
+| Dr. Suresh Kumar (`warden.malharboys@`) | Warden | Malhar Boys — **Warden** |
+| Dr. Geetha Menon (`dwarden.malharboys@`) | Warden | Malhar Boys — **Deputy Warden** |
+| Mr. Sajeev Thomas (`awarden.malharboys@`) | Warden | Malhar Boys — **Assistant Warden** |
+| Dr. Lakshmi Devi (`warden.saveriboys@`) | Warden | Saveri Boys — **Warden** |
+| Dr. Vinod Raj (`dwarden.saveriboys@`) | Warden | Saveri Boys — **Deputy Warden** |
+| Ms. Anu George (`awarden.saveriboys@`) | Warden | Saveri Boys — **Assistant Warden** |
+| Dr. Shalini Rao (`warden.tilangagirls@`) | Warden | Tilang A Girls — **Warden**, the only rank that hostel has |
 
 A persona with a kind but no dummy record (for example, a user created in the
 console) shows "no … record for <email>" and falls back to the profile. That is

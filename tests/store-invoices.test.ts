@@ -69,7 +69,7 @@ function doc(bookingId: string, total = 250_000): InvoiceDocument {
 
 function bookingInput(patch: Partial<NewBookingInput> = {}): NewBookingInput {
   return {
-    user_id: "employee-priya",
+    user_id: "faculty-cse",
     guest_house_id: "gh-hamsanandi",
     user_role: "employee",
     status: "VACATED",
@@ -194,7 +194,7 @@ describe("the invoice goes to Accounts", () => {
     const rows = (await store.listEmails({ bookingId: b.id, limit: 20 })).filter((r) => r.event_key === "invoice.issued.accounts");
     expect(rows).toHaveLength(1);
     expect(rows[0].to_emails).toEqual(["accounts@iitpkd.ac.in"]);
-    expect(rows[0].cc_emails).toEqual(["hod.cse@iitpkd.ac.in", "priya@iitpkd.ac.in"]);
+    expect(rows[0].cc_emails).toEqual(["hod.cse@iitpkd.ac.in", "faculty.cse@iitpkd.ac.in"]);
     expect(rows[0].attachments).toEqual([{ kind: "invoice", invoice_id: inv.id }]);
     // Queueing already started a dispatcher in the background; wait for it
     // (or run one) until the message settles - rendering the PDF takes a moment.

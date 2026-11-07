@@ -10,7 +10,7 @@ every table in `.local-db.json` and self-heals old files.
 
 | Table | Purpose |
 | --- | --- |
-| `profiles` | One row per user - **the only user table**. Stored columns: `email` (unique), `full_name`, `role`, `ldap_uid` (migration 12: the LDAP username sign-in matches, unique on `lower(ldap_uid)`, null = no LDAP sign-in), and `unit_id` (-> `units(id) on delete restrict`). **Four computed fields** (not stored - resolved at read time by the **`profiles_v` SQL view**): `hostel_name` (from `institute_students.hostel` or `institute_wardens` -> `institute_hostels`), `department_or_club` (from `units.name` via `unit_id`), `roll_number` (from `institute_students`), `staff_category` (from `institute_employees.employee_type`: Teaching -> `faculty`, Non Teaching -> `staff`). `hostel_name` eliminated 3 Nov 2026; the other three eliminated 4 Nov 2026. All profile reads in `PostgresStore` use the view; writes go to the base table. **19 foreign keys across 11 tables point at `profiles.id`** - which is why it is one table and not one per category ([02-decisions.md](02-decisions.md), 13 Oct 2026). |
+| `profiles` | One row per user - **the only user table**. Stored columns: `email` (unique), `full_name`, `role`, `ldap_uid` (migration 12: the LDAP username sign-in matches, unique on `lower(ldap_uid)`, null = no LDAP sign-in), and `unit_id` (-> `units(id) on delete restrict`). **Four computed fields** (not stored - resolved at read time by the **`profiles_v` SQL view**): `hostel_name` (from `institute_students.hostel` for a student, or `institute_wardens` -> `institute_hostels` for **any of the three warden ranks** - `warden`, `deputy_warden`, `assistant_warden`, widened 7 Nov 2026), `department_or_club` (from `units.name` via `unit_id`), `roll_number` (from `institute_students`), `staff_category` (from `institute_employees.employee_type`: Teaching -> `faculty`, Non Teaching -> `staff`). `hostel_name` eliminated 3 Nov 2026; the other three eliminated 4 Nov 2026. All profile reads in `PostgresStore` use the view; writes go to the base table. **19 foreign keys across 11 tables point at `profiles.id`** - which is why it is one table and not one per category ([02-decisions.md](02-decisions.md), 13 Oct 2026). |
 | `guest_houses` | `name` (free-form, unique), `total_rooms` (recounted from active rooms) and `serves_meals` (migration 8 — whether the booking form offers meals there; Hamsanandi on by default). |
 | `rooms` | `guest_house_id`, `room_number`, `room_type`, `is_active`. Unique per (guest house, room number). |
 | `bookings` | The core record — see below. |
@@ -23,7 +23,7 @@ every table in `.local-db.json` and self-heals old files.
 | `units` | (Migration 15) Departments, clubs, councils and offices: `name`, `category` (was `kind`, renamed 3 Nov 2026), `parent_department_id` (was `parent_id`), `head_id`, `acting_head_id`, and (migration 16) `office_type` (was `office_class`) — `officer` / `department`, offices only. `hod_approval_from_id` (was `hod_unit_id`) — whose HOD approves when not the default. (Migration 25) `faculty_advisor_id` → `profiles` (`on delete set null`) and `secretary_email`, councils and clubs only: who books for the unit and whose mailbox is copied — a club with none takes its council's. Approvers are resolved through it (`lib/units.ts`). |
 | `institute_hostels` | (Migration 35; consolidated with migration 16) The institute hostels list: `hostel_id` (unique, e.g. "HOS1") and `hostel_name` (unique). `profiles.hostel_name` references `institute_hostels(hostel_name)` **on update cascade, on delete restrict**: a rename moves everyone, a hostel in use cannot be removed. Replaces the legacy `hostels` table. |
 | `official_email_whitelist` | (Migration 16) Accounts allowed to submit Official / Dignitary bookings, lowercased. Replaced the constant in `lib/routes.ts`. Service-role only. |
-| `security_audit` | (Migration 16) The append-only security audit log. A trigger refuses every UPDATE, every DELETE except through `purge_security_audit(days)` (never under 180 days, CERT-In), and TRUNCATE. Service-role only. |
+| `security_audit` | (Migration 16) The append-only security audit log. A trigger refuses every UPDATE, every DELETE except through `purge_security_audit(days)` (never under 180 days, CERT-In), and TRUNCATE. Service-role only. **Known consequence (7 Nov 2026): a profile with any audit row cannot be deleted.** `security_audit.actor_id` is `on delete set null`, so deleting the account is an UPDATE on this table, and the trigger refuses that too - `delete from profiles` fails with "security_audit is append-only". Any account that has ever signed in has such a row, so this is most of them, and it applies to the console's Delete user as much as to a script. `npm run seed:personas` **retires** such an account instead (`account_status = 'retired'`), which stops it signing in and leaves the record intact. Open: [03-roadmap.md](03-roadmap.md). |
 | `email_outbox` | The notification queue (migration 10). One row per message: recipients, rendered HTML and text, status, attempts, backoff. **Service-role only, like `app_settings`** — the rendered bodies quote guest names, purposes of visit and rejection reasons, which makes this table more sensitive than the bookings it describes. |
 | `academic_records` | (Migration 28) The institute's records **as the guest house office pasted them in**: one flat row per `(kind, lower(email))`, with every kind's fields as nullable columns. Read by the Requester details card, the Assistant Warden's family check and the booking form's **locked parent names**. **Service-role only** — it holds parents' names and phone numbers. |
 | `institute_students` | (Migration 35) The institute's student directory: 26 fields including roll number, batch year, programme, department, hostel, family details and **five Aadhar columns encrypted at rest**. Keyed on `lower(email)`. `imported_by` → `profiles`. `year_of_admission` removed 3 Nov 2026 (consolidated into `batch_year`). |
@@ -196,7 +196,9 @@ constraint exists to stop cannot occur in a single-process JSON store.
 
 ```sql
 user_role:      student, employee, official, club, alumni,
-                warden, faculty_advisor, iar_cell, gh_manager, developer,
+                warden, deputy_warden, assistant_warden,   -- the hostel's
+                                 -- three ranks; the Assistant Warden decides
+                faculty_advisor, iar_cell, gh_manager, developer,
                 iar_student_cell, gh_caretaker
 booking_status: PENDING_WARDEN, PENDING_FA, PENDING_HOD, PENDING_IAR,
                 PENDING_GH_MANAGER, APPROVED, OCCUPIED, VACATED, REJECTED,
@@ -984,9 +986,33 @@ header says how to check.
 ## Resetting data
 
 - Mock: delete `.local-db.json`. It is regenerated from `lib/store/seed.ts`.
+- **PostgreSQL, the schema:** `psql <db> < scripts/init-postgres.sql`.
+- **PostgreSQL, the demo accounts:** `npm run seed:personas`
+  (`scripts/seed-personas.mjs`). Idempotent, and non-destructive to history -
+  see [20-architecture.md](20-architecture.md) *Demo data* for the flags.
 - Supabase local: `supabase db reset`.
-- Supabase hosted: re-run the migration and seed by hand (destructive — check
-  first).
+
+### Bringing an older PostgreSQL database up to the 7 Nov 2026 round
+
+`npm run seed:personas` does all three of these itself, in order, and they
+are listed here because each is worth knowing separately.
+
+1. **`alter type public.user_role add value 'deputy_warden'` and
+   `'assistant_warden'`.** Each on its own, and **before** anything uses
+   them: Postgres refuses to *use* a new enum value in the transaction that
+   added it (the same rule that made migration 29 a file of its own).
+2. **Rebuild `profiles_v`** so all three ranks resolve a hostel from
+   `institute_wardens`, not only `warden`. It is a **drop and create**, not
+   `create or replace`: that form refuses a changed column list, and this
+   one changes. The script keeps whichever of `ldap_uid`, `group_id`,
+   `login_disabled_at` and `login_disabled_reason` the database happens to
+   have on `profiles`, because a branch that reads them must not be broken
+   by a seeding script.
+3. **Two label fixes in `scripts/init-postgres.sql`**: the enum said
+   `PENDING_WARDEN_REVIEW` and `PENDING_FA_REVIEW`, which migration 15
+   renamed and `lib/types.ts` has never used. A database created from that
+   file would have refused every booking at those two stages. Existing
+   databases already have the short names and need nothing.
 
 
 ## Migration 9 — booking types and two new roles (16 Sep 2026)

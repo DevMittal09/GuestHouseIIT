@@ -18,18 +18,20 @@ import path from "node:path";
  * `uid` key for the session cache.
  */
 export const ACCOUNTS = {
-  student: { uid: "112201001", email: "112201001@smail.iitpkd.ac.in", name: "Anjali Menon" },
-  dayScholar: { uid: "122203099", email: "122203099@smail.iitpkd.ac.in", name: "Devika Iyer" },
-  faculty: { uid: "priya", email: "priya@iitpkd.ac.in", name: "Dr. Priya Sharma" },
+  student: { uid: "phd.malhar", email: "phd.malhar@smail.iitpkd.ac.in", name: "Nikhil Varma" },
+  dayScholar: { uid: "dayscholar", email: "dayscholar@smail.iitpkd.ac.in", name: "Devika Iyer" },
+  faculty: { uid: "faculty.cse", email: "faculty.cse@iitpkd.ac.in", name: "Dr. Priya Sharma" },
   hod: { uid: "hod.cse", email: "hod.cse@iitpkd.ac.in", name: "Prof. R. Venkatesh" },
-  warden: { uid: "warden.malhar", email: "warden.malhar@iitpkd.ac.in", name: "Dr. Suresh Kumar" },
+  // The **Assistant Warden** of Malhar Boys - the rank that decides a
+  // student's request; the Warden and Deputy Warden are copied on it.
+  warden: { uid: "awarden.malharboys", email: "awarden.malharboys@iitpkd.ac.in", name: "Mr. Sajeev Thomas" },
   manager: { uid: "guesthouse", email: "guesthouse@iitpkd.ac.in", name: "Guest House Manager" },
   caretaker: { uid: "gh.reception", email: "gh.reception@iitpkd.ac.in", name: "Guest House Caretaker" },
   developer: { uid: "developer", email: "developer@iitpkd.ac.in", name: "Portal Developer" },
   iarStudentCell: { uid: "alumnicell", email: "alumnicell@iitpkd.ac.in", name: "IAR Student Cell" },
   iarOffice: { uid: "iar", email: "iar@iitpkd.ac.in", name: "IAR Office" },
-  directorOffice: { uid: "admin", email: "admin@iitpkd.ac.in", name: "Director's Office" },
-  departmentOffice: { uid: "cse.office", email: "cse.office@iitpkd.ac.in", name: "CSE Department Office" },
+  directorOffice: { uid: "director_iitpkd", email: "director_iitpkd@iitpkd.ac.in", name: "Director's Office" },
+  departmentOffice: { uid: "office_cs", email: "office_cs@iitpkd.ac.in", name: "CSE Department Office" },
 } as const;
 
 /** A 1×1 PNG that passes the upload sniffer, for guest ID documents. */

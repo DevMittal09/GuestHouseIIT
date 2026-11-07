@@ -408,18 +408,18 @@ describe("a requester's own list is three sections", () => {
 
 describe("a student with no hostel has no Assistant Warden", () => {
   const profiles = asProfiles(seedProfiles).map((p) => {
-    if (p.id === "student-anjali") return { ...p, hostel_name: "Malhar" };
-    if (p.id === "warden-malhar") return { ...p, hostel_name: "Malhar" };
+    if (p.id === "student-phd-malhar") return { ...p, hostel_name: "Malhar Boys" };
+    if (p.id === "awarden-malhar") return { ...p, hostel_name: "Malhar Boys" };
     return p;
   });
   const units: Unit[] = seedUnits.map((u) => ({ ...u, hod_approval_from_id: u.hod_approval_from_id ?? null }));
-  const anjali = profiles.find((p) => p.id === "student-anjali")!;
+  const anjali = profiles.find((p) => p.id === "student-phd-malhar")!;
   const dayScholar = profiles.find((p) => p.id === "student-day-scholar")!;
-  const warden = profiles.find((p) => p.id === "warden-malhar")!;
+  const warden = profiles.find((p) => p.id === "awarden-malhar")!;
   const directory = { units, profiles };
 
   it("reads NULL and a blank string alike, and neither as a hostel", () => {
-    expect(hasHostel({ hostel_name: "Malhar" })).toBe(true);
+    expect(hasHostel({ hostel_name: "Malhar Boys" })).toBe(true);
     expect(hasHostel({ hostel_name: null })).toBe(false);
     expect(hasHostel({ hostel_name: "" })).toBe(false);
     expect(hasHostel({ hostel_name: "   " })).toBe(false);
@@ -510,7 +510,7 @@ describe("a student with no hostel has no Assistant Warden", () => {
     const hodless = { rules: DEFAULT_APPROVAL_RULES, directory, hasHodApprover: true };
     // None of these routes has a warden stage, and none of these accounts has
     // a hostel - the exception must not become "everyone goes direct".
-    const faculty = profiles.find((p) => p.id === "employee-priya")!;
+    const faculty = profiles.find((p) => p.id === "faculty-cse")!;
     expect(hasHostel(faculty)).toBe(false);
     expect(routeFor("employee", "room", { ...hodless, requester: faculty, bookingType: "official" })).toEqual([
       "PENDING_HOD",
@@ -534,7 +534,7 @@ describe("a student with no hostel has no Assistant Warden", () => {
     expect(dayScholar).toBeDefined();
     expect(dayScholar.role).toBe("student");
     expect(dayScholar.hostel_name).toBeNull();
-    expect(dayScholar.roll_number).toBe("122203099");
+    expect(dayScholar.roll_number).toBe("122303099");
   });
 
   it("gives the account a name that says what it is for", () => {

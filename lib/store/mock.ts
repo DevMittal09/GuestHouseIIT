@@ -16,7 +16,7 @@ import type {
   RoomHold,
   RoomOccupancySegment,
 } from "@/lib/types";
-import { BufferClashError, RoomClashError } from "@/lib/types";
+import { BufferClashError, isHostelWardenRole, RoomClashError } from "@/lib/types";
 import type { Role, RoomType } from "@/lib/types";
 import { mealsOn, normalizeMeals } from "@/lib/meals";
 import { isInfantAge } from "@/lib/occupancy";
@@ -2356,7 +2356,8 @@ function resolveComputed(db: Db, p: { email: string; role: string; unit_id?: str
     );
     hostel_name = s?.hostel ?? null;
     roll_number = s?.roll_number ?? null;
-  } else if (p.role === "warden") {
+  } else if (isHostelWardenRole(p.role as Role)) {
+    // All three ranks are hostel-scoped, not just `warden`.
     const w = (db.institute_wardens ?? []).find(
       (r) => r.warden_email.toLowerCase() === emailLower
     );

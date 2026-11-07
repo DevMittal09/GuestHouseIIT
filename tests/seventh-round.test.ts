@@ -428,7 +428,7 @@ describe("Copy to reaches every mail the requester gets", () => {
 
   function input(patch: Partial<NewBookingInput> = {}): NewBookingInput {
     return {
-      user_id: "employee-priya",
+      user_id: "faculty-cse",
       guest_house_id: "gh-bageshri",
       user_role: "employee",
       status: "PENDING_GH_MANAGER",
@@ -524,7 +524,7 @@ describe("Copy to reaches every mail the requester gets", () => {
     );
     // …and each one carries the whole Copy-to list, nobody else's mail does.
     for (const row of toRequester) {
-      expect(row.to_emails).toEqual(["priya@iitpkd.ac.in"]);
+      expect(row.to_emails).toEqual(["faculty.cse@iitpkd.ac.in"]);
       expect(row.cc_emails.map((a) => a.toLowerCase())).toEqual(COPY_TO);
     }
   });
@@ -544,7 +544,7 @@ describe("the store keeps each person's split", () => {
 
   it("round-trips meal_diet_counts on a dining booking", async () => {
     const created = await store.createBooking({
-      user_id: "employee-priya",
+      user_id: "faculty-cse",
       guest_house_id: "gh-hamsanandi",
       user_role: "employee",
       status: "PENDING_GH_MANAGER",

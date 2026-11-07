@@ -2,6 +2,7 @@ import { addMonths } from "date-fns";
 import type { BookingSearchCriteria } from "./booking-search";
 import {
   BOOKING_CATEGORY_ROLES,
+  isHostelWardenRole,
   type Booking,
   type BookingLog,
   type BookingStatus,
@@ -851,6 +852,8 @@ export function checksOutOn(
 /** Roles that get the approval log / booking archive at `/history`. */
 export const HISTORY_ROLES: Role[] = [
   "warden",
+  "deputy_warden",
+  "assistant_warden",
   "faculty_advisor",
   "iar_cell",
   "gh_manager",
@@ -928,7 +931,11 @@ export function historyScope(user: Profile, units: Unit[] = []): HistoryScope {
   // so their archive is their own bookings plus the requests of the units
   // they approve for - found the way `canReview` finds them.
   const governed = unitsGovernedBy(user.id, units);
-  if (governed.length > 0 && !["warden", "iar_cell", "gh_manager", "gh_caretaker", "developer"].includes(user.role)) {
+  if (
+    governed.length > 0 &&
+    !isHostelWardenRole(user.role) &&
+    !["iar_cell", "gh_manager", "gh_caretaker", "developer"].includes(user.role)
+  ) {
     const names = units.filter((u) => governed.includes(u.id)).map((u) => u.name);
     return {
       ok: true,
@@ -939,7 +946,13 @@ export function historyScope(user: Profile, units: Unit[] = []): HistoryScope {
     };
   }
   switch (user.role) {
+    // All three hostel appointments see their hostel's students: the
+    // Assistant Warden decided those requests, the other two were copied on
+    // them, and an archive that showed one of them nothing would be a
+    // record they are named in but cannot read.
     case "warden":
+    case "deputy_warden":
+    case "assistant_warden":
       if (!user.hostel_name) {
         return {
           ok: false,

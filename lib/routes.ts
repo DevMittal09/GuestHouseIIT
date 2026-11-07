@@ -28,7 +28,12 @@ export const MEALS_ONLY_SERVICE = "meals_only";
 /** Landing page for each role after sign-in. */
 export function homeForRole(role: Role): string {
   switch (role) {
+    // All three hostel appointments land on the queue: the Assistant Warden
+    // to decide, the Deputy Warden and the Warden to see what they have been
+    // copied on (`HOSTEL_WARDEN_ROLES`).
     case "warden":
+    case "deputy_warden":
+    case "assistant_warden":
       return "/warden";
     case "faculty_advisor":
       return "/approvals";

@@ -57,7 +57,7 @@ function studentBooking(rooms: Person[][]) {
 function parseStudent(rooms: Person[][]) {
   return bookingPayloadSchema(studentConfig, {
     mealsAvailable: false,
-    requesterEmail: "112201001@smail.iitpkd.ac.in",
+    requesterEmail: "phd.malhar@smail.iitpkd.ac.in",
   }).safeParse(studentBooking(rooms));
 }
 

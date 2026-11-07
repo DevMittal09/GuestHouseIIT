@@ -182,7 +182,7 @@ afterAll(() => db.cleanup());
 
 async function newBooking(checkIn: string, checkOut: string) {
   const b = await store.createBooking({
-    user_id: "employee-priya",
+    user_id: "faculty-cse",
     guest_house_id: "gh-hamsanandi",
     user_role: "employee",
     status: "PENDING_GH_MANAGER",

@@ -84,7 +84,7 @@ afterAll(() => {
 });
 
 const input = (checkOut: string): NewBookingInput => ({
-  user_id: "employee-priya",
+  user_id: "faculty-cse",
   guest_house_id: "gh-bageshri",
   user_role: "employee",
   status: "VACATED",
@@ -181,10 +181,10 @@ describe("retention", () => {
 
 describe("a person's own data", () => {
   it("records an erasure request once, and the office's answer", async () => {
-    const created = await store.createPrivacyRequest({ user_id: "employee-priya", kind: "deletion", note: "Please remove" });
-    expect((await store.listPrivacyRequests({ userId: "employee-priya" })).filter((r) => r.status === "open")).toHaveLength(1);
+    const created = await store.createPrivacyRequest({ user_id: "faculty-cse", kind: "deletion", note: "Please remove" });
+    expect((await store.listPrivacyRequests({ userId: "faculty-cse" })).filter((r) => r.status === "open")).toHaveLength(1);
     await store.resolvePrivacyRequest(created.id, { status: "done", response: "ID numbers erased; stay record kept for audit", handledBy: "gh-manager" });
-    const after = await store.listPrivacyRequests({ userId: "employee-priya" });
+    const after = await store.listPrivacyRequests({ userId: "faculty-cse" });
     expect(after[0].status).toBe("done");
     expect(after[0].handled_by).toBe("gh-manager");
     expect(after.filter((r) => r.status === "open")).toHaveLength(0);

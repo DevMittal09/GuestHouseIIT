@@ -125,36 +125,49 @@ async function forward(bookingId: string, approverId: string, from: BookingStatu
 }
 
 describe("staff mail is To the actioner and CC the Copy-to list, for every requester role", () => {
-  it("student: warden first, then the manager with the warden in CC", async () => {
-    const id = await route("student-anjali", "student", "PENDING_WARDEN", { booking_type: "personal" });
+  // 7 Nov 2026, the office: the request goes **to the Assistant Warden**,
+  // and the hostel's Warden and Deputy Warden are **copied** on it
+  // (`hostelWardenCopyIds`, the `hostel_warden` Copy-to rule).
+  it("student: the Assistant Warden, with the Warden and Deputy Warden in CC", async () => {
+    const id = await route("student-phd-malhar", "student", "PENDING_WARDEN", { booking_type: "personal" });
     expect(await mails(id, "booking.submitted.reviewer")).toEqual([
-      { to: ["warden.malhar@iitpkd.ac.in"], cc: [] },
+      {
+        to: ["awarden.malharboys@iitpkd.ac.in"],
+        cc: ["warden.malharboys@iitpkd.ac.in", "dwarden.malharboys@iitpkd.ac.in"],
+      },
     ]);
-    await forward(id, "warden-malhar", "PENDING_WARDEN");
+    await forward(id, "awarden-malhar", "PENDING_WARDEN");
     expect(await mails(id, "booking.pending.reviewer")).toEqual([
-      { to: [MANAGER], cc: ["warden.malhar@iitpkd.ac.in"] },
+      {
+        to: [MANAGER],
+        cc: [
+          "awarden.malharboys@iitpkd.ac.in",
+          "warden.malharboys@iitpkd.ac.in",
+          "dwarden.malharboys@iitpkd.ac.in",
+        ],
+      },
     ]);
   });
 
   it("the Saveri warden is never To or CC on a Malhar student's request", async () => {
-    const id = await route("student-anjali", "student", "PENDING_WARDEN", { booking_type: "personal" });
+    const id = await route("student-phd-malhar", "student", "PENDING_WARDEN", { booking_type: "personal" });
     const all = await store.listEmails({ bookingId: id });
-    expect(all.flatMap((m) => [...m.to_emails, ...m.cc_emails])).not.toContain("warden.saveri@iitpkd.ac.in");
+    expect(all.flatMap((m) => [...m.to_emails, ...m.cc_emails])).not.toContain("awarden.saveriboys@iitpkd.ac.in");
   });
 
   it("club: the council secretary (by appointment), then the manager with the secretary in CC", async () => {
     const id = await route("club-petrichor", "club", "PENDING_FA");
     expect(await mails(id, "booking.submitted.reviewer")).toEqual([
-      { to: ["112301045@smail.iitpkd.ac.in"], cc: [] },
+      { to: ["secretary.arts@smail.iitpkd.ac.in"], cc: [] },
     ]);
-    await forward(id, "secretary-cultural", "PENDING_FA");
+    await forward(id, "student-secretary", "PENDING_FA");
     expect(await mails(id, "booking.pending.reviewer")).toEqual([
-      { to: [MANAGER], cc: ["112301045@smail.iitpkd.ac.in"] },
+      { to: [MANAGER], cc: ["secretary.arts@smail.iitpkd.ac.in"] },
     ]);
   });
 
   it("faculty official: the HOD, then the manager with the HOD in CC", async () => {
-    const id = await route("employee-priya", "employee", "PENDING_HOD");
+    const id = await route("faculty-cse", "employee", "PENDING_HOD");
     expect(await mails(id, "booking.submitted.reviewer")).toEqual([
       { to: ["hod.cse@iitpkd.ac.in"], cc: [] },
     ]);
@@ -165,14 +178,14 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
   });
 
   it("faculty personal: straight to the manager, nobody in CC", async () => {
-    const id = await route("employee-priya", "employee", "PENDING_GH_MANAGER", {
+    const id = await route("faculty-cse", "employee", "PENDING_GH_MANAGER", {
       booking_type: "personal",
     });
     expect(await mails(id, "booking.submitted.reviewer")).toEqual([{ to: [MANAGER], cc: [] }]);
   });
 
   it("an office: the manager, with the office's head in CC", async () => {
-    const id = await route("official-admin", "official", "PENDING_GH_MANAGER");
+    const id = await route("office-director", "official", "PENDING_GH_MANAGER");
     expect(await mails(id, "booking.submitted.reviewer")).toEqual([
       { to: [MANAGER], cc: ["director@iitpkd.ac.in"] },
     ]);
@@ -199,7 +212,7 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
   });
 
   it("allocation: one message per desk address, the Copy-to list in CC on the first only", async () => {
-    const id = await route("student-anjali", "student", "PENDING_WARDEN", { booking_type: "personal" });
+    const id = await route("student-phd-malhar", "student", "PENDING_WARDEN", { booking_type: "personal" });
     await store.updateBookingStatus(id, { status: "APPROVED", assigned_room_ids: ["gh-bageshri-203"] }, {
       action_by: "gh-manager", action_by_name: "Manager", new_status: "APPROVED", remarks: "Rooms",
     });
@@ -208,11 +221,15 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
     // Threaded mail: one per recipient, CC once, so the warden joins the
     // first recipient's thread rather than receiving it twice.
     expect(desk.map((m) => m.to[0]).sort()).toEqual([...DESK].sort());
-    expect(desk.flatMap((m) => m.cc)).toEqual(["warden.malhar@iitpkd.ac.in"]);
+    expect(desk.flatMap((m) => m.cc)).toEqual([
+      "awarden.malharboys@iitpkd.ac.in",
+      "warden.malharboys@iitpkd.ac.in",
+      "dwarden.malharboys@iitpkd.ac.in",
+    ]);
   });
 
   it("cancellation: To the manager, the reviewers in CC - no separate for-information mail", async () => {
-    const id = await route("employee-priya", "employee", "PENDING_HOD");
+    const id = await route("faculty-cse", "employee", "PENDING_HOD");
     await notify.notifyCancellationRequested(id, "Plans changed");
     expect(await mails(id, "booking.cancellation_requested.manager")).toEqual([
       { to: [MANAGER], cc: ["hod.cse@iitpkd.ac.in"] },
@@ -221,8 +238,8 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
   });
 
   it("threaded staff mail hangs on the booking, and CC rides on it", async () => {
-    const id = await route("student-anjali", "student", "PENDING_WARDEN", { booking_type: "personal" });
-    await forward(id, "warden-malhar", "PENDING_WARDEN");
+    const id = await route("student-phd-malhar", "student", "PENDING_WARDEN", { booking_type: "personal" });
+    await forward(id, "awarden-malhar", "PENDING_WARDEN");
     const booking = (await store.getBooking(id))!;
     const reference = booking.booking_reference_id.toLowerCase();
     const [row] = (await store.listEmails({ bookingId: id })).filter(
@@ -234,18 +251,22 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
       new RegExp(`^<gh-booking-${reference}-[0-9a-f]{16}@`)
     );
     expect(row.subject).toBe(`[${booking.booking_reference_id}] Guest house booking`);
-    expect(row.cc_emails).toEqual(["warden.malhar@iitpkd.ac.in"]);
+    expect(row.cc_emails).toEqual([
+      "awarden.malharboys@iitpkd.ac.in",
+      "warden.malharboys@iitpkd.ac.in",
+      "dwarden.malharboys@iitpkd.ac.in",
+    ]);
   });
 
   it("two messages about one booking, days apart, share a root; two bookings do not", async () => {
-    const first = await route("student-anjali", "student", "PENDING_WARDEN", {
+    const first = await route("student-phd-malhar", "student", "PENDING_WARDEN", {
       booking_type: "personal",
     });
-    const second = await route("student-anjali", "student", "PENDING_WARDEN", {
+    const second = await route("student-phd-malhar", "student", "PENDING_WARDEN", {
       booking_type: "personal",
     });
-    await forward(first, "warden-malhar", "PENDING_WARDEN");
-    await forward(second, "warden-malhar", "PENDING_WARDEN");
+    await forward(first, "awarden-malhar", "PENDING_WARDEN");
+    await forward(second, "awarden-malhar", "PENDING_WARDEN");
     const threaded = async (id: string) =>
       (await store.listEmails({ bookingId: id })).filter((r) => r.thread_root);
     const reference = async (id: string) =>
@@ -273,7 +294,7 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
   });
 
   it("scheduled mail has no booking to hang on, so it still threads on the institute day", async () => {
-    await route("student-anjali", "student", "PENDING_WARDEN", { booking_type: "personal" });
+    await route("student-phd-malhar", "student", "PENDING_WARDEN", { booking_type: "personal" });
     const { queueReviewerDigests } = await import("@/lib/mail/digest");
     await queueReviewerDigests(new Date());
     const digests = (await store.listEmails({})).filter(

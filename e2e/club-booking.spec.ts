@@ -24,7 +24,7 @@ import {
  */
 
 const CLUB = { uid: "petrichor", email: "petrichor@iitpkd.ac.in", password: "Petrichor@2026", name: "Petrichor Fest Council" };
-const ADVISOR = { uid: "arun.prasad", email: "arun.prasad@iitpkd.ac.in", password: "Arun@2026", name: "Dr. Arun Prasad" };
+const ADVISOR = { uid: "arun.prasad", email: "advisor.cultural@iitpkd.ac.in", password: "Arun@2026", name: "Dr. Arun Prasad" };
 
 test("a club's Faculty Advisor books for it from their faculty login; the club's account cannot", async ({ page }) => {
   await signIn(page, CLUB);
@@ -68,7 +68,7 @@ test("a club's Faculty Advisor books for it from their faculty login; the club's
   const stored = db.bookings.find((b: { booking_reference_id: string }) => b.booking_reference_id === reference);
   expect(stored).toMatchObject({
     user_id: "club-petrichor",
-    created_by: "faculty-arun",
+    created_by: "faculty-advisor",
     status: "PENDING_GH_MANAGER",
     copy_to_emails: ["sec_arts@iitpkd.ac.in", "events.coordinator@example.org"],
   });

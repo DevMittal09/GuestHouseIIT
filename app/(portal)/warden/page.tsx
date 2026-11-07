@@ -9,6 +9,7 @@ import { studentRecordPanels } from "@/lib/academic/family-server";
 import { configuredStageName } from "@/lib/approval-routes";
 import { forwardTargets, getReviewContext, stageQueuesFor } from "@/lib/approval-routes-server";
 import { canReviewBooking } from "@/lib/workflow";
+import { isHostelWardenRole } from "@/lib/types";
 
 /**
  * The first stage of a student's request - and, since 12 Oct 2026, of
@@ -24,11 +25,14 @@ import { canReviewBooking } from "@/lib/workflow";
 export default async function WardenPage() {
   const user = await getCurrentUser();
   if (!user) redirect(SIGN_IN_PATH);
-  // The warden role always keeps this page - it is `homeForRole("warden")`,
-  // so turning them away here would be a redirect loop - and anyone a route
-  // points at this stage is let in beside them.
+  // The three hostel appointments always keep this page - it is
+  // `homeForRole` for each of them, so turning them away here would be a
+  // redirect loop - and anyone a route points at this stage is let in
+  // beside them. A Warden or Deputy Warden whose hostel has an Assistant
+  // Warden sees an empty queue and that is the honest answer: they are
+  // copied on the request, not asked to decide it.
   const queues = await stageQueuesFor(user);
-  if (user.role !== "warden" && !queues.includes("PENDING_WARDEN")) {
+  if (!isHostelWardenRole(user.role) && !queues.includes("PENDING_WARDEN")) {
     redirect(homeForRole(user.role));
   }
 
@@ -42,7 +46,7 @@ export default async function WardenPage() {
   const studentRecords = await studentRecordPanels(bookings);
 
   const title = configuredStageName("PENDING_WARDEN", review.rules) ?? "Assistant Warden Portal";
-  const scope = user.role === "warden" ? (user.hostel_name ?? "Hostel") : null;
+  const scope = isHostelWardenRole(user.role) ? (user.hostel_name ?? "Hostel") : null;
 
   return (
     <div className="space-y-6">

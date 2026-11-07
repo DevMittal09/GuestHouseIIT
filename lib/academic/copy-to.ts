@@ -3,7 +3,7 @@ import { getStore } from "@/lib/store";
 import type { BookingType, Profile, Role, ServiceType } from "@/lib/types";
 import { approversOf, type Unit } from "@/lib/units";
 import { getApprovalRules } from "@/lib/approval-routes-server";
-import type { ApprovalRules } from "@/lib/approval-routes";
+import { hostelWardenCopyIds, type ApprovalRules } from "@/lib/approval-routes";
 import { approvalStagesFor, canReview, requestFactsFor } from "@/lib/workflow";
 import { academicRecordKindFor, COPY_TO_RULE } from "./fields";
 import { academicRecordFor } from "./index";
@@ -22,6 +22,9 @@ import { academicRecordFor } from "./index";
  * - `head_of_department` - an office's head: from the Departments & Clubs
  *   console when set (the office unit's head, or the head of the unit above
  *   it), else the head named on the office's academic record.
+ * - `hostel_warden` - the rest of a student's hostel warden office: the
+ *   Warden and the Deputy Warden, where the Assistant Warden is deciding
+ *   (`hostelWardenCopyIds`, 7 Nov 2026).
  *
  * Never throws: a failed lookup yields what could be found, and the booking
  * and its mail go ahead regardless. The academic record is only read for the
@@ -85,6 +88,17 @@ export async function copyToFor(
   if (rules.includes("approver")) {
     for (const p of chainApprovers(route, requester, profiles, units, routes)) {
       entries.push({ name: p.full_name, email: p.email });
+    }
+  }
+
+  if (rules.includes("hostel_warden")) {
+    // The Warden and the Deputy Warden of the student's own hostel, where
+    // the Assistant Warden is the one being asked. Derived from the same
+    // rule that picks the approver, so the two lists cannot overlap.
+    const byId = new Map(profiles.map((p) => [p.id, p]));
+    for (const id of hostelWardenCopyIds(requester, profiles)) {
+      const p = byId.get(id);
+      if (p) entries.push({ name: p.full_name, email: p.email });
     }
   }
 

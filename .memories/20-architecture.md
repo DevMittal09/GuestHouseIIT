@@ -34,8 +34,8 @@ and verify: [22-running-and-testing.md](22-running-and-testing.md).
 app/
   (site)/                  PUBLIC website (19 Sep 2026): / home, book-room, book-meal,
                            guidelines, gallery, contact, sign-in,
-                           (mock-login removed 2 Nov 2026; privacy/ withdrawn
-                           14 Oct 2026 → archive/privacy-notice/)
+                           mock-login (the account picker, rebuilt 7 Nov 2026)
+                           (privacy/ withdrawn 14 Oct 2026 → archive/privacy-notice/)
   (portal)/
     layout.tsx             authenticated shell + role-aware nav
     dashboard/             requester's own bookings
@@ -612,7 +612,8 @@ acting account.
 | Concern | File |
 | --- | --- |
 | Public website (home, booking entry points, guidelines, gallery, contact) | `app/(site)/*`, `components/site/*` — see [14-public-site-and-ui.md](14-public-site-and-ui.md) |
-| Sign-in (**Google OAuth only** since 2 Nov 2026) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` (one centred shape) → `components/login-form.tsx` (Google button, no fields) |
+| Sign-in (**Google, or Mock Authentication** since 7 Nov 2026) | `app/(site)/sign-in/page.tsx`, `app/(site)/book-room`, `app/(site)/book-meal` → `components/site/sign-in-panel.tsx` (one centred shape) → `components/login-form.tsx` (one button per open door, no fields). `mockLoginEnabled()` in `lib/env.ts` says which |
+| **Mock Authentication** — the account picker | `app/(site)/mock-login/page.tsx` (two steps: the kind of user, then the account), `loginAs` in `app/actions/auth.ts`, and `lib/mock-personas.ts` for the grouping and the derived route |
 | Google sign-in (real OpenID Connect: state, PKCE, verified id_token) | `lib/oidc.ts`, `app/api/auth/google/start`, `app/api/auth/google/callback` |
 | **Mock Authentication** — removed 2 Nov 2026 | — |
 | Sessions (rows, opaque token, idle/absolute expiry, rotation, revoke) | `lib/sessions.ts` |
@@ -1101,7 +1102,8 @@ Guest Houses & Rooms.
 
 | File | Contents |
 | --- | --- |
-| `lib/approval-routes.ts` | **The approval workflow as data** (12 Oct 2026): `ApprovalRules` / `ApprovalRouteRule` / `ApprovalStage` / `ApproverRule`, `DEFAULT_APPROVAL_RULES` (the old `switch`, case for case), `matchingRule` / `stagesFor` / `stageForStatus` (first active match wins), `stageApproverIds` / `decidesStage` / `stagesDecidedBy` (who decides, and who has a queue), `hasHostel` / `approverNotApplicable` / `NO_HOSTEL_REASON` (a stage that **cannot apply** to this requester - a student with no hostel has no Assistant Warden, 17 Oct 2026), `describeChain` / `describeConditions` / `describeRouteChanges` (reading a route back in words), `approvalRulesSchema`. Pure - no store |
+| `lib/mock-personas.ts` | **The account picker's catalogue** (7 Nov 2026): `PERSONA_GROUPS` and `personaGroupFor` (which of the six kinds an account is, from its role, so a new account lands somewhere without anyone editing a list) and `personaRoute` (the chain a room booking from that account would take **under the configured routes**, the people named, who is copied, what it decides, and an office's other chain where it is asked Direct or HOD). Pure - the page loads the directory once and hands it in |
+| `lib/approval-routes.ts` | **The approval workflow as data** (12 Oct 2026): `ApprovalRules` / `ApprovalRouteRule` / `ApprovalStage` / `ApproverRule`, `DEFAULT_APPROVAL_RULES` (the old `switch`, case for case), `matchingRule` / `stagesFor` / `stageForStatus` (first active match wins), `stageApproverIds` / `decidesStage` / `stagesDecidedBy` (who decides, and who has a queue), `hasHostel` / `approverNotApplicable` / `NO_HOSTEL_REASON` (a stage that **cannot apply** to this requester - a student with no hostel has no Assistant Warden, 17 Oct 2026), `hostelWardenApproverIds` / `hostelWardenCopyIds` (**the hostel warden office**, 7 Nov 2026: the most junior of the three ranks decides and the rest are copied), `describeChain` / `describeConditions` / `describeRouteChanges` (reading a route back in words), `approvalRulesSchema`. Pure - no store |
 | `lib/approval-categories.ts` | **The workflow as a kind of request** (12 Oct 2026, second round): `REQUEST_CATEGORIES` (the eleven kinds, each with a representative request and the conditions a route of its own would carry), `categoryChains` (what each kind does now - answered with `matchingRule`, never worked out separately), `setCategoryStages` (**edit in place, or fork a route for this kind alone above the one it shares**), `insertStage` / `moveStage` / `removeStage` / `slotForApprover` / `setStageApprover` (the steps, and the slot the office never sees), `approverValue` / `approverFromValue` (six approver kinds as one select value), `uncoveredRules`. Pure - no store |
 | `lib/approval-routes-server.ts` | `getApprovalRules()`, `getReviewContext()` (the routes plus every account, which a role- or person-named stage needs), `stageQueuesFor()` (a person's queues), `forwardTargets()` (what each Forward button names) |
 | `lib/types.ts` | Domain shapes and label maps (`ROLE_LABELS`, `STATUS_LABELS`, `REQUESTER_ROLES`, `DEBIT_HEAD_LABELS`…). Declared as `type` aliases, not interfaces. |
@@ -1340,35 +1342,38 @@ templates (`lib/mail/render.ts`) still carry their own inline amber header.
 
 ### Demo data
 
-Seeded in `lib/store/seed.ts` (mock; Postgres uses `scripts/init-postgres.sql`):
-**18 personas**, 6 units and — mock only — **6 demo bookings** positioned so
-every queue has something in it (DM001 student at the warden, DM002 Petrichor
-at the legacy club stage, DM003 Student Cell alumni at the IAR Office, DM004
-faculty at the manager, DM005 Director's Office approved, DM006 a meals-only
-booking at the manager). Rooms are the office's real list: Bageshri 201, 202,
-203, 204, 206, 302, 303, 305, 306, 307 (10) and Hamsanandi A4, B1–B4, C1–C4,
-D1–D4 (13), all double sharing. Hamsanandi serves meals and Bageshri does not.
+**Two seeds, one set of people** (7 Nov 2026). `lib/store/seed.ts` fills the
+JSON mock store; **`scripts/seed-personas.mjs`** (`npm run seed:personas`)
+fills a PostgreSQL database. The set is written twice only because a Node
+script cannot import TypeScript, and **`tests/seed-parity.test.ts` compares
+them** on every run - emails, names, roles, units, hostels, ranks and the
+whitelist. Change a persona in one and that test tells you about the other.
 
-| Persona | Email |
-| --- | --- |
-| Student (Malhar) | `112201001@smail.iitpkd.ac.in` |
-| Student (Saveri) | `142202014@smail.iitpkd.ac.in` |
-| Employee | `priya@iitpkd.ac.in` |
-| Official (whitelisted) | `admin@iitpkd.ac.in` |
-| Club (Petrichor) | `petrichor@iitpkd.ac.in` |
-| Council (Cultural Affairs, its secretary's mailbox) | `sec_arts@iitpkd.ac.in` |
-| Faculty, **Faculty Advisor** of the council and Petrichor | `arun.prasad@iitpkd.ac.in` |
-| IAR Student Cell | `alumnicell@iitpkd.ac.in` |
-| Wardens | `warden.malhar@`, `warden.saveri@iitpkd.ac.in` |
-| IAR Office | `iar@iitpkd.ac.in` |
-| GH manager | `guesthouse@iitpkd.ac.in` |
-| GH caretaker | `gh.reception@iitpkd.ac.in` |
-| Developer | `developer@iitpkd.ac.in` |
+**29 accounts, one per kind of user**, 9 units, 7 hostels and — mock only —
+**6 demo bookings** positioned so every queue has something in it (DM001
+student at the warden, DM002 Petrichor at the legacy club stage, DM003
+Student Cell alumni at the IAR Office, DM004 faculty at the manager, DM005
+Director's Office approved, DM006 a meals-only booking at the manager). The
+accounts themselves are listed, with what each one demonstrates, in
+[05-credentials-and-security.md](05-credentials-and-security.md) Part 1 -
+one fact, one home.
+
+Rooms are the office's real list: Bageshri 201, 202, 203, 204, 206, 302, 303,
+305, 306, 307 (10) and Hamsanandi A4, B1–B4, C1–C4, D1–D4 (13), all double
+sharing. Hamsanandi serves meals and Bageshri does not.
 
 **There is no alumnus persona** — alumni cannot sign in. Demo booking 3 is the
 IAR Student Cell booking on behalf of Vikram Iyer (`101601023`), sitting in the
 IAR Office's queue, so the new pipeline has something in it on first run.
 
-Whitelisted official addresses are a Setting (`official_email_whitelist`):
-`admin@`, `director.office@`, `registrar@iitpkd.ac.in`, plus `cse.office@` in
-both seeds.
+Whitelisted official addresses are a Setting (`official_email_whitelist`) and
+are exactly the four office accounts: `director_iitpkd@`, `ro@`,
+`office_cs@`, `office_ds@iitpkd.ac.in`. A parity test asserts that, because
+an office account that is not whitelisted cannot book at all.
+
+`npm run seed:personas` is **idempotent** and non-destructive to history: it
+upserts by natural key, deletes accounts outside the set where nothing points
+at them, and **retires** (`account_status = 'retired'`) the ones a booking or
+a `security_audit` row names. `--dry-run` prints the plan, `--keep-extra`
+leaves other accounts alone, `--drop-orphans` deletes those accounts'
+bookings so they can go too.
