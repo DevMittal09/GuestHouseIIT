@@ -24,7 +24,10 @@ limit, and who may change it, in
 ### How a role's form is decided
 
 1. **The developer-saved config** for the role (Form Builder, `form_configs`),
-   if one was ever saved;
+   if one was ever saved **and it is one** - `isStoredFormConfig` (7 Nov
+   2026) ignores a row whose `role` does not match or that lacks the fields
+   every save carries, with a warning in the server log. A foreign row once
+   refused every booking for three roles;
 2. otherwise **`buildDefaultFormConfig(role)`** — the defaults below;
 3. then `sanitizeFormConfig` (drops deleted guest houses, repairs the
    relationship rules, turns a stored "hidden" age into required).
@@ -159,7 +162,7 @@ its form is not in the Form Builder and every guest field is required.
 | 6e | **Funds declaration** tick: "I have the necessary approval for the usage of funds from the competent authority and verified that sufficient balance is there in the debitable head." | **Every head except Personal Funds** (8 Oct 2026) | **Yes**. Inside the Debitable head card, so it appears and disappears with the head. Stored as `bookings.fund_declaration_at` (migration 30) |
 | 7 | **On behalf of** — guest's name, email, phone | GH Manager | Name **yes** |
 | 8 | **Alumnus** — full name, student / roll number, **Alumni ID card** | Booking type = alumni | All three **yes** |
-| 9 | **Guest house** | Stated as text when only one is possible; a dropdown otherwise; no question at all for meals only. **Students and alumni bookings are Bageshri alone** (7 Oct 2026, `restrictedToOneGuestHouse`), checked on the server, the manager excepted | **Yes** |
+| 9 | **Guest house** | **Not shown at all to a student** (7 Nov 2026 - field and note gone, the id in a hidden input). Otherwise stated as text when only one is possible; a dropdown otherwise; no question at all for meals only. **Students and alumni bookings are Bageshri alone** (7 Oct 2026, `restrictedToOneGuestHouse`), checked on the server, the manager excepted | **Yes** |
 | 10 | **Check-in** date + time, **check-out** date + time (hour / minute / AM-PM dropdowns, with a "Your stay" read-back) | Room bookings | **Yes** |
 | 11 | **Purpose of visit** — labelled **Remarks** on a meal booking | Everyone | **Yes**, ≥ 5 characters, on a stay; **optional** on a meal booking (1 Oct 2026) |
 | 12 | **Rooms** — room cards, each with its guests | Room bookings | **At least 1 room, at most 10** |

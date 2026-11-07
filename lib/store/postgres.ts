@@ -892,12 +892,17 @@ export class PostgresStore implements DataStore {
     for (let i = 0; i < cards.length; i++) {
       const next = roomIds[i] ?? null;
       params.push(cards[i].id, next);
-      cases.push(`WHEN id = $${params.length - 1} THEN $${params.length}`);
+      // Cast both: PostgreSQL types a bare `CASE ... THEN $n` parameter as
+      // text, and refuses text into a uuid column (42804). Every transition
+      // that releases rooms comes through here with `[]`, so without the
+      // cast forwarding, rejecting and cancelling all failed, not only
+      // allocation.
+      cases.push(`WHEN id = $${params.length - 1}::uuid THEN $${params.length}::uuid`);
       ids.push(cards[i].id);
     }
     params.push(ids);
     await q.query(
-      `UPDATE booking_rooms SET assigned_room_id = CASE ${cases.join(" ")} END WHERE id = ANY($${params.length})`,
+      `UPDATE booking_rooms SET assigned_room_id = CASE ${cases.join(" ")} END WHERE id = ANY($${params.length}::uuid[])`,
       params
     );
   }

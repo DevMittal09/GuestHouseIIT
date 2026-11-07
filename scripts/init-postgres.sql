@@ -17,8 +17,12 @@
 --
 -- Usage:
 --   createdb guesthouse
---   psql guesthouse < scripts/init-postgres.sql
---   psql guesthouse < supabase/seed.sql
+--   psql -v ON_ERROR_STOP=1 guesthouse < scripts/init-postgres.sql
+--
+-- It creates the schema, the default tariffs and the official whitelist -
+-- no guest houses, rooms or accounts. Add the guest houses and rooms in the
+-- console; `npm run seed:personas` adds the demo accounts (not for a live
+-- deployment - its addresses are the demo personas').
 --
 -- ==========================================================================
 
@@ -36,21 +40,68 @@ create type public.user_role as enum (
 );
 
 -- booking_status: migrations 1 + 2 + 15 + 29
-create type public.booking_status as enum (
-  'PENDING_WARDEN',
-  'PENDING_FA',
-  'PENDING_IAR',
-  'PENDING_GH_MANAGER',
-  'APPROVED',
-  'REJECTED',
-  'CANCELLED',
-  'CANCELLATION_REQUESTED',
-  'CANCELLATION_APPROVED',
-  'OCCUPIED',
-  'VACATED',
-  'PENDING_HOD',
-  'MISSED'
-);
+--
+-- The labels must be exactly lib/types.ts BookingStatus. Until 7 Nov 2026
+-- this file created three of them under migration 1's old names
+-- (PENDING_WARDEN_REVIEW, PENDING_FA_REVIEW, PENDING_IAR_REVIEW), and a
+-- database built from it refuses every booking that starts at a warden or
+-- IAR stage: 'invalid input value for enum booking_status: "PENDING_WARDEN"'.
+--
+-- So the type is created only where it is missing, and an existing one has
+-- the old labels renamed in place. A rename keeps every row that uses it.
+-- This block can be run on its own against an existing database:
+--   psql <db> -f scripts/init-postgres.sql   (the rest fails harmlessly), or
+--   copy the block below into psql.
+do $$
+declare
+  legacy text[][] := array[
+    ['PENDING_WARDEN_REVIEW', 'PENDING_WARDEN'],
+    ['PENDING_FA_REVIEW',     'PENDING_FA'],
+    ['PENDING_IAR_REVIEW',    'PENDING_IAR']
+  ];
+  i int;
+begin
+  if to_regtype('public.booking_status') is null then
+    create type public.booking_status as enum (
+      'PENDING_WARDEN',
+      'PENDING_FA',
+      'PENDING_IAR',
+      'PENDING_GH_MANAGER',
+      'APPROVED',
+      'REJECTED',
+      'CANCELLED',
+      'CANCELLATION_REQUESTED',
+      'CANCELLATION_APPROVED',
+      'OCCUPIED',
+      'VACATED',
+      'PENDING_HOD',
+      'MISSED'
+    );
+  end if;
+
+  for i in 1 .. array_length(legacy, 1) loop
+    if exists (
+      select 1 from pg_enum
+      where enumtypid = 'public.booking_status'::regtype and enumlabel = legacy[i][1]
+    ) and not exists (
+      select 1 from pg_enum
+      where enumtypid = 'public.booking_status'::regtype and enumlabel = legacy[i][2]
+    ) then
+      execute format('alter type public.booking_status rename value %L to %L',
+                     legacy[i][1], legacy[i][2]);
+      raise notice 'booking_status: renamed % to %', legacy[i][1], legacy[i][2];
+    end if;
+  end loop;
+
+  -- Values added by later migrations (2, 15, 29), for a type created before them.
+  alter type public.booking_status add value if not exists 'OCCUPIED';
+  alter type public.booking_status add value if not exists 'VACATED';
+  alter type public.booking_status add value if not exists 'CANCELLATION_REQUESTED';
+  alter type public.booking_status add value if not exists 'CANCELLATION_APPROVED';
+  alter type public.booking_status add value if not exists 'PENDING_HOD';
+  alter type public.booking_status add value if not exists 'MISSED';
+end
+$$;
 
 -- room_type: migration 1
 create type public.room_type as enum ('single', 'double_sharing');

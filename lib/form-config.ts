@@ -207,6 +207,40 @@ export function buildDefaultFormConfig(role: Role, guestHouses: GuestHouse[]): R
  */
 const RETIRED_BANNERS = ["Double shared rooms will get first preference"];
 
+/**
+ * Whether a stored `form_configs` row is a form configuration **for this
+ * role** (7 Nov 2026), and so safe to hand to `sanitizeFormConfig`.
+ *
+ * The row is jsonb and is written by more than the Form Builder - a seed
+ * script, or SQL pasted in by hand. On the owner's database every row was a
+ * different shape altogether (`max_rooms`, `allowed_guest_houses`,
+ * `require_relationship`) with **no `role`**. The "a saved row wins" rule
+ * took it anyway, `sanitizeFormConfig` built its defaults for
+ * `buildDefaultFormConfig(undefined)` and returned a config with no role, and
+ * `bookingTypeError(undefined)` then refused every student, employee and
+ * office booking with "Your role cannot submit booking requests" - on
+ * `booking_type`, a question a student is never shown, so the form said
+ * "fix the highlighted fields" with nothing highlighted.
+ *
+ * Only what every saved row has carried since the Form Builder existed is
+ * required; anything added later is filled from the defaults by
+ * `sanitizeFormConfig`, as before. A row that fails is ignored - the role
+ * gets its spec defaults - rather than repaired: there is no way to know what
+ * a foreign shape meant.
+ */
+export function isStoredFormConfig(value: unknown, role: Role): value is RoleFormConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    v.role === role &&
+    Array.isArray(v.allowed_guest_house_ids) &&
+    !!v.guest_fields &&
+    typeof v.guest_fields === "object" &&
+    (v.relationship_style === "dropdown" || v.relationship_style === "free_text") &&
+    Array.isArray(v.relationship_options)
+  );
+}
+
 export function sanitizeFormConfig(
   config: RoleFormConfig,
   guestHouses: GuestHouse[]

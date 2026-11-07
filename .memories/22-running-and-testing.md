@@ -50,6 +50,7 @@ form, all approval tiers, the room grid, invoices, the desk and the console.
 | `npm run lint` | ESLint incl. the strict React Compiler rules | must stay clean |
 | `npm run typecheck` | `next typegen && tsc --noEmit` | `npm run build` also typechecks |
 | `npm test` | Vitest, `tests/` — 35 files, 603 checks (27 Oct 2026) | mock store on a throwaway file (`MOCK_DB_PATH`), `TZ=UTC`; never touches `.local-db.json` |
+| `npm run test:pg` | Vitest, `tests-pg/` - 3 files, 39 checks (7 Nov 2026): the **real server actions on `PostgresStore`** | Rebuilds `gh_test` on the server in `PG_TEST_URL`, else `DATABASE_URL` with the name swapped - **never** the app's database, and it refuses any name without "test". Schema from `scripts/init-postgres.sql`, two guest houses and rates from `tests-pg/global-setup.ts`, the 29 personas from `scripts/seed-personas.mjs`. `tests-pg/setup.ts` mocks only the request (`@/lib/auth`, `next/headers`, `next/cache`, `after()` run at once); `MAIL_DRY_RUN`. One file at a time; each truncates bookings first. In CI against a `postgres:16-alpine` service |
 | `npm run test:e2e` | Playwright, `e2e/` — 50 journeys (about 4 min) | needs a prior `NEXT_PUBLIC_SUPABASE_URL= npm run build`; starts `next start` on :3100 against `./.e2e-db.json` (wiped by `e2e/global-setup.ts`) |
 | `npm run check:migrations` | Which migrations the project in `.env.local` actually has | **Read-only** (`GET`, one row, shape only). Exits 1 if any marker is missing. Migrations 17 and 23 are function-only and cannot be seen — it says so and gives the SQL. **Not a CI step** — CI runs with no secrets, where it prints "no project configured" and exits 0. Run it against a deployment, before relying on one |
 | `npm run check:lockfile` | The npm optional-dependency bug that breaks `npm ci` | Runs in CI |
@@ -708,6 +709,45 @@ authentication.
 
 **Fix.** Check `form_configs` (Supabase) or `.local-db.json` (mock). "Reset to
 spec defaults" in the Form Builder deletes the row and restores defaults.
+
+### "Please fix the highlighted fields" with nothing highlighted
+
+**Symptom.** Every booking for one or more roles is refused on the client,
+and no field on screen shows an error.
+
+**Cause (7 Nov 2026).** An issue on a path the form has no slot for. The
+case found: a `form_configs` row that was not a form config, so the config
+had no `role` and `bookingTypeError` fired on `booking_type`, which a
+student is never asked. Now ignored by `isStoredFormConfig`.
+
+**Diagnose.** Validate a correct payload outside the browser with what
+`/book` computes: `getEffectiveFormConfig`, `bookingContextFor`,
+`academicRecordFor` -> `guestNameRule`, then `bookingPayloadSchema(...)
+.safeParse` and print every issue's path. Run with
+`NODE_OPTIONS=--conditions=react-server npx tsx --tsconfig ./tsconfig.json`
+so `server-only` resolves; reading the database this way changes nothing.
+
+### A booking submits but cannot be forwarded, rejected or allocated
+
+**Symptom (PostgreSQL only).** `column "assigned_room_id" is of type uuid
+but expression is of type text`; or bookings work and no mail appears in
+`email_outbox`, with `[mail] could not queue … violates not-null
+constraint` in the log.
+
+**Cause.** A bind parameter PostgreSQL cannot type from context (`CASE …
+THEN $n` is text), or an explicit NULL into a `not null default` column - a
+default applies only when the column is left out. Both fixed 7 Nov 2026.
+
+**How to drive the real actions without touching real data.** Create a
+throwaway database on the same server, load `scripts/init-postgres.sql`,
+copy `guest_houses`, `rooms` and `tariffs` across, run
+`DATABASE_URL=<scratch> npm run seed:personas`, then a Vitest file outside
+the repo (its own config with `root` set to the repo and the `@` and
+`server-only` aliases from `vitest.config.ts`) that `vi.mock`s
+`@/lib/auth`, `@/lib/revalidate`, `next/cache` and `next/server`'s
+`after`, and calls `createBooking` / `reviewBooking` / `allocateRooms` as
+each persona. Set `MAIL_DRY_RUN=true`. Drop the database afterwards
+(`drop database … with (force)`).
 
 ### Status facet counts collapse on Supabase but not on the mock store
 

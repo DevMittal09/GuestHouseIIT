@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition, type FormEvent } from "react";
+import { ErrorSummary, type ShownProblem } from "@/components/error-summary";
+import { collectProblems, problemSelectors, problemToast, type FormProblem } from "@/lib/form-problems";
 import { useRouter } from "next/navigation";
 import {
   useFieldArray,
@@ -74,7 +76,6 @@ import {
   guestHousesForBookingType,
   latestCheckOutDate,
   mealsAllowedFor,
-  STUDENT_GUEST_HOUSE_NOTE,
   ALUMNI_GUEST_HOUSE_NOTE,
 } from "@/lib/policy";
 import {
@@ -340,6 +341,8 @@ export function BookingForm({
   // the default survive a change of dates.
   const [mealChoices, setMealChoices] = useState<Map<string, boolean>>(() => new Map());
   const [mealsError, setMealsError] = useState<string | null>(null);
+  /** Every problem with the last attempt, for the summary at the top. */
+  const [problems, setProblems] = useState<ShownProblem[]>([]);
   const [roomsToDrop, setRoomsToDrop] = useState<number | null>(null);
   /** The room card whose "Remove room" was pressed, awaiting confirmation. */
   const [roomToRemove, setRoomToRemove] = useState<number | null>(null);
@@ -528,6 +531,8 @@ export function BookingForm({
   // unsubmittable. It happens on every meals-only booking: only the kitchens
   // are offered, and there is one. Set it here instead of asking.
   const onlyGuestHouseId = guestHouseLocked ? offeredGuestHouses[0].id : null;
+  /** A student's one guest house is neither asked nor stated on the form. */
+  const guestHouseHidden = guestHouseLocked && config.role === "student";
   useEffect(() => {
     if (onlyGuestHouseId && selectedGuestHouseId !== onlyGuestHouseId) {
       setValue("guest_house_id", onlyGuestHouseId, { shouldValidate: false });
@@ -882,9 +887,32 @@ export function BookingForm({
   const peopleIn = (index: number) =>
     (form.getValues(`rooms.${index}.guests`) ?? []).filter((g) => g.name.trim() || g.age.trim() || g.id_number.trim()).length;
 
-  const validateAndSubmit = handleSubmit((values) => {
+  /**
+   * What the error summary shows (7 Nov 2026). Each problem's question is
+   * looked up on the page **now**, while the form is as the requester sees
+   * it: a question that is not on screen gets no link, but its message is
+   * still listed - so no error can exist only on a path nothing renders.
+   */
+  const showProblems = (found: FormProblem[], root: HTMLFormElement | null) => {
+    const isOnScreen = (el: Element | null) =>
+      !!el &&
+      !(el instanceof HTMLInputElement && el.type === "hidden") &&
+      el.getClientRects().length > 0;
+    const listed = collectProblems(found).map((p) => ({
+      ...p,
+      target: root ? (problemSelectors(p.path).find((s) => isOnScreen(root.querySelector(s))) ?? null) : null,
+    }));
+    setProblems(listed);
+    if (listed.length > 0) toast.error(problemToast(listed));
+  };
+
+  const validateAndSubmit = handleSubmit((values, event) => {
+    // The form element, taken now: the summary looks each question up in it,
+    // and the event is gone by the time the server answers.
+    const formElement = event?.target instanceof HTMLFormElement ? event.target : null;
     setAlumniCardError(null);
     setMealsError(null);
+    const found: FormProblem[] = [];
 
     const checkIn = wantsRooms
       ? `${values.check_in_date}T${values.check_in_time}`
@@ -974,18 +1002,22 @@ export function BookingForm({
     if (wantsRooms && roomCountRaw.trim() === "") {
       hasError = true;
       setRoomCountError("Number of rooms is required");
+      found.push({ message: "Number of rooms is required", path: "rooms_requested" });
     }
     if (mealsOnly && mealDates.length === 0) {
       hasError = true;
       setMealsError("Add at least one date for the kitchen to cook on");
+      found.push({ message: "Add at least one date for the kitchen to cook on", path: "meals" });
     }
     if (dietProblem) {
       hasError = true;
       setMealsError(dietProblem);
+      found.push({ message: dietProblem, path: "meal_diet_counts" });
     }
     if (!parsed.success) {
       hasError = true;
       for (const issue of parsed.error.issues) {
+        found.push({ message: issue.message, path: issue.path.join(".") || null });
         // Meals are not a react-hook-form field, so their message has its own slot.
         if (
           issue.path[0] === "meals" ||
@@ -1021,6 +1053,10 @@ export function BookingForm({
               type: "file",
               message: "ID document upload is required for this guest",
             });
+            found.push({
+              message: `ID document upload is required for ${g.name.trim() || `guest ${j + 1} in room ${i + 1}`}`,
+              path: `rooms.${i}.guests.${j}.name`,
+            });
           }
         });
       });
@@ -1028,6 +1064,7 @@ export function BookingForm({
     if (alumniCardRequired && !alumniCard) {
       hasError = true;
       setAlumniCardError("Alumni ID card upload is mandatory");
+      found.push({ message: "Alumni ID card upload is mandatory", path: "alumni_card" });
     }
     const nextCustomErrors: Record<string, string> = {};
     for (const field of config.custom_fields) {
@@ -1035,13 +1072,18 @@ export function BookingForm({
       if (fieldError) {
         hasError = true;
         nextCustomErrors[field.id] = fieldError;
+        found.push({ message: `${field.label}: ${fieldError}`, path: `custom.${field.id}` });
       }
     }
     setCustomErrors(nextCustomErrors);
     if (hasError || !parsed.success) {
-      toast.error("Please fix the highlighted fields");
+      // Never a bare "fix the highlighted fields": the summary names every
+      // problem, including one whose question is not on screen.
+      if (found.length === 0) found.push({ message: "The request could not be checked - please try again", path: null });
+      showProblems(found, formElement);
       return;
     }
+    setProblems([]);
 
     const formData = new FormData();
     formData.set("payload", JSON.stringify(parsed.data));
@@ -1072,7 +1114,9 @@ export function BookingForm({
         toast.success(`Booking submitted - reference ${result.reference}`);
         router.push("/dashboard");
       } else {
-        toast.error(result.error);
+        // The server's refusal belongs to no field the form knows; it goes
+        // in the summary too, not only in a toast that disappears.
+        showProblems([{ message: result.error, path: null }], formElement);
       }
     });
   });
@@ -1092,6 +1136,7 @@ export function BookingForm({
    */
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     clearErrors();
+    setProblems([]);
     void validateAndSubmit(event);
   };
 
@@ -1145,6 +1190,10 @@ export function BookingForm({
         onSubmit={onSubmit}
         className="numbered-sections min-w-0 space-y-6 lg:col-span-8 lg:row-start-1"
       >
+      {/* Every problem with the last attempt, linked to its question where
+          that question is on screen. A plain div, so the section numbering
+          does not count it. */}
+      <ErrorSummary problems={problems} />
       {/* `numbered-sections` (globals.css) numbers each card's title 1, 2, 3…
           in the order they are shown, so the numbers follow whichever
           sections this role's form actually has. */}
@@ -1488,17 +1537,27 @@ export function BookingForm({
       <Card>
         <CardHeader>
           <CardTitle>Stay details</CardTitle>
-          {offeredGuestHouses.length === 1 && (
+          {offeredGuestHouses.length === 1 && !guestHouseHidden && (
             <CardDescription>
               {forAlumnus
                 ? ALUMNI_GUEST_HOUSE_NOTE
-                : config.role === "student"
-                  ? STUDENT_GUEST_HOUSE_NOTE
-                  : `Your role can book the ${offeredGuestHouses[0].name} guest house only.`}
+                : `Your role can book the ${offeredGuestHouses[0].name} guest house only.`}
             </CardDescription>
           )}
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
+          {/* A student is not shown the guest house at all (7 Nov 2026, the
+              owner: "in UI there is no need to select any guest house. This
+              entire thing should not be visible for students"). The id still
+              travels in a hidden registered input, and `createBooking`
+              enforces Bageshri whatever arrives. */}
+          {guestHouseHidden ? (
+            <input
+              type="hidden"
+              {...register("guest_house_id")}
+              defaultValue={offeredGuestHouses[0].id}
+            />
+          ) : (
           <div className="space-y-2">
             <Label htmlFor="guest_house_id">Guest house *</Label>
             {/* One guest house is not a choice, so it is not a dropdown.
@@ -1543,6 +1602,7 @@ export function BookingForm({
             )}
             <FieldError message={err("guest_house_id")} />
           </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="rooms_requested">Number of rooms *</Label>
@@ -1709,7 +1769,7 @@ export function BookingForm({
           diet counts have to add up to it, so asking for the meals first was
           asking about a number the requester had not given yet. */}
       {mealsPossible && (
-        <Card>
+        <Card id="meals-section">
           <CardHeader>
             <CardTitle>{mealsOnly ? "Days and meals" : "Meals"}</CardTitle>
           </CardHeader>

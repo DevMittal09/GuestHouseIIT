@@ -29,6 +29,7 @@ import {
   type RequestFacts,
 } from "./approval-routes";
 import { formatDateTime } from "./format";
+import { instituteDayBounds, toInstituteDateValue } from "./tz";
 import { raisedByFacultyInCharge } from "./club-booking";
 import { TURNOVER_GRACE_HOURS } from "./turnover";
 import { DEFAULT_RULES } from "./settings";
@@ -704,11 +705,21 @@ type LapsableBooking = {
  * books a meal for today, and booking a meal for today is allowed (the
  * kitchen's notice period is what limits it). What makes one lapse is its last
  * meal day being over, so that is measured from `check_out`.
+ *
+ * **A stay lapses when its check-in day is over** (7 Nov 2026), not at the
+ * check-in instant. Since 1 Oct a new booking may name a check-in as early as
+ * midnight this morning (`earliestBookableCheckIn`) - so the desk can enter a
+ * guest already at the counter - and a request that could still be submitted
+ * must still be decidable. Measured from the instant, such a booking lapsed
+ * the moment it was made and could never be allocated, and a request for
+ * 12:00 that the manager reached at 12:30 was refused. The same mistake was
+ * fixed for dining bookings on 1 Oct and not for stays. Never later than the
+ * check-out: a stay that is over cannot be approved.
  */
 function lapseDeadline(booking: LapsableBooking): string {
-  return booking.service_type === "meals_only"
-    ? (booking.check_out ?? booking.check_in)
-    : booking.check_in;
+  if (booking.service_type === "meals_only") return booking.check_out ?? booking.check_in;
+  const endOfCheckInDay = instituteDayBounds(toInstituteDateValue(booking.check_in)).end.toISOString();
+  return booking.check_out && booking.check_out < endOfCheckInDay ? booking.check_out : endOfCheckInDay;
 }
 
 export function hasLapsed(booking: LapsableBooking, now: Date = new Date()): boolean {

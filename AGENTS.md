@@ -49,6 +49,7 @@ npm run lint         # must stay clean
 npm run typecheck    # tsc --noEmit, when you want types without a build
 npm test             # Vitest (tests/), must stay clean
 npm run test:e2e     # Playwright journeys (e2e/) against a production build
+npm run test:pg      # the real actions on PostgreSQL (tests-pg/), on a fresh gh_test DB
 ```
 
 **`npm test`** runs the Vitest suite in `tests/`. Store tests use the mock
@@ -181,6 +182,15 @@ port 3000 before launching your own.
   office's answers in Console -> Security - and the nightly retention job that
   erases ID documents. Whether the institute needs the notice back is
   `.memories/04-production.md` "DPDP Act, 2023".
+- **No error without a place on screen** (7 Nov 2026, the owner: "I don't
+  want any case where an error belongs to a question that isn't on
+  screen"). Every problem a booking submission finds - schema, the checks
+  outside it, and the server's refusal - goes into `found` and the
+  **`ErrorSummary`** at the top of the form (`components/error-summary.tsx`,
+  `lib/form-problems.ts`), linked to its question where that question is on
+  screen at submit time and listed in words where it is not. A new check in
+  `validateAndSubmit` must push to `found` as well as set its inline
+  message, and the toast is never "fix the highlighted fields" again.
 - **Every form that stars a field says what the star means** (11 Oct 2026, the
   owner: *'Mention "These field are mandatory for those shown with *"
   whenever we are using it [*]'*). `RequiredFieldsNote`
@@ -262,7 +272,12 @@ port 3000 before launching your own.
 | otherwise | `lib/store/mock.ts` | `.local-db.json`, `public/uploads/` |
 
 **Any new data operation must be added to the interface and to both
-implementations**, or one backend silently breaks. `searchBookings` is the
+implementations**, or one backend silently breaks. **`npm run test:pg`**
+(`tests-pg/`, 7 Nov 2026) is the only suite that runs `PostgresStore`: it
+rebuilds a `gh_test` database from `scripts/init-postgres.sql` and the
+persona seeder on every run, refuses a database whose name lacks "test",
+and drives the real server actions with only the request mocked. A change to
+`lib/store/postgres.ts` is not tested until it has run there. `searchBookings` is the
 trap-laden one — see the approval-log section below. The email outbox
 (`enqueueEmails` / `claimQueuedEmails` / `settleEmail` / `listEmails` /
 `countEmailsByStatus` / `requeueEmail`) is the newest, and the one where the
@@ -943,8 +958,11 @@ PENDING_* ──(nightly, check-in passed)──▶ MISSED ──(manager)──
 pending status, so it sat in a queue for ever and the requester was never
 told. `runMissedSweep()` (`lib/missed-server.ts`, server-only, run by
 `/api/mail/cron` **before** the digest) sets `MISSED`, writes the log and
-mails `booking.missed.requester`. The cutoff is `lapseDeadline` - the check-in,
-or a **dining** booking's last day of meals.
+mails `booking.missed.requester`. The cutoff is `lapseDeadline` - **the end of
+the check-in day, institute time, or the check-out if sooner** (7 Nov 2026; it
+was the check-in instant, so a booking for earlier today - which
+`earliestBookableCheckIn` allows - lapsed the moment it was made and could
+never be allocated), or a **dining** booking's last day of meals.
 
 - **Running it twice changes nothing**: a marked request is no longer in
   `ACTIVE_STATUSES`, and the mail is keyed on `updated_at`.
@@ -976,7 +994,11 @@ select/checkbox).
 Resolution order — get this right or changes appear to do nothing:
 
 1. `getEffectiveFormConfig(role)` (`lib/form-config-server.ts`) returns the
-   developer-saved config from the store **if one exists**,
+   developer-saved config from the store **if one exists and
+   `isStoredFormConfig` accepts it** (its `role` matches and it has the
+   fields every save carries - 7 Nov 2026: a foreign row with no `role`
+   refused every student, employee and office booking on a hidden
+   `booking_type`),
 2. otherwise `buildDefaultFormConfig(role, guestHouses)` — the spec defaults,
 3. then `sanitizeFormConfig` drops guest houses that no longer exist.
 
@@ -1176,6 +1198,13 @@ the form **states the name and carries the id in a hidden registered input** —
 never a disabled `<select>`. The value is computed before `useForm`
 (`initialGuestHouseId`), so it is in the server-rendered HTML rather than
 arriving with an effect.
+
+**A student is not shown the guest house at all** (7 Nov 2026, the owner:
+"This entire thing should not be visible for students"). `guestHouseHidden`
+in `booking-form.tsx` drops the field and the card's note
+(`STUDENT_GUEST_HOUSE_NOTE` is now read only by `guestHousePolicyError`);
+only the hidden input remains. Every other one-guest-house role still sees
+the name stated.
 
 > A disabled one-option dropdown is what made the IAR Student Cell's alumni
 > booking fail with "Select a guest house" — a question the form had already

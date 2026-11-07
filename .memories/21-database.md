@@ -1011,8 +1011,12 @@ are listed here because each is worth knowing separately.
 3. **Two label fixes in `scripts/init-postgres.sql`**: the enum said
    `PENDING_WARDEN_REVIEW` and `PENDING_FA_REVIEW`, which migration 15
    renamed and `lib/types.ts` has never used. A database created from that
-   file would have refused every booking at those two stages. Existing
-   databases already have the short names and need nothing.
+   file would have refused every booking at those two stages. **Existing
+   databases built from the old file keep the old labels** (the owner's
+   `guesthousedb` did, `PENDING_IAR_REVIEW` too), so since 7 Nov 2026 the
+   enum is a guarded `do` block: created only if missing, the three old
+   labels renamed in place (rows kept), later values added `if not exists`.
+   Running the block alone repairs an old database.
 
 
 ## Migration 9 — booking types and two new roles (16 Sep 2026)
