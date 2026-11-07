@@ -14,7 +14,7 @@ import { instituteParts } from "@/lib/tz";
  * Keyword + filter search over the booking archive.
  *
  * The matching rules live here - as pure functions over already-hydrated
- * bookings - so that `MockStore` and `SupabaseStore` cannot drift apart.
+ * bookings - so that `MockStore` and `PostgresStore` cannot drift apart.
  * Each store fetches candidate rows its own way and then hands them to
  * `runBookingSearch`.
  */
@@ -84,7 +84,7 @@ export interface BookingSearchResult {
    * the status filter can show live facet counts without disabling itself.
    */
   statusCounts: Record<BookingStatus, number>;
-  /** True when the backend could not scan the whole archive - see SupabaseStore. */
+  /** True when the backend could not scan the whole archive - see PostgresStore. */
   truncated: boolean;
 }
 

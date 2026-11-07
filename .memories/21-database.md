@@ -1,6 +1,6 @@
 # Database
 
-Schema lives in `supabase/migrations/` — **25 numbered files, applied in order,
+Schema lives in `supabase/migrations/` — **26 numbered files, applied in order,
 forward only** (the first is `00000000000001_initial_schema.sql`); demo data in
 `supabase/seed.sql`. The TypeScript types are hand-maintained in
 `lib/supabase/database.types.ts`. The mock store (`lib/store/mock.ts`) mirrors
@@ -10,7 +10,7 @@ every table in `.local-db.json` and self-heals old files.
 
 | Table | Purpose |
 | --- | --- |
-| `profiles` | One row per user - **the only user table; there is no `users` table**, `auth.users` being Supabase's own. `id` references `auth.users (id) on delete cascade`. Holds `email` (unique), `full_name`, `role`, `hostel_name` (-> `hostels(name)`, migration 16, on update cascade / on delete restrict), `department_or_club` (legacy free text - `unit_id` is what routes approvals), `roll_number`, `ldap_uid` (migration 12: the LDAP username sign-in matches, unique on `lower(ldap_uid)`, null = no LDAP sign-in), and from migration 15 `unit_id` (-> `units(id) on delete restrict`) and `staff_category` (`faculty` / `staff`, employees only). **19 foreign keys across 11 tables point at `profiles.id`** - which is why it is one table and not one per category ([02-decisions.md](02-decisions.md), 13 Oct 2026). |
+| `profiles` | One row per user - **the only user table**. Stored columns: `email` (unique), `full_name`, `role`, `ldap_uid` (migration 12: the LDAP username sign-in matches, unique on `lower(ldap_uid)`, null = no LDAP sign-in), and `unit_id` (-> `units(id) on delete restrict`). **Four computed fields** (not stored - resolved at read time by the **`profiles_v` SQL view**): `hostel_name` (from `institute_students.hostel` or `institute_wardens` -> `institute_hostels`), `department_or_club` (from `units.name` via `unit_id`), `roll_number` (from `institute_students`), `staff_category` (from `institute_employees.employee_type`: Teaching -> `faculty`, Non Teaching -> `staff`). `hostel_name` eliminated 3 Nov 2026; the other three eliminated 4 Nov 2026. All profile reads in `PostgresStore` use the view; writes go to the base table. **19 foreign keys across 11 tables point at `profiles.id`** - which is why it is one table and not one per category ([02-decisions.md](02-decisions.md), 13 Oct 2026). |
 | `guest_houses` | `name` (free-form, unique), `total_rooms` (recounted from active rooms) and `serves_meals` (migration 8 — whether the booking form offers meals there; Hamsanandi on by default). |
 | `rooms` | `guest_house_id`, `room_number`, `room_type`, `is_active`. Unique per (guest house, room number). |
 | `bookings` | The core record — see below. |
@@ -20,12 +20,18 @@ every table in `.local-db.json` and self-heals old files.
 | `form_configs` | One row per requester role: `role` (PK), `config` jsonb, `updated_at`. |
 | `room_holds` | Which room each booking occupies, and when. See below — this is the interesting one. |
 | `app_settings` | Runtime key/value (`value` is jsonb). Holds the developer console password hash (a string) and, since migration 16, the **Settings** groups as objects: `rules.capacity`, `rules.booking`, `rules.meals` (and later phases' groups, including **`rules.approval` — the whole approval workflow**, 12 Oct 2026, which needed no migration because this table already takes any key). A missing row means "the defaults in `lib/settings.ts`". **Service-role only — no `authenticated` policy**, because a developer policy would expose the hash to anyone who can set their own role. |
-| `units` | (Migration 15) Departments, clubs, councils and offices: `name`, `kind`, `parent_id`, `head_id`, `acting_head_id`, and (migration 16) `office_class` — `officer` / `department`, offices only. (Migration 25) `faculty_advisor_id` → `profiles` (`on delete set null`) and `secretary_email`, councils and clubs only: who books for the unit and whose mailbox is copied — a club with none takes its council's. Approvers are resolved through it (`lib/units.ts`). |
-| `hostels` | (Migration 16) The hostel list. `profiles.hostel_name` references `hostels(name)` **on update cascade, on delete restrict**: a rename moves everyone, a hostel in use cannot be removed. |
+| `units` | (Migration 15) Departments, clubs, councils and offices: `name`, `category` (was `kind`, renamed 3 Nov 2026), `parent_department_id` (was `parent_id`), `head_id`, `acting_head_id`, and (migration 16) `office_type` (was `office_class`) — `officer` / `department`, offices only. `hod_approval_from_id` (was `hod_unit_id`) — whose HOD approves when not the default. (Migration 25) `faculty_advisor_id` → `profiles` (`on delete set null`) and `secretary_email`, councils and clubs only: who books for the unit and whose mailbox is copied — a club with none takes its council's. Approvers are resolved through it (`lib/units.ts`). |
+| `institute_hostels` | (Migration 35; consolidated with migration 16) The institute hostels list: `hostel_id` (unique, e.g. "HOS1") and `hostel_name` (unique). `profiles.hostel_name` references `institute_hostels(hostel_name)` **on update cascade, on delete restrict**: a rename moves everyone, a hostel in use cannot be removed. Replaces the legacy `hostels` table. |
 | `official_email_whitelist` | (Migration 16) Accounts allowed to submit Official / Dignitary bookings, lowercased. Replaced the constant in `lib/routes.ts`. Service-role only. |
 | `security_audit` | (Migration 16) The append-only security audit log. A trigger refuses every UPDATE, every DELETE except through `purge_security_audit(days)` (never under 180 days, CERT-In), and TRUNCATE. Service-role only. |
 | `email_outbox` | The notification queue (migration 10). One row per message: recipients, rendered HTML and text, status, attempts, backoff. **Service-role only, like `app_settings`** — the rendered bodies quote guest names, purposes of visit and rejection reasons, which makes this table more sensitive than the bookings it describes. |
 | `academic_records` | (Migration 28) The institute's records **as the guest house office pasted them in**: one flat row per `(kind, lower(email))`, with every kind's fields as nullable columns. Read by the Requester details card, the Assistant Warden's family check and the booking form's **locked parent names**. **Service-role only** — it holds parents' names and phone numbers. |
+| `institute_students` | (Migration 35) The institute's student directory: 26 fields including roll number, batch year, programme, department, hostel, family details and **five Aadhar columns encrypted at rest**. Keyed on `lower(email)`. `imported_by` → `profiles`. `year_of_admission` removed 3 Nov 2026 (consolidated into `batch_year`). |
+| `institute_employees` | (Migration 35) The institute's employee directory: 13 fields — name, designation, department, employee type (faculty/staff), phone, address. Keyed on `lower(email)`. `imported_by` → `profiles`. |
+| `institute_offices` | (Migration 35) Institute offices: 11 fields — office name, department, head, contact details, address. Keyed on `lower(office_email)`. `imported_by` → `profiles`. |
+| `institute_fcc` | (Migration 35) Fests, councils and clubs: 8 fields — name, type, faculty advisor, secretary. Keyed on `lower(council_email)`. `imported_by` → `profiles`. |
+| `institute_hostels` | (Migration 35) Institute hostels: `hostel_id` (like "HOS1"), name, warden name/email/phone. No `imported_by`. |
+| `institute_wardens` | (Migration 35) Hostel wardens: 9 fields — name, email, phone, designation, `hostel_id` → `institute_hostels` (`ON UPDATE CASCADE ON DELETE SET NULL`). `imported_by` → `profiles`. |
 
 ### `bookings` columns worth knowing
 
@@ -91,11 +97,11 @@ here.
 
 | # | Finding | Status |
 | --- | --- | --- |
-| 1 | **`profiles.department_or_club` duplicates `profiles.unit_id`.** A department is held twice - once as free text, once as a foreign key to `units` - and they can disagree. A real 3NF violation (a non-key attribute determined by the unit, not the person) | **Left alone, deliberately.** Five modules still read it: `lib/approval-routes.ts` (the legacy `faculty_advisor` scoping), `lib/workflow.ts` (the club queue), `lib/booking-search.ts` (the `club` filter), `lib/invoice.ts` (printed on the invoice) and `lib/mail/templates.ts` (the scope line). Dropping it is a feature removal, not a migration. Retire it when every account has a `unit_id` - [03-roadmap.md](03-roadmap.md) §2f |
+| 1 | **`profiles.department_or_club` duplicates `profiles.unit_id`.** A department is held twice - once as free text, once as a foreign key to `units` - and they can disagree. A real 3NF violation (a non-key attribute determined by the unit, not the person) | **Fixed, 4 Nov 2026.** The column is eliminated from `profiles` and computed at read time from `units.name` via `unit_id` in the `profiles_v` view. `roll_number` and `staff_category` also eliminated in the same round |
 | 2 | **`guest_houses.total_rooms` is a stored derived value**, recounted by application code in both stores (`recountRooms`, `lib/store/mock.ts:1119`, `lib/store/supabase.ts:971`). A room inserted by SQL or by a repair script leaves it stale - a textbook update anomaly | **Fixed in migration 33** (14 Oct 2026), by the trigger this row proposed: `recount_guest_house_rooms()` on `rooms`, handling `OLD` and `NEW` so a room **moved** between guest houses recounts both ends. The column stays - dropping it would change `GuestHouse` in `lib/types.ts` and two console pages to fix something a trigger closes. `recountRooms()` is kept: the mock store has no triggers, and in Supabase mode it now writes the number the trigger already wrote |
 | 3 | **`academic_records` has every kind's fields as nullable columns** - a student's `father_name` is null on an office row. Not 3NF in the strict reading | **Correct as it is**, decided in migration 28's own header: six kinds share an email, a phone, a name and a department, and six tables would be six importers and six console sections for the same six CSV pastes. The discriminant is `kind`, the shape is checked in TypeScript by `ACADEMIC_RECORD_FIELDS`, and a column named in one and not the other is a compile error |
 | 4 | **`academic_records.hostel` is free text** while `profiles.hostel_name` is a foreign key to `hostels` - the same reference data, two representations | **Correct as it is.** The table is *the institute's records as the office pasted them in*. A foreign key would reject a valid import because the institute spells a hostel differently from our list, and the column is **display-only** - `lib/academic/fields.ts` renders it as a row and nothing scopes or authorises on it. Verified: no other reader |
-| 5 | **`profiles` had almost no indexes** - the primary key, unique `email`, unique `lower(ldap_uid)`, and nothing on `role`, `unit_id` or `hostel_name` | **Fixed in migration 31.** Invisible at 18 personas, not at a few thousand |
+| 5 | **`profiles` had almost no indexes** - the primary key, unique `email`, unique `lower(ldap_uid)`, and nothing on `role` or `unit_id` | **Fixed in migration 31.** Invisible at 18 personas, not at a few thousand. `hostel_name` index no longer needed - the column was eliminated from the table on 3 Nov 2026 |
 | 6 | **No case-insensitive index behind the import's match key.** The import matches on `lower(email)`; `profiles_email_key` is plain and cannot serve it | **Fixed in migration 31** (`profiles_email_lower_idx`, deliberately not unique - see the migration) |
 | 7 | **`profiles` had no check constraints at all** - a blank name or a non-address would store | **Fixed in migration 31**, both `not valid` so the migration cannot refuse to apply |
 | 9 | **22 foreign keys had no index on the referencing column**, 15 of them pointing at `profiles`. Postgres indexes the key being referenced, never the column referencing it, so deleting a parent row scans each unindexed child table **in full** | **Fixed in migration 34** (14 Oct 2026), for the 20 whose parent is actually deleted. Found while building the import undo, which is the operation that made it matter: undoing an import deletes every account it created, up to 2000. Measured in a throwaway Postgres with 200,000 `booking_logs` rows - deleting 300 profiles went from **2,580 ms to 64 ms**, and the before figure grows with the history while the after figure does not. Two were left deliberately: `invoices.replaces_invoice_id` (invoices are never deleted) and `booking_guests (booking_room_id, booking_id)` (`booking_guests_room_idx` is on the leading column, which the check can use) |
@@ -131,8 +137,10 @@ mistake:
 - **`booking_rooms_id_booking_idx`** - a composite unique index on
   `(id, booking_id)` so `booking_guests` can reference the pair, which makes
   attaching a guest to another booking's room unrepresentable.
-- **`profiles.hostel_name -> hostels(name)`** `on update cascade on delete
-  restrict` - a rename moves everyone, a hostel in use cannot be deleted.
+- **`institute_students.hostel -> institute_hostels(hostel_name)`** `on update
+  cascade on delete set null` - a rename moves everyone. (Before 3 Nov 2026
+  this was `profiles.hostel_name -> hostels(name)`; the column was eliminated
+  from `profiles` and the FK moved to `institute_students`.)
 - **`profiles.unit_id -> units(id)`** `on delete restrict`.
 - **`academic_records (kind, lower(email))`** unique - what makes the
   academic import idempotent.
@@ -209,9 +217,9 @@ Checked text columns rather than enums: `bookings.debit_head`
 `department_budget`, `special_budget` = **Special Budget** (labelled "Special
 Funds" from 24 Sep 2026 to 8 Oct), `personal_funds`, and
 the legacy `alumni_fund`, `student_fund`, `hostel_funds`),
-`bookings.office_approval` (`direct` / `hod`), `units.kind`
-(`department`, `club`, `council`, `office`), `units.office_class`
-(`officer` / `department`), `profiles.staff_category` (`faculty` / `staff`),
+`bookings.office_approval` (`direct` / `hod`), `units.category`
+(`department`, `club`, `council`, `office`; was `kind`, renamed 3 Nov 2026), `units.office_type`
+(`officer` / `department`; was `office_class`), `profiles.staff_category` (`faculty` / `staff`),
 `invoices.status` (draft / issued / paid / cancelled). `invoices.extra_charges`
 (migration 26) is jsonb, an array of at most 20.
 
@@ -453,7 +461,7 @@ Current migrations:
    after trimming them) with the `profiles_hostel_fk` foreign key;
    `official_email_whitelist` (seeded once, into an empty table, with the three
    formerly hardcoded addresses, so a re-run never resurrects a removed one);
-   `units.office_class`; `rule_int()`, and `check_room_occupancy()` reading its
+   `units.office_type` (was `office_class`, renamed 3 Nov 2026); `rule_int()`, and `check_room_occupancy()` reading its
    3 + 1 limits from `rules.capacity`; `security_audit` with its append-only
    triggers and `purge_security_audit()`. Verified in a throwaway Postgres 16
    with old-shape rows (untrimmed and blank hostel names), applied three times,
@@ -475,7 +483,7 @@ Current migrations:
    3 h refused under the buffer.
 
 18. `00000000000018_hod_approval_and_projects.sql` (Phase 4, Sep 2026).
-   `units.hod_unit_id` (whose HOD approves a unit when not the default, never
+   `units.hod_approval_from_id` (was `hod_unit_id`, renamed 3 Nov 2026; whose HOD approves a unit when not the default, never
    itself); `projects` (unique on `lower(project_number)`, readable when
    active); `bookings.office_approval` ('direct' / 'hod', existing office
    bookings backfilled 'direct') and `bookings.project_id` (on delete
@@ -932,6 +940,17 @@ Current migrations:
     booking with no category accepted, and three inserts refused - one column
     without the other, either way round (`bookings_tariff_category_pair`), and
     a booking type outside the enum (`bookings_tariff_booking_type_check`).
+35. **`00000000000035_institute_tables.sql`** — *the institute's own directory
+    tables* (2 Nov 2026). Six tables: `institute_students` (27 columns, five
+    Aadhar fields encrypted at rest), `institute_employees` (13),
+    `institute_offices` (11), `institute_fcc` (8), `institute_hostels` (5),
+    `institute_wardens` (9 columns, `hostel_id` → `institute_hostels` on update
+    cascade / on delete set null). Unique indexes on lowercased email columns,
+    `set_updated_at()` triggers on all six, `imported_by` → `profiles` on five
+    (not hostels). Uses `CREATE TABLE IF NOT EXISTS`, safe to re-run. Additive
+    and **optional** — no application code requires these tables to exist; both
+    stores degrade gracefully (PostgresStore catches `42P01`, MockStore
+    self-heals). **Not applied to the hosted project.**
 
 > Migrations 1–5 are **not** re-runnable (they `create` without `if not
 > exists`); 6 onwards are. Checked 21 Sep 2026 by applying 2–16 a second time.

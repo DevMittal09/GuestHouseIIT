@@ -60,7 +60,7 @@ function slug(heading) {
 function anchorsOf(text) {
   const anchors = new Set();
   let fenced = false;
-  for (const line of text.split("\n")) {
+  for (const line of text.split(/\r?\n/)) {
     if (/^\s*(```|~~~)/.test(line)) {
       fenced = !fenced;
       continue;

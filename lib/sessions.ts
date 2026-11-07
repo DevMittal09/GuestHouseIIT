@@ -32,8 +32,6 @@ const TOUCH_AFTER_MS = 60_000;
  * elsewhere, because the prefix requires Secure and dev is over http.
  */
 export const SESSION_COOKIE = isProduction() ? "__Host-gh_session" : "gh_session";
-/** The pre-Phase-8 cookie: a bare profile id. Only honoured when dev login is on. */
-export const LEGACY_COOKIE = "gh_mock_user";
 
 export type Session = {
   id: string;
@@ -126,8 +124,6 @@ export async function startSession(
   });
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, cookieOptions(ABSOLUTE_HOURS * 3600));
-  // A stale dev cookie would otherwise shadow the real session.
-  jar.delete(LEGACY_COOKIE);
   return session;
 }
 
@@ -193,7 +189,6 @@ export async function endSession(): Promise<void> {
     }
   }
   jar.delete(SESSION_COOKIE);
-  jar.delete(LEGACY_COOKIE);
 }
 
 /** Sign out everywhere: every session of this user, including this one. */
@@ -201,6 +196,5 @@ export async function endAllSessions(userId: string): Promise<number> {
   const count = await getStore().revokeUserSessions(userId);
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
-  jar.delete(LEGACY_COOKIE);
   return count;
 }

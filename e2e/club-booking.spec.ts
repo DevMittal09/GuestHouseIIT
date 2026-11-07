@@ -23,8 +23,8 @@ import {
  *   the professor's list, marked as the club's.
  */
 
-const CLUB = { uid: "petrichor", name: "Petrichor Fest Council" };
-const ADVISOR = { uid: "arun.prasad", name: "Dr. Arun Prasad" };
+const CLUB = { uid: "petrichor", email: "petrichor@iitpkd.ac.in", password: "Petrichor@2026", name: "Petrichor Fest Council" };
+const ADVISOR = { uid: "arun.prasad", email: "arun.prasad@iitpkd.ac.in", password: "Arun@2026", name: "Dr. Arun Prasad" };
 
 test("a club's Faculty Advisor books for it from their faculty login; the club's account cannot", async ({ page }) => {
   await signIn(page, CLUB);

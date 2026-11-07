@@ -17,6 +17,11 @@ and reorganised **10 Oct 2026**. The portal is feature-complete for every
 workflow the institute has specified and has been through a ten-phase
 production-readiness programme; it is **not deployed for real use**.
 
+The repo-root [`setup.md`](../setup.md) is the consolidated implementation,
+dependency, migration and deployment guide. This roadmap remains the source
+for what is still open; the production checklist is in
+[04-production.md](04-production.md).
+
 ---
 
 ## 1. Gates before real bookings go on it
@@ -25,19 +30,19 @@ Each of these is configuration or plumbing, not new design.
 
 | # | Gate | Why | How |
 | --- | --- | --- | --- |
-| 1 | **Connect the institute's LDAP** | Until `LDAP_URL` is set the dummy accounts work, and their passwords are published in this repository | [05-credentials-and-security.md](05-credentials-and-security.md) Part 2, "Moving to the real LDAP accounts" — env vars, then load real usernames (Users & Roles → Import LDAP usernames) |
-| 2 | **Close Mock Authentication** | Open wherever Google is unconfigured, production included; anyone reaching `/mock-login` becomes any account | Configure Google (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APP_URL`) or set `MOCK_LOGIN=false`. **The Google flow is built and verified, only unconfigured** - the whole setup, and the two things to fix before switching it on, is [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) at the repo root. **`MOCK_LOGIN=false` with Google unconfigured leaves no door at all** since the LDAP form came off the page on 28 Oct 2026 |
-| 3 | **Production secrets** | The server refuses to start without them | `APP_URL`, `CRON_SECRET`, `ID_ENCRYPTION_KEY` + the Supabase keys ([05-credentials-and-security.md](05-credentials-and-security.md)) |
+| 1 | ~~Connect the institute's LDAP~~ **— closed, 2 Nov 2026.** LDAP removed entirely (the owner: "Keep only Google OAuth"). `lib/ldap/` deleted, `ldapts` removed, no LDAP door exists. `ldap_uid` column removed from the code and schema | Configure Google (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APP_URL`). The flow is built and verified. [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) at the repo root |
+| 2 | ~~Close Mock Authentication~~ **— closed, 2 Nov 2026.** `/mock-login` was already deleted; `loginAs` and `mockLoginEnabled` are now gone too. The only sign-in door is Google OAuth (or the test-sign-in endpoint with `E2E_TEST_SECRET` for Playwright) | Configure Google to go live |
+| 3 | **Production secrets** | The server refuses to start without them | `APP_URL`, `CRON_SECRET`, `ID_ENCRYPTION_KEY`, `DATABASE_URL` ([05-credentials-and-security.md](05-credentials-and-security.md)) |
 | 4 | **Change the console password** | Default `0000` | Console → Console Access |
-| 5 | **Delete or disable the demo personas and demo data** | They sign in with published passwords | Users & Roles; `supabase/repairs/2026-09-21-clear-test-bookings.sql` for bookings |
+| 5 | **Delete or disable the demo personas and demo data** | They sign in with published passwords | Users & Roles |
 | 6 | **Apply every migration to the production database** | Missing ones fail writes quietly | **`npm run check:migrations`** asks the project and names what is missing. Do not write the answer down instead — that is how 24-30 were believed missing for weeks after they were applied |
 | 7 | **The office's Settings** | Defaults are guesses: extra-bed rate (none), GSTIN, Accounts email (empty), bank details, retention days, heads of units, Faculty Advisors, hostels and wardens, whitelist | [04-production.md](04-production.md#3-data-the-office-has-to-supply) |
 | 8 | **Decide `MAIL_REDIRECT_ALL_TO`** | Unset only in production; set everywhere else | |
-| 9 | **Backups** | Supabase's free plan has none | Confirm the plan; run the restore drill in the runbook |
-| **10** | ~~Close the GoTrue / PostgREST door~~ **- done in code; three production steps left** | Migration 31 drops the `profiles -> auth.users` key and all 38 `authenticated` policies, `createProfile` and `seed.sql` mint no Supabase password, and `tests/rls-surface.test.ts` keeps it that way | **Left to do, in this order:** (1) **disable the email/password provider** - Dashboard -> Authentication -> Providers -> Email. **Confirmed ON with signup open, 14 Oct 2026**, so this is now first: it is a toggle, needs no migration, and the portal does not use the provider; (2) apply migrations **31, 32, 33, 34** to the hosted project - `npm run check:migrations` prints the SQL for the ones it cannot probe; (3) run `supabase/repairs/2026-10-13-retire-seeded-auth-users.sql`, which refuses to run before 31. **31 and 32 are not optional once the code is deployed.** [04-production.md](04-production.md) §1a.1 |
-| **11** | ~~Make the user import atomic, or batch it~~ **- no longer a gate, 14 Oct 2026** | Two of the three problems are closed: the **inserts** are chunked (250 a request, so a first load is ~8 requests instead of ~2000), and a failure now **records where it stopped** - migration 32's undo record is written before the writes, so a part-way import is recoverable instead of a mystery. A username moving between two accounts in one paste used to fail part-way; fixed | What remains is that the **updates** are still one request per person, which cannot be chunked (each row has different values). Mitigation in [04-production.md](04-production.md) §1a.6: read the plan's "updated" count, import in pieces when it is large, and undo if it times out. The remaining fix is a single upsert, which needs the `ldap_uid` swap handled inside it - [03-roadmap.md](03-roadmap.md) §2f |
+| 9 | **Backups** | A regular backup strategy is needed | Confirm the plan; run the restore drill |
+| **10** | ~~Close the GoTrue / PostgREST door~~ **- closed, 2 Nov 2026.** Supabase removed entirely. Direct Postgres via `pg` driver. No Supabase Auth, no GoTrue, no PostgREST. `init-postgres.sql` has no `auth.users` reference, no `authenticated` policies, no seeded passwords | N/A |
+| **11** | ~~Make the user import atomic, or batch it~~ **- no longer a gate, 14 Oct 2026** | Two of the three problems are closed: the **inserts** are chunked (250 a request, so a first load is ~8 requests instead of ~2000), and a failure now **records where it stopped** - migration 32's undo record is written before the writes, so a part-way import is recoverable instead of a mystery | What remains is that the **updates** are still one request per person, which cannot be chunked (each row has different values). Mitigation in [04-production.md](04-production.md) §1a.6: read the plan's "updated" count, import in pieces when it is large, and undo if it times out. The remaining fix is a single upsert |
 
-| **12** | **Stop finding an account by scanning every profile** - **new, 28 Oct 2026** | The Google callback and `profileForDirectoryEntry` both do `listProfiles()` then `.find()`. `SupabaseStore.listProfiles` is `select("*")` with **no `.range()`**, and Supabase truncates an unbounded select at **1000 rows silently** (HTTP 200; the truth is only in `Content-Range`), ordered by `role` so *which* 1000 is arbitrary. Past that many accounts: sign-in fails for arbitrary people with "not registered on the guest house portal", and `planUserImport` reads already-imported people as **new**, tries to create them and the unique `email` constraint refuses the whole paste. `MAX_USER_IMPORT_ROWS` is 2000 and [`DATA-REQUEST-AND-IMPORT.md`](../DATA-REQUEST-AND-IMPORT.md) §7 says to split the file, which walks into it | **Both:** (1) raise **Max rows** (Supabase Dashboard -> Settings -> API; ceiling 1,000,000) and record it in [04-production.md](04-production.md), because a new project defaults back to 1000; (2) add `getProfileByEmail` to `DataStore` and **both** stores and use it in the callback - migration 31 already added `profiles (lower(email))` **for this and nothing uses it**. [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §7 has the code |
+| **12** | **Stop finding an account by scanning every profile** - **new, 28 Oct 2026** | The Google callback and `profileForDirectoryEntry` both do `listProfiles()` then `.find()`. With direct Postgres this is a full table scan — not truncated silently as it was under Supabase's PostgREST (which capped at 1000 rows), but still inefficient at scale. Past a few thousand accounts this becomes slow | Add `getProfileByEmail` to `DataStore` and **both** stores and use it in the callback — `init-postgres.sql` already has `profiles (lower(email))` for this. [`GOOGLE-SIGN-IN.md`](../GOOGLE-SIGN-IN.md) §7 has the code |
 
 **Next security phase** (not a gate for a pilot, but the next real step):
 move request-scoped database access off the service-role key so row-level
@@ -375,16 +380,28 @@ one.
 - ~~**No deactivation story for people who leave.**~~ **Built on 5 Nov 2026:**
   `profiles.login_disabled_at` (migration 36), set from Console -> User Groups.
   It does not yet hide a blocked person from the approver pickers: see §2r.
+- **The undo is not offered for the institute-records import.** That importer
+  (`lib/institute/import.ts`) is all-or-nothing and keyed on `lower(email)` the
+  same way, and it overwrites a student's parents' names - which is what the
+  booking form locks a guest to. Migration 32's table is deliberately shaped to
+  take a `kind` column if this is wanted.
+- **Add `profiles` and the `institute_*` tables to whatever is used as a
+  pre-import snapshot.** The documented drill - `supabase db dump` - already
+  covers them; the ad-hoc JSON export kept outside the repo does not, and must
+  not be mistaken for a backup. The undo record is a safety net for one import,
+  **not** a substitute for this.
+- **No deactivation story for people who leave.** `profiles` has no
+  `is_active`, and `deleteProfile` refuses anyone with a booking (correctly -
+  it would orphan the history), so repeated imports only accumulate. Wanted:
+  a flag that hides someone from pickers and refuses them a session without
+  touching their bookings. Not urgent until the first graduation after
+  go-live.
 - **`MAX_USER_IMPORT_ROWS` is 2000 and the institute is larger.** The paste has
   to be split anyway while the updates are sequential, so this is a ceiling to
   remember rather than a bug.
-- **`department_or_club` duplicates `unit_id`** and the two can disagree - a
-  real 3NF violation kept because five modules read it
-  ([21-database.md](21-database.md), finding 1). The practical risk at import
-  time is different: a sheet that fills the free-text column and leaves
-  `unit` blank produces people whose official bookings have **no HOD**. The
-  runbook says to check it; the real fix is to retire the column once every
-  account has a unit.
+- ~~`department_or_club` duplicates `unit_id`~~ **Done, 4 Nov 2026.** The column
+  is eliminated from `profiles` and computed at read time from `units.name`
+  via `unit_id`, along with `roll_number` and `staff_category`.
 - **Migration 31 is the first migration that is not optional once the code is
   deployed.** `createProfile` cannot work on a database still on 30. If the
   project ever gains a real deploy pipeline, this is the case that argues for
@@ -647,19 +664,12 @@ Every item of the brief closed. What it opened:
 
 Every item of both briefs closed. What they opened:
 
-- **The sign-in throttle no longer protects the door.** Nothing types a
-  password, so `RATE_LIMITS.signIn` guards an action the interface does not
-  call. It still guards `signInWithLdap` itself, and the account picker is
-  open only while Google is unconfigured - but if the picker is ever the real
-  door for a deployment, the question "what stops somebody signing in as the
-  manager" has only one answer today, and it is `mockLoginEnabled()`.
-  [04-production.md](04-production.md) already carries closing that door as a
-  gate; this round makes it the **only** gate.
-- **The LDAP form has no test and no caller.** `signInWithLdap`, the
-  throttle, the "one message for both failures" rule and the empty-password
-  refusal are all still there and still unit-covered where they were, but no
-  journey exercises the door any more. If it is ever rendered again, re-read
-  `05-credentials-and-security.md` rather than trusting that it still works.
+- ~~The sign-in throttle no longer protects the door.~~ *Resolved 3 Nov 2026:*
+  `RATE_LIMITS.signIn` removed with the rest of LDAP. Google OAuth has its own
+  per-IP throttle (`RATE_LIMITS.oauth`).
+- ~~The LDAP form has no test and no caller.~~ *Resolved 2 Nov 2026:* LDAP
+  sign-in, `signInWithLdap`, the throttle, mock-login and all related code
+  deleted. Google OAuth is the only sign-in door.
 - **Nothing tests the opaque header**: not that white links stay readable
   over the hero (the measurement is in [02-decisions.md](02-decisions.md),
   taken against the two photographs that are in the hero *today*), and not
@@ -891,6 +901,13 @@ this is what building it would touch.
 - **A group is one per person.** Someone in two kinds of group is not expressible.
 - **`IMPORTING-USERS.md` describes the older paste import in full**; groups have a
   short section at its head.
+### From the unit column rename (3 Nov 2026)
+
+- **Rename columns on existing Postgres databases.** The code now expects
+  `units.category` (was `kind`), `parent_department_id` (was `parent_id`),
+  `office_type` (was `office_class`), `hod_approval_from_id` (was
+  `hod_unit_id`), and `institute_offices.office_type` (was `office_class`).
+  Five `ALTER TABLE … RENAME COLUMN` statements; no data changes needed.
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 
@@ -960,6 +977,48 @@ CI. What would catch the most next:
   bars, spelled-out legend), but have not had a screen-reader pass.
 - Audit focus order and labels through the long booking form.
 
+## 6a. Institute data tables (2 Nov 2026)
+
+Migration 35 adds six `institute_*` tables (students, employees, offices,
+fests/councils/clubs, hostels, wardens) with types in `lib/institute/types.ts`
+and 30 `DataStore` methods. The second session rewired all dependent code:
+
+- ~~Console pages~~ **Done.** The Academic Records console imports, views and
+  deletes records per institute table kind.
+- ~~Integration with the portal~~ **Done for the academic record path.**
+  `StoreAcademicSource` reads institute_* tables through an adapter
+  (`lib/institute/academic-adapter.ts`). The booking form's parent locking,
+  the warden's family check, the Copy-to chain and the requester-details card
+  all work unchanged.
+
+**Done in the round of 3 Nov 2026:**
+
+- ~~Header-aware institute import~~ — `lib/institute/import.ts` detects a header
+  row automatically and maps columns by name using `KNOWN_*_COLUMNS` aliases, so
+  the office's spreadsheet columns can be in any order and unknown columns are
+  skipped. Positional fallback unchanged.
+- ~~`year_of_admission` removed from `institute_students`~~ — redundant with
+  `batch_year`. The alias `year_of_admission` -> `batch_year` ensures old
+  spreadsheets still import. Existing databases need
+  `ALTER TABLE institute_students DROP COLUMN IF EXISTS year_of_admission`.
+
+What is **not built yet**:
+
+- **Delete the dead code** in `lib/academic/stored.ts` (`planAcademicImport`,
+  `StoredAcademicRecord`, `ACADEMIC_RECORD_KINDS` etc.) - no production code
+  imports them any longer
+- **Drop the old `academic_records` table** once migration 35 is applied and
+  confirmed working on the hosted project
+- **Migration 35 applied** to the hosted project
+- **Drop `year_of_admission` from the hosted database** once migration 35 is
+  applied — `ALTER TABLE institute_students DROP COLUMN IF EXISTS year_of_admission`
+- ~~Warden scoping and approval routing from institute tables~~ **Done,
+  3 Nov 2026.** `hostel_name` eliminated from the `profiles` table, computed
+  at read time via `profiles_v` / `withComputed()`. **Extended 4 Nov 2026**:
+  `department_or_club`, `roll_number` and `staff_category` also eliminated
+  from `profiles` and computed the same way. All four fields remain on the
+  `Profile` type; all downstream consumers unchanged
+
 ## 7. Features likely to be asked for next
 
 - **Requester-side booking edits** — today a requester cancels and resubmits;
@@ -969,8 +1028,7 @@ CI. What would catch the most next:
 - **Per-guest-house managers** — scope `gh_manager` by a profile field, the way
   wardens are scoped.
 - **Snapshot the academic record onto the booking** if reviewers need the
-  requester's phone, and **fill `hostel_name` from the record at sign-in** so
-  warden routing stops depending on a hand-typed profile field.
+  requester's phone.
 - **Just-in-time provisioning** of profiles on first sign-in - the 2 Sep
   plan's `account_directory` proposal, superseded by `units` and
   `official_email_whitelist` but never built for provisioning - instead of

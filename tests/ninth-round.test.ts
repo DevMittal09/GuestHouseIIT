@@ -267,8 +267,8 @@ describe("loading the accounts from a spreadsheet", () => {
     {
       id: "unit-cse",
       name: "Computer Science and Engineering",
-      kind: "department",
-      parent_id: null,
+      category: "department",
+      parent_department_id: null,
       head_id: null,
       acting_head_id: null,
     },
@@ -308,8 +308,7 @@ describe("loading the accounts from a spreadsheet", () => {
    * order, and holds only some of them.
    */
   it("takes the columns in whatever order the header names them", () => {
-    expect(columnFor("Roll No.")).toBe("roll_number");
-    expect(columnFor("Dept / Club")).toBe("department_or_club");
+    expect(columnFor("Unit")).toBe("unit");
     expect(columnFor("nonsense")).toBeNull();
     expect(headerColumns(["email", "name"])).toEqual(["email", "full_name"]);
     // A data line is not a header, even though its first cell matches "email".
@@ -324,19 +323,18 @@ describe("loading the accounts from a spreadsheet", () => {
     expect(plan.problems[0]).toMatch(/not an email address/);
 
     const ordered = planUserImport(
-      ["email, name, role, category", "priya@iitpkd.ac.in, Dr. Priya N, employee, faculty"].join("\n"),
+      ["email, name, role", "priya@iitpkd.ac.in, Dr. Priya N, employee"].join("\n"),
       context()
     );
     expect(ordered.problems).toEqual([]);
     expect(ordered.hadHeader).toBe(true);
-    expect(ordered.added[0].staff_category).toBe("faculty");
+    expect(ordered.added[0].role).toBe("employee");
   });
 
-  it("reads the office's word for a kind of employee as the role and the category", () => {
+  it("reads the office's word for a kind of employee as the role", () => {
     const plan = planUserImport("ravi@iitpkd.ac.in, Ravi K, staff", context());
     expect(plan.problems).toEqual([]);
     expect(plan.added[0].role).toBe("employee");
-    expect(plan.added[0].staff_category).toBe("staff");
   });
 
   it("updates somebody already on the list, and leaves out what the paste does not carry", () => {
@@ -345,10 +343,6 @@ describe("loading the accounts from a spreadsheet", () => {
       email: "ravi@iitpkd.ac.in",
       full_name: "Ravi K",
       role: "employee",
-      hostel_name: null,
-      department_or_club: "Mechanical",
-      roll_number: "EMP0142",
-      ldap_uid: "ravi",
     });
     const plan = planUserImport(
       ["email, name", "ravi@iitpkd.ac.in, Ravi Kumar"].join("\n"),
@@ -359,10 +353,6 @@ describe("loading the accounts from a spreadsheet", () => {
     expect(plan.updated).toHaveLength(1);
     const { before, row } = plan.updated[0];
     expect(row.full_name).toBe("Ravi Kumar");
-    // Not cleared by a paste that never mentioned them.
-    expect(row.department_or_club).toBe("Mechanical");
-    expect(row.roll_number).toBe("EMP0142");
-    expect(row.ldap_uid).toBe("ravi");
     expect(changedFields(before, row)).toEqual(["Name"]);
   });
 
@@ -386,18 +376,16 @@ describe("loading the accounts from a spreadsheet", () => {
   it("refuses the whole paste when any line is wrong", () => {
     const plan = planUserImport(
       [
-        "email, name, role, hostel",
-        "good@iitpkd.ac.in, Good Person, student, Malhar",
-        "not-an-email, Bad Person, student, Malhar",
-        "third@iitpkd.ac.in, Third Person, student, Nowhere",
+        "email, name, role",
+        "good@iitpkd.ac.in, Good Person, student",
+        "not-an-email, Bad Person, student",
       ].join("\n"),
       context()
     );
     expect(plan.added).toEqual([]);
     expect(plan.updated).toEqual([]);
-    expect(plan.problems).toHaveLength(2);
-    expect(plan.problems[0]).toMatch(/Line 3/);
-    expect(plan.problems[1]).toMatch(/"Nowhere" is not a hostel on record/);
+    expect(plan.problems).toHaveLength(1);
+    expect(plan.problems[0]).toMatch(/not an email address/);
   });
 
   it("refuses a role this console user may not hand out", () => {
@@ -408,21 +396,13 @@ describe("loading the accounts from a spreadsheet", () => {
     expect(plan.problems[0]).toMatch(/not a role this console can assign/);
   });
 
-  it("refuses the same person twice, and one LDAP username on two accounts", () => {
+  it("refuses the same person twice", () => {
     expect(
       planUserImport(
         ["a@iitpkd.ac.in, A Person, student", "a@iitpkd.ac.in, A Person again, student"].join("\n"),
         context()
       ).problems[0]
     ).toMatch(/also given on line 1/);
-
-    const held = profile({ id: "p-held", email: "held@iitpkd.ac.in", ldap_uid: "shared" });
-    expect(
-      planUserImport(
-        "new@iitpkd.ac.in, New Person, student, , , , shared",
-        context([held])
-      ).problems[0]
-    ).toMatch(/already belongs to held@iitpkd.ac.in/);
   });
 
   it("will not import an account this console user may not edit", () => {

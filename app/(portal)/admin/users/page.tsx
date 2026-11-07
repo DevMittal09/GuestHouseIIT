@@ -4,16 +4,14 @@ import { assignableRoles } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
-import { getHostels } from "@/lib/settings-server";
 import { ROLE_LABELS, type Role } from "@/lib/types";
 
 export default async function AdminUsersPage() {
   const user = await getCurrentUser();
   if (!user) redirect(SIGN_IN_PATH);
   const store = getStore();
-  const [profiles, hostels, units, imports] = await Promise.all([
+  const [profiles, units, imports] = await Promise.all([
     store.listProfiles(),
-    getHostels(),
     // Before migration 15 there is no units table; the form then simply
     // offers none, rather than the page failing.
     store.listUnits().catch(() => []),
@@ -31,7 +29,6 @@ export default async function AdminUsersPage() {
     <UsersManager
       profiles={profiles}
       units={units}
-      hostels={hostels}
       roles={roles}
       actorRole={user.role}
       imports={imports}

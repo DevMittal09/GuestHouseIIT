@@ -193,7 +193,7 @@ addSubSection("A. Authentication & Auto-Provisioning Workflow");
 addBullet("Step 1 (Bind)", "Connect to ldaps://ldap.iitpkd.ac.in:636 and bind with user credentials (uid=username,ou=people,dc=iitpkd,dc=ac,dc=in).");
 addBullet("Step 2 (Attributes)", "Extract user attributes: Full Name (cn), Email (mail), Department (department), and Organizational Unit.");
 addBullet("Step 3 (JIT Provisioning)", "Query database for existing profile. If user exists, retain assigned roles (Warden, Manager, FA, IAR, Developer). If new user, create profile automatically: student if @smail domain / roll number format, employee otherwise.");
-addBullet("Step 4 (Session)", "Set encrypted session cookie (gh_mock_user or JWT session) and route user to homeForRole(profile.role).");
+addBullet("Step 4 (Session)", "Set encrypted session cookie and route user to homeForRole(profile.role).");
 
 addSubSection("B. Implementation Blueprint");
 addParagraph("1. Install ldapts: npm install ldapts");

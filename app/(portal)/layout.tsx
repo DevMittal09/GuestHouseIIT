@@ -175,11 +175,7 @@ export default async function PortalLayout({ children }: { children: React.React
           </span>
         </div>
       </footer>
-      {/* Realtime where Supabase is configured, a 30-second poll otherwise. */}
-      <LiveUpdates
-        supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL ?? null}
-        supabaseAnonKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? null}
-      />
+      <LiveUpdates />
     </div>
   );
 }

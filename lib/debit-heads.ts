@@ -433,7 +433,7 @@ export function debitCategoryFor(
     case "official":
     case "iar_cell": {
       const unit = units.find((u) => u.id === requester.unit_id);
-      return unit?.office_class === "officer" ? "officer_office" : "department_office";
+      return unit?.office_type === "officer" ? "officer_office" : "department_office";
     }
     case "club":
       return "club";

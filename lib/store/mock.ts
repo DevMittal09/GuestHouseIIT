@@ -17,7 +17,7 @@ import type {
   RoomHold,
   RoomOccupancySegment,
 } from "@/lib/types";
-import { BufferClashError, RoomClashError } from "@/lib/types";
+import { ACCOUNT_STATUS_LABELS, BufferClashError, RoomClashError } from "@/lib/types";
 import type { Role, RoomType } from "@/lib/types";
 import { mealsOn, normalizeMeals } from "@/lib/meals";
 import { isInfantAge } from "@/lib/occupancy";
@@ -26,8 +26,20 @@ import { deriveFromRooms } from "./derive";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import { runBookingSearch } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
-import type { NewAcademicRecordInput, StoredAcademicRecord } from "@/lib/academic/stored";
-import type { AcademicRecord, AcademicRecordKind } from "@/lib/academic/types";
+import type {
+  InstituteStudent,
+  NewStudentInput,
+  InstituteEmployee,
+  NewEmployeeInput,
+  InstituteOffice,
+  NewOfficeInput,
+  InstituteFCC,
+  NewFCCInput,
+  InstituteHostel,
+  NewHostelInput,
+  InstituteWarden,
+  NewWardenInput,
+} from "@/lib/institute/types";
 import type {
   EmailMessage,
   EmailOutboxFilter,
@@ -60,13 +72,18 @@ import {
   seedLogs,
   seedProfiles,
   seedRoomHolds,
-  seedHostels,
   seedUserGroups,
   seedOfficialEmails,
   seedProjects,
   seedTariffs,
   seedRooms,
   seedUnits,
+  seedInstituteStudents,
+  seedInstituteEmployees,
+  seedInstituteOffices,
+  seedInstituteFCCs,
+  seedInstituteHostels,
+  seedInstituteWardens,
 } from "./seed";
 import type { NewProjectInput, Project } from "@/lib/projects";
 import { blockOverlaps, type NewRoomBlockInput, type RoomBlock } from "@/lib/operations";
@@ -132,10 +149,16 @@ interface Db {
   mail_templates?: MailTemplateOverride[];
   /** Departments, clubs, councils and offices, and who heads each (migration 15). */
   units?: Unit[];
-  /** Migration 28: the institute's records as the office pasted them in. */
-  academic_records?: StoredAcademicRecord[];
   /** Migration 32: one row per spreadsheet import - what it changed, so it can be undone. */
   user_import_batches?: UserImportBatch[];
+  /** Migration 37: the institute's own data tables. */
+  institute_students?: InstituteStudent[];
+  institute_employees?: InstituteEmployee[];
+  institute_offices?: InstituteOffice[];
+  institute_fcc?: InstituteFCC[];
+  institute_hostels?: InstituteHostel[];
+  institute_wardens?: InstituteWarden[];
+  /** Migration 36: user groups. */
   user_groups?: UserGroup[];
 }
 
@@ -328,24 +351,16 @@ function loadDb(): Db {
     }
     for (const seeded of seedProfiles) {
       if (!db.profiles.some((p) => p.id === seeded.id || p.email === seeded.email)) {
-        db.profiles.push(seeded);
+        db.profiles.push(seeded as Profile);
         dirty = true;
       }
     }
-    // Migration 12's counterpart: LDAP usernames. Seeded personas get theirs
-    // back (matched by email, as `supabase/seed.sql` does); anyone else starts
-    // without one, as they would in Postgres.
     for (const p of db.profiles) {
-      if (p.ldap_uid === undefined) {
-        p.ldap_uid = seedProfiles.find((s) => s.email === p.email)?.ldap_uid ?? null;
-        dirty = true;
-      }
       // Migration 15's counterpart: demo personas get their unit back; anyone
       // else starts in none, as they would in Postgres.
       if (p.unit_id === undefined) {
         const seeded = seedProfiles.find((s) => s.email === p.email);
         p.unit_id = seeded?.unit_id ?? null;
-        p.staff_category = seeded?.staff_category ?? null;
         dirty = true;
       }
     }
@@ -363,12 +378,12 @@ function loadDb(): Db {
       }
     }
     for (const u of db.units) {
-      if (u.office_class === undefined) {
-        u.office_class = seedUnits.find((s) => s.id === u.id)?.office_class ?? null;
+      if (u.office_type === undefined) {
+        u.office_type = seedUnits.find((s) => s.id === u.id)?.office_type ?? null;
         dirty = true;
       }
-      if (u.hod_unit_id === undefined) {
-        u.hod_unit_id = null;
+      if (u.hod_approval_from_id === undefined) {
+        u.hod_approval_from_id = null;
         dirty = true;
       }
       // Migration 25's counterpart: the demo councils and fest get their
@@ -393,14 +408,57 @@ function loadDb(): Db {
         dirty = true;
       }
     }
-    if (!db.hostels) {
-      // Seeded from what the profiles already say, exactly as the migration
-      // does, so no stored account is left naming a hostel that is not there.
-      const named = db.profiles
-        .map((p) => p.hostel_name?.trim())
-        .filter((h): h is string => Boolean(h));
-      db.hostels = [...new Set([...seedHostels, ...named])].sort();
+    if (!db.institute_hostels) {
+      db.institute_hostels = [...seedInstituteHostels];
       dirty = true;
+    }
+    if (db.hostels && Array.isArray(db.hostels)) {
+      for (const h of db.hostels) {
+        if (!db.institute_hostels.some((ih) => ih.hostel_name.toLowerCase() === h.toLowerCase())) {
+          const baseId = h.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16) || 'HOS';
+          let hostelId = baseId;
+          let counter = 1;
+          while (db.institute_hostels.some((ih) => ih.hostel_id.toLowerCase() === hostelId.toLowerCase())) {
+            counter++;
+            hostelId = `${baseId}${counter}`;
+          }
+          const now = new Date().toISOString();
+          db.institute_hostels.push({
+            id: randomUUID(),
+            hostel_id: hostelId,
+            hostel_name: h,
+            created_at: now,
+            updated_at: now,
+          });
+          dirty = true;
+        }
+      }
+    }
+    // Hostel names from institute_students that are not in institute_hostels
+    // (self-heal: an old .local-db.json may have student rows that reference
+    // a hostel not yet in the hostels list).
+    const studentHostels = (db.institute_students ?? [])
+      .map((s) => s.hostel?.trim())
+      .filter((h): h is string => Boolean(h));
+    for (const h of studentHostels) {
+      if (!db.institute_hostels.some((ih) => ih.hostel_name.toLowerCase() === h.toLowerCase())) {
+        const baseId = h.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16) || 'HOS';
+        let hostelId = baseId;
+        let counter = 1;
+        while (db.institute_hostels.some((ih) => ih.hostel_id.toLowerCase() === hostelId.toLowerCase())) {
+          counter++;
+          hostelId = `${baseId}${counter}`;
+        }
+        const now = new Date().toISOString();
+        db.institute_hostels.push({
+          id: randomUUID(),
+          hostel_id: hostelId,
+          hostel_name: h,
+          created_at: now,
+          updated_at: now,
+        });
+        dirty = true;
+      }
     }
     if (!db.official_emails) {
       db.official_emails = [...seedOfficialEmails];
@@ -461,11 +519,36 @@ function loadDb(): Db {
       db.user_groups = [...seedUserGroups];
       dirty = true;
     }
+    // Migration 37: the institute's own data tables.
+    if (!db.institute_students) {
+      db.institute_students = seedInstituteStudents;
+      dirty = true;
+    }
+    if (!db.institute_employees) {
+      db.institute_employees = seedInstituteEmployees;
+      dirty = true;
+    }
+    if (!db.institute_offices) {
+      db.institute_offices = seedInstituteOffices;
+      dirty = true;
+    }
+    if (!db.institute_fcc) {
+      db.institute_fcc = seedInstituteFCCs;
+      dirty = true;
+    }
+    if (!db.institute_hostels) {
+      db.institute_hostels = seedInstituteHostels;
+      dirty = true;
+    }
+    if (!db.institute_wardens) {
+      db.institute_wardens = seedInstituteWardens;
+      dirty = true;
+    }
     if (dirty) saveDb(db);
     return db;
   }
   const db: Db = {
-    profiles: seedProfiles,
+    profiles: seedProfiles as Profile[],
     guest_houses: seedGuestHouses,
     rooms: seedRooms,
     bookings: seedBookings,
@@ -476,7 +559,6 @@ function loadDb(): Db {
     room_holds: seedRoomHolds,
     email_outbox: [],
     units: seedUnits,
-    hostels: [...seedHostels],
     official_emails: [...seedOfficialEmails],
     projects: [...seedProjects],
     user_groups: [...seedUserGroups],
@@ -484,6 +566,12 @@ function loadDb(): Db {
     tariffs: [...seedTariffs],
     invoices: [],
     invoice_counters: {},
+    institute_students: seedInstituteStudents,
+    institute_employees: seedInstituteEmployees,
+    institute_offices: seedInstituteOffices,
+    institute_fcc: seedInstituteFCCs,
+    institute_hostels: seedInstituteHostels,
+    institute_wardens: seedInstituteWardens,
   };
   saveDb(db);
   return db;
@@ -571,11 +659,20 @@ function saveDb(db: Db) {
 
 export class MockStore implements DataStore {
   async listProfiles(): Promise<Profile[]> {
-    return loadDb().profiles;
+    const db = loadDb();
+    return db.profiles.map((p) => withComputed(db, p));
   }
 
   async getProfile(id: string): Promise<Profile | null> {
-    return loadDb().profiles.find((p) => p.id === id) ?? null;
+    const db = loadDb();
+    const p = db.profiles.find((x) => x.id === id);
+    return p ? withComputed(db, p) : null;
+  }
+
+  async getProfileByEmail(email: string): Promise<Profile | null> {
+    const db = loadDb();
+    const p = db.profiles.find((x) => x.email.toLowerCase() === email.toLowerCase());
+    return p ? withComputed(db, p) : null;
   }
 
   async listGuestHouses(): Promise<GuestHouse[]> {
@@ -718,7 +815,7 @@ export class MockStore implements DataStore {
       meal_diet_counts: b.meal_diet_counts ?? null,
       meals: normalizeMeals(b.meals, b),
       assigned_room_ids: assignedRoomIds,
-      requester: db.profiles.find((p) => p.id === b.user_id)!,
+      requester: withComputed(db, db.profiles.find((p) => p.id === b.user_id)!),
       guest_house: db.guest_houses.find((g) => g.id === b.guest_house_id)!,
       // Room order first, then any guest whose room card is missing - a
       // hand-edited mock database should still show its guests.
@@ -748,8 +845,11 @@ export class MockStore implements DataStore {
         if (filter.guestHouseId && b.guest_house_id !== filter.guestHouseId) return false;
         if (filter.userRole && b.user_role !== filter.userRole) return false;
         const requester = db.profiles.find((p) => p.id === b.user_id);
-        if (filter.hostelName && requester?.hostel_name !== filter.hostelName) return false;
-        if (filter.club && requester?.department_or_club !== filter.club) return false;
+        if (filter.hostelName || filter.club) {
+          const computed = requester ? resolveComputed(db, requester) : null;
+          if (filter.hostelName && computed?.hostel_name !== filter.hostelName) return false;
+          if (filter.club && computed?.department_or_club !== filter.club) return false;
+        }
         return true;
       })
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -1040,12 +1140,10 @@ export class MockStore implements DataStore {
     if (db.profiles.some((p) => p.email.toLowerCase() === input.email.toLowerCase())) {
       throw new Error("A user with this email already exists");
     }
-    assertLdapUidFree(db, input.ldap_uid, null);
-    assertHostelExists(db, input.hostel_name);
-    const profile: Profile = { ...input, id: randomUUID() };
-    db.profiles.push(profile);
+    const stored = { ...input, id: randomUUID() };
+    db.profiles.push(stored as Profile);
     saveDb(db);
-    return profile;
+    return withComputed(db, stored);
   }
 
   async updateProfile(id: string, patch: Partial<NewProfileInput>): Promise<void> {
@@ -1058,8 +1156,6 @@ export class MockStore implements DataStore {
     ) {
       throw new Error("A user with this email already exists");
     }
-    if (patch.ldap_uid !== undefined) assertLdapUidFree(db, patch.ldap_uid, id);
-    if (patch.hostel_name !== undefined) assertHostelExists(db, patch.hostel_name);
     Object.assign(p, patch);
     saveDb(db);
   }
@@ -1127,11 +1223,33 @@ export class MockStore implements DataStore {
       if (db.profiles.some((p) => p.email.toLowerCase() === input.email.toLowerCase())) {
         throw new Error(`A user with the email ${input.email} already exists`);
       }
-      assertLdapUidFree(db, input.ldap_uid, null);
-      assertHostelExists(db, input.hostel_name);
-      db.profiles.push({ ...input });
+      db.profiles.push({ ...input } as Profile);
     }
     saveDb(db);
+  }
+
+  async bulkUpdateAccountStatus(emails: string[], status: import("@/lib/types").AccountStatus): Promise<number> {
+    const db = loadDb();
+    const lower = new Set(emails.map((e) => e.toLowerCase()));
+    const now = new Date().toISOString();
+    let count = 0;
+    for (const p of db.profiles) {
+      if (!lower.has(p.email.toLowerCase())) continue;
+      p.account_status = status;
+      // `account_status` says *why*; `login_disabled_at` says *when*
+      // (migration 36). They are written together so `signInRefusal` stays
+      // the one reader of "may this person sign in".
+      if (status === "active") {
+        p.login_disabled_at = null;
+        p.login_disabled_reason = null;
+      } else {
+        p.login_disabled_at = p.login_disabled_at ?? now;
+        p.login_disabled_reason = p.login_disabled_reason ?? ACCOUNT_STATUS_LABELS[status];
+      }
+      count++;
+    }
+    if (count > 0) saveDb(db);
+    return count;
   }
 
   async deleteProfile(id: string): Promise<void> {
@@ -1213,7 +1331,7 @@ export class MockStore implements DataStore {
     if (db.profiles.some((p) => p.unit_id === id)) {
       throw new Error("People still belong to this unit - move them first");
     }
-    if ((db.units ?? []).some((u) => u.parent_id === id)) {
+    if ((db.units ?? []).some((u) => u.parent_department_id === id)) {
       throw new Error("Other units sit under this one - move them first");
     }
     db.units = (db.units ?? []).filter((u) => u.id !== id);
@@ -1340,43 +1458,66 @@ export class MockStore implements DataStore {
   }
 
   async listHostels(): Promise<string[]> {
-    return [...(loadDb().hostels ?? [])].sort((a, b) => a.localeCompare(b));
+    return [...(loadDb().institute_hostels ?? [])]
+      .map((h) => h.hostel_name)
+      .sort((a, b) => a.localeCompare(b));
   }
 
   async addHostel(name: string): Promise<void> {
     const db = loadDb();
-    const hostels = (db.hostels ??= []);
-    if (hostels.some((h) => h.toLowerCase() === name.toLowerCase())) {
+    const hostels = (db.institute_hostels ??= []);
+    if (hostels.some((h) => h.hostel_name.toLowerCase() === name.toLowerCase())) {
       throw new Error(`${name} is already on the list`);
     }
-    hostels.push(name);
+    const baseId = name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16) || 'HOS';
+    let hostelId = baseId;
+    let counter = 1;
+    while (hostels.some((h) => h.hostel_id.toLowerCase() === hostelId.toLowerCase())) {
+      counter++;
+      hostelId = `${baseId}${counter}`;
+    }
+    const now = new Date().toISOString();
+    hostels.push({
+      id: randomUUID(),
+      hostel_id: hostelId,
+      hostel_name: name,
+      created_at: now,
+      updated_at: now,
+    });
     saveDb(db);
   }
 
   async renameHostel(from: string, to: string): Promise<void> {
     const db = loadDb();
-    const hostels = (db.hostels ??= []);
-    const at = hostels.indexOf(from);
-    if (at < 0) throw new Error(`${from} is not on the list`);
-    if (hostels.some((h) => h !== from && h.toLowerCase() === to.toLowerCase())) {
+    const hostels = (db.institute_hostels ??= []);
+    const target = hostels.find((h) => h.hostel_name === from);
+    if (!target) throw new Error(`${from} is not on the list`);
+    if (hostels.some((h) => h !== target && h.hostel_name.toLowerCase() === to.toLowerCase())) {
       throw new Error(`${to} is already on the list`);
     }
-    hostels[at] = to;
-    // `on update cascade`, as the foreign key does in Postgres.
-    for (const p of db.profiles) if (p.hostel_name === from) p.hostel_name = to;
+    target.hostel_name = to;
+    target.updated_at = new Date().toISOString();
+    // Cascade to institute_students (emulates ON UPDATE CASCADE on the FK)
+    for (const s of db.institute_students ?? []) {
+      if (s.hostel === from) s.hostel = to;
+    }
     saveDb(db);
   }
 
   async removeHostel(name: string): Promise<void> {
     const db = loadDb();
-    // `on delete restrict`: a hostel someone still lives in stays.
-    const inUse = db.profiles.filter((p) => p.hostel_name === name);
-    if (inUse.length > 0) {
+    const students = (db.institute_students ?? []).filter((s) => s.hostel === name);
+    const wardens = (db.institute_wardens ?? []).filter((w) => {
+      const ih = (db.institute_hostels ?? []).find((h) => h.hostel_id === w.hostel_id);
+      return ih?.hostel_name === name;
+    });
+    const inUse = students.length + wardens.length;
+    if (inUse > 0) {
       throw new Error(
-        `${inUse.length} account${inUse.length === 1 ? "" : "s"} still name ${name} - move ${inUse.length === 1 ? "it" : "them"} first`
+        `${inUse} record${inUse === 1 ? '' : 's'} still reference ${name} - move ${inUse === 1 ? 'it' : 'them'} first`
       );
     }
-    db.hostels = (db.hostels ?? []).filter((h) => h !== name);
+    db.institute_hostels = (db.institute_hostels ?? []).filter((h) => h.hostel_name !== name);
     saveDb(db);
   }
 
@@ -1418,65 +1559,242 @@ export class MockStore implements DataStore {
     saveDb(db);
   }
 
-  // ---- academic records (migration 28) --------------------------------
+  // ---- institute data tables (migration 35) --------------------------------
 
-  async findAcademicRecord(
-    kind: AcademicRecordKind,
+  private mockFind<T extends Record<string, unknown>>(
+    key: keyof Db,
+    emailCol: string,
     email: string
-  ): Promise<AcademicRecord | null> {
-    const key = email.trim().toLowerCase();
-    // The unique index on (kind, lower(email)), emulated.
-    const row = (loadDb().academic_records ?? []).find(
-      (r) => r.record.kind === kind && r.email.trim().toLowerCase() === key
-    );
-    return row ? row.record : null;
+  ): T | null {
+    const rows = (loadDb()[key] as T[] | undefined) ?? [];
+    const needle = email.trim().toLowerCase();
+    return rows.find((r) => String(r[emailCol] ?? "").trim().toLowerCase() === needle) ?? null;
   }
 
-  async listAcademicRecords(kind?: AcademicRecordKind): Promise<StoredAcademicRecord[]> {
-    return (loadDb().academic_records ?? [])
-      .filter((r) => !kind || r.record.kind === kind)
-      .sort((a, b) => a.email.localeCompare(b.email));
+  private mockList<T>(key: keyof Db): T[] {
+    return ((loadDb()[key] as T[] | undefined) ?? []);
   }
 
-  async saveAcademicRecords(
-    added: NewAcademicRecordInput[],
-    updated: { id: string; input: NewAcademicRecordInput }[]
-  ): Promise<void> {
+  private mockSave<T extends { id: string; created_at: string; updated_at: string }>(
+    key: keyof Db,
+    emailCol: string,
+    added: T[],
+    updated: { id: string; input: Omit<T, "id" | "created_at" | "updated_at"> }[],
+    toRow: (input: Omit<T, "id" | "created_at" | "updated_at">, id: string, now: string) => T
+  ): void {
     const db = loadDb();
-    const rows = (db.academic_records ??= []);
+    const rows = ((db[key] as T[] | undefined) ?? []) as T[];
     const now = new Date().toISOString();
-    const taken = new Set(rows.map((r) => `${r.record.kind}|${r.email.trim().toLowerCase()}`));
+    const taken = new Set(rows.map((r) => String((r as Record<string, unknown>)[emailCol] ?? "").trim().toLowerCase()));
     for (const input of added) {
-      const key = `${input.record.kind}|${input.email.trim().toLowerCase()}`;
-      if (taken.has(key)) throw new Error(`A ${input.record.kind} record for ${input.email} is already stored`);
-      taken.add(key);
-      rows.push({ ...input, id: randomUUID(), created_at: now, updated_at: now });
+      const emailVal = String((input as unknown as Record<string, unknown>)[emailCol] ?? "").trim().toLowerCase();
+      if (taken.has(emailVal)) throw new Error(`A record with that ${emailCol} is already stored`);
+      taken.add(emailVal);
+      rows.push(toRow(input as Omit<T, "id" | "created_at" | "updated_at">, randomUUID(), now));
     }
     for (const { id, input } of updated) {
       const row = rows.find((r) => r.id === id);
       if (!row) throw new Error("That record is no longer stored");
-      Object.assign(row, input, { updated_at: now });
+      const fresh = toRow(input, id, now);
+      Object.assign(row, fresh, { updated_at: now });
     }
+    (db as unknown as Record<string, unknown>)[key] = rows;
     saveDb(db);
   }
 
-  async deleteAcademicRecord(id: string): Promise<void> {
+  private mockDelete(key: keyof Db, id: string): void {
     const db = loadDb();
-    const rows = db.academic_records ?? [];
+    const rows = ((db[key] as { id: string }[] | undefined) ?? []);
     const at = rows.findIndex((r) => r.id === id);
     if (at < 0) throw new Error("That record is already gone");
     rows.splice(at, 1);
-    db.academic_records = rows;
+    (db as unknown as Record<string, unknown>)[key] = rows;
     saveDb(db);
   }
 
-  async deleteAcademicRecords(kind?: AcademicRecordKind): Promise<number> {
+  private mockDeleteAll(key: keyof Db): number {
     const db = loadDb();
-    const rows = db.academic_records ?? [];
-    const keep = rows.filter((r) => kind && r.record.kind !== kind);
-    db.academic_records = keep;
+    const rows = ((db[key] as unknown[] | undefined) ?? []);
+    const count = rows.length;
+    (db as unknown as Record<string, unknown>)[key] = [];
     saveDb(db);
-    return rows.length - keep.length;
+    return count;
+  }
+
+  async findStudent(email: string): Promise<InstituteStudent | null> {
+    return this.mockFind<InstituteStudent>("institute_students", "email", email);
+  }
+
+  async listStudents(): Promise<InstituteStudent[]> {
+    return this.mockList<InstituteStudent>("institute_students");
+  }
+
+  async saveStudents(
+    added: NewStudentInput[],
+    updated: { id: string; input: NewStudentInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteStudent>(
+      "institute_students", "email", added as unknown as InstituteStudent[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteStudent)
+    );
+  }
+
+  async deleteStudent(id: string): Promise<void> {
+    this.mockDelete("institute_students", id);
+  }
+
+  async deleteAllStudents(): Promise<number> {
+    return this.mockDeleteAll("institute_students");
+  }
+
+  async findEmployee(email: string): Promise<InstituteEmployee | null> {
+    return this.mockFind<InstituteEmployee>("institute_employees", "email", email);
+  }
+
+  async listEmployees(): Promise<InstituteEmployee[]> {
+    return this.mockList<InstituteEmployee>("institute_employees");
+  }
+
+  async saveEmployees(
+    added: NewEmployeeInput[],
+    updated: { id: string; input: NewEmployeeInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteEmployee>(
+      "institute_employees", "email", added as unknown as InstituteEmployee[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteEmployee)
+    );
+  }
+
+  async deleteEmployee(id: string): Promise<void> {
+    this.mockDelete("institute_employees", id);
+  }
+
+  async deleteAllEmployees(): Promise<number> {
+    return this.mockDeleteAll("institute_employees");
+  }
+
+  async findOffice(email: string): Promise<InstituteOffice | null> {
+    return this.mockFind<InstituteOffice>("institute_offices", "office_email", email);
+  }
+
+  async listOffices(): Promise<InstituteOffice[]> {
+    return this.mockList<InstituteOffice>("institute_offices");
+  }
+
+  async saveOffices(
+    added: NewOfficeInput[],
+    updated: { id: string; input: NewOfficeInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteOffice>(
+      "institute_offices", "office_email", added as unknown as InstituteOffice[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteOffice)
+    );
+  }
+
+  async deleteOffice(id: string): Promise<void> {
+    this.mockDelete("institute_offices", id);
+  }
+
+  async deleteAllOffices(): Promise<number> {
+    return this.mockDeleteAll("institute_offices");
+  }
+
+  async findFCC(email: string): Promise<InstituteFCC | null> {
+    return this.mockFind<InstituteFCC>("institute_fcc", "council_email", email);
+  }
+
+  async listFCCs(): Promise<InstituteFCC[]> {
+    return this.mockList<InstituteFCC>("institute_fcc");
+  }
+
+  async saveFCCs(
+    added: NewFCCInput[],
+    updated: { id: string; input: NewFCCInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteFCC>(
+      "institute_fcc", "council_email", added as unknown as InstituteFCC[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteFCC)
+    );
+  }
+
+  async deleteFCC(id: string): Promise<void> {
+    this.mockDelete("institute_fcc", id);
+  }
+
+  async deleteAllFCCs(): Promise<number> {
+    return this.mockDeleteAll("institute_fcc");
+  }
+
+  async listInstituteHostels(): Promise<InstituteHostel[]> {
+    return this.mockList<InstituteHostel>("institute_hostels");
+  }
+
+  async saveInstituteHostels(
+    added: NewHostelInput[],
+    updated: { id: string; input: NewHostelInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteHostel>(
+      "institute_hostels", "hostel_id", added as unknown as InstituteHostel[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteHostel)
+    );
+  }
+
+  async deleteInstituteHostel(id: string): Promise<void> {
+    const db = loadDb();
+    const item = (db.institute_hostels ?? []).find((h) => h.id === id);
+    if (item) {
+      const students = (db.institute_students ?? []).filter((s) => s.hostel === item.hostel_name);
+      const wardens = (db.institute_wardens ?? []).filter((w) => w.hostel_id === item.hostel_id);
+      const inUse = students.length + wardens.length;
+      if (inUse > 0) {
+        throw new Error(`Records still reference ${item.hostel_name} - move them first`);
+      }
+    }
+    this.mockDelete("institute_hostels", id);
+  }
+
+  async deleteAllInstituteHostels(): Promise<number> {
+    const db = loadDb();
+    const studentsWithHostel = (db.institute_students ?? []).filter((s) => Boolean(s.hostel));
+    const wardensWithHostel = (db.institute_wardens ?? []).filter((w) => Boolean(w.hostel_id));
+    const inUse = studentsWithHostel.length + wardensWithHostel.length;
+    if (inUse > 0) {
+      const hostelNames = [
+        ...new Set(studentsWithHostel.map((s) => s.hostel)),
+        ...new Set(wardensWithHostel.map((w) => {
+          const ih = (db.institute_hostels ?? []).find((h) => h.hostel_id === w.hostel_id);
+          return ih?.hostel_name ?? w.hostel_id;
+        })),
+      ].join(", ");
+      throw new Error(`Cannot clear hostels: records still reference ${hostelNames}`);
+    }
+    return this.mockDeleteAll("institute_hostels");
+  }
+
+  async findWarden(email: string): Promise<InstituteWarden | null> {
+    return this.mockFind<InstituteWarden>("institute_wardens", "warden_email", email);
+  }
+
+  async listWardens(): Promise<InstituteWarden[]> {
+    return this.mockList<InstituteWarden>("institute_wardens");
+  }
+
+  async saveWardens(
+    added: NewWardenInput[],
+    updated: { id: string; input: NewWardenInput }[]
+  ): Promise<void> {
+    this.mockSave<InstituteWarden>(
+      "institute_wardens", "warden_email", added as unknown as InstituteWarden[], updated,
+      (input, id, now) => ({ ...input, id, created_at: now, updated_at: now } as InstituteWarden)
+    );
+  }
+
+  async deleteWarden(id: string): Promise<void> {
+    this.mockDelete("institute_wardens", id);
+  }
+
+  async deleteAllWardens(): Promise<number> {
+    return this.mockDeleteAll("institute_wardens");
   }
 
   async updateProject(id: string, patch: Partial<NewProjectInput>): Promise<void> {
@@ -2080,27 +2398,95 @@ function makeReference(): string {
 }
 
 /**
- * `profiles_hostel_fk` (migration 16), emulated: an account can only name a
- * hostel that is on the list.
+ * Resolve computed profile fields from the institute tables.
+ * Mirrors the `profiles_v` SQL view: hostel_name, department_or_club,
+ * roll_number and staff_category are no longer stored on profiles.
  */
-function assertHostelExists(db: Db, hostel: string | null | undefined): void {
-  if (!hostel) return;
-  if (!(db.hostels ?? []).includes(hostel)) {
-    throw new Error(`${hostel} is not a hostel on the list - add it in Settings first`);
+/**
+ * The four fields `profiles_v` resolves, resolved the same way here.
+ *
+ * **This must stay a mirror of migration 37's `profiles_v`**, including its
+ * COALESCE: the institute tables win where they hold a row for this person,
+ * and the column stored on the profile answers where they do not. Reading the
+ * institute tables *only* is the bug this comment exists to prevent, and it
+ * has been written twice already - once in the SQL view and once here. What it
+ * looks like: a value the console or the spreadsheet import has just written
+ * reads back as `null`, so the next import sees every row as changed, the
+ * warden's queue empties, and nothing anywhere reports an error.
+ *
+ * `p` carries the stored row, so the fallbacks are read off it rather than
+ * passed in separately.
+ */
+function resolveComputed(
+  db: Db,
+  p: {
+    email: string;
+    role: string;
+    unit_id?: string | null;
+    hostel_name?: string | null;
+    department_or_club?: string | null;
+    roll_number?: string | null;
+    staff_category?: string | null;
   }
+): {
+  hostel_name: string | null;
+  department_or_club: string | null;
+  roll_number: string | null;
+  staff_category: string | null;
+} {
+  let hostel_name: string | null = null;
+  let roll_number: string | null = null;
+  let staff_category: string | null = null;
+
+  const emailLower = p.email.toLowerCase();
+
+  if (p.role === "student") {
+    const s = (db.institute_students ?? []).find(
+      (r) => r.email.toLowerCase() === emailLower
+    );
+    hostel_name = s?.hostel ?? null;
+    roll_number = s?.roll_number ?? null;
+  } else if (p.role === "warden") {
+    const w = (db.institute_wardens ?? []).find(
+      (r) => r.warden_email.toLowerCase() === emailLower
+    );
+    if (w?.hostel_id) {
+      const ih = (db.institute_hostels ?? []).find((h) => h.hostel_id === w.hostel_id);
+      hostel_name = ih?.hostel_name ?? null;
+    }
+  }
+
+  if (p.role === "employee") {
+    const e = (db.institute_employees ?? []).find(
+      (r) => r.email.toLowerCase() === emailLower
+    );
+    if (e?.employee_type) {
+      const lower = e.employee_type.toLowerCase();
+      staff_category = (lower.includes("non") && lower.includes("teaching")) ? "staff" : "faculty";
+    }
+  }
+
+  const unit = p.unit_id
+    ? (db.units ?? []).find((u) => u.id === p.unit_id)
+    : null;
+
+  return {
+    hostel_name: hostel_name ?? p.hostel_name ?? null,
+    department_or_club: unit?.name ?? p.department_or_club ?? null,
+    roll_number: roll_number ?? p.roll_number ?? null,
+    staff_category: staff_category ?? p.staff_category ?? null,
+  };
 }
 
 /**
- * The unique index on `lower(ldap_uid)` (migration 12), emulated. Two profiles
- * sharing a uid would make LDAP sign-in pick one of them arbitrarily.
+ * A Profile as the application reads one: the stored row with the four fields
+ * of `profiles_v` resolved over it. The mock store's answer to that view.
  */
-function assertLdapUidFree(db: Db, uid: string | null | undefined, exceptId: string | null): void {
-  if (!uid) return;
-  const wanted = uid.toLowerCase();
-  if (db.profiles.some((p) => p.id !== exceptId && p.ldap_uid?.toLowerCase() === wanted)) {
-    throw new Error("Another user already has this LDAP username");
-  }
+function withComputed(db: Db, p: Record<string, unknown>): Profile {
+  const computed = resolveComputed(db, p as Parameters<typeof resolveComputed>[1]);
+  return { ldap_uid: null, account_status: "active", ...p, ...computed } as Profile;
 }
+
 
 /** A fresh draft row, as the table's defaults would make it. */
 function blankInvoice(bookingId: string, userId: string, now: string): InvoiceRecord {

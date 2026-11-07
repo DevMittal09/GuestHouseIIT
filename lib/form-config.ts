@@ -272,32 +272,39 @@ export function sanitizeFormConfig(
   config: RoleFormConfig,
   guestHouses: GuestHouse[]
 ): RoleFormConfig {
+  // A stored row may predate fields added later. Spread the spec defaults
+  // underneath so every field is present before the specific fixes below.
+  const defaults = buildDefaultFormConfig(config.role, guestHouses);
+  const full: RoleFormConfig = { ...defaults, ...config };
+
   const existing = new Set(guestHouses.map((g) => g.id));
-  const ids = config.allowed_guest_house_ids.filter((id) => existing.has(id));
+  const ids = full.allowed_guest_house_ids.filter((id) => existing.has(id));
 
   // Rows saved before the dependency rule existed have no arrays at all; fall
   // back to the role's spec defaults so the rule is not silently lost.
-  const defaults = buildDefaultFormConfig(config.role, guestHouses);
   // A row saved before the spouse rule (4 Nov 2026) has no
   // `scholar_only_relationships` at all, and no Spouse option either: the
   // default's options gain it once, so a research scholar is not kept from
-  // booking for a spouse by a Form Builder save that predates the rule. A
-  // row saved since keeps whatever the console chose.
+  // booking for a spouse by a Form Builder save that predates the rule. A row
+  // saved since keeps whatever the console chose.
+  //
+  // Tested on `config`, not on `full`: `full` has the spec defaults spread
+  // underneath it, so `full.scholar_only_relationships` is never undefined and
+  // the question "did this row predate the rule?" can only be asked of the
+  // stored row itself.
   const beforeScholarRule = config.scholar_only_relationships === undefined;
-  const relationshipOptions =
-    beforeScholarRule && config.relationship_style === "dropdown"
-      ? [
-          ...config.relationship_options,
-          ...defaults.scholar_only_relationships.filter(
-            (r) => !config.relationship_options.includes(r)
-          ),
-        ]
-      : config.relationship_options;
-  config = { ...config, relationship_options: relationshipOptions };
-  const offered = new Set(config.relationship_options);
-  const scholarOnly = (config.scholar_only_relationships ?? defaults.scholar_only_relationships).filter(
-    (r) => offered.has(r)
-  );
+  if (beforeScholarRule && full.relationship_style === "dropdown") {
+    full.relationship_options = [
+      ...full.relationship_options,
+      ...defaults.scholar_only_relationships.filter(
+        (r) => !full.relationship_options.includes(r)
+      ),
+    ];
+  }
+  const offered = new Set(full.relationship_options);
+  const scholarOnly = (
+    config.scholar_only_relationships ?? defaults.scholar_only_relationships
+  ).filter((r) => offered.has(r));
   const parents = (config.parent_relationships ?? defaults.parent_relationships).filter((r) =>
     offered.has(r)
   );
@@ -317,7 +324,7 @@ export function sanitizeFormConfig(
   // no option list to be unique within, and "Mother " and "mother" would be
   // two different answers.
   const unique =
-    config.relationship_style === "dropdown"
+    full.relationship_style === "dropdown"
       ? (beforeScholarRule
           ? [
               ...(config.unique_relationships ?? defaults.unique_relationships),
@@ -328,15 +335,16 @@ export function sanitizeFormConfig(
       : [];
 
   return {
-    ...config,
-    banner_text: RETIRED_BANNERS.includes((config.banner_text ?? "").trim())
+    ...full,
+    banner_text: RETIRED_BANNERS.includes((full.banner_text ?? "").trim())
       ? null
-      : config.banner_text,
+      : full.banner_text,
     unique_relationships: unique,
     scholar_only_relationships: scholarOnly,
     allowed_guest_house_ids: ids.length > 0 ? ids : guestHouses.map((g) => g.id),
     guest_fields: {
-      ...config.guest_fields,
+      ...defaults.guest_fields,
+      ...full.guest_fields,
       // Age may be required or optional, never hidden. A guest below
       // `INFANT_AGE_LIMIT` is an infant, and the per-room limit counts guests
       // and infants separately, so the box must always be there for an
@@ -344,7 +352,7 @@ export function sanitizeFormConfig(
       // forms since 24 Sep 2026) a guest left without one is an adult. A
       // stored "hidden" - from before this rule - reads as required, as it
       // always has.
-      age: config.guest_fields.age === "optional" ? "optional" : "required",
+      age: full.guest_fields.age === "optional" ? "optional" : "required",
     },
     parent_relationships: dependents.length === 0 ? [] : parents,
     dependent_relationships: dependents,

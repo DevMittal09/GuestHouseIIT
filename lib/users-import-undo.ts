@@ -21,7 +21,7 @@ import type { Profile, Role, StaffCategory } from "./types";
  * a list of writes. Three properties matter, and each is a deliberate choice:
  *
  * 1. **Only the fields an import can write are restored** ({@link
- *    UserImportFields}, the same eight `sameProfile` compares). A profile
+ *    UserImportFields}, the same fields `sameProfile` compares). A profile
  *    holds more than that, and an undo that wrote the whole row back would
  *    revert edits the import never made.
  * 2. **A row changed since the import is left alone and named.** The undo is
@@ -42,7 +42,7 @@ import type { Profile, Role, StaffCategory } from "./types";
 
 /**
  * The fields a spreadsheet import may write, and the only ones an undo
- * restores. Deliberately the same eight that `sameProfile` and
+ * restores. Deliberately the same as what `sameProfile` and
  * `changedFields` compare in `lib/users-import.ts`: if a column is added to
  * the import, it belongs in all three.
  */
@@ -111,7 +111,7 @@ export type UserImportSettlement = {
   reverted_actor_name?: string | null;
 };
 
-/** The eight import-writable fields of anything that has them, with nulls normalized. */
+/** The import-writable fields of anything that has them, with nulls normalized. */
 export function importFieldsOf(source: {
   full_name: string;
   role: Role;
@@ -148,7 +148,7 @@ const FIELD_LABELS: [keyof UserImportFields, string][] = [
   ["group_id", "Group"],
 ];
 
-/** Which of the eight differ, by the label the console already uses for each. */
+/** Which of the nine differ, by the label the console already uses for each. */
 export function differingFields(a: UserImportFields, b: UserImportFields): string[] {
   return FIELD_LABELS.filter(([key]) => (a[key] ?? null) !== (b[key] ?? null)).map(([, label]) => label);
 }
@@ -225,39 +225,7 @@ export function planUserImportRevert(
     candidates.push({ id: changed.id, email: changed.email, to });
   }
 
-  /**
-   * Second pass: a username the undo wants to give back may be held by an
-   * account the undo is **not** touching.
-   *
-   * Two accounts swap usernames in one import and somebody then corrects one
-   * of them by hand. The corrected one is left alone by the pass above, so it
-   * keeps the username the import gave it - and the other one therefore
-   * cannot have that username back, because `lower(ldap_uid)` is unique.
-   *
-   * Naming the row here rather than letting the write fail is what keeps the
-   * undo from making things worse: releasing a username and then failing to
-   * write the old one would leave that account unable to sign in at all. A
-   * holder that **is** being restored is fine - it gives the username up first
-   * ({@link uidsToRelease}).
-   *
-   * Found by running `supabase/repairs/2026-10-14-restore-user-import.sql`
-   * against a throwaway Postgres, where the same case appears as a
-   * `skip_reason`. The two implementations agree deliberately.
-   */
-  const restoring = new Set(candidates.map((c) => c.id));
-  for (const candidate of candidates) {
-    const wanted = candidate.to.ldap_uid?.toLowerCase();
-    const holder = wanted
-      ? profiles.find((p) => p.id !== candidate.id && p.ldap_uid?.toLowerCase() === wanted)
-      : undefined;
-    if (holder && !restoring.has(holder.id)) {
-      conflicts.push(
-        `${candidate.email} - LDAP username ${candidate.to.ldap_uid} is now held by ${holder.email}, left as it is`
-      );
-      continue;
-    }
-    restore.push(candidate);
-  }
+  restore.push(...candidates);
 
   for (const account of batch.added) {
     const current = byId.get(account.id);
@@ -273,29 +241,6 @@ export function planUserImportRevert(
   }
 
   return { restore, remove, conflicts };
-}
-
-/**
- * The accounts whose LDAP username has to be given up before the restores can
- * run.
- *
- * `lower(ldap_uid)` is unique, so two accounts that swapped usernames in one
- * import cannot be restored one at a time - the first write collides with the
- * second account, which still holds the username. The same two passes as
- * `importLdapUidsAction`, for the same reason, and only over the rows whose
- * username actually moves.
- */
-export function uidsToRelease(
-  restore: UserImportRevertPlan["restore"],
-  profiles: Profile[]
-): string[] {
-  const byId = new Map(profiles.map((p) => [p.id, p]));
-  return restore
-    .filter((r) => {
-      const current = byId.get(r.id)?.ldap_uid ?? null;
-      return current !== null && current !== r.to.ldap_uid;
-    })
-    .map((r) => r.id);
 }
 
 /** "3 restored, 412 removed" - for the toast and the audit row. */

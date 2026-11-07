@@ -57,7 +57,7 @@ function fail(e: unknown): ActionResult {
     return {
       ok: false,
       error:
-        "The settings table is not there yet - apply supabase/migrations/00000000000016_settings_and_audit.sql.",
+        "The settings table is not there yet - apply migration 5 (table: app_settings).",
     };
   }
   return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
@@ -90,7 +90,7 @@ export type WorkflowPerson = {
 export type WorkflowConsoleData = {
   rules: ApprovalRules;
   defaults: ApprovalRules;
-  units: { id: string; name: string; kind: string; hasHead: boolean }[];
+  units: { id: string; name: string; category: string; hasHead: boolean }[];
   people: WorkflowPerson[];
   hostels: string[];
   /** User groups a route may be limited to (migration 36). */
@@ -128,7 +128,7 @@ export async function getWorkflowConsoleData(): Promise<
         units: units.map((u) => ({
           id: u.id,
           name: u.name,
-          kind: u.kind,
+          category: u.category,
           hasHead: Boolean(u.head_id || u.acting_head_id),
         })),
         people: profiles.map((p) => ({

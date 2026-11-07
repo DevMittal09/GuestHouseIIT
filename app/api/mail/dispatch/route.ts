@@ -47,13 +47,11 @@ async function handle(request: Request): Promise<Response> {
  * rather than showing an opaque 500 from the framework.
  */
 function failed(error: unknown): Response {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error("[mail] route failed", error);
+  console.error("[mail] dispatch route failed", error);
   return Response.json(
     {
       ok: false,
-      error: message,
-      hint: "If the outbox table is missing, apply supabase/migrations/00000000000010_email_outbox.sql.",
+      error: "An internal error occurred",
     },
     { status: 500 }
   );

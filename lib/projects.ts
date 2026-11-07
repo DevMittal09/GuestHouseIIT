@@ -1,3 +1,5 @@
+import { splitCsvLine } from "@/lib/csv";
+
 /**
  * Sponsored and consultancy projects a stay can be debited to (Phase 4).
  *
@@ -69,9 +71,9 @@ export function planProjectImport(text: string, existing: Project[]): ProjectImp
     const n = i + 1;
     const line = raw.trim();
     if (!line || line.startsWith("#")) return;
-    const fields = (line.includes("\t") ? line.split("\t") : line.split(/[,;]/)).map((f) =>
-      f.trim().replace(/^"(.*)"$/, "$1").trim()
-    );
+    const fields = line.includes("\t")
+      ? line.split("\t").map((f) => f.trim())
+      : splitCsvLine(line);
     if (/^project/i.test(fields[0] ?? "")) return;
     const [number = "", title = "", pi = ""] = fields;
     if (fields.length < 2 || !title) {

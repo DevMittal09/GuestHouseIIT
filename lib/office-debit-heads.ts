@@ -11,7 +11,7 @@ import type { DebitHead } from "./types";
  * per class of office**: the Director's Office draws on the Institute Grant,
  * a department office on its department's budget, the Students Section on the
  * student and hostel funds, IAR on the alumni fund, and the Sports Officer on
- * the grant alone. No class boundary separates those - `office_class`
+ * the grant alone. No class boundary separates those - `office_type`
  * (officer / department) cuts the list in the wrong place, and the six-head
  * list offered every office five budgets it has no authority over.
  *

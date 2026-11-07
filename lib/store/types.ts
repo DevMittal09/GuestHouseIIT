@@ -29,14 +29,26 @@ import type { MailTemplateOverride } from "@/lib/mail/template-config";
 import type { Role } from "@/lib/types";
 import type { Unit } from "@/lib/units";
 import type { AuditEvent, AuditFilter, NewAuditEvent } from "@/lib/audit";
+import type {
+  InstituteStudent,
+  NewStudentInput,
+  InstituteEmployee,
+  NewEmployeeInput,
+  InstituteOffice,
+  NewOfficeInput,
+  InstituteFCC,
+  NewFCCInput,
+  InstituteHostel,
+  NewHostelInput,
+  InstituteWarden,
+  NewWardenInput,
+} from "@/lib/institute/types";
 import type { NewProjectInput, Project } from "@/lib/projects";
 import type {
   NewUserImportBatch,
   UserImportBatch,
   UserImportSettlement,
 } from "@/lib/users-import-undo";
-import type { NewAcademicRecordInput, StoredAcademicRecord } from "@/lib/academic/stored";
-import type { AcademicRecord, AcademicRecordKind } from "@/lib/academic/types";
 import type { NewTariffInput, Tariff, TariffScope } from "@/lib/tariffs";
 import type { NewRoomBlockInput, RoomBlock } from "@/lib/operations";
 import type { NewSessionInput, Session } from "@/lib/sessions";
@@ -56,7 +68,30 @@ import type {
   PaymentMode,
 } from "@/lib/invoice";
 
-export type NewProfileInput = Omit<Profile, "id">;
+/**
+ * What a caller may write to `profiles`.
+ *
+ * `hostel_name`, `department_or_club`, `roll_number` and `ldap_uid` are
+ * **optional, not absent**: `profiles_v` resolves them from the institute
+ * tables where those hold a row and from these columns where they do not
+ * (migration 37), so they are still live data and still what the console and
+ * the spreadsheet import write - but nothing has to name one to create an
+ * account. `account_status` defaults to `active` in the database.
+ *
+ * Dropping them altogether is the *contract* half of migration 37's
+ * expand-and-contract, and waits on the institute data being loaded and
+ * checked - see `.memories/04-production.md`.
+ */
+export type NewProfileInput = Omit<
+  Profile,
+  "id" | "account_status" | "hostel_name" | "department_or_club" | "roll_number" | "ldap_uid"
+> & {
+  account_status?: Profile["account_status"];
+  hostel_name?: string | null;
+  department_or_club?: string | null;
+  roll_number?: string | null;
+  ldap_uid?: string | null;
+};
 export type { NewUserGroup, UserGroup };
 
 /**
@@ -125,11 +160,18 @@ export type NewLogInput = Omit<BookingLog, "id" | "booking_id" | "timestamp" | "
 
 /**
  * Storage abstraction. `MockStore` (JSON file, zero setup) is used when no
- * Supabase env vars are present; `SupabaseStore` otherwise.
+ * DATABASE_URL is present; `PostgresStore` otherwise.
  */
 export interface DataStore {
   listProfiles(): Promise<Profile[]>;
   getProfile(id: string): Promise<Profile | null>;
+  /**
+   * One account by address, looked up in the database rather than by scanning
+   * `listProfiles()` (which Supabase's PostgREST truncates at 1000 rows
+   * silently - `GOOGLE-SIGN-IN.md`'s first defect). The Google callback and
+   * the spreadsheet import both go through this.
+   */
+  getProfileByEmail(email: string): Promise<Profile | null>;
 
   listGuestHouses(): Promise<GuestHouse[]>;
   getGuestHouse(id: string): Promise<GuestHouse | null>;
@@ -229,11 +271,13 @@ export interface DataStore {
    *
    * One write, so a spreadsheet import is one statement rather than one round
    * trip per person, and either every account in the chunk exists or none
-   * does. The per-account rules (a free email, a free LDAP username, a hostel
-   * on the list) still apply to each.
+   * does. The per-account rules (a free email, a hostel on the list) still
+   * apply to each.
    */
   createProfiles(inputs: SeededProfileInput[]): Promise<void>;
   updateProfile(id: string, patch: Partial<NewProfileInput>): Promise<void>;
+  /** Set account_status for every profile matching one of `emails`. Returns the count of rows changed. */
+  bulkUpdateAccountStatus(emails: string[], status: import("@/lib/types").AccountStatus): Promise<number>;
   /** Throws if the user still has bookings. */
   deleteProfile(id: string): Promise<void>;
   /** The same change to many accounts in one write: a whole batch graduating. */
@@ -321,29 +365,42 @@ export interface DataStore {
   /** Throws while any booking is debited to it - deactivate it instead. */
   deleteProject(id: string): Promise<void>;
 
-  // ---- academic records (migration 28) --------------------------------
+  // ---- institute data tables (migration 35) ----------------------------
 
-  /**
-   * The institute's records as the office pasted them in (7 Oct 2026). Read
-   * by `StoreAcademicSource`, which is what the Requester details card, the
-   * Assistant Warden's family check and the booking form's locked parent
-   * names go through.
-   */
-  findAcademicRecord(kind: AcademicRecordKind, email: string): Promise<AcademicRecord | null>;
-  /** Every stored record, or one kind's. For the Academic records console. */
-  listAcademicRecords(kind?: AcademicRecordKind): Promise<StoredAcademicRecord[]>;
-  /**
-   * Apply an import: add the new rows and replace the changed ones, in one
-   * go. The plan is built first (`planAcademicImport`) and is all-or-nothing,
-   * so this is handed only rows it has already accepted.
-   */
-  saveAcademicRecords(
-    added: NewAcademicRecordInput[],
-    updated: { id: string; input: NewAcademicRecordInput }[]
-  ): Promise<void>;
-  deleteAcademicRecord(id: string): Promise<void>;
-  /** Every record of one kind, or all of them. Returns how many went. */
-  deleteAcademicRecords(kind?: AcademicRecordKind): Promise<number>;
+  findStudent(email: string): Promise<InstituteStudent | null>;
+  listStudents(): Promise<InstituteStudent[]>;
+  saveStudents(added: NewStudentInput[], updated: { id: string; input: NewStudentInput }[]): Promise<void>;
+  deleteStudent(id: string): Promise<void>;
+  deleteAllStudents(): Promise<number>;
+
+  findEmployee(email: string): Promise<InstituteEmployee | null>;
+  listEmployees(): Promise<InstituteEmployee[]>;
+  saveEmployees(added: NewEmployeeInput[], updated: { id: string; input: NewEmployeeInput }[]): Promise<void>;
+  deleteEmployee(id: string): Promise<void>;
+  deleteAllEmployees(): Promise<number>;
+
+  findOffice(email: string): Promise<InstituteOffice | null>;
+  listOffices(): Promise<InstituteOffice[]>;
+  saveOffices(added: NewOfficeInput[], updated: { id: string; input: NewOfficeInput }[]): Promise<void>;
+  deleteOffice(id: string): Promise<void>;
+  deleteAllOffices(): Promise<number>;
+
+  findFCC(email: string): Promise<InstituteFCC | null>;
+  listFCCs(): Promise<InstituteFCC[]>;
+  saveFCCs(added: NewFCCInput[], updated: { id: string; input: NewFCCInput }[]): Promise<void>;
+  deleteFCC(id: string): Promise<void>;
+  deleteAllFCCs(): Promise<number>;
+
+  listInstituteHostels(): Promise<InstituteHostel[]>;
+  saveInstituteHostels(added: NewHostelInput[], updated: { id: string; input: NewHostelInput }[]): Promise<void>;
+  deleteInstituteHostel(id: string): Promise<void>;
+  deleteAllInstituteHostels(): Promise<number>;
+
+  findWarden(email: string): Promise<InstituteWarden | null>;
+  listWardens(): Promise<InstituteWarden[]>;
+  saveWardens(added: NewWardenInput[], updated: { id: string; input: NewWardenInput }[]): Promise<void>;
+  deleteWarden(id: string): Promise<void>;
+  deleteAllWardens(): Promise<number>;
 
   // ---- security audit log (migration 16) ------------------------------
 

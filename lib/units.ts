@@ -24,7 +24,7 @@
 
 export type UnitKind = "department" | "club" | "council" | "office";
 
-export const UNIT_KIND_LABELS: Record<UnitKind, string> = {
+export const UNIT_CATEGORY_LABELS: Record<UnitKind, string> = {
   department: "Department",
   club: "Club",
   council: "Council / Board",
@@ -59,9 +59,9 @@ export function isStudentBody(kind: UnitKind): boolean {
 export type Unit = {
   id: string;
   name: string;
-  kind: UnitKind;
+  category: UnitKind;
   /** The unit this one sits under - a club's council, say. */
-  parent_id: string | null;
+  parent_department_id: string | null;
   head_id: string | null;
   /** Stands in for the head while set. Both may approve. */
   acting_head_id: string | null;
@@ -69,10 +69,10 @@ export type Unit = {
    * Offices only (migration 16): an **officer** office (Director, Registrar,
    * the Deans) books against the Institute Grant; a **department** office
    * (a department's own office) against its Department. Null for every other
-   * kind of unit, and for an office nobody has classified yet - which is
+   * category of unit, and for an office nobody has classified yet - which is
    * treated as a department office, the narrower of the two.
    */
-  office_class?: OfficeClass | null;
+  office_type?: OfficeClass | null;
   /**
    * Whose HOD approves this unit's official requests (migration 18), when it is
    * not the obvious one - a club whose bookings go to the Dean of Students'
@@ -80,7 +80,7 @@ export type Unit = {
    * department office answers to the department above it; an officer office
    * to its own head; a club or council has no HOD stage.
    */
-  hod_unit_id?: string | null;
+  hod_approval_from_id?: string | null;
   /**
    * Councils, fests and clubs only (migration 25): the faculty member who is
    * the unit's **Faculty Advisor** now. An appointment of a year or two, so it
@@ -101,9 +101,9 @@ export type Unit = {
 
 export type OfficeClass = "officer" | "department";
 
-export const OFFICE_CLASS_LABELS: Record<OfficeClass, string> = {
-  officer: "Officer office (Director, Registrar, Deans…)",
-  department: "Department office",
+export const OFFICE_TYPE_LABELS: Record<OfficeClass, string> = {
+  officer: "Independent office (Director, Registrar, Deans…)",
+  department: "Under a department",
 };
 
 /** The longest chain of parents followed - a guard against a cycle someone typed in. */
@@ -122,7 +122,7 @@ export function approversOf(unitId: string | null | undefined, units: Unit[]): s
       (id): id is string => Boolean(id)
     );
     if (ids.length > 0) return [...new Set(ids)];
-    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+    current = current.parent_department_id ? byId.get(current.parent_department_id) : undefined;
   }
   return [];
 }
@@ -133,7 +133,7 @@ export function approvingUnit(unitId: string | null | undefined, units: Unit[]):
   let current = unitId ? byId.get(unitId) : undefined;
   for (let depth = 0; current && depth < MAX_DEPTH; depth++) {
     if (current.head_id || current.acting_head_id) return current;
-    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+    current = current.parent_department_id ? byId.get(current.parent_department_id) : undefined;
   }
   return null;
 }
@@ -152,7 +152,7 @@ function inherited(
   for (let depth = 0; current && depth < MAX_DEPTH; depth++) {
     const value = pick(current)?.trim();
     if (value) return value;
-    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+    current = current.parent_department_id ? byId.get(current.parent_department_id) : undefined;
   }
   return null;
 }
@@ -173,20 +173,20 @@ export function secretaryEmailOf(unitId: string | null | undefined, units: Unit[
 
 /**
  * The unit whose head gives *HOD approval* for a requester in `unitId`, or
- * null when requests from there have no HOD stage. See `hod_unit_id`.
+ * null when requests from there have no HOD stage. See `hod_approval_from_id`.
  */
 export function hodUnitIdFor(unitId: string | null | undefined, units: Unit[]): string | null {
   const unit = unitId ? units.find((u) => u.id === unitId) : undefined;
   if (!unit) return null;
-  if (unit.hod_unit_id) return unit.hod_unit_id;
-  switch (unit.kind) {
+  if (unit.hod_approval_from_id) return unit.hod_approval_from_id;
+  switch (unit.category) {
     case "department":
       return unit.id;
     case "office":
       // A department's own office answers to that department; an officer
       // office (Director, Registrar) to its own head. An office nobody has
       // classified is treated as a department office.
-      return unit.office_class === "officer" ? unit.id : (unit.parent_id ?? unit.id);
+      return unit.office_type === "officer" ? unit.id : (unit.parent_department_id ?? unit.id);
     default:
       return null;
   }
@@ -230,7 +230,7 @@ export function isHodForAny(profileId: string, units: Unit[]): boolean {
  */
 export function approvesClubsFor(profileId: string, units: Unit[]): boolean {
   return units.some(
-    (u) => (u.kind === "club" || u.kind === "council") && approversOf(u.id, units).includes(profileId)
+    (u) => (u.category === "club" || u.category === "council") && approversOf(u.id, units).includes(profileId)
   );
 }
 
@@ -251,7 +251,7 @@ export function parentError(unitId: string, parentId: string | null, units: Unit
   let current = byId.get(parentId);
   for (let depth = 0; current && depth < MAX_DEPTH; depth++) {
     if (current.id === unitId) return "That would put the unit under one of its own sub-units";
-    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+    current = current.parent_department_id ? byId.get(current.parent_department_id) : undefined;
   }
   return null;
 }

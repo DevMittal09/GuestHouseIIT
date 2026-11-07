@@ -1,15 +1,13 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { appUrl, googleOauth } from "@/lib/env";
-import { startGoogleSignIn } from "@/lib/oidc";
+import { startGoogleSignIn, OAUTH_COOKIE } from "@/lib/oidc";
 import { RATE_LIMITS } from "@/lib/security";
 import { safeNextPath } from "@/lib/site";
 import { getStore } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-/** Where the state, verifier and nonce live between the two legs, for 10 minutes. */
-export const OAUTH_COOKIE = "gh_oauth";
 
 /**
  * Leg one of Google sign-in: mint state + PKCE, remember them in an httpOnly
@@ -29,8 +27,8 @@ export async function GET(request: Request): Promise<Response> {
         headers: { "Retry-After": String(gate.retryAfter) },
       });
     }
-  } catch {
-    // No throttle table yet (migration 21): let the sign-in through.
+  } catch (e) {
+    console.warn("[security] OAuth rate-limit check failed — allowing request through.", e);
   }
 
   const next = safeNextPath(new URL(request.url).searchParams.get("next"));
@@ -43,7 +41,7 @@ export async function GET(request: Request): Promise<Response> {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    path: "/api/auth/google",
+    path: "/",
     maxAge: 600,
   });
   return NextResponse.redirect(start.url);

@@ -6,8 +6,7 @@ const nextConfig: NextConfig = {
   // built-ins (net, tls, dns), which the Server Components bundler cannot
   // follow. It is not on Next's built-in externals list, so name it here and
   // let plain `require` load it at runtime.
-  // ldapts (LDAP sign-in) is the same kind of package: raw sockets and TLS.
-  serverExternalPackages: ["nodemailer", "ldapts"],
+  serverExternalPackages: ["nodemailer", "pg"],
   // The framework's version is not something a visitor needs to know.
   poweredByHeader: false,
   experimental: {

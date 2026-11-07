@@ -236,7 +236,7 @@ async function safely(what: string, run: () => Promise<unknown>): Promise<void> 
   } catch (error) {
     console.error(
       `[mail] could not queue ${what}. ` +
-        "Has supabase/migrations/00000000000010_email_outbox.sql been applied?",
+        "Has migration 10 been applied? (table: email_outbox)",
       error
     );
   }
