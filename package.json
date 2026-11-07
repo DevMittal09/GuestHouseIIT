@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:pg": "vitest run --config vitest.pg.config.ts",
     "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test",
     "check:lockfile": "node scripts/check-lockfile.mjs",

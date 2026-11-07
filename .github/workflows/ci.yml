@@ -46,6 +46,33 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ""
           MAIL_DRY_RUN: "true"
 
+  postgres:
+    name: Store and actions on PostgreSQL
+    runs-on: ubuntu-latest
+    # The production store. `npm test` runs on the mock store, which is how
+    # four PostgreSQL-only write faults reached the owner on 7 Nov 2026. The
+    # database is a throwaway service container; `tests-pg/global-setup.ts`
+    # rebuilds `gh_test` on it from `scripts/init-postgres.sql` every run.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - run: npm run test:pg
+        env:
+          PG_TEST_URL: postgres://postgres:postgres@localhost:5432/gh_test
+
   e2e:
     name: End-to-end journeys
     runs-on: ubuntu-latest

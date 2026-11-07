@@ -73,6 +73,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **3 Nov** (third) | **Rename unit columns for clarity.** `units.kind` -> `category`, `parent_id` -> `parent_department_id`, `office_class` -> `office_type`, `hod_unit_id` -> `hod_approval_from_id`. Also `institute_offices.office_class` -> `office_type`. Label values updated: "Officer office" -> "Independent office", "Department office" -> "Under a department". ~25 files, 604 tests pass. **No migration** (columns renamed in `init-postgres.sql`; existing DBs need four `ALTER TABLE RENAME COLUMN`). |
 | **4 Nov** | **Remove `department_or_club`, `roll_number` and `staff_category` from profiles.** Continues the computed-fields pattern from 3 Nov. All three are now computed at read time by `profiles_v` / `withComputed()`: `department_or_club` from `units.name`, `roll_number` from `institute_students`, `staff_category` from `institute_employees.employee_type`. User import reduced to email/name/role/unit. ~30 files, 604 tests pass. **No migration** (columns removed from `init-postgres.sql`). |
 | **7 Nov** | **One account per kind of user, mock authentication, and the hostel's three wardens.** The owner, with a PDF of the accounts then in the database: one account to test each kind of user, mock authentication in place of the password form, and *"Saveri Hostel residing student -> request sent to Saveri Assistant warden [Mail copied to Warden] -> Forwarded to GHM"*. `deputy_warden` and `assistant_warden` become working roles (`HOSTEL_WARDEN_ROLES`, most junior decides, the rest are copied through a new `hostel_warden` Copy-to rule); the persona set becomes **29 accounts** seeded by `lib/store/seed.ts` and `npm run seed:personas`, held together by `tests/seed-parity.test.ts`; `/mock-login` returns as a **two-step picker** that computes each account's route from the configured rules; mail is sent from `ghm@iitpkd.ac.in` and redirected to the test inbox, which had been silently off. Two schema faults fixed on the way. ~40 files, **648 tests** pass. **No migration file** - the seeder adds the two enum values and rebuilds `profiles_v`. |
+| **7 Nov** (second) | **Audit of the booking path on PostgreSQL, and a suite that runs there (`npm run test:pg`, 39 checks; it found a fourth fault - a stay booked for earlier today could never be allocated).** The owner: bookings fail with "Please fix the highlighted fields". Reproduced against the real database (read-only) and a throwaway one. Three PostgreSQL-only faults: foreign-shaped `form_configs` rows with no `role` trusted as saved configs (every student, employee and office booking refused on a hidden `booking_type`); `assignRoomsToCards` binding text into a uuid (nothing could be forwarded, rejected, cancelled or allocated); `enqueueEmails` binding NULL into two defaulted not-null columns (no mail ever queued). 3 files, **653 tests** pass. **No migration.** |
 
 ## The problem
 
@@ -1553,3 +1554,26 @@ that file would have refused every booking at those stages — and
 column list changes.
 
 Clean: lint, typecheck, **648 tests** (39 new), build.
+
+## Round of 7 November 2026 (second) - an audit of the booking path on PostgreSQL
+
+> *"In my portal, the guesthouse booking logic is not working now. It shows
+> please fix the highlighted error etc. Can you audit the whole code and let
+> me know what is the issue and implement plan. Audit all the code and find
+> out the bugs and logic fixes"*
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | Why the form says "Please fix the highlighted fields" | **Found and fixed.** The five `form_configs` rows in the owner's database are not form configurations and carry no `role`; trusted as saved configs, they produced a config with `role: undefined`, and `bookingTypeError` refused the booking on `booking_type`, which a student is never shown. `isStoredFormConfig` now ignores such a row. The rows are left in place for the owner to remove with **Reset to spec defaults**. |
+| 2 | Audit the rest of the booking logic | **Two more faults found by driving the real actions on a throwaway database, both fixed.** Forwarding, rejecting, cancelling and allocating all failed on a text-into-uuid bind in `assignRoomsToCards`; no mail was ever queued because `enqueueEmails` sent NULL into two defaulted not-null columns. After the fixes the whole journey runs: submit, each stage forwarded by the right person, allocation, cancellation, mail. |
+| 3 | A plan | **Written up** in [03-roadmap.md](03-roadmap.md) §2p - first of all, a test suite that runs on PostgreSQL. |
+| 4 | *"For students… there is no need to select any guest house. This entire thing should not be visible for students"* | **Done.** The field and the note are gone from a student's form; the id travels in a hidden input and the server still enforces Bageshri. |
+
+| 5 | *"Do the testing on real postgress db"* - on a fresh test database, the owner chose | **Done.** `npm run test:pg`: 39 checks of the real actions on PostgreSQL, rebuilt from `scripts/init-postgres.sql` every run, in CI on a `postgres:16` service. Each of the day's fixes undone in turn made it fail. |
+| 6 | (found by item 5) A stay booked for earlier today can never be allocated | **Fixed.** `lapseDeadline` is now the end of the check-in day, or the check-out if sooner, so a request that could still be submitted can still be decided. |
+
+| 7 | *"I don't want any case where an error belongs to a question that isn't on screen"* | **Done.** An error summary at the top of the booking form lists every problem, server refusals included, linked where the question is on screen. Browser journey written, not yet run. |
+| 8 | `invalid input value for enum booking_status: "PENDING_WARDEN"` - *"update init.sql too"* | **Fixed.** `guesthousedb` still had the three old `_REVIEW` labels. `scripts/init-postgres.sql` now creates the enum only if missing and renames old labels in place; applied to `guesthousedb`. |
+
+Clean: lint, typecheck, **661 tests** and **39 on PostgreSQL**. Build and e2e
+not run: a dev server was up on :3000.

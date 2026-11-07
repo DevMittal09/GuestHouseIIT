@@ -54,6 +54,27 @@ describe("which requests the nightly job marks", () => {
     expect(missedSweepable(stay("PENDING_WARDEN", future), now)).toBe(false);
   });
 
+  /**
+   * 7 Nov 2026: a booking may name a check-in from midnight this morning, so
+   * a request whose check-in passed earlier **today** is still decidable -
+   * the desk's walk-in, or a 12:00 request the manager reaches at 12:30. It
+   * lapses when that day is over (institute time), or at check-out if sooner.
+   */
+  it("a stay stays decidable for the rest of its check-in day, institute time", () => {
+    // Check-in 12:00 IST on 7 Oct; 12:30 IST and 23:59 IST the same day.
+    const checkIn = "2026-10-07T06:30:00.000Z";
+    expect(hasLapsed(stay("PENDING_GH_MANAGER", checkIn), new Date("2026-10-07T07:00:00.000Z"))).toBe(false);
+    expect(hasLapsed(stay("PENDING_GH_MANAGER", checkIn), new Date("2026-10-07T18:29:00.000Z"))).toBe(false);
+    // 00:01 IST on 8 Oct: the day is over.
+    expect(hasLapsed(stay("PENDING_GH_MANAGER", checkIn), new Date("2026-10-07T18:31:00.000Z"))).toBe(true);
+  });
+
+  it("a same-day stay lapses at its check-out, not after it", () => {
+    const sameDay = { ...stay("PENDING_GH_MANAGER", "2026-10-07T00:30:00.000Z"), check_out: "2026-10-07T04:30:00.000Z" };
+    expect(hasLapsed(sameDay, new Date("2026-10-07T04:00:00.000Z"))).toBe(false);
+    expect(hasLapsed(sameDay, new Date("2026-10-07T05:00:00.000Z"))).toBe(true);
+  });
+
   it("leaves anything already decided", () => {
     for (const status of ["APPROVED", "REJECTED", "CANCELLED", "OCCUPIED", "VACATED", "MISSED"] as const) {
       expect(missedSweepable(stay(status, past), now)).toBe(false);

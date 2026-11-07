@@ -794,6 +794,47 @@ No code changed in the application. What the review of the auth seam turned up:
   `npm run seed:personas -- --drop-orphans` clears both, and is deliberately
   not the default.
 
+## 2p. Opened by the 7 Nov 2026 (second) round - the booking path on PostgreSQL
+
+In order of what would have caught the most:
+
+1. ~~**A test suite that runs on PostgreSQL.**~~ **Done the same day:**
+   `npm run test:pg` (`tests-pg/`, 39 checks, a CI job on `postgres:16`).
+   It covers create, forward, reject, allocate and the clash, Occupied /
+   Vacated, the personal-stay settlement, invoice issue and payment,
+   extensions and moved check-ins, both cancellation paths, dining and the
+   kitchen cap, the missed sweep and reinstatement, the outbox, the foreign
+   form config and an ID upload. Each of the day's four fixes was undone in
+   turn and the suite failed every time. **Not yet in it:** reassigning
+   rooms, editing meals after approval, room blocks, the Approval Log search
+   and exports, the console's user import, and the developer's force-status.
+2. **Remove the five foreign `form_configs` rows** on the owner's database
+   (`student`, `employee`, `official`, `faculty_advisor`, `gh_manager`):
+   Form Builder -> **Reset to spec defaults** for each. They are ignored now,
+   and log a warning on every `/book` view until they go. Whatever wrote them
+   on 1 Nov 2026 is outside the repo - find it before it runs again.
+3. **The five `app_settings` rule rows are the same foreign shape**
+   (`max_advance_days`, `gst_slab`, `lunch_cutoff`…), same date. They are
+   harmless - `parseRuleGroup` merges over the defaults and validates - but
+   every value in them is ignored, which a reader of the table would not
+   guess. Remove them, or save each card in Settings once.
+4. ~~**Not exercised by the audit:** invoices, Occupied / Vacated,
+   extensions, meals at Hamsanandi, uploads.~~ All in item 1 now, and the
+   suite found one more fault doing it: a stay booked for earlier today
+   could never be allocated (`lapseDeadline`, fixed - see
+   [02-decisions.md](02-decisions.md)).
+5. **Insert builders that take columns from `Object.keys(row)`** in
+   `PostgresStore` (profiles, projects, tariffs, sessions, MFA, privacy
+   requests) send `undefined` as NULL. None of them failed in the audit, but
+   that is the shape the outbox fault had.
+6. ~~**An error the form cannot show still reads "fix the highlighted
+   fields".**~~ **Done the same day:** the booking form's error summary
+   (`components/error-summary.tsx`, `lib/form-problems.ts`) lists every
+   problem, server refusals included. **Not yet run in a browser** -
+   `e2e/error-summary.spec.ts` is written and waits for a build. The other
+   console forms carry one message in their own dialog and were left as
+   they are.
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the

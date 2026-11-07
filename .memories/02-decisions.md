@@ -7330,9 +7330,105 @@ that is where the three lines were copied from.
   `PENDING_FA_REVIEW`** in `booking_status` — migration 1's labels, renamed
   by migration 15 and never used by `lib/types.ts`. A database created from
   that file would have refused every booking at those two stages. Fixed;
-  existing databases already have the short names.
+  existing databases already have the short names. *Superseded 7 Nov 2026
+  (third): wrong - the owner's `guesthousedb` had been built from the old
+  file and still carried `PENDING_WARDEN_REVIEW`, `PENDING_FA_REVIEW` and
+  `PENDING_IAR_REVIEW`. See below.*
 - **`create or replace view` cannot change a column list**, so `profiles_v`
   is dropped and recreated — keeping whichever of `ldap_uid`, `group_id`,
   `login_disabled_at` and `login_disabled_reason` the database actually has,
   because a seeding script must not narrow a schema another branch depends
   on.
+
+## 7 November 2026 (second) - the booking path on PostgreSQL
+
+### A saved form config that is not one is ignored, not repaired
+
+The owner's `form_configs` rows were a foreign shape with no `role`, and the
+"a saved row wins" rule (11-booking-forms Part 1) trusted them. Three
+options: delete the rows, repair them on read, or ignore them on read.
+**Ignored on read** (`isStoredFormConfig`), because:
+
+- deleting is a change to the owner's data, and the Form Builder's **Reset
+  to spec defaults** already does it per role, audited, when they choose;
+- repairing would mean guessing what `max_rooms: 1` or
+  `require_relationship: false` was meant to do in a form that has neither
+  question - and a guess about money and ID documents is worse than the
+  defaults;
+- the check asks only for what every Form Builder save has carried
+  (`role`, `allowed_guest_house_ids`, `guest_fields`, `relationship_style`,
+  `relationship_options`), so an older genuine row with later fields missing
+  is still taken and filled in by `sanitizeFormConfig` as before.
+
+`sanitizeFormConfig` itself was left alone: it is pure and is handed a
+`RoleFormConfig`, and the bug was that the loader handed it something else.
+
+### The two store fixes are casts in SQL, not changes to the callers
+
+`assignRoomsToCards` casts each `THEN $n` to `uuid`, and `enqueueEmails`
+wraps `attachments` and `scheduled_for` in `coalesce(..., <the column's own
+default>)`. The alternative for the outbox - leaving the columns out of the
+insert when null - would mean a column list that varies per row inside one
+multi-row `VALUES`, which cannot be written. The coalesce states the same
+default the schema does; if the default changes in `init-postgres.sql`,
+change it here too.
+
+### A student is not told the guest house either
+
+The 7 Oct rule stated the one guest house as text so nobody was asked a
+question that had been answered. The owner wants a student not to see it at
+all. Kept to **students only**: the IAR Student Cell and alumni bookings
+still see the name, because the Cell books from a form that also offers
+official stays at either guest house, and the statement is how it learns
+why the choice narrowed. The note under the card title went with the field;
+the same sentence is still the error `guestHousePolicyError` returns, which
+is the one place a student can now meet the rule.
+
+### A stay lapses at the end of its check-in day, not at the check-in
+
+`test:pg` found it: a booking for earlier today, which
+`earliestBookableCheckIn` has accepted since 1 Oct so the desk can enter a
+guest already at the counter, lapsed the instant it was made and could never
+be allocated. The rule chosen is **a request that could still be submitted
+can still be decided**: it lapses when its check-in's institute day is over,
+or at its check-out if that is sooner. Considered and not taken: lapsing at
+check-out (would let the manager approve a stay that began yesterday, which a
+new booking may not name), and a fixed grace of a few hours (a number with no
+rule behind it). The nightly sweep reads the same deadline, so a request for
+yesterday is still marked Missed the next morning.
+
+> **Supersedes in part** the 1 Oct entry ("Allowing meals today broke
+> something one layer down"), which moved only meals-only bookings off the
+> check-in instant and left stays lapsing at it.
+
+### Every error on the booking form is also in a summary at the top
+
+Asked for outright: no error may belong to a question that is not on screen.
+Two ways to get there: make every path the schema can report have a slot
+that is always rendered, or list every problem in one place that is always
+rendered. **The list**, because the first is a promise about every future
+`superRefine` and every gate in the form - the meal slot behind "Yes" was
+exactly such a gate, and nobody had noticed. The summary is GOV.UK's own
+pattern, which the portal's primitives already follow, so it is not a new
+device. Links are worked out **at submit time against the page**, not from
+a list of which questions each role is asked: that list would be a second
+copy of the form's gating and would drift from it.
+
+## 7 November 2026 (third) - the database's enum labels, repaired by the schema file
+
+The owner's dev server logged `invalid input value for enum booking_status:
+"PENDING_WARDEN"` on a student's booking. `guesthousedb` had been created
+from `scripts/init-postgres.sql` before its labels were corrected, so it
+still held `PENDING_WARDEN_REVIEW`, `PENDING_FA_REVIEW` and
+`PENDING_IAR_REVIEW`: every request starting at a warden or IAR stage was
+refused at insert, while HOD and desk routes worked. `test:pg` could not see
+it, because it builds a fresh database from the corrected file.
+
+- **The fix lives in `init-postgres.sql`, not a one-off note**: the
+  `booking_status` creation is a `do` block that creates the type only where
+  it is missing, renames each old label where the new one is absent (`alter
+  type ... rename value` keeps the rows), and adds the later values `if not
+  exists`. Idempotent; tested on a database with the old labels and a row
+  using one, and on a fresh one. Applied to `guesthousedb` (1 booking, kept).
+- **Rename, not drop and recreate**: six columns use the type, and a rename
+  needs no column rewrite.

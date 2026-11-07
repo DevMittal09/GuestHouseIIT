@@ -892,12 +892,17 @@ export class PostgresStore implements DataStore {
     for (let i = 0; i < cards.length; i++) {
       const next = roomIds[i] ?? null;
       params.push(cards[i].id, next);
-      cases.push(`WHEN id = $${params.length - 1} THEN $${params.length}`);
+      // Cast both: PostgreSQL types a bare `CASE ... THEN $n` parameter as
+      // text, and refuses text into a uuid column (42804). Every transition
+      // that releases rooms comes through here with `[]`, so without the
+      // cast forwarding, rejecting and cancelling all failed, not only
+      // allocation.
+      cases.push(`WHEN id = $${params.length - 1}::uuid THEN $${params.length}::uuid`);
       ids.push(cards[i].id);
     }
     params.push(ids);
     await q.query(
-      `UPDATE booking_rooms SET assigned_room_id = CASE ${cases.join(" ")} END WHERE id = ANY($${params.length})`,
+      `UPDATE booking_rooms SET assigned_room_id = CASE ${cases.join(" ")} END WHERE id = ANY($${params.length}::uuid[])`,
       params
     );
   }
@@ -2171,8 +2176,13 @@ export class PostgresStore implements DataStore {
         input.attachments?.length ? JSON.stringify(input.attachments) : null,
         input.scheduled_for ?? null
       );
+      // `attachments` and `scheduled_for` are `not null` with a default, and
+      // an explicit NULL does not fall back to a column default - it is
+      // refused (23502). Both are NULL on almost every message (no
+      // attachment, send now), so without the coalesce no mail was ever
+      // queued, and `notify*()` swallowed the error by design.
       valueRows.push(
-        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}::jsonb, $${base + 12})`
+        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, coalesce($${base + 11}::jsonb, '[]'::jsonb), coalesce($${base + 12}::timestamptz, now()))`
       );
     }
     const { rowCount } = await this.pool.query(
