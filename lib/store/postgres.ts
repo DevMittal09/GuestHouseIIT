@@ -2171,8 +2171,16 @@ export class PostgresStore implements DataStore {
         input.attachments?.length ? JSON.stringify(input.attachments) : null,
         input.scheduled_for ?? null
       );
+      // `attachments` and `scheduled_for` are `not null default` columns, and
+      // **naming a column in an INSERT defeats its default** - binding NULL
+      // is an explicit NULL, not an omission. Most messages carry neither
+      // (only the digests schedule ahead), so without these two `coalesce`s
+      // every ordinary notification failed with "null value in column
+      // scheduled_for violates not-null constraint" - which `safely()` in
+      // `lib/mail/notify.ts` logs and swallows, so the booking succeeded and
+      // no mail was ever queued. Fixed 7 Nov 2026.
       valueRows.push(
-        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}::jsonb, $${base + 12})`
+        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, coalesce($${base + 11}::jsonb, '[]'::jsonb), coalesce($${base + 12}::timestamptz, now()))`
       );
     }
     const { rowCount } = await this.pool.query(
