@@ -15,7 +15,8 @@
     "check:lockfile": "node scripts/check-lockfile.mjs",
     "check:migrations": "node scripts/check-migrations.mjs",
     "check:memories": "node scripts/check-memories.mjs",
-    "seed:personas": "node scripts/seed-personas.mjs"
+    "seed:personas": "node scripts/seed-personas.mjs",
+    "seed:reference": "node scripts/seed-reference.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^7.0.1",

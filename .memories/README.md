@@ -61,7 +61,19 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · PostgreSQL (direct via
 **Node 22 or newer**; see the root [`setup.md`](../setup.md) for runtime and
 deployment requirements.
 
-**Status, 7 Nov 2026.** The current round rebuilt the demo accounts as
+**Status, 8 Nov 2026.** The current round found what the move off Supabase
+had left behind: `guesthouse_dev` held nine meal rates and **no room rate at
+all**, so the booking form's tariff panel read "no rates published" and no
+invoice could be issued. Nothing in the repository had ever seeded one -
+`scripts/init-postgres.sql` named each room rate's guest house with a
+subselect against the table it had just created empty. The office's sheet was
+read out of the hosted project and applied (the **Category I / II / III**
+rates of 5 Nov 2026), the sheet moved into a new
+**`scripts/seed-reference-data.sql`** / `npm run seed:reference` that creates
+the guest houses first, and the **room inventory** was aligned with the
+office's own - Hamsanandi had ten rooms where it has thirteen.
+
+The round before rebuilt the demo accounts as
 **one per kind of user** (29 of them, seeded into both stores and held
 together by a parity test), brought back **Mock Authentication** as a
 two-step picker that computes each account's real route, and made the
@@ -144,8 +156,9 @@ of Google's account chooser.
 **Numbers.** 13 roles (12 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
 **29 demo accounts** · 6 demo bookings · 23 real rooms · **25 photographs** ·
-**648 unit tests** · 50 end-to-end journeys · 15 console sections ·
-**5 invoice layout versions**.
+**661 unit tests** · **39 PostgreSQL checks** · 50 end-to-end journeys ·
+15 console sections · **5 invoice layout versions** · **31 tariff rows** (the
+office's Category I / II / III sheet, in force from 5 Nov 2026).
 
 ---
 
@@ -309,9 +322,16 @@ every date reads **DD/MM/YYYY**.
    `DataStore` **and** both stores.
 2. **A saved Form Builder row beats a changed default** — press Reset to spec
    defaults.
-3. **`.env.local` points at the hosted database** — use
-   `NEXT_PUBLIC_SUPABASE_URL= npm run dev` for anything that writes;
-   `NEXT_PUBLIC_*` is baked in at build time.
+3. **The schema is not the database.** `npm run check:migrations` answers
+   whether the structures are there and nothing answers whether the data is:
+   a database can pass it with **no room rates** (the booking form reads "no
+   rates published", no invoice can be issued) or fewer rooms than the office
+   has. A fresh PostgreSQL database is three steps -
+   `scripts/init-postgres.sql`, then **`npm run seed:reference`**, then
+   `npm run seed:personas` - and step 2 must follow step 1 because the room
+   rates name the guest houses it creates.
+   `.env.local`'s Supabase lines are **commented out** and kept only to read
+   the old hosted project from; the portal runs on `DATABASE_URL`.
 4. **`npm run build` kills a running `next dev`.**
 5. **Never parse a naked datetime string or format without a zone** — use
    `lib/tz.ts`.

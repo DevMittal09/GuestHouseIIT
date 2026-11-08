@@ -7432,3 +7432,77 @@ it, because it builds a fresh database from the corrected file.
   using one, and on a fresh one. Applied to `guesthousedb` (1 booking, kept).
 - **Rename, not drop and recreate**: six columns use the type, and a rename
   needs no column rewrite.
+
+## 8 November 2026 - the tariff sheet moves out of the schema file
+
+The move off Supabase left `guesthouse_dev` with nine meal rates and no room
+rate, so the booking form's tariff panel read "no rates published" and no
+invoice could be issued. The cause was not a half-finished copy: **nothing
+in the repository had ever seeded a room rate into PostgreSQL.**
+`scripts/init-postgres.sql` carried the sheet and named each room row's
+guest house with `(select id from public.guest_houses where name = …)`, but
+that file creates the schema - the table is empty at that point, the three
+subselects were NULL, and `where (s.item <> 'room' or s.gh is not null)`
+discarded them silently. The guest houses used to follow from
+`supabase/seed.sql`, which went with Supabase.
+
+- **A new file, `scripts/seed-reference-data.sql`, owns the office's own
+  data** - the guest houses, their rooms and the whole rate sheet - and
+  creates the guest houses before the rates that reference them. The rate
+  sheet is **removed** from `init-postgres.sql` rather than left in both:
+  one fact, one home, and leaving a half-working copy in the schema file is
+  what hid the fault for the whole of the migration. Its place there is now
+  a comment explaining the trap, so the next reader does not re-add it.
+- **A `.mjs` runner rather than a bare `psql` npm script.**
+  `npm run seed:reference` has to find `DATABASE_URL` the way
+  `seed:personas` does - in `.env.local`, which `psql` cannot read - and the
+  useful thing to print is a before/after census, not psql's `INSERT 0 1`
+  ninety times.
+- **Idempotent and additive, never corrective.** A rate is inserted only
+  where none with the same scope and `effective_from` exists, because
+  `tariffs_guard` refuses an UPDATE or a DELETE of a rate in force by
+  design: a rate that has been quoted is the record of what a stay was
+  priced with. Rooms are written only into a guest house that has **none at
+  all**, so a seeder can never overwrite an inventory the office has edited.
+- **The hosted project's rates were copied verbatim, not re-derived.** All
+  three generations are kept - 2024-01-01, the 23 Sep Bageshri rise, and the
+  Category I / II / III sheet of 5 Nov 2026 - because `resolveTariff` prices
+  each night from the row in force on it, so an older row is the record of
+  an older stay, not clutter.
+- **Category I is written twice per guest house**, once unscoped and once
+  with `requester_role: official`. That looks redundant and is not: the
+  ₹4,000 Hamsanandi row of 2024-01-01 has the same specificity (guest house
+  + requester role), so without the second row an office's personal booking
+  would still resolve to ₹4,000.
+- **Proved by comparison, not by inspection.** The seeded database and the
+  owner's were run through the real `resolveTariff` over 630 combinations of
+  guest house, item, booking type and requester role on three dates: 0
+  differences. That is also what showed the eight duplicate rows the office
+  had entered twice (5 Nov and 1 Dec, same rates) change nothing, so they
+  were left in place rather than deleted - they are the office's own rows.
+- **No `extra_bed` rate was invented.** The office has never sent one, the
+  hosted project has none, and `invoiceBlocker` refusing to issue is the
+  correct behaviour - a guessed figure would be charged to a guest. It is
+  recorded as a question for the office, and the seeder prints it.
+
+### The room inventory, the same day
+
+Neither database held the rooms of 23 Sep 2026: Bageshri still had the dummy
+`B1`-`B10` and Hamsanandi ten rooms including an `A1`-`A3` block that does
+not exist, so three real rooms could not be booked. Aligned with
+`lib/store/seed.ts` by **renaming** Bageshri's ten (holds and room cards
+point at the row id, so the demo bookings kept their rooms and gained their
+real numbers) and deleting the unreferenced `A1`-`A3`. A rename rather than
+a delete-and-insert for the same reason `tariffs` is append-only: the holds
+are somebody's reservation, and re-creating the rows would have dropped
+them.
+
+### The duplicate Supabase URL
+
+`.env.local` had two commented `NEXT_PUBLIC_SUPABASE_URL` lines. **Answered
+from the keys, not from preference**: both JWTs carry
+`"ref":"azfdzrahtsikofzovmda"`, so the hosted URL is the one they
+authenticate against and `http://127.0.0.1:54321` belonged to no running
+instance. The hosted line stays, commented, with a note that it is kept only
+to read the old data from - deleting it would have made the next export
+impossible to perform.

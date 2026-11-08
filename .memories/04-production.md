@@ -798,7 +798,8 @@ left alone.
 | **Each council's and club's Faculty Advisor** and secretary's mailbox | Departments & Clubs → Faculty Advisors | **Nobody can book for that club at all.** Only `sec_arts@` is seeded |
 | **Hostels, and a warden per hostel** | Settings → Hostels; Users & Roles | A student's request has no reviewer |
 | **The official email whitelist** | Settings | Those offices cannot book as an office |
-| **Tariffs**, including an **extra-bed rate** | Tariffs & Invoicing | An invoice for a room with an extra bed **cannot be issued at all**. Seeded from the office's sheet: Bageshri ₹1,000/day (raised from ₹750 on 23 Sep 2026), Hamsanandi ₹2,000 and ₹4,000 for the `official` role, breakfast ₹80, lunch ₹120, dinner ₹100, meals free to students and on alumni bookings. Confirm every rate and its effective date |
+| **An extra-bed rate** - the one rate nobody has | Tariffs & Invoicing | An invoice for a stay with an extra bed **cannot be issued at all** - `resolveTariff` returns null and `invoiceBlocker` reports it rather than charging ₹0 by omission. There is no `extra_bed` row at any date, here or in the hosted project the sheet came from; it is a figure to ask the office for, never one to guess |
+| **Confirm the rest of the tariff sheet** and its effective dates | Tariffs & Invoicing | The rates in force are the office's **Category I / II / III** sheet of 5 Nov 2026 - Bageshri ₹1,000 / ₹1,500 / ₹2,000 and Hamsanandi ₹1,500 / ₹2,000 / ₹2,500 per room per night, with breakfast ₹80, lunch ₹120, dinner ₹100 per head and meals free to students and on alumni bookings. Tabulated in [12-settings-and-defaults.md](12-settings-and-defaults.md#rates--the-tariffs-table); seeded by `npm run seed:reference`. **A rate in force cannot be edited** - a correction is a new row from a later date, so an error found after go-live is only fixable forwards |
 | **GSTIN** | Tariffs & Invoicing | The template's value is printed on every invoice. Confirm it against the institute's registration |
 | **Accounts email** | Tariffs & Invoicing | **Empty**, so nothing is mailed to Accounts when an official booking's invoice is issued |
 | **Bank details** (holder, account number, IFSC, branch) | Tariffs & Invoicing | Guests pay against the template's values |
@@ -845,7 +846,29 @@ reminders, no day-wise log and **nothing marks a request Missed**.
 
 ---
 
-## 5. Migrations
+## 5. Migrations - and the data a fresh database still needs
+
+> **The schema is not the database.** `npm run check:migrations` says whether
+> every structure is there; nothing says whether the database holds anything.
+> A database can pass it and still have **no room rates** (so no invoice can
+> be issued and the booking form reads "no rates published") or **fewer rooms
+> than the office has** - both of which the 8 Nov 2026 round found in the
+> owner's `guesthouse_dev`, weeks after the move off Supabase. A fresh
+> PostgreSQL database is **three steps**, in this order:
+>
+> ```bash
+> psql "$DATABASE_URL" -f scripts/init-postgres.sql   # the schema
+> npm run seed:reference                              # guest houses, rooms, the tariff sheet
+> npm run seed:personas                               # the demo accounts (not for production)
+> ```
+>
+> Step 2 is `scripts/seed-reference-data.sql` and is the **one home** for the
+> office's guest houses, rooms and rates; it must follow step 1 because the
+> room rates name the guest houses it creates. It is idempotent and only ever
+> inserts. On a real deployment the office then edits the rates in the console
+> and **section 3 above is the list of what it must supply** - starting with
+> the extra-bed rate, which nobody has. Details in
+> [21-database.md](21-database.md) *Resetting data*.
 
 Applied **by hand**, in order. A missing one fails writes quietly - the store
 leaves an unknown column out of the insert where it can, so usually only the

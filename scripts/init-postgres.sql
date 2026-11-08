@@ -1691,40 +1691,20 @@ alter table public.profiles
 
 -- ========================== SEED DATA =====================================
 
--- Tariff seed (migration 19): the office's tariff sheet.
--- These run only on an empty tariffs table (fresh install).
-insert into public.tariffs (guest_house_id, item, room_type, booking_type, requester_role, rate, effective_from, note)
-select s.gh, s.item, null, s.booking_type, s.requester_role, s.rate, date '2024-01-01', s.note
-from (
-  select (select id from public.guest_houses where name = 'Bageshri') as gh, 'room' as item,
-         null::text as booking_type, null::text as requester_role, 1000::numeric as rate,
-         'Tariff sheet: Bageshri, per room per day' as note
-  union all
-  select (select id from public.guest_houses where name = 'Hamsanandi'), 'room', null, null, 2000,
-         'Tariff sheet: Hamsanandi types 1 and 2'
-  union all
-  select (select id from public.guest_houses where name = 'Hamsanandi'), 'room', null, 'official', 4000,
-         'Tariff sheet: Hamsanandi type 3, government officers'
-  union all select null, 'breakfast', null, null, 80, 'Tariff sheet: per head'
-  union all select null, 'lunch', null, null, 120, 'Tariff sheet: per head'
-  union all select null, 'dinner', null, null, 100, 'Tariff sheet: per head'
-  union all select null, 'breakfast', null, 'student', 0, 'Tariff sheet: meals free to students'
-  union all select null, 'lunch', null, 'student', 0, 'Tariff sheet: meals free to students'
-  union all select null, 'dinner', null, 'student', 0, 'Tariff sheet: meals free to students'
-  union all select null, 'breakfast', 'alumni', null, 0, 'Tariff sheet: meals free to alumni'
-  union all select null, 'lunch', 'alumni', null, 0, 'Tariff sheet: meals free to alumni'
-  union all select null, 'dinner', 'alumni', null, 0, 'Tariff sheet: meals free to alumni'
-) s
-where (s.item <> 'room' or s.gh is not null)
-  and not exists (
-    select 1 from public.tariffs t
-    where t.guest_house_id is not distinct from s.gh
-      and t.item = s.item
-      and t.room_type is null
-      and t.booking_type is not distinct from s.booking_type
-      and t.requester_role is not distinct from s.requester_role
-      and t.effective_from = date '2024-01-01'
-  );
+-- The tariff sheet is **not** seeded here (8 Nov 2026). It used to be, and
+-- its three room rows read the guest house ids with
+-- `(select id from guest_houses where name = 'Bageshri')` - but this file
+-- only builds the schema, so at that point the table is empty and those
+-- subselects were NULL. `where (s.item <> 'room' or s.gh is not null)` then
+-- dropped them, and **every direct-PostgreSQL install was left with the nine
+-- meal rates and no room rate at all**: the booking form's tariff panel read
+-- "no rates published" and no invoice could be issued. The guest houses came
+-- from supabase/seed.sql afterwards, and that file no longer exists.
+--
+-- The office's guest houses, rooms and whole rate sheet are now in
+-- `scripts/seed-reference-data.sql` (`npm run seed:reference`), which creates
+-- the guest houses before the rates that point at them. Run it after this
+-- file. One home for the rate sheet - do not add rates back here.
 
 -- Official whitelist seed (migration 16): conditional on empty table.
 insert into public.official_email_whitelist (email)
@@ -1736,5 +1716,8 @@ select e from unnest(array[
 where not exists (select 1 from public.official_email_whitelist);
 
 -- ==========================================================================
--- Done. Run supabase/seed.sql next for the demo personas and guest houses.
+-- Done. Next, in this order:
+--   npm run seed:reference   -- the guest houses, their rooms, the rate sheet
+--   npm run seed:personas    -- the 29 demo accounts and the institute tables
+-- (`supabase/seed.sql` is gone with Supabase; it used to do both.)
 -- ==========================================================================

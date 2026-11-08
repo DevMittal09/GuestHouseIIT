@@ -224,7 +224,14 @@ total, and issuing uses exactly those figures. **Preview PDF** prints the
   log entries; an occupied stay is billed to its booked check-out.
 - **Tariffs** are effective-dated rows (`tariffs`, migration 19), each
   optionally narrowed by guest house, room type, booking type and requester
-  role. `resolveTariff()` takes the most specific row in force (guest house >
+  role. **The sheet itself is `scripts/seed-reference-data.sql`**
+  (`npm run seed:reference`, 8 Nov 2026) - one home, run after
+  `scripts/init-postgres.sql` because it creates the guest houses the room
+  rates point at. The rates in force are the office's **Category I / II /
+  III** sheet of 5 Nov 2026, tabulated in
+  [12-settings-and-defaults.md](12-settings-and-defaults.md#rates--the-tariffs-table);
+  **there is no `extra_bed` rate at any date**, so a stay with an extra bed
+  cannot be invoiced until the office supplies one. `resolveTariff()` takes the most specific row in force (guest house >
   requester > booking type > room type), then the latest. A rate in force is
   never edited or deleted (trigger `tariffs_guard`, `tariffLockedError`); a new
   price is a new row, **and it must start later than today**

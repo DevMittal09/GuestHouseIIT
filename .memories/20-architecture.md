@@ -1358,9 +1358,25 @@ accounts themselves are listed, with what each one demonstrates, in
 [05-credentials-and-security.md](05-credentials-and-security.md) Part 1 -
 one fact, one home.
 
+**Three seeds, then, not two** (8 Nov 2026). `seed-personas.mjs`
+deliberately never touches guest houses, rooms, tariffs or bookings, and on
+PostgreSQL **nothing used to**: the office's own data is
+**`scripts/seed-reference-data.sql`**, run by
+**`scripts/seed-reference.mjs`** (`npm run seed:reference`). It must come
+**after** `scripts/init-postgres.sql`, because the room rates name the guest
+houses it creates - the fault it was written for is that the sheet used to
+sit in the schema file, where the guest houses did not exist yet, so every
+room rate was silently discarded and no invoice could be issued. Run order
+and the reasoning: [21-database.md](21-database.md) *Resetting data*.
+
 Rooms are the office's real list: Bageshri 201, 202, 203, 204, 206, 302, 303,
 305, 306, 307 (10) and Hamsanandi A4, B1–B4, C1–C4, D1–D4 (13), all double
-sharing. Hamsanandi serves meals and Bageshri does not.
+sharing. Hamsanandi serves meals and Bageshri does not. **The list is written
+in two places** - `BAGESHRI_ROOM_NUMBERS` / `HAMSANANDI_ROOM_NUMBERS` in
+`lib/store/seed.ts` and the `unnest(array[…])` in
+`scripts/seed-reference-data.sql` - and unlike the personas **no test
+compares them** ([03-roadmap.md](03-roadmap.md) section 2q). Keep them in
+step by hand.
 
 **There is no alumnus persona** — alumni cannot sign in. Demo booking 3 is the
 IAR Student Cell booking on behalf of Vikram Iyer (`101601023`), sitting in the

@@ -50,7 +50,25 @@ npm run typecheck    # tsc --noEmit, when you want types without a build
 npm test             # Vitest (tests/), must stay clean
 npm run test:e2e     # Playwright journeys (e2e/) against a production build
 npm run test:pg      # the real actions on PostgreSQL (tests-pg/), on a fresh gh_test DB
+npm run seed:reference  # the guest houses, their rooms and the tariff sheet
+npm run seed:personas   # the 29 demo accounts
 ```
+
+**A fresh PostgreSQL database is three steps, in this order:**
+`psql "$DATABASE_URL" -f scripts/init-postgres.sql` (the schema), then
+**`npm run seed:reference`**, then `npm run seed:personas`. Step 2
+(`scripts/seed-reference-data.sql`, 8 Nov 2026) is the **one home** for the
+office's guest houses, their rooms and the rate sheet, and it must follow
+step 1 because the room rates name the guest houses it creates. The sheet
+used to sit inside `init-postgres.sql`, which resolved each room row's guest
+house with `(select id from guest_houses where name = …)` against the table
+it had just created **empty** - so `where (s.item <> 'room' or s.gh is not
+null)` discarded every room rate and **every direct-PostgreSQL install held
+nine meal rates and none for a room**: the booking form's tariff panel read
+"no rates published" and no invoice could be issued, silently. Don't put
+rates back in the schema file. `npm run check:migrations` checks the
+structures and says nothing about the data, so neither that nor a clean test
+run would have caught it.
 
 **`npm test`** runs the Vitest suite in `tests/`. Store tests use the mock
 store on a throwaway file (`MOCK_DB_PATH`, see `tests/helpers.ts`) with

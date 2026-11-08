@@ -7,160 +7,154 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 7 November 2026 (second) - an audit of the booking path on PostgreSQL
+## Round of 8 November 2026 - the rates the move off Supabase left behind
 
-The owner: *"the guesthouse booking logic is not working now. It shows
-please fix the highlighted error etc. Can you audit the whole code and let
-me know what is the issue"*.
+The owner: *"we had switched from a hosted Supabase database to a local
+postgres database. And after switching we havent populated it fully... just
+get the data like prices, which we havent populated yet so that we can get
+the website up and running. The data like users and all we have already
+populated, only stuff like prices need to be updated"* - and, for the two
+duplicate `NEXT_PUBLIC_SUPABASE_URL` lines in `.env.local`, *"just find out
+which is correct and remove the other"*.
 
-The whole journey was reproduced rather than read: a read-only script ran
-what `/book` computes for every requester account in the owner's database
-and validated a correctly filled form exactly as the browser does; then the
-real server actions (`createBooking`, `reviewBooking`, `allocateRooms`,
-`cancelBooking`, `approveCancellation`) were driven against a **throwaway
-database on the same server** (`gh_audit_scratch`, built from
-`scripts/init-postgres.sql` and `npm run seed:personas`, dropped afterwards).
-Three defects, all PostgreSQL-only, which is why 648 unit tests on the mock
-store saw none of them.
+### 1. Which Supabase URL was the right one
 
-### 1. The reported error - a stored form config with no role
+`.env.local` carried two commented `NEXT_PUBLIC_SUPABASE_URL` lines:
+`http://127.0.0.1:54321` and `https://azfdzrahtsikofzovmda.supabase.co`. The
+question is answered by the keys beside them, not by preference: the `iss`
+payload of both JWTs names **project ref `azfdzrahtsikofzovmda`**, so the
+local URL belonged to no running instance and was removed. The hosted line
+stays commented, with a note saying it is kept only to read the old data
+from - the portal runs on `DATABASE_URL`.
 
-All five `form_configs` rows in the owner's database (`student`,
-`employee`, `official`, `faculty_advisor`, `gh_manager`, all dated
-1 Nov 2026) are **not form configurations**: `{max_rooms,
-allowed_guest_houses, require_relationship}`, no `role`. Nothing in the repo
-writes that shape; it came from outside it. The "saved row wins" rule took
-it, `sanitizeFormConfig` (which since 4 Nov spreads the row over
-`buildDefaultFormConfig(config.role)`) built defaults for role `undefined`,
-and `bookingTypeError(undefined)` refused every student, employee and
-office booking: **"Your role cannot submit booking requests" on
-`booking_type`** - a question a student is never shown, so the toast said
-"Please fix the highlighted fields" with nothing highlighted. Staff also got
-the student's relationship dropdown and an ID document demand, and students
-both guest houses.
+### 2. The fault: no room rate had ever been seeded into PostgreSQL
 
-- **`isStoredFormConfig(value, role)`** (`lib/form-config.ts`) - a saved row
-  is used only if its `role` matches and it has the fields every Form
-  Builder save has carried. `getEffectiveFormConfig` ignores anything else,
-  with a `console.warn` naming the role. Pinned by
-  `tests/stored-form-config.test.ts`, using the owner's rows verbatim.
-- **The rows themselves were not deleted.** Pressing **Reset to spec
-  defaults** in the Form Builder for each of the five roles removes them;
-  until then they are ignored.
+`guesthouse_dev` held **nine meal rates and no room rate at all**. It was not
+a half-finished copy; nothing in the repository had ever written one.
 
-### 2. Nothing could be forwarded, rejected, cancelled or allocated
+`scripts/init-postgres.sql` carried the office's tariff sheet, and resolved
+the guest house of each room row with
+`(select id from public.guest_houses where name = 'Bageshri')`. But that file
+**builds the schema**, so at that point `guest_houses` is empty, all three
+subselects were NULL, and the guard
 
-`assignRoomsToCards` (`lib/store/postgres.ts`) wrote
-`CASE WHEN id = $1 THEN $2 ...` into `booking_rooms.assigned_room_id`
-(uuid). PostgreSQL types a bare `THEN $n` as **text** and refused it
-(42804). Every transition that releases rooms calls it with `[]`, so
-**forwarding at every stage, rejecting, cancelling, the missed sweep and
-allocation all failed**. Fixed with `::uuid` / `::uuid[]` casts.
+```sql
+where (s.item <> 'room' or s.gh is not null)
+```
 
-### 3. No mail was ever queued
+dropped every room row on the floor. The guest houses used to arrive
+afterwards from `supabase/seed.sql` - which went with Supabase and **no
+longer exists**, while init's closing comment still told the reader to run
+it. Nothing errored; the room rates were simply never there.
 
-`enqueueEmails` bound `attachments` and `scheduled_for` as NULL whenever a
-message had none - nearly always - and both are `not null` with a default.
-An explicit NULL does not fall back to a default; it is refused (23502), and
-`notify*()` swallows the error by design, so bookings succeeded and nobody
-was told. Fixed with `coalesce(..., '[]'::jsonb)` and `coalesce(...,
-now())`.
+What that cost: `resolveTariff` returns null for a room, so the booking
+form's tariff panel reads **"no rates published"**, there is no category for
+the requester to pick (and picking one is what writes `guest_house_id` and
+`booking_type` since 17 Oct 2026), and **no invoice can be issued** -
+`invoiceBlocker` refuses a charge no rate covers rather than printing a zero.
 
-### Verified after the fixes
+### 3. The rates, taken from the hosted project
 
-On the scratch database: eight submissions (three students, faculty, staff,
-two offices, IAR) stored with the right first stage - the day scholar to the
-desk, Saveri to its Assistant Warden, Tilang (Warden only) to its Warden,
-faculty and staff to the HOD; each forwarded by the right person, allocated,
-one cancelled with its room released; mail queued and dispatched (dry run)
-at every step. Against the owner's database (read-only): every requester's
-correctly filled form now validates.
+Read over PostgREST with the service-role key in `.env.local`, **read-only**;
+31 rows, three generations:
 
-`npm run lint`, `npm run typecheck`, `npm test` (**653 tests, 38 files**)
-clean. **`npm run build` and `npm run test:e2e` were not run** - a dev
-server was up on :3000 and a build would have killed it.
+| Effective | What |
+| --- | --- |
+| 2024-01-01 | The sheet the portal was built with: meals per head (80 / 120 / 100), free to students and on alumni bookings, Bageshri 750, Hamsanandi 2,000, Hamsanandi 4,000 for an `official` requester |
+| 2026-09-23 | Bageshri raised to 1,000 |
+| **2026-11-05** | **The office's Category I / II / III sheet - what is charged today** |
 
-### Then: the guest house is not shown to a student
+The current sheet, per room per night:
 
-The owner: *"For students only the booking is allowed in Bageshri guest
-house only. So in UI there is no need to select any guest house. This
-entire thing should not be visible for students."* The Stay details card no
-longer shows a student the Guest house field or the "Student bookings are
-accommodated at Bageshri" note; `guestHouseHidden` in
-`components/booking-form.tsx` leaves only the hidden input carrying the id,
-and `createBooking` still enforces Bageshri. Other one-guest-house roles
-(the IAR Student Cell, an alumni booking) still see the name stated.
-**Not seen in a browser** - the dev server has no `DEV_LOGIN`, and signing
-in would have written a session to the owner's database.
+| Category | Bageshri | Hamsanandi |
+| --- | --- | --- |
+| **I** - guests and relatives of employees, parents of students on a personal visit | ₹1,000 | ₹1,500 |
+| **II** - institute guests on official duty (ministers, directors, BOG, selection committees, external examiners, official guests) | ₹1,500 | ₹2,000 |
+| **III** - academic visitors (an `employee` on an official booking) | ₹2,000 | ₹2,500 |
 
-### Then: a test suite on PostgreSQL, and the fault it found
+Two details that matter and are easy to lose:
 
-The owner: *"Do the testing on real postgress db"* - and chose a **fresh
-test database** on their own server over their `guesthousedb`.
+- **Category I is written twice per guest house** - once unscoped and once
+  with `requester_role: official`. The second row exists only to outrank the
+  ₹4,000 row of 2024-01-01, which has the same specificity (guest house +
+  requester role) and would otherwise still win for that role. Delete it and
+  an office's personal booking jumps to ₹4,000.
+- **Eight rows dated 2026-12-01** in the hosted project are the same
+  categories at the same rates - the office's first attempt, made when the
+  console forced a future date, before they were re-entered from 5 Nov. They
+  are harmless (equal specificity, later date, identical rate) and were
+  copied into `guesthouse_dev` with everything else, but they are **not** in
+  the seed file, which is why a fresh install has 14 room rates and
+  `guesthouse_dev` has 22.
 
-- **`npm run test:pg`** - `vitest.pg.config.ts`, `tests-pg/` (3 files, **39
-  checks**). Every run drops and rebuilds `gh_test` from
-  `scripts/init-postgres.sql`, adds two guest houses with rooms and rates,
-  and seeds the personas with `scripts/seed-personas.mjs`. It refuses a
-  database whose name lacks "test". Only the request is mocked
-  (`tests-pg/setup.ts`); the schema, rules, store and SQL are real. A CI
-  job runs it against a `postgres:16-alpine` service.
-- **It caught a fourth fault: a stay booked for earlier today could never be
-  allocated.** `earliestBookableCheckIn` accepts a check-in from midnight
-  this morning, but `lapseDeadline` was the check-in instant, so such a
-  booking was "never decided and its check-in has passed" the moment it was
-  made - and a 12:00 request the manager reached at 12:30 was refused the
-  same way. The dining version was fixed on 1 Oct; stays were not. A stay
-  now lapses at **the end of its check-in day, institute time, or its
-  check-out if sooner** (`lib/workflow.ts`), with two unit tests in
-  `tests/missed-requests.test.ts`.
-- **Each fix was undone in turn and the suite failed every time**: the uuid
-  cast (19 failures), the outbox coalesce (2), the form-config guard (1),
-  the lapse rule (5).
-- `guesthousedb` was checked afterwards: 0 bookings, 0 mails, 29 accounts.
+**Applied to `guesthouse_dev`:** 22 rows inserted, the 9 meal rows already
+there skipped on their unique scope. Verified with the real
+`resolveTariff` over every (guest house x booking type x requester role)
+combination: every one now resolves, and the figures are the table above.
 
-### Then: no error without a place on screen
+### 4. The repository, so it cannot happen again
 
-The owner: *"I don't want any case where an error belongs to a question that
-isn't on screen."* Besides the hidden `booking_type` already found, two more
-such cases were live: the meal error's only slot is inside the Meals card
-**after "Yes"**, so a meal refusal for anyone else (a student, a house with
-no kitchen) had nowhere to appear; and a server refusal was only a toast,
-gone after a few seconds.
+- **`scripts/seed-reference-data.sql`** - new, and the **one home** for the
+  office's guest houses, their rooms and the whole rate sheet. It creates the
+  guest houses **before** the rates that point at them. Idempotent and
+  additive: guest houses by their fixed ids, rooms only into a guest house
+  that has none at all (so an inventory the office edited by hand is never
+  touched), a rate only where none with the same scope and `effective_from`
+  exists. `tariffs_guard` refuses an UPDATE or DELETE of a rate in force, so
+  the file only ever inserts.
+- **`scripts/seed-reference.mjs`** / **`npm run seed:reference`** - loads
+  `.env.local` the way `seed-personas.mjs` does, prints a census before and
+  after, and names the missing `extra_bed` rate.
+- **The tariff block is gone from `scripts/init-postgres.sql`**, replaced by
+  a comment explaining the trap, and its closing note now gives the real run
+  order: `init-postgres.sql` -> `npm run seed:reference` ->
+  `npm run seed:personas`.
 
-- **An error summary at the top of the booking form**, GOV.UK fashion
-  (`components/error-summary.tsx`). Every problem found on submit - each
-  zod issue, the room count, meals, every missing ID upload by guest, the
-  alumni card, custom fields, **and the server's refusal** - is listed. Each
-  links to its question if that question is **on screen when the form is
-  checked** (`problemSelectors` in `lib/form-problems.ts`; a hidden input or
-  an element with no box does not count); one that is not is still listed
-  in words. It takes focus and scrolls into view. Inline messages are
-  unchanged.
-- The toast is the message itself, or "N things need fixing"; **"Please fix
-  the highlighted fields" is gone**.
-- A plain `div`, so `.numbered-sections` does not count it as a step. The
-  form element comes from the submit event, not a ref - the React Compiler
-  lint refuses a ref read in a callback built during render.
-- `tests/form-problems.test.ts` (6 checks) and `e2e/error-summary.spec.ts`
-  (2 journeys, **not yet run**: they need a build, and the dev server was
-  up).
+Tested on a throwaway `gh_seed_scratch`: schema from nothing, then
+`seed:reference` -> **2 guest houses, 23 rooms, 23 rates (14 room, 9 meal)**;
+run again, nothing added. Then the seeded database and `guesthouse_dev` were
+compared through `resolveTariff` over **630 combinations across three dates**
+(10 Nov, 5 Dec, 1 Mar) - **0 differences**, which is what proves the seed
+file reproduces the hosted project's pricing and that the eight duplicate
+rows change nothing.
 
-### Then: the database still had the old status names
+### 5. Then: the room inventory was not the office's
 
-The owner's log: `invalid input value for enum booking_status:
-"PENDING_WARDEN"`. `guesthousedb` was built from `init-postgres.sql` before
-its labels were fixed and still had `PENDING_WARDEN_REVIEW`,
-`PENDING_FA_REVIEW` and `PENDING_IAR_REVIEW`, so every warden- or
-IAR-routed request was refused at insert. The owner: *"update init.sql
-too"*. The enum is now a guarded `do` block in `scripts/init-postgres.sql`
-(create if missing, rename the old labels in place, add later values `if
-not exists`), tested on an old-shaped and a fresh database, **and applied
-to `guesthousedb`** (its one booking kept). `npm run test:pg` 39/39.
+Found while checking what else the move had left behind, and fixed with the
+owner's agreement. Neither database had the rooms of 23 Sep 2026:
+
+| | Was in `guesthouse_dev` | Now |
+| --- | --- | --- |
+| Bageshri | `B1`-`B10`, the old dummy block | **201, 202, 203, 204, 206, 302, 303, 305, 306, 307** |
+| Hamsanandi | `A1`, `A2`, `A3`, `A4`, `C1`, `C2`, `D1`-`D4` - **ten** | **A4, B1-B4, C1-C4, D1-D4** - **thirteen** |
+
+Three real Hamsanandi rooms could not be booked at all. Bageshri's ten were
+**renamed, not replaced** - `room_holds` and `booking_rooms` point at the row
+id, so the three demo bookings kept their rooms and now show the real
+numbers (B1 -> 201, B2 -> 202, B10 -> 307); 0 orphan holds afterwards.
+`A1`-`A3` were held by nothing and were deleted. `rooms_recount_total`
+(migration 33) moved `total_rooms` to 10 and 13 by itself.
+
+### 6. What is deliberately still missing
+
+**There is no `extra_bed` rate** - not here and not in the hosted project the
+rates came from. The office has never sent the figure. A stay with an extra
+bed therefore **cannot be invoiced**: `resolveTariff` returns null and
+`invoiceBlocker` reports it rather than charging ₹0 by omission. It is an
+office question, not a code one - [04-production.md](04-production.md) §3,
+and `seed:reference` says so on every run.
+
+### Verified
+
+`npm run lint`, `npm run typecheck`, `npm test` (**661 tests, 39 files**) and
+`npm run test:pg` (**39 checks**) all clean - the PostgreSQL suite matters
+here because it loads `scripts/init-postgres.sql`, which this round edited.
+`npm run build` and `npm run test:e2e` **were not run**: a build kills a
+running `next dev`, and nothing in this round touches a component.
 
 ### What is left open
 
-[03-roadmap.md](03-roadmap.md) §2p: the five foreign `form_configs` rows and
-five `app_settings` rows on the owner's database, what `test:pg` does not
-cover yet, and running `e2e/error-summary.spec.ts`. `npm run build` **clean** (run at the owner's request, 7 Nov 2026). `npm run test:e2e`
-(including `e2e/error-summary.spec.ts`) not yet run.
+[03-roadmap.md](03-roadmap.md) §2q: the extra-bed rate, the eight duplicate
+tariff rows, and the fact that the guest houses and rooms of a database are
+still not checked by anything the way `npm run check:migrations` checks the
+schema.

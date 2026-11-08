@@ -341,6 +341,27 @@ one, never paste one into an issue.** Rotation procedure:
 > among them - which is truthy, so the deployment had been silently sending
 > nothing. Comments go on their own line.
 
+> **The Supabase variables are history, and `.env.local` says so**
+> (8 Nov 2026). The portal runs on **`DATABASE_URL`** - direct PostgreSQL,
+> since the Supabase removal of 2 Nov 2026 - and the four Supabase lines are
+> **commented out**, kept only so the old hosted project can still be read
+> from. The three rows above that call them required describe the Supabase
+> era; `DATABASE_URL` is what a deployment must set now.
+>
+> There were **two** `NEXT_PUBLIC_SUPABASE_URL` lines,
+> `http://127.0.0.1:54321` and `https://azfdzrahtsikofzovmda.supabase.co`,
+> and the local one was removed. **The keys answer which is right, not
+> preference:** both JWTs carry `"ref":"azfdzrahtsikofzovmda"` in their
+> payload, so that is the only project they authenticate against and the
+> `127.0.0.1` URL belonged to no running instance. Decode a Supabase key's
+> middle segment (`base64 -d`) whenever a URL and a key may have drifted
+> apart - it names the project.
+>
+> The **service-role key in `.env.local` still works on that project** and
+> still bypasses RLS. It is the key the 8 Nov round used, read-only, to take
+> the office's tariff sheet out. Treat it as live: it has not been rotated,
+> and the project has not been deleted.
+
 ### Environment variables — all of them, and what each switches
 
 Every variable the code reads (`lib/env.ts`, `lib/mail/config.ts`,

@@ -986,11 +986,43 @@ header says how to check.
 ## Resetting data
 
 - Mock: delete `.local-db.json`. It is regenerated from `lib/store/seed.ts`.
-- **PostgreSQL, the schema:** `psql <db> < scripts/init-postgres.sql`.
-- **PostgreSQL, the demo accounts:** `npm run seed:personas`
-  (`scripts/seed-personas.mjs`). Idempotent, and non-destructive to history -
-  see [20-architecture.md](20-architecture.md) *Demo data* for the flags.
-- Supabase local: `supabase db reset`.
+- **PostgreSQL, from nothing - three steps, in this order:**
+
+  ```bash
+  psql "$DATABASE_URL" -f scripts/init-postgres.sql   # the schema
+  npm run seed:reference                              # guest houses, rooms, rates
+  npm run seed:personas                               # the 29 demo accounts
+  ```
+
+  1. **The schema**, `scripts/init-postgres.sql`. Also seeds the official
+     email whitelist, and nothing else - the tariff sheet was taken out of it
+     on 8 Nov 2026 (below).
+  2. **The office's own data**, `scripts/seed-reference-data.sql` through
+     `npm run seed:reference` (`scripts/seed-reference.mjs`, which loads
+     `.env.local` for `DATABASE_URL` and prints a before/after census;
+     `-- --dry-run` writes nothing). The two guest houses at their fixed ids,
+     their real rooms, and the whole tariff sheet. Idempotent: guest houses by
+     id, rooms **only into a guest house that has none at all** so a
+     hand-edited inventory is never touched, and a rate only where none with
+     the same scope and `effective_from` exists - `tariffs_guard` refuses an
+     UPDATE or DELETE of a rate in force, so the file only ever inserts.
+  3. **The demo accounts**, `npm run seed:personas`
+     (`scripts/seed-personas.mjs`). Idempotent, and non-destructive to
+     history - see [20-architecture.md](20-architecture.md) *Demo data* for
+     the flags. It deliberately never touches guest houses, rooms, tariffs or
+     bookings, which is why step 2 exists.
+
+> **Why step 2 is a separate file (8 Nov 2026).** The tariff sheet used to be
+> in `init-postgres.sql`, where each room row named its guest house with
+> `(select id from public.guest_houses where name = 'Bageshri')` - against a
+> table that file had just created **empty**. All three subselects were NULL
+> and `where (s.item <> 'room' or s.gh is not null)` discarded them. The guest
+> houses then arrived from `supabase/seed.sql`, which went with Supabase, and
+> whose name init's closing comment still carried. So **every
+> direct-PostgreSQL install was left with the nine meal rates and no room rate
+> at all** - the booking form's tariff panel read "no rates published" and no
+> invoice could be issued, with nothing in any log. The rate sheet now has one
+> home, and it creates the guest houses before the rates that reference them.
 
 ### Bringing an older PostgreSQL database up to the 7 Nov 2026 round
 

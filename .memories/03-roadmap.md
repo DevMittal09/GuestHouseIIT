@@ -835,6 +835,38 @@ In order of what would have caught the most:
    console forms carry one message in their own dialog and were left as
    they are.
 
+## 2q. Opened by the 8 November 2026 round - the rates
+
+1. **There is no `extra_bed` rate**, here or in the hosted project the sheet
+   came from, and the office has never sent one. A stay with an extra bed
+   therefore **cannot be invoiced**: `resolveTariff` returns null and
+   `invoiceBlocker` reports it rather than charging zero by omission. This
+   is the office's figure to supply, not a default to guess - see
+   [04-production.md](04-production.md) section 3. `npm run seed:reference`
+   prints the warning on every run.
+2. **Eight duplicate tariff rows in `guesthouse_dev`**, dated 2026-12-01:
+   the Category I / II / III sheet at the same rates as the 5 Nov rows, from
+   the office's first attempt when the console forced a future date. They
+   change nothing (equal specificity, later date, identical rate - proved
+   over 630 combinations on three dates) and are the office's own rows, so
+   they were left. They are **not** in `seed-reference-data.sql`, which is
+   why a fresh install holds 14 room rates and `guesthouse_dev` 22. Worth a
+   tidy next time the manager edits rates.
+3. **Nothing checks a database's reference data** the way
+   `npm run check:migrations` checks its schema. A database can have every
+   migration and still hold no rates, the wrong rooms, or ten rooms where
+   the office has thirteen - which is exactly what this round found, weeks
+   after the move. `seed:reference --dry-run` is a census, not a verdict;
+   the useful thing would be a `check:reference` that exits 1 on a guest
+   house with no rooms, a room list that does not match
+   `lib/store/seed.ts`, or an item with no rate in force.
+4. **The office's rate sheet is now in three places that must stay in step**:
+   `scripts/seed-reference-data.sql` (the SQL),
+   [12-settings-and-defaults.md](12-settings-and-defaults.md) (the table a
+   reader looks at) and the database itself. The room numbers are in two:
+   that SQL and `lib/store/seed.ts`. No test compares them, unlike
+   `tests/seed-parity.test.ts` for the personas - the obvious next guard.
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the

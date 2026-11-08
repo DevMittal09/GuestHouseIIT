@@ -727,6 +727,74 @@ student is never asked. Now ignored by `isStoredFormConfig`.
 `NODE_OPTIONS=--conditions=react-server npx tsx --tsconfig ./tsconfig.json`
 so `server-only` resolves; reading the database this way changes nothing.
 
+### The booking form says "no rates published", and no invoice can be issued
+
+**8 Nov 2026.** The tariff panel beside `/book` offers no category to pick
+and quotes nothing; at the desk, `invoiceBlocker` refuses to issue because a
+charge has no rate.
+
+Ask the database what rates it actually holds:
+
+```bash
+psql "$DATABASE_URL" -c "select item, count(*) from tariffs group by 1 order by 1;"
+```
+
+**Nine meal rates and no `room` row** is the signature. Every
+direct-PostgreSQL install had it: the tariff sheet used to live in
+`scripts/init-postgres.sql`, which resolved each room row's guest house with
+`(select id from public.guest_houses where name = 'Bageshri')` - against the
+table it had just created **empty**. The subselects were NULL and
+`where (s.item <> 'room' or s.gh is not null)` discarded all three rows. The
+guest houses arrived afterwards from `supabase/seed.sql`, which no longer
+exists. Nothing errored, nothing logged.
+
+**Fix:** `npm run seed:reference`. It is idempotent, prints a before/after
+census, and takes `-- --dry-run`. The sheet now lives in
+`scripts/seed-reference-data.sql`, which creates the guest houses before the
+rates that point at them.
+
+Two things that are **not** this fault:
+
+- **An extra bed with no rate.** There is no `extra_bed` row at any date, by
+  omission on the office's side, so a stay with an extra bed cannot be
+  invoiced. Correct behaviour - a guessed figure would be charged to a guest.
+  [04-production.md](04-production.md) section 3.
+- **A rate that exists but starts tomorrow.** `resolveTariff` takes the row
+  in force **on the night being charged**, and `tariffStartError` makes every
+  new rate start later than today, so a rate added this morning prices
+  nothing tonight. That is the design, not a missing row.
+
+### A guest house has fewer rooms than the office does
+
+**8 Nov 2026.** `guesthouse_dev` had Hamsanandi on ten rooms where the office
+has thirteen, and Bageshri still on the dummy `B1`-`B10` block. Three real
+rooms could not be booked by anybody, and no check would have said so -
+`npm run check:migrations` verifies the schema, nothing verifies the data.
+
+```bash
+psql "$DATABASE_URL" -c "select g.name, g.total_rooms, string_agg(r.room_number, ', ' order by r.room_number) from guest_houses g join rooms r on r.guest_house_id = g.id and r.is_active group by 1, 2;"
+```
+
+The office's real inventory is `BAGESHRI_ROOM_NUMBERS` /
+`HAMSANANDI_ROOM_NUMBERS` in `lib/store/seed.ts` and in
+`scripts/seed-reference-data.sql` - Bageshri 201, 202, 203, 204, 206, 302,
+303, 305, 306, 307; Hamsanandi A4, B1-B4, C1-C4, D1-D4.
+
+**Rename, never delete and re-insert.** `room_holds` and
+`booking_rooms.assigned_room_id` point at the room's **row id**, so an
+`update rooms set room_number = …` keeps every reservation and simply shows
+the real number; re-creating the row would silently free somebody's room.
+Check afterwards:
+
+```bash
+psql "$DATABASE_URL" -c "select count(*) from room_holds h left join rooms r on r.id = h.room_id where r.id is null;"
+```
+
+`seed:reference` deliberately will **not** repair this: it writes rooms only
+into a guest house that has none at all, because a seeder must never
+overwrite an inventory the office has edited. `rooms_recount_total`
+(migration 33) keeps `total_rooms` right by itself - never set it by hand.
+
 ### A booking submits but cannot be forwarded, rejected or allocated
 
 **Symptom (PostgreSQL only).** `column "assigned_room_id" is of type uuid

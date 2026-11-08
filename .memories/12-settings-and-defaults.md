@@ -200,17 +200,42 @@ edited or deleted — a new price is a new row, and **that row must start later
 than today**: the console seeds the date with tomorrow, puts `min` on the box
 and disables Add with the reason on screen (`tariffStartError`,
 16 Oct 2026 — the owner: "only for future booking GHM can change the rates").
-`createTariffAction` applies the same rule. Seeded from the tariff sheet:
+`createTariffAction` applies the same rule.
 
-| Item | Rate | Scope |
-| --- | --- | --- |
-| Room, Bageshri | ₹1,000 / room / day | (₹750 before 23 Sep 2026) |
-| Room, Hamsanandi | ₹2,000 / room / day | |
-| Room, Hamsanandi, `official` role | ₹4,000 / room / day | "government officers" |
-| Breakfast / Lunch / Dinner | ₹80 / ₹120 / ₹100 per head | |
-| Meals for students | ₹0 | requester role `student` |
-| Meals on alumni bookings | ₹0 | booking type `alumni` |
-| **Extra bed** | **none seeded** | An invoice with an extra bed cannot be issued until one is added |
+**The sheet is seeded by `scripts/seed-reference-data.sql`**
+(`npm run seed:reference`), which is the one place it is written in SQL - and
+which must run **after** `scripts/init-postgres.sql`, because it creates the
+two guest houses the room rates point at. Until 8 Nov 2026 the sheet lived in
+the schema file, where the guest houses did not yet exist and every room rate
+was silently discarded; see [99-recent-changes.md](99-recent-changes.md).
+
+**What is charged now - the office's Category I / II / III sheet**, in force
+from **5 Nov 2026**, per room per night:
+
+| Category | Who | Bageshri | Hamsanandi |
+| --- | --- | --- | --- |
+| **I** | Guests and relatives of employees, parents of students on a personal visit | ₹1,000 | ₹1,500 |
+| **II** | Institute guests on official duty: ministers, directors, BOG, selection committees, external examiners, official guests (`booking_type: official`) | ₹1,500 | ₹2,000 |
+| **III** | Academic visitors (`booking_type: official`, requester `employee`) | ₹2,000 | ₹2,500 |
+
+Category I is stored **twice per guest house** - once unscoped and once with
+`requester_role: official`. Not redundant: the ₹4,000 row below has the same
+specificity (guest house + requester role), so without the second row an
+office's personal booking would still resolve to ₹4,000.
+
+**Meals, and the rows the categories superseded** (kept, because
+`resolveTariff` prices each night from the row in force on it, so an older row
+is the record of an older stay):
+
+| Item | Rate | Scope | From |
+| --- | --- | --- | --- |
+| Breakfast / Lunch / Dinner | ₹80 / ₹120 / ₹100 per head | No guest house - only a kitchen sells them | 2024-01-01 |
+| Meals for students | ₹0 | requester role `student` | 2024-01-01 |
+| Meals on alumni bookings | ₹0 | booking type `alumni` | 2024-01-01 |
+| Room, Bageshri | ₹750, then ₹1,000 | | 2024-01-01, 2026-09-23 |
+| Room, Hamsanandi | ₹2,000 | "types 1 and 2" | 2024-01-01 |
+| Room, Hamsanandi, `official` role | ₹4,000 | "government officers" | 2024-01-01 |
+| **Extra bed** | **none, at any date** | The office has never sent the figure. An invoice for a stay with an extra bed **cannot be issued** - `invoiceBlocker` refuses a charge no rate covers rather than printing ₹0. [04-production.md](04-production.md) section 3 | - |
 
 ### Invoice settings — `rules.invoice`
 
