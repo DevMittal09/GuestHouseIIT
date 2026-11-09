@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { addDaysToDateValue, formatDateValue, parseDateValue } from "./tz";
-import type { BookingType, MealKey, Role, RoomType, ServiceType } from "./types";
+import {
+  TARIFF_CATEGORIES,
+  type BookingType,
+  type MealKey,
+  type Role,
+  type RoomType,
+  type ServiceType,
+  type TariffCategoryName,
+} from "./types";
 
 /**
  * The guest house tariff (Phase 5): what a room night, an extra bed and each
@@ -52,6 +60,16 @@ export type Tariff = {
   booking_type: BookingType | null;
   /** Null: any requester. The role of whoever the booking belongs to. */
   requester_role: Role | null;
+  /**
+   * Null: any category. The office's named category (9 Nov 2026) - the one
+   * thing the **manager** decides about a price, so it outranks every other
+   * qualifier in {@link resolveTariff}.
+   *
+   * Optional, and absent reads as null: a row written before migration 36 -
+   * including every row in a mock database - has no such field, and "this rate
+   * is not tied to a category" is the right reading of that.
+   */
+  tariff_category?: TariffCategoryName | null;
   /** Rupees, up to two decimals. Zero is a price: "free for students". */
   rate: number;
   /** Institute calendar date ("yyyy-MM-dd") the rate applies from. */
@@ -70,12 +88,22 @@ export type TariffQuery = {
   room_type: RoomType | null;
   booking_type: BookingType;
   requester_role: Role;
+  /**
+   * The category the manager put the booking in. Absent or null means none is
+   * set, which prices from the uncategorised sheet.
+   */
+  tariff_category?: TariffCategoryName | null;
   /** Institute calendar date the charge falls on. */
   date: string;
 };
 
 function specificity(t: Tariff): number {
   return (
+    // A named category is the most specific thing anybody can say about a
+    // price: it is the manager's own decision about this guest, taken with
+    // the person in front of them, and it must outrank every rule that only
+    // knows which account raised the request.
+    ((t.tariff_category ?? null) ? 16 : 0) +
     (t.guest_house_id ? 8 : 0) +
     (t.requester_role ? 4 : 0) +
     (t.booking_type ? 2 : 0) +
@@ -90,7 +118,28 @@ function applies(t: Tariff, q: TariffQuery): boolean {
     (t.guest_house_id === null || t.guest_house_id === q.guest_house_id) &&
     (t.room_type === null || t.room_type === q.room_type) &&
     (t.booking_type === null || t.booking_type === q.booking_type) &&
-    (t.requester_role === null || t.requester_role === q.requester_role)
+    (t.requester_role === null || t.requester_role === q.requester_role) &&
+    /*
+     * The category, which is the manager's own decision about this guest, and
+     * so is matched in two different ways on purpose.
+     *
+     * **A room charge on a categorised booking matches that category and
+     * nothing else.** Not even an unscoped row: if the office has published
+     * no Category III rate for this guest house, the honest answer is *no
+     * rate*, which `invoiceBlocker` reports and which stops the bill. Letting
+     * it fall back to the general room rate would charge a figure the manager
+     * did not choose while the invoice printed the category they did - the
+     * one outcome the meeting's "the invoice must be generated using the
+     * tariff category selected by the GHM" rules out.
+     *
+     * **Everything else matches the unscoped rows**: a meal and an extra bed
+     * are not priced per category, and a booking with no category at all -
+     * every one made before 9 Nov 2026 - prices exactly as it did, which is
+     * what keeps those stays printable.
+     */
+    (q.item === "room" && q.tariff_category
+      ? t.tariff_category === q.tariff_category
+      : (t.tariff_category ?? null) === null || t.tariff_category === q.tariff_category)
   );
 }
 
@@ -169,6 +218,7 @@ export const tariffInputSchema = z
     requester_role: z
       .enum(["student", "employee", "official", "club", "alumni", "iar_cell", "iar_student_cell", "gh_manager"])
       .nullable(),
+    tariff_category: z.enum(TARIFF_CATEGORIES).nullable().default(null),
     rate: money,
     effective_from: z
       .string()
@@ -181,11 +231,13 @@ export const tariffInputSchema = z
 
 /** "Hamsanandi · Double sharing · Official · Official booking", for the console. */
 export function describeTariffScope(
-  t: Pick<Tariff, "guest_house_id" | "room_type" | "booking_type" | "requester_role">,
+  t: Pick<Tariff, "guest_house_id" | "room_type" | "booking_type" | "requester_role" | "tariff_category">,
   names: { guestHouse: (id: string) => string; roomType: (t: RoomType) => string; bookingType: (t: BookingType) => string; role: (r: Role) => string }
 ): string {
   const parts = [
     t.guest_house_id ? names.guestHouse(t.guest_house_id) : "Every guest house",
+    // Named first after the guest house because it is what outranks the rest.
+    t.tariff_category ? `Category ${t.tariff_category}` : null,
     t.room_type ? names.roomType(t.room_type) : null,
     t.booking_type ? `${names.bookingType(t.booking_type)} bookings` : null,
     t.requester_role ? `requester: ${names.role(t.requester_role)}` : null,
@@ -253,6 +305,8 @@ export function tariffPreviewLines(
     date: string;
     /** What is being booked: a dining booking is quoted meals and nothing else. */
     service?: ServiceType;
+    /** Set only where a category is already decided - the desk re-pricing a stay. */
+    tariffCategory?: TariffCategoryName | null;
   }
 ): TariffPreviewLine[] {
   return previewItemsFor(q.servesMeals, q.service).map((item) => {
@@ -263,6 +317,12 @@ export function tariffPreviewLines(
       room_type: item === "room" || item === "extra_bed" ? q.roomType : null,
       booking_type: q.bookingType,
       requester_role: q.role,
+      // The preview is what a **requester** is shown while they fill the form
+      // in, and the requester no longer picks a category (9 Nov 2026) - the
+      // manager does, at allocation. So the preview resolves the uncategorised
+      // sheet, and the figures beside the categories come from
+      // `tariffCategorySheet` instead.
+      tariff_category: q.tariffCategory ?? null,
       date: q.date,
     });
     return { item, label: TARIFF_ITEM_LABELS[item], rate: row ? row.rate : null };

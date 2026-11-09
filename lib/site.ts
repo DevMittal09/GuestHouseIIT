@@ -41,8 +41,17 @@ export function safeNextPath(next: string | null | undefined): string | null {
   return next;
 }
 
-/** TODO(site): the URL of the full guidelines PDF. `null` hides the button. */
-export const GUIDELINES_PDF_URL: string | null = null;
+/*
+ * **`GUIDELINES_PDF_URL` is gone** (9 Nov 2026, the meeting: "the GHM must
+ * have a backend settings field to update the Google Drive URL... updating the
+ * URL should automatically update the destination of the frontend Guidelines
+ * link without requiring a code deployment").
+ *
+ * It was a constant here, which is exactly the deploy the office asked not to
+ * need. The link is now `rules.portal.guidelines_url`, edited by the manager
+ * at Console -> Portal Settings; empty hides the button rather than printing
+ * a dead one, which is what `null` did here.
+ */
 
 /**
  * The Guidelines page's house rules (conduct, safety) are placeholders written

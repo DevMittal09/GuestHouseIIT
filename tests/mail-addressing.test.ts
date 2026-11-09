@@ -71,7 +71,7 @@ beforeAll(async () => {
 });
 afterAll(() => db.cleanup());
 
-const MANAGER = "guesthouse@iitpkd.ac.in";
+const MANAGER = "muhamed.rizwan2458@gmail.com";
 const DESK = [MANAGER, "gh.reception@iitpkd.ac.in"];
 
 function input(user: string, role: Role, status: BookingStatus, patch: Partial<NewBookingInput> = {}): NewBookingInput {
@@ -152,7 +152,7 @@ describe("staff mail is To the actioner and CC the Copy-to list, for every reque
   it("the Saveri warden is never To or CC on a Malhar student's request", async () => {
     const id = await route("student-phd-malhar", "student", "PENDING_WARDEN", { booking_type: "personal" });
     const all = await store.listEmails({ bookingId: id });
-    expect(all.flatMap((m) => [...m.to_emails, ...m.cc_emails])).not.toContain("awarden.saveriboys@iitpkd.ac.in");
+    expect(all.flatMap((m) => [...m.to_emails, ...m.cc_emails])).not.toContain("student.iitpkd01@gmail.com");
   });
 
   it("club: the council secretary (by appointment), then the manager with the secretary in CC", async () => {

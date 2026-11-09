@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { serviceTypesFor } from "@/lib/booking-types";
 import { getEffectiveFormConfig } from "@/lib/form-config-server";
 import { homeForRole, MEAL_BOOKING_PATH, ROOM_BOOKING_PATH, SIGN_IN_PATH } from "@/lib/routes";
+import { getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
 import { REQUESTER_ROLES } from "@/lib/types";
 import { clubBookingNotice, mustBookThroughFacultyInCharge } from "@/lib/club-booking";
@@ -112,7 +113,13 @@ export default async function DashboardPage() {
       {/* Three sections of its own since 17 Oct 2026 - current, upcoming and
           previous - so the single "Your requests" heading that used to stand
           over one long table has gone with it. */}
-      <MyBookings bookings={bookings} invoices={invoices} />
+      <MyBookings
+        bookings={bookings}
+        invoices={invoices}
+        // The notice period, read once here and handed down, so the Cancel
+        // button and `cancelBooking` apply the same figure (9 Nov 2026).
+        cancellationNoticeHours={(await getRules()).booking.cancellation_notice_hours}
+      />
       {/* DPDP (Phase 8): take a copy, or ask the office to erase it. A quiet
           line at the foot of the page, not a notice (9 Oct 2026).
 

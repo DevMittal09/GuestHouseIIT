@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { ArrowDown } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { Container, PageMasthead, SectionHead, siteButton } from "@/components/site/site-ui";
-import { GUEST_HOUSE_CONTACT, GUIDELINES_PDF_URL, GUIDELINES_PROVISIONAL } from "@/lib/site";
+import { GUEST_HOUSE_CONTACT, GUIDELINES_PROVISIONAL } from "@/lib/site";
 import { BOOKING_STEPS, guidelineSections, joinNames, type GuidelineSection } from "@/lib/site-content";
 import { getSiteGuestHouses } from "@/lib/site-data";
 import { getRules } from "@/lib/settings-server";
@@ -31,6 +31,7 @@ export const metadata: Metadata = { title: "Guidelines" };
 export default async function GuidelinesPage() {
   const [houses, rules] = await Promise.all([getSiteGuestHouses(), getRules()]);
   const sections = guidelineSections(houses, rules);
+  const guidelinesUrl = rules.portal.guidelines_url.trim();
   const provisional = sections
     .map((section, i) => ({ section, number: i + 1 }))
     .filter(({ section }) => section.provisional);
@@ -50,13 +51,20 @@ export default async function GuidelinesPage() {
           ) : undefined
         }
         aside={
-          GUIDELINES_PDF_URL && (
-            <a href={GUIDELINES_PDF_URL} target="_blank" rel="noopener noreferrer" className={siteButton.ink}>
-              Download as PDF
-              <ArrowDown aria-hidden className="size-4 text-saffron" />
+          /* **The office's full guidelines document** (9 Nov 2026, the
+             meeting). The address is a Setting the Guest House Manager
+             edits - Console -> Portal Settings - so sending a new version of
+             the document is a console edit and not a deploy. Empty hides the
+             button: a link to nothing is worse than no link, which is the
+             same reasoning that took the withdrawn privacy notice's three
+             links off with the page. */
+          guidelinesUrl ? (
+            <a href={guidelinesUrl} target="_blank" rel="noopener noreferrer" className={siteButton.ink}>
+              Read the full guidelines
+              <ArrowUpRight aria-hidden className="size-4 text-saffron" />
               <span className="sr-only">(opens in a new tab)</span>
             </a>
-          )
+          ) : undefined
         }
       />
 
@@ -125,6 +133,18 @@ export default async function GuidelinesPage() {
   );
 }
 
+/** One numbered rule. `index` is its place in the section's flat list. */
+function RuleRow({ item, number, index }: { item: string; number: number; index: number }) {
+  return (
+    <li className="grid grid-cols-[2.75rem_1fr] gap-x-3 border-b border-border py-3.5 last:border-b-0">
+      <span className="pt-[3px] text-[13.5px] text-muted-foreground tabular-nums">
+        {number}.{index + 1}
+      </span>
+      <span className="text-[16px] leading-[1.6] text-body">{item}</span>
+    </li>
+  );
+}
+
 function GuidelineBlock({ section, number }: { section: GuidelineSection; number: number }) {
   const headingId = `${section.id}-title`;
   return (
@@ -143,19 +163,37 @@ function GuidelineBlock({ section, number }: { section: GuidelineSection; number
         )}
       </div>
 
-      <ol className="mt-3">
-        {section.items.map((item, j) => (
-          <li
-            key={item}
-            className="grid grid-cols-[2.75rem_1fr] gap-x-3 border-b border-border py-3.5 last:border-b-0"
-          >
-            <span className="pt-[3px] text-[13.5px] text-muted-foreground tabular-nums">
-              {number}.{j + 1}
-            </span>
-            <span className="text-[16px] leading-[1.6] text-body">{item}</span>
-          </li>
-        ))}
-      </ol>
+      {/* A section with its items grouped - Dos and Don'ts (9 Nov 2026) -
+          draws each group under its own heading. The numbering runs straight
+          through, so "7.4" means the same rule whether or not the groups are
+          there, and a reader can still cite one. */}
+      {section.groups ? (
+        <div className="mt-3">
+          {section.groups.map((group, g) => (
+            <div key={group.label} className={cn(g > 0 && "mt-8")}>
+              <h3 className="text-[11.5px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+                {group.label}
+              </h3>
+              <ol className="mt-2">
+                {group.items.map((item) => (
+                  <RuleRow
+                    key={item}
+                    item={item}
+                    number={number}
+                    index={section.items.indexOf(item)}
+                  />
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <ol className="mt-3">
+          {section.items.map((item, j) => (
+            <RuleRow key={item} item={item} number={number} index={j} />
+          ))}
+        </ol>
+      )}
 
       {section.timetable && (
         <table className="mt-5 w-full max-w-[520px] border-y border-ink">

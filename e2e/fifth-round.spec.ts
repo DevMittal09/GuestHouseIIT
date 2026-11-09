@@ -63,6 +63,7 @@ async function facultyStayStartingNow(page: Page): Promise<string> {
   await expect(dialog.getByRole("button", { name: "Refresh availability" })).toBeVisible();
   await expect(dialog.getByText("Loading occupancy…")).toHaveCount(0, { timeout: 30_000 });
   await dialog.locator('button[title*="Occupancy:"]:not([disabled])').first().click();
+  await dialog.getByRole("radio", { name: /^Category I / }).check();
   await dialog.getByRole("button", { name: /Confirm & Allocate/ }).click();
   await expect(dialog).toBeHidden({ timeout: 30_000 });
   return reference;

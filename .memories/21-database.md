@@ -1,5 +1,21 @@
 # Database
 
+## Migration 36 - room classes and manager tariff categories
+
+New file: [`scripts/migrations/00000000000036_room_classes_and_tariff_categories.sql`](../scripts/migrations/00000000000036_room_classes_and_tariff_categories.sql). Apply before running the updated application. It adds:
+
+- `rooms.room_class` (`general`, `vip`, `director_only`, `reserved`), `reservation_note`, `reserved_until`, and a class index.
+- `bookings.tariff_category`, `original_check_in`, `original_check_out`.
+- `tariffs.tariff_category`, included in the tariff scope/date unique index.
+
+New installs have the same columns/constraints in `scripts/init-postgres.sql`. The migration is additive and repeatable; it does not rewrite bookings or invoice snapshots. `check:migrations` verifies the columns, Director-only constraint and category index. Its legacy migration-31 probe uses `to_regclass` so direct PostgreSQL without an `auth` schema is valid; process `DATABASE_URL` overrides `.env.local` for isolated checks.
+
+Run `npm run seed:reference` after migration 36. Hamsanandi gets A1–A3 reserved and C1/C2 Director-only; the existing thirteen rooms retain their IDs. Bageshri keeps 201,202,203,204,206,302,303,305,306,307. The live configured database was read-only checked and matches those old lists. No B1–B10 renaming is inferred. A one-time `reference.room_classes.v36` setting prevents seed reruns from overwriting later console classifications. Six named-category rates are added without changing historical rates.
+
+The migration and seed were exercised twice on a disposable PostgreSQL database created from the pre-change schema. The shared database has **not** been migrated by this continuation.
+
+---
+
 **The schema is `scripts/init-postgres.sql`** - one file that builds the whole
 database on plain PostgreSQL 16+, consolidated from the 35 Supabase migrations
 with every Supabase-specific construct removed. `supabase/migrations/`,

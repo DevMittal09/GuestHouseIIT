@@ -98,7 +98,7 @@ describe("the nightly Missed sweep", () => {
     expect(await runMissedSweep()).toBe(0);
     const [room] = await freeRooms(b);
     await as(MANAGER);
-    expect(await allocateRooms(b.id, [room])).toEqual({ ok: true });
+    expect(await allocateRooms(b.id, [room], [], "I")).toEqual({ ok: true });
   });
 });
 

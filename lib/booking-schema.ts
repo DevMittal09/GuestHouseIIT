@@ -954,7 +954,8 @@ export function bookingPayloadSchema(
         instituteDate(v.check_out),
         config.role,
         context.requesterEmail,
-        rules.booking.max_stay_nights
+        rules.booking.max_stay_nights,
+        v.booking_type
       );
       if (message) ctx.addIssue({ code: "custom", message, path: ["check_out"] });
     })

@@ -38,7 +38,7 @@ begin;
 insert into public.guest_houses (id, name, total_rooms, serves_meals)
 values
   ('22222222-2222-2222-2222-222222222201', 'Bageshri',   10, false),
-  ('22222222-2222-2222-2222-222222222202', 'Hamsanandi', 13, true)
+  ('22222222-2222-2222-2222-222222222202', 'Hamsanandi', 16, true)
 on conflict (id) do nothing;
 
 -- ---- The rooms the office actually has (23 Sep 2026) ----
@@ -57,11 +57,57 @@ where not exists (
 
 insert into public.rooms (guest_house_id, room_number, room_type)
 select '22222222-2222-2222-2222-222222222202'::uuid, n, 'double_sharing'
-from unnest(array['A4','B1','B2','B3','B4','C1','C2','C3','C4','D1','D2','D3','D4']) as n
+from unnest(array[
+  'A1','A2','A3','A4',
+  'B1','B2','B3','B4',
+  'C1','C2','C3','C4',
+  'D1','D2','D3','D4'
+]) as n
 where not exists (
   select 1 from public.rooms
   where guest_house_id = '22222222-2222-2222-2222-222222222202'::uuid
 );
+
+-- ---- Hamsanandi: the whole sixteen, and which eleven are bookable ----
+-- The meeting of 9 Nov 2026 described the guest house as the office runs it:
+-- four blocks of four, rooms 1 and 2 on the ground floor and 3 and 4 above.
+-- Three of the sixteen are let to faculty for three years and two more are
+-- the Director's, which leaves **eleven** for an ordinary online booking.
+--
+-- A1-A3 were simply **absent** from the inventory until now (the office's list
+-- of 23 Sep 2026 gave Hamsanandi thirteen rooms, "only A4 exists in A"), which
+-- is the same eleven-plus-two arithmetic recorded by leaving the reserved rooms
+-- out. They are real rooms the office has to keep seeing, so they are created
+-- and marked `reserved` instead - `rooms_recount_total` then counts sixteen,
+-- and `generalInventory` (lib/rooms-access.ts) counts eleven.
+--
+-- Unlike the inserts above, these two statements are **keyed on the room
+-- number** and so apply to an inventory that already exists. They set the
+-- class only where it is still the default, so a class the office has since
+-- changed from the console is never overwritten.
+insert into public.rooms (guest_house_id, room_number, room_type, room_class, reservation_note)
+select '22222222-2222-2222-2222-222222222202'::uuid, n, 'double_sharing', 'reserved',
+       'Let to faculty for three years (meeting of 9 Nov 2026)'
+from unnest(array['A1','A2','A3']) as n
+where not exists (
+  select 1 from public.rooms
+  where guest_house_id = '22222222-2222-2222-2222-222222222202'::uuid
+    and room_number = n
+);
+
+do $$
+begin
+  if not exists (select 1 from public.app_settings where key = 'reference.room_classes.v36') then
+    update public.rooms set room_class = 'reserved',
+      reservation_note = coalesce(reservation_note, 'Faculty reservation for three years; dates await office confirmation')
+    where guest_house_id = '22222222-2222-2222-2222-222222222202'::uuid
+      and room_number in ('A1','A2','A3') and room_class = 'general';
+    update public.rooms set room_class = 'director_only'
+    where guest_house_id = '22222222-2222-2222-2222-222222222202'::uuid
+      and room_number in ('C1','C2') and room_class = 'general';
+    insert into public.app_settings (key, value) values ('reference.room_classes.v36', 'true');
+  end if;
+end $$;
 
 -- ---- The tariff sheet ----
 -- Effective-dated rows (migration 19). `resolveTariff` takes the most
@@ -128,6 +174,43 @@ where (s.gh is null or exists (select 1 from public.guest_houses g where g.id = 
       and t.booking_type is not distinct from s.booking_type
       and t.requester_role is not distinct from s.requester_role
       and t.effective_from = s.effective_from
+  );
+
+-- ---- The Category I / II / III sheet, now named rather than derived ----
+-- The three rows above each category in the block before this one scope the
+-- same figures by booking type and requester role - which is how a category
+-- was expressed until the meeting of 9 Nov 2026, when the office took the
+-- choice off the requester and gave it to the Guest House Manager. **Both are
+-- kept.** The derived rows price every booking made before that round and
+-- every booking the manager has not yet categorised; these name the category
+-- outright, and `resolveTariff` ranks a named category above every other
+-- qualifier, so a booking the manager puts in Category II is charged the
+-- Category II rate whoever raised it.
+--
+-- Scoped by guest house and category and nothing else, because that is what
+-- the office's table says: a category is a kind of guest, not a kind of
+-- account.
+insert into public.tariffs (guest_house_id, item, room_type, booking_type, requester_role, tariff_category, rate, effective_from, note)
+select s.gh, 'room', null, null, null, s.category, s.rate, date '2026-11-05', s.note
+from (
+  values
+    ('22222222-2222-2222-2222-222222222201'::uuid, 'I',   1000::numeric, 'Category I: guests and relatives of employees, parents of students on a personal visit'),
+    ('22222222-2222-2222-2222-222222222202',       'I',   1500,          'Category I: guests and relatives of employees, parents of students on a personal visit'),
+    ('22222222-2222-2222-2222-222222222201',       'II',  1500,          'Category II: institute guests on official duty - ministers, directors, BOG, selection committees, external examiners, official guests'),
+    ('22222222-2222-2222-2222-222222222202',       'II',  2000,          'Category II: institute guests on official duty - ministers, directors, BOG, selection committees, external examiners, official guests'),
+    ('22222222-2222-2222-2222-222222222201',       'III', 2000,          'Category III: academic visitors'),
+    ('22222222-2222-2222-2222-222222222202',       'III', 2500,          'Category III: academic visitors')
+) as s(gh, category, rate, note)
+where exists (select 1 from public.guest_houses g where g.id = s.gh)
+  and not exists (
+    select 1 from public.tariffs t
+    where t.guest_house_id is not distinct from s.gh
+      and t.item = 'room'
+      and t.room_type is null
+      and t.booking_type is null
+      and t.requester_role is null
+      and t.tariff_category = s.category
+      and t.effective_from = date '2026-11-05'
   );
 
 commit;

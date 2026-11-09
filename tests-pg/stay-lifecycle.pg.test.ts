@@ -24,7 +24,7 @@ async function approved(email: string, o: Parameters<typeof mustSubmitRoom>[1]):
   expect(b.status).toBe("PENDING_GH_MANAGER");
   const [room] = await freeRooms(b);
   await as(MANAGER);
-  expect(await allocateRooms(b.id, [room])).toEqual({ ok: true });
+  expect(await allocateRooms(b.id, [room], [], "I")).toEqual({ ok: true });
   return reload(b.id);
 }
 
@@ -94,6 +94,8 @@ describe("an official stay is billed after check-out", () => {
     await as(CARETAKER);
     expect(await updateBookingLifecycle(b.id, "OCCUPIED")).toEqual({ ok: true });
     expect(await updateBookingLifecycle(b.id, "VACATED")).toEqual({ ok: true });
+    expect((await issueInvoiceAction(b.id, null)).ok).toBe(false);
+    await as(MANAGER);
     const issued = await issueInvoiceAction(b.id, null);
     expect(issued.ok ? "ok" : issued.error).toBe("ok");
     const [inv] = await sql<{ status: string }>("select status from invoices where booking_id = $1", [b.id]);
@@ -127,21 +129,21 @@ describe("the desk moves a stay's dates", () => {
   });
 
   it("refuses an extension onto a room somebody else holds", async () => {
-    const first = await approved("iar@iitpkd.ac.in", { checkIn: `${day(40)}T12:00`, checkOut: `${day(41)}T10:00` });
+    const first = await approved("iar@iitpkd.ac.in", { checkIn: `${day(15)}T12:00`, checkOut: `${day(16)}T10:00` });
     const second = await mustSubmitRoom("director_iitpkd@iitpkd.ac.in", {
-      checkIn: `${day(42)}T12:00`,
-      checkOut: `${day(43)}T10:00`,
+      checkIn: `${day(17)}T12:00`,
+      checkOut: `${day(18)}T10:00`,
     });
     await as(MANAGER);
-    expect(await allocateRooms(second.id, first.assigned_room_ids)).toEqual({ ok: true });
-    expect((await extendStayAction(first.id, `${day(43)}T10:00`, "Staying on")).ok).toBe(false);
+    expect(await allocateRooms(second.id, first.assigned_room_ids, [], "I")).toEqual({ ok: true });
+    expect((await extendStayAction(first.id, `${day(18)}T10:00`, "Staying on")).ok).toBe(false);
     expect((await reload(first.id)).check_out).toBe(first.check_out);
   });
 });
 
 describe("cancellation", () => {
   it("a requester asks, the manager declines, the requester asks again, the manager approves", async () => {
-    const b = await approved("iar@iitpkd.ac.in", { checkIn: `${day(50)}T12:00`, checkOut: `${day(51)}T10:00` });
+    const b = await approved("iar@iitpkd.ac.in", { checkIn: `${day(25)}T12:00`, checkOut: `${day(26)}T10:00` });
     await as("iar@iitpkd.ac.in");
     expect((await cancelBooking(b.id, "")).ok).toBe(false);
     expect(await cancelBooking(b.id, "Visit postponed")).toEqual({ ok: true });
@@ -164,20 +166,20 @@ describe("cancellation", () => {
   });
 
   it("someone else cannot cancel your booking", async () => {
-    const b = await approved("iar@iitpkd.ac.in", { checkIn: `${day(54)}T12:00`, checkOut: `${day(55)}T10:00` });
+    const b = await approved("iar@iitpkd.ac.in", { checkIn: `${day(29)}T12:00`, checkOut: `${day(30)}T10:00` });
     await as("faculty.cse@iitpkd.ac.in");
     expect((await cancelBooking(b.id, "Not mine")).ok).toBe(false);
   });
 
   it("a pending request cancelled by its requester also waits for the manager", async () => {
-    const b = await mustSubmitRoom("faculty.cse@iitpkd.ac.in", { checkIn: `${day(56)}T12:00`, checkOut: `${day(57)}T10:00` });
+    const b = await mustSubmitRoom("faculty.cse@iitpkd.ac.in", { checkIn: `${day(21)}T12:00`, checkOut: `${day(22)}T10:00` });
     await as("faculty.cse@iitpkd.ac.in");
     expect(await cancelBooking(b.id, "Changed plans")).toEqual({ ok: true });
     expect((await reload(b.id)).status).toBe("CANCELLATION_REQUESTED");
   });
 
   it("the manager cancels outright, and the room is free again", async () => {
-    const b = await approved("director_iitpkd@iitpkd.ac.in", { checkIn: `${day(58)}T12:00`, checkOut: `${day(59)}T10:00` });
+    const b = await approved("director_iitpkd@iitpkd.ac.in", { checkIn: `${day(23)}T12:00`, checkOut: `${day(24)}T10:00` });
     await as(MANAGER);
     expect(await managerCancelBooking(b.id, "Guest house closed for repairs")).toEqual({ ok: true });
     const after = await reload(b.id);

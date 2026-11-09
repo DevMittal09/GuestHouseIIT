@@ -152,11 +152,17 @@ export function BookingAvailability({
 
   const today = toDateInputValue(new Date());
   const showsToday = range?.days.includes(today) ?? false;
-  // From the counts, which the server computes for everybody - so the line
-  // above the panel reads the same arithmetic whether the rooms came with it.
-  const roomCount = detailed ? rooms.length : counts.total;
   const period = view === "day" ? "day" : view;
-  const hasRooms = roomCount > 0;
+  /**
+   * Whether there is anything to draw.
+   *
+   * It was `rooms.length` for the desk and `counts.total` for everyone else -
+   * and from 9 Nov 2026 a requester is sent **no total at all** (the office:
+   * do not publish the inventory), so reading it would have made every
+   * requester's panel say "This guest house has no active rooms". The honest
+   * signal for a requester is that the server bucketed the window at all.
+   */
+  const hasRooms = detailed ? rooms.length > 0 : counts.days.length > 0;
 
   if (!guestHouseId || !date) {
     return (

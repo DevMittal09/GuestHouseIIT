@@ -69,6 +69,9 @@ async function seedGuestHouses(c: Client): Promise<void> {
         [gh.id, `${prefix}-10${n}`]
       );
     }
+    for (const [i, category] of ["I", "II", "III"].entries()) {
+      await c.query("insert into tariffs (guest_house_id, item, tariff_category, rate, effective_from) values ($1, 'room', $2, $3, '2026-01-01')", [gh.id, category, (meals ? 1500 : 1000) + i * 500]);
+    }
     const rates: [string, string | null, number][] = [
       ["room", "double_sharing", meals ? 1500 : 1000],
       ["extra_bed", "double_sharing", 300],

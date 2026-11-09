@@ -97,6 +97,7 @@ function TariffsSection({
       item: t.item,
       guest_house_id: t.guest_house_id ?? "",
       room_type: t.room_type ?? "",
+      tariff_category: t.tariff_category ?? "",
       booking_type: t.booking_type ?? "",
       requester_role: t.requester_role ?? "",
       rate: "",
@@ -218,6 +219,7 @@ export function blankTariffDraft(earliest: string): TariffDraft {
     item: "room",
     guest_house_id: "",
     room_type: "",
+    tariff_category: "",
     booking_type: "",
     requester_role: "",
     rate: "",
@@ -230,6 +232,7 @@ type TariffDraft = {
   item: TariffItem;
   guest_house_id: string;
   room_type: string;
+  tariff_category: string;
   booking_type: string;
   requester_role: string;
   rate: string;
@@ -317,6 +320,13 @@ function NewTariffForm({
             ))}
           </NativeSelect>
         </Field>
+        <div className="space-y-1">
+          <Label htmlFor="t-category">Tariff category</Label>
+          <NativeSelect id="t-category" value={draft.tariff_category} onChange={set("tariff_category")}>
+            <option value="">Uncategorised / meals</option>
+            {["I", "II", "III"].map((c) => <option key={c} value={c}>Category {c}</option>)}
+          </NativeSelect>
+        </div>
         <Field label="Requester" id="t-role">
           <NativeSelect id="t-role" value={draft.requester_role} onChange={set("requester_role")}>
             <option value="">Any</option>
@@ -360,6 +370,7 @@ function NewTariffForm({
                   item: draft.item,
                   guest_house_id: draft.guest_house_id || null,
                   room_type: roomish ? draft.room_type || null : null,
+                  tariff_category: draft.tariff_category || null,
                   booking_type: draft.booking_type || null,
                   requester_role: draft.requester_role || null,
                   rate: draft.rate,

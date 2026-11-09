@@ -1,5 +1,13 @@
 # UI design — the public website and the portal restyle
 
+## Meeting decisions implemented, 9 November 2026
+
+The booking sidebar now presents Category I/II/III rates for both guest houses and catering timings, without tariff-selection controls or an assumed room quote. Other applicable charges remain informational. The Guidelines page has inline Dos and Don'ts and a detailed-guidelines button whose HTTPS URL comes from Portal Settings. Existing website navigation still leads to the portal's Guidelines page.
+
+Requester availability contains counts only, with no room list, booking segments, occupied count or denominator. It filters reserved/direct-only rooms and unauthorised VIP rooms before applying the display cap. Desk views retain the full active inventory; faculty reservations appear blocked rather than free. The cap currently applies per queried guest house; whether the meeting intended a shared cap remains an office question.
+
+---
+
 Read this before changing anything visual, adding a public page, or touching
 the sign-in pages.
 

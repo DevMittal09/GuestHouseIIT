@@ -13,6 +13,7 @@ import { canBookOnBehalf } from "@/lib/access";
 import { REQUESTER_ROLES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/types";
 import { firstBookableMealDate } from "@/lib/meals";
 import { bookingTypesFor, serviceTypesFor } from "@/lib/booking-types";
+import { tariffCategorySheet } from "@/lib/tariff-category";
 import { tariffPreviews } from "@/lib/tariffs";
 import { academicRecordFor } from "@/lib/academic";
 import { guestNameRule } from "@/lib/academic/guest-names";
@@ -111,9 +112,14 @@ export async function BookingRequestPage({
   ]);
   const guestNames = guestNameRule(
     lookup.status === "found" ? lookup.record : null,
-    config.relationship_options
+    config.relationship_options,
+    requester
   );
-  const guestHouses = (await getStore().listGuestHouses()).filter((g) =>
+  // Every guest house the office has, and the subset this requester's form
+  // may offer. The published tariff names all of them; the form offers only
+  // what the Form Builder allows.
+  const allGuestHouses = await getStore().listGuestHouses();
+  const guestHouses = allGuestHouses.filter((g) =>
     config.allowed_guest_house_ids.includes(g.id)
   );
   // Booking as Faculty Advisor, Copy to starts with the council secretary's
@@ -149,6 +155,22 @@ export async function BookingRequestPage({
     // A dining booking is quoted the meals and nothing else: there is no room
     // on it to charge a room rate or an extra bed for (9 Oct 2026).
     mealsOnly ? "meals_only" : "room"
+  );
+  /**
+   * The office's Category I / II / III sheet - one row per category, the room
+   * rate per guest house, priced from the same rows the invoice resolves
+   * (9 Nov 2026, requirement 5.2). It is **information**: the requester is
+   * shown what the office charges and the Guest House Manager decides which
+   * category a stay falls in, when they allot its rooms.
+   *
+   * Every guest house the office has, not only the ones this requester may
+   * book: it is the published tariff, and a student who may only book
+   * Bageshri is still being told what the office charges.
+   */
+  const tariffSheet = tariffCategorySheet(
+    context.tariffs,
+    allGuestHouses,
+    toInstituteDateValue(new Date())
   );
 
   return (
@@ -213,6 +235,7 @@ export async function BookingRequestPage({
         hodApprovers={context.hodApprovers}
         defaultCopyTo={defaultCopyTo}
         tariffPreviews={rates}
+        tariffSheet={tariffSheet}
         guestNames={guestNames}
         aside={
           /* Who is asking, from the academic database. Read-only, so it is

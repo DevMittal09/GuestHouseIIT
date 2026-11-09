@@ -236,7 +236,7 @@ const RECORDS: AcademicRecord[] = [
     kind: "warden",
     name: "Dr. Lakshmi Devi",
     phone: "+91 90000 00604",
-    email: "warden.saveriboys@iitpkd.ac.in",
+    email: "muhamed.rizwan2222@gmail.com",
     hostel: "Saveri Boys",
   },
   {
@@ -250,7 +250,7 @@ const RECORDS: AcademicRecord[] = [
     kind: "warden",
     name: "Ms. Anu George",
     phone: "+91 90000 00606",
-    email: "awarden.saveriboys@iitpkd.ac.in",
+    email: "student.iitpkd01@gmail.com",
     hostel: "Saveri Boys",
   },
   {

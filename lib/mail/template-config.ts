@@ -132,6 +132,10 @@ export const MAIL_EVENT_NOTES: Record<MailEventKey, { audience: string; when: st
     audience: "The person who made the booking",
     when: "When the manager approves or declines a request to stay longer.",
   },
+  "booking.stay_shortened.requester": {
+    audience: "The person who made the booking",
+    when: "When the manager approves fewer days than were requested, or shortens a stay afterwards.",
+  },
   "booking.no_show.requester": {
     audience: "The person who made the booking",
     when: "When a stay is released because the guest did not arrive - by the manager or automatically.",

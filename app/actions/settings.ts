@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidateEverything } from "@/lib/revalidate";
-import { canUseConsoleSection } from "@/lib/access";
+import { CONSOLE_SECTIONS, canUseConsoleSection, type ConsoleSection } from "@/lib/access";
 import { isAdminUnlocked } from "@/lib/admin-lock";
 import { recordAudit } from "@/lib/audit-server";
 import { requireUser, stepUpProblem } from "@/lib/auth";
@@ -44,10 +44,19 @@ import type { ActionResult } from "./bookings";
  * its own section and its own action (`app/actions/workflow.ts`).
  */
 async function requireConsoleFor(group: RuleGroup): Promise<Profile> {
-  if (group !== "invoice") return requireSettingsConsole();
+  // Two groups are the **manager's**, not the developer's, and each has a
+  // console section of its own: the invoice rules (Tariffs & Invoicing) and,
+  // since 9 Nov 2026, the portal settings (VIP rooms, what a requester is
+  // shown, the guidelines link). Everything else is the developer's Settings
+  // page.
+  const section: ConsoleSection | null =
+    group === "invoice" ? "billing" : group === "portal" ? "portal" : null;
+  if (section === null) return requireSettingsConsole();
   const user = await requireUser();
-  if (!canUseConsoleSection(user.role, "billing")) {
-    throw new Error("Only the Guest House Manager or a developer can change invoice settings");
+  if (!canUseConsoleSection(user.role, section)) {
+    throw new Error(
+      `Only the Guest House Manager or a developer can change ${CONSOLE_SECTIONS[section].label}`
+    );
   }
   if (!(await isAdminUnlocked())) {
     throw new Error("The console is locked - enter the console password again");

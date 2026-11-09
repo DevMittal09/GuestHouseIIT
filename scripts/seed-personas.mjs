@@ -98,12 +98,12 @@ export const PROFILES = [
   { key: "warden-malhar", email: "warden.malharboys@iitpkd.ac.in", full_name: "Dr. Suresh Kumar", role: "warden", unit: null },
   { key: "dwarden-malhar", email: "dwarden.malharboys@iitpkd.ac.in", full_name: "Dr. Geetha Menon", role: "deputy_warden", unit: null },
   { key: "awarden-malhar", email: "awarden.malharboys@iitpkd.ac.in", full_name: "Mr. Sajeev Thomas", role: "assistant_warden", unit: null },
-  { key: "warden-saveri", email: "warden.saveriboys@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi", role: "warden", unit: null },
+  { key: "warden-saveri", email: "muhamed.rizwan2222@gmail.com", full_name: "Dr. Lakshmi Devi", role: "warden", unit: null },
   { key: "dwarden-saveri", email: "dwarden.saveriboys@iitpkd.ac.in", full_name: "Dr. Vinod Raj", role: "deputy_warden", unit: null },
-  { key: "awarden-saveri", email: "awarden.saveriboys@iitpkd.ac.in", full_name: "Ms. Anu George", role: "assistant_warden", unit: null },
+  { key: "awarden-saveri", email: "student.iitpkd01@gmail.com", full_name: "Ms. Anu George", role: "assistant_warden", unit: null },
   { key: "warden-tilang", email: "warden.tilangagirls@iitpkd.ac.in", full_name: "Dr. Shalini Rao", role: "warden", unit: null },
 
-  { key: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager", unit: null },
+  { key: "gh-manager", email: "muhamed.rizwan2458@gmail.com", full_name: "Guest House Manager", role: "gh_manager", unit: null },
   { key: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker", unit: null },
   { key: "developer", email: "developer@iitpkd.ac.in", full_name: "Portal Developer", role: "developer", unit: null },
 ];
@@ -112,7 +112,7 @@ export const STUDENTS = [
   { email: "btech.saveri@smail.iitpkd.ac.in", batch_year: "2023", roll_number: "112301007", full_name: "Arjun Pillai", programme: "B.Tech", department: "Computer Science and Engineering", hostel: "Saveri Boys", father_name: "Mohanan Pillai", father_phone_number: "+91 90000 00201", mother_name: "Radhika Pillai", mother_phone_number: "+91 90000 00202", guardian_name: null, guardian_phone_number: null },
   { email: "phd.malhar@smail.iitpkd.ac.in", batch_year: "2021", roll_number: "202104003", full_name: "Nikhil Varma", programme: "PhD", department: "Chemistry", hostel: "Malhar Boys", father_name: "Sudhakara Varma", father_phone_number: "+91 90000 00203", mother_name: null, mother_phone_number: null, guardian_name: null, guardian_phone_number: null },
   { email: "ms.tilang@smail.iitpkd.ac.in", batch_year: "2023", roll_number: "142303011", full_name: "Fathima Rasheed", programme: "MS", department: "Data Science and Engineering", hostel: "Tilang A Girls", father_name: null, father_phone_number: null, mother_name: null, mother_phone_number: null, guardian_name: "Abdul Rasheed", guardian_phone_number: "+91 90000 00204" },
-  { email: "dayscholar@smail.iitpkd.ac.in", batch_year: "2023", roll_number: "122303099", full_name: "Devika Iyer", programme: "B.Tech", department: "Mechanical Engineering", hostel: null, father_name: "Krishnan Iyer", father_phone_number: null, mother_name: "Sudha Iyer", mother_phone_number: null, guardian_name: null, guardian_phone_number: null },
+  { email: "dayscholar@smail.iitpkd.ac.in", batch_year: "2023", roll_number: "122301099", full_name: "Devika Iyer", programme: "B.Tech", department: "Mechanical Engineering", hostel: null, father_name: "Krishnan Iyer", father_phone_number: null, mother_name: "Sudha Iyer", mother_phone_number: null, guardian_name: null, guardian_phone_number: null },
   { email: "secretary.arts@smail.iitpkd.ac.in", batch_year: "2023", roll_number: "112301045", full_name: "Meera Nair", programme: "B.Tech", department: "Computer Science and Engineering", hostel: "Malhar Girls", father_name: "Rajan Nair", father_phone_number: null, mother_name: "Bindu Nair", mother_phone_number: null, guardian_name: null, guardian_phone_number: null },
 ];
 
@@ -141,9 +141,9 @@ export const WARDENS = [
   { warden_email: "warden.malharboys@iitpkd.ac.in", full_name: "Dr. Suresh Kumar", warden_phone: "9876543250", warden_role: "Warden", hostel_id: "HOS2" },
   { warden_email: "dwarden.malharboys@iitpkd.ac.in", full_name: "Dr. Geetha Menon", warden_phone: "9876543251", warden_role: "Deputy Warden", hostel_id: "HOS2" },
   { warden_email: "awarden.malharboys@iitpkd.ac.in", full_name: "Mr. Sajeev Thomas", warden_phone: "9876543252", warden_role: "Assistant Warden", hostel_id: "HOS2" },
-  { warden_email: "warden.saveriboys@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi", warden_phone: "9876543253", warden_role: "Warden", hostel_id: "HOS3" },
+  { warden_email: "muhamed.rizwan2222@gmail.com", full_name: "Dr. Lakshmi Devi", warden_phone: "9876543253", warden_role: "Warden", hostel_id: "HOS3" },
   { warden_email: "dwarden.saveriboys@iitpkd.ac.in", full_name: "Dr. Vinod Raj", warden_phone: "9876543254", warden_role: "Deputy Warden", hostel_id: "HOS3" },
-  { warden_email: "awarden.saveriboys@iitpkd.ac.in", full_name: "Ms. Anu George", warden_phone: "9876543255", warden_role: "Assistant Warden", hostel_id: "HOS3" },
+  { warden_email: "student.iitpkd01@gmail.com", full_name: "Ms. Anu George", warden_phone: "9876543255", warden_role: "Assistant Warden", hostel_id: "HOS3" },
   { warden_email: "warden.tilangagirls@iitpkd.ac.in", full_name: "Dr. Shalini Rao", warden_phone: "9876543256", warden_role: "Warden", hostel_id: "HOS5" },
 ];
 

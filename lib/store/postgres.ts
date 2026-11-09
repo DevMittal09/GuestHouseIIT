@@ -9,6 +9,7 @@ import type {
   Profile,
   Role,
   Room,
+  RoomClass,
   RoomOccupancySegment,
   RoomType,
 } from "@/lib/types";
@@ -424,7 +425,18 @@ export class PostgresStore implements DataStore {
     return rooms.length;
   }
 
-  async updateRoom(id: string, patch: { is_active?: boolean; room_number?: string; room_type?: RoomType }): Promise<void> {
+  async updateRoom(
+    id: string,
+    patch: {
+      is_active?: boolean;
+      room_number?: string;
+      room_type?: RoomType;
+      /** Migration 36: who the room may be allotted to. */
+      room_class?: RoomClass;
+      reservation_note?: string | null;
+      reserved_until?: string | null;
+    }
+  ): Promise<void> {
     const entries = Object.entries(patch).filter(([, v]) => v !== undefined);
     if (entries.length === 0) return;
     const sets = entries.map(([col], i) => `${col} = $${i + 2}`);
@@ -840,6 +852,9 @@ export class PostgresStore implements DataStore {
       if (update.no_show_released_at !== undefined) {
         sets.push(`no_show_released_at = $${pi}`); vals.push(update.no_show_released_at); pi++;
       }
+      if (update.tariff_category !== undefined) {
+        sets.push(`tariff_category = $${pi}`); vals.push(update.tariff_category); pi++;
+      }
       await client.query(`UPDATE bookings SET ${sets.join(", ")} WHERE id = $1`, vals);
 
       if (!ROOM_HOLDING_STATUSES.includes(update.status)) {
@@ -934,6 +949,13 @@ export class PostgresStore implements DataStore {
       if (patch.meals !== undefined) { sets.push(`meals = $${pi}`); vals.push(JSON.stringify(patch.meals)); pi++; }
       if (patch.meal_preference !== undefined) { sets.push(`meal_preference = $${pi}`); vals.push(patch.meal_preference); pi++; }
       if (patch.meal_diet_counts !== undefined) { sets.push(`meal_diet_counts = $${pi}`); vals.push(JSON.stringify(patch.meal_diet_counts)); pi++; }
+      // Migration 36. The category the manager put the booking in, and
+      // what the requester originally asked for where the desk has since
+      // changed it - written once, by the action that decides it is the
+      // first change.
+      if (patch.tariff_category !== undefined) { sets.push(`tariff_category = $${pi}`); vals.push(patch.tariff_category); pi++; }
+      if (patch.original_check_in !== undefined) { sets.push(`original_check_in = $${pi}`); vals.push(patch.original_check_in); pi++; }
+      if (patch.original_check_out !== undefined) { sets.push(`original_check_out = $${pi}`); vals.push(patch.original_check_out); pi++; }
 
       if (patch.extension_request !== undefined) {
         sets.push(`extension_requested_until = $${pi}`); vals.push(patch.extension_request?.until ?? null); pi++;
@@ -2208,9 +2230,11 @@ export class PostgresStore implements DataStore {
 
   async settleEmail(id: string, result: EmailSettlement): Promise<void> {
     if (result.ok) {
+      // `note` records a row that was settled without being delivered - a
+      // recipient ruled out by MAIL_ALLOWED_RECIPIENTS. Not an error.
       await this.pool.query(
-        "UPDATE email_outbox SET status = 'SENT', sent_at = $2, last_error = NULL WHERE id = $1",
-        [id, new Date().toISOString()]
+        "UPDATE email_outbox SET status = 'SENT', sent_at = $2, last_error = $3 WHERE id = $1",
+        [id, new Date().toISOString(), result.note ?? null]
       );
     } else {
       const status = result.retryAt ? "QUEUED" : "FAILED";

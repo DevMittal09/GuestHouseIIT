@@ -121,6 +121,76 @@ export function moveCheckInError(
   return null;
 }
 
+/**
+ * **The desk shortens an approved stay** (9 Nov 2026, the meeting).
+ *
+ * The office's example, in their words: "user requests 10 days, GHM decides
+ * to approve only 3 days, GHM can modify the approved duration to 3 days".
+ * Until this round the only move allowed on a check-out was **later**
+ * (`extensionError`: "the new check-out must be later than the current
+ * one"), so a manager who wanted to grant three nights of a ten-night request
+ * had to reject it and ask for it again - which loses the request's place in
+ * the queue and its approval trail.
+ *
+ * This is the mirror of what was done for the **check-in** on 1 Oct 2026,
+ * and the same shape: one rule, applied by the form and by the action, which
+ * says why rather than silently refusing.
+ *
+ * What it will not do:
+ *
+ * - leave **no stay at all**: the new check-out has to be after the check-in,
+ *   and a stay cut to nothing is a cancellation, which is its own action with
+ *   its own notification;
+ * - touch a **dining** booking, which has no stay;
+ * - touch anything but an approved or current one - a request still waiting
+ *   is shortened by the manager allotting the dates they are granting;
+ * - move it by more than 60 days at a time, like every other date move here.
+ *
+ * **Meals already booked** are checked by the action, not here: that needs
+ * the serving windows, which are a Setting.
+ */
+export function shortenStayError(
+  booking: Pick<BookingWithDetails, "status" | "check_in" | "check_out" | "service_type">,
+  to: string
+): string | null {
+  if (booking.service_type === "meals_only") return "A dining booking has no stay to shorten";
+  if (!["APPROVED", "OCCUPIED"].includes(booking.status)) {
+    return "Only an approved or current stay can be shortened";
+  }
+  const t = Date.parse(to);
+  if (!Number.isFinite(t)) return "Choose the new check-out date and time";
+  const current = Date.parse(booking.check_out);
+  if (t === current) return "That is the check-out the stay already has";
+  if (t > current) return "That is later than the current check-out - use Extend the stay instead";
+  if (t <= Date.parse(booking.check_in)) {
+    return "The new check-out must be after the check-in. To call the stay off altogether, cancel it.";
+  }
+  if (current - t > 60 * 86_400_000) return "Shorten the stay by at most 60 days at a time";
+  return null;
+}
+
+/**
+ * **What the requester originally asked for, written once** (9 Nov 2026, the
+ * meeting: "record the originally requested dates and duration; record the
+ * modified approved dates and duration").
+ *
+ * Returns the patch to merge into any date change, or `{}` when the booking
+ * already carries its original dates. Written once and never again, so the
+ * record is **the request as submitted** rather than the last of a chain of
+ * desk edits - which is the only version that answers "what did they ask
+ * for?" after a stay has been moved twice.
+ *
+ * Both columns are written together even when only one date is moving: the
+ * pair is what a duration is, and a half-filled record would read as the
+ * other date never having changed.
+ */
+export function originalDatesPatch(
+  booking: Pick<BookingWithDetails, "check_in" | "check_out" | "original_check_in" | "original_check_out">
+): { original_check_in?: string; original_check_out?: string } {
+  if (booking.original_check_in || booking.original_check_out) return {};
+  return { original_check_in: booking.check_in, original_check_out: booking.check_out };
+}
+
 // ------------------------------------------------------------- no-shows
 
 /** Whether the desk recorded the guest arriving. */

@@ -523,21 +523,24 @@ function CapacitySection({ current }: { current: Rules["capacity"] }) {
 function BookingWindowSection({ current }: { current: Rules["booking"] }) {
   const initial = () => ({
     advance_booking_months: String(current.advance_booking_months),
+    cancellation_notice_hours: String(current.cancellation_notice_hours),
     max_stay_nights: String(current.max_stay_nights),
     buffer_minutes: String(current.buffer_minutes),
     no_show_release_hours: String(current.no_show_release_hours),
   });
   const [raw, setRaw] = useState(initial);
   const months = toInt(raw.advance_booking_months);
+  const notice = toInt(raw.cancellation_notice_hours);
   const nights = toInt(raw.max_stay_nights);
   const buffer = toInt(raw.buffer_minutes);
   const noShow = toInt(raw.no_show_release_hours);
   const parsed =
-    months === null || nights === null || buffer === null || noShow === null
+    months === null || notice === null || nights === null || buffer === null || noShow === null
       ? null
       : {
           ...current,
           advance_booking_months: months,
+          cancellation_notice_hours: notice,
           max_stay_nights: nights,
           buffer_minutes: buffer,
           no_show_release_hours: noShow,
@@ -556,6 +559,15 @@ function BookingWindowSection({ current }: { current: Rules["booking"] }) {
           min={1}
           max={24}
           onChange={(v) => setRaw({ ...raw, advance_booking_months: v })}
+        />
+        <NumberField
+          id="booking-cancellation-notice"
+          label="Cancellation notice (hours)"
+          value={raw.cancellation_notice_hours}
+          min={0}
+          max={168}
+          hint="How long before check-in a requester may still cancel from the portal, so a released room can be offered to somebody waiting. 0 turns it off; the Guest House Manager can cancel at any time."
+          onChange={(v) => setRaw({ ...raw, cancellation_notice_hours: v })}
         />
         <NumberField
           id="booking-nights"
@@ -604,7 +616,7 @@ function MealWindowsSection({ current }: { current: Rules["meals"] }) {
   // other number in this console.
   const [diners, setDiners] = useState(String(current.max_diners_per_meal));
   const dinersValid = /^\d+$/.test(diners.trim()) && Number(diners) <= 1000;
-  const draft = { windows, max_diners_per_meal: dinersValid ? Number(diners) : 0 };
+  const draft = { revision: current.revision, windows, max_diners_per_meal: dinersValid ? Number(diners) : 0 };
 
   return (
     <SettingCard

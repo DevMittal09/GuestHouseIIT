@@ -34,8 +34,8 @@ import { dispatchOutbox, drainOutbox } from "@/lib/mail/dispatch";
 import { queueMessages } from "@/lib/mail/notify";
 import type { MailStatus } from "@/lib/mail/types";
 import { getStore } from "@/lib/store";
-import type { AccountStatus, BookingStatus, Profile, Role, RoomType } from "@/lib/types";
-import { ACCOUNT_STATUS_LABELS, REQUESTER_ROLES, ROLE_LABELS } from "@/lib/types";
+import type { AccountStatus, BookingStatus, Profile, Role, RoomClass, RoomType } from "@/lib/types";
+import { ACCOUNT_STATUS_LABELS, REQUESTER_ROLES, ROLE_LABELS, ROOM_CLASSES } from "@/lib/types";
 import { occupancyNotStartedError } from "@/lib/workflow";
 import {
   assignableRoles,
@@ -324,6 +324,51 @@ export async function setRoomActiveAction(id: string, isActive: boolean): Promis
   try {
     await requireConsole("guest_houses");
     await getStore().updateRoom(id, { is_active: isActive });
+    return done();
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * **Which rooms are VIP, and which are reserved off-portal** (9 Nov 2026, the
+ * meeting: "the GHM should have a settings interface to change which rooms are
+ * designated as VIP"; Hamsanandi A1-A3 are let to faculty for three years).
+ *
+ * Set on the room because it is a property of the room, beside the room it
+ * describes - the same reasoning that keeps "serves meals" on the guest
+ * house. **Who** may be allotted a VIP room is Portal Settings; this is
+ * **which** rooms those are.
+ *
+ * The note and the end date are cleared when the class leaves `reserved`, so
+ * a room put back into the general inventory does not keep reading as let to
+ * somebody. Audited, because it decides who can be given a room.
+ */
+export async function setRoomClassAction(
+  id: string,
+  roomClass: RoomClass,
+  reservationNote: string | null,
+  reservedUntil: string | null
+): Promise<ActionResult> {
+  try {
+    const user = await requireConsole("guest_houses");
+    if (!ROOM_CLASSES.includes(roomClass)) return { ok: false, error: "Unknown room class" };
+    const reserved = roomClass === "reserved";
+    const note = reserved ? (reservationNote?.trim() || null) : null;
+    const until = reserved && reservedUntil?.trim() ? reservedUntil.trim() : null;
+    if (until !== null && !/^\d{4}-\d{2}-\d{2}$/.test(until)) {
+      return { ok: false, error: "The date the reservation runs to must be a date" };
+    }
+    await getStore().updateRoom(id, {
+      room_class: roomClass,
+      reservation_note: note,
+      reserved_until: until,
+    });
+    await recordAudit(user, "settings.changed", `room.class:${id}`, {
+      room_class: roomClass,
+      reservation_note: note,
+      reserved_until: until,
+    });
     return done();
   } catch (e) {
     return fail(e);
@@ -868,6 +913,12 @@ export async function listMailOutbox(
        * it is a deployment setting, not a bug in the addressing.
        */
       redirectAllTo: string | null;
+      /**
+       * `MAIL_ALLOWED_RECIPIENTS`, parsed. Reported for the same reason as the
+       * redirect: it is invisible from everywhere else and decides who
+       * actually receives mail. `null` means no restriction.
+       */
+      allowedRecipients: string[] | null;
     }
   | { ok: false; error: string }
 > {
@@ -883,6 +934,7 @@ export async function listMailOutbox(
       counts,
       transport: mailConfig().transport,
       redirectAllTo: mailConfig().redirectAllTo,
+      allowedRecipients: mailConfig().allowedRecipients,
       rows: rows.map((row) => ({
         id: row.id,
         booking_id: row.booking_id,
@@ -983,11 +1035,19 @@ export async function sendTestEmail(): Promise<ActionResult> {
                 ["From", config.from],
                 ["Reply-To", config.replyTo],
                 ["Redirecting all mail to", config.redirectAllTo ?? "(not set - real recipients)"],
+                [
+                  "Allowed recipients",
+                  config.allowedRecipients === null
+                    ? "(not set - every address)"
+                    : config.allowedRecipients.length > 0
+                      ? config.allowedRecipients.join(", ")
+                      : "(empty list - no address at all)",
+                ],
                 ["Portal base URL", config.baseUrl],
                 ["Requested by", `${dev.full_name} <${dev.email}>`],
               ],
             },
-            ...(config.redirectAllTo
+            ...(config.redirectAllTo || config.allowedRecipients !== null
               ? []
               : [
                   {

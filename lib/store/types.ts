@@ -11,8 +11,10 @@ import type {
   NewBookingInput,
   Profile,
   Room,
+  RoomClass,
   RoomOccupancySegment,
   RoomType,
+  TariffCategoryName,
 } from "@/lib/types";
 import type { BookingSearchCriteria, BookingSearchResult } from "@/lib/booking-search";
 import type { RoleFormConfig } from "@/lib/form-config";
@@ -103,6 +105,13 @@ export interface StatusUpdate {
   override_by?: string | null;
   /** Mark the stay released as a no-show (migration 20). */
   no_show_released_at?: string | null;
+  /**
+   * The office's tariff category, set by the Guest House Manager when they
+   * allot rooms (migration 36). Absent leaves whatever the booking has, so
+   * re-allotting a room does not un-price a booking already categorised;
+   * `null` clears it.
+   */
+  tariff_category?: TariffCategoryName | null;
 }
 
 /**
@@ -111,10 +120,35 @@ export interface StatusUpdate {
  * Moving the dates moves the room holds with them, and the exclusion
  * constraint decides whether that is allowed - so a stay cannot be extended
  * over a room someone else already has.
+ *
+ * **`booking_type` is deliberately not on this list** (9 Nov 2026, the
+ * meeting: "the GHM must not be allowed to directly change a booking type
+ * from Personal to Official or vice versa... the GHM must reject the request
+ * [and] the user must submit a fresh booking request with the correct booking
+ * type"). It is written once, by `createBooking`, and no action or store
+ * method writes it again - which is the strongest form the rule can take,
+ * because there is nothing to enforce.
+ *
+ * The reason the office gives it that weight: the booking type decides the
+ * **approval route** the request took, which **budget** it may be charged to
+ * and **how it is settled** - a personal stay is paid before the guest
+ * leaves, an official one is billed to a department. Flipping it afterwards
+ * would leave a request approved by people who never saw it as what it has
+ * become. `tests/fifteenth-round.test.ts` keeps this true.
  */
 export interface BookingDetailsPatch {
   check_in?: string;
   check_out?: string;
+  /**
+   * What the requester originally asked for (migration 36). Set by the action
+   * the first time the desk moves the dates and never again - the store
+   * writes whatever it is handed, and `updateBookingStay` is the one place
+   * that decides whether to hand it anything.
+   */
+  original_check_in?: string;
+  original_check_out?: string;
+  /** The category the Guest House Manager put the booking in, or null to clear it. */
+  tariff_category?: TariffCategoryName | null;
   purpose_of_visit?: string;
   meals?: MealPlan;
   meal_preference?: MealPreference | null;
@@ -272,7 +306,18 @@ export interface DataStore {
   /** All rooms of a guest house, including inactive ones (admin view). */
   listAllRooms(guestHouseId: string): Promise<Room[]>;
   createRoom(guestHouseId: string, roomNumber: string, roomType: RoomType): Promise<Room>;
-  updateRoom(id: string, patch: { is_active?: boolean; room_number?: string; room_type?: RoomType }): Promise<void>;
+  updateRoom(
+    id: string,
+    patch: {
+      is_active?: boolean;
+      room_number?: string;
+      room_type?: RoomType;
+      /** Migration 36: who the room may be allotted to. */
+      room_class?: RoomClass;
+      reservation_note?: string | null;
+      reserved_until?: string | null;
+    }
+  ): Promise<void>;
   /** Throws if the room is assigned to any booking. */
   deleteRoom(id: string): Promise<void>;
 

@@ -1,3 +1,9 @@
+import {
+  SPOUSE_RELATIONSHIP,
+  SPOUSE_SCHOLARS_ONLY,
+  spouseBookingError,
+} from "../student-programme";
+import type { Profile } from "../types";
 import type { AcademicRecord, StudentRecord } from "./types";
 
 /**
@@ -62,12 +68,31 @@ export type GuestNameRule = {
   locked: Record<string, string>;
   /**
    * Relationships the form must not offer, because the record rules them
-   * out - a parent it does not name, or a guardian where it names a parent.
+   * out - a parent it does not name, a guardian where it names a parent, or
+   * (9 Nov 2026) a spouse on a taught programme.
    */
   withheld: string[];
+  /**
+   * Why each entry of `withheld` is withheld, keyed as `withheld` spells it:
+   * `short` for the greyed-out option on the form, `message` for the error.
+   *
+   * Two wordings because the two places can take different lengths - a
+   * dropdown option has a line, an error has a sentence - and because the
+   * reasons genuinely read differently: a parent the record does not name is
+   * a gap the office can fill, a spouse on a taught programme is a rule that
+   * will not change. A relationship with **no** entry here is one that is not
+   * offered at all, and `withheldRelationshipError` words it from the
+   * relationship's own name.
+   */
+  withheldReasons: Record<string, { short: string; message: string }>;
 };
 
-export const NO_GUEST_NAME_RULE: GuestNameRule = { fromRecord: false, locked: {}, withheld: [] };
+export const NO_GUEST_NAME_RULE: GuestNameRule = {
+  fromRecord: false,
+  locked: {},
+  withheld: [],
+  withheldReasons: {},
+};
 
 const key = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -81,9 +106,32 @@ const key = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
  */
 export function guestNameRule(
   record: AcademicRecord | null | undefined,
-  options: readonly string[]
+  options: readonly string[],
+  /**
+   * Who is booking, for the rules that do not come from the record.
+   *
+   * Today that is the **spouse rule** (9 Nov 2026): a regular B.Tech or
+   * M.Tech student may not book for a spouse, an MS or PhD research scholar
+   * may, and the programme is read from the roll number
+   * (`lib/student-programme.ts`). It is answered from the **profile** rather
+   * than from the academic record because it has to be answered even when
+   * there is no record at all - otherwise a student the portal holds nothing
+   * about would be the one student who could book a spouse.
+   */
+  requester?: Pick<Profile, "role" | "roll_number"> | null
 ): GuestNameRule {
-  if (!record || record.kind !== "student") return NO_GUEST_NAME_RULE;
+  // The spouse rule applies to a student whether or not a record was found,
+  // so it is settled before the early return below.
+  const spouse = spouseWithholding(options, requester, record);
+  if (!record || record.kind !== "student") {
+    return spouse
+      ? {
+          ...NO_GUEST_NAME_RULE,
+          withheld: [spouse.option],
+          withheldReasons: { [spouse.option]: spouse.reason },
+        }
+      : NO_GUEST_NAME_RULE;
+  }
   const student = record as StudentRecord;
   const father = student.father_name?.trim() || null;
   const mother = student.mother_name?.trim() || null;
@@ -116,7 +164,40 @@ export function guestNameRule(
     if (relationship === "Guardian" && guardianApplies) continue;
     withheld.push(option);
   }
-  return { fromRecord: true, locked, withheld };
+  const withheldReasons: GuestNameRule["withheldReasons"] = {};
+  if (spouse) {
+    withheld.push(spouse.option);
+    withheldReasons[spouse.option] = spouse.reason;
+  }
+  return { fromRecord: true, locked, withheld, withheldReasons };
+}
+
+/**
+ * The spouse option and why it is withheld, or null when it may be offered -
+ * which is also the answer for anybody who is not a student, since the rule
+ * is about programmes and only students have one.
+ *
+ * The roll number comes from the profile first (`profiles_v` resolves it from
+ * `institute_students`) and from the record second, so a deployment whose
+ * profile view has not caught up still gets the right answer.
+ */
+function spouseWithholding(
+  options: readonly string[],
+  requester: Pick<Profile, "role" | "roll_number"> | null | undefined,
+  record: AcademicRecord | null | undefined
+): { option: string; reason: { short: string; message: string } } | null {
+  if (!requester || requester.role !== "student") return null;
+  // Matched the way every other relationship here is: on the Form Builder's
+  // own spelling, ignoring case. Rename the option and the rule stops biting,
+  // rather than producing a form nobody can submit.
+  const option = options.find((o) => key(o) === key(SPOUSE_RELATIONSHIP));
+  if (!option) return null;
+  const student = record && record.kind === "student" ? (record as StudentRecord) : null;
+  const reason = spouseBookingError({
+    roll_number: requester.roll_number ?? student?.roll_number ?? null,
+    program: student?.program ?? null,
+  });
+  return reason ? { option, reason: { short: SPOUSE_SCHOLARS_ONLY, message: reason } } : null;
 }
 
 /** The name the record fixes for this relationship, or null when it fixes none. */
@@ -169,6 +250,23 @@ export function lockedNameError(
   return `${guest.relationship} is on your academic record as ${expected}. If that is wrong, ask the guest house office to correct the record.`;
 }
 
+/**
+ * The short reason a relationship is withheld, where the rule has one to give,
+ * for the greyed-out option on the form. Null for a relationship that is
+ * simply not offered - a parent the record does not name - and null for one
+ * that is not withheld at all.
+ */
+export function withheldReason(
+  rule: GuestNameRule,
+  relationship: string | null | undefined
+): string | null {
+  if (!relationship) return null;
+  const found = Object.entries(rule.withheldReasons ?? {}).find(
+    ([r]) => key(r) === key(relationship)
+  );
+  return found ? found[1].short : null;
+}
+
 /** Why this relationship may not be chosen, or null when it may. */
 export function withheldRelationshipError(
   rule: GuestNameRule,
@@ -176,6 +274,10 @@ export function withheldRelationshipError(
 ): string | null {
   if (!isRelationshipWithheld(rule, guest.relationship)) return null;
   const relationship = (guest.relationship ?? "").trim();
+  // A rule that says why in its own words - today the spouse rule - says it
+  // here rather than being described again from the relationship's name.
+  const given = Object.entries(rule.withheldReasons ?? {}).find(([r]) => key(r) === key(relationship));
+  if (given) return given[1].message;
   return relationship.toLowerCase() === "guardian"
     ? "A guardian can be booked only when your academic record names neither parent."
     : `Your academic record does not name a ${relationship.toLowerCase()}. Ask the guest house office to add it if it is missing.`;

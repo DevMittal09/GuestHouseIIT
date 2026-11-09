@@ -167,9 +167,51 @@ export type GuidelineSection = {
   id: string;
   title: string;
   items: string[];
+  /**
+   * The section's items split under their own headings - **Dos** and
+   * **Don'ts** (9 Nov 2026, the meeting: "general guest house rules and Dos
+   * and Don'ts should be hardcoded into the website interface so that users
+   * can see them without needing to open an external document").
+   *
+   * A section with groups renders them in place of `items`, which stays the
+   * flat list of the same rules in the same order - so the numbering a guest
+   * or an office cites ("see 7.4") is unchanged by the grouping, and anything
+   * that reads a section's rules without drawing them (the unit test that
+   * keeps role names off the public site) needs no special case.
+   */
+  groups?: { label: string; items: string[] }[];
   timetable?: { meal: string; time: string }[];
   provisional?: boolean;
 };
+
+/**
+ * The house rules, as two lists.
+ *
+ * Grouped rather than rewritten: these are the same placeholder rules that
+ * have stood in section 7 since 26 Sep 2026, still **awaiting the office's
+ * confirmation** (`provisional`), now under the headings the meeting asked
+ * for. Nothing was added and nothing was taken away - inventing a house rule
+ * because a heading looked thin would put words in the office's mouth.
+ *
+ * A **do** is phrased as something to do; a **don't** as something not
+ * permitted. Each rule sits under whichever of those it already was.
+ */
+const CONDUCT_DOS = [
+  "Only the guests named on the booking may occupy the room",
+  "Visitors are received in the lounge between 8:00 AM and 9:00 PM, and may not stay overnight",
+  "Switch off lights, fans and air-conditioning when leaving the room",
+  "Report a fault in the room to reception",
+  "Note the fire exits and extinguishers on your floor when you arrive",
+  "Carry your booking confirmation and identity document when entering the campus",
+];
+
+const CONDUCT_DONTS = [
+  "Smoking, alcohol and intoxicants are not permitted anywhere on the premises",
+  "Cooking, heaters, induction stoves and other high-load appliances are not permitted in the rooms",
+  "Pets are not allowed",
+  "Furniture, linen and fittings stay in the room they belong to; nothing is to be fixed to the walls",
+  "Quiet hours are 10:00 PM to 6:00 AM",
+];
 
 /**
  * The Guidelines page, section by section. The first six are the portal's own
@@ -189,7 +231,10 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
         "Rooms are requested online by members of the institute, for themselves or for their guests",
         "Visitors from outside the institute are booked by the person hosting them",
         `Check-in must fall within ${plural(rules.booking.advance_booking_months, "month")} of the day the request is made`,
-        ...(maxNights > 0 ? [`A single request may cover up to ${plural(maxNights, "night")}`] : []),
+        ...(maxNights > 0 ? [`A personal stay may cover up to ${plural(maxNights, "night")}`] : []),
+        "Official stays have no maximum duration",
+        "MS and PhD research scholars may book for a spouse without an accompanying parent",
+        "B.Tech and M.Tech students cannot book for a spouse",
         "Every request is reviewed before it is confirmed, and you are told by email at each step",
         "Rooms are allotted by the Guest House Office once a request is approved",
       ],
@@ -258,29 +303,49 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
     {
       id: "cancellation",
       title: "Cancellation",
+      // The notice period (9 Nov 2026, the meeting). Stated here because this
+      // is one of a rule's three homes; the other two are the error when it
+      // fires, with the reader's own figure in it
+      // (`cancellationNoticeError`), and the Cancel control itself.
       items: [
-        "A request can be cancelled from My Bookings at any time, with a reason",
+        ...(rules.booking.cancellation_notice_hours > 0
+          ? [
+              `A booking is cancelled from My Bookings, with a reason, at least ${plural(rules.booking.cancellation_notice_hours, "hour")} before check-in`,
+              "Closer to the check-in than that, ask the Guest House Office",
+            ]
+          : ["A request can be cancelled from My Bookings at any time, with a reason"]),
+        "Cancellations are made through the portal, so the room is released and the record is kept",
         "The Guest House Office confirms the cancellation, and the rooms are released then",
         "Once a guest has checked in, the stay is ended at reception instead",
       ],
     },
     {
       id: "conduct",
-      title: "During your stay",
+      title: "Dos and Don'ts during your stay",
       provisional: true,
       // TODO(site): house rules usual at institute guest houses, written as
-      // placeholders - the office to confirm or replace them.
+      // placeholders - the office to confirm or replace them. Grouped into
+      // Dos and Don'ts on 9 Nov 2026 at the meeting's request; the wording is
+      // unchanged, and the flat `items` below keeps the numbering stable.
+      groups: [
+        { label: "Please do", items: CONDUCT_DOS },
+        { label: "Please do not", items: CONDUCT_DONTS },
+        {
+          label: "Good to know",
+          items: [
+            "The guest house is not responsible for belongings left in rooms",
+            "Rooms are cleaned daily between 9:00 AM and 12:00 noon",
+            "Lost property is kept at reception for 30 days",
+            "The Guest House Office may end a stay that breaks these rules",
+          ],
+        },
+      ],
       items: [
-        "Only the guests named on the booking may occupy the room",
-        "Smoking, alcohol and intoxicants are not permitted anywhere on the premises",
-        "Quiet hours are 10:00 PM to 6:00 AM",
-        "Visitors are received in the lounge between 8:00 AM and 9:00 PM, and may not stay overnight",
-        "Cooking, heaters, induction stoves and other high-load appliances are not permitted in the rooms",
-        "Pets are not allowed",
-        "Furniture, linen and fittings stay in the room they belong to; nothing is to be fixed to the walls",
-        "Switch off lights, fans and air-conditioning when leaving the room",
+        ...CONDUCT_DOS,
+        ...CONDUCT_DONTS,
         "The guest house is not responsible for belongings left in rooms",
         "Rooms are cleaned daily between 9:00 AM and 12:00 noon",
+        "Lost property is kept at reception for 30 days",
         "The Guest House Office may end a stay that breaks these rules",
       ],
     },
@@ -289,12 +354,13 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
       title: "Safety and help",
       provisional: true,
       // TODO(site): placeholders - the office to confirm.
+      // Three of the five moved into "Dos and Don'ts" on 9 Nov 2026, where a
+      // reader looking for what to do will find them. What is left is what
+      // this section is actually for: who to call, and what the guest house
+      // will do.
       items: [
-        "Note the fire exits and extinguishers on your floor when you arrive",
         "In an emergency, call reception; they will reach the medical centre and campus security",
-        "Carry your booking confirmation and identity document when entering the campus",
-        "Lost property is kept at reception for 30 days",
-        "Report a fault in the room to reception",
+        "Reception can reach the institute's medical centre and campus security at any hour",
       ],
     },
   ];

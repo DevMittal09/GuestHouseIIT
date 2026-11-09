@@ -25,7 +25,7 @@ export const ACCOUNTS = {
   // The **Assistant Warden** of Malhar Boys - the rank that decides a
   // student's request; the Warden and Deputy Warden are copied on it.
   warden: { uid: "awarden.malharboys", email: "awarden.malharboys@iitpkd.ac.in", name: "Mr. Sajeev Thomas" },
-  manager: { uid: "guesthouse", email: "guesthouse@iitpkd.ac.in", name: "Guest House Manager" },
+  manager: { uid: "guesthouse", email: "muhamed.rizwan2458@gmail.com", name: "Guest House Manager" },
   caretaker: { uid: "gh.reception", email: "gh.reception@iitpkd.ac.in", name: "Guest House Caretaker" },
   developer: { uid: "developer", email: "developer@iitpkd.ac.in", name: "Portal Developer" },
   iarStudentCell: { uid: "alumnicell", email: "alumnicell@iitpkd.ac.in", name: "IAR Student Cell" },

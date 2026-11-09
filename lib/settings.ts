@@ -6,8 +6,9 @@ import {
   type ApprovalRules,
 } from "./approval-routes";
 import { DEFAULT_DEBIT_RULES, debitRulesSchema, upgradeDebitRules, type DebitRules } from "./debit-heads";
+import { DEFAULT_VIP_EMAILS } from "./rooms-access";
 import { GUEST_HOUSE_CONTACT } from "./site";
-import type { MealKey, RoomType } from "./types";
+import { ROLE_LABELS, type MealKey, type Role, type RoomType } from "./types";
 
 /**
  * The rules the office can change from the developer console (Settings).
@@ -66,6 +67,13 @@ export type CapacityRules = {
 export type BookingRules = {
   /** How many months ahead a check-in may be requested. Officials are exempt. */
   advance_booking_months: number;
+  /**
+   * How long before check-in a requester may still cancel from the portal
+   * (9 Nov 2026, the meeting): **24 hours**, so a released room can still be
+   * offered to somebody on the waiting list. 0 turns the notice period off.
+   * The Guest House Manager is never held to it - see `cancellationNoticeError`.
+   */
+  cancellation_notice_hours: number;
   /** The longest ordinary stay, in nights; 0 means no limit. */
   max_stay_nights: number;
   /**
@@ -81,6 +89,43 @@ export type BookingRules = {
    * by the daily cron, which mails the requester.
    */
   no_show_release_hours: number;
+  /**
+   * Which shape of the defaults a saved row was made from - see
+   * {@link upgradeBookingRules}. Absent on rows saved before 9 Nov 2026.
+   */
+  revision?: number;
+};
+
+/**
+ * **Portal access and content** (9 Nov 2026, the meeting): who may be put in
+ * a VIP room, how much of the inventory an ordinary requester is told about,
+ * and where the full guidelines live.
+ *
+ * A group of its own rather than three fields bolted onto `rules.booking`,
+ * because `rules.booking` is on the **developer's** Settings page and the
+ * meeting put all three in the Guest House Manager's hands ("the GHM should
+ * have a settings interface", "the GHM must have a backend settings field to
+ * update the Google Drive URL"). It is edited at Console -> Portal Settings,
+ * which the manager opens. `saveRuleGroup` refuses it from the developer's
+ * Settings page for the same reason it refuses `rules.approval`: two doors to
+ * one `app_settings` row means one of them skipping the other's checks.
+ */
+export type PortalRules = {
+  /** Addresses that may see and be allotted a VIP room. */
+  vip_emails: string[];
+  /** Whole roles granted the same - the meeting's "user groups". */
+  vip_roles: Role[];
+  /**
+   * The most free rooms a general requester is ever shown. 0 turns the cap
+   * off. It is a cap on the **figure**, never a fraction: the total inventory
+   * is not published to a requester at all.
+   */
+  general_visible_rooms: number;
+  /**
+   * The institute's full guidelines document - a Google Drive link the office
+   * keeps up to date. Empty hides the link rather than printing a dead one.
+   */
+  guidelines_url: string;
 };
 
 export type MealWindow = { start: string; end: string };
@@ -88,6 +133,7 @@ export type MealWindow = { start: string; end: string };
 export type MealRules = {
   /** Institute wall-clock "HH:mm", end exclusive. */
   windows: Record<MealKey, MealWindow>;
+  revision?: number;
   /**
    * The most people the kitchen will serve at one sitting, counting everyone
    * already booked for it (1 Oct 2026). 0 turns the limit off. Checked per
@@ -155,6 +201,17 @@ export type InvoiceRules = {
 };
 
 /**
+ * Revision 2 (9 Nov 2026): the advance-booking window is **one month** again.
+ * Bump this if a default in `rules.booking` changes in a way a saved row
+ * cannot be left holding.
+ *
+ * Declared **above** `DEFAULT_RULES`, which reads it: a `const` referenced
+ * before its declaration is a temporal-dead-zone error at module load, not a
+ * type error, so it would pass `tsc` and break every page.
+ */
+export const BOOKING_RULES_REVISION = 2;
+
+/**
  * Revision 2 (25 Sep 2026): a flat 18% on rooms and 5% on food, no slab.
  * Revision 3 (7 Oct 2026): the state is spelled **Keralam** on the invoice.
  */
@@ -191,6 +248,8 @@ export type Rules = {
   approval: ApprovalRules;
   invoice: InvoiceRules;
   privacy: PrivacyRules;
+  /** VIP rooms, what a requester is told about availability, the guidelines link. */
+  portal: PortalRules;
 };
 
 export type RuleGroup = keyof Rules;
@@ -203,6 +262,7 @@ export const RULE_GROUPS: RuleGroup[] = [
   "approval",
   "invoice",
   "privacy",
+  "portal",
 ];
 
 /** The `app_settings` key a group is stored under. */
@@ -230,28 +290,35 @@ export const DEFAULT_RULES: Rules = {
   },
   booking: {
     /**
-     * **Six months** (14 Oct 2026, the office: "allow users to make bookings
-     * more than 30 days in advance"). It was **one month**, which refused a
-     * parent booking for convocation, a conference guest invited a term
-     * ahead, and anyone whose own travel is booked before the guest house
-     * will take them - and left the office entering those by hand, which is
-     * the thing the portal exists to stop.
+     * **One month** (9 Nov 2026, the meeting: "users should be able to book
+     * accommodation a maximum of one month in advance, similar to the railway
+     * reservation window").
      *
-     * Six rather than no limit at all: the office can still set anything from
-     * 1 to 24 months here without code (`bookingRulesSchema`), and a window
-     * of zero is deliberately refused, so the figure is always a figure the
-     * Guidelines page can print. Official / dignitary bookings, the manager
-     * and the developer remain exempt from it entirely
-     * (`isAdvanceWindowExempt`).
+     * This **reverses 14 Oct 2026**, when the office asked for more than
+     * thirty days and the window went to six months. The reasons that change
+     * was made have not gone away - a parent booking for convocation, a
+     * conference guest invited a term ahead - and the way they are met is
+     * unchanged: official and dignitary bookings, the manager and the
+     * developer are **exempt from the window entirely**
+     * (`isAdvanceWindowExempt`), and the office can still set anything from
+     * 1 to 24 months from the console without a deploy.
+     *
+     * Because a deployment that pressed Save between those two dates holds
+     * **six**, this default alone would not reach it - so `rules.booking`
+     * gained a revision and {@link upgradeBookingRules} rewrites the window
+     * **once**. See `.memories/02-decisions.md`.
      */
-    advance_booking_months: 6,
+    advance_booking_months: 1,
+    cancellation_notice_hours: 24,
     max_stay_nights: 14,
     buffer_minutes: 240,
     no_show_release_hours: 0,
+    revision: BOOKING_RULES_REVISION,
   },
   meals: {
+    revision: 1,
     windows: {
-      breakfast: { start: "07:30", end: "09:30" },
+      breakfast: { start: "08:00", end: "09:30" },
       lunch: { start: "12:30", end: "14:00" },
       dinner: { start: "19:30", end: "21:00" },
     },
@@ -301,7 +368,20 @@ export const DEFAULT_RULES: Rules = {
     id_retention_days: 365,
     audit_retention_days: 180,
   },
+  portal: {
+    // The three addresses the meeting named. The desk reaches the VIP rooms
+    // through `VIP_STAFF_ROLES`, not through this list.
+    vip_emails: [...DEFAULT_VIP_EMAILS],
+    vip_roles: [],
+    // The meeting's figure: "general users should see a maximum of 14 rooms
+    // available at any given time".
+    general_visible_rooms: 14,
+    // TODO(site): the office's Google Drive guidelines document. Empty until
+    // they send it, which hides the link rather than printing a dead one.
+    guidelines_url: "",
+  },
 };
+
 
 // -------------------------------------------------------------- validation
 
@@ -350,9 +430,44 @@ export const capacityRulesSchema = z
 
 export const bookingRulesSchema = z.object({
   advance_booking_months: whole("Advance-booking window", 1, 24),
+  cancellation_notice_hours: whole("Cancellation notice", 0, 168),
   max_stay_nights: whole("Maximum stay", 0, 365),
   buffer_minutes: whole("Turnaround buffer", 0, 1440),
   no_show_release_hours: whole("No-show release", 0, 168),
+  revision: z.number().int().optional(),
+});
+
+/**
+ * The Guest House Manager's own settings: VIP rooms, what a requester is told
+ * about availability, the guidelines link.
+ */
+export const portalRulesSchema = z.object({
+  vip_emails: z
+    .array(
+      z
+        .string()
+        .trim()
+        .toLowerCase()
+        .refine((v) => z.email().safeParse(v).success, "That is not an email address")
+    )
+    .max(200, "At most 200 authorised addresses")
+    // Two spellings of one address would be two entries granting one person
+    // access, and removing one would look like it had not worked.
+    .transform((list) => [...new Set(list)]),
+  // The same "every role there is" the console's own role pickers use.
+  vip_roles: z
+    .array(z.enum(Object.keys(ROLE_LABELS) as [Role, ...Role[]]))
+    .max(20)
+    .transform((list) => [...new Set(list)]),
+  general_visible_rooms: whole("Rooms shown to general users", 1, 14),
+  guidelines_url: z
+    .string()
+    .trim()
+    .max(2000, "That link is too long")
+    .refine(
+      (v) => v === "" || /^https:\/\/[^\s]+$/.test(v),
+      "The guidelines link must be an https:// address, or empty to hide the link"
+    ),
 });
 
 const windowSchema = (label: string) =>
@@ -365,6 +480,7 @@ const windowSchema = (label: string) =>
 
 export const mealRulesSchema = z
   .object({
+    revision: z.number().int().optional(),
     windows: z.object({
       breakfast: windowSchema("Breakfast"),
       lunch: windowSchema("Lunch"),
@@ -445,6 +561,7 @@ export const RULE_SCHEMAS = {
   approval: approvalRulesSchema,
   invoice: invoiceRulesSchema,
   privacy: privacyRulesSchema,
+  portal: portalRulesSchema,
 } as const satisfies Record<RuleGroup, z.ZodType>;
 
 /**
@@ -495,6 +612,10 @@ function upgradeStoredGroup(
   if (group === "debit") return upgradeDebitRules(stored);
   if (group === "approval") return upgradeApprovalRules(stored);
   if (group === "invoice") return upgradeInvoiceRules(stored);
+  if (group === "booking") return upgradeBookingRules(stored);
+  if (group === "meals" && !stored.revision) {
+    return { ...stored, revision: 1, windows: DEFAULT_RULES.meals.windows };
+  }
   if (group !== "capacity" || "max_occupants_per_room" in stored) return stored;
   const rest = { ...stored };
   delete rest.max_infants_per_room;
@@ -544,6 +665,32 @@ function renameState(contact: unknown): unknown {
   // row that already reads Keralam would make it "Keralamm".
   const renamed = address.replace(new RegExp(`\\b${FORMER_STATE_NAME}\\b`, "g"), STATE_NAME);
   return renamed === address ? contact : { ...row, address: renamed };
+}
+
+/**
+ * A saved booking group from before 9 Nov 2026 holds whatever
+ * advance-booking window the office had set - **six months** on any
+ * deployment that opened Settings between 14 Oct and 9 Nov 2026, because that
+ * was the default then and pressing Save writes every field.
+ *
+ * The meeting put the window back to **one month**, and a default alone
+ * cannot reach a row that already has a value: that is the "a saved Settings
+ * row beats the changed default" trap, and it is why `rules.booking` now
+ * carries a revision when it deliberately did not before. The window is taken
+ * from the defaults **once**; a row already on the current revision is left
+ * alone, so an office that sets three months from the console afterwards
+ * keeps three months.
+ *
+ * Only the window. `max_stay_nights`, the turnaround buffer and the no-show
+ * release are untouched - the meeting confirmed the fourteen-night cap the
+ * office already had, and nothing was said about the other two.
+ */
+export function upgradeBookingRules(stored: Record<string, unknown>): Record<string, unknown> {
+  const revision = typeof stored.revision === "number" ? stored.revision : 1;
+  if (revision >= BOOKING_RULES_REVISION) return stored;
+  const rest = { ...stored };
+  delete rest.advance_booking_months;
+  return { ...rest, revision: BOOKING_RULES_REVISION };
 }
 
 /** First validation message for a proposed group, or null when it is acceptable. */

@@ -1,6 +1,7 @@
 import { getStore } from "@/lib/store";
 import { mailConfig } from "./config";
 import { getMailer } from "./index";
+import { applyAllowList } from "./deliverable";
 import { applyRedirect } from "./redirect";
 import { freshMessageId } from "./thread";
 import type { EmailMessage, MailAttachmentRef, OutboundAttachment, OutboundMessage } from "./types";
@@ -119,6 +120,12 @@ export interface DispatchResult {
   claimed: number;
   sent: number;
   failed: number;
+  /**
+   * Settled without being delivered, because `MAIL_ALLOWED_RECIPIENTS` ruled
+   * every recipient out. Counted apart from `sent` and `failed` so a run that
+   * delivered nothing cannot read as a run that worked.
+   */
+  skipped: number;
   /** False when another dispatcher in this process was already running. */
   ran: boolean;
 }
@@ -134,7 +141,7 @@ let running = false;
 export async function dispatchOutbox(
   { batchSize = BATCH_SIZE }: { batchSize?: number } = {}
 ): Promise<DispatchResult> {
-  if (running) return { claimed: 0, sent: 0, failed: 0, ran: false };
+  if (running) return { claimed: 0, sent: 0, failed: 0, skipped: 0, ran: false };
   running = true;
   try {
     const store = getStore();
@@ -144,14 +151,41 @@ export async function dispatchOutbox(
     const claimed = await store.claimQueuedEmails(batchSize, STALE_SENDING_MS);
     let sent = 0;
     let failed = 0;
+    let skipped = 0;
 
     for (const row of claimed) {
-      // The redirect is applied here, not at queue time, so the outbox keeps a
-      // record of who the message was genuinely for.
-      const { message, originalRecipients } = applyRedirect(
+      // Both of these are applied here rather than at queue time, so the
+      // outbox keeps a record of who the message was genuinely for.
+      //
+      // Order matters and is deliberate: the allow list decides **whether**
+      // each real recipient may be written to, and the redirect then decides
+      // **where** what is left actually goes. The other way round would test
+      // the redirect mailbox against the allow list, which answers nothing.
+      const addressed = applyAllowList(
         toOutbound(row, await opensThread(row)),
+        config.allowedRecipients
+      );
+      if (addressed.message.to.length === 0 && addressed.dropped.length > 0) {
+        // Every recipient is an address the deployment says does not exist.
+        // Settled, not failed: there is nothing to retry and nothing wrong.
+        await store.settleEmail(row.id, {
+          ok: true,
+          providerMessageId: "skipped-no-allowed-recipient",
+          note: `Not sent: no recipient is in MAIL_ALLOWED_RECIPIENTS (${addressed.dropped.join(", ")})`,
+        });
+        skipped++;
+        continue;
+      }
+      const { message, originalRecipients } = applyRedirect(
+        addressed.message,
         config.redirectAllTo
       );
+      if (addressed.dropped.length > 0) {
+        console.log(
+          `[mail] ${row.event_key}: skipped ${addressed.dropped.length} recipient(s) not in ` +
+            `MAIL_ALLOWED_RECIPIENTS (${addressed.dropped.join(", ")})`
+        );
+      }
       if (message.to.length === 0) {
         // Nobody to send to - a profile without an address, most likely.
         // Failing it outright is right: a retry would find the same nobody.
@@ -183,9 +217,13 @@ export async function dispatchOutbox(
     }
 
     if (claimed.length > 0) {
-      console.log(`[mail] ${mailer.name}: ${sent} sent, ${failed} failed of ${claimed.length} claimed`);
+      console.log(
+        `[mail] ${mailer.name}: ${sent} sent, ${failed} failed` +
+          (skipped > 0 ? `, ${skipped} skipped (no allowed recipient)` : "") +
+          ` of ${claimed.length} claimed`
+      );
     }
-    return { claimed: claimed.length, sent, failed, ran: true };
+    return { claimed: claimed.length, sent, failed, skipped, ran: true };
   } finally {
     running = false;
   }
@@ -197,12 +235,13 @@ export async function dispatchOutbox(
  * spin forever.
  */
 export async function drainOutbox(maxBatches = 10): Promise<DispatchResult> {
-  const total: DispatchResult = { claimed: 0, sent: 0, failed: 0, ran: false };
+  const total: DispatchResult = { claimed: 0, sent: 0, failed: 0, skipped: 0, ran: false };
   for (let i = 0; i < maxBatches; i++) {
     const result = await dispatchOutbox();
     total.claimed += result.claimed;
     total.sent += result.sent;
     total.failed += result.failed;
+    total.skipped += result.skipped;
     total.ran = total.ran || result.ran;
     if (result.claimed === 0) break;
   }

@@ -1,15 +1,18 @@
 "use client";
 
+import { RequiredFieldsNote } from "@/components/required-fields-note";
+
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { managerCancelBooking, reassignRooms } from "@/app/actions/manager";
+import { managerCancelBooking, reassignRooms, updateBookingStay } from "@/app/actions/manager";
 import {
   moveCheckInAction,
   decideExtensionAction,
   extendStayAction,
   getMoveOptions,
   releaseNoShowAction,
+  shortenStayAction,
 } from "@/app/actions/operations";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -28,7 +31,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { TimeSelect } from "@/components/ui/time-select";
 import { formatDateTime, toDatetimeLocal } from "@/lib/format";
 import { ROOM_TYPE_LABELS } from "@/lib/occupancy";
-import { extensionError, moveCheckInError, noShowReleasable } from "@/lib/operations";
+import {
+  extensionError,
+  moveCheckInError,
+  noShowReleasable,
+  shortenStayError,
+} from "@/lib/operations";
+import {
+  TARIFF_CATEGORIES,
+  TARIFF_CATEGORY_GUESTS,
+  TARIFF_CATEGORY_LABELS,
+  type TariffCategoryName,
+} from "@/lib/tariff-category";
 import { instituteIso } from "@/lib/tz";
 import type { BookingWithDetails, RoomType } from "@/lib/types";
 
@@ -60,6 +74,12 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
     splitLocal(booking.extension_requested_until ?? booking.check_out)
   );
   const [extendReason, setExtendReason] = useState("");
+  /** The shorter check-out the manager is approving, and why (9 Nov 2026). */
+  const [[shortDate, shortTime], setShort] = useState(() => splitLocal(booking.check_out));
+  const [shortenReason, setShortenReason] = useState("");
+  /** The office's tariff category, normally set at allocation; this is the way back to it. */
+  const [category, setCategory] = useState<TariffCategoryName | "">(booking.tariff_category ?? "");
+  const [categoryReason, setCategoryReason] = useState("");
   const [decisionNote, setDecisionNote] = useState("");
   const [rooms, setRooms] = useState<MoveRoom[] | null>(null);
   const [moveTo, setMoveTo] = useState<string[]>(booking.assigned_room_ids);
@@ -81,6 +101,7 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
   };
   const moveProblem = moveCheckInError(booking, instant(from));
   const laterProblem = extensionError(booking, instant(until));
+  const shortenProblem = shortenStayError(booking, instant(`${shortDate}T${shortTime}`));
   const canMove = isManager && booking.assigned_room_ids.length > 0;
   const noShow = isManager && noShowReleasable(booking, new Date());
   const pendingExtension = booking.extension_requested_until ?? null;
@@ -231,6 +252,131 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
             </div>
           </div>
         </section>
+
+        {/* **Approving fewer days than were asked for** (9 Nov 2026, the
+            meeting: "user requests 10 days, GHM decides to approve only 3
+            days"). Its own section rather than a third box inside Extend:
+            this is a decision about what the institute is granting, it emails
+            the guest, and it is the manager's where extending is the whole
+            desk's. The dates originally requested are kept on the booking the
+            first time they move, and the email names both periods. */}
+        {isManager && booking.service_type !== "meals_only" && (
+          <section className="space-y-3 rounded-lg border p-3">
+            <div>
+              <p className="text-sm font-medium">Approve a shorter stay</p>
+              <p className="text-xs text-muted-foreground">
+                The nights given up are released at once. The guest is emailed both the dates they
+                asked for and the dates approved, and the request as submitted is kept on the
+                booking.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`shorten-reason-${booking.id}`}>Reason *</Label>
+              <Input
+                id={`shorten-reason-${booking.id}`}
+                value={shortenReason}
+                onChange={(e) => setShortenReason(e.target.value)}
+                placeholder="e.g. Rooms are committed to the Selection Committee from Thursday"
+              />
+            </div>
+            <div className="space-y-2 rounded-md border bg-muted/20 p-2">
+              <Label htmlFor={`shorten-${booking.id}`}>Approved check-out</Label>
+              <Input
+                id={`shorten-${booking.id}`}
+                type="date"
+                value={shortDate}
+                min={splitLocal(booking.check_in)[0]}
+                max={splitLocal(booking.check_out)[0]}
+                onChange={(e) => setShort([e.target.value, shortTime])}
+              />
+              <TimeSelect
+                label="Approved check-out"
+                value={shortTime}
+                onChange={(t) => setShort([shortDate, t])}
+              />
+              <p className="text-xs text-muted-foreground">
+                Requested {formatDateTime(booking.original_check_out ?? booking.check_out)}
+                {booking.original_check_out ? " · currently approved " : ", now "}
+                {booking.original_check_out ? formatDateTime(booking.check_out) : ""}.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                disabled={isPending || !shortenReason.trim() || !!shortenProblem}
+                title={shortenProblem ?? undefined}
+                onClick={() =>
+                  run(
+                    () =>
+                      shortenStayAction(booking.id, `${shortDate}T${shortTime}`, shortenReason),
+                    "Shorter stay approved - the guest has been emailed"
+                  )
+                }
+              >
+                Approve this check-out
+              </Button>
+            </div>
+          </section>
+        )}
+
+        {/* The rate the stay is charged at. Chosen at allocation; here is
+            where it is corrected when the guest turns out to be somebody
+            else - an academic visitor rather than a parent. The requester
+            never sees this question, which is the point of it. */}
+        {isManager && booking.service_type !== "meals_only" && (
+          <section className="space-y-3 rounded-lg border p-3">
+            <div>
+              <p className="text-sm font-medium">Tariff category</p>
+              <p className="text-xs text-muted-foreground">
+                What the stay is charged at. An invoice already issued keeps the rates it printed.
+              </p>
+            </div>
+            <NativeSelect
+              aria-label="Tariff category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value as TariffCategoryName | "")}
+            >
+              <option value="" disabled>Choose a category</option>
+              {TARIFF_CATEGORIES.map((option) => (
+                <option key={option} value={option}>
+                  {TARIFF_CATEGORY_LABELS[option]} - {TARIFF_CATEGORY_GUESTS[option]}
+                </option>
+              ))}
+            </NativeSelect>
+            <div className="space-y-1">
+              <RequiredFieldsNote />
+              <Label htmlFor={`category-reason-${booking.id}`}>Reason *</Label>
+              <Input
+                id={`category-reason-${booking.id}`}
+                value={categoryReason}
+                onChange={(e) => setCategoryReason(e.target.value)}
+                placeholder="e.g. Guest is an external examiner, not a relative"
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full"
+              disabled={
+                isPending ||
+                !categoryReason.trim() || category === "" ||
+                category === (booking.tariff_category ?? "")
+              }
+              onClick={() =>
+                run(
+                  () =>
+                    updateBookingStay(booking.id, {
+                      tariff_category: category === "" ? null : category,
+                      reason: categoryReason,
+                    }),
+                  "Tariff category saved"
+                )
+              }
+            >
+              Save the category
+            </Button>
+          </section>
+        )}
 
         {canMove && (
           <section className="space-y-2 rounded-lg border p-3">

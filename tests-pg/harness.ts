@@ -1,7 +1,12 @@
 import { Pool } from "pg";
 import { expect } from "vitest";
 import { createBooking } from "@/app/actions/bookings";
-import { guestNameRule, isRelationshipWithheld, lockedNameFor } from "@/lib/academic/guest-names";
+import {
+  NO_GUEST_NAME_RULE,
+  guestNameRule,
+  isRelationshipWithheld,
+  lockedNameFor,
+} from "@/lib/academic/guest-names";
 import { academicRecordFor } from "@/lib/academic";
 import { bookingContextFor } from "@/lib/booking-context-server";
 import { bookingPayloadSchema } from "@/lib/booking-schema";
@@ -44,7 +49,7 @@ export async function as(email: string): Promise<Profile> {
   return p;
 }
 
-export const MANAGER = "guesthouse@iitpkd.ac.in";
+export const MANAGER = "muhamed.rizwan2458@gmail.com";
 export const CARETAKER = "gh.reception@iitpkd.ac.in";
 
 /** An institute calendar date `n` days from today ("yyyy-MM-dd"). */
@@ -166,7 +171,7 @@ export async function submitMeals(email: string, dates: string[], people: number
     rooms: [],
     custom: {},
   };
-  return send(user, config, context, { fromRecord: false, locked: {}, withheld: [] }, gh, payload);
+  return send(user, config, context, NO_GUEST_NAME_RULE, gh, payload);
 }
 
 async function send(

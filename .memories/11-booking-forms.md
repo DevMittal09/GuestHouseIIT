@@ -1,5 +1,19 @@
 # Booking forms — what each requester is asked, and where the answers come from
 
+## Meeting decisions implemented, 9 November 2026
+
+This section supersedes the older tariff-selector and six-month descriptions below.
+
+- The requester chooses the existing role-allowed booking type and guest house; the sidebar is read-only. Legacy alumni workflows remain intact.
+- Check-in is at most one calendar month ahead for requesters, including official accounts. GHM/developer desk operations remain exempt. Official **booking types**, including employee official bookings, have no stay cap; ordinary personal stays retain 14 nights.
+- Student hostel allocation still determines the route automatically: NULL hostel goes directly to GHM.
+- The sixth digit of a nine-digit roll number determines B.Tech (1), M.Tech (2), MS (3), or PhD (4). Only MS/PhD may book a spouse, without an accompanying parent. Missing/unrecognised rolls do not grant the exception. `guestNameRule` applies on both the page and `createBooking`; saved student forms gain Spouse on read.
+- Submission capacity now filters room classes and counts occupied IDs only within that eligible room set.
+- The sidebar shows all six category prices and the catering timetable. The GHM chooses the actual category at allocation.
+- Requester room cancellations need 24 hours' notice. They still enter the existing manager-confirmed cancellation workflow; meals-only cancellation retains its existing handling.
+
+---
+
 The New Booking form (`/book`) as each role sees it, every rule the server
 applies to a submission, and the **academic record** that fills and locks part
 of it.

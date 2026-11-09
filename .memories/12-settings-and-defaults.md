@@ -1,5 +1,22 @@
 # Settings and defaults — every configurable value
 
+## Meeting decisions implemented, 9 November 2026
+
+`rules.portal` is a persisted Setting, edited by GHM/developer from Portal Settings:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `vip_emails` | director@iitpkd.ac.in, office_director@iitpkd.ac.in, adadmin@iitpkd.ac.in | Case-insensitive VIP access |
+| `vip_roles` | empty | Additional authorised role groups |
+| `general_visible_rooms` | 14 | Maximum published free count for the queried guest house; configurable from 1 to 14 |
+| `guidelines_url` | empty | HTTPS detailed-guidelines document link; hidden until supplied |
+
+Booking rules revision 2 changes saved advance windows to one month once and adds `cancellation_notice_hours` (24 by default). `max_stay_nights` stays 14; official booking types are exempt. Meal rules revision 1 supplies the meeting timetable; see [13-billing-and-dining.md](13-billing-and-dining.md). The existing developer Settings controls remain available for future policy edits.
+
+Room class, reservation note and optional reservation end date persist on each room. An end date is descriptive, not automatic release: the office must confirm dates and explicitly reclassify a reserved room.
+
+---
+
 Everything the office can change without a developer, what it is set to out
 of the box, who may change it and where — and then the values that are fixed
 in code, so nobody goes looking for a Setting that does not exist. **Checked
@@ -306,7 +323,7 @@ is the record of an older stay):
 | `LDAP_URL` (+ `LDAP_BASE_DN`…) | Real directory instead of the dummy accounts |
 | `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `APP_URL` | Real Google sign-in; closes Mock Authentication |
 | `MOCK_LOGIN=false` | Closes Mock Authentication without Google |
-| `MAIL_USER` + `MAIL_APP_PASSWORD` / `MAIL_DRY_RUN` / `MAIL_REDIRECT_ALL_TO` | SMTP / no mail / all mail to one test address |
+| `MAIL_USER` + `MAIL_APP_PASSWORD` / `MAIL_DRY_RUN` / `MAIL_REDIRECT_ALL_TO` / `MAIL_ALLOWED_RECIPIENTS` | SMTP / no mail / all mail to one test address / mail only to named addresses, the rest **dropped** |
 | `ACADEMIC_DB_URL` | Real academic records instead of the dummy ones |
 
 The full list, with what each is for, is in

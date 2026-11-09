@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
 import { EmptyState, SectionHeading } from "@/components/section-heading";
-import { lapsedError } from "@/lib/workflow";
+import { inArrivalOrder, lapsedError } from "@/lib/workflow";
 import type { StudentRecordPanel } from "@/lib/academic/family";
 import type { BookingWithDetails } from "@/lib/types";
 
@@ -58,13 +58,21 @@ export function ReviewQueue({
    */
   forwardTargets?: Record<string, string>;
 }) {
+  /**
+   * **First come, first served** (9 Nov 2026, the meeting). The stores hand
+   * every list back newest first, which put the request that had waited
+   * longest at the bottom of the page. Sorted here rather than in each of the
+   * four pages that render this table, so no queue can be in a different
+   * order from the others - see `inArrivalOrder`.
+   */
+  const queue = inArrivalOrder(bookings);
   const heading = (
     <SectionHeading
       title="Waiting for your review"
-      count={bookings.length}
+      count={queue.length}
     />
   );
-  if (bookings.length === 0) {
+  if (queue.length === 0) {
     return (
       <section>
         {heading}
@@ -103,7 +111,7 @@ export function ReviewQueue({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {bookings.map((b) => (
+          {queue.map((b) => (
             <ReviewRow
               key={b.id}
               booking={b}

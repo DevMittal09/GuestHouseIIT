@@ -1,5 +1,13 @@
 # Architecture and code map
 
+## Meeting decisions implemented, 9 November 2026
+
+New pure rules live in `lib/rooms-access.ts` (room eligibility and display cap), `lib/student-programme.ts` (roll convention), and `lib/tariff-category.ts` (named categories and sidebar sheet). Both stores persist category and original dates. Mock reference upgrades add missing faculty rooms and category rates once without resetting manager edits. Portal Settings has its own console page and component.
+
+The booking schema remains shared by client/server. Allocation/reassignment independently check room eligibility. Invoice draft/issue independently check booking-type authority. Date changes preserve original dates through `originalDatesPatch`; existing room-hold maintenance remains authoritative for clashes.
+
+---
+
 **Why** the codebase is shaped the way it is, and **where** the code for each
 feature lives. The reasoning for a particular choice, with what was rejected,
 is in [02-decisions.md](02-decisions.md); how to run and verify any of it is
@@ -595,6 +603,15 @@ Everything else follows from those two:
   dispatchers get disjoint batches.
 - **HTML and plain text render from one block list** (`lib/mail/render.ts`), so
   the two cannot diverge.
+- **Two send-time filters, in a fixed order** - `lib/mail/deliverable.ts`
+  (`MAIL_ALLOWED_RECIPIENTS`, 9 Nov 2026) decides **whether** each real
+  recipient may be written to, then `lib/mail/redirect.ts`
+  (`MAIL_REDIRECT_ALL_TO`) decides **where** what is left goes. Both at send
+  time, so the outbox stays an honest record of intent. An address the allow
+  list rules out is **dropped, not failed**, and a message with no allowed
+  recipient is settled with a note rather than retried - which is what stops
+  the demo accounts' non-existent addresses producing SMTP errors.
+  [10-roles-and-workflows.md](10-roles-and-workflows.md) Part 3 has the rules.
 - **Scheduled work is two ordinary route handlers** — `/api/mail/dispatch`
   drains the queue, `/api/mail/cron` runs the daily digests, reminders,
   per-guest-house day-wise log and 48-hour escalations. They are the only route

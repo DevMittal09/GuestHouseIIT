@@ -12,7 +12,7 @@
  * override rather than a loophole: the audit trail names who did it and why.
  */
 
-import type { Profile, Role } from "./types";
+import type { BookingType, Profile, Role } from "./types";
 
 /**
  * Roles with unrestricted access to every booking. The developer is included
@@ -117,6 +117,7 @@ export type ConsoleSection =
   | "projects"
   | "billing"
   | "guest_houses"
+  | "portal"
   | "forms"
   | "mail_templates"
   | "mail_outbox"
@@ -173,6 +174,25 @@ export const CONSOLE_SECTIONS: Record<
     href: "/admin/guest-houses",
     roles: ["gh_manager", "developer"],
     blurb: "Guest houses, their rooms, and which of them serve meals.",
+  },
+  /**
+   * **The manager's own settings** (9 Nov 2026, the meeting). VIP rooms and
+   * who may be allotted one, how many free rooms a general requester is
+   * shown, and the link to the institute's full guidelines document.
+   *
+   * Not part of the developer's Settings page, deliberately and for the same
+   * reason the approval workflow is not: the meeting put all three in the
+   * Guest House Manager's hands ("the GHM should have a settings interface to
+   * change which rooms are designated as VIP", "the GHM must have a backend
+   * settings field to update the Google Drive URL"), and a developer-only
+   * page would mean every one of those edits waits on a developer.
+   */
+  portal: {
+    label: "Portal Settings",
+    href: "/admin/portal",
+    roles: ["gh_manager", "developer"],
+    blurb:
+      "Who may be allotted a VIP room, how many free rooms a general requester is shown, and the link to the full guidelines.",
   },
   forms: {
     label: "Form Builder",
@@ -267,9 +287,45 @@ export function userEditError(actor: Profile, target: Profile): string | null {
 /**
  * Preview, issue and print invoices and record payments (Phase 5): the desk -
  * manager and caretaker - plus the developer.
+ *
+ * **Which invoices** is a second question, answered by
+ * {@link canIssueInvoiceForBookingType}: the caretaker runs reception and
+ * settles a personal stay at the counter, but an official bill is charged to
+ * a department's budget, and the meeting reserved that to the manager.
  */
 export function canIssueInvoices(role: Role): boolean {
   return role === "gh_manager" || role === "gh_caretaker" || role === "developer";
+}
+
+/**
+ * **Only the manager invoices an official booking** (9 Nov 2026, the
+ * meeting: "only the GHM should have the authority to generate invoices for
+ * official bookings"; the caretaker may "generate invoices for personal
+ * bookings only").
+ *
+ * An official invoice is a claim on an institute budget and goes to Accounts
+ * with the requester's HOD copied; a personal one is money taken over the
+ * counter as the guest leaves. The caretaker does the second all day and
+ * should never be the one making the first.
+ *
+ * An **alumni** booking is the manager's too: it is billed to the Alumni Fund
+ * or a Special Budget, never settled at the counter, so it is an official
+ * bill in everything but name.
+ */
+export function canIssueInvoiceForBookingType(role: Role, bookingType: BookingType): boolean {
+  if (!canIssueInvoices(role)) return false;
+  if (bookingType === "personal") return true;
+  return role !== "gh_caretaker";
+}
+
+/** Why this person may not invoice this booking, or null when they may. */
+export function invoiceAuthorityError(
+  role: Role,
+  bookingType: BookingType
+): string | null {
+  if (!canIssueInvoices(role)) return "You cannot issue invoices";
+  if (canIssueInvoiceForBookingType(role, bookingType)) return null;
+  return "Only the Guest House Manager can invoice an official booking. The caretaker issues invoices for personal stays.";
 }
 
 /**

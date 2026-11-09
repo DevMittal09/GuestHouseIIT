@@ -54,7 +54,7 @@ export const ADVANCE_BOOKING_WINDOW_MONTHS = DEFAULT_RULES.booking.advance_booki
  * developer because the console bypasses everything anyway.
  */
 export function isAdvanceWindowExempt(role: Role): boolean {
-  return role === "official" || role === "gh_manager" || role === "developer";
+  return role === "gh_manager" || role === "developer";
 }
 
 /**
@@ -737,6 +737,36 @@ export function lapsedError(booking: LapsableBooking, now: Date = new Date()): s
   return `This request was never decided and its check-in (${formatDateTime(
     booking.check_in
   )}) has passed, so the stay cannot happen. Reject it, or ask the Guest House Manager to move the dates first.`;
+}
+
+// ---------------------------------------------------- first come, first served
+
+/**
+ * **The queue is in the order the requests arrived** (9 Nov 2026, the
+ * meeting: "booking requests must follow a First-Come-First-Served
+ * principle... requests should be sorted based on their actual submission
+ * timestamp, not check-in date").
+ *
+ * Both stores return bookings **newest first** (`order by created_at desc`),
+ * which is right for an archive and wrong for a queue: it put the request
+ * that had waited longest at the bottom of the page. This sorts the other
+ * way, on `created_at` and nothing else - not `updated_at`, which moves every
+ * time somebody forwards or edits the request and would shuffle the queue
+ * under the person working down it, and not `check_in`, which is the office's
+ * own distinction: a guest arriving tomorrow does not jump a request made
+ * last week.
+ *
+ * `id` breaks a tie so the order is **total**, and so the list does not
+ * reorder itself between two renders a few seconds apart - which is the other
+ * half of what the meeting asked for ("ensure the ordering remains consistent
+ * when requests are refreshed or updated").
+ *
+ * It returns a new array; the input is left alone.
+ */
+export function inArrivalOrder<T extends { created_at: string; id: string }>(bookings: T[]): T[] {
+  return [...bookings].sort(
+    (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || a.id.localeCompare(b.id)
+  );
 }
 
 // ------------------------------------------------------------------ missed

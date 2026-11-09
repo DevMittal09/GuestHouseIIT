@@ -17,7 +17,7 @@ import type {
   RoomOccupancySegment,
 } from "@/lib/types";
 import { BufferClashError, isHostelWardenRole, RoomClashError } from "@/lib/types";
-import type { Role, RoomType } from "@/lib/types";
+import type { Role, RoomClass, RoomType } from "@/lib/types";
 import { mealsOn, normalizeMeals } from "@/lib/meals";
 import { isInfantAge } from "@/lib/occupancy";
 import { bufferMs, holdGuard, rangesOverlap } from "@/lib/turnover";
@@ -215,6 +215,24 @@ function loadDb(): Db {
         gh.serves_meals = gh.name === "Hamsanandi";
         dirty = true;
       }
+    }
+    /**
+     * Migration 36's counterpart: a room written before the class existed
+     * joins the **general** inventory, and the rooms the seed designates are
+     * taken from the seed - so a developer's existing `.local-db.json` picks
+     * up the Director's rooms and the three let to faculty without being
+     * deleted. From then on the stored class is the truth, which is what lets
+     * the console change one.
+     */
+    for (const room of db.rooms) {
+      if (room.room_class !== undefined) continue;
+      const seeded = seedRooms.find(
+        (r) => r.guest_house_id === room.guest_house_id && r.room_number === room.room_number
+      );
+      room.room_class = seeded?.room_class ?? "general";
+      room.reservation_note = seeded?.reservation_note ?? null;
+      room.reserved_until = null;
+      dirty = true;
     }
     for (const b of db.bookings) {
       // Migrations 6 and 8: no answer at all is "none requested", and the old
@@ -475,6 +493,16 @@ function loadDb(): Db {
       db.tariffs = seedTariffs.filter(
         (t) => t.guest_house_id === null || db.guest_houses.some((g) => g.id === t.guest_house_id)
       );
+      dirty = true;
+    }
+    if (!db.app_settings?.["reference.category_rates.v36"]) {
+      for (const rate of seedTariffs.filter((t) => t.tariff_category)) {
+        if (db.guest_houses.some((g) => g.id === rate.guest_house_id) && !db.tariffs.some((t) => t.id === rate.id)) db.tariffs.push(rate);
+      }
+      for (const room of seedRooms.filter((r) => r.room_class === "reserved")) {
+        if (db.guest_houses.some((g) => g.id === room.guest_house_id) && !db.rooms.some((r) => r.guest_house_id === room.guest_house_id && r.room_number === room.room_number)) db.rooms.push({ ...room });
+      }
+      db.app_settings = { ...db.app_settings, "reference.category_rates.v36": true };
       dirty = true;
     }
     if (!db.invoices) {
@@ -904,6 +932,10 @@ export class MockStore implements DataStore {
     b.status = update.status;
     if (update.rejection_reason !== undefined) b.rejection_reason = update.rejection_reason;
     if (update.no_show_released_at !== undefined) b.no_show_released_at = update.no_show_released_at;
+    // The category the manager chose at allocation (migration 36). Absent
+    // leaves what the booking has, so re-allotting a room does not un-price a
+    // booking already categorised.
+    if (update.tariff_category !== undefined) b.tariff_category = update.tariff_category;
     // A hold exists exactly while the booking holds the room, so leaving
     // ROOM_HOLDING_STATUSES releases the rooms with no caller involvement.
     // The room *cards* are not a hold: they record which room the party was
@@ -957,6 +989,11 @@ export class MockStore implements DataStore {
       b.check_out = checkOut;
     }
     if (patch.purpose_of_visit !== undefined) b.purpose_of_visit = patch.purpose_of_visit;
+    if (patch.tariff_category !== undefined) b.tariff_category = patch.tariff_category;
+    // Written once, the first time the desk moves the dates - the action
+    // decides whether to hand these over, and never hands them over twice.
+    if (patch.original_check_in !== undefined) b.original_check_in = patch.original_check_in;
+    if (patch.original_check_out !== undefined) b.original_check_out = patch.original_check_out;
     if (patch.meals !== undefined) b.meals = normalizeMeals(patch.meals);
     if (patch.meal_preference !== undefined) b.meal_preference = patch.meal_preference;
     if (patch.meal_diet_counts !== undefined) b.meal_diet_counts = patch.meal_diet_counts;
@@ -1330,6 +1367,10 @@ export class MockStore implements DataStore {
       room_number: roomNumber,
       room_type: roomType,
       is_active: true,
+      // A new room joins the general inventory; the console moves it from there.
+      room_class: "general",
+      reservation_note: null,
+      reserved_until: null,
     };
     db.rooms.push(room);
     MockStore.recountRooms(db, guestHouseId);
@@ -1339,7 +1380,15 @@ export class MockStore implements DataStore {
 
   async updateRoom(
     id: string,
-    patch: { is_active?: boolean; room_number?: string; room_type?: RoomType }
+    patch: {
+      is_active?: boolean;
+      room_number?: string;
+      room_type?: RoomType;
+      /** Migration 36: who the room may be allotted to. */
+      room_class?: RoomClass;
+      reservation_note?: string | null;
+      reserved_until?: string | null;
+    }
   ): Promise<void> {
     const db = loadDb();
     const room = db.rooms.find((r) => r.id === id);
@@ -2261,7 +2310,9 @@ export class MockStore implements DataStore {
     if (result.ok) {
       mail.status = "SENT";
       mail.sent_at = nowIso;
-      mail.last_error = null;
+      // `note` records a row that was settled without being delivered - a
+      // recipient ruled out by MAIL_ALLOWED_RECIPIENTS. Not an error.
+      mail.last_error = result.note ?? null;
     } else {
       // A retry is still QUEUED, due later; only giving up is FAILED.
       mail.status = result.retryAt ? "QUEUED" : "FAILED";

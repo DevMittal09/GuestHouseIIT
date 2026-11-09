@@ -46,6 +46,7 @@ test("a student's stay goes from request to a paid invoice", async ({ page }) =>
   const free = dialog.locator("button[title]:not([disabled])").first();
   await expect(free).toBeVisible();
   await free.click();
+  await dialog.getByRole("radio", { name: /^Category I / }).check();
   await dialog.getByRole("button", { name: /Confirm & Allocate/ }).click();
   await expect(dialog).toBeHidden({ timeout: 30_000 });
 

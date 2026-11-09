@@ -821,6 +821,52 @@ export function extensionRequestedToManager(booking: BookingWithDetails): EmailD
   };
 }
 
+/**
+ * **The approved stay is shorter than the one asked for** (9 Nov 2026, the
+ * meeting: "send an email notification to the user explaining the
+ * modification" and "clearly communicate the approved stay duration").
+ *
+ * Both periods are printed, named as what they are - what was requested and
+ * what is approved - because the whole point of the mail is that the two
+ * differ, and a mail that printed only the new dates would read as the guest
+ * having asked for them.
+ */
+export function stayShortenedToRequester(
+  booking: BookingWithDetails,
+  requested: { check_in: string; check_out: string },
+  reason: string | null
+): EmailDocument {
+  return {
+    heading: "Your booking dates have changed",
+    preheader: `${booking.booking_reference_id} - now ${formatDateTime(booking.check_in)} to ${formatDateTime(booking.check_out)}.`,
+    blocks: [
+      {
+        kind: "paragraph",
+        text: `The Guest House Manager has changed your booking dates at ${booking.guest_house.name}. The updated dates are shown below.`,
+      },
+      {
+        kind: "facts",
+        rows: [
+          ["Previous dates", `${formatDateTime(requested.check_in)} to ${formatDateTime(requested.check_out)}`],
+          ["Updated dates", `${formatDateTime(booking.check_in)} to ${formatDateTime(booking.check_out)}`],
+        ],
+      },
+      ...(reason
+        ? [
+            {
+              kind: "callout" as const,
+              tone: "warning" as const,
+              title: "Reason given",
+              lines: [reason],
+            },
+          ]
+        : []),
+      bookingFacts(booking),
+      { kind: "button", label: "Open My Bookings", href: portalUrl("/dashboard") },
+    ],
+  };
+}
+
 export function extensionDecidedToRequester(
   booking: BookingWithDetails,
   approved: boolean,

@@ -21,6 +21,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 
 | Date | What happened |
 | --- | --- |
+| **9 Nov, meeting continuation** | Completed interrupted implementation: scholar spouse rule, room classes and Director-only rooms, GHM tariffs, date edits, cancellation notice, FCFS, caretaker billing restrictions and portal settings. Migration 36 and focused workflow tests. Office ambiguities remain documented. |
 | **19 Aug** | First commit: five requester categories and their approval chains, config-driven forms, the manager's cinema-style room grid, the developer console, two data stores behind one interface, a persona-picker mock auth. `AGENTS.md` written for AI agents. |
 | 21-22 Aug | Pushed to GitHub. The approval log and archive search at `/history`. |
 | 30 Aug | Booking lifecycle (Occupied, Vacated, cancellation flow); history PDF export. |
@@ -77,6 +78,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 | **8 Nov** | **The rates the move off Supabase left behind.** The owner: the portal moved from hosted Supabase to a local PostgreSQL database and *"we havent populated it fully... only stuff like prices need to be updated"*. `guesthouse_dev` held nine meal rates and **no room rate at all** - and nothing in the repository had ever seeded one: `scripts/init-postgres.sql` named each room row's guest house with a subselect against the table it had just created empty, and a `where` guard then discarded all three rows. So the booking form's tariff panel read "no rates published" and no invoice could be issued. The office's sheet was read out of the hosted project (read-only) and applied - the **Category I / II / III** rates of 5 Nov 2026 - and the sheet moved into a new **`scripts/seed-reference-data.sql`** / `npm run seed:reference`, which creates the guest houses before the rates. The **room inventory** was aligned with the office's own (Bageshri renamed to 201-307, Hamsanandi brought from 10 rooms to its real 13). The duplicate `NEXT_PUBLIC_SUPABASE_URL` in `.env.local` resolved from the JWTs' project ref. **661 tests** and **39 on PostgreSQL** pass. **No migration.** |
 | **8 Nov** (second) | **The Supabase project becomes the shared database.** The owner asked whether a booking made on `localhost` is visible to a collaborator (**it is not** - each laptop has its own PostgreSQL, and `serverActions.allowedOrigins` is derived from `APP_URL`, so even over the LAN a collaborator could read pages and not submit), and then to put the local database into the Supabase project they had been using. The premise that the schemas had diverged was **wrong**: 387 columns against 386, the one difference `profiles.password_hash`. The **data** had diverged, each side holding what the other lacked - the hosted project 35 bookings, 98 logs and the only 8 invoices; the laptop the only complete directory, including the 9 `units` rows without which HOD approval resolves to nobody. The owner chose the laptop as the truth, so the hosted `public` schema was **backed up, dropped and restored** from it. Supabase is now a **managed PostgreSQL** reached over `DATABASE_URL` and nothing else - the same `PostgresStore` the institute's database will use, so that migration is one line. Three obstacles worth knowing: Supabase runs **17.6** and `pg_dump` 16 refuses a newer server (a `postgres:17-alpine` container took the backup); the direct host is **IPv6-only** and unreachable, so the **session pooler on 5432** is the way in; and `pg_dump`'s `search_path = ''` stops the default gist operator class for `uuid` resolving, which silently loses **both exclusion constraints** unless `btree_gist` is in `public` and the path is widened. **661 tests** pass. **No migration, no code change.** |
 | **9 Nov** | **The shared database, made usable.** Two runtime errors from the day before's move. `.env.local` held the literal `:<password>@` - the previous round's closing message had handed the owner a connection string with that placeholder in it, written to be *sent to a collaborator*, and it went into their own file; the database was fine. Then `(EMAXCONNSESSION) max clients reached in session mode`: Supabase's **session pooler admits 15 clients per project**, not per developer, against a pool asking for `max: 20`, **and** `lib/db/client.ts` cached its pool in a module-level `let`, which Turbopack rebuilt on every hot reload while the old pool kept its idle connections. So `DATABASE_URL` moved to the **transaction pooler (6543)** - verified to keep transactions, plpgsql and the `room_holds` exclusion constraint's `23P01` - and the pool moved to **`globalThis`** with `max` 10, `DATABASE_POOL_MAX` and a 10 s idle timeout. **661 tests** pass; 40 concurrent requests to the failing page returned 40 x 200. **No migration**; one code change. |
+| **9 Nov** (second) | **Real Gmail, and no mail to addresses that do not exist.** The owner turned `MAIL_REDIRECT_ALL_TO` off to see whether delivery works, and asked that non-existent addresses simply not be written to: *"i dont want errors due to that invalid mail ids"*. New seam **`MAIL_ALLOWED_RECIPIENTS`** (`lib/mail/deliverable.ts`), applied at send time just before the redirect: an address not on the list is **dropped, not failed** - nothing attempted, nothing retried - and a message with no allowed recipient is **settled with a note** instead of failing, while a requester with no address on file still fails, because that is a real fault. Three accounts repointed at real inboxes (Saveri Boys' Assistant Warden and Warden, and the desk); the **Deputy Warden left fake on purpose**, as the live proof the drop works on a CC list. The **student was not repointed**: the shared database already held a real account on that address with 3 bookings, so the repair's guard refused the rename, and the fix was to give that account the Saveri Boys `institute_students` row it had never had - without which it had no hostel, no Assistant Warden, and its requests went straight to the desk. Gmail **authenticates** (`nodemailer.verify()`); nothing was sent. **No migration.** |
 
 ## The problem
 
@@ -1658,3 +1660,49 @@ fault in the database itself.
 The first exclusion-constraint test of the round was **invalid** - it deferred
 the constraint and then rolled back, so nothing was checked - and was redone.
 Recorded because a test that cannot fail is worse than no test.
+
+
+---
+
+## Round of 9 November 2026 (second) - real Gmail, and no mail to addresses that do not exist
+
+Not a requirements round. The owner wanted to know whether the portal's mail
+actually reaches a real mailbox, which the redirect made impossible to see.
+
+| # | What was asked | Status |
+| --- | --- | --- |
+| 1 | *"dont redirect mails to student.iitpkd01@gmail.com"* | **Done.** `MAIL_REDIRECT_ALL_TO` commented out in `.env.local`, not deleted - restoring it is one character |
+| 2 | *"For invalid mail ids... just dont send the mails, Like i dont want errors due to that invalid mail ids"* | **Done**, as a new send-time filter `MAIL_ALLOWED_RECIPIENTS` (`lib/mail/deliverable.ts`): an address not on the list is **dropped, not failed**, and a message with nobody left is **settled with a note** rather than retried. 13 new tests |
+| 3 | Saveri student = `142301026@smail.iitpkd.ac.in` | **Not as asked, and deliberately.** A **real account** already held that address on the shared database (3 bookings, 3 log entries); the repair's guard refused to rename a demo persona onto it. Instead that account was given the **Saveri Boys** `institute_students` row it had never had - it had no hostel, so no Assistant Warden, so its requests skipped the stage this test is for |
+| 4 | Saveri Assistant Warden = `student.iitpkd01@gmail.com` | **Done** - the account that decides |
+| 5 | Saveri Warden = `muhamed.rizwan2222@gmail.com` | **Done** - the account that is copied |
+| 6 | Guest House Manager = `muhamed.rizwan2458@gmail.com` | **Done** - the account that allocates |
+| 7 | *"We can change it back temporarily later"* | **Three places, listed** in [99-recent-changes.md](99-recent-changes.md): the `.env.local` line, the two seeds, and the repair script. Reverting the seeds without the repair makes `npm run seed:personas` retire three accounts |
+| 8 | Checks | The chain computed from the live store delivers to all four and **drops** the Deputy Warden's fake address; Gmail **authenticates** (`nodemailer.verify()`, nothing sent); `lint`, `typecheck` and **44** mail/seed-parity tests clean |
+
+The **Deputy Warden was left on its fake address on purpose**: it is the one
+rank in that office with no real inbox, so it is the live proof that the allow
+list drops an address out of a CC list rather than failing the message.
+
+> This round shared the working tree with another session's unfinished work
+> (room classes, tariff categories, migration 36). **7 unit tests fail on
+> those changes** - `advance_booking_months` 6 -> 1 and a changed roll number -
+> and belong to that round, not this one.
+
+
+## 9 November 2026 - consolidated meeting decisions, continued after Claude's limit
+
+The owner supplied the original consolidated prompt and Claude transcript and asked to continue. The working tree already contained most UI/schema work plus a separate mail round.
+
+| Requirement | Result |
+| --- | --- |
+| Campus classification and scholar spouses | Existing NULL-hostel route retained; roll-based spouse restriction enforced server-side |
+| GHM/caretaker authority | Existing desk authority retained; official/alumni invoice draft and issue denied to caretaker |
+| Inventory and VIP configuration | Additive sixteen-room Hamsanandi with eleven general, three reserved, two Director-only; Bageshri IDs preserved; dynamic VIP email/role settings |
+| One-month window, fourteen-day ordinary stays, FCFS, cancellation | Implemented in shared rules/actions/UI; official booking-type duration exemption and 24-hour requester notice |
+| Manager tariff and duration decisions | Required category at allocation, category rate editor, original dates, audit and requester notification; booking-type changes refused |
+| Sidebar and guidelines | Read-only category sheet, catering timetable, inline Dos and Don'ts, configurable document link |
+| Availability and consistency | Eligibility checked at submission/allocation/reassignment; requester counts exclude restricted rooms and totals |
+| Ambiguous inputs | PDF, reservation dates, cap scope, alternate room labels and legacy alumni type documented in roadmap |
+
+Shared-database deployment was not performed. The separate mail/account work was preserved.

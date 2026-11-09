@@ -1,5 +1,13 @@
 # Production — what it needs, how to deploy it, how to run it
 
+## Deployment addition - meeting decisions, 9 November 2026
+
+Before deploying this round, back up the database, apply [`migration 36`](../scripts/migrations/00000000000036_room_classes_and_tariff_categories.sql), then run `npm run seed:reference` using the DDL/session connection. Run `npm run check:migrations` against that database. Do not rerun the full schema on an existing installation.
+
+The source changes are complete locally; this continuation did not apply migrations to the shared database. Confirm the A1–A3 reservation dates, supply the authoritative catering PDF and Google Drive guidelines URL, and resolve whether the 14-room display cap is shared across houses. See [03-roadmap.md](03-roadmap.md). The office must also confirm the alternative room-label reference before any renaming; existing IDs and names are retained.
+
+---
+
 The one file about the **real deployed portal**, as opposed to the demo.
 Part 1 is the checklist of what a production build has to have and who must
 supply it; Part 2 is how to deploy and operate it; Part 3 is what still has to

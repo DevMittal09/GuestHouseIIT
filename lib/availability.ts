@@ -454,8 +454,24 @@ export function roomsBookedAt(
  * requester's business either.
  */
 export interface AvailabilityCounts {
-  /** Active rooms at the guest house. */
+  /**
+   * Active rooms the figures below are counted against.
+   *
+   * **Never sent to a requester** (9 Nov 2026, the meeting: the frontend
+   * "must not display the total number of rooms or a fraction such as
+   * Available Rooms / Total Rooms"). `getRoomAvailability` zeroes it for
+   * everyone but the desk, and `AvailabilityCountsPanel` prints no
+   * denominator - so the inventory cannot reach a page even by accident.
+   * The desk's own chart header still reads it.
+   */
   total: number;
+  /**
+   * Whether the figures have been **capped** for a general requester
+   * (`rules.portal.general_visible_rooms`). The panel says so in a screen
+   * reader's label rather than printing a figure it cannot explain; the desk
+   * never sees a capped count.
+   */
+  capped?: boolean;
   /** The institute dates the window covers - the index of `freeByDay`. */
   days: string[];
   /** Rooms free at every moment of each day. */

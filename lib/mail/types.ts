@@ -42,6 +42,7 @@ export type MailEventKey =
   | "invoice.issued.accounts"
   | "booking.extension_requested.manager"
   | "booking.extension_decided.requester"
+  | "booking.stay_shortened.requester"
   | "booking.no_show.requester"
   /** Nobody decided it in time (migration 29, 7 Oct 2026). */
   | "booking.missed.requester";
@@ -67,6 +68,7 @@ export const MAIL_EVENT_LABELS: Record<MailEventKey, string> = {
   "invoice.issued.accounts": "Invoice issued (Accounts)",
   "booking.extension_requested.manager": "Extension requested",
   "booking.extension_decided.requester": "Extension decided",
+  "booking.stay_shortened.requester": "Approved stay shortened",
   "booking.no_show.requester": "Released as a no-show",
   "booking.missed.requester": "Request missed - nobody decided it in time",
 };
@@ -128,6 +130,7 @@ export const MAIL_THREAD_OF: Partial<Record<MailEventKey, MailThreadKind>> = {
   "booking.cancellation_decided.requester": "booking",
   "booking.cancelled.requester": "booking",
   "booking.extension_decided.requester": "booking",
+  "booking.stay_shortened.requester": "booking",
   "booking.no_show.requester": "booking",
   "booking.missed.requester": "booking",
   "stay.reminder.requester": "booking",
@@ -234,7 +237,20 @@ export interface EmailOutboxFilter {
   limit?: number;
 }
 
-/** How a send attempt ended, for `settleEmail`. */
+/**
+ * How a send attempt ended, for `settleEmail`.
+ *
+ * `note` is for an outcome that is **settled but not a delivery** - today,
+ * every recipient ruled out by `MAIL_ALLOWED_RECIPIENTS`. It is not a failure:
+ * a retry would reach the same nobody, and the point of the allow list is to
+ * stop mail to addresses that do not exist producing errors. Stores write it
+ * to `last_error`, which the console renders muted rather than red on a row
+ * that did not fail.
+ *
+ * A row like that reads SENT, which is the one dishonest corner of this: it
+ * was settled, not sent. A `SKIPPED` value on the `email_status` enum is the
+ * honest fix and needs a migration - `.memories/03-roadmap.md`.
+ */
 export type EmailSettlement =
-  | { ok: true; providerMessageId: string }
+  | { ok: true; providerMessageId: string; note?: string }
   | { ok: false; error: string; retryAt: string | null };

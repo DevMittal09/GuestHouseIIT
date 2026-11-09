@@ -7,98 +7,177 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 9 November 2026 - the shared database, made usable
+## Round of 9 November 2026 (third) - the consolidated meeting decisions
 
-Two runtime errors from the owner, one after the other, both from the move to
-the shared database the day before. Neither was a fault in the database.
+The owner sent the two sets of notes from the Guest House Portal meeting as
+one consolidated list - user classifications, room inventory and VIP rooms,
+booking and cancellation rules, who decides the tariff, the booking page's
+sidebar, and availability - with the instruction to verify the current
+implementation rather than assume, and to **report conflicts rather than
+silently resolve them**.
 
-### 1. `password authentication failed for user "postgres"`
+> **This round ran across two sessions and shares its working tree with the
+> mail round** of the same day ([01-background.md](01-background.md),
+> *9 November 2026 (second)*): `MAIL_ALLOWED_RECIPIENTS`, and three demo
+> accounts repointed at real inboxes. That arrangement is **temporary and
+> nothing here reverts it** - how to, and why it must be reverted in three
+> places together, is [05-credentials-and-security.md](05-credentials-and-security.md)
+> Part 1 and [03-roadmap.md](03-roadmap.md) §2s. The two rounds overlap in
+> `lib/store/{mock,postgres,seed}.ts`, `scripts/seed-personas.mjs`,
+> `app/actions/admin.ts`, `lib/mail/types.ts`, `tests-pg/harness.ts` and
+> `e2e/helpers.ts`.
 
-Thrown by `PostgresStore.listProfiles` on `/mock-login`, so the persona picker
-- the only door into the portal - was dead.
+### What the meeting changed, and what it only confirmed
 
-`.env.local` held the literal string `:<password>@`. The previous round's
-closing message gave the owner a line to **send a collaborator**, with
-`<password>` as a placeholder; it looked like a configuration line, so it went
-into their own `.env.local` and overwrote the working password. **An agent's
-own output caused this**, which is why the fix is a wording rule and not a
-code change: a placeholder inside a copy-pasteable connection string must read
-`PASTE_PASSWORD_HERE`, never `<password>`.
+**Already true, verified and left alone.** A student whose `hostel_name` is
+NULL already went straight to the desk (17 Oct 2026, `approverNotApplicable`);
+the fourteen-night cap, the desk's authority over dates and rooms, the
+cancellation request/decision flow, and date-specific availability from
+`room_holds` were all already as the meeting described. These were checked,
+not rewritten.
 
-- The database was never involved: `psql` with the real password returned 35
-  profiles.
-- The password was restored, `.env.local` backed up first
-  (`.env.local.bak-20261109-0933`).
-- Two things the owner's own rewrite had dropped came back: the **commented
-  local `DATABASE_URL`** they had asked for on 8 Nov, and a stray
-  `# LEAVE UNSET IN PRODUCTION - it drops CC entirely.` that had ended up
-  above `DATABASE_URL` (it belongs to `MAIL_REDIRECT_ALL_TO`).
-- `next dev` watches env files, so no restart was needed; `/mock-login`
-  returned 200 and rendered its groups.
+**Three decisions reverse an earlier one**, and each is recorded as a
+*Superseded* note in [02-decisions.md](02-decisions.md):
 
-### 2. `(EMAXCONNSESSION) max clients reached in session mode`
-
-Thrown by `listGuestHouses` through `getEffectiveFormConfig` on `/book`. **Two
-independent causes**, and fixing either alone would not have held.
-
-| | Cause | Fix |
+| Now | Was | Why the reversal is taken |
 | --- | --- | --- |
-| a | Supabase's **session pooler admits 15 clients for the whole project**, not per developer, and the pool asked for `max: 20`. One dev server could lock out every collaborator | `DATABASE_URL` moved to the **transaction pooler, port 6543**, which multiplexes; the session pooler stays in `.env.local`, commented, for `pg_dump` / `psql` / DDL |
-| b | **Turbopack re-evaluates a module on hot reload** and `lib/db/client.ts` cached its pool in a module-level `let`, so each reload built a new `Pool` and the old one kept its idle connections for ever | The pool is cached on **`globalThis`**, `max` defaults to **10** with **`DATABASE_POOL_MAX`** to lower it, `idleTimeoutMillis` 30 s -> **10 s** |
+| The **manager** picks the tariff category, and must, before rooms are allotted | The **requester** picked it on the form (17 Oct 2026) | A category is a kind of *guest*, not a kind of account. Only the desk knows whether the arrival is an external examiner or somebody's parent, and a requester choosing their category is a requester choosing their rate |
+| **One month** of advance booking | **Six months** (14 Oct 2026, the office) | The meeting asked for the railway window outright. The cases six months was granted for are still met: official and dignitary bookings, the manager and the developer are exempt from the window entirely |
+| The desk's queue is **first come, first served** | Official requests floated to the top | A queue that reorders itself by who is asking is not a queue. Officials keep their saffron edge, so nothing became harder to find |
 
-`pg_stat_activity` is no help here and misled the first reading: it shows
-*Supavisor's* connections to Postgres (12 idle, steady, by design), not the
-pooler's client count, so the database reads as healthy while clients are
-being refused.
+**A fourth reverses a deliberate non-decision.** A named category stored on a
+booking was considered and refused in [03-roadmap.md](03-roadmap.md) §2j,
+because it would be a second source of truth for money. It is not one now:
+`tariffs` carries the same column, and `resolveTariff` ranks a named category
+above every other qualifier, so the name on the booking and the rate sheet
+meet in one function.
 
-**Transaction mode was verified, not assumed** - it is the riskier half of the
-fix, because a transaction pooler holds no session:
+### The four room classes, which are three different restrictions
 
-- 25 concurrent queries through one pool: all 25 fine.
-- `pool.connect()` + `BEGIN` / `COMMIT` / `ROLLBACK` - the `allocateRooms`
-  pattern - fine: the server connection is pinned for the transaction.
-- `room_holds_no_overlap_guard` **still refuses an overlap**, with SQLSTATE
-  **`23P01`**, which is what `RoomClashError` is built on. Checked with two
-  different bookings on one room, inside a transaction that was rolled back;
-  `room_holds` was 3 rows before and 3 after.
-- `set_room_holds()` and the other plpgsql functions resolve.
-- Nothing in `lib/` or `app/` uses `LISTEN`, `NOTIFY`, advisory locks,
-  session `SET` or runtime DDL (grepped), and node-postgres uses **unnamed**
-  prepared statements - which is what makes transaction mode safe here.
+`rooms.room_class` (migration 36), the rule in `lib/rooms-access.ts`:
 
-> The first exclusion-constraint test was **invalid** and said so: it ran
-> `SET CONSTRAINTS ALL DEFERRED`, which postpones a `DEFERRABLE` constraint to
-> commit time, and then rolled back - so nothing was ever checked. It was
-> redone without it. A test that cannot fail is worse than no test.
+| Class | Who may be put in it |
+| --- | --- |
+| `general` | anybody - the ordinary inventory |
+| `vip` | the addresses and roles the manager authorises in Portal Settings |
+| `director_only` | **nobody through the portal**: only a booking the desk raises itself |
+| `reserved` | nobody at all; the desk still sees the room |
+
+**`vip` and `director_only` are deliberately not one class.** The meeting's own
+warning was that the Director's rooms "should not accidentally become
+available for ordinary online VIP bookings" - which they would have, if adding
+an address to the authorised list had reached them. C1 and C2 are
+`director_only`; an office that later wants a named guest in one moves that
+room, which is a deliberate act on one room rather than a side effect.
+
+**Hamsanandi is sixteen rooms again.** A1-A3 were simply *absent* from the
+inventory (the office's list of 23 Sep 2026 gave it thirteen, "only A4 exists
+in A"), which recorded the eleven-bookable arithmetic by leaving the reserved
+rooms out - and so showed the manager thirteen rooms in a sixteen-room guest
+house. They are created `reserved`. 16 - 3 reserved - 2 director-only = the
+**eleven** the meeting named. **The live database was read first**: it holds
+the old thirteen Hamsanandi labels and ten Bageshri labels, so this is purely
+additive and **no room was renamed**.
+
+### What a requester is now told about availability
+
+Three rules, kept separate on purpose - the meeting asked for exactly that
+("implemented as distinct rules rather than conflated into one hardcoded room
+count"):
+
+1. **which rooms count** - the room's class (`generalInventory`);
+2. **how high the figure may read** - the cap, `rules.portal.general_visible_rooms`, default 14 (`visibleFreeRooms`);
+3. **what is published at all** - a count, never a denominator.
+
+So `AvailabilityCountsPanel` lost its `/total` and its proportional meter (a
+bar a tenth full publishes the inventory as plainly as "1 of 10"), and
+`/availability`'s header figures became the desk's. The word **Full** stays,
+because it is the one thing the fraction was doing that a bare figure cannot.
 
 ### Changed
 
-| File | Change |
+| Area | Files |
 | --- | --- |
-| `lib/db/client.ts` | The pool on `globalThis`; `max` 20 -> **10** and configurable by `DATABASE_POOL_MAX`; `idleTimeoutMillis` 30 s -> 10 s. The only code change of the round |
-| `.env.local` | Real password restored; `DATABASE_URL` on **6543**; the session-pooler and local strings kept commented; the misplaced mail comment removed |
-| `AGENTS.md` | The two ports and the `globalThis` pool, under *Two backends, one interface* |
-| [20-architecture.md](20-architecture.md) | The pool's rule, beside the store it serves |
-| [21-database.md](21-database.md) | *Where the database actually is* now names the transaction pooler |
-| [22-running-and-testing.md](22-running-and-testing.md) | Both errors in Part 2; the connection table's transaction-pooler row rewritten (it had said to avoid 6543) |
-| [05-credentials-and-security.md](05-credentials-and-security.md) | `DATABASE_POOL_MAX`; which pooler the app uses |
-| [04-production.md](04-production.md) | The three install steps need a **session**; the running service wants the transaction pooler and a pool ceiling |
+| **New rules** | `lib/rooms-access.ts` (room classes, VIP access, the cap), `lib/student-programme.ts` (the roll-number convention, the spouse rule), `lib/tariff-category.ts` (Category I/II/III and the sheet) |
+| Shared names | `lib/types.ts` - `ROOM_CLASSES`, `TARIFF_CATEGORIES`, `Spouse` on the student relationship list, `Room.room_class`, `Booking.tariff_category` / `original_check_*` |
+| Settings | `lib/settings.ts` - the new **`rules.portal`** group, `cancellation_notice_hours`, `advance_booking_months` back to 1 behind a **revision upgrade** (a saved row beats a changed default, which is why the group now has one) |
+| Rules applied | `lib/policy.ts` (the 24-hour notice; official bookings exempt from the stay cap **by booking type**), `lib/operations.ts` (`shortenStayError`, `originalDatesPatch`), `lib/workflow.ts` (`inArrivalOrder`), `lib/access.ts` (the `portal` console section, `invoiceAuthorityError`), `lib/tariffs.ts` + `lib/invoice.ts` (the category outranks every qualifier, and is printed), `lib/academic/guest-names.ts` (the spouse rule rides the existing `withheld` seam), `lib/booking-schema.ts`, `lib/form-config.ts`, `lib/form-config-server.ts`, `lib/availability.ts` |
+| Actions | `bookings.ts` (room access at allocation, the category required there, the cancellation notice), `manager.ts` (the category and the original dates, and the requester told), `operations.ts` (`shortenStayAction`), `invoices.ts` (the caretaker cannot draw up or issue an official bill), `availability.ts`, `settings.ts`, `admin.ts` (`setRoomClassAction`) |
+| Mail | `lib/mail/{types,template-config,templates,notify}.ts` - **`booking.stay_shortened.requester`**, which names both periods because the whole point is that they differ |
+| Console | **`/admin/portal`** + `components/admin/portal-settings-manager.tsx` (new), `admin/guest-houses-manager.tsx` (the class per room), `admin/settings-manager.tsx`, `admin/billing-manager.tsx` (a rate scoped to a category) |
+| Booking page | `tariff-panel.tsx` **rewritten** - the office's table and the catering timings, and it asks nothing; `booking-form.tsx`, `booking-request-page.tsx`, `room-grid.tsx` (the category, and restricted rooms shown but unpickable), `manage-stay-dialog.tsx` (approve a shorter stay; correct the category), `manager-queue.tsx`, `review-queue.tsx`, `my-bookings.tsx`, `booking-details.tsx`, `availability-{counts,grid}.tsx`, `booking-availability.tsx` |
+| Public site | `lib/site-content.ts` (**Dos and Don'ts**, and the notice period), `lib/site.ts` (`GUIDELINES_PDF_URL` retired), `app/(site)/guidelines/page.tsx` |
+| Database | `scripts/migrations/00000000000036_room_classes_and_tariff_categories.sql` (**new**, and so is `scripts/migrations/`), `scripts/init-postgres.sql`, `scripts/seed-reference-data.sql`, `scripts/check-migrations.mjs`, `lib/store/{types,mock,postgres,seed}.ts` |
+| Tests | `tests/meeting-decisions.test.ts` and `tests-pg/meeting-decisions.pg.test.ts` (**new**); `tests/{settings,public-site,twelfth-round,fourteenth-round}.test.ts` updated where this round superseded them; `tests-pg/*` |
+| e2e harness | `playwright.config.ts` (the secret reaches the runner; `DATABASE_URL` **and** Google blanked), `lib/env.ts` (`ALLOW_MOCK_STORE` exempts Google), `e2e/{booking-journey,fifth-round,fourteenth-round,eighth-round}.spec.ts` (the category radio, the rates table), `e2e/sign-in.spec.ts` **rewritten** for the door the harness actually serves |
+| Checks | `scripts/check-migrations.mjs` - the remediation line named `init-postgres.sql`, which builds a database from nothing; it now names `scripts/migrations/` for an existing one |
+| Rules file | `AGENTS.md` |
 
 ### Checks
 
-`npm run lint`, `npm run typecheck`, **661 tests** (39 files) and
-`npm run build` all clean. 40 concurrent requests to `/mock-login` - the page
-that had been failing - returned **40 x 200**. The dev server was restarted
-once, after the build, because a build pulls `.next/` out from under it.
+`npm run lint`, `npm run typecheck`, **689 tests in 41 files**,
+`npm run test:pg` (**51 tests**, against a local throwaway `gh_test` - never
+the shared host) and `npm run build` all clean. Migration 36 was applied to a
+throwaway `postgres:16-alpine` from the previous schema, re-run to prove it
+idempotent, and checked not to overwrite a room class edited afterwards.
+`npm run check:migrations` confirms the shared database still holds **1-35**,
+and names all eight of migration 36's elements as missing - which is the
+state this round intends.
 
-**No migration. No schema change. Nothing was written to the shared database**
-beyond a transaction that was rolled back.
+**The Playwright suite is not clean, and the reasons are all older than this
+round.** It turned out to be **un-runnable** - the production server refused
+to start without Google, and `signIn()` threw because `E2E_TEST_SECRET` was
+in the server's environment and not the runner's - so nobody had run it for
+several rounds and the specs had drifted. The harness is fixed (and now
+blanks `DATABASE_URL` **and** Google, so it cannot reach the shared database
+or the owner's real Google client). Of the 20 journeys that then failed:
+
+- **one was this round's** - the room row moving out of the per-guest-house
+  rates table, which `e2e/eighth-round.spec.ts` still asserted. Fixed, and
+  verified passing. The specs that allocate rooms also gained the new
+  category radio;
+- **three were pre-existing and are fixed anyway**, because fixing the
+  harness is what exposed them: `e2e/sign-in.spec.ts` asserted a Google
+  button that only a machine with real credentials in `.env.local` ever had.
+  Rewritten for the door the harness serves, and one was only a strict-mode
+  locator matching Next's route announcer;
+- **16 remain, none of them on this round's code**, each asserting something
+  decided away on 7 Oct, 28 Oct or 7 Nov 2026.
+
+Attributed by checking out `HEAD`, applying **only** the harness fixes, and
+running the same specs: they fail there identically. The list, and the two
+sign-in defects they uncovered, are [03-roadmap.md](03-roadmap.md) §2t.
+
+**The build and the journeys were run in a copy of the tree**, not at the
+repo root: a dev server was serving the owner on port 3000, and
+`npm run build` pulls `.next/` out from under it. `node_modules` was
+hard-linked (`cp -al`) rather than symlinked, because **Turbopack cannot
+resolve `next` through a symlinked `node_modules`** and fails with "Could not
+find the Next.js package".
+
+**Migration 36 is written and tested but deliberately not applied to the
+shared database** - that is a production change, and the order is
+[04-production.md](04-production.md) §1a. Nothing was written to the shared
+database this round.
 
 ### What this opens
 
-In [03-roadmap.md](03-roadmap.md) §2r, which this round amends rather than
-closes: the pool ceiling is now a figure somebody has to own per deployment,
-and the 15-client limit is a property of the Supabase plan - it is the first
-thing that will bite when a third and fourth collaborator join, or when the
-e2e suite is pointed at the shared database (it must not be; it builds its
-own throwaway database for this reason).
+[03-roadmap.md](03-roadmap.md), *Meeting follow-ups*: six things only the
+office can settle, and none of them guessed at -
+
+1. the **authoritative catering PDF**, which was never attached; the meeting's
+   own timings are in force provisionally;
+2. the **dates** of the A1-A3 faculty reservation - reserved indefinitely
+   until released, because no three-year start was invented;
+3. the **Google Drive guidelines URL**; the field is ready and the button
+   stays hidden while it is empty;
+4. whether the **14-room cap** is per guest house (as built) or across both;
+5. the alternative labels "Hamsanandi A1-A4/D1-D4, Bageshri B1-B10", which
+   have **no verified mapping** to the live inventory;
+6. whether the **alumni** booking type is retired, the meeting having named
+   Personal and Official only. The IAR workflow is preserved until somebody
+   says otherwise.
+
+There is also **no waiting-list automation**: a cancellation releases the
+rooms for the desk to allot, which is what the 24-hour notice period exists to
+make possible.

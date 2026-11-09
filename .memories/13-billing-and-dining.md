@@ -1,5 +1,19 @@
 # Billing — tariffs, invoices, payments and dining
 
+## Meeting decisions implemented, 9 November 2026
+
+Supersedes the requester-selected/derived tariff descriptions below.
+
+`bookings.tariff_category` and `tariffs.tariff_category` hold I, II or III. GHM must select a category when allocating; only manager/developer management actions can change it later, with a reason in the log. Booking type cannot be changed by the management action: reject and resubmit.
+
+The six named rates are Bageshri ₹1,000/1,500/2,000 and Hamsanandi ₹1,500/2,000/2,500, effective 5 November 2026. Both store seeds carry them. A selected category with no matching room rate blocks invoicing rather than falling back to another price. Historical uncategorised bookings still resolve against legacy rates; issued invoice snapshots remain unchanged. The future-rate editor copies the category when changing a rate.
+
+Caretaker may draft and issue **personal** invoices only. Official and alumni invoices require GHM/developer authority, enforced in both actions and shown in the invoice panel. Existing personal-payment and room-vacating rules remain.
+
+Catering defaults are breakfast 08:00–09:30, lunch 12:30–14:00 and dinner 19:30–21:00. These are the meeting notes' times; no authoritative PDF was supplied. Meal rules revision 1 updates previously saved windows once, and subsequent console edits persist.
+
+---
+
 Phases 5 and 6 (22 Sep 2026), the 24 Sep corrections, the 25 Sep ones (GST per
 section, additional charges, live repricing), the **7 Oct** ones (version 4,
 cash retired, a personal stay settled at check-out, Awaiting payment), the

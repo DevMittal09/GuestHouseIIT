@@ -59,7 +59,6 @@ export function AvailabilityCountsPanel({
         <DayHeadline
           day={counts.days[0]}
           free={counts.freeByDay[0] ?? 0}
-          total={counts.total}
           isToday={counts.days[0] === today}
           isPast={isPastDay(counts.days[0], today)}
         />
@@ -74,7 +73,6 @@ export function AvailabilityCountsPanel({
                 key={day}
                 day={day}
                 free={counts.freeByDay[i] ?? 0}
-                total={counts.total}
                 isToday={day === today}
                 isPast={isPastDay(day, today)}
               />
@@ -100,7 +98,7 @@ export function AvailabilityCountsPanel({
                 <li
                   key={hour}
                   aria-label={`${hourLabel(hour)}${now ? " (now)" : ""}: ${
-                    full ? "no rooms free" : `${free} of ${counts.total} rooms free`
+                    full ? "no rooms free" : `${free} room${free === 1 ? "" : "s"} free`
                   }`}
                   className={cn(
                     "rounded border px-2 py-1.5",
@@ -129,17 +127,26 @@ export function AvailabilityCountsPanel({
   );
 }
 
-/** One day of the strip: the date, the figure, the proportion. */
+/**
+ * One day of the strip: the date and the figure.
+ *
+ * **No denominator and no proportional meter** (9 Nov 2026, the meeting: the
+ * frontend "must not display the total number of rooms or a fraction such as
+ * Available Rooms / Total Rooms"). Both were here: the figure was set beside
+ * "/10" and a 3px bar underneath drew `free / total`, which publishes the
+ * inventory just as plainly as printing it. The count is the whole answer, it
+ * still falls as rooms go, and a day with nothing left still says **Full** -
+ * which is the one thing the fraction was doing that the figure alone could
+ * not.
+ */
 function DayCell({
   day,
   free,
-  total,
   isToday,
   isPast,
 }: {
   day: string;
   free: number;
-  total: number;
   isToday: boolean;
   /** The day has gone: no figure, because it cannot be booked. */
   isPast: boolean;
@@ -152,7 +159,7 @@ function DayCell({
           ? "a past date, not available to book"
           : full
             ? "no rooms free all day"
-            : `${free} of ${total} rooms free`
+            : `${free} room${free === 1 ? "" : "s"} free`
       }`}
       className={cn(
         "border-t-2 pt-2",
@@ -185,13 +192,12 @@ function DayCell({
             <span className="font-heading text-[1.5rem] leading-none font-semibold text-occupy tabular-nums">
               {free}
             </span>
-            <span className="text-[12px] leading-none text-muted-foreground tabular-nums">
-              /{total}
+            <span className="text-[12px] leading-none text-muted-foreground">
+              free
             </span>
           </>
         )}
       </p>
-      {!isPast && <Meter free={free} total={total} className="mt-2" />}
     </li>
   );
 }
@@ -200,13 +206,11 @@ function DayCell({
 function DayHeadline({
   day,
   free,
-  total,
   isToday,
   isPast,
 }: {
   day: string;
   free: number;
-  total: number;
   isToday: boolean;
   /** The day has gone - see `DayCell`. */
   isPast: boolean;
@@ -236,24 +240,20 @@ function DayHeadline({
             <span className="font-heading text-[2.25rem] leading-none font-semibold text-occupy tabular-nums">
               {free}
             </span>
-            <span className="text-sm text-body">of {total} rooms free all day</span>
+            <span className="text-sm text-body">
+              room{free === 1 ? "" : "s"} free all day
+            </span>
           </>
         )}
       </p>
-      {!isPast && <Meter free={free} total={total} className="mt-3 max-w-[22rem]" />}
     </div>
   );
 }
 
-/** The proportion free, as a hairline bar. Decorative: every cell is labelled. */
-function Meter({ free, total, className }: { free: number; total: number; className?: string }) {
-  const pct = total > 0 ? Math.round((free / total) * 100) : 0;
-  return (
-    <span aria-hidden className={cn("block h-[3px] w-full bg-band", className)}>
-      <span
-        className={cn("block h-full", free === 0 ? "bg-vermilion" : "bg-occupy")}
-        style={{ width: `${pct}%` }}
-      />
-    </span>
-  );
-}
+/*
+ * **`Meter` is deleted** (9 Nov 2026). It drew `free / total` as a 3px bar,
+ * which is the fraction the office asked to be taken off the page - a reader
+ * can see a bar a tenth full as readily as they can read "1 of 10". Nothing
+ * replaced it: the figure, its colour and the word **Full** carry the whole
+ * answer, and every cell already states it in full to a screen reader.
+ */

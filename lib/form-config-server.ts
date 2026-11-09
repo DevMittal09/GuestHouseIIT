@@ -26,5 +26,9 @@ export async function getEffectiveFormConfig(role: Role): Promise<RoleFormConfig
       `[form-config] ignoring the saved form_configs row for "${role}": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.`
     );
   }
-  return sanitizeFormConfig(saved ?? buildDefaultFormConfig(role, guestHouses), guestHouses);
+  const config = sanitizeFormConfig(saved ?? buildDefaultFormConfig(role, guestHouses), guestHouses);
+  if (role === "student" && !config.relationship_options.some((r) => r.trim().toLowerCase() === "spouse")) {
+    config.relationship_options = [...config.relationship_options, "Spouse"];
+  }
+  return config;
 }

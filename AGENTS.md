@@ -8,6 +8,15 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## Current meeting overrides - 9 November 2026
+
+These supersede older instructions below where they conflict. Requesters choose booking type, never tariff category. GHM must choose Category I/II/III at allocation; categories exist on both bookings and tariffs. Official booking types are exempt from the 14-night cap; ordinary requester check-in is within one month, with the existing GHM/developer desk exception. Room cancellation requests need 24 hours' notice; manager cancellation remains unrestricted by that window.
+
+Hamsanandi has 16 physical rooms: A1-A3 reserved, C1/C2 `director_only` VIP rooms for GHM-raised bookings, 11 general rooms. Ordinary `vip` rooms use the configurable email/role grants; those grants never admit Director-only rooms. Bageshri's ten verified numbers remain unchanged. Apply migration 36 and seed reference data before using the new code against an older database.
+
+Spouse eligibility is determined by digit six of the student's nine-digit roll: only 3 (MS) and 4 (PhD). No programme-name fallback grants access. Caretaker invoices personal bookings only. Queues use submission time, oldest first. Preserve original dates on every desk date edit and notify requesters of manager date changes. See `.memories/99-recent-changes.md` and the owning memory files for details and unresolved office inputs.
+
+
 # IIT Palakkad Guest House Booking Portal — agent context
 
 Read this before touching the code. It captures the decisions and the traps that
@@ -108,7 +117,7 @@ Beyond the suites, behaviour is verified these ways:
    does and keep the jar:
    ```bash
    curl -s -c jar.txt -b jar.txt -X POST -H "Content-Type: application/json" \
-     -d '{"email":"guesthouse@iitpkd.ac.in","secret":"$E2E_TEST_SECRET"}' \
+     -d '{"email":"muhamed.rizwan2458@gmail.com","secret":"$E2E_TEST_SECRET"}' \
      http://localhost:3000/api/auth/test-sign-in
    curl -s -b jar.txt -o /dev/null -w "%{http_code}\n" http://localhost:3000/book
    ```
@@ -415,7 +424,12 @@ reachable only by a crafted request while the form is withdrawn:
   narrower than `isInstituteEmail()`, so it may keep `@smail` students out of
   Google's own account chooser. Configuring Google also **deletes
   `/mock-login`**, which is how the Playwright suite signs in - don't set
-  these in CI.
+  these in CI. The suite serves a **production** build, so `assertEnv()` used
+  to refuse to start without them; since 9 Nov 2026 `envProblems` exempts
+  both under **`ALLOW_MOCK_STORE=true`**, the same escape hatch
+  `DATABASE_URL` uses, so `playwright.config.ts` needs no placeholder client
+  id. Setting one anyway costs three journeys in `e2e/sign-in.spec.ts`, one
+  of which navigates out to `accounts.google.com`.
 
 Rules for the LDAP door:
 
@@ -1528,6 +1542,20 @@ The file mailer keeps the zero-setup first run working, like `MockStore`.
   working". It is config, not a bug in the addressing: `/admin/mail` now says
   so in red, and the fix is to unset the variable on a deployment that is
   meant to deliver.
+- **`MAIL_ALLOWED_RECIPIENTS` is the other send-time filter, and it answers a
+  different question** (9 Nov 2026, `lib/mail/deliverable.ts`). The redirect
+  says *where* mail goes; this says *whether an address is real*. Most of the
+  29 demo accounts' addresses do not exist, and sending to one earns an SMTP
+  rejection, a FAILED row and four retries. An entry is a whole address or
+  `@domain` (a subdomain is a different domain, so `@iitpkd.ac.in` does **not**
+  cover `@smail.iitpkd.ac.in`); an address not on the list is **dropped, not
+  failed**, and a message with no allowed recipient is **settled with a note**
+  rather than retried. **Unset, and an empty value, both mean no
+  restriction** - so a blanked variable fails open to production behaviour;
+  `MAIL_DRY_RUN` is how you send nothing. A requester with **no address on
+  file still FAILS** - that is a real fault, and the dispatcher tells the two
+  apart by whether anything was dropped. **The order is fixed**: allow list
+  first, then the redirect. Don't add a third addressing mechanism.
 - **Idempotency does the heavy lifting.** `idempotency_key` is unique and
   inserts are `on conflict do nothing`, keyed on the booking's `updated_at` for
   a transition and the institute date for a digest. So retries queue nothing,

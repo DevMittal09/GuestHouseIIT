@@ -1,5 +1,22 @@
 # Roadmap — what is open, in priority order
 
+## Meeting follow-ups - 9 November 2026
+
+Implemented: room classes, VIP groups, Director-only isolation, named manager tariffs, official stay-length exemption, FCFS queues, cancellation notice, original-date preservation, caretaker invoice permissions, informational sidebar and editable guidelines link. This supersedes the earlier deferred named-category design in §2j.
+
+Still requires office input:
+
+1. Authoritative catering PDF (not present in attachments/repository). Meeting times are implemented provisionally.
+2. Faculty reservation start/end dates for A1–A3. Reserved indefinitely until explicitly released; no three-year start was invented.
+3. The actual Google Drive guidelines URL. The field is ready; the button stays hidden when empty.
+4. Whether the 14-room cap is per selected house (current implementation) or shared across both. It is a cap on free counts, separate from physical inventory and access restrictions.
+5. Alternative labels “Hamsanandi A1–A4/D1–D4, Bageshri B1–B10” have no verified mapping to the live inventory; no existing room was renamed.
+6. The requirement names Personal/Official only, while established IAR alumni bookings have required alumni details and separate funding. That specialised workflow is preserved pending an explicit decision to retire it.
+
+No waiting-list automation exists; cancellation releases rooms for manual FCFS allocation. Deployment steps are in [04-production.md](04-production.md).
+
+---
+
 The single list of what is **left**. Three neighbours, and the boundary
 between them matters, because keeping one item in two places is how this
 folder drifted before:
@@ -926,6 +943,98 @@ In order of what would have caught the most:
    database, which may be PgBouncer in transaction mode, no pooler at all, or
    a hard `max_connections` the portal shares with other services. Worked
    through in [02-decisions.md](02-decisions.md), *9 November 2026*.
+
+## 2t. The Playwright suite - a harness that could not run, and specs that drifted
+
+Found while verifying the meeting round (9 Nov 2026). The **harness** is
+fixed; the **specs** are not, and the two are different problems.
+
+**Fixed.** `npm run test:e2e` could not run at all: the production server
+refused to start without Google, `signIn()` threw because
+`E2E_TEST_SECRET` was set in the server's environment and not the runner's,
+and `webServer.env` did not blank `DATABASE_URL` - so once the server *could*
+start it would have pointed a production build at the **shared hosted
+database**. Google is now blanked explicitly too, because `next start` loads
+`.env.local` and a machine with real credentials in it was serving a different
+page from CI and sending a journey to `accounts.google.com` with the owner's
+client id. Full account in
+[22-running-and-testing.md](22-running-and-testing.md), *The journeys could
+not run at all*.
+
+**Still open: 16 journeys assert behaviour that was deliberately changed, and
+none of them on the meeting round's code.** Verified by running the same specs
+against `HEAD` with only the harness fixes applied - they fail there
+identically. In rough order of how many journeys each accounts for:
+
+1. **The demo student is `phd.malhar`, whose record names only a father**
+   (7 Nov 2026). `guestNameRule` therefore withholds **Mother**, and every
+   journey whose fixture selects it dies in `selectOption` with *"did not find
+   some options"* - which reads as a broken dropdown, not as a withheld
+   option. Either the fixture should use **Father**, or `ACCOUNTS.student`
+   should point at a persona with both parents (`btech.saveri`). That is a
+   choice about what the journeys are *for*, which is why it is here and not
+   done.
+2. **`accommodated at Bageshri Guest House` is no longer on a student's
+   form** (7 Nov 2026 - a student is not shown the guest house at all).
+3. **A heading with a count reads `Current bookings: 3`** (28 Oct 2026), so
+   `getByRole("heading", { name: "Current bookings" })` cannot match: the
+   `name` option matches the whole accessible name.
+4. **The father's name on the locked field is `Sudhakara Varma`**, not the
+   `Ramesh Menon` the fixture expects - the same persona change as (1).
+
+Two **product** defects these journeys uncovered, neither fixed, because the
+sign-in door is not something to change on the side:
+
+5. **`/sign-in` drops `next`.** Its `searchParams` type is `{ error?: string }`
+   and it never reads `next`, so `/sign-in?next=%2Fbook` renders a door with
+   no destination on it - and a visitor sent there by a portal guard is
+   returned to their role's home rather than to the page they asked for.
+   `safeNextPath` and `LoginForm`'s `withNext` are both already there.
+6. **`/book-room`'s `submitLabel` only ever reaches the Google button.**
+   `LoginForm` puts `submitLabel` on the Google door alone, so "Sign in to
+   book" labels a link straight to `/api/auth/google/start` where Google is
+   configured, and appears nowhere at all where it is not.
+
+## 2s. Opened by the 9 November 2026 (second) round - mail to real inboxes
+
+1. **A skipped message reads SENT, which it was not.** A row settled because
+   `MAIL_ALLOWED_RECIPIENTS` ruled every recipient out carries its reason in
+   `last_error` and renders muted rather than red, but its *status* is wrong.
+   The honest fix is a **`SKIPPED`** value on the `email_status` enum, and it
+   is not free: Postgres refuses to use a new enum value in the transaction
+   that adds it (migration 29's lesson), so it is a migration **plus**
+   `MAIL_STATUSES`, `countEmailsByStatus`'s `Record<MailStatus, number>`, both
+   stores, and the console's tiles and filter. Worth doing if the allow list
+   outlives the test it was written for.
+2. **Nothing reverts a temporary arrangement.** Three real inboxes are on
+   three demo accounts, in **three places** that have to move together - the
+   `.env.local` line, both seeds, and
+   `scripts/repairs/2026-11-09-real-mail-test-addresses.sql`. Revert the seeds
+   alone and `npm run seed:personas` sees three accounts outside its set and
+   retires them. There is no reminder and no expiry; the only record that this
+   is temporary is the prose in
+   [05-credentials-and-security.md](05-credentials-and-security.md) Part 1,
+   [01-background.md](01-background.md) and
+   [02-decisions.md](02-decisions.md) under *9 November 2026 (second)*.
+   **Not `99-recent-changes.md`** - that file is replaced every round, and the
+   round after this one replaced it.
+3. **The allow list is a workaround for a directory that is not loaded.**
+   Every one of these problems - fake addresses, bounces, a drop list - goes
+   away when the institute's real people are imported (Users & Roles ->
+   Import from spreadsheet, `lib/users-import.ts`). Until then the demo
+   personas are the directory, and most of their addresses do not exist.
+4. **Three demo accounts can no longer sign in with Google**, because
+   `isInstituteEmail()` refuses a `@gmail.com` address and the Google callback
+   checks it. They sign in through `/mock-login`, which is how the demo
+   accounts are used anyway - but if Google is ever configured on a deployment
+   holding these addresses, those three accounts are locked out and the reason
+   will not be obvious.
+5. **`scripts/repairs/` is a new directory and nothing documents it but this.**
+   `supabase/` was deleted on 2 Nov 2026 and took `supabase/repairs/` with it,
+   so the one-off SQL had nowhere to live. Several places still *name* the old
+   paths - `AGENTS.md` and [21-database.md](21-database.md) among them - which
+   is drift from that deletion rather than from this round, and wants one pass
+   over it.
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 

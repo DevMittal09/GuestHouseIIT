@@ -534,7 +534,11 @@ describe("a student with no hostel has no Assistant Warden", () => {
     expect(dayScholar).toBeDefined();
     expect(dayScholar.role).toBe("student");
     expect(dayScholar.hostel_name).toBeNull();
-    expect(dayScholar.roll_number).toBe("122303099");
+    // The sixth digit is the programme (9 Nov 2026,
+    // `lib/student-programme.ts`), so a B.Tech day scholar's roll number has
+    // to read **1** there. It said 3, which is MS, and would have made the
+    // persona a research scholar who may book a spouse.
+    expect(dayScholar.roll_number).toBe("122301099");
   });
 
   it("gives the account a name that says what it is for", () => {

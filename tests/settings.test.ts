@@ -13,6 +13,7 @@ import {
 } from "@/lib/occupancy";
 import { stayLengthError } from "@/lib/policy";
 import {
+  BOOKING_RULES_REVISION,
   DEFAULT_RULES,
   describeRuleChanges,
   isWhitelistedOfficial,
@@ -41,8 +42,49 @@ describe("reading stored settings", () => {
   });
 
   it("merges a partial row over the defaults (a field added later)", () => {
-    const parsed = parseRuleGroup("booking", { advance_booking_months: 3 });
-    expect(parsed).toEqual({ advance_booking_months: 3, max_stay_nights: 14, buffer_minutes: 240, no_show_release_hours: 0 });
+    // A row already on the current revision keeps every value it carries and
+    // gains the defaults for anything it does not.
+    const parsed = parseRuleGroup("booking", {
+      advance_booking_months: 3,
+      revision: BOOKING_RULES_REVISION,
+    });
+    expect(parsed).toEqual({
+      advance_booking_months: 3,
+      cancellation_notice_hours: 24,
+      max_stay_nights: 14,
+      buffer_minutes: 240,
+      no_show_release_hours: 0,
+      revision: BOOKING_RULES_REVISION,
+    });
+  });
+
+  /**
+   * **The advance-booking window is taken back once** (9 Nov 2026). A row
+   * saved while the default was six months holds six; the meeting put it back
+   * to one, and a changed default alone cannot reach a row that has a value.
+   * So `rules.booking` gained a revision: a row below it loses its window and
+   * nothing else, and is marked current - after which an office that sets
+   * three months from the console keeps three months.
+   */
+  it("takes the advance-booking window back to the default, exactly once", () => {
+    const beforeTheMeeting = parseRuleGroup("booking", {
+      advance_booking_months: 6,
+      max_stay_nights: 21,
+      buffer_minutes: 90,
+      no_show_release_hours: 0,
+    });
+    expect(beforeTheMeeting.advance_booking_months).toBe(1);
+    // Only the window: everything the office chose deliberately is kept.
+    expect(beforeTheMeeting.max_stay_nights).toBe(21);
+    expect(beforeTheMeeting.buffer_minutes).toBe(90);
+    expect(beforeTheMeeting.revision).toBe(BOOKING_RULES_REVISION);
+
+    // And once it is marked current, a window the office sets afterwards stands.
+    const afterSaving = parseRuleGroup("booking", {
+      ...beforeTheMeeting,
+      advance_booking_months: 3,
+    });
+    expect(afterSaving.advance_booking_months).toBe(3);
   });
 
   it("ignores a malformed row rather than throwing", () => {
@@ -53,8 +95,19 @@ describe("reading stored settings", () => {
   });
 
   it("ignores keys it does not know", () => {
-    const parsed = parseRuleGroup("booking", { max_stay_nights: 7, surprise: true });
-    expect(parsed).toEqual({ advance_booking_months: 6, max_stay_nights: 7, buffer_minutes: 240, no_show_release_hours: 0 });
+    const parsed = parseRuleGroup("booking", {
+      max_stay_nights: 7,
+      surprise: true,
+      revision: BOOKING_RULES_REVISION,
+    });
+    expect(parsed).toEqual({
+      advance_booking_months: 1,
+      cancellation_notice_hours: 24,
+      max_stay_nights: 7,
+      buffer_minutes: 240,
+      no_show_release_hours: 0,
+      revision: BOOKING_RULES_REVISION,
+    });
   });
 
   /**
@@ -198,13 +251,14 @@ describe("rule functions follow the settings", () => {
 
   it("advance window in months", () => {
     const from = new Date("2026-01-31T06:30:00Z");
-    // The default - six months since 14 Oct 2026, one before that.
-    expect(latestCheckIn("employee", from)?.toISOString().slice(0, 10)).toBe("2026-07-31");
+    // The default - **one month** again since the meeting of 9 Nov 2026; it
+    // was six from 14 Oct 2026, and one before that.
+    expect(latestCheckIn("employee", from)?.toISOString().slice(0, 10)).toBe("2026-02-28");
     expect(latestCheckIn("employee", from, 3)?.toISOString().slice(0, 10)).toBe("2026-04-30");
     // `addMonths` clamps the day of the month: 31 January plus one month is
     // 28 February, not 3 March. `setMonth` would roll it over.
     expect(latestCheckIn("employee", from, 1)?.toISOString().slice(0, 10)).toBe("2026-02-28");
-    expect(latestCheckIn("official", from, 3)).toBeNull();
+    expect(latestCheckIn("official", from, 3)?.toISOString().slice(0, 10)).toBe("2026-04-30");
   });
 
   it("maximum stay, and 0 meaning no limit", () => {

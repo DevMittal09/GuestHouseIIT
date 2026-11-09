@@ -11,6 +11,7 @@ import {
   renameGuestHouseAction,
   setGuestHouseMealsAction,
   setRoomActiveAction,
+  setRoomClassAction,
 } from "@/app/actions/admin";
 import {
   createRoomBlockAction,
@@ -35,7 +36,12 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { GuestHouse, Room, RoomType } from "@/lib/types";
+import {
+  ROOM_CLASS_BLURBS,
+  ROOM_CLASS_LABELS,
+  roomClassOf,
+} from "@/lib/rooms-access";
+import { ROOM_CLASSES, type GuestHouse, type Room, type RoomClass, type RoomType } from "@/lib/types";
 import type { ActionResult } from "@/app/actions/bookings";
 import { EmptyState } from "@/components/section-heading";
 
@@ -398,49 +404,16 @@ function GuestHouseCard({
         {rooms.length === 0 ? (
           <EmptyState>No rooms yet.</EmptyState>
         ) : (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {rooms.map((room) => (
-              <div
+              <RoomCard
                 key={room.id}
-                className={cn(
-                  "flex items-center justify-between gap-2 rounded-md border p-2 text-sm",
-                  !room.is_active && "opacity-60"
-                )}
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{room.room_number}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {/* Printed only where this guest house has more than one
-                        type - otherwise it is the same word under every room. */}
-                    {mixedTypes ? `${room.room_type === "single" ? "Single" : "Double"}` : "Room"}
-                    {!room.is_active && " · inactive"}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isPending}
-                    onClick={() =>
-                      run(
-                        () => setRoomActiveAction(room.id, !room.is_active),
-                        room.is_active ? "Room deactivated" : "Room activated"
-                      )
-                    }
-                  >
-                    {room.is_active ? "Disable" : "Enable"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={isPending}
-                    className="text-destructive"
-                    onClick={() => setRoomToDelete(room)}
-                  >
-                    ✕
-                  </Button>
-                </div>
-              </div>
+                room={room}
+                mixedTypes={mixedTypes}
+                isPending={isPending}
+                run={run}
+                onDelete={() => setRoomToDelete(room)}
+              />
             ))}
           </div>
         )}
@@ -464,5 +437,144 @@ function GuestHouseCard({
         />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * One room, with **who it may be allotted to** (9 Nov 2026, the meeting).
+ *
+ * Three classes, and the difference is the one the meeting insisted on
+ * keeping: `general` is the ordinary inventory, `vip` is allotted only to the
+ * addresses and roles authorised in Portal Settings, and `reserved` is a real
+ * room let off-portal that is never offered to a booking at all - Hamsanandi
+ * A1-A3, which the office lets to faculty for three years.
+ *
+ * **Reserved is not Disabled.** Disabling a room takes it out of the
+ * inventory altogether - out of the count, the grid and the total. A reserved
+ * room is still the guest house's, and the desk has to keep seeing it, which
+ * is why both controls are here and neither replaces the other.
+ */
+function RoomCard({
+  room,
+  mixedTypes,
+  isPending,
+  run,
+  onDelete,
+}: {
+  room: Room;
+  mixedTypes: boolean;
+  isPending: boolean;
+  run: (work: () => Promise<ActionResult>, success: string) => void;
+  onDelete: () => void;
+}) {
+  const current = roomClassOf(room);
+  const [draftClass, setDraftClass] = useState<RoomClass>(current);
+  const [note, setNote] = useState(room.reservation_note ?? "");
+  const [until, setUntil] = useState(room.reserved_until ?? "");
+  const dirty =
+    draftClass !== current ||
+    (draftClass === "reserved" &&
+      (note.trim() !== (room.reservation_note ?? "") || until !== (room.reserved_until ?? "")));
+
+  return (
+    <div
+      className={cn(
+        "space-y-2 rounded-md border p-2 text-sm",
+        !room.is_active && "opacity-60",
+        current === "vip" && "border-saffron"
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-medium">{room.room_number}</p>
+          <p className="text-xs text-muted-foreground">
+            {/* Printed only where this guest house has more than one
+                type - otherwise it is the same word under every room. */}
+            {mixedTypes ? `${room.room_type === "single" ? "Single" : "Double"}` : "Room"}
+            {current !== "general" && ` · ${ROOM_CLASS_LABELS[current]}`}
+            {!room.is_active && " · inactive"}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isPending}
+            onClick={() =>
+              run(
+                () => setRoomActiveAction(room.id, !room.is_active),
+                room.is_active ? "Room deactivated" : "Room activated"
+              )
+            }
+          >
+            {room.is_active ? "Disable" : "Enable"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={isPending}
+            className="text-destructive"
+            onClick={onDelete}
+          >
+            ✕
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-1.5 border-t pt-2">
+        <Label htmlFor={`class-${room.id}`} className="text-xs">
+          Who may be allotted it
+        </Label>
+        <NativeSelect
+          id={`class-${room.id}`}
+          value={draftClass}
+          onChange={(e) => setDraftClass(e.target.value as RoomClass)}
+        >
+          {ROOM_CLASSES.map((option) => (
+            <option key={option} value={option}>
+              {ROOM_CLASS_LABELS[option]}
+            </option>
+          ))}
+        </NativeSelect>
+        <p className="text-xs text-muted-foreground">{ROOM_CLASS_BLURBS[draftClass]}</p>
+        {draftClass === "reserved" && (
+          <>
+            <Input
+              aria-label={`Why ${room.room_number} is reserved`}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. Let to faculty for three years"
+            />
+            <Input
+              aria-label={`The date ${room.room_number} is reserved until`}
+              type="date"
+              value={until}
+              onChange={(e) => setUntil(e.target.value)}
+            />
+          </>
+        )}
+        {dirty && (
+          <Button
+            size="sm"
+            className="w-full"
+            disabled={isPending}
+            onClick={() =>
+              run(
+                () =>
+                  setRoomClassAction(
+                    room.id,
+                    draftClass,
+                    draftClass === "reserved" ? note : null,
+                    draftClass === "reserved" && until !== "" ? until : null
+                  ),
+                `${room.room_number} is now ${ROOM_CLASS_LABELS[draftClass].toLowerCase()}`
+              )
+            }
+          >
+            Save
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

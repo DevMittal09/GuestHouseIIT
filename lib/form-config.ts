@@ -88,6 +88,8 @@ const STUDENT_UNIQUE_RELATIONSHIPS = [
   "Guardian",
   "Grandmother",
   "Grandfather",
+  // Nobody has two spouses on one request either (9 Nov 2026).
+  "Spouse",
   "Self",
 ];
 

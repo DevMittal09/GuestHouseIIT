@@ -619,6 +619,43 @@ export async function notifyExtensionDecided(
 }
 
 /**
+ * **The manager approved fewer days than were asked for** (9 Nov 2026, the
+ * meeting). To the requester, with the booking's own Copy-to list in CC, on
+ * the booking's thread like every other mail about it.
+ *
+ * `requested` is handed in rather than read off the booking, because by the
+ * time this runs the booking carries the **approved** dates; the originals are
+ * on `original_check_*`, and the action that shortened the stay is the one
+ * that knows it has just written them.
+ *
+ * Keyed on `updated_at`, which the change has just moved, so a retry queues
+ * nothing - the same idempotency every transition mail uses.
+ */
+export async function notifyStayShortened(
+  bookingId: string,
+  requested: { check_in: string; check_out: string },
+  reason: string | null
+): Promise<void> {
+  await safely("booking.stay_shortened", async () => {
+    const booking = await freshBooking(bookingId);
+    if (!booking) return;
+    const requester = requesterRecipient(booking);
+    const requesterCc = await requesterCopyTo(booking);
+    await queueMessages([
+      requester && {
+        eventKey: "booking.stay_shortened.requester",
+        booking,
+        to: [requester.email],
+        cc: requesterCc,
+        subjectText: "Booking dates changed",
+        doc: t.stayShortenedToRequester(booking, requested, reason),
+        stamp: booking.updated_at,
+      },
+    ]);
+  });
+}
+
+/**
  * A request the nightly sweep marked as Missed (migration 29, 7 Oct 2026).
  *
  * To the requester alone: nobody else needs telling, because nobody did

@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { RequiredFieldsNote } from "@/components/required-fields-note";
 import { allocateRooms, getRoomConflicts } from "@/app/actions/bookings";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/format";
@@ -25,7 +26,14 @@ import {
 } from "@/lib/turnover";
 import { cn } from "@/lib/utils";
 import { DEFAULT_RULES, type CapacityRules } from "@/lib/settings";
-import type { BookingWithDetails, Room } from "@/lib/types";
+import { roomAccessError } from "@/lib/rooms-access";
+import {
+  TARIFF_CATEGORIES,
+  TARIFF_CATEGORY_GUESTS,
+  TARIFF_CATEGORY_LABELS,
+  type TariffCategoryName,
+} from "@/lib/tariff-category";
+import type { BookingWithDetails, Role, Room } from "@/lib/types";
 
 /**
  * Cinema-style room allocation grid for one booking.
@@ -43,7 +51,14 @@ export function RoomGrid({
   onAllocated,
   capacity = DEFAULT_RULES.capacity,
   bufferMinutes = DEFAULT_RULES.booking.buffer_minutes,
+  vipAccess = DEFAULT_RULES.portal,
 }: {
+  /**
+   * Who may be allotted a VIP room (Settings -> Portal Settings). Handed in by
+   * the page, like `capacity` and `bufferMinutes`, so the grid checks exactly
+   * what `allocateRooms` checks.
+   */
+  vipAccess?: { vip_emails: string[]; vip_roles: Role[] };
   /** The turnaround buffer from Settings, for the legend and the override notice. */
   bufferMinutes?: number;
   booking: BookingWithDetails;
@@ -86,6 +101,16 @@ export function RoomGrid({
    * so - the manager needs to see which party ends up where.
    */
   const [selected, setSelected] = useState<string[]>([]);
+  /**
+   * **The office's tariff category, which only the desk decides** (9 Nov
+   * 2026, the meeting: "the tariff category must be decided exclusively by
+   * the GHM during the approval and room allocation process"). It opens on
+   * whatever the booking already has - null on a new request - so re-opening
+   * the dialog to move a room does not silently re-price the stay.
+   */
+  const [category, setCategory] = useState<TariffCategoryName | "">(
+    booking.tariff_category ?? ""
+  );
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isPending, startTransition] = useTransition();
@@ -118,6 +143,7 @@ export function RoomGrid({
 
   const toggle = (room: Room) => {
     if (conflicts[room.id] === "hard") return;
+    if (roomAccessError(room, booking.requester, vipAccess)) return;
     setSelected((prev) => {
       if (prev.includes(room.id)) return prev.filter((id) => id !== room.id);
       if (prev.length >= booking.rooms_requested) {
@@ -130,7 +156,12 @@ export function RoomGrid({
 
   const confirm = () =>
     startTransition(async () => {
-      const result = await allocateRooms(booking.id, selected, overridden);
+      const result = await allocateRooms(
+        booking.id,
+        selected,
+        overridden,
+        category === "" ? null : category
+      );
       if (result.ok) {
         toast.success(`${booking.booking_reference_id} approved - rooms allocated`);
         onAllocated?.();
@@ -140,6 +171,23 @@ export function RoomGrid({
         refreshOccupancy();
       }
     });
+
+  /**
+   * Why each room cannot be allotted to **this** booking, by room id - a
+   * reserved room, or a VIP room this requester is not authorised for (9 Nov
+   * 2026). The same function the server refuses with
+   * (`roomAccessError`), so the grid cannot offer what the action will reject.
+   *
+   * The rooms are **shown** rather than filtered out: the meeting asked for
+   * the manager to keep "complete visibility into room inventory", and a
+   * grid that silently had eleven tiles where the guest house has sixteen
+   * would be the manager's own console lying to them about their building.
+   */
+  const blocked: Record<string, string> = {};
+  for (const room of rooms) {
+    const problem = roomAccessError(room, booking.requester, vipAccess);
+    if (problem) blocked[room.id] = problem;
+  }
 
   const doubles = rooms.filter((r) => r.room_type === "double_sharing");
   const singles = rooms.filter((r) => r.room_type === "single");
@@ -210,6 +258,12 @@ export function RoomGrid({
           label={`Changeover - overlaps by up to ${TURNOVER_GRACE_HOURS}h, yours to override`}
         />
         <LegendSwatch className={SEAT.hard} label="Already allotted - cannot be picked" />
+        {Object.keys(blocked).length > 0 && (
+          <LegendSwatch
+            className={SEAT.restricted}
+            label="Reserved or VIP - not available to this booking"
+          />
+        )}
         <LegendSwatch className={SEAT.selected} label="Selected for this booking" />
         {loading && <span className="text-muted-foreground">Loading occupancy…</span>}
       </div>
@@ -220,6 +274,7 @@ export function RoomGrid({
             title={`${ROOM_TYPE_LABELS.double_sharing} rooms`}
             description={describeCapacity("double_sharing", capacity)}
             rooms={doubles}
+            blocked={blocked}
             capacity={capacity}
             bufferMinutes={bufferMinutes}
             conflicts={conflicts}
@@ -230,6 +285,7 @@ export function RoomGrid({
             title={`${ROOM_TYPE_LABELS.single} rooms`}
             description={describeCapacity("single", capacity)}
             rooms={singles}
+            blocked={blocked}
             capacity={capacity}
             bufferMinutes={bufferMinutes}
             conflicts={conflicts}
@@ -244,12 +300,55 @@ export function RoomGrid({
             rooms.length > 0 ? describeCapacity(rooms[0].room_type, capacity) : ""
           }
           rooms={rooms}
+          blocked={blocked}
           capacity={capacity}
           bufferMinutes={bufferMinutes}
           conflicts={conflicts}
           selected={selected}
           onToggle={toggle}
         />
+      )}
+
+      {/* The rate this stay is charged at. A question only the desk can
+          answer - the account that raised the request does not say whether
+          the person arriving is an external examiner or somebody's parent -
+          which is why it is here, beside the rooms, and not on the booking
+          form. Priced from the sheet, so the figures follow a rate the office
+          changes without anything here being edited. */}
+      {booking.service_type !== "meals_only" && (
+        <fieldset className="space-y-2 rounded-lg border border-border-strong bg-card p-4">
+          <legend className="px-1 text-sm font-medium text-ink">Tariff category</legend>
+          <RequiredFieldsNote />
+          <p className="text-sm">Category *</p>
+          <div className="space-y-1.5">
+            {TARIFF_CATEGORIES.map((option) => (
+              <label
+                key={option}
+                className={cn(
+                  "flex cursor-pointer items-start gap-2.5 rounded border px-3 py-2 text-sm",
+                  category === option ? "border-ink bg-band/70" : "border-border hover:border-border-strong"
+                )}
+              >
+                <input
+                  type="radio"
+                  name={`tariff-category-${booking.id}`}
+                  value={option}
+                  checked={category === option}
+                  onChange={() => setCategory(option)}
+                  className="mt-1 size-4 shrink-0 accent-[var(--ink)]"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium text-ink">
+                    {TARIFF_CATEGORY_LABELS[option]}
+                  </span>
+                  <span className="mt-0.5 block text-muted-foreground">
+                    {TARIFF_CATEGORY_GUESTS[option]}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
       )}
 
       <div className="space-y-4 rounded-lg border border-border bg-band/60 p-4">
@@ -349,7 +448,7 @@ export function RoomGrid({
           <Button
             onClick={confirm}
             disabled={
-              isPending || selected.length === 0 || capacityProblem !== null || cardProblem
+              isPending || category === "" || selected.length === 0 || capacityProblem !== null || cardProblem
             }
           >
             {isPending
@@ -396,6 +495,7 @@ function RoomSection({
   title,
   description,
   rooms,
+  blocked,
   conflicts,
   selected,
   onToggle,
@@ -405,6 +505,8 @@ function RoomSection({
   title: string;
   description: string;
   rooms: Room[];
+  /** Why each room is out of bounds for this booking, by room id. */
+  blocked: Record<string, string>;
   capacity: CapacityRules;
   bufferMinutes: number;
   conflicts: Record<string, ConflictKind>;
@@ -422,6 +524,7 @@ function RoomSection({
       <div className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2">
         {rooms.map((room) => {
           const conflict = conflicts[room.id] ?? "free";
+          const restricted = blocked[room.id] ?? null;
           const isOccupied = conflict === "hard";
           const isTurnover = conflict === "soft";
           const isTurnaround = conflict === "turnaround";
@@ -432,9 +535,11 @@ function RoomSection({
               key={room.id}
               type="button"
               onClick={() => onToggle(room)}
-              disabled={isOccupied}
+              disabled={isOccupied || restricted !== null}
               title={
-                isOccupied
+                restricted
+                  ? restricted
+                  : isOccupied
                   ? `${room.room_number} - already allotted for these dates`
                   : isTurnover
                     ? `${room.room_number} - another stay overlaps by up to ${TURNOVER_GRACE_HOURS} hours. Pick it to accept the changeover.`
@@ -444,7 +549,9 @@ function RoomSection({
               }
               className={cn(
                 "flex h-14 cursor-pointer items-center justify-center rounded border text-sm font-semibold tabular-nums transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-vermilion",
-                isOccupied
+                restricted
+                  ? cn(SEAT.restricted, "cursor-not-allowed")
+                  : isOccupied
                   ? cn(SEAT.hard, "cursor-not-allowed line-through decoration-white/60")
                   : isSelected
                     ? cn(SEAT.selected, (isTurnover || isTurnaround) && "outline-2 outline-offset-2 outline-amber-500")
@@ -480,6 +587,14 @@ function RoomSection({
  */
 const SEAT = {
   free: "border-occupy bg-[#e6f2ec] text-[#00391e]",
+  /**
+   * A room this booking may not be put in at all - reserved off-portal, or a
+   * VIP room and this requester is not authorised (9 Nov 2026). Deliberately
+   * **not** red: red means "somebody is in it", and the manager reading the
+   * grid needs those two apart. Grey with a dashed edge is the same language
+   * the turnaround band uses for "there, but not yours".
+   */
+  restricted: "border-slate-400 bg-band text-muted-foreground",
   hard: "border-[#a4201a] bg-[#b42318] text-white",
   selected: "border-[#123f7a] bg-[#1d4ed8] text-white",
   soft: "border-amber-600 bg-amber-300 text-amber-950",

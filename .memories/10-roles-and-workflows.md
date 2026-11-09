@@ -1,5 +1,18 @@
 # Roles, workflows and notifications — the life of a request
 
+## Meeting decisions implemented, 9 November 2026
+
+Current overrides to the historical descriptions below:
+
+- Manager and intermediate queues use submission timestamp ascending, with ID as a stable tie-breaker; official requests no longer jump ahead.
+- Portal Settings (`/admin/portal`) is available to GHM/developer: authorised VIP email addresses, role groups, the availability display cap, and the detailed-guidelines URL. Room classifications are edited in Guest Houses & Rooms.
+- `general` rooms are ordinary inventory; `vip` rooms require an authorised requester. `director_only` is a separate VIP class for bookings raised directly by GHM/developer, even when an online requester is on the VIP allow list. `reserved` rooms cannot be allocated until reclassified.
+- Manager date edits preserve the first requested date pair and audit the reason. Shortening an allocated stay adjusts its room holds; editing pending dates before allocation uses the existing management action. The `booking.stay_shortened.requester` event now describes a general date change, with previous/updated dates and reason, addressed to the requester plus existing Copy-to recipients. Existing extension notifications remain.
+- Requester cancellation requires 24 hours' notice; GHM cancellation bypasses the notice and releases holds immediately. Requester cancellation remains a request until the manager confirms it. No automatic waiting-list promotion exists.
+- Caretaker retains occupied/vacated controls but cannot draft or issue official/alumni invoices. Billing details are in [13-billing-and-dining.md](13-billing-and-dining.md).
+
+---
+
 Who may do what, where a request travels, and what the portal sends at each
 step. One file, because the three answers are one story: a role decides what a
 person may raise, the route decides who sees it next, and the mail is what
@@ -917,6 +930,7 @@ which needed the same missing piece.
 | `smtp.ts` | `SmtpMailer` (nodemailer, pooled) |
 | `file.ts` | `FileMailer` → `.local-mail/*.eml`, and `DryRunMailer` |
 | `redirect.ts` | `MAIL_REDIRECT_ALL_TO`, applied at **send** time |
+| `deliverable.ts` | `MAIL_ALLOWED_RECIPIENTS` - the only addresses mail may reach, applied at **send** time, before the redirect |
 | `render.ts` | Blocks → HTML **and** plain text, from one description |
 | `templates.ts` | What each mail says. Pure functions, no store access |
 | `thread.ts` | Per-booking and daily per-person thread roots and subjects; the `[reference]` subject for mail with no thread (the console's test message) |
@@ -1101,6 +1115,46 @@ and the banner names both.
 
 Set it on every non-production deployment. Without it, one person pointing a
 staging server at real data mails a real parent.
+
+#### `MAIL_ALLOWED_RECIPIENTS` answers a different question (9 Nov 2026)
+
+The redirect says *where* mail goes. This says *whether an address is real*,
+and it exists because the redirect cannot be used to watch the addressing
+work: it replaces To and drops CC, so with it set the one thing you want to
+observe is the one thing that is gone. The owner, turning it off to test Gmail
+for the first time: *"For invalid mail ids, that is mail ids which do not
+exist, just dont send the mails, Like i dont want errors due to that invalid
+mail ids."*
+
+Most of the 29 demo accounts have addresses that do not exist. Sending to one
+earns an SMTP rejection or a bounce, a FAILED outbox row, four retries on the
+backoff, and a log of errors about a mailbox nobody expected to work.
+
+- An entry is a **whole address** or **`@domain`** for every address at a
+  domain; comma, semicolon or whitespace separated, case ignored. A subdomain
+  is a different domain - `@iitpkd.ac.in` does **not** cover
+  `@smail.iitpkd.ac.in`, which is where the students are.
+- **Unset means no restriction; an empty value also reads as unset.** A typo
+  that blanks the variable therefore fails *open* to production behaviour
+  rather than silently delivering nothing. `MAIL_DRY_RUN` is how you send
+  nothing at all.
+- An address not on the list is **dropped, not failed**. Nothing is attempted
+  and nothing is retried.
+- A message with **no** allowed recipient is **settled with a note**, not
+  failed - a retry would reach the same nobody. It reads SENT in the console
+  with the reason beside it, rendered muted rather than red. That row saying
+  SENT is the one dishonest corner; a `SKIPPED` status is the honest fix and
+  needs a migration ([03-roadmap.md](03-roadmap.md)).
+- **A booking whose requester has no address on file still FAILS.** That is a
+  real fault and must stay visible. The dispatcher tells the two apart by
+  whether anything was dropped.
+- **Order with the redirect is fixed**: the allow list filters the real
+  recipients, then the redirect rewrites the envelope. The other way round
+  would test the redirect mailbox against the allow list, which answers
+  nothing. With both set you see, in one mailbox, only the mail that would
+  really have been delivered.
+- `/admin/mail` names it on screen, in ink rather than red - it is a setting,
+  not a fault - for the same reason the redirect is named there.
 
 #### Idempotency is the whole safety story
 

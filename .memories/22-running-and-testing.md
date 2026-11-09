@@ -1,5 +1,23 @@
 # Running, testing, and every trap already hit
 
+## Meeting continuation verification, 9 November 2026
+
+Focused rules are in `tests/meeting-decisions.test.ts`; real action/hold/pricing/permission checks are in `tests-pg/meeting-decisions.pg.test.ts`. The PostgreSQL test fixture now includes named category rates, and allocation journeys explicitly choose a category.
+
+Use an explicit local `PG_TEST_URL` for the real PostgreSQL suite. This round used a disposable PostgreSQL 16 container, never the shared host. Migration 36 plus reference seed were also run twice against the old schema, including verification that a later console classification survives a seed rerun.
+
+The production browser harness now passes its test-sign-in secret to both workers and server, and explicitly clears `DATABASE_URL`. Building in a temporary source copy with its own `.next` avoids disrupting an existing development server; hard-link `node_modules` with `cp -al` rather than symlinking it, because Turbopack cannot resolve `next` through a symlink.
+
+**It no longer sets Google client values.** It did, briefly, as inert
+placeholders to satisfy the production startup check - and that configures
+Google, which closes `/mock-login` and turns the sign-in button into a real
+link, so one journey navigated out to `accounts.google.com`'s own error page.
+`envProblems` exempts `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` under
+`ALLOW_MOCK_STORE=true` instead. See *The journeys could not run at all* in
+Part 2.
+
+---
+
 How to run the portal on a developer machine, point it at a database, prove a
 change works — and, in Part 3, every error this project has already produced
 with its cause and its fix. Read Part 3 before debugging anything that smells
@@ -254,7 +272,7 @@ the way a person does and keep the cookie jar:
 ```bash
 # Sign in via the test-sign-in endpoint (e2e only, needs E2E_TEST_SECRET):
 curl -s -c jar.txt -b jar.txt -X POST -H "Content-Type: application/json" \
-  -d '{"email":"guesthouse@iitpkd.ac.in","secret":"your-e2e-secret"}' \
+  -d '{"email":"muhamed.rizwan2458@gmail.com","secret":"your-e2e-secret"}' \
   http://localhost:3000/api/auth/test-sign-in
 # or use the end-to-end suite, which does exactly this: npm run test:e2e
 
@@ -524,6 +542,80 @@ perfectly healthy. **Two causes, and fixing one alone would not have held.**
 connections to Postgres (12 idle, steady, by design), not the pooler's client
 count, so it reads as healthy while clients are being refused. The symptom is
 the error; the fix is the pool.
+
+### The journeys could not run at all, and nothing said so (9 Nov 2026)
+
+`npm run test:e2e` had been **structurally broken for some time**, in two
+independent ways, both in the harness rather than in the application. Neither
+produces an obvious message, and because nobody ran the suite between the
+rounds that broke it, both were found together.
+
+1. **The production server refused to start.** `envProblems` lists
+   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `REQUIRED_IN_PRODUCTION`,
+   the suite serves a **production** build, and `playwright.config.ts` did not
+   set them - so `assertEnv()` threw and Playwright timed out waiting for a
+   server that was never going to answer.
+2. **`signIn()` threw on the first line of every portal journey.**
+   `e2e/helpers.ts` reads `process.env.E2E_TEST_SECRET` in the **test
+   process**; the config set it only in `webServer.env`, which is the
+   **server's** environment. Every journey that signs in failed with
+   "E2E_TEST_SECRET is not set - the test server needs it", which reads as a
+   missing variable rather than as a variable in the wrong process.
+
+Both are fixed: the secret is defaulted at the top of
+`playwright.config.ts` (module scope, so the runner has it too) and passed on
+to the server from there, and `ALLOW_MOCK_STORE=true` now exempts the two
+Google variables. **Do not fix the first one by setting Google**: that closes
+`/mock-login` and sends a journey to `accounts.google.com`.
+
+> **And the config did not blank `DATABASE_URL`.** Once the server could
+> start, it would have inherited `.env.local` and pointed a production build
+> at the **shared hosted database** - writing demo bookings into everybody's
+> data. `webServer.env` now sets `DATABASE_URL: ""`. Check that line before
+> running the suite on a machine whose `.env.local` is configured.
+
+**What was left underneath.** With the harness working, **17 journeys still
+fail, and none of them on the meeting round's code.** They assert behaviour
+that was deliberately removed or changed earlier and were never updated:
+
+| Assertion | Decided away on |
+| --- | --- |
+| `accommodated at Bageshri Guest House` on a student's form | 7 Nov 2026 - a student is not shown the guest house at all |
+| relationship `Mother`, and the father's name `Ramesh Menon` | 7 Nov 2026 - the demo student became `phd.malhar`, whose record names **only a father**, so `guestNameRule` withholds Mother and `selectOption` fails with *"did not find some options"* |
+| a heading named exactly `Current bookings` | 28 Oct 2026 - `SectionHeading` writes `Current bookings: 3`, and Playwright's `name` matches the whole accessible name |
+
+Verified by checking out `HEAD` into a scratch copy, applying **only** the two
+harness fixes, and running the same specs: they fail there identically. That
+is the only way to tell "my change broke this" from "this has been broken",
+and it is worth the fifteen minutes.
+
+### Renaming a demo account onto a real address, and finding one there (9 Nov 2026)
+
+Three of the Saveri Boys chain were repointed at real inboxes so Gmail
+delivery could be watched. The fourth, the student, was refused by the repair
+script's own guard: `142301026@smail.iitpkd.ac.in` **already belonged to a
+real account** on the shared database - a student with 3 bookings and 3 log
+entries. Renaming the demo persona onto it would have put somebody else's name
+on those bookings.
+
+Two things to keep from it:
+
+- **Guard a rename against the target, not only the source.** The guard is six
+  lines and it is what turned a silent misattribution into an error before any
+  row moved. A unique index would have failed too - part way through, after
+  some tables had already been updated.
+- **A person is keyed by email in three tables and they must move together**:
+  `profiles.email`, `institute_students.email`,
+  `institute_wardens.warden_email` (and `academic_records.email`). Move only
+  `profiles` and `profiles_v` stops resolving the hostel, so a warden silently
+  loses their queue. `profiles` is also the one of the four with **no
+  `updated_at` column**, which is its own small trap.
+
+The fix for the student was not a rename: that existing account had **no
+`institute_students` row at all**, so `hostel_name` was null - and a student
+with no hostel has no Assistant Warden, so its bookings had been going
+straight to the desk and skipping the stage the test was for. Giving it a
+Saveri Boys row was the whole change.
 
 ### `pkill -f "next dev"` kills the shell you ran it in
 

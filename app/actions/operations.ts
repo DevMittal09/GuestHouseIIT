@@ -6,17 +6,21 @@ import { isAdminUnlocked } from "@/lib/admin-lock";
 import { recordAudit } from "@/lib/audit-server";
 import { requireUser } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
-import { notifyExtensionDecided, notifyExtensionRequested } from "@/lib/mail/notify";
+import { notifyExtensionDecided, notifyExtensionRequested, notifyStayShortened } from "@/lib/mail/notify";
+import { mealPlanError } from "@/lib/meals";
 import { releaseNoShow } from "@/lib/no-show-server";
 import {
   moveCheckInError,
   extensionError,
   noShowReleasable,
+  originalDatesPatch,
+  shortenStayError,
   planRoomRange,
   roomBlockError,
   type RoomBlock,
   type RoomRangePlan,
 } from "@/lib/operations";
+import { getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
 import { instituteIso } from "@/lib/tz";
 import { RoomClashError, type Profile, type RoomType } from "@/lib/types";
@@ -65,7 +69,7 @@ export async function extendStayAction(bookingId: string, untilLocal: string, re
     const problem = extensionError(booking, until);
     if (problem) return { ok: false, error: problem };
     const answersRequest = booking.extension_requested_until && Date.parse(booking.extension_requested_until) <= Date.parse(until);
-    await store.updateBookingDetails(bookingId, { check_out: until }, {
+    await store.updateBookingDetails(bookingId, { check_out: until, ...originalDatesPatch(booking) }, {
       action_by: user.id,
       action_by_name: user.full_name,
       new_status: booking.status,
@@ -76,6 +80,91 @@ export async function extendStayAction(bookingId: string, untilLocal: string, re
     return { ok: true };
   } catch (e) {
     return fail(e, "extending the stay");
+  }
+}
+
+/**
+ * **The manager approves fewer days than were asked for** (9 Nov 2026, the
+ * meeting: "the GHM must have the ability to reduce the requested booking
+ * duration... user requests 10 days, GHM decides to approve only 3 days").
+ *
+ * The mirror of `extendStayAction`, and deliberately a **separate action**
+ * from it rather than one that takes a date in either direction: shortening
+ * somebody's approved stay is a different decision from granting them more of
+ * it, it is told to the requester by email, and it is the **manager's alone**
+ * - `canManageAnyBooking`, not `canUpdateLifecycle`, so reception cannot cut
+ * a stay short. Extending is the desk's because a guest asking to stay another
+ * night is an operational matter.
+ *
+ * Three things it does beyond moving the date, all of them because the meeting
+ * asked for them:
+ *
+ *   1. **records what was requested**, once (`originalDatesPatch`), so the
+ *      original duration survives on the booking;
+ *   2. **tells the requester**, naming both periods (`notifyStayShortened`);
+ *   3. **leaves the log saying what happened and why**, like every other desk
+ *      change.
+ *
+ * The room holds follow the dates through `updateBookingDetails`, so the
+ * nights given up are free for somebody else the moment this returns - and
+ * the invoice, which is priced from the actual stay, charges the approved
+ * duration and not the requested one.
+ */
+export async function shortenStayAction(
+  bookingId: string,
+  toLocal: string,
+  reason: string
+): Promise<ActionResult> {
+  try {
+    const user = await requireUser();
+    if (!canManageAnyBooking(user.role)) {
+      return { ok: false, error: "Only the Guest House Manager can shorten an approved stay" };
+    }
+    if (!reason?.trim()) {
+      return { ok: false, error: "Say why the stay is being shortened - it goes in the log and in the email to the guest" };
+    }
+    const store = getStore();
+    const booking = await store.getBooking(bookingId);
+    if (!booking) return { ok: false, error: "Booking not found" };
+    const to = instituteIso(toLocal);
+    const problem = shortenStayError(booking, to);
+    if (problem) return { ok: false, error: problem };
+
+    // Meals already ordered have to still fall inside the shorter stay, or the
+    // kitchen would be cooking for a day nobody is here. Same check, and the
+    // same wording, as `updateBookingStay`.
+    if (booking.meals.length > 0) {
+      const mealProblem = mealPlanError(
+        booking.meals,
+        new Date(booking.check_in),
+        new Date(to),
+        (await getRules()).meals.windows
+      );
+      if (mealProblem) {
+        return {
+          ok: false,
+          error: `${mealProblem}. Change the meal plan first, then shorten the stay.`,
+        };
+      }
+    }
+
+    // Read before the write, because the write is what makes them "original".
+    const requested = { check_in: booking.check_in, check_out: booking.check_out };
+    await store.updateBookingDetails(
+      bookingId,
+      { check_out: to, ...originalDatesPatch(booking) },
+      {
+        action_by: user.id,
+        action_by_name: user.full_name,
+        new_status: booking.status,
+        remarks: `Stay shortened by ${user.full_name}: approved to ${formatDateTime(to)}, requested to ${formatDateTime(requested.check_out)}. ${reason.trim()}`,
+      }
+    );
+    await notifyStayShortened(bookingId, requested, reason.trim());
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return fail(e, "shortening the stay");
   }
 }
 
@@ -100,7 +189,7 @@ export async function moveCheckInAction(bookingId: string, toLocal: string, reas
     // Which way it went is read from the booking, not from the caller, so the
     // log says what happened rather than which button was pressed.
     const earlier = Date.parse(to) < Date.parse(booking.check_in);
-    await store.updateBookingDetails(bookingId, { check_in: to }, {
+    await store.updateBookingDetails(bookingId, { check_in: to, ...originalDatesPatch(booking) }, {
       action_by: user.id,
       action_by_name: user.full_name,
       new_status: booking.status,

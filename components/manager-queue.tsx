@@ -37,13 +37,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
-import { lapsedError } from "@/lib/workflow";
+import { inArrivalOrder, lapsedError } from "@/lib/workflow";
 import { describeDietCounts, describeMealDays, describeMeals, mealDietCounts } from "@/lib/meals";
 import {
   BOOKING_TYPE_LABELS,
   ROLE_LABELS,
   SERVICE_TYPE_LABELS,
   type BookingWithDetails,
+  type Role,
   type Room,
 } from "@/lib/types";
 
@@ -62,9 +63,12 @@ export function ManagerQueue({
   nowIso,
   capacity,
   bufferMinutes,
+  vipAccess,
 }: {
   /** Room capacity from Settings, for the allocation grid. */
   capacity?: CapacityRules;
+  /** Who may be allotted a VIP room (Portal Settings), for the grid. */
+  vipAccess?: { vip_emails: string[]; vip_roles: Role[] };
   /** The turnaround buffer from Settings, for the allocation grid. */
   bufferMinutes?: number;
   pending: BookingWithDetails[];
@@ -215,7 +219,7 @@ export function ManagerQueue({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortOfficialFirst(pendingRooms).map((b) => (
+                {deskQueueOrder(pendingRooms).map((b) => (
                   <ManagerRow
                     key={b.id}
                     booking={b}
@@ -223,6 +227,7 @@ export function ManagerQueue({
                     occupancyVersion={occupancyVersion}
                     capacity={capacity}
                     bufferMinutes={bufferMinutes}
+                    vipAccess={vipAccess}
                   />
                 ))}
               </TableBody>
@@ -261,7 +266,7 @@ export function ManagerQueue({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortOfficialFirst(pendingMeals).map((b) => (
+                {deskQueueOrder(pendingMeals).map((b) => (
                   <MealRequestRow key={b.id} booking={b} />
                 ))}
               </TableBody>
@@ -353,11 +358,25 @@ export function ManagerQueue({
   );
 }
 
-/** Official / dignitary bookings float to the top of a queue. */
-function sortOfficialFirst(bookings: BookingWithDetails[]): BookingWithDetails[] {
-  return [...bookings].sort(
-    (a, b) => Number(b.user_role === "official") - Number(a.user_role === "official")
-  );
+/**
+ * **The desk's queue is first come, first served** (9 Nov 2026, the meeting:
+ * "the GHM dashboard should display the earliest submitted requests at the
+ * top... sorted based on their actual submission timestamp, not check-in
+ * date").
+ *
+ * This **replaces `sortOfficialFirst`**, which floated official and dignitary
+ * requests above everything else. That was a reasonable reading of "highlight
+ * the official ones" and it is no longer the order the office asked for: a
+ * queue that reorders itself by who the requester is is not a queue, and the
+ * request that had waited longest could be pushed down the page by a
+ * dignitary's booking made that morning.
+ *
+ * **Nothing is lost.** An official request is still unmistakable - the row
+ * keeps its saffron edge and notice background, which is what made it findable
+ * in the first place; only its position changes.
+ */
+function deskQueueOrder(bookings: BookingWithDetails[]): BookingWithDetails[] {
+  return inArrivalOrder(bookings);
 }
 
 /**
@@ -438,11 +457,14 @@ function ManagerRow({
   occupancyVersion,
   capacity,
   bufferMinutes,
+  vipAccess,
 }: {
   booking: BookingWithDetails;
   rooms: Room[];
   occupancyVersion: string;
   capacity?: CapacityRules;
+  /** Who may be allotted a VIP room (Portal Settings), for the grid. */
+  vipAccess?: { vip_emails: string[]; vip_roles: Role[] };
   bufferMinutes?: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -516,6 +538,7 @@ function ManagerRow({
                 onAllocated={() => setOpen(false)}
                 capacity={capacity}
                 bufferMinutes={bufferMinutes}
+                vipAccess={vipAccess}
               />
               <Separator />
               <BookingDetails booking={booking} showAlumniCard />

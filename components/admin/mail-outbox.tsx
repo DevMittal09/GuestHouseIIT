@@ -64,6 +64,11 @@ type Loaded = {
   transport: string;
   /** `MAIL_REDIRECT_ALL_TO`, when set - every message goes there instead. */
   redirectAllTo: string | null;
+  /**
+   * `MAIL_ALLOWED_RECIPIENTS`, when set - the only addresses mail reaches.
+   * `null` is no restriction.
+   */
+  allowedRecipients: string[] | null;
 };
 
 export function MailOutbox() {
@@ -82,6 +87,7 @@ export function MailOutbox() {
           counts: result.counts,
           transport: result.transport,
           redirectAllTo: result.redirectAllTo,
+          allowedRecipients: result.allowedRecipients,
         });
         setError(null);
       } else {
@@ -171,6 +177,30 @@ export function MailOutbox() {
                 <code className="font-mono">MAIL_REDIRECT_ALL_TO</code> in the deployment&apos;s
                 environment to deliver for real. The outbox below still records who each message
                 was meant for.
+              </p>
+            </div>
+          )}
+          {/* Same reasoning as the redirect above: a setting that decides who
+              receives mail and is invisible from every other screen. Not an
+              error state, so it is ruled in ink rather than in red. */}
+          {data && data.allowedRecipients !== null && (
+            <div className="border-l-4 border-foreground bg-muted/50 px-3 py-2 text-sm">
+              <p className="font-semibold">
+                {data.allowedRecipients.length > 0
+                  ? `Mail is only delivered to ${data.allowedRecipients.length} allowed ${data.allowedRecipients.length === 1 ? "address" : "addresses"}.`
+                  : "No address is allowed, so nothing is delivered."}
+              </p>
+              {data.allowedRecipients.length > 0 && (
+                <p className="mt-1 font-mono text-xs break-all">
+                  {data.allowedRecipients.join(", ")}
+                </p>
+              )}
+              <p className="mt-1 text-muted-foreground">
+                Every other recipient is <strong>dropped, not failed</strong> - nothing is
+                attempted and nothing is retried, which is the point: most demo accounts have
+                addresses that do not exist. A message with no allowed recipient is settled with
+                a note instead of an error. Unset{" "}
+                <code className="font-mono">MAIL_ALLOWED_RECIPIENTS</code> to deliver to everyone.
               </p>
             </div>
           )}
@@ -264,7 +294,13 @@ export function MailOutbox() {
                           {row.subject}
                         </span>
                         {row.last_error && (
-                          <span className="mt-0.5 block text-xs text-red-700 dark:text-red-300">
+                          <span
+                            className={
+                              row.status === "SENT"
+                                ? "mt-0.5 block text-xs text-muted-foreground"
+                                : "mt-0.5 block text-xs text-red-700 dark:text-red-300"
+                            }
+                          >
                             {row.last_error}
                           </span>
                         )}

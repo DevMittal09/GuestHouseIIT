@@ -61,7 +61,9 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · PostgreSQL (direct via
 **Node 22 or newer**; see the root [`setup.md`](../setup.md) for runtime and
 deployment requirements.
 
-**Status, 8 Nov 2026.** The current round found what the move off Supabase
+**Latest, 9 Nov 2026:** the interrupted meeting implementation is complete in source; migration 36 awaits shared-database deployment. See [99-recent-changes.md](99-recent-changes.md). Physical inventory is now 26 rooms, including 3 faculty reservations and 2 Director-only rooms; 21 are general inventory before date-specific occupancy and display caps.
+
+**Status, 8 Nov 2026 (historical).** The current round found what the move off Supabase
 had left behind: `guesthouse_dev` held nine meal rates and **no room rate at
 all**, so the booking form's tariff panel read "no rates published" and no
 invoice could be issued. Nothing in the repository had ever seeded one -

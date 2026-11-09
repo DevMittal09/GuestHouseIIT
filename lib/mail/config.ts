@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "crypto";
+import { parseAllowedRecipients } from "./deliverable";
 
 /**
  * Mail configuration, read from the environment.
@@ -33,6 +34,17 @@ export interface MailConfig {
    * inbox.
    */
   redirectAllTo: string | null;
+  /**
+   * `MAIL_ALLOWED_RECIPIENTS`, parsed: the only addresses mail may reach.
+   * `null` means no restriction (production, and what the portal did before
+   * this existed); every other address is **dropped, not failed**.
+   *
+   * Different question from the redirect, which asks *where* mail goes. This
+   * asks *whether* an address is real - most of the demo accounts' are not,
+   * and sending to one costs an SMTP rejection, a FAILED row and four
+   * retries. See `deliverable.ts`.
+   */
+  allowedRecipients: string[] | null;
   /** Absolute origin for links in mail bodies - relative URLs are useless there. */
   baseUrl: string;
   /** Right-hand side of generated Message-IDs; also what threads a booking's mail. */
@@ -94,6 +106,7 @@ export function mailConfig(): MailConfig {
     user,
     pass,
     redirectAllTo: env("MAIL_REDIRECT_ALL_TO"),
+    allowedRecipients: parseAllowedRecipients(env("MAIL_ALLOWED_RECIPIENTS")),
     baseUrl: (env("APP_BASE_URL") ?? env("NEXT_PUBLIC_APP_URL") ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
     messageIdDomain: env("MAIL_MESSAGE_ID_DOMAIN") ?? DEFAULT_MESSAGE_ID_DOMAIN,
   };

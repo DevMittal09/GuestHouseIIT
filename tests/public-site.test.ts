@@ -267,7 +267,10 @@ describe("guidelines", () => {
 
   it("states the portal's rules from Settings", () => {
     const booking = byId.booking.items.join(" ");
-    expect(booking).toContain("within 6 months");
+    // One month again since the meeting of 9 Nov 2026 (it was six from
+    // 14 Oct). The page prints whatever the Setting holds, so this follows
+    // the default rather than restating it.
+    expect(booking).toContain("within 1 month");
     expect(booking).toContain("up to 14 nights");
 
     const rules: Rules = {
@@ -290,7 +293,7 @@ describe("guidelines", () => {
   it("gives the meal times from Settings where a guest house serves meals, and none where none does", () => {
     expect(byId.meals.items[0]).toMatch(/^Meals are served at Hamsanandi/);
     expect(byId.meals.timetable?.map((r) => r.meal)).toEqual(["Breakfast", "Lunch", "Dinner"]);
-    expect(byId.meals.timetable?.[0].time).toBe("7:30 – 9:30 AM");
+    expect(byId.meals.timetable?.[0].time).toBe("8:00 – 9:30 AM");
 
     const noKitchen = guidelineSections([BAGESHRI]).find((s) => s.id === "meals");
     expect(noKitchen?.items).toEqual(["Meals are not being served at the guest houses at present"]);

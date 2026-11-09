@@ -9,6 +9,7 @@ import type {
   MealKey,
   MealPlan,
   Room,
+  RoomClass,
   RoomHold,
 } from "@/lib/types";
 import type { SeededProfileInput } from "./types";
@@ -29,19 +30,31 @@ export const GH_HAMSANANDI = "gh-hamsanandi";
 // Meals are served at Hamsanandi only, as in migration 8.
 export const seedGuestHouses: GuestHouse[] = [
   { id: GH_BAGESHRI, name: "Bageshri", total_rooms: 10, serves_meals: false },
-  { id: GH_HAMSANANDI, name: "Hamsanandi", total_rooms: 13, serves_meals: true },
+  { id: GH_HAMSANANDI, name: "Hamsanandi", total_rooms: 16, serves_meals: true },
 ];
 
 /**
- * The rooms the office actually has (23 Sep 2026) - these replaced the dummy
- * B-101…/H-101… blocks. Bageshri numbers its rooms by floor and skips 205,
- * 301 and 304; Hamsanandi is four blocks, A to D, and only A4 exists in A.
+ * The rooms the office actually has (23 Sep 2026, and the whole of
+ * Hamsanandi since 9 Nov 2026) - these replaced the dummy B-101…/H-101…
+ * blocks. Bageshri numbers its rooms by floor and skips 205, 301 and 304;
+ * Hamsanandi is **four blocks of four**, A to D, rooms 1 and 2 on the ground
+ * floor and 3 and 4 above.
  *
  * Both guest houses are **all double sharing** - the office confirmed there is
  * no single room, which is why the booking form and the developer console no
  * longer ask for a type. `room_type` stays on the row because the tariffs and
  * the invoice are priced per type, and a stored booking may still point at a
  * single created before this.
+ *
+ * **Eleven of Hamsanandi's sixteen are bookable online** (9 Nov 2026, the
+ * meeting): A1-A3 are let to faculty for three years and C1 and C2 are the
+ * Director's. Until this round A1-A3 were simply **missing** from the
+ * inventory, which recorded the same arithmetic by leaving them out and so
+ * showed the manager thirteen rooms in a sixteen-room guest house. They are
+ * here now with a `room_class`, which is the distinction the meeting asked
+ * for: `reserved` is nobody's to book, `vip` is the authorised's
+ * (`lib/rooms-access.ts`). Keep this in step with
+ * `scripts/seed-reference-data.sql`.
  */
 export const BAGESHRI_ROOM_NUMBERS = [
   "201", "202", "203", "204", "206",
@@ -49,25 +62,41 @@ export const BAGESHRI_ROOM_NUMBERS = [
 ];
 
 export const HAMSANANDI_ROOM_NUMBERS = [
-  "A4",
+  "A1", "A2", "A3", "A4",
   "B1", "B2", "B3", "B4",
   "C1", "C2", "C3", "C4",
   "D1", "D2", "D3", "D4",
 ];
 
-function makeRooms(ghId: string, roomNumbers: readonly string[]): Room[] {
+/** Hamsanandi rooms that are not in the general online inventory. */
+const HAMSANANDI_ROOM_CLASSES: Record<string, { room_class: RoomClass; note: string | null }> = {
+  A1: { room_class: "reserved", note: "Let to faculty for three years (meeting of 9 Nov 2026)" },
+  A2: { room_class: "reserved", note: "Let to faculty for three years (meeting of 9 Nov 2026)" },
+  A3: { room_class: "reserved", note: "Let to faculty for three years (meeting of 9 Nov 2026)" },
+  C1: { room_class: "director_only", note: null },
+  C2: { room_class: "director_only", note: null },
+};
+
+function makeRooms(
+  ghId: string,
+  roomNumbers: readonly string[],
+  classes: Record<string, { room_class: RoomClass; note: string | null }> = {}
+): Room[] {
   return roomNumbers.map((n) => ({
     id: `${ghId}-${n}`,
     guest_house_id: ghId,
     room_number: n,
     room_type: "double_sharing" as const,
     is_active: true,
+    room_class: classes[n]?.room_class ?? "general",
+    reservation_note: classes[n]?.note ?? null,
+    reserved_until: null,
   }));
 }
 
 export const seedRooms: Room[] = [
   ...makeRooms(GH_BAGESHRI, BAGESHRI_ROOM_NUMBERS),
-  ...makeRooms(GH_HAMSANANDI, HAMSANANDI_ROOM_NUMBERS),
+  ...makeRooms(GH_HAMSANANDI, HAMSANANDI_ROOM_NUMBERS, HAMSANANDI_ROOM_CLASSES),
 ];
 
 
@@ -161,13 +190,13 @@ export const seedProfiles: SeededProfileInput[] = [
   { id: "warden-malhar", email: "warden.malharboys@iitpkd.ac.in", full_name: "Dr. Suresh Kumar", role: "warden" },
   { id: "dwarden-malhar", email: "dwarden.malharboys@iitpkd.ac.in", full_name: "Dr. Geetha Menon", role: "deputy_warden" },
   { id: "awarden-malhar", email: "awarden.malharboys@iitpkd.ac.in", full_name: "Mr. Sajeev Thomas", role: "assistant_warden" },
-  { id: "warden-saveri", email: "warden.saveriboys@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi", role: "warden" },
+  { id: "warden-saveri", email: "muhamed.rizwan2222@gmail.com", full_name: "Dr. Lakshmi Devi", role: "warden" },
   { id: "dwarden-saveri", email: "dwarden.saveriboys@iitpkd.ac.in", full_name: "Dr. Vinod Raj", role: "deputy_warden" },
-  { id: "awarden-saveri", email: "awarden.saveriboys@iitpkd.ac.in", full_name: "Ms. Anu George", role: "assistant_warden" },
+  { id: "awarden-saveri", email: "student.iitpkd01@gmail.com", full_name: "Ms. Anu George", role: "assistant_warden" },
   { id: "warden-tilang", email: "warden.tilangagirls@iitpkd.ac.in", full_name: "Dr. Shalini Rao", role: "warden" },
 
   // ------------------------------------------------------------ the desk
-  { id: "gh-manager", email: "guesthouse@iitpkd.ac.in", full_name: "Guest House Manager", role: "gh_manager" },
+  { id: "gh-manager", email: "muhamed.rizwan2458@gmail.com", full_name: "Guest House Manager", role: "gh_manager" },
   { id: "gh-caretaker", email: "gh.reception@iitpkd.ac.in", full_name: "Guest House Caretaker", role: "gh_caretaker" },
   { id: "developer", email: "developer@iitpkd.ac.in", full_name: "Portal Developer", role: "developer" },
 ];
@@ -241,6 +270,13 @@ function tariff(
 }
 
 export const seedTariffs: Tariff[] = [
+  ...([GH_BAGESHRI, GH_HAMSANANDI] as const).flatMap((house) =>
+    (["I", "II", "III"] as const).map((category, index) => ({
+      ...tariff(`category-${house}-${category}`, house, "room", (house === GH_BAGESHRI ? 1000 : 1500) + index * 500, {}, `Category ${category}`),
+      tariff_category: category,
+      effective_from: "2026-11-05",
+    }))
+  ),
   tariff("tariff-bageshri-room", GH_BAGESHRI, "room", 1000, {}, "Tariff sheet: Bageshri, per room per day"),
   tariff("tariff-hamsanandi-room", GH_HAMSANANDI, "room", 2000, {}, "Tariff sheet: Hamsanandi types 1 and 2"),
   tariff("tariff-hamsanandi-official", GH_HAMSANANDI, "room", 4000, { requester_role: "official" }, "Tariff sheet: Hamsanandi type 3, government officers"),
@@ -665,7 +701,7 @@ export const seedInstituteStudents: InstituteStudent[] = [
   }),
   // **Hostel null**: a day scholar has no Assistant Warden, so the request
   // enters at the Guest House Manager and the log says why.
-  student("is-devika", "dayscholar@smail.iitpkd.ac.in", "Devika Iyer", "122303099", "B.Tech", "Mechanical Engineering", null, {
+  student("is-devika", "dayscholar@smail.iitpkd.ac.in", "Devika Iyer", "122301099", "B.Tech", "Mechanical Engineering", null, {
     father_name: "Krishnan Iyer",
     mother_name: "Sudha Iyer",
   }),
@@ -730,8 +766,8 @@ export const seedInstituteWardens: InstituteWarden[] = [
   { id: "iw-malhar-w", warden_email: "warden.malharboys@iitpkd.ac.in", full_name: "Dr. Suresh Kumar", warden_phone: "9876543250", warden_role: "Warden", hostel_id: "HOS2", imported_by: null, created_at: seedTs, updated_at: seedTs },
   { id: "iw-malhar-dw", warden_email: "dwarden.malharboys@iitpkd.ac.in", full_name: "Dr. Geetha Menon", warden_phone: "9876543251", warden_role: "Deputy Warden", hostel_id: "HOS2", imported_by: null, created_at: seedTs, updated_at: seedTs },
   { id: "iw-malhar-aw", warden_email: "awarden.malharboys@iitpkd.ac.in", full_name: "Mr. Sajeev Thomas", warden_phone: "9876543252", warden_role: "Assistant Warden", hostel_id: "HOS2", imported_by: null, created_at: seedTs, updated_at: seedTs },
-  { id: "iw-saveri-w", warden_email: "warden.saveriboys@iitpkd.ac.in", full_name: "Dr. Lakshmi Devi", warden_phone: "9876543253", warden_role: "Warden", hostel_id: "HOS3", imported_by: null, created_at: seedTs, updated_at: seedTs },
+  { id: "iw-saveri-w", warden_email: "muhamed.rizwan2222@gmail.com", full_name: "Dr. Lakshmi Devi", warden_phone: "9876543253", warden_role: "Warden", hostel_id: "HOS3", imported_by: null, created_at: seedTs, updated_at: seedTs },
   { id: "iw-saveri-dw", warden_email: "dwarden.saveriboys@iitpkd.ac.in", full_name: "Dr. Vinod Raj", warden_phone: "9876543254", warden_role: "Deputy Warden", hostel_id: "HOS3", imported_by: null, created_at: seedTs, updated_at: seedTs },
-  { id: "iw-saveri-aw", warden_email: "awarden.saveriboys@iitpkd.ac.in", full_name: "Ms. Anu George", warden_phone: "9876543255", warden_role: "Assistant Warden", hostel_id: "HOS3", imported_by: null, created_at: seedTs, updated_at: seedTs },
+  { id: "iw-saveri-aw", warden_email: "student.iitpkd01@gmail.com", full_name: "Ms. Anu George", warden_phone: "9876543255", warden_role: "Assistant Warden", hostel_id: "HOS3", imported_by: null, created_at: seedTs, updated_at: seedTs },
   { id: "iw-tilang-w", warden_email: "warden.tilangagirls@iitpkd.ac.in", full_name: "Dr. Shalini Rao", warden_phone: "9876543256", warden_role: "Warden", hostel_id: "HOS5", imported_by: null, created_at: seedTs, updated_at: seedTs },
 ];

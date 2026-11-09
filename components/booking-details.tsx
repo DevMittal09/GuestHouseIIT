@@ -15,6 +15,7 @@ import { countryName } from "@/lib/countries";
 import { describeDebit } from "@/lib/debit-heads";
 import { raisedByFacultyInCharge } from "@/lib/club-booking";
 import { formatDateTime } from "@/lib/format";
+import { TARIFF_CATEGORY_LABELS } from "@/lib/tariff-category";
 import {
   describeDietCounts,
   describeMeals,
@@ -143,7 +144,30 @@ export function BookingDetails({
           label={mealsOnly ? "Last day of meals" : "Check-out"}
           value={formatDateTime(booking.check_out)}
         />
+        {/* **What the requester originally asked for**, where the desk has
+            since changed it (9 Nov 2026, the meeting: "record the originally
+            requested dates and duration; record the modified approved dates
+            and duration"). Printed only when the two differ, so an ordinary
+            booking does not carry a row saying nothing - and printed at all
+            because an approver reading this months later has to be able to
+            see that the stay was cut, not just that it is short. */}
+        {!mealsOnly && booking.original_check_in && booking.original_check_out && (
+          <Field
+            label="Originally requested"
+            value={`${formatDateTime(booking.original_check_in)} to ${formatDateTime(booking.original_check_out)}`}
+          />
+        )}
         {!mealsOnly && <Field label="Rooms requested" value={String(booking.rooms_requested)} />}
+        {/* The rate the stay is charged at, set by the Guest House Manager at
+            allocation. Absent until they set it, which is the honest reading
+            of "not yet priced" - and of every booking made before 9 Nov
+            2026, which prices from the general sheet. */}
+        {!mealsOnly && booking.tariff_category && (
+          <Field
+            label="Tariff category"
+            value={TARIFF_CATEGORY_LABELS[booking.tariff_category]}
+          />
+        )}
         <Field
           label={mealsOnly ? "Guests" : "Party size"}
           value={

@@ -62,10 +62,22 @@ test("a student's form states one guest house, no meals, no debitable head, and 
   await expect(page.locator('[name="debit_head"]')).toHaveCount(0);
   await expect(page.getByText(/settled at the time of checkout/)).toBeVisible();
 
-  // And the rates for that guest house, from the office's own rate sheet.
+  /**
+   * And the rates, from the office's own rate sheet.
+   *
+   * **The room rate is the category table's** (9 Nov 2026): the manager picks
+   * the category when they allot the rooms, so the page states all three
+   * rather than quoting the one it cannot know. The per-guest-house table
+   * below it therefore has **no room row** - it carries the extra bed, and
+   * the meals where there is a kitchen.
+   */
+  const panel = page.locator('section[aria-labelledby="tariff-panel-heading"]');
+  await expect(panel.getByRole("rowheader", { name: /^Category I / })).toBeVisible();
+  await expect(panel.getByRole("rowheader", { name: /^Category III / })).toBeVisible();
+
   const rates = page.getByRole("table", { name: /Rates at Bageshri, in force today/ });
   await expect(rates).toBeVisible();
-  await expect(rates.getByRole("cell", { name: "Room, per day" })).toBeVisible();
+  await expect(rates.getByRole("cell", { name: "Room, per day" })).toHaveCount(0);
   // Bageshri has no kitchen, so no meal rates are quoted.
   await expect(rates.getByRole("cell", { name: "Lunch, per head" })).toHaveCount(0);
   // A figure or an honest "Not published", never a silent zero.
@@ -88,7 +100,8 @@ test("a faculty member sees the meal rates at the kitchen and is still asked on 
 
   const rates = page.getByRole("table", { name: /Rates at Hamsanandi, in force today/ });
   await expect(rates).toBeVisible();
-  await expect(rates.getByRole("cell", { name: "Room, per day" })).toBeVisible();
+  // No room row: the room rate is the category table's, above (9 Nov 2026).
+  await expect(rates.getByRole("cell", { name: "Room, per day" })).toHaveCount(0);
   await expect(rates.getByRole("cell", { name: "Lunch, per head" })).toBeVisible();
   // The table and nothing beside it (9 Oct 2026): the paragraph about rates in
   // force, GST and night-by-night pricing is on the Guidelines page.

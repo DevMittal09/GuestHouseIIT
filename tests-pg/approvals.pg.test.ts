@@ -54,7 +54,7 @@ describe("forwarding", () => {
   it("the Saveri Assistant Warden forwards; the Warden, Deputy, another hostel and the HOD cannot", async () => {
     const b = await mustSubmitRoom("btech.saveri@smail.iitpkd.ac.in", stay(14));
     for (const wrong of [
-      "warden.saveriboys@iitpkd.ac.in",
+      "muhamed.rizwan2222@gmail.com",
       "dwarden.saveriboys@iitpkd.ac.in",
       "awarden.malharboys@iitpkd.ac.in",
       "hod.cse@iitpkd.ac.in",
@@ -64,7 +64,7 @@ describe("forwarding", () => {
     }
     expect((await reload(b.id)).status).toBe("PENDING_WARDEN");
 
-    await as("awarden.saveriboys@iitpkd.ac.in");
+    await as("student.iitpkd01@gmail.com");
     expect(await reviewBooking(b.id, "approve")).toEqual({ ok: true });
     expect((await reload(b.id)).status).toBe("PENDING_GH_MANAGER");
     const log = await logsOf(b.id);
@@ -121,7 +121,7 @@ describe("allocation", () => {
     const b = await mustSubmitRoom("director_iitpkd@iitpkd.ac.in", stay(22));
     const [room] = await freeRooms(b);
     await as(MANAGER);
-    expect(await allocateRooms(b.id, [room])).toEqual({ ok: true });
+    expect(await allocateRooms(b.id, [room], [], "I")).toEqual({ ok: true });
     const after = await reload(b.id);
     expect(after.status).toBe("APPROVED");
     expect(after.assigned_room_ids).toEqual([room]);
@@ -139,8 +139,8 @@ describe("allocation", () => {
     const second = await mustSubmitRoom("director_iitpkd@iitpkd.ac.in", stay(26));
     const [room] = await freeRooms(first);
     await as(MANAGER);
-    expect(await allocateRooms(first.id, [room])).toEqual({ ok: true });
-    const clash = await allocateRooms(second.id, [room]);
+    expect(await allocateRooms(first.id, [room], [], "I")).toEqual({ ok: true });
+    const clash = await allocateRooms(second.id, [room], [], "I");
     expect(clash.ok).toBe(false);
     expect((await reload(second.id)).status).toBe("PENDING_GH_MANAGER");
     expect(await sql("select 1 from room_holds where booking_id = $1", [second.id])).toHaveLength(0);
@@ -151,7 +151,7 @@ describe("allocation", () => {
     const [room] = await freeRooms(b);
     for (const who of ["gh.reception@iitpkd.ac.in", "hod.cse@iitpkd.ac.in", "developer@iitpkd.ac.in"]) {
       await as(who);
-      expect((await allocateRooms(b.id, [room])).ok, who).toBe(false);
+      expect((await allocateRooms(b.id, [room], [], "I")).ok, who).toBe(false);
     }
   });
 });

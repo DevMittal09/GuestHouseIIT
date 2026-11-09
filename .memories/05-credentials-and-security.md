@@ -94,18 +94,40 @@ from the profile.
 | Dr. Suresh Kumar | `warden.malharboys@iitpkd.ac.in` | `warden-malhar` | Warden | Malhar Boys |
 | Dr. Geetha Menon | `dwarden.malharboys@iitpkd.ac.in` | `dwarden-malhar` | Deputy Warden | Malhar Boys |
 | Mr. Sajeev Thomas | `awarden.malharboys@iitpkd.ac.in` | `awarden-malhar` | **Assistant Warden — decides** | Malhar Boys |
-| Dr. Lakshmi Devi | `warden.saveriboys@iitpkd.ac.in` | `warden-saveri` | Warden | Saveri Boys |
+| Dr. Lakshmi Devi | `muhamed.rizwan2222@gmail.com` **(real inbox, 9 Nov 2026)** | `warden-saveri` | Warden | Saveri Boys |
 | Dr. Vinod Raj | `dwarden.saveriboys@iitpkd.ac.in` | `dwarden-saveri` | Deputy Warden | Saveri Boys |
-| Ms. Anu George | `awarden.saveriboys@iitpkd.ac.in` | `awarden-saveri` | **Assistant Warden — decides** | Saveri Boys |
+| Ms. Anu George | `student.iitpkd01@gmail.com` **(real inbox, 9 Nov 2026)** | `awarden-saveri` | **Assistant Warden — decides** | Saveri Boys |
 | Dr. Shalini Rao | `warden.tilangagirls@iitpkd.ac.in` | `warden-tilang` | **Warden — decides**, there being no Assistant Warden | Tilang A Girls |
 
 **The desk and the console**
 
 | Name | Email | Mock id | Demonstrates |
 | --- | --- | --- | --- |
-| Guest House Manager | `guesthouse@iitpkd.ac.in` | `gh-manager` | Allocation, the desk, invoices, 11 console sections, the approval workflow |
+| Guest House Manager | `muhamed.rizwan2458@gmail.com` **(real inbox, 9 Nov 2026)** | `gh-manager` | Allocation, the desk, invoices, 11 console sections, the approval workflow |
 | Guest House Caretaker | `gh.reception@iitpkd.ac.in` | `gh-caretaker` | Reception: check-in, check-out, moving dates, invoices |
 | Portal Developer | `developer@iitpkd.ac.in` | `developer` | All 15 console sections (needs 2FA enrolment — below) |
+
+> **Three of these addresses are real inboxes, on purpose** (9 Nov 2026, the
+> owner: *"This is to verify if the gmail is working without redirecting to
+> one mail account"*). The Saveri Boys chain and the desk were repointed at
+> mailboxes the owner reads - the Assistant Warden who decides, the Warden who
+> is copied, and the Guest House Manager who allocates - so one real booking
+> exercises the whole chain through Gmail. **The Deputy Warden was left on its
+> fake address deliberately**: it is the one rank in that office with no real
+> inbox, which makes it the live proof that `MAIL_ALLOWED_RECIPIENTS` drops an
+> address out of a CC list rather than failing the message.
+>
+> **The student was not repointed.** `142301026@smail.iitpkd.ac.in` was going
+> to be Arjun Pillai's, but the shared database already had a **real account**
+> on it (*Rizwan*, a student, 3 bookings) - so the demo persona keeps its fake
+> address and that existing account was given a Saveri Boys
+> `institute_students` row instead. It had none, and a student with no hostel
+> has no Assistant Warden, so its requests had been going straight to the desk.
+> `scripts/repairs/2026-11-09-real-mail-test-addresses.sql` is the change, and
+> its guard is what refused the rename.
+>
+> These are a **temporary test arrangement**, to be reverted with the allow
+> list. Three places hold them: the two seeds and that repair.
 
 - **The four hostels with nobody appointed** — Malhar Girls, Saveri Girls,
   Tilang B, Brindavani — are deliberate: a student in one of them enters at
@@ -324,7 +346,8 @@ appears here.**
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Real Google sign-in | not set | Google Cloud console (institute project) | Rotate in the Google Cloud console |
 | `LDAP_BIND_PASSWORD` (with `LDAP_URL`, `LDAP_BASE_DN`, `LDAP_BIND_DN`) | The institute directory and its read-only service account | not set (dummy directory in use) | the institute's LDAP administrators | Rotate with the directory administrators |
 | `ACADEMIC_DB_TOKEN` (with `ACADEMIC_DB_URL`) | The academic database API | not set (the office's own imported records are used) | the academic office / IT | Rotate with whoever issued it |
-| `MAIL_REDIRECT_ALL_TO`, `MAIL_DRY_RUN` | Test mailbox that swallows all mail / no-send switch | `.env.local` (set) | a mailbox the developer reads | Not a secret — but **unset the redirect in production** or no Copy-to address ever receives anything |
+| `MAIL_REDIRECT_ALL_TO`, `MAIL_DRY_RUN` | Test mailbox that swallows all mail / no-send switch | `.env.local` (**the redirect is commented out since 9 Nov 2026** - `MAIL_ALLOWED_RECIPIENTS` does the safety job instead) | a mailbox the developer reads | Not a secret — but **unset the redirect in production** or no Copy-to address ever receives anything |
+| `MAIL_ALLOWED_RECIPIENTS` | The only addresses mail may reach; every other recipient is **dropped, not failed** | `.env.local` (set to the four real inboxes of the Saveri chain) | the developer's own mailboxes | Not a secret. **Unset in production**, where every address is real |
 | `APP_URL`, `APP_BASE_URL` | The site's own URL (redirects, links in mail) | `.env.local` (set) | the deployment URL | Not a secret |
 | `SENTRY_DSN`, `CLAMAV_HOST` | Error reporting, virus scanning | not set | optional | Rotate the DSN in Sentry |
 
@@ -397,7 +420,8 @@ must set.
 | `ALLOW_MOCK_STORE` | Lets a production build run on the JSON store (e2e only) | **Never** |
 | `MAIL_USER`, `MAIL_APP_PASSWORD` / `MAIL_PASSWORD`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_FROM`, `MAIL_FROM_NAME`, `MAIL_REPLY_TO`, `MAIL_MESSAGE_ID_DOMAIN` | SMTP transport; otherwise `.local-mail/*.eml` | Needed to send mail |
 | `MAIL_DRY_RUN` | Log mail, send nothing | — |
-| `MAIL_REDIRECT_ALL_TO` | Every message to one address (originals in `X-Original-To/Cc`) | **Unset only in production; set everywhere else** |
+| `MAIL_REDIRECT_ALL_TO` | Every message to one address (originals in `X-Original-To/Cc`) | **Unset only in production; set everywhere else** - or use the allow list below, which keeps To and CC |
+| `MAIL_ALLOWED_RECIPIENTS` | The only addresses mail may reach. Unset = no restriction; an **empty** value also reads as unset, so a blank cannot silently open the gate | **Unset in production.** Set it anywhere the account list contains addresses that do not exist |
 | `ACADEMIC_DB_URL`, `ACADEMIC_DB_TOKEN` | Real academic records | When available |
 | `SENTRY_DSN` | Error reporting | Optional |
 | `CLAMAV_HOST`, `CLAMAV_PORT` | Virus-scan uploads (an unreachable scanner refuses uploads) | Optional |

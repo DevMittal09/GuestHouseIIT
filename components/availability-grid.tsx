@@ -150,11 +150,15 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
   // rows, which are the guest house's hours and days.
   const currentHour = instituteHour();
   /**
-   * The header's figures come from `counts`, which the server computes for
-   * everybody - so a requester, who is sent no rooms at all (7 Oct 2026),
-   * still gets the same totals the desk reads, from the same arithmetic.
+   * **The header's figures are the desk's** (9 Nov 2026, the meeting). They
+   * read "10 rooms · 3 booked during this week · 7 free all week", which is
+   * the inventory and the fraction the office asked to be taken off a
+   * requester's page - said in words rather than drawn as a bar, but the same
+   * disclosure. A requester gets `AvailabilityCountsPanel` below, which is the
+   * count of free rooms and nothing else; `getRoomAvailability` now sends them
+   * no total at all, so there is nothing here for them to read.
    */
-  const roomCount = detailed ? rooms.length : counts.total;
+  const roomCount = rooms.length;
   const bookedNow = counts.bookedNow ?? 0;
   const bookedInRange = Math.max(0, counts.total - counts.freeThroughout);
   const period = PERIOD[view];
@@ -242,7 +246,7 @@ export function AvailabilityGrid({ guestHouses }: { guestHouses: GuestHouse[] })
           <div className="ml-auto text-sm text-muted-foreground">
             {loading ? (
               "Loading availability…"
-            ) : (
+            ) : !detailed ? null : (
               <>
                 <Figure>{roomCount}</Figure> rooms · <Figure>{bookedInRange}</Figure> booked{" "}
                 {view === "day" ? "on this date" : `during this ${period}`}

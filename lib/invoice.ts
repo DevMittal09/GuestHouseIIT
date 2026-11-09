@@ -1,6 +1,7 @@
 import { mealDayCounts, MEAL_KEYS, MEAL_LABELS } from "./meals";
 import { countBedGuests, countInfants, ROOM_TYPE_LABELS } from "./occupancy";
 import { invoiceHeadLabel, needsProject } from "./debit-heads";
+import { TARIFF_CATEGORY_LABELS, type TariffCategoryName } from "./tariff-category";
 import { resolveTariff, type Tariff, type TariffItem } from "./tariffs";
 import {
   addDaysToDateValue,
@@ -569,6 +570,19 @@ export type InvoiceDocument = {
    * `invoicePrintsDining`.
    */
   serves_meals?: boolean;
+  /**
+   * **The office's tariff category, as the Guest House Manager set it**
+   * (9 Nov 2026, the meeting: "the invoice must be generated using the tariff
+   * category selected by the GHM, not a category selected or assumed by the
+   * user").
+   *
+   * Frozen into the snapshot like every other printed fact, so an invoice
+   * says which category it was charged at even after the manager changes the
+   * booking's. Absent or null on an uncategorised booking - every one made
+   * before this round, and every dining booking - which prices from the
+   * general rate sheet and prints no category row.
+   */
+  tariff_category?: TariffCategoryName | null;
   booked_by: string;
   unit: string;
   debit_head: DebitHead | null;
@@ -663,6 +677,14 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     guest_house_id: booking.guest_house_id,
     booking_type: booking.booking_type,
     requester_role: booking.user_role,
+    /**
+     * The category the Guest House Manager put this booking in (9 Nov 2026).
+     * It outranks every other qualifier in `resolveTariff`, so where one is
+     * set the invoice is priced at the rate the manager chose; where none is
+     * - every stay booked before this round, and every dining booking - the
+     * sheet resolves exactly as it did before.
+     */
+    tariff_category: booking.tariff_category ?? null,
   };
   const rules = ctx.rules;
   const inclusive = rules.prices_include_gst;
@@ -811,6 +833,9 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     booking_reference: booking.booking_reference_id,
     guest_house: house,
     serves_meals: servesMeals,
+    // A dining booking has no room and so no category, whatever arrived -
+    // overwritten rather than refused, like the dining counts above it.
+    tariff_category: mealsOnly ? null : (booking.tariff_category ?? null),
     booked_by: booking.on_behalf_of_name ?? requester?.full_name ?? "",
     unit: booking.on_behalf_of_name
       ? booking.booking_type === "official"
@@ -933,6 +958,12 @@ export function invoiceFacts(doc: InvoiceDocument): { left: [string, string][]; 
   }
   if (doc.debit_head === "special_budget" && doc.special_fund) {
     left.push(["Special Fund: ", doc.special_fund]);
+  }
+  // Printed where the manager set one: it is what the room rate was resolved
+  // from, so an invoice that did not name it could not be checked against the
+  // office's own sheet.
+  if (doc.tariff_category) {
+    left.push(["Tariff category: ", TARIFF_CATEGORY_LABELS[doc.tariff_category]]);
   }
   const right: [string, string][] = [
     ["Invoice No.: ", doc.invoice_number ?? "DRAFT - not yet issued"],

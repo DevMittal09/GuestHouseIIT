@@ -46,6 +46,26 @@ export type BookingStatus =
   | "MISSED";
 
 export type RoomType = "single" | "double_sharing";
+
+/**
+ * Who a room may be allotted to (9 Nov 2026, migration 36). The rule that
+ * applies it is `lib/rooms-access.ts`; the names live here because
+ * `Room`, the tariff sheet and both stores all need them and this module
+ * imports nothing.
+ */
+export const ROOM_CLASSES = ["general", "vip", "director_only", "reserved"] as const;
+export type RoomClass = (typeof ROOM_CLASSES)[number];
+
+/**
+ * The office's named tariff categories (9 Nov 2026). The rule is
+ * `lib/tariff-category.ts`; the names are here for the same reason as
+ * `ROOM_CLASSES` - `Booking`, `Tariff` and both stores need them, and a value
+ * import between `lib/tariffs.ts` and `lib/tariff-category.ts` would be a
+ * module cycle evaluated while a zod schema was being built.
+ */
+export const TARIFF_CATEGORIES = ["I", "II", "III"] as const;
+export type TariffCategoryName = (typeof TARIFF_CATEGORIES)[number];
+
 export type Gender = "male" | "female" | "other";
 
 /**
@@ -221,6 +241,20 @@ export const STUDENT_RELATIONSHIPS = [
   "Grandmother",
   "Grandfather",
   "Siblings",
+  /**
+   * **Research scholars only** (9 Nov 2026, the meeting): "regular B.Tech /
+   * M.Tech students cannot book accommodation for their spouses", while "MS
+   * and PhD research scholars are permitted to book accommodation for their
+   * spouses without requiring their parents to accompany them".
+   *
+   * On the list for every student, and **withheld** from the ones it does not
+   * apply to - the same mechanism as a parent the academic record does not
+   * name (`guestNameRule`), so the option is greyed out with the reason on it
+   * and the schema refuses it on both sides. It is deliberately **not** a
+   * `dependent_relationship`: the point of the rule is that a scholar's
+   * spouse needs nobody else on the request.
+   */
+  "Spouse",
   // The student as one of the guests on their own request (30 Sep 2026) -
   // "Fill in from saved details" offers them as "Yourself". Neither a parent
   // nor a dependent, so it neither needs a parent nor lets a sibling in.
@@ -316,6 +350,18 @@ export type Room = {
   room_number: string;
   room_type: RoomType;
   is_active: boolean;
+  /**
+   * Who the room may be allotted to (9 Nov 2026, migration 36): the general
+   * inventory, a VIP room only the authorised may have, or a room reserved
+   * off-portal and never offered to a booking at all. `lib/rooms-access.ts`
+   * is the rule; absent on a mock row written before the column existed,
+   * which reads as `general`.
+   */
+  room_class?: RoomClass | null;
+  /** Why a reserved room is reserved - "Faculty, three years". Free text. */
+  reservation_note?: string | null;
+  /** The institute date a reservation runs to ("yyyy-MM-dd"), where one is known. */
+  reserved_until?: string | null;
 }
 
 export type Booking = {
@@ -328,6 +374,26 @@ export type Booking = {
   purpose_of_visit: string;
   check_in: string; // ISO datetime
   check_out: string; // ISO datetime
+  /**
+   * What the requester originally asked for, where the desk has since changed
+   * it (9 Nov 2026, migration 36). Written **once**, the first time the dates
+   * move, so it is always the request as submitted and not the last of a
+   * chain of edits; null on a booking whose dates nobody has touched.
+   *
+   * The meeting asked for both to be on the record - "record the originally
+   * requested dates and duration, record the modified approved dates and
+   * duration" - because a stay cut from ten days to three has to be legible
+   * as a decision afterwards, not just as a shorter booking.
+   */
+  original_check_in?: string | null;
+  original_check_out?: string | null;
+  /**
+   * The office's named tariff category (`lib/tariff-category.ts`), set by the
+   * Guest House Manager when they allocate rooms and by nobody else. Null
+   * until then, and on every booking made before 9 Nov 2026 - which prices
+   * from the uncategorised rate sheet, exactly as it did.
+   */
+  tariff_category?: TariffCategoryName | null;
   /** Always equal to the number of `booking_rooms` rows. Zero on a meals-only booking. */
   rooms_requested: number;
   /**

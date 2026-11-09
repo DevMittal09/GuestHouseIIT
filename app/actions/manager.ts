@@ -15,7 +15,14 @@ import {
   countBedGuests,
   roomAssignmentError,
 } from "@/lib/occupancy";
-import { notifyCancelled } from "@/lib/mail/notify";
+import { notifyCancelled, notifyStayShortened } from "@/lib/mail/notify";
+import { originalDatesPatch } from "@/lib/operations";
+import { roomAccessError } from "@/lib/rooms-access";
+import {
+  describeTariffCategory,
+  tariffCategoryError,
+  tariffCategoryOf,
+} from "@/lib/tariff-category";
 import { getStore } from "@/lib/store";
 import { getRules } from "@/lib/settings-server";
 import { instituteDate, instituteIso, toInstituteDateTimeValue } from "@/lib/tz";
@@ -37,7 +44,21 @@ import type { ActionResult } from "./bookings";
 /** Move a booking's dates and/or correct its purpose. */
 export async function updateBookingStay(
   bookingId: string,
-  input: { check_in?: string; check_out?: string; purpose_of_visit?: string; reason: string }
+  input: {
+    check_in?: string;
+    check_out?: string;
+    purpose_of_visit?: string;
+    /**
+     * The office's tariff category (9 Nov 2026). The manager normally sets it
+     * when they allot rooms; this is the way back to it afterwards - a guest
+     * who turns out to be an academic visitor rather than a parent. The
+     * **manager's** only, like everything else in this action, and audited in
+     * the booking's log. `null` clears it, which prices the stay from the
+     * uncategorised sheet again.
+     */
+    tariff_category?: string | null;
+    reason: string;
+  }
 ): Promise<ActionResult> {
   try {
     const user = await requireUser();
@@ -46,6 +67,9 @@ export async function updateBookingStay(
     }
     if (!input.reason?.trim()) {
       return { ok: false, error: "Say why the booking is being changed - it goes in the log" };
+    }
+    if ("booking_type" in input) {
+      return { ok: false, error: "Booking type cannot be changed. Reject the request and ask for a fresh booking." };
     }
     const store = getStore();
     const booking = await store.getBooking(bookingId);
@@ -82,6 +106,23 @@ export async function updateBookingStay(
     // (`BOOKING_DURATION_EXEMPT_ROLES`), which is the point of doing this from
     // the admin side: a stay the institute has committed to can be extended
     // past a limit the booking form would refuse.
+    // Refused rather than ignored, so a category the manager chose cannot be
+    // silently dropped on its way to the price.
+    if (input.tariff_category === null || input.tariff_category === "") {
+      return { ok: false, error: "Choose a tariff category" };
+    }
+    const categoryProblem =
+      input.tariff_category === undefined
+        ? null
+        : tariffCategoryError(input.tariff_category, booking);
+    if (categoryProblem) return { ok: false, error: categoryProblem };
+    const category =
+      input.tariff_category === undefined ? undefined : tariffCategoryOf(input.tariff_category);
+
+    const movingDates =
+      (input.check_in !== undefined && checkIn !== booking.check_in) ||
+      (input.check_out !== undefined && checkOut !== booking.check_out);
+
     await store.updateBookingDetails(
       bookingId,
       {
@@ -90,14 +131,29 @@ export async function updateBookingStay(
         ...(input.purpose_of_visit !== undefined && {
           purpose_of_visit: input.purpose_of_visit.trim(),
         }),
+        ...(category !== undefined && { tariff_category: category }),
+        // What the requester asked for, kept once (9 Nov 2026). Any change of
+        // dates records it, not only a shortening, so the original duration is
+        // on the booking however the desk got to the dates it has.
+        ...(movingDates ? originalDatesPatch(booking) : {}),
       },
       {
         action_by: user.id,
         action_by_name: user.full_name,
         new_status: booking.status,
-        remarks: `Booking updated by the Guest House Manager: ${input.reason.trim()}`,
+        remarks: [
+          `Booking updated by the Guest House Manager: ${input.reason.trim()}`,
+          category !== undefined
+            ? category === null
+              ? "Tariff category cleared."
+              : `Tariff category set to ${describeTariffCategory(category)}.`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" "),
       }
     );
+    if (movingDates) await notifyStayShortened(bookingId, booking, input.reason.trim());
     revalidateBookings();
     return { ok: true };
   } catch (e) {
@@ -220,6 +276,15 @@ export async function reassignRooms(
       return { ok: false, error: "Selected rooms do not belong to this guest house" };
     }
     const selected = roomIds.map((id) => roomsById.get(id)!);
+    // A reserved room is nobody's to allot and a VIP room is only the
+    // authorised's, on a move mid-stay exactly as on the first allocation
+    // (9 Nov 2026) - otherwise the rule could be walked around by allocating
+    // an ordinary room and then moving the party into C1.
+    const portal = (await getRules()).portal;
+    for (const room of selected) {
+      const accessProblem = roomAccessError(room, booking.requester, portal);
+      if (accessProblem) return { ok: false, error: accessProblem };
+    }
     const capacityProblem = allocationCapacityError(countBedGuests(booking.guests), selected);
     if (capacityProblem) return { ok: false, error: capacityProblem };
     for (const [i, card] of booking.rooms.entries()) {

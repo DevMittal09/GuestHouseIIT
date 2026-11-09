@@ -76,9 +76,10 @@ export function stayLengthError(
   checkOut: Date,
   role: Role,
   email?: string | null,
-  maxNights: number = MAX_BOOKING_NIGHTS
+  maxNights: number = MAX_BOOKING_NIGHTS,
+  bookingType?: BookingType
 ): string | null {
-  if (isDurationExempt(role, email) || maxNights <= 0) return null;
+  if (bookingType === "official" || isDurationExempt(role, email) || maxNights <= 0) return null;
   const nights = stayNights(checkIn, checkOut);
   if (nights <= maxNights) return null;
   return `Bookings are limited to a maximum of ${maxNights} nights - this stay is ${nights} nights. ${CONTACT_FOR_LONGER_STAYS}`;
@@ -105,11 +106,60 @@ export function latestCheckOutDate(
   checkInDate: string,
   role: Role,
   email?: string | null,
-  maxNights: number = MAX_BOOKING_NIGHTS
+  maxNights: number = MAX_BOOKING_NIGHTS,
+  bookingType?: BookingType
 ): string | null {
-  if (isDurationExempt(role, email) || maxNights <= 0) return null;
+  if (bookingType === "official" || isDurationExempt(role, email) || maxNights <= 0) return null;
   if (!parseDateValue(checkInDate)) return null;
   return addDaysToDateValue(checkInDate, maxNights);
+}
+
+// ------------------------------------------------------------ cancellation
+
+/**
+ * **A requester cancels at least 24 hours before check-in** (9 Nov 2026, the
+ * meeting).
+ *
+ * The office's reason, in their words: the notice period "allows rooms to be
+ * allocated to people on the waiting list". A room released an hour before
+ * the guest was due is a room nobody else can be offered, so it is a room the
+ * guest house loses - and the office was being asked to cancel by telephone
+ * and WhatsApp instead, which left no record at all. So the portal takes the
+ * cancellation and the notice period is the rule.
+ *
+ * The figure is Settings (`rules.booking.cancellation_notice_hours`, 0 turns
+ * it off) and is passed in, like every other rule here.
+ *
+ * **Three things it deliberately does not do.**
+ *
+ * - It does not hold the **Guest House Manager** to anything: the meeting was
+ *   explicit that "the GHM should have the authority to cancel any booking at
+ *   any time", which is `managerCancelBooking` and has always been a separate
+ *   action.
+ * - It does not touch a stay that has already **started**: that is refused
+ *   earlier and for a different reason - the guest is in the room, and what
+ *   happens next is a conversation at the desk.
+ * - It does not refuse a **dining** booking by its check-in. A meal booking's
+ *   `check_in` is derived from its first day of meals, and the kitchen's own
+ *   notice period (`mealBookingDeadline`) is the rule that governs it.
+ */
+export function cancellationNoticeError(
+  checkIn: Date,
+  now: Date,
+  noticeHours: number = DEFAULT_RULES.booking.cancellation_notice_hours
+): string | null {
+  if (noticeHours <= 0) return null;
+  const deadline = checkIn.getTime() - noticeHours * 3_600_000;
+  if (now.getTime() <= deadline) return null;
+  return `A booking can be cancelled from the portal up to ${plural(noticeHours, "hour")} before check-in, so the room can be offered to somebody else. ${CONTACT_TO_CANCEL_LATE}`;
+}
+
+export const CONTACT_TO_CANCEL_LATE =
+  "Speak to the Guest House Manager to cancel this stay.";
+
+/** "24 hours", "1 hour" - the one place either is spelled. */
+function plural(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
 }
 
 // ------------------------------------------------------------------ alumni

@@ -80,9 +80,29 @@ export function envProblems(env: NodeJS.ProcessEnv = process.env): EnvProblem[] 
   const production = env.NODE_ENV === "production";
 
   if (production) {
+    /**
+     * `ALLOW_MOCK_STORE=true` says this is a **production build that is not a
+     * production deployment** - the Playwright suite, which serves a real
+     * build off `.e2e-db.json`. It has always exempted `DATABASE_URL`, and
+     * since 9 Nov 2026 it exempts **Google** for the same reason and with
+     * more force.
+     *
+     * Requiring Google here was making the e2e suite set
+     * `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` to inert placeholders just
+     * to get the server up - and configuring Google **closes
+     * `/mock-login`** and turns the sign-in button into a real link to
+     * `accounts.google.com`. `AGENTS.md` says in so many words: *don't set
+     * these in CI*. Three journeys failed on exactly that, one of them by
+     * navigating out to Google's own error page.
+     *
+     * A real deployment never sets `ALLOW_MOCK_STORE` (`setup.md`,
+     * [05-credentials-and-security.md] - "never"), so nothing about the
+     * production gate is weakened: there, Google is still required.
+     */
     const allowMock = env.ALLOW_MOCK_STORE === "true";
+    const EXEMPT_UNDER_MOCK_STORE = ["DATABASE_URL", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"];
     for (const [name, why] of REQUIRED_IN_PRODUCTION) {
-      if (allowMock && name === "DATABASE_URL") continue;
+      if (allowMock && EXEMPT_UNDER_MOCK_STORE.includes(name)) continue;
       if (!env[name]) problems.push({ variable: name, problem: `is required in production - ${why}` });
     }
     if (env.APP_URL && !url.safeParse(env.APP_URL).success) {

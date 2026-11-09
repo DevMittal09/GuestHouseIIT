@@ -203,8 +203,20 @@ create table public.rooms (
   room_number    text not null,
   room_type      public.room_type not null,
   is_active      boolean not null default true,
+  -- Migration 36: who the room may be allotted to. `general` is the ordinary
+  -- inventory; `vip` is allotted only to the addresses and roles authorised in
+  -- Portal Settings (Hamsanandi C1 and C2, the Director's rooms); `reserved`
+  -- is a real room let off-portal and never offered to a booking (Hamsanandi
+  -- A1-A3, faculty, three years). A reserved room is **not** an inactive one:
+  -- the desk keeps seeing it.
+  room_class       text not null default 'general'
+                     check (room_class in ('general', 'vip', 'director_only', 'reserved')),
+  reservation_note text,
+  reserved_until   date,
   unique (guest_house_id, room_number)
 );
+
+create index rooms_class_idx on public.rooms (guest_house_id, room_class);
 
 -- ------------------------------ app_settings ------------------------------
 -- Migration 5
@@ -276,6 +288,15 @@ create table public.bookings (
   purpose_of_visit      text not null,
   check_in              timestamptz not null,
   check_out             timestamptz not null,
+  -- Migration 36: what the requester originally asked for, where the desk has
+  -- since changed it. Written **once**, the first time the dates move, so it
+  -- is the request as submitted and not the last of a chain of edits.
+  original_check_in     timestamptz,
+  original_check_out    timestamptz,
+  -- Migration 36: the category the Guest House Manager put this booking in,
+  -- set at allocation and by nobody else. Null means "not yet priced", which
+  -- prices from the uncategorised rate sheet.
+  tariff_category       text check (tariff_category is null or tariff_category in ('I', 'II', 'III')),
   rooms_requested       integer not null check (rooms_requested between 0 and 10),
   booking_reference_id  text not null unique,
   rejection_reason      text,
@@ -557,6 +578,11 @@ create table public.tariffs (
   requester_role text check (requester_role in (
                    'student', 'employee', 'official', 'club', 'alumni',
                    'iar_cell', 'iar_student_cell', 'gh_manager')),
+  -- Migration 36: the office's named category, which the Guest House Manager
+  -- puts a booking in. It outranks every qualifier above it in
+  -- `resolveTariff`, and it is what keeps `bookings.tariff_category` from
+  -- being a second source of truth for a price.
+  tariff_category text check (tariff_category is null or tariff_category in ('I', 'II', 'III')),
   rate           numeric(10, 2) not null check (rate >= 0),
   effective_from date not null,
   note           text,
@@ -572,6 +598,7 @@ create unique index tariffs_one_per_scope_and_date on public.tariffs (
   coalesce(room_type, ''),
   coalesce(booking_type, ''),
   coalesce(requester_role, ''),
+  coalesce(tariff_category, ''),
   effective_from
 );
 

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cancelBooking } from "@/app/actions/bookings";
+import { cancellationNoticeError } from "@/lib/policy";
+import { DEFAULT_RULES } from "@/lib/settings";
 import { raisedByFacultyInCharge } from "@/lib/club-booking";
 import { requestExtensionAction } from "@/app/actions/operations";
 import { BookingDetails } from "@/components/booking-details";
@@ -56,12 +58,19 @@ export function MyBookings({
   bookings,
   invoices = {},
   previousShown = PREVIOUS_BOOKINGS_SHOWN,
+  cancellationNoticeHours = DEFAULT_RULES.booking.cancellation_notice_hours,
 }: {
   bookings: BookingWithDetails[];
   /** By booking id: the live issued invoice, if any. */
   invoices?: Record<string, MyInvoice>;
   /** How many finished bookings to draw before "Show all". */
   previousShown?: number;
+  /**
+   * How long before check-in a booking may still be cancelled from the portal
+   * (Settings, 9 Nov 2026). Handed in by the page so the button and the server
+   * apply the same figure, like every other rule on a form here.
+   */
+  cancellationNoticeHours?: number;
 }) {
   const [allPrevious, setAllPrevious] = useState(false);
   // Grouped on the client so the sections follow the clock without a reload;
@@ -87,7 +96,11 @@ export function MyBookings({
         {sections.current.length === 0 ? (
           <EmptyState>Nothing in progress today.</EmptyState>
         ) : (
-          <BookingTable bookings={sections.current} invoices={invoices} />
+          <BookingTable
+            bookings={sections.current}
+            invoices={invoices}
+            cancellationNoticeHours={cancellationNoticeHours}
+          />
         )}
       </section>
 
@@ -96,7 +109,11 @@ export function MyBookings({
         {sections.upcoming.length === 0 ? (
           <EmptyState>No bookings ahead.</EmptyState>
         ) : (
-          <BookingTable bookings={sections.upcoming} invoices={invoices} />
+          <BookingTable
+            bookings={sections.upcoming}
+            invoices={invoices}
+            cancellationNoticeHours={cancellationNoticeHours}
+          />
         )}
       </section>
 
@@ -144,10 +161,12 @@ function BookingTable({
   bookings,
   invoices,
   compact = false,
+  cancellationNoticeHours = DEFAULT_RULES.booking.cancellation_notice_hours,
 }: {
   bookings: BookingWithDetails[];
   invoices: Record<string, MyInvoice>;
   compact?: boolean;
+  cancellationNoticeHours?: number;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
@@ -176,6 +195,7 @@ function BookingTable({
               booking={b}
               invoice={invoices[b.id] ?? null}
               compact={compact}
+              cancellationNoticeHours={cancellationNoticeHours}
             />
           ))}
         </TableBody>
@@ -188,10 +208,12 @@ function BookingRow({
   booking,
   invoice,
   compact = false,
+  cancellationNoticeHours = DEFAULT_RULES.booking.cancellation_notice_hours,
 }: {
   booking: BookingWithDetails;
   invoice: MyInvoice | null;
   compact?: boolean;
+  cancellationNoticeHours?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -201,6 +223,25 @@ function BookingRow({
 
   const canCancel = CANCELLABLE.includes(booking.status);
   const needsManagerApproval = booking.status === "APPROVED" || booking.status === "OCCUPIED";
+  /**
+   * **Why this one can no longer be cancelled from the portal** (9 Nov 2026,
+   * the meeting: at least 24 hours' notice, so the room can be offered to
+   * somebody on the waiting list).
+   *
+   * The same function the server refuses with, so the button is live exactly
+   * when `cancelBooking` would accept it - and when it is not, it says why
+   * with this booking's own figure in it, which is the third home every rule
+   * here has. A dining booking is exempt: its check-in is derived from its
+   * first day of meals, and the kitchen's own notice period governs it.
+   */
+  const noticeProblem =
+    booking.service_type === "meals_only"
+      ? null
+      : cancellationNoticeError(
+          new Date(booking.check_in),
+          new Date(),
+          cancellationNoticeHours
+        );
 
   const cancel = () =>
     startTransition(async () => {
@@ -300,7 +341,10 @@ function BookingRow({
               </div>
             )}
 
-            {canCancel && !showCancelDialog && (
+            {canCancel && !showCancelDialog && noticeProblem && (
+              <p className="text-xs text-muted-foreground">{noticeProblem}</p>
+            )}
+            {canCancel && !showCancelDialog && !noticeProblem && (
               <div className="flex justify-end">
                 <Button variant="destructive" onClick={() => setShowCancelDialog(true)}>
                   {needsManagerApproval ? "Request cancellation" : "Cancel booking"}

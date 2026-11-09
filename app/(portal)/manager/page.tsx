@@ -205,6 +205,7 @@ export default async function ManagerPage({
         nowIso={now.toISOString()}
         capacity={rules.capacity}
         bufferMinutes={rules.booking.buffer_minutes}
+        vipAccess={rules.portal}
       />
     </div>
   );

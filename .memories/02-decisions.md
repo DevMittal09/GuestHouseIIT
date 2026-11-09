@@ -5411,6 +5411,8 @@ institute.
 
 ## Bookings open six months ahead, not one
 
+> **Superseded 9 Nov 2026:** the meeting restores one month for requesters, including official accounts.
+
 **Decision.** `DEFAULT_RULES.booking.advance_booking_months` is **6**. The
 Setting's range (1-24) and the exempt roles are unchanged.
 
@@ -5975,6 +5977,8 @@ first, which is why item 8 is written up as a *correction of a reason* rather
 than a new rule.
 
 ### A tariff category is the pair the requester decides, not a field on the booking
+
+> **Superseded 9 Nov 2026:** manager-selected named categories now exist on both booking and tariff; see the meeting continuation at the end.
 
 **Decision.** The categories and their rates live in a panel on the
 **right-hand side** of the booking page, under the requester's own details,
@@ -7632,3 +7636,122 @@ records it because the cost was the owner's time, not the agent's.
 **Not decided here:** what the pool ceiling should be once there are more than
 three collaborators, or on a multi-instance production deployment where
 `DATABASE_POOL_MAX` multiplies by the instance count. [03-roadmap.md](03-roadmap.md) §2r.
+
+---
+
+## 9 November 2026 (second) - mail to an address that does not exist is dropped, not failed
+
+The owner turned `MAIL_REDIRECT_ALL_TO` off to find out whether Gmail delivery
+works at all, and asked for the obvious corollary: *"For invalid mail ids,
+that is mail ids which do not exist, just dont send the mails, Like i dont
+want errors due to that invalid mail ids."*
+
+**Why a new variable rather than reusing the redirect.** They answer different
+questions, and the redirect cannot answer this one. It says *where* mail goes;
+it replaces To and **drops CC**, so while it is set the thing the owner wanted
+to observe - that the real chain addresses the real people - is precisely the
+thing that is gone. (That property is not a bug: it is the office's "copy to
+mail is not working" of 1 Oct 2026, correctly diagnosed then.) The new question
+is *whether an address is real*, and the honest answer is a list of the ones
+that are, because nothing in the portal can know it otherwise.
+
+**Why an allow list rather than a block list of fake domains.** The obvious
+shortcut - block `@iitpkd.ac.in` and `@smail.iitpkd.ac.in` - is wrong in this
+very deployment: `142301026@smail.iitpkd.ac.in` is a **real** mailbox at a
+domain full of fake ones, and `ghm@iitpkd.ac.in` is the account doing the
+sending. Realness is per address, not per domain, so the list has to be of
+addresses. `@domain` entries exist for when a whole directory is real, and a
+subdomain is deliberately **not** covered by its parent, because that
+distinction is exactly the one above.
+
+**Why dropped rather than failed, and why that needed a new settlement.**
+A FAILED row means "something went wrong, a human should look". An address the
+deployment has declared fictional is not that: there is nothing to look at and
+nothing to retry, and four backoff attempts each would bury the real failures.
+So the dispatcher settles such a message instead, with the reason recorded.
+That required widening `EmailSettlement`'s ok branch with an optional `note`,
+which both stores write to `last_error`, and teaching the console to render a
+note on a settled row **muted rather than red** - a red line under a row that
+did not fail is how a setting gets reported as a bug.
+
+**The corner this does not get right, stated plainly.** A skipped row reads
+**SENT**, which it was not. The honest fix is a `SKIPPED` value on the
+`email_status` enum, and it is not free: Postgres refuses to *use* a new enum
+value in the transaction that adds it (migration 29's lesson), so it is a
+migration plus `MAIL_STATUSES`, `countEmailsByStatus`'s
+`Record<MailStatus, number>`, both stores and the console's tiles and filter.
+That is more than the owner asked for in a "for now" arrangement, so it is
+[03-roadmap.md](03-roadmap.md) §2s rather than this round - and the note in
+the row is what keeps it from being invisible meanwhile.
+
+**Why the two filters are ordered, and fixed.** The allow list runs first, on
+the real recipients; the redirect rewrites the envelope afterwards. The other
+way round would test the *redirect mailbox* against the allow list, which
+answers nothing about anybody. In the chosen order, setting both means "show
+me, in one mailbox, only the mail that would really have been delivered",
+which is a sentence somebody might actually want. A unit test pins it, because
+it is the kind of thing a later refactor reorders without noticing.
+
+**Why a blank value reads as unset.** The two states mean opposite things - no
+restriction against **nobody** allowed - and a variable can be blanked by
+accident far more easily than it can be deleted by accident. So the blank is
+read as the production meaning, not the testing one, and `MAIL_DRY_RUN` stays
+the way to send nothing at all.
+
+**And why the student was not repointed.** Three of the four accounts the
+owner named were renamed onto real inboxes. The fourth could not be: the
+shared database already had a **real account** on
+`142301026@smail.iitpkd.ac.in`, with three bookings and three log entries, and
+renaming the demo persona onto it would have attributed somebody else's
+bookings to Arjun Pillai. The repair script's guard - six lines checking the
+*target* rather than only the source - refused the whole transaction before any
+row moved, which is the difference between an error and a silent
+misattribution. The real fix turned out to be smaller and better: that account
+had no `institute_students` row, so no hostel, so **no Assistant Warden** - its
+requests had been entering at the desk and skipping the stage the test existed
+to exercise. One row.
+
+**Not decided here:** whether the institute's real directory should be loaded
+in place of the fake persona addresses, which would make the allow list
+unnecessary for this purpose; and what reverts a temporary arrangement like
+this one, since nothing does. [03-roadmap.md](03-roadmap.md) §2s.
+
+
+## 9 November 2026 - completing the interrupted meeting implementation
+
+The requester no longer decides a tariff. A name on both booking and rate sheet removes the former second-source-of-truth objection. New allocations require an explicit manager choice; historical bookings without one retain historical pricing. A missing selected-category price blocks billing rather than silently choosing a legacy rate.
+
+Director rooms require a distinct `director_only` class. An ordinary VIP grant cannot expose them online; GHM-raised bookings can still use them. Faculty reservations remain separate from inactive rooms and maintenance. The live database confirmed the old thirteen Hamsanandi labels and ten Bageshri labels, so adding A1–A3 is additive and renaming Bageshri would be an unsupported assumption.
+
+The meeting says official **bookings**, not only official-role users, have no duration limit. The shared schema and date picker now use booking type. The advance window still limits ordinary official requesters; the desk can accommodate exceptions through its existing authority. Cancellation remains the existing request/manager-decision flow, with a 24-hour submission cutoff.
+
+Original dates are preserved once when any desk date change occurs; current dates are the revised period. This avoids duplicating durations while keeping the original request auditable. All manager date edits notify the requester, including shortening a pending request before allocation. Issued invoice snapshots remain unchanged.
+
+No official PDF or reservation start date was supplied. Meeting meal timings are used and reservation dates remain unset. The separate mail-allowlist/account changes already in the working tree were preserved.
+
+Two things the final verification pass changed, both of them about the checks
+rather than about the meeting.
+
+**Google is not configured for the Playwright suite, and `envProblems` is why
+it no longer has to be.** The suite serves a **production build**, so
+`assertEnv()` refused to start without `GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET`, and they had been set to inert placeholders to get
+past it. But configuring Google **closes `/mock-login`** and turns the
+sign-in button into a real link to `accounts.google.com` - `AGENTS.md` says
+*don't set these in CI* - and three journeys failed on exactly that, one by
+navigating out to Google's own error page. The fix is to exempt them under
+**`ALLOW_MOCK_STORE=true`**, which `DATABASE_URL` has always been exempted
+under and which is documented as never set in a real deployment. Nothing
+about the production gate moves: a real deployment does not set it, and
+Google is still required there. The alternative - a dedicated `E2E` flag that
+switches off a production check - would have been a second way to start an
+under-configured production server, which is the thing the check exists to
+prevent.
+
+**`npm run check:migrations` now names the right file to fix things with.**
+It said "apply the matching sections from `scripts/init-postgres.sql`", which
+is the file that builds a database **from nothing**: run against a database
+that already has tables it fails, or half-succeeds. That advice was harmless
+while there was nowhere else to point, and became wrong the moment this round
+created `scripts/migrations/`. It now names the numbered migration for an
+existing database and the schema file only for a fresh install.

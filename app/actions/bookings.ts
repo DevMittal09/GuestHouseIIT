@@ -32,7 +32,13 @@ import {
   notifyTierApproved,
 } from "@/lib/mail/notify";
 import { vacateBlocker } from "@/lib/invoice";
-import { guestHousePolicyError, mealsPolicyError } from "@/lib/policy";
+import { cancellationNoticeError, guestHousePolicyError, mealsPolicyError } from "@/lib/policy";
+import { allocatableRooms, roomAccessError } from "@/lib/rooms-access";
+import {
+  describeTariffCategory,
+  tariffCategoryError,
+  tariffCategoryOf,
+} from "@/lib/tariff-category";
 import { isWhitelistedOfficial } from "@/lib/settings";
 import { getOfficialEmails, getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
@@ -182,7 +188,10 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     const lookup = await academicRecordFor(requester);
     const guestNames = guestNameRule(
       lookup.status === "found" ? lookup.record : null,
-      config.relationship_options
+      config.relationship_options,
+      // The spouse rule is answered from the requester's own programme, with
+      // or without a record - see `guestNameRule`.
+      requester
     );
     /**
      * Whether anybody other than whoever is submitting gives this requester
@@ -302,7 +311,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     // Room limit enforcement: check against total active rooms and date-range
     // availability. A meals-only booking holds no rooms, so none of it applies.
     if (wantsRooms) {
-      const activeRooms = await store.listRooms(payload.guest_house_id);
+      const activeRooms = allocatableRooms(await store.listRooms(payload.guest_house_id), requester, bookingContext.rules.portal);
       if (payload.rooms.length > activeRooms.length) {
         return {
           ok: false,
@@ -314,7 +323,8 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         checkInIso,
         checkOutIso
       );
-      const freeRoomCount = activeRooms.length - occupiedIds.length;
+      const occupied = new Set(occupiedIds);
+      const freeRoomCount = activeRooms.filter((room) => !occupied.has(room.id)).length;
       if (payload.rooms.length > freeRoomCount) {
         return {
           ok: false,
@@ -695,7 +705,20 @@ export async function allocateRooms(
   bookingId: string,
   roomIds: string[],
   /** Rooms whose turnover overlap the manager is accepting. */
-  overrideRoomIds: string[] = []
+  overrideRoomIds: string[] = [],
+  /**
+   * **The office's tariff category, chosen here and nowhere else** (9 Nov
+   * 2026, the meeting: "the tariff category must be decided exclusively by
+   * the GHM during the approval and room allocation process").
+   *
+   * The requester is not asked and cannot send it: only the desk knows
+   * whether the person arriving is an external examiner, an academic visitor
+   * or somebody's parent, and the account that raised the request does not
+   * say. Null leaves the booking uncategorised, which prices from the
+   * uncategorised rate sheet exactly as every booking did before this round -
+   * so a desk that has not decided yet is not blocked from allotting a room.
+   */
+  tariffCategory: string | null = null
 ): Promise<ActionResult> {
   try {
     const user = await requireUser();
@@ -728,6 +751,24 @@ export async function allocateRooms(
     const roomsById = new Map(rooms.map((r) => [r.id, r]));
     if (roomIds.some((id) => !roomsById.has(id))) {
       return { ok: false, error: "Selected rooms do not belong to this guest house" };
+    }
+
+    /**
+     * **A reserved room is nobody's to allot, and a VIP room is only the
+     * authorised's** (9 Nov 2026, the meeting). Checked here and not only in
+     * the grid: the grid hides what it must not offer, and this is the rule.
+     *
+     * Decided on **the requester**, not on the manager doing the allotting -
+     * the room is for the guest, and the manager's own authority is to put an
+     * authorised person in one, not to put anybody in one. A booking the desk
+     * raised itself carries `user_role: "gh_manager"`, which `VIP_STAFF_ROLES`
+     * admits, so the Director's rooms stay bookable "directly through the
+     * GHM" exactly as the office runs them.
+     */
+    const portal = (await getRules()).portal;
+    for (const id of roomIds) {
+      const problem = roomAccessError(roomsById.get(id)!, booking.requester, portal);
+      if (problem) return { ok: false, error: problem };
     }
 
     // Do the picked rooms actually sleep the party? Infants share with their
@@ -776,6 +817,13 @@ export async function allocateRooms(
     // No pre-flight occupancy check for the rest: the room_holds exclusion
     // constraint is the authority, and checking first would only reintroduce
     // the check-then-act race this replaced. A loser gets RoomClashError.
+    // Refused rather than ignored: a category the manager typed and the
+    // portal silently dropped would be a price nobody could account for.
+    const categoryProblem = tariffCategoryError(tariffCategory, booking);
+    if (categoryProblem) return { ok: false, error: categoryProblem };
+    const category = tariffCategoryOf(tariffCategory) ?? booking.tariff_category;
+    if (!category) return { ok: false, error: "Choose a tariff category before allocating rooms" };
+
     const roomNumbers = selectedRooms.map((r) => r.room_number).join(", ");
     const overrideNumbers = overrides
       .map((id) => roomsById.get(id)?.room_number ?? id)
@@ -787,6 +835,9 @@ export async function allocateRooms(
         assigned_room_ids: roomIds,
         override_room_ids: overrides,
         override_by: overrides.length > 0 ? user.id : null,
+        // Left alone when the manager chose none, so re-allotting a room on a
+        // booking that is already categorised does not quietly un-price it.
+        ...(category !== null && { tariff_category: category }),
       },
       {
         action_by: user.id,
@@ -797,6 +848,12 @@ export async function allocateRooms(
             ? `Approved by the Guest House Manager without the remaining review stages (was ${booking.status}).`
             : null,
           `Rooms allocated: ${roomNumbers}`,
+          // In the log because it decides the money, and because the office
+          // has to be able to answer "why was this charged at Category II"
+          // months later.
+          category !== null
+            ? `Tariff category set to ${describeTariffCategory(category)}.`
+            : null,
           // The override is in the log or it did not happen: it is the record
           // of a human accepting an overlap the system would otherwise refuse.
           overrides.length > 0
@@ -854,6 +911,24 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
         error:
           "This stay has already started - speak to the Guest House Manager to end it early.",
       };
+    }
+    /**
+     * **At least 24 hours' notice** (9 Nov 2026, the meeting), so a released
+     * room can still be offered to somebody on the waiting list. The figure
+     * is Settings and 0 turns it off; the manager is not held to it, which is
+     * `managerCancelBooking`, a different action with a different check.
+     *
+     * A dining booking is exempt: its `check_in` is derived from its first
+     * day of meals, and the kitchen's notice period is the rule there.
+     */
+    if (booking.service_type !== "meals_only") {
+      const rules = await getRules();
+      const notice = cancellationNoticeError(
+        new Date(booking.check_in),
+        new Date(),
+        rules.booking.cancellation_notice_hours
+      );
+      if (notice) return { ok: false, error: notice };
     }
 
     // **Every** cancellation goes to the Guest House Manager, whatever stage

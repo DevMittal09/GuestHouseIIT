@@ -39,6 +39,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { COUNTRIES } from "@/lib/countries";
 import {
   isRelationshipWithheld,
+  withheldReason,
   LOCKED_NAME_HINT,
   lockedNameFor,
   NO_GUEST_NAME_RULE,
@@ -98,7 +99,7 @@ import {
   totalMeals,
 } from "@/lib/meals";
 import type { TariffPreview } from "@/lib/tariffs";
-import { tariffCategories, type TariffCategory } from "@/lib/tariff-categories";
+import type { TariffSheetRow } from "@/lib/tariff-category";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
 import { cn } from "@/lib/utils";
 import { asksOfficeApproval, isOfficeRole, latestCheckIn } from "@/lib/workflow";
@@ -250,6 +251,7 @@ export function BookingForm({
   forClub = null,
   defaultCopyTo = [],
   tariffPreviews = [],
+  tariffSheet = [],
   guestNames = NO_GUEST_NAME_RULE,
   aside = null,
 }: {
@@ -268,6 +270,12 @@ export function BookingForm({
    * requester is quoted and what the desk charges cannot drift.
    */
   tariffPreviews?: TariffPreview[];
+  /**
+   * The office's Category I / II / III sheet, resolved on the server (9 Nov
+   * 2026). **Read-only on this form**: the category is the desk's to decide,
+   * and the panel states it so the requester knows what a stay costs.
+   */
+  tariffSheet?: TariffSheetRow[];
   /**
    * What stands above the tariff in the right-hand column - the requester's
    * own details card, rendered on the server because nothing in it is
@@ -753,33 +761,26 @@ export function BookingForm({
     setMealChoices((prev) => choicesFromMealSlots(mealDays, next, prev));
   };
 
-  /**
-   * The tariff categories this requester may book, each with the rate it
-   * resolves to (17 Oct 2026). One category is one (guest house, booking
-   * type) pair - the two answers the rate is resolved from - so choosing one
-   * in the panel writes exactly those two fields, and the figure quoted
-   * cannot drift from the one the invoice prices.
+  /*
+   * **The tariff panel no longer asks anything** (9 Nov 2026, the meeting:
+   * "users must not be allowed to select their tariff category"; "the tariff
+   * category must be decided exclusively by the GHM during the approval and
+   * room allocation process").
    *
-   * Computed from the same `guestHousesForBookingType` the guest house
-   * dropdown narrows itself with, so neither can offer what the other
-   * refuses.
+   * `tariffCategories` and `chooseCategory` were here from 17 Oct 2026: a
+   * "category" then meant the (guest house, booking type) pair, so picking
+   * one in the panel wrote those two fields and the quote could not drift
+   * from the invoice. The office's categories turn out to be kinds of
+   * **guest** - an external examiner, an academic visitor, somebody's parent -
+   * which the account raising the request does not say and the requester
+   * should not be choosing, because choosing it is choosing the rate.
+   *
+   * So the panel states the whole sheet and the desk sets the category when
+   * it allots rooms (`lib/tariff-category.ts`, `allocateRooms`). The guest
+   * house and the booking type are still asked **on the form**, in the cards
+   * below, where they always were - they were never the panel's to ask.
+   * `lib/tariff-categories.ts` is still what resolves the rates shown.
    */
-  const categories: TariffCategory[] = tariffCategories({
-    guestHouses,
-    bookingTypes: bookingTypeOptions,
-    role: config.role,
-    previews: tariffPreviews,
-    service: mealsOnly ? "meals_only" : "room",
-    allowAnyGuestHouse: canOverrideHouse,
-  });
-  const chooseCategory = (category: TariffCategory) => {
-    if (category.booking_type !== bookingType) {
-      setValue("booking_type", category.booking_type, { shouldValidate: false });
-    }
-    if (category.guest_house_id !== selectedGuestHouseId) {
-      setValue("guest_house_id", category.guest_house_id, { shouldValidate: false });
-    }
-  };
 
   // The kitchen's limit per sitting (Settings). One booking cannot be larger
   // than it; how much of a sitting is already taken is checked on the server,
@@ -808,7 +809,7 @@ export function BookingForm({
   // and for the same reason as the one above.
   const maxNights = rules.booking.max_stay_nights;
   const latestCheckOut = checkInDate
-    ? latestCheckOutDate(checkInDate, config.role, user.email, maxNights)
+    ? latestCheckOutDate(checkInDate, config.role, user.email, maxNights, bookingType)
     : null;
 
   // The room count is its own text state rather than being read off
@@ -1177,13 +1178,15 @@ export function BookingForm({
       <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 lg:col-span-4 lg:col-start-9 lg:row-start-1 lg:self-start">
         {aside}
         <TariffPanel
-          categories={categories}
+          sheet={tariffSheet}
+          guestHouses={guestHouses}
           previews={tariffPreviews}
           guestHouseId={selectedGuestHouseId}
           bookingType={bookingType}
           pricesIncludeGst={rules.invoice.prices_include_gst}
-          onSelect={chooseCategory}
+          rules={rules}
           mealsOnly={mealsOnly}
+          servesMeals={servesMeals}
         />
       </aside>
       <form
@@ -2573,10 +2576,21 @@ function GuestRow({
                     offering it would let a typed parent back in through the
                     one door this closes. Guardian is the mirror - it appears
                     only where the record names neither parent. */}
+                {/* A relationship withheld **with a reason** - today the
+                    spouse rule (9 Nov 2026) - is greyed out and says why,
+                    which is where a rule the form enforces belongs. One
+                    withheld with no reason is a parent the record does not
+                    name: that one is not offered at all, because there is
+                    nothing to lock it to and listing it would invite a typed
+                    parent back in. */}
                 {config.relationship_options
-                  .filter((r) => !isRelationshipWithheld(guestNames, r))
+                  .filter(
+                    (r) =>
+                      !isRelationshipWithheld(guestNames, r) ||
+                      withheldReason(guestNames, r) !== null
+                  )
                   .map((r) => {
-                    const locked = lockReason(r);
+                    const locked = lockReason(r) ?? withheldReason(guestNames, r);
                     return (
                       <option
                         key={r}

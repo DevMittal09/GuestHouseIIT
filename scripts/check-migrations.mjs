@@ -55,7 +55,7 @@ const MARKERS = [
     what: "profiles decoupled from auth.users, and the authenticated RLS surface closed",
     sql:
       "SELECT (SELECT count(*)::int FROM pg_constraint WHERE conrelid = 'public.profiles'::regclass " +
-      "AND contype = 'f' AND confrelid = 'auth.users'::regclass) AS auth_fk, " +
+      "AND contype = 'f' AND confrelid = to_regclass('auth.users')) AS auth_fk, " +
       "(SELECT count(*)::int FROM pg_policies WHERE 'authenticated' = ANY(roles) " +
       "AND schemaname IN ('public','storage')) AS authenticated_policies",
     check: (row) => row.auth_fk === 0 && row.authenticated_policies === 0,
@@ -83,6 +83,21 @@ const MARKERS = [
     check: (row) => row.c >= 19,
   },
   { n: 35, kind: "table", table: "institute_students", what: "institute data tables (students, employees, offices, fcc, hostels, wardens)" },
+  { n: 36, kind: "column", table: "rooms", column: "room_class", what: "room classes (VIP and reserved) and named tariff categories" },
+  ...["reservation_note", "reserved_until"].map((column) => ({ n: 36, kind: "column", table: "rooms", column, what: "room reservation metadata" })),
+  ...["tariff_category", "original_check_in", "original_check_out"].map((column) => ({ n: 36, kind: "column", table: "bookings", column, what: "booking category and requested dates" })),
+  { n: 36, kind: "sql", what: "director-only room restriction", sql: "SELECT count(*)::int AS c FROM pg_constraint WHERE conrelid = 'public.rooms'::regclass AND pg_get_constraintdef(oid) LIKE '%director_only%'", check: (row) => row.c > 0 },
+  {
+    // The other half of 36: a category is part of a rate's scope, so the
+    // uniqueness index has to include it or the office cannot publish a
+    // Category I and a Category II rate for one guest house on one day.
+    n: 36, kind: "sql",
+    what: "the tariff uniqueness index widened to include the category",
+    sql:
+      "SELECT count(*)::int AS c FROM pg_indexes WHERE schemaname = 'public' " +
+      "AND indexname = 'tariffs_one_per_scope_and_date' AND indexdef LIKE '%tariff_category%'",
+    check: (row) => row.c === 1,
+  },
 ];
 
 function env() {
@@ -112,7 +127,7 @@ function env() {
 async function main() {
   const vars = env();
   const connectionString =
-    vars.DATABASE_URL ?? process.env.DATABASE_URL ?? "";
+    process.env.DATABASE_URL ?? vars.DATABASE_URL ?? "";
   if (!connectionString) {
     console.log(
       "No database is configured (DATABASE_URL in .env.local),\n" +
@@ -131,7 +146,7 @@ async function main() {
     return 1;
   }
 
-  const host = connectionString.replace(/^postgresql:\/\/[^@]*@/, "").split(/[/?]/)[0];
+  const host = new URL(connectionString).host;
   console.log(`Database: ${host}\n`);
 
   const missing = [];
@@ -183,7 +198,16 @@ async function main() {
 
   console.log("");
   if (missing.length > 0) {
-    console.log(`${missing.length} schema element(s) appear to be missing. Apply the matching sections from scripts/init-postgres.sql:`);
+    // An **existing** database is brought up to date with the numbered file
+    // in `scripts/migrations/`, not with the schema file: `init-postgres.sql`
+    // builds a database from nothing and would fail, or worse half-succeed,
+    // against one that already has tables. The schema file is only for a
+    // fresh install, which is why it is named second (9 Nov 2026 - the
+    // advice said `init-postgres.sql` outright, and `scripts/migrations/`
+    // did not exist until this round).
+    console.log(`${missing.length} schema element(s) appear to be missing.`);
+    console.log("On an existing database, apply the numbered file in scripts/migrations/ for each one below.");
+    console.log("On a database being created from nothing, scripts/init-postgres.sql already has them all.");
     for (const m of missing) {
       console.log(`  ${String(m.n).padStart(2)}  ${m.what}`);
     }

@@ -6,6 +6,7 @@ import {
   canExportCollections,
   canIssueInvoices,
   canUseConsoleSection,
+  invoiceAuthorityError,
 } from "@/lib/access";
 import { isAdminUnlocked } from "@/lib/admin-lock";
 import { recordAudit } from "@/lib/audit-server";
@@ -172,7 +173,16 @@ export async function getInvoicePanel(
         gstMealPercent: rules.gst_meal_percent,
         kind: invoiceKind(document),
         servesMeals: invoicePrintsDining(document),
-        blocker: live && live.status !== "draft" ? null : invoiceBlocker(booking, document),
+        // Who may issue *this* invoice comes first: the caretaker settles a
+        // personal stay at the counter, and an official bill is a claim on a
+        // department's budget, which the meeting of 9 Nov 2026 reserved to
+        // the manager. Said here as well as refused in the action, so the
+        // dialog explains it rather than failing on the button.
+        blocker:
+          live && live.status !== "draft"
+            ? null
+            : (invoiceAuthorityError(user.role, booking.booking_type) ??
+              invoiceBlocker(booking, document)),
         history: invoices.filter((i) => i.status === "cancelled"),
         canCancel: canCancelInvoices(user.role),
       },
@@ -218,6 +228,10 @@ export async function saveInvoiceDraftAction(
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
+    // The draft is the invoice being drawn up, so the same authority applies
+    // to it as to issuing it.
+    const authority = invoiceAuthorityError(user.role, booking.booking_type);
+    if (authority) return { ok: false, error: authority };
     await store.saveInvoiceDraft(bookingId, cleanCounts(counts), user.id, cleanCharges(booking, charges));
     return { ok: true };
   } catch (e) {
@@ -240,6 +254,13 @@ export async function issueInvoiceAction(
     const store = getStore();
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
+    /**
+     * **Only the manager invoices an official booking** (9 Nov 2026, the
+     * meeting). Checked here, in the server action, not only in the dialog -
+     * the UI hiding a button is never the security boundary.
+     */
+    const authority = invoiceAuthorityError(user.role, booking.booking_type);
+    if (authority) return { ok: false, error: authority };
     const mealCounts = cleanCounts(counts);
     const extraCharges = cleanCharges(booking, charges);
     const now = new Date().toISOString();

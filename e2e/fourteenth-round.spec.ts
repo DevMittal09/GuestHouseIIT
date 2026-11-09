@@ -32,49 +32,19 @@ function tariffPanel(page: Page) {
   return page.locator('section[aria-labelledby="tariff-panel-heading"]');
 }
 
-/** One category's radio, found by the label beside it. */
-function tariffCategory(page: Page, label: string) {
-  return tariffPanel(page)
-    .locator("label", { hasText: label })
-    .locator('input[type="radio"]');
-}
-
-test("the tariff panel offers the categories and sets what the rate is read from", async ({
-  page,
-}) => {
+test("the tariff sidebar is informational and includes catering times", async ({ page }) => {
   await signIn(page, ACCOUNTS.faculty);
   await page.goto("/book");
-  await expect(page.getByRole("heading", { name: /New Booking/i })).toBeVisible();
-
-  // Both guest houses and both kinds of booking, each with its own rate.
   const panel = tariffPanel(page);
-  await expect(panel.getByRole("heading", { name: "Tariff" })).toBeVisible();
-  const hamsanandiPersonal = tariffCategory(page, "Hamsanandi - Personal booking");
-  await expect(panel.getByText("Bageshri - Official booking")).toBeVisible();
-  await expect(panel.getByText("Hamsanandi - Official booking")).toBeVisible();
-  await expect(panel.getByText("Hamsanandi - Personal booking")).toBeVisible();
-  // A rupee figure against each, or an honest "Rate not published".
-  await expect(panel.getByText(/₹|Rate not published/).first()).toBeVisible();
-
-  // The form opens on no guest house, so the rates wait for a category.
-  await expect(panel.getByText("Choose one to see every charge.")).toBeVisible();
-
-  // Choosing a category is choosing the guest house and the kind of booking:
-  // both of the form's own controls follow it.
-  await hamsanandiPersonal.check();
-  await expect(page.locator('[name="booking_type"][value="personal"]')).toBeChecked();
+  await expect(panel.getByRole("heading", { name: "Room tariff" })).toBeVisible();
+  await expect(panel.getByRole("radio")).toHaveCount(0);
+  for (const name of ["Category I", "Category II", "Category III"]) await expect(panel.getByText(name, { exact: true })).toBeVisible();
+  await expect(panel.getByText("₹1,500.00").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Catering timings" })).toBeVisible();
+  await page.locator('[name="booking_type"][value="personal"]').check();
   const house = page.locator('select[name="guest_house_id"]');
-  await expect(house.locator("option:checked")).toHaveText(/Hamsanandi/);
-  // And the full table of charges for it - the same caption the table has
-  // carried since the rates were a card in the form.
-  await expect(
-    panel.getByRole("table", { name: /Rates at Hamsanandi, in force today/ })
-  ).toBeVisible();
-  await expect(panel.getByRole("cell", { name: "Lunch, per head" })).toBeVisible();
-
-  // The rates are **only** in the panel: the form has no numbered Rates
-  // section any more.
-  await expect(page.locator('[data-slot="card-title"]', { hasText: /^Rates$/ })).toHaveCount(0);
+  await house.selectOption({ label: "Hamsanandi" });
+  await expect(house.locator("option:checked")).toHaveText("Hamsanandi");
 });
 
 test("the guests come before the meals, and the meals are a Yes or No", async ({ page }) => {
@@ -82,7 +52,7 @@ test("the guests come before the meals, and the meals are a Yes or No", async ({
   await page.goto("/book");
 
   // Hamsanandi, which has the kitchen - picked from the tariff panel.
-  await tariffCategory(page, "Hamsanandi - Official booking").check();
+  await page.locator('select[name="guest_house_id"]').selectOption({ label: "Hamsanandi" });
 
   const guests = page.getByText("Guests, room by room");
   const meals = page.locator('[data-slot="card-title"]', { hasText: /^Meals$/ });
