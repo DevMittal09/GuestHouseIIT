@@ -199,6 +199,27 @@ belong only in `academic_records`.** Nothing about a parent goes in `profiles`.
 
 ### 1a.1 Before any import - close the second door
 
+> **Most of this section is now history (8 Nov 2026, second round).** The
+> hosted project's `public` schema was **dropped and restored** from the
+> laptop's database, so: the 38 `authenticated` policies are **gone** (they
+> went with the old schema and were not recreated), `anon` and
+> `authenticated` were granted **no table privileges** on the new schema, the
+> `profiles -> auth.users` foreign key does not exist, and `documents` bucket
+> policies went with it. The three production actions below were therefore
+> taken by the restore rather than by running migration 31 - **except the
+> GoTrue settings**, which live in the project's Auth configuration and not
+> in the database at all. **Email/password signup may well still be open**;
+> that door is closed in the dashboard, and nothing in this round touched it.
+> The remaining Auth users from the old seed are also still there - harmless
+> now that nothing references them, but worth deleting
+> (`supabase/repairs/2026-10-13-retire-seeded-auth-users.sql` is no longer
+> runnable from the repository, so do it in the dashboard).
+>
+> The one remaining API credential that can read the data is the
+> **service-role key**, which bypasses RLS and is in `.env.local`. The portal
+> itself reaches the database over `DATABASE_URL`, not PostgREST.
+
+
 **Done in code on 13 Oct 2026. Three steps are left, and they are production
 actions.** The reasoning and the link-by-link chain are in
 [05-credentials-and-security.md](05-credentials-and-security.md) Part 4, "The

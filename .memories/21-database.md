@@ -1,10 +1,31 @@
 # Database
 
-Schema lives in `supabase/migrations/` — **26 numbered files, applied in order,
-forward only** (the first is `00000000000001_initial_schema.sql`); demo data in
-`supabase/seed.sql`. The TypeScript types are hand-maintained in
-`lib/supabase/database.types.ts`. The mock store (`lib/store/mock.ts`) mirrors
-every table in `.local-db.json` and self-heals old files.
+**The schema is `scripts/init-postgres.sql`** - one file that builds the whole
+database on plain PostgreSQL 16+, consolidated from the 35 Supabase migrations
+with every Supabase-specific construct removed. `supabase/migrations/`,
+`supabase/seed.sql` and `lib/supabase/database.types.ts` **no longer exist**
+(the Supabase store went on 2 Nov 2026); the numbered migrations are still
+described below because they are the history of every column, and because the
+shared database was built by them. A database is created in **three steps, in
+this order**: `psql -f scripts/init-postgres.sql`, then
+`npm run seed:reference` (the guest houses, their rooms, the rate sheet), then
+`npm run seed:personas` (the 29 demo accounts). The mock store
+(`lib/store/mock.ts`) mirrors every table in `.local-db.json` and self-heals
+old files.
+
+> **Where the database actually is** (8 Nov 2026, second round): the hosted
+> Supabase project's **PostgreSQL 17.6**, shared by every collaborator and
+> reached over `DATABASE_URL` through its **session pooler** - as a managed
+> PostgreSQL and nothing more. Its `public` schema is a restore of the
+> laptop's `guesthouse_dev`: **34 tables, 2 views, 34 triggers, 2 exclusion
+> constraints, 79 foreign keys**. One consequence to know about that database
+> rather than this schema file: it carries **15 RLS policies** and the
+> functions `my_role()` and `can_access_booking()`, which call `auth.uid()`.
+> They survive only because `pg_dump` emits `SET check_function_bodies =
+> false`, the application connects as the table owner (so RLS is bypassed),
+> and nothing calls them. They would fail on a database with no `auth`
+> schema - the institute's, for instance. Full account:
+> [02-decisions.md](02-decisions.md), 8 November 2026 (second).
 
 ## Tables
 

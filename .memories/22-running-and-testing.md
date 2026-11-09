@@ -146,110 +146,61 @@ npm run build        # rebuild normally afterwards if you will `next start` agai
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests, a mock-store
 build and the journeys, **with no secrets at all**.
 
-### Local with Supabase
+### The shared database (the Supabase project, 8 Nov 2026)
 
-Requires Docker.
-
-```bash
-npm install -g supabase      # or: brew install supabase/tap/supabase
-supabase start
-supabase db reset            # applies migrations + seed
-supabase status              # prints URL, anon key, service_role key
-```
-
-### Hosted Supabase
-
-1. Create a project at https://supabase.com/dashboard.
-2. In the SQL Editor run **every file in `supabase/migrations/` in numerical
-   order** (there are 25 as of 24 Sep 2026 — count the directory, not this
-   sentence), then `supabase/seed.sql`.
-3. Copy the keys from **Project Settings → API**.
-
-> **Migrations are not applied automatically and an existing project will not
-> pick up new ones.** After pulling changes, check whether
-> `supabase/migrations/` has grown. Missing migrations rarely fail loudly:
-> reads degrade and writes fail. Migrations 6 to 8 are the classic example —
-> the booking insert names `meals` and `has_infant`, and migration 6's check
-> refuses a per-day plan until 8 replaces it, so until all three are applied
-> **submissions fail** while every page still renders. The same shape of
-> problem applies to the Sep 2026 work: without 17 there are no Settings rows
-> to read, without 19 no invoice can be numbered, without 21 nobody can sign
-> in at all, and without 22 the archive search falls back to its scan.
-
-Either way, fill `.env.local` and restart the dev server:
+`DATABASE_URL` in `.env.local` points at the hosted Supabase project's
+**PostgreSQL 17.6**, which every collaborator shares. Nothing Supabase-specific
+is used: no client library, no PostgREST, no Auth. It is a managed PostgreSQL
+behind the ordinary `PostgresStore`.
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
-SUPABASE_SERVICE_ROLE_KEY=<service role key>
+# the connection string is in .env.local; psql reads it directly
+psql "$(grep -E '^DATABASE_URL' .env.local | cut -d= -f2-)" -c '\dt public.*'
 ```
 
-The store switches automatically — no code change. `.env.example` documents these
-variables; `.env.local` is gitignored and must stay that way.
+Three things about connecting, each of which costs an hour if unknown:
 
-> **The service-role key is a full-access credential.** Never commit it, never log
-> it, never expose it to the client. The server uses it for **every** database
-> read and write (it bypasses row-level security), and the console uses it to
-> create Supabase Auth users.
-
-The hosted project has the schema, seed data and the private `documents`
-bucket.
-
-**Which migrations it has is a question for the database, not for these
-notes** (9 Oct 2026):
+| Trap | What happens | What to do |
+| --- | --- | --- |
+| **The direct host is IPv6-only** | `db.<ref>.supabase.co` resolves to AAAA only; on a network with no IPv6 route psql says *Network is unreachable* | Use the **session pooler**, `aws-0-<region>.pooler.supabase.com:5432`, user `postgres.<ref>` |
+| **The transaction pooler** | Port **6543** does not hold a session, so `pg_dump`, DDL and prepared statements break in confusing ways | Use **5432** (session mode) for anything but ordinary queries |
+| **`pg_dump` 16 cannot dump a 17 server** | *aborting because of server version mismatch*; the laptop has 16.15, the server runs 17.6 | Run the client in a container (below) |
 
 ```bash
-npm run check:migrations      # node scripts/check-migrations.mjs
+# pg_dump 17 without installing it
+mkdir -p ~/guesthouse-db-backups
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e PGPASSWORD='<the database password>' \
+  -v "$HOME/guesthouse-db-backups:/out" \
+  postgres:17-alpine \
+  pg_dump -h aws-0-<region>.pooler.supabase.com -p 5432 \
+          -U postgres.<ref> -d postgres \
+          --no-owner --no-privileges --no-acl --schema=public \
+          -f /out/supabase-$(date +%F-%H%M).sql
 ```
 
-It reads `.env.local`, asks the project whether each migration's marker - the
-table, column or enum value that migration created - exists, and prints one
-line each. **Read-only**: every request is a `GET` of at most one row, and
-only the shape is read, never anybody's data. It exits 1 if anything is
-missing, so a deploy step can gate on it.
+> **Restoring a `--schema=public` dump into a fresh schema loses both
+> exclusion constraints unless you prepare for it.** `pg_dump --schema=public`
+> omits extensions, because an extension is a database-level object, and its
+> preamble sets `search_path` to `''`. With no schema on the path the
+> **default gist operator class for `uuid` cannot be resolved**, so
+> `room_holds_no_overlap_guard` and `room_blocks_no_overlap` fail to be
+> created - and a database without them will happily double-book a room. Two
+> steps, both needed: `create extension if not exists btree_gist with schema
+> public` on the target first, and rewrite the dump's one
+> `set_config('search_path', '', false)` to `'public, extensions'`. Every
+> object in the dump is schema-qualified, so widening the path changes nothing
+> else. Afterwards **check**:
+> `select count(*) from pg_constraint where contype = 'x';` must be **2**.
 
-> **This replaced a paragraph that was wrong for weeks.** The note used to say
-> "which migrations it has is not recorded here", followed by a hand-written
-> SQL query whose marker list stopped at migration **25**. So 26 onwards could
-> not be checked at all, and the prose claim that 24-30 were "outstanding on
-> the hosted project" was carried forward from round to round by hand - long
-> after the owner had applied them in the SQL editor. A missing migration fails
-> writes quietly; a migration *wrongly believed* missing sends somebody to
-> re-apply files that were already there. Both are ended by asking.
->
-> **Verified 9 Oct 2026: migrations 1-30 are all applied** on the hosted
-> project (`azfd…`), except the two the script cannot see.
-
-**The two it cannot see are 17 and 23**, which only add or replace a plpgsql
-function - PostgREST cannot read `pg_proc`, and calling either function would
-be a write. Run this in the SQL editor instead:
-
-```sql
-select proname from pg_proc
- where proname in ('set_booking_buffer', 'check_room_occupancy');
-```
-
-Both names present means both are applied. If in doubt, re-apply the file:
-every migration from 6 onwards is re-runnable, so a file applied twice is
-harmless. The observable symptom of **23** missing is that Supabase refuses a
-*second* infant in one room although the form and the schema allow it; of
-**17**, that changing the turnaround buffer in Settings fails.
-
-The list, and what each migration needs, is in
-[21-database.md](21-database.md#migrations).
-
-`supabase/repairs/` holds one-off data fixes, some of which the hosted project
-may still need — the timezone repair for bookings stored 5h30m late, the real
-room numbers, all rooms double sharing, and the Bageshri ₹1,000 rate. The list
-is in [21-database.md](21-database.md#one-off-repairs--supabaserepairs).
-
-#### One-off repairs
-
-`supabase/repairs/` holds data fixes that are **not** migrations and are never
-applied automatically. Each file's header explains what it is for and how to
-check whether it applies to your data. Read it, take a backup, and run it
-deliberately in the SQL editor. They are not idempotent — the timezone repair in
-particular would shift already-correct rows a second time if re-run.
+> **`supabase/migrations/` no longer exists**, so the old recipe of pasting
+> every migration file into the SQL editor is gone with it. A database is
+> built from `scripts/init-postgres.sql`, then `npm run seed:reference`, then
+> `npm run seed:personas` - in that order, for the reason in `AGENTS.md`.
+> `npm run check:migrations` now probes `DATABASE_URL` directly rather than
+> PostgREST, so it reports on whatever that URL points at. Read its first line
+> ("Database: …") before believing the result: it is easy to check the laptop
+> while thinking about the shared host.
 
 ### Verifying changes
 
@@ -272,10 +223,18 @@ and migrations are checked.
 **1. Ad-hoc TypeScript tests**
 
 ```bash
-npx tsx --tsconfig ./tsconfig.json /path/to/test.ts
+NODE_OPTIONS="--conditions=react-server" \
+  npx tsx --tsconfig ./tsconfig.json --env-file=.env.local /path/to/test.ts
 ```
 
 Write them outside the repo (a temp directory); `@/` path aliases resolve fine.
+**`--conditions=react-server` is not optional** if the script imports anything
+that reaches `lib/db/client.ts`, `lib/store` or any other `server-only` module:
+without it Node resolves `server-only` to its client build, which throws *This
+module cannot be imported from a Client Component module* before a line of your
+script runs. Pass it through `NODE_OPTIONS`, not as a `tsx` flag - `tsx` hands
+its own unrecognised flags to Node and the invocation fails on `--tsconfig`
+instead. `--env-file=.env.local` is what gives the script `DATABASE_URL`.
 Good for store operations, workflow transitions, form-config resolution and the
 time-conversion helpers.
 
@@ -490,6 +449,44 @@ stay, say), `npx vite-node --config vitest.config.ts script.ts` resolves the
 ## Part 2 — Traps and fixes
 
 Each of these cost real time.
+
+### A booking made on `localhost` is invisible to a collaborator (8 Nov 2026)
+
+Working as designed, twice over, and both halves have to be understood or the
+"fix" goes in the wrong place.
+
+1. **Each laptop had its own PostgreSQL.** `DATABASE_URL` pointed at
+   `127.0.0.1:5433/guesthouse_dev`, bound to loopback. A collaborator who
+   cloned the repository got their own database with their own rows.
+2. **`next dev` binds `0.0.0.0`** and prints a `Network:` address, so the LAN
+   *could* load the pages - but `next.config.ts` derives
+   `serverActions.allowedOrigins` from `APP_URL`
+   (`http://localhost:3000`), so a **submission** from `http://192.168.x.x:3000`
+   is refused while browsing looks fine. A booking form that renders and will
+   not submit, for one visitor and not another, is this.
+
+**What makes a booking shared is the database, not where the app runs.** Both
+machines keep running `npm run dev` on `localhost` and point `DATABASE_URL` at
+one database. If you do want LAN access to one person's server, `APP_URL` has
+to name the address the browser actually used.
+
+### `password authentication failed for user "postgres"` against Supabase
+
+The Supabase **account** password is not the **database** password, and
+`.env.local`'s `SUPABASE_SERVICE_ROLE_KEY` is an API key that cannot open a
+PostgreSQL connection at all. Reset the database password at Project Settings
+-> Database, and prefer letters and digits: `@ : / ? # %` in a password have to
+be percent-encoded inside a connection URL, and a mis-encoded one fails with
+this same message. Note the message always names `postgres`, even when you
+connected as `postgres.<ref>` - the pooler reports the part before the dot, so
+it is **not** evidence that your username was wrong.
+
+### `pkill -f "next dev"` kills the shell you ran it in
+
+The pattern matches that shell's own command line, because the command line
+contains the string. The shell dies, and in a tool-driven session this reads as
+an unexplained exit 144 with no output from anything after it. Use
+`pkill -f 'next[ ]dev'`, or kill by port.
 
 ### Uploads fail with an opaque `NetworkError`
 

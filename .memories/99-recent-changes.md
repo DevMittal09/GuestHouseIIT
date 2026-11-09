@@ -7,154 +7,151 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 8 November 2026 - the rates the move off Supabase left behind
+## Round of 8 November 2026 (second) - the Supabase project becomes the shared database
 
-The owner: *"we had switched from a hosted Supabase database to a local
-postgres database. And after switching we havent populated it fully... just
-get the data like prices, which we havent populated yet so that we can get
-the website up and running. The data like users and all we have already
-populated, only stuff like prices need to be updated"* - and, for the two
-duplicate `NEXT_PUBLIC_SUPABASE_URL` lines in `.env.local`, *"just find out
-which is correct and remove the other"*.
+The owner, in three steps: *"Can you tell me whether if i book a room from
+localhost in my laptop will my collaborators be able to see it. Also whether
+it is better to do it in Supabase or local database for now for testing
+before migrating to institute database"*, then *"which is better for our
+case"*, then *"I want this same database in supabase and set the same
+supabase we were using till now... Issue is that the entire schema is
+different in supabase"* - and *"update the database url in the
+.env.local and also comment out the local database url"*.
 
-### 1. Which Supabase URL was the right one
+### 1. The answer to the question
 
-`.env.local` carried two commented `NEXT_PUBLIC_SUPABASE_URL` lines:
-`http://127.0.0.1:54321` and `https://azfdzrahtsikofzovmda.supabase.co`. The
-question is answered by the keys beside them, not by preference: the `iss`
-payload of both JWTs names **project ref `azfdzrahtsikofzovmda`**, so the
-local URL belonged to no running instance and was removed. The hosted line
-stays commented, with a note saying it is kept only to read the old data
-from - the portal runs on `DATABASE_URL`.
+**No.** A booking made on `localhost` was visible to nobody else, for two
+independent reasons, and both had to be fixed:
 
-### 2. The fault: no room rate had ever been seeded into PostgreSQL
+- The data was in a PostgreSQL on that laptop (`127.0.0.1:5433/guesthouse_dev`),
+  bound to loopback only. A collaborator who cloned the repository got their
+  own `guesthouse_dev`.
+- `next dev` does bind `0.0.0.0` (it prints a `Network:` address), so the LAN
+  could reach the pages - but `next.config.ts` sets
+  `serverActions.allowedOrigins` from `APP_URL`, which was
+  `http://localhost:3000`, so **every booking submission from any other
+  origin was refused**. Browsing worked; submitting did not.
 
-`guesthouse_dev` held **nine meal rates and no room rate at all**. It was not
-a half-finished copy; nothing in the repository had ever written one.
+What makes a booking shared is **the database, not where the app runs**. Both
+laptops can keep running `npm run dev` on `localhost`; pointing
+`DATABASE_URL` at one database is the whole change.
 
-`scripts/init-postgres.sql` carried the office's tariff sheet, and resolved
-the guest house of each room row with
-`(select id from public.guest_houses where name = 'Bageshri')`. But that file
-**builds the schema**, so at that point `guest_houses` is empty, all three
-subselects were NULL, and the guard
+### 2. Supabase is a managed PostgreSQL now, not a store
 
-```sql
-where (s.item <> 'room' or s.gh is not null)
-```
+The move of 8 Nov deleted `lib/store/supabase.ts` and the `supabase/`
+directory, so "use Supabase" cannot mean the old client path. It means
+**Supabase's PostgreSQL over `DATABASE_URL`**, through the same
+`PostgresStore` the institute's database will use. That is the reason to
+prefer it over any other host: the only line that changes when the institute
+hands over its database is that one.
 
-dropped every room row on the floor. The guest houses used to arrive
-afterwards from `supabase/seed.sql` - which went with Supabase and **no
-longer exists**, while init's closing comment still told the reader to run
-it. Nothing errored; the room rates were simply never there.
+### 3. The schemas were never the obstacle - the data was
 
-What that cost: `resolveTariff` returns null for a room, so the booking
-form's tariff panel reads **"no rates published"**, there is no category for
-the requester to pick (and picking one is what writes `guest_house_id` and
-`booking_type` since 17 Oct 2026), and **no invoice can be issued** -
-`invoiceBlocker` refuses a charge no rate covers rather than printing a zero.
+The premise checked and found wrong. Every column of both databases compared
+(local over psql, hosted over PostgREST's OpenAPI): **387 columns against
+386, and the single difference was `profiles.password_hash`**, which local has
+and the hosted project did not. Same 34 tables, same 2 views.
 
-### 3. The rates, taken from the hosted project
+What had actually forked was the **data**, each side holding what the other
+lacked:
 
-Read over PostgREST with the service-role key in `.env.local`, **read-only**;
-31 rows, three generations:
-
-| Effective | What |
-| --- | --- |
-| 2024-01-01 | The sheet the portal was built with: meals per head (80 / 120 / 100), free to students and on alumni bookings, Bageshri 750, Hamsanandi 2,000, Hamsanandi 4,000 for an `official` requester |
-| 2026-09-23 | Bageshri raised to 1,000 |
-| **2026-11-05** | **The office's Category I / II / III sheet - what is charged today** |
-
-The current sheet, per room per night:
-
-| Category | Bageshri | Hamsanandi |
+| | Supabase (before) | Local |
 | --- | --- | --- |
-| **I** - guests and relatives of employees, parents of students on a personal visit | ₹1,000 | ₹1,500 |
-| **II** - institute guests on official duty (ministers, directors, BOG, selection committees, external examiners, official guests) | ₹1,500 | ₹2,000 |
-| **III** - academic visitors (an `employee` on an official booking) | ₹2,000 | ₹2,500 |
+| bookings / guests / logs | **35 / 61 / 98** | 6 / 6 / 12 |
+| invoices | **8** | 0 |
+| email_outbox / sessions / security_audit | 138 / 330 / 218 | 17 / 11 / 38 |
+| profiles | 14 | **35** |
+| units (drives HOD routing) | **0** | **9** |
+| institute_offices / wardens / employees / students | 0 / 2 / 1 / 3 | **6 / 7 / 6 / 5** |
+| user_groups / projects | 0 / 0 | **4 / 3** |
 
-Two details that matter and are easy to lose:
+So the hosted project held the richer booking history and the only 8 invoices
+in existence, and the local one held the only correct **directory** - with
+`units` empty on the hosted project, HOD approval and office heads resolved to
+nobody there. **The owner chose local as the truth**, knowing the cost.
 
-- **Category I is written twice per guest house** - once unscoped and once
-  with `requester_role: official`. The second row exists only to outrank the
-  ₹4,000 row of 2024-01-01, which has the same specificity (guest house +
-  requester role) and would otherwise still win for that role. Delete it and
-  an office's personal booking jumps to ₹4,000.
-- **Eight rows dated 2026-12-01** in the hosted project are the same
-  categories at the same rates - the office's first attempt, made when the
-  console forced a future date, before they were re-entered from 5 Nov. They
-  are harmless (equal specificity, later date, identical rate) and were
-  copied into `guesthouse_dev` with everything else, but they are **not** in
-  the seed file, which is why a fresh install has 14 room rates and
-  `guesthouse_dev` has 22.
+### 4. The migration, and the three things that nearly stopped it
 
-**Applied to `guesthouse_dev`:** 22 rows inserted, the 9 meal rows already
-there skipped on their unique scope. Verified with the real
-`resolveTariff` over every (guest house x booking type x requester role)
-combination: every one now resolves, and the figures are the table above.
+- **`pg_dump` 16 cannot dump a 17 server.** Supabase runs **PostgreSQL 17.6**,
+  the laptop 16.15, and `pg_dump` refuses a newer server. The backup was taken
+  with `pg_dump` 17 in a throwaway `postgres:17-alpine` container. The restore
+  the other way (a 16 dump into 17) is the supported direction and needed
+  nothing.
+- **The direct host is IPv6-only.** `db.<ref>.supabase.co` resolves to AAAA
+  only and the office network has no IPv6 route - *Network is unreachable*.
+  The **session pooler** (`aws-0-ap-northeast-2.pooler.supabase.com:5432`) is
+  the way in. Not the transaction pooler on **6543**, which breaks `pg_dump`
+  and DDL.
+- **`btree_gist` and `search_path`.** `pg_dump --schema=public` omits
+  extensions (they are database-level), and its preamble sets
+  `search_path` to `''`. With no schema in the path the **default gist
+  operator class for `uuid` does not resolve**, and both exclusion constraints
+  (`room_holds_no_overlap_guard`, `room_blocks_no_overlap`) fail to be
+  created. So: `create extension btree_gist with schema public` on the target
+  first, and the dump's one `set_config('search_path', '', false)` line
+  rewritten to `'public, extensions'`. Every object in the dump is
+  schema-qualified, so widening the path changes nothing else.
 
-### 4. The repository, so it cannot happen again
+Order run: back up the hosted project, copy the local dump beside it,
+`drop schema public cascade` + `create schema public` + the four Supabase
+role grants + `btree_gist`, restore, verify. The only error in the restore
+was `schema "public" already exists`, from the dump's own
+`CREATE SCHEMA public`.
 
-- **`scripts/seed-reference-data.sql`** - new, and the **one home** for the
-  office's guest houses, their rooms and the whole rate sheet. It creates the
-  guest houses **before** the rates that point at them. Idempotent and
-  additive: guest houses by their fixed ids, rooms only into a guest house
-  that has none at all (so an inventory the office edited by hand is never
-  touched), a rate only where none with the same scope and `effective_from`
-  exists. `tariffs_guard` refuses an UPDATE or DELETE of a rate in force, so
-  the file only ever inserts.
-- **`scripts/seed-reference.mjs`** / **`npm run seed:reference`** - loads
-  `.env.local` the way `seed-personas.mjs` does, prints a census before and
-  after, and names the missing `extra_bed` rate.
-- **The tariff block is gone from `scripts/init-postgres.sql`**, replaced by
-  a comment explaining the trap, and its closing note now gives the real run
-  order: `init-postgres.sql` -> `npm run seed:reference` ->
-  `npm run seed:personas`.
+**Both dumps are kept outside the repository**, in
+`~/guesthouse-db-backups/` - `supabase-before-<stamp>.sql` (1.7 MB, verified
+to contain the 35 bookings, 8 invoices, 98 logs before anything was dropped)
+and `local-guesthouse-<stamp>.sql`. The 8 invoices now exist **only** there.
 
-Tested on a throwaway `gh_seed_scratch`: schema from nothing, then
-`seed:reference` -> **2 guest houses, 23 rooms, 23 rates (14 room, 9 meal)**;
-run again, nothing added. Then the seeded database and `guesthouse_dev` were
-compared through `resolveTariff` over **630 combinations across three dates**
-(10 Nov, 5 Dec, 1 Mar) - **0 differences**, which is what proves the seed
-file reproduces the hosted project's pricing and that the eight duplicate
-rows change nothing.
+### 5. Verified afterwards
 
-### 5. Then: the room inventory was not the office's
+- **Structure:** 34 tables, 2 views, 34 triggers, **2 exclusion constraints**,
+  79 foreign keys.
+- **Data:** every one of 24 tables checked holds exactly what local holds.
+- **The app's own client:** `PostgresStore` over the pooler with SSL reads
+  2 guest houses, 35 profiles, 31 tariffs, 6 bookings.
+- **Rates:** all **36** (guest house x role x booking type) room combinations
+  resolve through the real `resolveTariff` - Category I ₹1,000 / ₹1,500,
+  II ₹1,500 / ₹2,000, III ₹2,000 / ₹2,500, breakfast ₹80. The "no rates
+  published" fault of the previous round does not exist on this host.
+- **The invariant:** two overlapping holds on one room from different
+  bookings were **refused** by `room_holds_no_overlap_guard`, inside a
+  transaction that was rolled back (no residue).
+- **Pages:** `/`, `/guidelines`, `/sign-in`, `/contact` all 200 against
+  Supabase.
+- `npm run lint`, `npm run typecheck`, `npm test` (**661 passing**) and
+  `npm run build` all clean.
 
-Found while checking what else the move had left behind, and fixed with the
-owner's agreement. Neither database had the rooms of 23 Sep 2026:
+### 6. `.env.local`
 
-| | Was in `guesthouse_dev` | Now |
-| --- | --- | --- |
-| Bageshri | `B1`-`B10`, the old dummy block | **201, 202, 203, 204, 206, 302, 303, 305, 306, 307** |
-| Hamsanandi | `A1`, `A2`, `A3`, `A4`, `C1`, `C2`, `D1`-`D4` - **ten** | **A4, B1-B4, C1-C4, D1-D4** - **thirteen** |
+`DATABASE_URL` is the Supabase session pooler. **`DATABASE_SSL=true` and
+`DATABASE_SSL_REJECT_UNAUTHORIZED=false`** are new and necessary: Supabase
+presents its own CA, which node-postgres rejects by default, and
+`lib/db/client.ts` already reads both. The local URL is kept **commented
+directly below** it, so working offline is uncommenting one line. The
+previous file is saved as `.env.local.bak-<stamp>` (gitignored, like
+`.env.local` itself). The database password is a **real secret** and is
+recorded by name and location only, in
+[05-credentials-and-security.md](05-credentials-and-security.md).
 
-Three real Hamsanandi rooms could not be booked at all. Bageshri's ten were
-**renamed, not replaced** - `room_holds` and `booking_rooms` point at the row
-id, so the three demo bookings kept their rooms and now show the real
-numbers (B1 -> 201, B2 -> 202, B10 -> 307); 0 orphan holds afterwards.
-`A1`-`A3` were held by nothing and were deleted. `rooms_recount_total`
-(migration 33) moved `total_rooms` to 10 and 13 by itself.
+### 7. Three stale things found and fixed on the way
 
-### 6. What is deliberately still missing
+- **`AGENTS.md`'s HTTP smoke-test recipe does not work.** `DEV_LOGIN` and the
+  `gh_mock_user` cookie **no longer exist anywhere in the code**; the recipe
+  was corrected to say so and to name `/api/auth/test-sign-in`. My Bookings is
+  **`/dashboard`**, not `/my-bookings`.
+- **`server-only` throws under `tsx`.** An ad-hoc script that imports the
+  store dies on `This module cannot be imported from a Client Component
+  module`. Run it with `NODE_OPTIONS="--conditions=react-server"`.
+- **`pkill -f "next dev"` kills the shell that runs it**, because the pattern
+  matches that shell's own command line. Use `pkill -f 'next[ ]dev'`.
 
-**There is no `extra_bed` rate** - not here and not in the hosted project the
-rates came from. The office has never sent the figure. A stay with an extra
-bed therefore **cannot be invoiced**: `resolveTariff` returns null and
-`invoiceBlocker` reports it rather than charging ₹0 by omission. It is an
-office question, not a code one - [04-production.md](04-production.md) §3,
-and `seed:reference` says so on every run.
+### 8. What this opens
 
-### Verified
-
-`npm run lint`, `npm run typecheck`, `npm test` (**661 tests, 39 files**) and
-`npm run test:pg` (**39 checks**) all clean - the PostgreSQL suite matters
-here because it loads `scripts/init-postgres.sql`, which this round edited.
-`npm run build` and `npm run test:e2e` **were not run**: a build kills a
-running `next dev`, and nothing in this round touches a component.
-
-### What is left open
-
-[03-roadmap.md](03-roadmap.md) §2q: the extra-bed rate, the eight duplicate
-tariff rows, and the fact that the guest houses and rooms of a database are
-still not checked by anything the way `npm run check:migrations` checks the
-schema.
+- **The password is now a shared secret** between collaborators, and resetting
+  it in the dashboard breaks everyone's `DATABASE_URL` at once.
+- **There is one database for everybody**, so a destructive experiment is
+  destructive for everybody. A per-developer database is in
+  [03-roadmap.md](03-roadmap.md).
+- `guesthouse_dev` on the laptop is no longer what the app reads, and will
+  drift from the shared database the moment anyone books.

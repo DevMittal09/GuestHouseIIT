@@ -7506,3 +7506,66 @@ authenticate against and `http://127.0.0.1:54321` belonged to no running
 instance. The hosted line stays, commented, with a note that it is kept only
 to read the old data from - deleting it would have made the next export
 impossible to perform.
+
+## 8 November 2026 (second) - the hosted Supabase project becomes the shared database
+
+**The decision:** the portal's database for development is now the Supabase
+project's PostgreSQL, reached over `DATABASE_URL`, holding a copy of what the
+laptop's `guesthouse_dev` held. Supabase is a **managed PostgreSQL host** in
+this arrangement and nothing more; `lib/store/supabase.ts` and the `supabase/`
+directory are still deleted and are not coming back.
+
+**Why a shared database at all.** The question that started it was whether a
+booking made on `localhost` is visible to a collaborator. It was not, and the
+reason worth recording is that **two** separate things isolated it: each
+laptop had its own PostgreSQL, *and* `serverActions.allowedOrigins` is derived
+from `APP_URL`, so even a collaborator who reached the dev server over the LAN
+could read pages and could not submit a booking. Sharing the **database** is
+the whole fix; where the app runs does not matter. Both machines still run
+`npm run dev` on `localhost`.
+
+**Why Supabase rather than any other host.** Not for any Supabase feature -
+none is used. Because the institute will hand over a plain PostgreSQL, and a
+plain PostgreSQL is what this is: the same `PostgresStore`, the same
+`scripts/init-postgres.sql` schema, the same seeds. The migration to the
+institute's database is then one line of `.env.local`, which is the closest
+thing to a rehearsal available before the real database exists.
+
+**Why the local database won, and what it cost.** The owner's premise was
+that the schemas had diverged. They had not: 387 columns against 386, the one
+difference being `profiles.password_hash`. What had diverged was the data, and
+**each side held something the other did not** - the hosted project 35
+bookings, 98 logs and the only 8 invoices ever issued; the laptop the only
+complete directory, including the 9 `units` rows without which HOD approval
+and office heads resolve to nobody. Overwriting the hosted project was
+therefore a real loss, taken deliberately: a correct directory is what the
+portal needs to *work*, and booking history is reproducible demo traffic. The
+judgement would reverse if those invoices were the office's real billing
+record rather than tests - which is why the pre-migration dump is kept rather
+than discarded, and why the round refused to run until it existed and had
+been checked for those 8 rows.
+
+**Why the schema was replaced wholesale rather than migrated forward.** The
+two were one column apart, so an `alter table` would have been shorter. It was
+rejected because the *invisible* surface could not be compared over PostgREST
+at all - the `auth.users` foreign key on `profiles.id`, the RLS policies,
+which triggers and indexes migrations 31-34 had actually left behind. A
+dump-and-restore makes the answer "whatever local has", which is a fact that
+can be checked, instead of "whatever the hosted project accumulated over
+fourteen migrations", which cannot.
+
+**A thing learned about this codebase in passing.** The laptop's database is
+*not* the output of `scripts/init-postgres.sql` alone: it carries 15 RLS
+policies and `my_role()` / `can_access_booking()`, both of which call
+`auth.uid()`. They exist only because `pg_dump` emits
+`SET check_function_bodies = false`, so a `language sql` function naming a
+missing schema restores without complaint. The application connects as the
+table owner, so RLS is bypassed and none of it is reachable - but anyone
+reading that database should know it was itself restored from Supabase at some
+point, and that those functions would fail if ever called on a database with
+no `auth` schema.
+
+**Not decided here:** whether each developer eventually gets their own
+database (one shared database means one person's destructive experiment is
+everyone's), and whether the application should connect as a role narrower
+than `postgres`. Both are in [03-roadmap.md](03-roadmap.md).

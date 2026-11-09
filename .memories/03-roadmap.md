@@ -867,6 +867,47 @@ In order of what would have caught the most:
    that SQL and `lib/store/seed.ts`. No test compares them, unlike
    `tests/seed-parity.test.ts` for the personas - the obvious next guard.
 
+## 2r. Opened by the 8 November 2026 (second) round - one shared database
+
+1. **One database for everybody, so one person's mistake is everybody's.**
+   A dropped table, a bad import or a `delete` with no `where` now costs the
+   whole team, and there is no per-developer copy to fall back on. The cheap
+   next step is a second database on the same host used as a scratch copy
+   (restore from `~/guesthouse-db-backups/` and point one `.env.local` at
+   it); the fuller answer is a database per developer, seeded from
+   `scripts/init-postgres.sql` + `npm run seed:reference` +
+   `npm run seed:personas`, with the shared one kept for demonstrating.
+2. **The database password is now a shared secret.** It is in each
+   collaborator's `.env.local`, and resetting it in the Supabase dashboard
+   breaks every one of them at once. Nothing rotates it, nothing records who
+   holds it. Named and located in
+   [05-credentials-and-security.md](05-credentials-and-security.md).
+3. **The application connects as `postgres`**, the superuser-equivalent
+   owner, which is also what bypasses the 15 restored RLS policies. A narrower
+   role owning nothing and granted only DML on `public` would be a real
+   improvement, and is a prerequisite for ever trusting those policies. It
+   needs the grants worked out against both stores first.
+4. **`guesthouse_dev` on the laptop is now dead weight that looks alive.**
+   It is no longer what the app reads and will drift from the shared database
+   the moment anybody books. Either keep it deliberately as the offline copy
+   (the commented `DATABASE_URL` is there for that) and expect to re-seed it,
+   or drop it. What must not happen is diagnosing a bug against it by
+   accident.
+5. **No backup runs on a schedule.** The only dumps in existence are the two
+   this round took by hand. A shared database holding the office's rates and
+   directory deserves a nightly `pg_dump` - Supabase's own backups cover the
+   paid tiers only, and this project is on the free one.
+6. **The pre-migration history is in a file, not a database.** The hosted
+   project's 35 bookings, 98 logs and **8 invoices** exist only in
+   `~/guesthouse-db-backups/supabase-before-<stamp>.sql`. If any of those
+   invoices turn out to be a real billing record rather than a test, they
+   have to be read back out of that dump - which is why it is kept.
+7. **The 17.6 / 16.15 version gap is a trap for the next person.** The shared
+   database is PostgreSQL **17.6** and the laptop's client is **16.15**, so
+   `pg_dump` against the shared database fails until it is run from a
+   `postgres:17-alpine` container. Recipe in
+   [22-running-and-testing.md](22-running-and-testing.md).
+
 ## 3. Found in the documentation audit (24 Sep 2026)
 
 Small, real, and none urgent. Three were **fixed the same evening**: the

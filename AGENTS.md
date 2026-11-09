@@ -91,27 +91,41 @@ rebuilding. Lint, types, unit tests and the journeys all run in CI
 Beyond the suites, behaviour is verified these ways:
 
 1. **Ad-hoc TypeScript tests** run with
-   `npx tsx --tsconfig ./tsconfig.json <file>.ts` (write them outside the repo,
-   e.g. a temp dir; `@/` path aliases resolve fine). Good for store/workflow/pure
-   logic.
-2. **HTTP smoke tests** against a running dev server. A session is a row and
-   the cookie is an opaque token, so a forged cookie gets nothing. In
-   development with `DEV_LOGIN=true` the old persona cookie is still honoured,
-   which is the quickest way to check a page:
    ```bash
-   DEV_LOGIN=true npm run dev
-   curl -s -b "gh_mock_user=<profile-id>" http://localhost:3000/book
+   NODE_OPTIONS="--conditions=react-server" \
+     npx tsx --tsconfig ./tsconfig.json --env-file=.env.local <file>.ts
    ```
-   Use this to check a page renders (200) and that scoping works (e.g. the Malhar
-   warden sees only Malhar students' requests). For a whole journey — approvals,
-   the desk, an invoice — run `npm run test:e2e` instead: it signs in through
-   the form as each role against a production build on a throwaway database.
+   (write them outside the repo, e.g. a temp dir; `@/` path aliases resolve
+   fine). Good for store/workflow/pure logic. **`--conditions=react-server` is
+   required** for anything importing the store or `lib/db/client.ts`: without
+   it Node resolves `server-only` to its client build and throws before your
+   script runs. Pass it via `NODE_OPTIONS` — `tsx` forwards its own unknown
+   flags to Node and dies on `--tsconfig` instead.
+2. **HTTP smoke tests** against a running dev server. A session is a row and
+   the cookie is an opaque token, so **a forged cookie gets nothing**.
+   `DEV_LOGIN` and the `gh_mock_user` cookie **no longer exist anywhere in the
+   code** (verified 8 Nov 2026) — don't try them. Sign in the way a person
+   does and keep the jar:
+   ```bash
+   curl -s -c jar.txt -b jar.txt -X POST -H "Content-Type: application/json" \
+     -d '{"email":"guesthouse@iitpkd.ac.in","secret":"$E2E_TEST_SECRET"}' \
+     http://localhost:3000/api/auth/test-sign-in
+   curl -s -b jar.txt -o /dev/null -w "%{http_code}\n" http://localhost:3000/book
+   ```
+   Public pages (`/`, `/guidelines`, `/sign-in`, `/contact`) need no jar, and
+   render off the store, so they are the quickest check that a database is
+   reachable at all. **My Bookings is `/dashboard`**, not `/my-bookings`. For a
+   whole journey — approvals, the desk, an invoice — run `npm run test:e2e`:
+   it signs in as each role against a production build on a throwaway database.
 
-   `.env.local` currently points at the **hosted** Supabase project, so a plain
-   dev server writes there. For anything that creates or changes data, start it
-   with `NEXT_PUBLIC_SUPABASE_URL= npm run dev` — an empty value in the process
+   **`.env.local`'s `DATABASE_URL` points at the shared hosted database**
+   (the Supabase project's PostgreSQL, used as a managed Postgres — every
+   collaborator reads and writes it), so a plain dev server writes **where
+   everyone can see it**. For anything that creates or changes data, start it
+   with `DATABASE_URL= npm run dev` — an empty value in the process
    environment beats `.env.local` and selects the mock store — and delete the
-   `.local-db.json` it creates if there was none before.
+   `.local-db.json` it creates if there was none before. The local PostgreSQL
+   is the commented `DATABASE_URL` one line below.
 3. **Headless Chrome** for client-rendered UI (dialogs, the meal grid, the
    week/month charts), driven over the DevTools protocol with Node 20's
    `--experimental-websocket` — no packages needed. Recipe and gotchas in
@@ -286,8 +300,15 @@ port 3000 before launching your own.
 
 | Condition | Store | Data lives in |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` + a key set | `lib/store/supabase.ts` | Supabase Postgres + Storage |
+| `DATABASE_URL` set | `lib/store/postgres.ts` | PostgreSQL (today: the shared Supabase-hosted one), `public/uploads/` |
 | otherwise | `lib/store/mock.ts` | `.local-db.json`, `public/uploads/` |
+
+`lib/store/supabase.ts` and the whole `supabase/` directory were **deleted**
+on 2 Nov 2026; `NEXT_PUBLIC_SUPABASE_*` is read by nothing. Where a database
+is *hosted* by Supabase it is still reached as plain PostgreSQL over
+`DATABASE_URL`, so there is no Supabase code path to maintain. Hosted
+connections also need `DATABASE_SSL=true` and, for Supabase's own CA,
+`DATABASE_SSL_REJECT_UNAUTHORIZED=false` (`lib/db/client.ts`).
 
 **Any new data operation must be added to the interface and to both
 implementations**, or one backend silently breaks. **`npm run test:pg`**
