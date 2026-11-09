@@ -87,6 +87,16 @@ it:
 `lib/store/index.ts` picks one **from the environment** at first use: Postgres if
 `DATABASE_URL` is set (`databaseConfigured()`), otherwise the mock.
 
+**The connection pool is one per process, cached on `globalThis`**
+(`lib/db/client.ts`, 9 Nov 2026) - not in a module-level `let`, because
+Turbopack re-evaluates the module on hot reload and a `let` built a new `Pool`
+each time while the old one kept its idle connections. Against a shared
+database with a client quota that empties the quota in a morning. `max`
+defaults to 10 and `DATABASE_POOL_MAX` lowers it; `idleTimeoutMillis` is 10 s
+so an idle dev server does not sit on somebody else's share. See
+[22-running-and-testing.md](22-running-and-testing.md) Part 2,
+*max clients reached in session mode*.
+
 > **Rule:** any new data operation must be added to the interface *and both*
 > implementations, or one backend silently breaks. TypeScript catches this if you
 > add to the interface first.

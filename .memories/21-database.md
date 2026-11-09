@@ -15,8 +15,10 @@ old files.
 
 > **Where the database actually is** (8 Nov 2026, second round): the hosted
 > Supabase project's **PostgreSQL 17.6**, shared by every collaborator and
-> reached over `DATABASE_URL` through its **session pooler** - as a managed
-> PostgreSQL and nothing more. Its `public` schema is a restore of the
+> reached over `DATABASE_URL` through its **transaction pooler** (port 6543;
+> the session pooler on 5432 is for `pg_dump`, `psql` and DDL, and admits only
+> 15 clients for the whole project) - as a managed PostgreSQL and nothing
+> more. Its `public` schema is a restore of the
 > laptop's `guesthouse_dev`: **34 tables, 2 views, 34 triggers, 2 exclusion
 > constraints, 79 foreign keys**. One consequence to know about that database
 > rather than this schema file: it carries **15 RLS policies** and the

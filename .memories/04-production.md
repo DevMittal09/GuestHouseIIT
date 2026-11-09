@@ -883,6 +883,15 @@ reminders, no day-wise log and **nothing marks a request Missed**.
 > npm run seed:personas                               # the demo accounts (not for production)
 > ```
 >
+> **Run these three on a connection that holds a session.** Behind a
+> transaction pooler (Supabase's port 6543, PgBouncer in transaction mode) DDL
+> and `psql` scripts fail in confusing ways; the app is the only thing that
+> belongs on that port. Point `DATABASE_URL` at the session pooler or the
+> direct host for the install, and at the transaction pooler for the running
+> service - and set **`DATABASE_POOL_MAX`** where the host counts clients
+> rather than queries (`lib/db/client.ts` defaults to 10 per process, so a
+> service on several instances multiplies it).
+>
 > Step 2 is `scripts/seed-reference-data.sql` and is the **one home** for the
 > office's guest houses, rooms and rates; it must follow step 1 because the
 > room rates name the guest houses it creates. It is idempotent and only ever

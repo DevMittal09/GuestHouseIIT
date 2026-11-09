@@ -310,6 +310,16 @@ is *hosted* by Supabase it is still reached as plain PostgreSQL over
 connections also need `DATABASE_SSL=true` and, for Supabase's own CA,
 `DATABASE_SSL_REJECT_UNAUTHORIZED=false` (`lib/db/client.ts`).
 
+**Two ports, and picking the wrong one looks like a broken database.** The app
+runs on Supabase's **transaction pooler, 6543**; `pg_dump`, `psql` and anything
+that runs DDL need the **session pooler, 5432**, which admits only **15 clients
+for the whole project** - one dev server with a 20-connection pool took all of
+them and every page died with `(EMAXCONNSESSION) max clients reached in session
+mode` on a healthy database. Both strings are in `.env.local`, the session one
+commented. The pool is cached on **`globalThis`**, not a module-level `let`:
+Turbopack re-evaluates the module on hot reload and a `let` leaked a whole
+`Pool` per reload. `DATABASE_POOL_MAX` lowers the ceiling (default 10).
+
 **Any new data operation must be added to the interface and to both
 implementations**, or one backend silently breaks. **`npm run test:pg`**
 (`tests-pg/`, 7 Nov 2026) is the only suite that runs `PostgresStore`: it

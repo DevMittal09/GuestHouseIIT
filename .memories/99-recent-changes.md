@@ -7,151 +7,98 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 8 November 2026 (second) - the Supabase project becomes the shared database
+## Round of 9 November 2026 - the shared database, made usable
 
-The owner, in three steps: *"Can you tell me whether if i book a room from
-localhost in my laptop will my collaborators be able to see it. Also whether
-it is better to do it in Supabase or local database for now for testing
-before migrating to institute database"*, then *"which is better for our
-case"*, then *"I want this same database in supabase and set the same
-supabase we were using till now... Issue is that the entire schema is
-different in supabase"* - and *"update the database url in the
-.env.local and also comment out the local database url"*.
+Two runtime errors from the owner, one after the other, both from the move to
+the shared database the day before. Neither was a fault in the database.
 
-### 1. The answer to the question
+### 1. `password authentication failed for user "postgres"`
 
-**No.** A booking made on `localhost` was visible to nobody else, for two
-independent reasons, and both had to be fixed:
+Thrown by `PostgresStore.listProfiles` on `/mock-login`, so the persona picker
+- the only door into the portal - was dead.
 
-- The data was in a PostgreSQL on that laptop (`127.0.0.1:5433/guesthouse_dev`),
-  bound to loopback only. A collaborator who cloned the repository got their
-  own `guesthouse_dev`.
-- `next dev` does bind `0.0.0.0` (it prints a `Network:` address), so the LAN
-  could reach the pages - but `next.config.ts` sets
-  `serverActions.allowedOrigins` from `APP_URL`, which was
-  `http://localhost:3000`, so **every booking submission from any other
-  origin was refused**. Browsing worked; submitting did not.
+`.env.local` held the literal string `:<password>@`. The previous round's
+closing message gave the owner a line to **send a collaborator**, with
+`<password>` as a placeholder; it looked like a configuration line, so it went
+into their own `.env.local` and overwrote the working password. **An agent's
+own output caused this**, which is why the fix is a wording rule and not a
+code change: a placeholder inside a copy-pasteable connection string must read
+`PASTE_PASSWORD_HERE`, never `<password>`.
 
-What makes a booking shared is **the database, not where the app runs**. Both
-laptops can keep running `npm run dev` on `localhost`; pointing
-`DATABASE_URL` at one database is the whole change.
+- The database was never involved: `psql` with the real password returned 35
+  profiles.
+- The password was restored, `.env.local` backed up first
+  (`.env.local.bak-20261109-0933`).
+- Two things the owner's own rewrite had dropped came back: the **commented
+  local `DATABASE_URL`** they had asked for on 8 Nov, and a stray
+  `# LEAVE UNSET IN PRODUCTION - it drops CC entirely.` that had ended up
+  above `DATABASE_URL` (it belongs to `MAIL_REDIRECT_ALL_TO`).
+- `next dev` watches env files, so no restart was needed; `/mock-login`
+  returned 200 and rendered its groups.
 
-### 2. Supabase is a managed PostgreSQL now, not a store
+### 2. `(EMAXCONNSESSION) max clients reached in session mode`
 
-The move of 8 Nov deleted `lib/store/supabase.ts` and the `supabase/`
-directory, so "use Supabase" cannot mean the old client path. It means
-**Supabase's PostgreSQL over `DATABASE_URL`**, through the same
-`PostgresStore` the institute's database will use. That is the reason to
-prefer it over any other host: the only line that changes when the institute
-hands over its database is that one.
+Thrown by `listGuestHouses` through `getEffectiveFormConfig` on `/book`. **Two
+independent causes**, and fixing either alone would not have held.
 
-### 3. The schemas were never the obstacle - the data was
-
-The premise checked and found wrong. Every column of both databases compared
-(local over psql, hosted over PostgREST's OpenAPI): **387 columns against
-386, and the single difference was `profiles.password_hash`**, which local has
-and the hosted project did not. Same 34 tables, same 2 views.
-
-What had actually forked was the **data**, each side holding what the other
-lacked:
-
-| | Supabase (before) | Local |
+| | Cause | Fix |
 | --- | --- | --- |
-| bookings / guests / logs | **35 / 61 / 98** | 6 / 6 / 12 |
-| invoices | **8** | 0 |
-| email_outbox / sessions / security_audit | 138 / 330 / 218 | 17 / 11 / 38 |
-| profiles | 14 | **35** |
-| units (drives HOD routing) | **0** | **9** |
-| institute_offices / wardens / employees / students | 0 / 2 / 1 / 3 | **6 / 7 / 6 / 5** |
-| user_groups / projects | 0 / 0 | **4 / 3** |
+| a | Supabase's **session pooler admits 15 clients for the whole project**, not per developer, and the pool asked for `max: 20`. One dev server could lock out every collaborator | `DATABASE_URL` moved to the **transaction pooler, port 6543**, which multiplexes; the session pooler stays in `.env.local`, commented, for `pg_dump` / `psql` / DDL |
+| b | **Turbopack re-evaluates a module on hot reload** and `lib/db/client.ts` cached its pool in a module-level `let`, so each reload built a new `Pool` and the old one kept its idle connections for ever | The pool is cached on **`globalThis`**, `max` defaults to **10** with **`DATABASE_POOL_MAX`** to lower it, `idleTimeoutMillis` 30 s -> **10 s** |
 
-So the hosted project held the richer booking history and the only 8 invoices
-in existence, and the local one held the only correct **directory** - with
-`units` empty on the hosted project, HOD approval and office heads resolved to
-nobody there. **The owner chose local as the truth**, knowing the cost.
+`pg_stat_activity` is no help here and misled the first reading: it shows
+*Supavisor's* connections to Postgres (12 idle, steady, by design), not the
+pooler's client count, so the database reads as healthy while clients are
+being refused.
 
-### 4. The migration, and the three things that nearly stopped it
+**Transaction mode was verified, not assumed** - it is the riskier half of the
+fix, because a transaction pooler holds no session:
 
-- **`pg_dump` 16 cannot dump a 17 server.** Supabase runs **PostgreSQL 17.6**,
-  the laptop 16.15, and `pg_dump` refuses a newer server. The backup was taken
-  with `pg_dump` 17 in a throwaway `postgres:17-alpine` container. The restore
-  the other way (a 16 dump into 17) is the supported direction and needed
-  nothing.
-- **The direct host is IPv6-only.** `db.<ref>.supabase.co` resolves to AAAA
-  only and the office network has no IPv6 route - *Network is unreachable*.
-  The **session pooler** (`aws-0-ap-northeast-2.pooler.supabase.com:5432`) is
-  the way in. Not the transaction pooler on **6543**, which breaks `pg_dump`
-  and DDL.
-- **`btree_gist` and `search_path`.** `pg_dump --schema=public` omits
-  extensions (they are database-level), and its preamble sets
-  `search_path` to `''`. With no schema in the path the **default gist
-  operator class for `uuid` does not resolve**, and both exclusion constraints
-  (`room_holds_no_overlap_guard`, `room_blocks_no_overlap`) fail to be
-  created. So: `create extension btree_gist with schema public` on the target
-  first, and the dump's one `set_config('search_path', '', false)` line
-  rewritten to `'public, extensions'`. Every object in the dump is
-  schema-qualified, so widening the path changes nothing else.
+- 25 concurrent queries through one pool: all 25 fine.
+- `pool.connect()` + `BEGIN` / `COMMIT` / `ROLLBACK` - the `allocateRooms`
+  pattern - fine: the server connection is pinned for the transaction.
+- `room_holds_no_overlap_guard` **still refuses an overlap**, with SQLSTATE
+  **`23P01`**, which is what `RoomClashError` is built on. Checked with two
+  different bookings on one room, inside a transaction that was rolled back;
+  `room_holds` was 3 rows before and 3 after.
+- `set_room_holds()` and the other plpgsql functions resolve.
+- Nothing in `lib/` or `app/` uses `LISTEN`, `NOTIFY`, advisory locks,
+  session `SET` or runtime DDL (grepped), and node-postgres uses **unnamed**
+  prepared statements - which is what makes transaction mode safe here.
 
-Order run: back up the hosted project, copy the local dump beside it,
-`drop schema public cascade` + `create schema public` + the four Supabase
-role grants + `btree_gist`, restore, verify. The only error in the restore
-was `schema "public" already exists`, from the dump's own
-`CREATE SCHEMA public`.
+> The first exclusion-constraint test was **invalid** and said so: it ran
+> `SET CONSTRAINTS ALL DEFERRED`, which postpones a `DEFERRABLE` constraint to
+> commit time, and then rolled back - so nothing was ever checked. It was
+> redone without it. A test that cannot fail is worse than no test.
 
-**Both dumps are kept outside the repository**, in
-`~/guesthouse-db-backups/` - `supabase-before-<stamp>.sql` (1.7 MB, verified
-to contain the 35 bookings, 8 invoices, 98 logs before anything was dropped)
-and `local-guesthouse-<stamp>.sql`. The 8 invoices now exist **only** there.
+### Changed
 
-### 5. Verified afterwards
+| File | Change |
+| --- | --- |
+| `lib/db/client.ts` | The pool on `globalThis`; `max` 20 -> **10** and configurable by `DATABASE_POOL_MAX`; `idleTimeoutMillis` 30 s -> 10 s. The only code change of the round |
+| `.env.local` | Real password restored; `DATABASE_URL` on **6543**; the session-pooler and local strings kept commented; the misplaced mail comment removed |
+| `AGENTS.md` | The two ports and the `globalThis` pool, under *Two backends, one interface* |
+| [20-architecture.md](20-architecture.md) | The pool's rule, beside the store it serves |
+| [21-database.md](21-database.md) | *Where the database actually is* now names the transaction pooler |
+| [22-running-and-testing.md](22-running-and-testing.md) | Both errors in Part 2; the connection table's transaction-pooler row rewritten (it had said to avoid 6543) |
+| [05-credentials-and-security.md](05-credentials-and-security.md) | `DATABASE_POOL_MAX`; which pooler the app uses |
+| [04-production.md](04-production.md) | The three install steps need a **session**; the running service wants the transaction pooler and a pool ceiling |
 
-- **Structure:** 34 tables, 2 views, 34 triggers, **2 exclusion constraints**,
-  79 foreign keys.
-- **Data:** every one of 24 tables checked holds exactly what local holds.
-- **The app's own client:** `PostgresStore` over the pooler with SSL reads
-  2 guest houses, 35 profiles, 31 tariffs, 6 bookings.
-- **Rates:** all **36** (guest house x role x booking type) room combinations
-  resolve through the real `resolveTariff` - Category I ₹1,000 / ₹1,500,
-  II ₹1,500 / ₹2,000, III ₹2,000 / ₹2,500, breakfast ₹80. The "no rates
-  published" fault of the previous round does not exist on this host.
-- **The invariant:** two overlapping holds on one room from different
-  bookings were **refused** by `room_holds_no_overlap_guard`, inside a
-  transaction that was rolled back (no residue).
-- **Pages:** `/`, `/guidelines`, `/sign-in`, `/contact` all 200 against
-  Supabase.
-- `npm run lint`, `npm run typecheck`, `npm test` (**661 passing**) and
-  `npm run build` all clean.
+### Checks
 
-### 6. `.env.local`
+`npm run lint`, `npm run typecheck`, **661 tests** (39 files) and
+`npm run build` all clean. 40 concurrent requests to `/mock-login` - the page
+that had been failing - returned **40 x 200**. The dev server was restarted
+once, after the build, because a build pulls `.next/` out from under it.
 
-`DATABASE_URL` is the Supabase session pooler. **`DATABASE_SSL=true` and
-`DATABASE_SSL_REJECT_UNAUTHORIZED=false`** are new and necessary: Supabase
-presents its own CA, which node-postgres rejects by default, and
-`lib/db/client.ts` already reads both. The local URL is kept **commented
-directly below** it, so working offline is uncommenting one line. The
-previous file is saved as `.env.local.bak-<stamp>` (gitignored, like
-`.env.local` itself). The database password is a **real secret** and is
-recorded by name and location only, in
-[05-credentials-and-security.md](05-credentials-and-security.md).
+**No migration. No schema change. Nothing was written to the shared database**
+beyond a transaction that was rolled back.
 
-### 7. Three stale things found and fixed on the way
+### What this opens
 
-- **`AGENTS.md`'s HTTP smoke-test recipe does not work.** `DEV_LOGIN` and the
-  `gh_mock_user` cookie **no longer exist anywhere in the code**; the recipe
-  was corrected to say so and to name `/api/auth/test-sign-in`. My Bookings is
-  **`/dashboard`**, not `/my-bookings`.
-- **`server-only` throws under `tsx`.** An ad-hoc script that imports the
-  store dies on `This module cannot be imported from a Client Component
-  module`. Run it with `NODE_OPTIONS="--conditions=react-server"`.
-- **`pkill -f "next dev"` kills the shell that runs it**, because the pattern
-  matches that shell's own command line. Use `pkill -f 'next[ ]dev'`.
-
-### 8. What this opens
-
-- **The password is now a shared secret** between collaborators, and resetting
-  it in the dashboard breaks everyone's `DATABASE_URL` at once.
-- **There is one database for everybody**, so a destructive experiment is
-  destructive for everybody. A per-developer database is in
-  [03-roadmap.md](03-roadmap.md).
-- `guesthouse_dev` on the laptop is no longer what the app reads, and will
-  drift from the shared database the moment anyone books.
+In [03-roadmap.md](03-roadmap.md) §2r, which this round amends rather than
+closes: the pool ceiling is now a figure somebody has to own per deployment,
+and the 15-client limit is a property of the Supabase plan - it is the first
+thing that will bite when a third and fourth collaborator join, or when the
+e2e suite is pointed at the shared database (it must not be; it builds its
+own throwaway database for this reason).

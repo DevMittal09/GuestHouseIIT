@@ -314,7 +314,7 @@ appears here.**
 
 | Secret | What it is | Where it lives now | Real value comes from | If it leaks |
 | --- | --- | --- | --- | --- |
-| `DATABASE_URL` | The PostgreSQL connection string - **and it carries the database password**, so the whole line is a secret | `.env.local` (set, pointing at the Supabase project since 8 Nov 2026); hosting provider's environment in production | Supabase -> Project Settings -> Database -> Connection string (**Session pooler**, port 5432) | Reset the password at Project Settings -> Database -> Reset database password, then give every collaborator the new string - **it breaks all of them at once**, so warn first |
+| `DATABASE_URL` | The PostgreSQL connection string - **and it carries the database password**, so the whole line is a secret | `.env.local` (set, pointing at the Supabase project since 8 Nov 2026); hosting provider's environment in production | Supabase -> Project Settings -> Database -> Connection string. The app uses the **Transaction pooler, port 6543**; the **Session pooler, 5432** is for `pg_dump` / `psql` / DDL and is the commented second line in `.env.local` | Reset the password at Project Settings -> Database -> Reset database password, then give every collaborator the new string - **it breaks all of them at once**, so warn first |
 | `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED` | Switch TLS on, and stop node-postgres verifying Supabase's own CA. Both `true`/`false` strings, read by `lib/db/client.ts` | `.env.local` (`true` and `false` respectively) | n/a | Not secret |
 | `SUPABASE_SERVICE_ROLE_KEY` | Full database access, bypasses RLS — **the most dangerous secret** | `.env.local` (set); hosting provider's environment in production | Supabase → Project Settings → API | Rotate immediately in Supabase → Settings → API, redeploy, then read the audit log for what was done with it |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The hosted project's URL and public key (not secret, but they identify the project) | `.env.local` (set) | same | Nothing to rotate; RLS is what makes the anon key safe to ship |
@@ -385,6 +385,7 @@ must set.
 | --- | --- | --- |
 | `DATABASE_URL` | **PostgreSQL (`PostgresStore`); without it the JSON mock (`.local-db.json`)**. The one switch between backends since 2 Nov 2026 | **Required** |
 | `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED` | TLS on; and `false` to accept Supabase's own CA. Needed for any hosted database | **Required against a hosted database** |
+| `DATABASE_POOL_MAX` | The connection pool's ceiling, default **10**. Lower it on a host that counts *clients* rather than queries - Supabase's session pooler admits 15 for the whole project | Optional |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | **Read by nothing** since the store was deleted (2 Nov 2026); kept commented for PostgREST access to the same project | Not used |
 | `APP_URL` (or `NEXT_PUBLIC_APP_URL`), `APP_BASE_URL` | OAuth redirect, server-action origin; absolute links in mail | **Required** (`APP_URL`) |
 | `CRON_SECRET` | Guards `/api/mail/cron` and `/api/mail/dispatch` (≥ 16 chars) | **Required** |
@@ -408,7 +409,7 @@ must set.
 | What | Where |
 | --- | --- |
 | Code | `https://github.com/DevMittal09/GuestHouseIIT.git`, branch **`main`** (the `ui` branch holds only the 21 Sep vermilion redesign, superseded by the 26 Sep redesign on `main`, and has diverged). Pushes from this machine's identity (`Rizzwan285`) work since 10 Sep 2026 |
-| Database | **The hosted Supabase project's PostgreSQL 17.6, shared by every collaborator**, reached over `DATABASE_URL` (session pooler) since 8 Nov 2026. Its `public` schema is a restore of the laptop's `guesthouse_dev`, so its structure is `scripts/init-postgres.sql` plus what that database had accumulated. The laptop's local PostgreSQL survives as the commented `DATABASE_URL` for offline work. Dumps: `~/guesthouse-db-backups/` (outside the repository) |
+| Database | **The hosted Supabase project's PostgreSQL 17.6, shared by every collaborator**, reached over `DATABASE_URL` (transaction pooler, 6543, since 9 Nov 2026; session pooler for tooling) since 8 Nov 2026. Its `public` schema is a restore of the laptop's `guesthouse_dev`, so its structure is `scripts/init-postgres.sql` plus what that database had accumulated. The laptop's local PostgreSQL survives as the commented `DATABASE_URL` for offline work. Dumps: `~/guesthouse-db-backups/` (outside the repository) |
 | Deployment | Vercel (Hobby plan: two daily crons, no `regions`) — not yet a production deployment |
 | Mail | A Gmail sender with an app password (in `.env.local`); the institute relay is the eventual target |
 | Office contacts on the site / invoice | ghm@iitpkd.ac.in, +91 491 209 2016 (from the office's invoice template) |

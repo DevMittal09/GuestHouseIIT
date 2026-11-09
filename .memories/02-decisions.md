@@ -7569,3 +7569,66 @@ no `auth` schema.
 database (one shared database means one person's destructive experiment is
 everyone's), and whether the application should connect as a role narrower
 than `postgres`. Both are in [03-roadmap.md](03-roadmap.md).
+
+---
+
+## 9 November 2026 - the app connects through the transaction pooler, and the pool lives on `globalThis`
+
+Two runtime errors, a day after the shared database went live. The reasoning
+matters more than either fix, because both were about a *shared* resource and
+neither was visible from one machine.
+
+**Why the app is on port 6543 and not 5432.** The session pooler holds a real
+PostgreSQL session per client, which is what `pg_dump` and DDL need - and the
+8 Nov round chose it for exactly that reason, because the direct host is
+IPv6-only. What that round did not weigh is that its client limit, **15, is
+per project, not per developer**. A pool with `max: 20` therefore had a
+ceiling above the quota it was drawing from: one dev server could take
+everything and the second collaborator's portal would fail on a database doing
+nothing. The transaction pooler multiplexes - a client is held for the length
+of a query or a transaction - so the quota stops being a function of how many
+people have a dev server open.
+
+**Why that is safe here, and would not be everywhere.** A transaction pooler
+holds no session, so three things break on it: named prepared statements,
+session-level `SET`, and anything spanning statements outside a transaction
+(`LISTEN`, advisory locks). This codebase uses none of them - grepped across
+`lib/` and `app/` - and node-postgres issues **unnamed** prepared statements.
+The one pattern that looked risky, `pool.connect()` + `BEGIN` / `COMMIT` in
+`lib/store/postgres.ts`, is precisely what transaction mode supports: the
+server connection is pinned for the transaction. It was verified rather than
+reasoned about, including that the `room_holds` exclusion constraint still
+raises **`23P01`** - the error `RoomClashError` is built on, and the one thing
+in this schema that stops a room being double-booked. A codebase that *did*
+use advisory locks would have to take the other branch: stay on 5432 and cap
+the pool instead.
+
+**Why the pool moved to `globalThis`.** The module-level `let` was correct for
+a process that loads a module once. Turbopack re-evaluates it on hot reload,
+so a morning's editing built a pool per reload and each one kept its idle
+connections - the quota drained with nobody doing anything. This is the same
+reason every Next.js codebase stashes its Prisma or Mongo client on
+`globalThis`; the only reason it had not bitten before is that the previous
+databases were a local PostgreSQL and a JSON file, where leaking connections
+costs nothing visible. **A per-process cache is not the same thing as a
+per-module cache, and in dev the difference is the bug.**
+
+**Why `pg_stat_activity` was the wrong instrument**, worth recording because
+it actively misled the first reading. It shows Supavisor's own connections to
+Postgres - a steady 12 idle, by design - not the pooler's client count. The
+database reads as healthy at the moment clients are being refused. The error
+string is the only evidence; a connection count from the server side is not.
+
+**And one wording rule, from the first error.** `.env.local` held the literal
+`:<password>@` because the previous round's closing message handed the owner a
+connection string with `<password>` in it, meant to be filled in before
+sending it on. A connection string is copy-pasteable by design, so a
+placeholder inside one gets deployed - and the resulting error names
+`postgres` and the word *password*, which reads as a credentials problem on
+the database rather than a paste. **Placeholders in anything shaped like
+configuration read `PASTE_PASSWORD_HERE`**, never angle brackets. The folder
+records it because the cost was the owner's time, not the agent's.
+
+**Not decided here:** what the pool ceiling should be once there are more than
+three collaborators, or on a multi-instance production deployment where
+`DATABASE_POOL_MAX` multiplies by the instance count. [03-roadmap.md](03-roadmap.md) §2r.

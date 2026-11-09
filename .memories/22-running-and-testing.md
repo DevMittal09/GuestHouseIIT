@@ -153,6 +153,13 @@ build and the journeys, **with no secrets at all**.
 is used: no client library, no PostgREST, no Auth. It is a managed PostgreSQL
 behind the ordinary `PostgresStore`.
 
+**Two ports, and which one is a rule, not a preference** (9 Nov 2026). The app
+runs on the **transaction pooler, 6543**, because the session pooler admits
+**15 clients for the whole project** and two dev servers exhaust it. `pg_dump`,
+`psql` and anything that runs DDL use the **session pooler, 5432**. Both strings
+are in `.env.local`, the session one commented, so neither has to be
+reconstructed.
+
 ```bash
 # the connection string is in .env.local; psql reads it directly
 psql "$(grep -E '^DATABASE_URL' .env.local | cut -d= -f2-)" -c '\dt public.*'
@@ -163,7 +170,7 @@ Three things about connecting, each of which costs an hour if unknown:
 | Trap | What happens | What to do |
 | --- | --- | --- |
 | **The direct host is IPv6-only** | `db.<ref>.supabase.co` resolves to AAAA only; on a network with no IPv6 route psql says *Network is unreachable* | Use the **session pooler**, `aws-0-<region>.pooler.supabase.com:5432`, user `postgres.<ref>` |
-| **The transaction pooler** | Port **6543** does not hold a session, so `pg_dump`, DDL and prepared statements break in confusing ways | Use **5432** (session mode) for anything but ordinary queries |
+| **The two poolers do different jobs** | **5432** holds a session but admits only **15 clients per project**; **6543** multiplexes but holds no session, so `pg_dump`, DDL and named prepared statements break on it | The **app** on **6543**, **tooling** on **5432**. Verified 9 Nov 2026: node-postgres on 6543 handles 25 concurrent queries, `BEGIN`/`COMMIT` on a pooled client, plpgsql functions and `23P01` from the exclusion constraint - it uses unnamed prepared statements, which is what makes transaction mode safe here |
 | **`pg_dump` 16 cannot dump a 17 server** | *aborting because of server version mismatch*; the laptop has 16.15, the server runs 17.6 | Run the client in a container (below) |
 
 ```bash
@@ -472,6 +479,21 @@ to name the address the browser actually used.
 
 ### `password authentication failed for user "postgres"` against Supabase
 
+**Check the string for a placeholder first** (9 Nov 2026). The first time this
+appeared it was a reset account password; the second time `.env.local` held the
+literal `:<password>@`, pasted out of a line written to be *sent to a
+collaborator*. A connection string is copy-pasteable by design, so a placeholder
+inside one gets deployed. Parse it before theorising - this prints the shape and
+not the secret:
+
+```bash
+python3 -c 'import sys,urllib.parse as u; p=u.urlparse(sys.argv[1]); pw=u.unquote(p.password or ""); print(p.hostname, p.port, "pwlen", len(pw))' \
+  "$(grep -m1 -E "^DATABASE_URL" .env.local | cut -d= -f2-)"
+```
+
+Write a placeholder as `PASTE_PASSWORD_HERE`, never `<password>`: the angle
+brackets read as documentation and survive the paste.
+
 The Supabase **account** password is not the **database** password, and
 `.env.local`'s `SUPABASE_SERVICE_ROLE_KEY` is an API key that cannot open a
 PostgreSQL connection at all. Reset the database password at Project Settings
@@ -480,6 +502,28 @@ be percent-encoded inside a connection URL, and a mis-encoded one fails with
 this same message. Note the message always names `postgres`, even when you
 connected as `postgres.<ref>` - the pooler reports the part before the dot, so
 it is **not** evidence that your username was wrong.
+
+### `(EMAXCONNSESSION) max clients reached in session mode` (9 Nov 2026)
+
+Every page died in `listGuestHouses` / `listProfiles` on a database that was
+perfectly healthy. **Two causes, and fixing one alone would not have held.**
+
+1. **The session pooler admits 15 clients for the entire project**, not per
+   developer, and the pool asked for `max: 20`. One dev server could take the
+   whole quota and lock every collaborator out. The app moved to the
+   **transaction pooler on 6543**, which multiplexes.
+2. **Turbopack re-evaluates a module on hot reload**, and `lib/db/client.ts`
+   cached its pool in a module-level `let`. Each reload built a *new* `Pool`
+   and the previous one kept its idle connections for ever: a morning's editing
+   leaked pools until the quota was gone. It is cached on `globalThis` now -
+   the same reason the Prisma and Mongo clients are, in every Next.js
+   codebase - with `idleTimeoutMillis` at 10 s and `DATABASE_POOL_MAX` to lower
+   the ceiling on a host that counts clients.
+
+**`pg_stat_activity` does not answer this question.** It shows *Supavisor's*
+connections to Postgres (12 idle, steady, by design), not the pooler's client
+count, so it reads as healthy while clients are being refused. The symptom is
+the error; the fix is the pool.
 
 ### `pkill -f "next dev"` kills the shell you ran it in
 

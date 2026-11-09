@@ -869,6 +869,10 @@ In order of what would have caught the most:
 
 ## 2r. Opened by the 8 November 2026 (second) round - one shared database
 
+> **Amended 9 November 2026.** Item 8 below was added by that round, and the
+> connection advice in item 7 now has a second half: the app runs on the
+> **transaction pooler (6543)**, tooling on the **session pooler (5432)**.
+
 1. **One database for everybody, so one person's mistake is everybody's.**
    A dropped table, a bad import or a `delete` with no `where` now costs the
    whole team, and there is no per-developer copy to fall back on. The cheap
@@ -907,6 +911,21 @@ In order of what would have caught the most:
    `pg_dump` against the shared database fails until it is run from a
    `postgres:17-alpine` container. Recipe in
    [22-running-and-testing.md](22-running-and-testing.md).
+
+8. **The connection quota is the next thing that will bite, and it is a
+   property of the plan.** Supabase's session pooler admits **15 clients for
+   the whole project** on this tier, which is what failed on 9 Nov 2026 with
+   one dev server open. Moving the app to the **transaction pooler (6543)**
+   buys room by multiplexing, and `DATABASE_POOL_MAX` caps each process
+   (default 10 in `lib/db/client.ts`), but neither raises the underlying
+   limit. Three things follow. (a) Nobody owns the figure: on a production
+   deployment running several instances the default multiplies by the instance
+   count. (b) **Do not point the e2e suite at the shared database** - it
+   builds its own throwaway one, and that is now a quota reason as well as a
+   data one. (c) The same arithmetic has to be redone against the institute's
+   database, which may be PgBouncer in transaction mode, no pooler at all, or
+   a hard `max_connections` the portal shares with other services. Worked
+   through in [02-decisions.md](02-decisions.md), *9 November 2026*.
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 
