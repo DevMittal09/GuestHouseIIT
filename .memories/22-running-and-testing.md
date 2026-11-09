@@ -190,6 +190,8 @@ Three things about connecting, each of which costs an hour if unknown:
 | **The direct host is IPv6-only** | `db.<ref>.supabase.co` resolves to AAAA only; on a network with no IPv6 route psql says *Network is unreachable* | Use the **session pooler**, `aws-0-<region>.pooler.supabase.com:5432`, user `postgres.<ref>` |
 | **The two poolers do different jobs** | **5432** holds a session but admits only **15 clients per project**; **6543** multiplexes but holds no session, so `pg_dump`, DDL and named prepared statements break on it | The **app** on **6543**, **tooling** on **5432**. Verified 9 Nov 2026: node-postgres on 6543 handles 25 concurrent queries, `BEGIN`/`COMMIT` on a pooled client, plpgsql functions and `23P01` from the exclusion constraint - it uses unnamed prepared statements, which is what makes transaction mode safe here |
 | **`pg_dump` 16 cannot dump a 17 server** | *aborting because of server version mismatch*; the laptop has 16.15, the server runs 17.6 | Run the client in a container (below) |
+| **A pg_dump 17 file does not restore on 16** | Two lines in the preamble: `\restrict <token>` (a psql 17.6+ meta-command - older psql says *invalid command \restrict*) and `SET transaction_timeout = 0;` (PostgreSQL 17+ - *unrecognized configuration parameter*). With `ON_ERROR_STOP` either kills the whole restore in the first 15 lines | Delete the two `\restrict`/`\unrestrict` lines and comment the `transaction_timeout` one. 0 is that parameter's default, so nothing is lost. Found 9 Nov 2026 taking the shared database to a second laptop |
+| **The dump's own `CREATE SCHEMA public`** | Clashes with the schema you had to create first in order to install `btree_gist`, and under `ON_ERROR_STOP` aborts at that line | Comment it out of the dump; create the schema and the extension in the recipe instead |
 
 ```bash
 # pg_dump 17 without installing it
@@ -217,6 +219,40 @@ docker run --rm --user "$(id -u):$(id -g)" \
 > object in the dump is schema-qualified, so widening the path changes nothing
 > else. Afterwards **check**:
 > `select count(*) from pg_constraint where contype = 'x';` must be **2**.
+
+**Putting the shared database on a laptop** (9 Nov 2026). The whole package
+lives with the dumps, outside the repository, in
+`~/guesthouse-db-backups/`: the dump, `restore-shared-db.sh` (which verifies
+itself and exits non-zero on anything but 2 exclusion constraints) and
+`RESTORE-README.md`. The order matters and is not arbitrary:
+
+```bash
+createdb guesthouse_dev
+psql -d guesthouse_dev -c 'drop schema if exists public cascade'
+psql -d guesthouse_dev -c 'create schema public'
+psql -d guesthouse_dev -c 'create extension if not exists btree_gist with schema public'
+psql -v ON_ERROR_STOP=1 -d guesthouse_dev -f guesthouse-shared-<date>.sql
+psql -d guesthouse_dev -c "select count(*) from pg_constraint where contype='x'"   # MUST be 2
+```
+
+> **Replace the schema; do not try to patch it.** Asked which migrations a
+> laptop's existing database still needed, the answer was that the question
+> does not have to be answered: `drop schema public cascade` plus a full
+> restore makes the dump the definition, whatever state that database had
+> drifted into - half-applied migrations included. The same reasoning as
+> 8 Nov's decision to replace the hosted schema wholesale rather than migrate
+> it forward ([02-decisions.md](02-decisions.md)). The cost is the other side
+> of it: anything that existed only on that laptop is gone.
+
+> **Count constraints scoped to `public`, or the two databases will look
+> different when they are not.** Comparing the hosted project with a restored
+> copy, `pg_constraint`/`pg_trigger` reported **79 foreign keys and 34
+> triggers against 49 and 22** - because Supabase's own `auth`, `storage` and
+> `realtime` schemas are in those catalogues and a `--schema=public` dump
+> never carried them. Joined to `pg_namespace` and filtered to `public`, both
+> sides read 49 FKs, 22 triggers, 215 functions and 118 indexes. A
+> per-table row count over all 34 tables (`query_to_xml` over `pg_class`) is
+> the check that cannot be fooled this way.
 
 > **`supabase/migrations/` no longer exists**, so the old recipe of pasting
 > every migration file into the SQL editor is gone with it. A database is

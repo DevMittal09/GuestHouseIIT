@@ -7755,3 +7755,75 @@ that already has tables it fails, or half-succeeds. That advice was harmless
 while there was nowhere else to point, and became wrong the moment this round
 created `scripts/migrations/`. It now names the numbered migration for an
 existing database and the schema file only for a fresh install.
+
+---
+
+## 9 November 2026 (third) - a laptop gets a copy by replacing its schema, not by catching up
+
+The owner wanted the shared database on a second laptop and said the thing that
+usually makes this hard: *"That database was already initialized, just changes
+we made are left to make in that, issue is idk from which commit."*
+
+**The question was dissolved rather than answered.** Working out which
+migrations a database is missing needs a reliable record of what was applied,
+and this project has none - `npm run check:migrations` probes for markers, and
+cannot see function-only, trigger-only, policy-only or index-only migrations at
+all. Reconstructing the gap from commits would be guesswork, and guessing wrong
+leaves a database that is *almost* right, which is worse than one that is
+obviously broken. `drop schema public cascade` plus a full restore makes the
+dump the definition of the schema, so the starting state stops mattering - the
+same reasoning as the 8 November decision to replace the hosted project's
+schema wholesale instead of migrating it forward, and for the same reason: the
+cheapest correct answer is the one that does not depend on history nobody
+recorded.
+
+The cost is real and is written at the top of the README rather than buried:
+**anything that exists only on that laptop is lost.** That is acceptable here
+because the local copy's purpose is offline work and destructive experiments,
+not a second source of truth.
+
+**Why the dump was edited rather than shipped raw.** Four edits, and each one
+is the difference between a restore that works and one that fails - or worse,
+appears to work:
+
+- `search_path = ''` (known since 8 Nov) silently loses **both exclusion
+  constraints**, because an extension is a database-level object that
+  `--schema=public` does not carry and the default gist operator class for
+  `uuid` cannot then be resolved. The restore reports success. A database
+  without those constraints double-books rooms. Of the four this is the only
+  one that fails *quietly*, which is why the restore script exits non-zero
+  unless it counts exactly 2.
+- `\restrict` / `\unrestrict` and `SET transaction_timeout` are PostgreSQL
+  17-isms that abort a restore on 16 in the first fifteen lines. The hosted
+  database is 17.6 and both laptops are 16.15, so a raw dump from this source
+  can never restore on the machines it is for.
+- The dump's own `CREATE SCHEMA public` cannot coexist with creating that
+  schema first, which is required because `btree_gist` has to be installed
+  **into** it before the constraints are read.
+
+Shipping the raw file plus a list of caveats would have put all four on the
+person at the other end, at the moment they are least able to judge them. The
+fixes are in the file, each with a comment saying what it was and why.
+
+**Why it was test-restored rather than reasoned about.** A dump is a claim
+about a database that does not exist yet, and the one failure mode that matters
+most is silent. So the file was restored into a throwaway PostgreSQL 16.15
+database, every one of the 34 tables' row counts diffed against the source, and
+**two overlapping room holds inserted to watch the constraint refuse them**.
+Counting the constraints would not have been enough: presence in
+`pg_constraint` and actually refusing an overlap are different claims, and only
+the second is the one anybody cares about.
+
+**One correction worth keeping.** The first structural comparison reported 79
+foreign keys and 34 triggers on the source against 49 and 22 on the copy, which
+reads as a bad restore. The query was wrong, not the dump: `pg_constraint` and
+`pg_trigger` span every schema, and the hosted project carries Supabase's own
+`auth`, `storage` and `realtime` schemas that a `--schema=public` dump never
+touches. Scoped to `public` the two agree exactly. The lesson is in
+[22-running-and-testing.md](22-running-and-testing.md): on a database with
+extra schemas, compare *scoped*, and prefer a per-table row count, which cannot
+be fooled this way.
+
+**Not decided here:** what reconciles a laptop's copy with the shared database
+once both have been written to - nothing does, and nothing warns.
+[03-roadmap.md](03-roadmap.md) §2t.

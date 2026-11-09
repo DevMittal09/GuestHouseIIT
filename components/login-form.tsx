@@ -19,11 +19,27 @@ import { cn } from "@/lib/utils";
  */
 export function LoginForm({
   next,
-  submitLabel = "Sign in with Google",
+  submitLabel,
   doors,
   notice,
 }: {
   next?: string;
+  /**
+   * What the caller wants its door called - `/book-room` passes "Sign in to
+   * book", so the button names the thing the visitor came to do.
+   *
+   * **It follows whichever door is the only one open** (9 Nov 2026). It used
+   * to default to "Sign in with Google" and was read by the Google button
+   * alone, which was right on 30 Oct when Google was the only door - but the
+   * account picker came back on 7 Nov and nobody joined the two up. The
+   * result was a label that existed only where Google was configured: on a
+   * deployment without it, `/book-room`'s door read a bare "Sign in", and the
+   * public-site journey that looks for "Sign in to book" could only pass on a
+   * machine with real Google credentials in its `.env.local`.
+   *
+   * Where **both** doors are open the caller's label stays on Google's, which
+   * is the real one; the picker keeps saying what it is.
+   */
   submitLabel?: string;
   /** Which doors are open. At least one always is, or the card says nothing. */
   doors: { google: boolean; mock: boolean };
@@ -64,7 +80,7 @@ export function LoginForm({
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            {submitLabel}
+            {submitLabel ?? "Sign in with Google"}
           </a>
         )}
 
@@ -73,7 +89,11 @@ export function LoginForm({
             href={withNext("/mock-login")}
             className={cn(doors.google ? siteButton.outline : siteButton.ink, "w-full")}
           >
-            {doors.google ? "Mock authentication" : "Sign in"}
+            {/* With Google beside it this button has to say what it is, so the
+                caller's label stays on the real door. On its own it *is* the
+                door, and takes the caller's label - "Sign in to book" on
+                `/book-room` - falling back to a plain "Sign in". */}
+            {doors.google ? "Mock authentication" : (submitLabel ?? "Sign in")}
           </a>
         )}
       </div>

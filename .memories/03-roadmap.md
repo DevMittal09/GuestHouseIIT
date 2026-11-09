@@ -982,18 +982,23 @@ identically. In rough order of how many journeys each accounts for:
 4. **The father's name on the locked field is `Sudhakara Varma`**, not the
    `Ramesh Menon` the fixture expects - the same persona change as (1).
 
-Two **product** defects these journeys uncovered, neither fixed, because the
-sign-in door is not something to change on the side:
+One **product** defect these journeys uncovered and that is **still open**,
+because the sign-in door is not something to change on the side:
 
 5. **`/sign-in` drops `next`.** Its `searchParams` type is `{ error?: string }`
    and it never reads `next`, so `/sign-in?next=%2Fbook` renders a door with
    no destination on it - and a visitor sent there by a portal guard is
    returned to their role's home rather than to the page they asked for.
    `safeNextPath` and `LoginForm`'s `withNext` are both already there.
-6. **`/book-room`'s `submitLabel` only ever reaches the Google button.**
-   `LoginForm` puts `submitLabel` on the Google door alone, so "Sign in to
-   book" labels a link straight to `/api/auth/google/start` where Google is
-   configured, and appears nowhere at all where it is not.
+
+> **A second one was fixed**, because blanking Google in the harness made it
+> fail where it had been invisible: `LoginForm` read `submitLabel` on the
+> **Google** button alone, so `/book-room`'s "Sign in to book" existed only
+> where Google was configured, and on every other deployment that door read a
+> bare "Sign in". The label now follows whichever door is the only one open.
+> The lesson is the one this whole section is about: a check that cannot run
+> is not a check, and two journeys had been passing for a reason that had
+> nothing to do with the code being right.
 
 ## 2s. Opened by the 9 November 2026 (second) round - mail to real inboxes
 
@@ -1035,6 +1040,39 @@ sign-in door is not something to change on the side:
    paths - `AGENTS.md` and [21-database.md](21-database.md) among them - which
    is drift from that deletion rather than from this round, and wants one pass
    over it.
+
+## 2t. Opened by the 9 November 2026 (third) round - a copy on a laptop
+
+1. **Nothing reconciles a local copy with the shared database, and nothing
+   warns.** The moment anybody books on either, the two diverge silently, and
+   there is no "you are on a stale copy" anywhere in the portal. The copy's
+   stated purpose is offline work and destructive experiments - but the only
+   thing stopping somebody from demonstrating the portal from a three-week-old
+   copy is remembering which `DATABASE_URL` is commented out in their
+   `.env.local`. A banner naming the database the app is connected to, in
+   non-production only, would cost very little.
+2. **Migration 36 now has to reach two places, and is applied in neither.**
+   `scripts/migrations/00000000000036_room_classes_and_tariff_categories.sql`
+   is in the tree; the shared database has neither `rooms.room_class` nor
+   `tariffs.tariff_category`, so the dump does not either. Code expecting
+   those columns works against no database that exists. When it is finished it
+   has to be applied to the shared database **and** to every laptop that
+   restored from this dump - which is the first time this project has had more
+   than one database to keep in step since 8 Nov.
+3. **There is still no record of which migrations a database has.**
+   `npm run check:migrations` cannot see function-only, trigger-only,
+   policy-only or index-only migrations (17, 23, 31, 33, 34 among them), which
+   is exactly why *"I don't know from which commit"* had to be answered by
+   replacing the schema rather than by catching it up. A
+   `schema_migrations` table written by the migration runner would make the
+   question answerable - and would have to be back-filled by hand once, which
+   is the reason it keeps not happening.
+4. **The dump is a hand-made artefact that will go stale.** It was taken,
+   patched four ways and test-restored by hand; nothing produces it on a
+   schedule and nothing stops somebody restoring November's copy in February.
+   The patching is mechanical enough to be a script
+   (`scripts/dump-shared-db.sh`), which would also be the nightly backup
+   §2r item 5 still wants.
 
 ## 3. Found in the documentation audit (24 Sep 2026)
 
