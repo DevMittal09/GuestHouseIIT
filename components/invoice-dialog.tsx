@@ -336,7 +336,17 @@ export function InvoiceDialog({
                 >
                   Preview PDF
                 </Button>
-                <Button disabled={isPending || pricing || !!problem} onClick={() => setConfirmIssue(true)}>
+                {/* **Green** (10 Nov 2026, the owner: "Issue & print as well
+                    as Mark Paid should come in green colour"). `occupy` is the
+                    desk's existing green - the one on Mark as Occupied - so
+                    nothing was added to the palette. The two money buttons now
+                    read as the pair they are: this one settles the bill, Mark
+                    paid closes it. */}
+                <Button
+                  variant="occupy"
+                  disabled={isPending || pricing || !!problem}
+                  onClick={() => setConfirmIssue(true)}
+                >
                   Issue &amp; print
                 </Button>
               </div>
@@ -391,6 +401,7 @@ export function InvoiceDialog({
                     </div>
                     <div className="flex justify-end">
                       <Button
+                        variant="occupy"
                         disabled={isPending || !reference.trim()}
                         onClick={() =>
                           run(
