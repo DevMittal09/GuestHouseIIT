@@ -1,5 +1,19 @@
 # Settings and defaults — every configurable value
 
+## Owner's corrections, 10 November 2026
+
+**`rules.booking.max_stay_nights` has no exemptions left.** It applied to
+everyone but `official` / `gh_manager` / `developer` and the Director's Office
+by address, and from 9 Nov also not to an `official` **booking type**. All of
+that is deleted: `stayLengthError(checkIn, checkOut, maxNights)` and
+`latestCheckOutDate(checkInDate, maxNights)` take no role, address or booking
+type, because a parameter nothing reads is an exemption waiting to come back.
+
+**`0` is the only way off**, and it turns the cap off for everybody at once. A
+longer stay for one guest is the desk extending it after approval
+(`extendStayAction`), which has never consulted this rule. If the office ever
+wants "14 nights except X", that is a new rule, not a revived exemption.
+
 ## Meeting decisions implemented, 9 November 2026
 
 `rules.portal` is a persisted Setting, edited by GHM/developer from Portal Settings:

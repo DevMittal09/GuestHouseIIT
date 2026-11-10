@@ -1,5 +1,27 @@
 # Booking forms — what each requester is asked, and where the answers come from
 
+## Owner's corrections, 10 November 2026
+
+**Dates are picked from a calendar.** `components/ui/date-field.tsx`
+(`DateField`) replaces `<input type="date">` on the booking form and the meal
+dates picker. It is a button that opens a calendar, so there is **no text to
+type** - which matters for three reasons, the last two being the ones that
+caused real mistakes: a half-typed date looks valid; the native control
+renders in the **browser's** locale, so the one control in a DD/MM/YYYY portal
+read MM/DD/YYYY on en-US; and its `min` / `max` bound the picker but never the
+typing. The value is still the same `"yyyy-MM-dd"` string, so nothing about
+validation or submission changed.
+
+So the **advance window** and the **stay cap** are now enforced by the control
+as well as the schema: they are the calendar's `min` and `max`, and there is
+no way past them on the form.
+
+**The stay cap is 14 nights for everyone.** Every exemption is gone - the
+`official` **booking type** (the meeting's own, 9 Nov) and the `official`,
+`gh_manager` and `developer` **roles**. A longer stay is granted by the desk
+extending it after approval, not booked on the form. See
+[12-settings-and-defaults.md](12-settings-and-defaults.md).
+
 ## Meeting decisions implemented, 9 November 2026
 
 This section supersedes the older tariff-selector and six-month descriptions below.

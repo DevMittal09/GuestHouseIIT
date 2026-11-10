@@ -1691,6 +1691,30 @@ list drops an address out of a CC list rather than failing the message.
 > and belong to that round, not this one.
 
 
+## 10 November 2026 - seven corrections from the owner
+
+Sent as one list the morning after the meeting round was committed, and
+**committed one change at a time** at the owner's request, so a limit
+mid-round leaves a checkpoint.
+
+| Item | Status |
+| --- | --- |
+| Different colours per guest house on the GHM console | Done - four tokens of their own, on the switcher chip and the console caption; identity never state |
+| Type of Booking more visible in the GHM review | Done - leads the queue cell, the allocate dialog's header and the record, by weight not a badge |
+| Issue & print and Mark Paid in green | Done - `variant="occupy"`, the desk's existing green |
+| Invoice number more noticeable | Done - 14pt bold on the PDF, its own serif line in the dialog |
+| Don't show every category for a personal booking | Done - personal -> I, official -> II and III; **alumni keep all three**, the office's sheet being silent on them |
+| 14 days max for everyone, limited in the check-out calendar | Done - **every exemption withdrawn**, including the meeting's own `official` one from the day before; the cap is the calendar's `max` |
+| Calendar-only date input, no typing | Done - `DateField` on the booking form, the meal picker and Manage |
+
+Two of these **reverse earlier instructions** and are recorded as
+supersessions: the stay cap (the meeting of 9 Nov had exempted official
+bookings) and the category list (which the same round had just made show all
+three). Both are in [02-decisions.md](02-decisions.md).
+
+Left for the office: whether an **alumni** stay has a category of its own, and
+four remaining native date inputs that browse or filter rather than book.
+
 ## 9 November 2026 - consolidated meeting decisions, continued after Claude's limit
 
 The owner supplied the original consolidated prompt and Claude transcript and asked to continue. The working tree already contained most UI/schema work plus a separate mail round.

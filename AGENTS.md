@@ -8,9 +8,57 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## Current overrides - 10 November 2026
+
+These supersede everything below, **including the 9 November block that
+follows**, where they conflict.
+
+**The stay cap is 14 nights for everyone and nobody is exempt.** This
+withdraws the 9 Nov exemption for `official` **booking types** and the older
+one for the `official`, `gh_manager` and `developer` **roles**
+(`BOOKING_DURATION_EXEMPT_ROLES`, `DIRECTOR_OFFICE_EMAILS` and
+`isDurationExempt` are **deleted**). `stayLengthError(checkIn, checkOut,
+maxNights)` and `latestCheckOutDate(checkInDate, maxNights)` take no role,
+address or booking type - carrying a parameter nothing reads is an exemption
+waiting to come back. A longer stay is granted by the desk **extending it
+after approval** (`extendStayAction`), which has never consulted this rule.
+Only `max_stay_nights: 0` in Settings turns the cap off.
+
+**Dates are picked from a calendar and never typed.**
+`components/ui/date-field.tsx` (`DateField`) replaces every
+`<input type="date">` on the booking form, the meal picker and Manage. The
+native input could be typed into, rendered in the **browser's** locale (so the
+one control in a DD/MM/YYYY portal read MM/DD/YYYY on en-US), and its
+`min`/`max` bound only the picker. Don't reintroduce it. A day is addressed by
+`data-date="yyyy-MM-dd"` on `CalendarDayButton`; the e2e suite picks dates
+with `pickDate()`, never `.fill()`.
+
+**A tariff category is only offered where it can be charged.**
+`tariffCategoriesFor(bookingType)`: personal -> I, official -> II and III,
+alumni -> all three (the office's sheet says nothing about alumni, and hiding
+the needed one would leave a stay that cannot be invoiced). One rule, read by
+the booking panel, the allocation radios and Manage. Where one category
+applies the allocation dialog opens on it, because `allocateRooms` requires
+one.
+
+**Each guest house has a colour on the desk's console**
+(`lib/guest-house-accent.ts`, `--gh-1`..`--gh-4`). They are **identity, never
+state**: the switcher chip and the console caption only, never a row, a room
+tile or a status - every other accent in this service already means something
+(vermilion brand/Reject/Full, saffron official, green check-in, indigo
+check-out, violet accepted overlap). Assigned by position in the store's
+ordered list, never by name.
+
+**The booking type leads wherever the desk reviews a request** - the queue
+cell, the allocate dialog's header and the record - by **weight and position,
+not a badge**; the 11 Oct 2026 rule stands. The queue's old "Category" column
+is "Booking type". **Issue & print and Mark paid are `variant="occupy"`**
+(green), and **the invoice number is set apart** - 14pt bold on the PDF, its
+own serif line in the dialog, picked out by `INVOICE_NUMBER_LABEL`.
+
 ## Current meeting overrides - 9 November 2026
 
-These supersede older instructions below where they conflict. Requesters choose booking type, never tariff category. GHM must choose Category I/II/III at allocation; categories exist on both bookings and tariffs. Official booking types are exempt from the 14-night cap; ordinary requester check-in is within one month, with the existing GHM/developer desk exception. Room cancellation requests need 24 hours' notice; manager cancellation remains unrestricted by that window.
+These supersede older instructions below where they conflict. Requesters choose booking type, never tariff category. GHM must choose Category I/II/III at allocation; categories exist on both bookings and tariffs. ~~Official booking types are exempt from the 14-night cap~~ (**superseded 10 Nov 2026: nobody is exempt** - see the block above); ordinary requester check-in is within one month, with the existing GHM/developer desk exception. Room cancellation requests need 24 hours' notice; manager cancellation remains unrestricted by that window.
 
 Hamsanandi has 16 physical rooms: A1-A3 reserved, C1/C2 `director_only` VIP rooms for GHM-raised bookings, 11 general rooms. Ordinary `vip` rooms use the configurable email/role grants; those grants never admit Director-only rooms. Bageshri's ten verified numbers remain unchanged. Apply migration 36 and seed reference data before using the new code against an older database.
 

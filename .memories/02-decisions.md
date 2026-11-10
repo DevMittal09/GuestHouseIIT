@@ -7717,6 +7717,71 @@ unnecessary for this purpose; and what reverts a temporary arrangement like
 this one, since nothing does. [03-roadmap.md](03-roadmap.md) §2s.
 
 
+## 10 November 2026 - seven corrections, and two reversals inside them
+
+**The stay cap applies to everyone, and the exemptions are deleted rather
+than narrowed.** Two were in force: the meeting's own `official` **booking
+type** (9 Nov) and an older set of **roles** - `official`, `gh_manager`,
+`developer` - plus the Director's Office by address. The owner asked for "14
+days max for everyone so limit it in the checkout calender selection", and the
+second half of that sentence is what settles it: `latestCheckOutDate` returned
+**null** for every exempt case, so the picker offered no limit at all. A cap
+most of the desk's own accounts could ignore, and that the control did not
+show, was not a cap.
+
+`stayLengthError` and `latestCheckOutDate` now take neither a role, an address
+nor a booking type. Keeping the parameters and ignoring them would have been
+smaller, and wrong: a parameter nothing reads is an exemption waiting to be
+reintroduced by the next person who sees it in the signature.
+
+The institute has not lost the ability to host a long visit. It is granted by
+the desk **extending the stay after approval** (`extendStayAction`), which has
+never consulted this rule and still does not. The difference is that it is now
+a decision somebody takes on a booking they can see, rather than a length
+nobody reviewed.
+
+**A category is only offered where it can be charged**, and the office's own
+descriptions decide which: Category I is "parents of students on a personal
+visit", II "institute guests on official duty", III "academic visitors". So
+personal -> I, official -> II and III. **Alumni keep all three**, because the
+sheet says nothing about alumni - they are neither an employee's relative, nor
+on official duty, nor academic visitors - and the cost of the two readings is
+asymmetric: one extra row on a panel against a stay that cannot be invoiced.
+That asymmetry is the whole argument, and it is why this is not a guess
+dressed as a default.
+
+**The guest-house colours are new tokens because every existing accent is
+already a word.** Vermilion is the brand and Reject and Full, saffron marks an
+official request, green is check-in, indigo check-out, violet an accepted
+overlap. Reusing one would have made Hamsanandi read as "occupied" on every
+screen it appeared on. Four hues clear of all six, white text above 7:1, and
+**identity never state**: the switcher chip and the console caption only. Keyed
+on **position** in the store's ordered list, because guest houses are renamed
+from the console and a colour keyed on "Bageshri" dies with the first typo fix.
+
+**The booking type is made prominent by weight and position, not a badge.**
+The 11 Oct 2026 rule - a badge is for a state, not a classification - stands,
+and `BookingDetails` is the very place that once opened on six pills with the
+one that meant something lost among them. Promoting a classification to a
+coloured badge would have traded one unreadable screen for another.
+
+**`<input type="date">` is gone from the booking flow**, and the reason is not
+only the typing. It renders in the **browser's** locale, which `lib/tz.ts` had
+already recorded as the one thing the portal could do nothing about: every
+date in the service reads DD/MM/YYYY and that control read MM/DD/YYYY for
+anybody on en-US, so 11/20 was 11 December to the form and 20 November to the
+reader. And its `min`/`max` bound the picker but not the typing, so a date
+outside the window submitted and was refused afterwards. A button that opens a
+calendar has no text path at all, which turns the advance window and the stay
+cap from hints into the control's own behaviour.
+
+It needed one production seam and one test seam, both small and both worth
+naming. `CalendarDayButton` gains `data-date="yyyy-MM-dd"` because `data-day`
+beside it is `toLocaleDateString` - a label, not a selector. `pickDate()`
+replaces `.fill()` on a date field across nine specs, because the field is
+controlled through `setValue` and carries no `name`; the **baseline was taken
+before the first commit** so that nine rewritten specs could be held to it.
+
 ## 9 November 2026 - completing the interrupted meeting implementation
 
 The requester no longer decides a tariff. A name on both booking and rate sheet removes the former second-source-of-truth objection. New allocations require an explicit manager choice; historical bookings without one retain historical pricing. A missing selected-category price blocks billing rather than silently choosing a legacy rate.

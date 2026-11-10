@@ -1,5 +1,27 @@
 # Roadmap — what is open, in priority order
 
+## Opened by the 10 November 2026 round - the owner's seven corrections
+
+1. **Does an alumni stay have a tariff category?** `tariffCategoriesFor`
+   narrows a personal booking to Category I and an official one to II and III,
+   from the office's own descriptions - but the sheet says nothing about
+   alumni, who are neither an employee's relative, nor on official duty, nor
+   academic visitors. All three are offered, because one extra row on a panel
+   costs less than a stay that cannot be invoiced. **One question for the
+   office**, and the answer is one line in that function.
+2. **Four date inputs still use the native control**: the archive's filter bar,
+   `/availability`, the kitchen's day view, and the billing and guest-house
+   console pages. They **browse or filter** rather than book, so none carries
+   a rule a typed date could evade - but they still render in the browser's
+   locale, which is the half of the problem that is not about typing.
+   Converting them is `DateField` and a prop each.
+3. **The stay cap now has exactly one way off**, `max_stay_nights: 0` in
+   Settings, which turns it off for everybody at once. If the office ever
+   wants "14 nights, except the Director's Office", that is a new rule and not
+   a revived exemption - the parameters were deleted deliberately.
+
+---
+
 ## Meeting follow-ups - 9 November 2026
 
 Implemented: room classes, VIP groups, Director-only isolation, named manager tariffs, official stay-length exemption, FCFS queues, cancellation notice, original-date preservation, caretaker invoice permissions, informational sidebar and editable guidelines link. This supersedes the earlier deferred named-category design in §2j.

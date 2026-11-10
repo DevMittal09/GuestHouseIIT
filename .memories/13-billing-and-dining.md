@@ -1,5 +1,33 @@
 # Billing — tariffs, invoices, payments and dining
 
+## Owner's corrections, 10 November 2026
+
+**A tariff category is only offered where it can be charged.**
+`tariffCategoriesFor(bookingType)` in `lib/tariff-category.ts`, read by the
+booking panel, the allocation radios and Manage:
+
+| Booking type | Categories | From the office's own words |
+| --- | --- | --- |
+| personal | I | "parents of students **on a personal visit**" |
+| official | II, III | "**official duty**"; "academic visitors" |
+| alumni | I, II, III | the sheet is **silent** on alumni |
+
+Alumni keep all three deliberately: hiding the one the desk turns out to need
+would leave a stay that cannot be invoiced, which costs more than one extra
+row on a panel. It is a question for the office
+([03-roadmap.md](03-roadmap.md)). Where **one** category applies the
+allocation dialog opens on it, because `allocateRooms` requires one.
+
+**The invoice number is set apart.** 14pt bold on the PDF - the office's
+template prints every fact in one regular weight and this is the single
+deliberate exception - and its own serif line in the dialog. The row is picked
+out by `INVOICE_NUMBER_LABEL`, exported from `lib/invoice.ts` so the PDF and
+the preview cannot drift, and never by position. Row heights are measured at
+each row's own size, or the larger row overlaps the next.
+
+**Issue & print and Mark paid are green** (`variant="occupy"`, the desk's
+existing check-in green): the two money buttons now read as the pair they are.
+
 ## Meeting decisions implemented, 9 November 2026
 
 Supersedes the requester-selected/derived tariff descriptions below.

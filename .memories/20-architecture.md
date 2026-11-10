@@ -1,5 +1,25 @@
 # Architecture and code map
 
+## Owner's corrections, 10 November 2026
+
+Two new modules, both pure or presentational:
+
+- **`lib/guest-house-accent.ts`** - one colour per guest house for the desk's
+  console. Assignment by position in the store's ordered list, and the three
+  class records are **written out, never interpolated**: Tailwind finds classes
+  by scanning source text, so `bg-${accent}` compiles to nothing and the chip
+  comes out unstyled with no error anywhere.
+- **`components/ui/date-field.tsx`** - the portal's date control, replacing
+  `<input type="date">` on the booking form, the meal picker and Manage. A
+  calendar date is turned into a `Date` at **local noon**, never midnight:
+  `react-day-picker` compares in the runtime's zone, and midnight UTC lands on
+  the previous day west of it.
+
+`tariffCategoriesFor` joins `lib/tariff-category.ts` as the one rule for which
+categories a booking type can be charged at, read from three components.
+`lib/policy.ts` lost `isDurationExempt`, `BOOKING_DURATION_EXEMPT_ROLES` and
+`DIRECTOR_OFFICE_EMAILS`.
+
 ## Meeting decisions implemented, 9 November 2026
 
 New pure rules live in `lib/rooms-access.ts` (room eligibility and display cap), `lib/student-programme.ts` (roll convention), and `lib/tariff-category.ts` (named categories and sidebar sheet). Both stores persist category and original dates. Mock reference upgrades add missing faculty rooms and category rates once without resetting manager edits. Portal Settings has its own console page and component.

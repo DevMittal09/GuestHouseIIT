@@ -1,5 +1,37 @@
 # UI design — the public website and the portal restyle
 
+## Owner's corrections, 10 November 2026
+
+**One colour per guest house, on the desk's console only**
+(`lib/guest-house-accent.ts`, `--gh-1`..`--gh-4` in `app/globals.css`).
+
+They are **new tokens, not a reuse**, and that is the point: every accent this
+service has already means something - vermilion the brand and Reject and Full,
+saffron an official request, green check-in, indigo check-out, violet an
+accepted overlap. Hamsanandi in green would have read as "occupied" wherever
+it appeared. Four hues clear of all six, each carrying white text above 7:1.
+
+**Identity, never state**: the guest-house switcher chip (`LinkTabs`
+`activeClass`) and the console's caption (`PageHeader` `captionClass`) only -
+**never a row, a room tile or a status**, where they would compete with the
+six. Assigned by **position** in the store's ordered list, never by name:
+guest houses are renamed from the console. Four is a real cycle; a fifth
+guest house reuses the first.
+
+Still a **fill**, so "whatever is selected is filled, never underlined"
+(28 Oct 2026) is unchanged - only the hue says which house.
+
+**`DateField` is the portal's date control** (`components/ui/date-field.tsx`):
+a button that opens a calendar, printing the date in the portal's own
+DD/MM/YYYY. It replaces `<input type="date">`, which rendered in the
+**browser's** locale - the one thing `lib/tz.ts` said it could do nothing
+about. Don't reintroduce the native input on a form. `CalendarDayButton`
+carries `data-date="yyyy-MM-dd"` for addressing one day; `data-day` beside it
+is `toLocaleDateString` and is a label, not a selector.
+
+**The booking type leads wherever the desk reviews a request**, by weight and
+position - **not a badge**. The 11 Oct 2026 rule stands.
+
 ## Meeting decisions implemented, 9 November 2026
 
 The booking sidebar now presents Category I/II/III rates for both guest houses and catering timings, without tariff-selection controls or an assumed room quote. Other applicable charges remain informational. The Guidelines page has inline Dos and Don'ts and a detailed-guidelines button whose HTTPS URL comes from Portal Settings. Existing website navigation still leads to the portal's Guidelines page.
