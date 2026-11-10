@@ -19,21 +19,35 @@ mid-round leaves a checkpoint rather than a half-finished tree.
 | 2 | "Make the Type of Booking to be more visible in the Review of GHM also" | Leads the queue cell, the allocate dialog's header and the record |
 | 3 | "Issue & print as well as Mark Paid should come in green colour" | `variant="occupy"`, the desk's existing green |
 | 4 | "Invoice number should be more noticeable in the invoice" | 14pt bold on the PDF, its own serif line in the dialog |
-| 5 | "Category we dont need to show all categories for personal bookings and all" | `tariffCategoriesFor(bookingType)`, applied in three places from one rule |
-| 6 | "Booking period should be 14 days max for everyone so limit it in the checkout calender selection" | Every exemption withdrawn; the cap is the calendar's `max` |
+| 5 | "Category we dont need to show all categories for personal bookings and all" | `tariffCategoriesFor(bookingType)` - narrows **where a category is chosen**, which is the manager's |
+| 6 | "Booking period should be 14 days max for everyone so limit it in the checkout calender selection" | Every exemption withdrawn but the Director's Office; the cap is the calendar's `max` |
 | 7 | "Calender-only input for dates no typing input" | `DateField` replaces every `<input type="date">` on the booking flow |
 
 ### The two that are reversals, and why they are taken
+
+> **Corrected the same afternoon, on two of the seven.** The owner: "the 14
+> night limit is for everyone **except the Directors Office**... Guest House
+> Manager can increase it in his console if required", and "the categories
+> should be **visible** in the right hand side, but they cant choose the
+> categories. The guest house manager selects the category while approving."
+> So the Director's Office is exempt again - **by address**, not by role - and
+> the booking page's panel shows the whole published sheet. Both are folded
+> into the sections below; the narrowing survives where a category is actually
+> **chosen**, which was the part that was asked for.
 
 **Item 6 withdraws two exemptions, one of them a day old.** The meeting of
 9 Nov said in its own list that "official bookings and GHM-created bookings"
 have no maximum duration, and that was implemented. Underneath it was an older
 exemption still: `BOOKING_DURATION_EXEMPT_ROLES` let the `official`,
 `gh_manager` and `developer` **roles** book any length, and
-`DIRECTOR_OFFICE_EMAILS` did it by address. All of it is **deleted**, and
-`stayLengthError` / `latestCheckOutDate` now take no role, address or booking
-type at all - a parameter nothing reads is an exemption waiting to be
-reintroduced.
+`DIRECTOR_OFFICE_EMAILS` did it by address.
+
+**The roles are deleted; the address is kept.** Exempting the `official` role
+covered every whitelisted office, and the other two covered the desk's own
+accounts - between them, most of the accounts that matter, which is not
+"everyone except the Director's Office". So `stayLengthError` and
+`latestCheckOutDate` take the **address** and still no role and no booking
+type: those are the two parameters that turn into exemptions.
 
 The reason this is not a loss: `latestCheckOutDate` returned **null** for
 every exempt case, so the picker offered no limit at all - the opposite of
@@ -43,13 +57,19 @@ after approval** (`extendStayAction`, from Manage), which has never consulted
 this rule. The institute can still host a three-week visit; what it can no
 longer do is book one on a form nobody reviewed for length.
 
-**Item 5 narrows what the meeting had just widened**, and the office's own
-words decide it: Category I is "parents of students **on a personal visit**",
-II is "institute guests **on official duty**", III is "academic visitors". So
-a personal stay has exactly one rate and the panel states it instead of
-listing three, two of which could never be charged. **Alumni keep all three** -
-the sheet says nothing about them, and hiding the one the desk turns out to
-need would leave a stay that cannot be invoiced at all.
+**Item 5 narrows where a category is *chosen*, and nowhere else**, and the
+office's own words decide which: Category I is "parents of students **on a
+personal visit**", II is "institute guests **on official duty**", III is
+"academic visitors". So the **manager's** list at allocation is one option on
+a personal booking and a real choice of two on an official one. **Alumni keep
+all three** - the sheet says nothing about them, and hiding the one the desk
+turns out to need would leave a stay that cannot be invoiced at all.
+
+**The booking page's panel is not narrowed.** It was, for an afternoon, and
+the owner corrected it: the panel is the office's **published tariff**, which
+a requester reads to know what the guest house charges, and a published tariff
+that changes as you tick a radio is not one. All three categories, always, and
+none of them selectable.
 
 ### The colours, and why they are new tokens
 

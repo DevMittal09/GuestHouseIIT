@@ -16,10 +16,11 @@ So the **advance window** and the **stay cap** are now enforced by the control
 as well as the schema: they are the calendar's `min` and `max`, and there is
 no way past them on the form.
 
-**The stay cap is 14 nights for everyone.** Every exemption is gone - the
-`official` **booking type** (the meeting's own, 9 Nov) and the `official`,
-`gh_manager` and `developer` **roles**. A longer stay is granted by the desk
-extending it after approval, not booked on the form. See
+**The stay cap is 14 nights for everyone except the Director's Office**, which
+is exempt by address. The `official` **booking type** (the meeting's own,
+9 Nov) and the `official` / `gh_manager` / `developer` **roles** are not. Any
+other longer stay is granted by the manager extending it after approval, not
+booked on the form. See
 [12-settings-and-defaults.md](12-settings-and-defaults.md).
 
 ## Meeting decisions implemented, 9 November 2026

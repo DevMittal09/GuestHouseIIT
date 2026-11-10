@@ -2,17 +2,17 @@
 
 ## Owner's corrections, 10 November 2026
 
-**`rules.booking.max_stay_nights` has no exemptions left.** It applied to
-everyone but `official` / `gh_manager` / `developer` and the Director's Office
-by address, and from 9 Nov also not to an `official` **booking type**. All of
-that is deleted: `stayLengthError(checkIn, checkOut, maxNights)` and
-`latestCheckOutDate(checkInDate, maxNights)` take no role, address or booking
-type, because a parameter nothing reads is an exemption waiting to come back.
+**`rules.booking.max_stay_nights` has exactly one exemption: the Director's
+Office, by address** (`DIRECTOR_OFFICE_EMAILS`). It used to exempt the
+`official`, `gh_manager` and `developer` **roles** as well, and from 9 Nov an
+`official` **booking type** - all of which is deleted and is not coming back,
+because exempting the `official` role covered every whitelisted office and the
+other two covered the desk's own accounts. `stayLengthError` and
+`latestCheckOutDate` take the **address** and no role and no booking type.
 
-**`0` is the only way off**, and it turns the cap off for everybody at once. A
-longer stay for one guest is the desk extending it after approval
-(`extendStayAction`), which has never consulted this rule. If the office ever
-wants "14 nights except X", that is a new rule, not a revived exemption.
+**Any other longer stay is granted, not assumed**: the Guest House Manager
+extends it after approval (`extendStayAction`, from Manage), which has never
+consulted this rule. `0` turns the cap off for everybody at once.
 
 ## Meeting decisions implemented, 9 November 2026
 

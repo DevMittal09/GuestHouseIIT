@@ -13,16 +13,18 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 These supersede everything below, **including the 9 November block that
 follows**, where they conflict.
 
-**The stay cap is 14 nights for everyone and nobody is exempt.** This
+**The stay cap is 14 nights for everyone except the Director's Office**, which
+is exempt **by address** (`DIRECTOR_OFFICE_EMAILS`, `isDurationExempt`). This
 withdraws the 9 Nov exemption for `official` **booking types** and the older
 one for the `official`, `gh_manager` and `developer` **roles**
-(`BOOKING_DURATION_EXEMPT_ROLES`, `DIRECTOR_OFFICE_EMAILS` and
-`isDurationExempt` are **deleted**). `stayLengthError(checkIn, checkOut,
-maxNights)` and `latestCheckOutDate(checkInDate, maxNights)` take no role,
-address or booking type - carrying a parameter nothing reads is an exemption
-waiting to come back. A longer stay is granted by the desk **extending it
-after approval** (`extendStayAction`), which has never consulted this rule.
-Only `max_stay_nights: 0` in Settings turns the cap off.
+(`BOOKING_DURATION_EXEMPT_ROLES` is **deleted** and is not coming back: it
+covered every whitelisted office and the desk's own accounts, which is not
+"everyone except the Director's Office"). `stayLengthError` and
+`latestCheckOutDate` take the address and **no role and no booking type** -
+those are the parameters that turn into exemptions. Any other longer stay is
+granted by the **manager extending it after approval**
+(`extendStayAction`), which has never consulted this rule;
+`max_stay_nights: 0` in Settings turns the cap off for everybody.
 
 **Dates are picked from a calendar and never typed.**
 `components/ui/date-field.tsx` (`DateField`) replaces every
@@ -33,13 +35,19 @@ one control in a DD/MM/YYYY portal read MM/DD/YYYY on en-US), and its
 `data-date="yyyy-MM-dd"` on `CalendarDayButton`; the e2e suite picks dates
 with `pickDate()`, never `.fill()`.
 
-**A tariff category is only offered where it can be charged.**
-`tariffCategoriesFor(bookingType)`: personal -> I, official -> II and III,
-alumni -> all three (the office's sheet says nothing about alumni, and hiding
-the needed one would leave a stay that cannot be invoiced). One rule, read by
-the booking panel, the allocation radios and Manage. Where one category
-applies the allocation dialog opens on it, because `allocateRooms` requires
-one.
+**A tariff category is chosen by the Guest House Manager when they approve,
+and nowhere else.** `tariffCategoriesFor(bookingType)` - personal -> I,
+official -> II and III, alumni -> all three (the office's sheet says nothing
+about alumni, and hiding the needed one would leave a stay that cannot be
+invoiced) - narrows the **allocation radios and Manage**, both the manager's,
+and where one category applies the dialog opens on it because
+`allocateRooms` requires one.
+
+**The booking page's panel is not narrowed**: it shows the whole published
+sheet whatever the booking type is, and nothing in it is selectable (10 Nov
+2026, the owner: "the categories should be visible in the right hand side,
+but they cant choose the categories"). A published tariff that changes as you
+tick a radio is not a published tariff. Don't filter it again.
 
 **Each guest house has a colour on the desk's console**
 (`lib/guest-house-accent.ts`, `--gh-1`..`--gh-4`). They are **identity, never
@@ -58,7 +66,7 @@ own serif line in the dialog, picked out by `INVOICE_NUMBER_LABEL`.
 
 ## Current meeting overrides - 9 November 2026
 
-These supersede older instructions below where they conflict. Requesters choose booking type, never tariff category. GHM must choose Category I/II/III at allocation; categories exist on both bookings and tariffs. ~~Official booking types are exempt from the 14-night cap~~ (**superseded 10 Nov 2026: nobody is exempt** - see the block above); ordinary requester check-in is within one month, with the existing GHM/developer desk exception. Room cancellation requests need 24 hours' notice; manager cancellation remains unrestricted by that window.
+These supersede older instructions below where they conflict. Requesters choose booking type, never tariff category. GHM must choose Category I/II/III at allocation; categories exist on both bookings and tariffs. ~~Official booking types are exempt from the 14-night cap~~ (**superseded 10 Nov 2026: only the Director's Office is exempt, by address** - see the block above); ordinary requester check-in is within one month, with the existing GHM/developer desk exception. Room cancellation requests need 24 hours' notice; manager cancellation remains unrestricted by that window.
 
 Hamsanandi has 16 physical rooms: A1-A3 reserved, C1/C2 `director_only` VIP rooms for GHM-raised bookings, 11 general rooms. Ordinary `vip` rooms use the configurable email/role grants; those grants never admit Director-only rooms. Bageshri's ten verified numbers remain unchanged. Apply migration 36 and seed reference data before using the new code against an older database.
 
