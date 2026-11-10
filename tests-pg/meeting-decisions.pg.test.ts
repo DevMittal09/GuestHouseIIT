@@ -105,10 +105,24 @@ describe("meeting decisions through PostgreSQL actions", () => {
     expect(await managerCancelBooking(b.id, "Visit cancelled")).toEqual({ ok: true });
     expect(await sql("select 1 from room_holds where booking_id = $1", [b.id])).toHaveLength(0);
   });
-  it("allows a long official employee booking while refusing a long personal booking", async () => {
+  /**
+   * **Superseded on 10 Nov 2026.** The meeting of 9 Nov exempted official
+   * bookings from the stay cap, and this asserted that through the real
+   * action. The owner then asked for "14 days max for everyone", so the
+   * exemption - and the older one for the `official`, `gh_manager` and
+   * `developer` roles - is gone. A stay that must run longer is extended by
+   * the desk after approval, which is a different action and still uncapped.
+   */
+  it("refuses a 30-night stay whatever the booking type", async () => {
     const dates = { checkIn: `${day(5)}T12:00`, checkOut: `${day(35)}T10:00` };
-    expect((await submitRoom(employee, { ...dates, bookingType: "personal" })).ok).toBe(false);
-    expect((await submitRoom(employee, { ...dates, bookingType: "official" })).ok).toBe(true);
+    for (const bookingType of ["personal", "official"] as const) {
+      const result = await submitRoom(employee, { ...dates, bookingType });
+      expect(result.ok).toBe(false);
+      expect(result.ok ? "" : result.error).toMatch(/14 nights/);
+    }
+    // And the same account books a stay inside the cap without complaint.
+    const within = { checkIn: `${day(5)}T12:00`, checkOut: `${day(12)}T10:00` };
+    expect((await submitRoom(employee, { ...within, bookingType: "official" })).ok).toBe(true);
   });
   it("enforces research-scholar spouse eligibility on the server", async () => {
     for (const email of ["btech.saveri@smail.iitpkd.ac.in", "dayscholar@smail.iitpkd.ac.in"]) {
