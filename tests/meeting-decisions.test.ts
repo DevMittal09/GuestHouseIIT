@@ -39,11 +39,20 @@ describe("meeting rules", () => {
   it("caps the published count and never reports negative availability", () => {
     expect([21, 14, 13, 0, -1].map((n) => visibleFreeRooms(n, 14))).toEqual([14, 14, 13, 0, 0]);
   });
-  it("allows official employee stays beyond fourteen days", () => {
+  /**
+   * **Superseded on 10 Nov 2026.** The meeting of 9 Nov said official
+   * bookings had no maximum duration; the owner then asked for "14 days max
+   * for everyone", limited in the check-out picker. A stay that genuinely has
+   * to run longer is extended by the desk after approval
+   * (`extendStayAction`), which has never consulted this rule.
+   */
+  it("caps every kind of booking at the same number of nights", () => {
     const start = new Date("2026-11-10T12:00:00+05:30"), end = new Date("2026-12-10T12:00:00+05:30");
-    expect(stayLengthError(start, end, "employee", null, 14, "personal")).toMatch(/30 nights/);
-    expect(stayLengthError(start, end, "employee", null, 14, "official")).toBeNull();
-    expect(latestCheckOutDate("2026-11-10", "employee", null, 14, "official")).toBeNull();
+    expect(stayLengthError(start, end, 14)).toMatch(/30 nights/);
+    // And the picker offers the cap to everyone, rather than no limit at all.
+    expect(latestCheckOutDate("2026-11-10", 14)).toBe("2026-11-24");
+    // 0 is the one way off: the office turning the cap off in Settings.
+    expect(latestCheckOutDate("2026-11-10", 0)).toBeNull();
   });
   it("accepts exactly 24 hours' cancellation notice and refuses one millisecond less", () => {
     const arrival = new Date("2026-11-11T12:00:00+05:30");

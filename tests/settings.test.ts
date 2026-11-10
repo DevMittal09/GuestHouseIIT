@@ -264,10 +264,13 @@ describe("rule functions follow the settings", () => {
   it("maximum stay, and 0 meaning no limit", () => {
     const inAt = instituteDate("2030-01-01T12:00");
     const outAt = instituteDate("2030-01-20T10:00");
-    expect(stayLengthError(inAt, outAt, "employee")).toMatch(/maximum of 14 nights/);
-    expect(stayLengthError(inAt, outAt, "employee", null, 30)).toBeNull();
-    expect(stayLengthError(inAt, outAt, "employee", null, 0)).toBeNull();
-    expect(stayLengthError(inAt, outAt, "official", null, 3)).toBeNull();
+    expect(stayLengthError(inAt, outAt)).toMatch(/maximum of 14 nights/);
+    expect(stayLengthError(inAt, outAt, 30)).toBeNull();
+    // 0 is the office turning the cap off altogether.
+    expect(stayLengthError(inAt, outAt, 0)).toBeNull();
+    // **No role is exempt any more** (10 Nov 2026): `official` was, and a
+    // 19-night stay now fails for it like anybody else.
+    expect(stayLengthError(inAt, outAt, 3)).toMatch(/maximum of 3 nights/);
   });
 
   it("meal windows decide which meals a stay is offered", () => {

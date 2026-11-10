@@ -809,7 +809,7 @@ export function BookingForm({
   // and for the same reason as the one above.
   const maxNights = rules.booking.max_stay_nights;
   const latestCheckOut = checkInDate
-    ? latestCheckOutDate(checkInDate, config.role, user.email, maxNights, bookingType)
+    ? latestCheckOutDate(checkInDate, maxNights)
     : null;
 
   // The room count is its own text state rather than being read off

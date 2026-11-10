@@ -231,8 +231,15 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
         "Rooms are requested online by members of the institute, for themselves or for their guests",
         "Visitors from outside the institute are booked by the person hosting them",
         `Check-in must fall within ${plural(rules.booking.advance_booking_months, "month")} of the day the request is made`,
-        ...(maxNights > 0 ? [`A personal stay may cover up to ${plural(maxNights, "night")}`] : []),
-        "Official stays have no maximum duration",
+        // One figure for everyone since 10 Nov 2026. It said "a personal stay
+        // may cover up to 14 nights" beside "official stays have no maximum
+        // duration", which is the exemption the owner withdrew.
+        ...(maxNights > 0
+          ? [
+              `A request may cover up to ${plural(maxNights, "night")}`,
+              "A longer stay is arranged with the Guest House Office, which extends it once the booking is approved",
+            ]
+          : []),
         "MS and PhD research scholars may book for a spouse without an accompanying parent",
         "B.Tech and M.Tech students cannot book for a spouse",
         "Every request is reviewed before it is confirmed, and you are told by email at each step",

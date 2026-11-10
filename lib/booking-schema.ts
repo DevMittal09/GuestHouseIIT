@@ -952,10 +952,7 @@ export function bookingPayloadSchema(
       const message = stayLengthError(
         instituteDate(v.check_in),
         instituteDate(v.check_out),
-        config.role,
-        context.requesterEmail,
-        rules.booking.max_stay_nights,
-        v.booking_type
+        rules.booking.max_stay_nights
       );
       if (message) ctx.addIssue({ code: "custom", message, path: ["check_out"] });
     })
