@@ -86,7 +86,10 @@ describe("meeting rules", () => {
     // Alumni keep all three: the sheet says nothing about them, and hiding
     // the right one would leave a stay that cannot be invoiced.
     expect(tariffCategoriesFor("alumni")).toEqual(["I", "II", "III"]);
-    // The sheet narrows with them, and is the whole sheet when unasked.
+    // The sheet can narrow with them - but the booking page's panel asks for
+    // the **whole** sheet (10 Nov 2026: "the categories should be visible in
+    // the right hand side, but they cant choose"), and narrowing is for
+    // wherever a category is actually chosen.
     const narrowed = tariffCategorySheet(seedTariffs, seedGuestHouses, "2026-11-09", "personal");
     expect(narrowed.map((r) => r.category)).toEqual(["I"]);
     expect(tariffCategorySheet(seedTariffs, seedGuestHouses, "2026-11-09")).toHaveLength(3);

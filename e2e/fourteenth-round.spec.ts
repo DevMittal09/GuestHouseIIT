@@ -40,26 +40,25 @@ test("the tariff sidebar is informational and includes catering times", async ({
   await expect(panel.getByRole("heading", { name: "Room tariff" })).toBeVisible();
   await expect(panel.getByRole("radio")).toHaveCount(0);
   /**
-   * **Only the categories this booking type can be charged at** (10 Nov 2026,
-   * the owner: "category we dont need to show all categories for personal
-   * bookings and all"). A faculty form opens on **Official**, which the
-   * office's sheet prices as Category II ("official duty") or III ("academic
-   * visitors") - so Category I, which is "parents of students on a personal
-   * visit", is not offered.
+   * **The whole published tariff, and none of it selectable** (10 Nov 2026,
+   * the owner: "the categories should be visible in the right hand side, but
+   * they cant choose the categories"). All three are here whatever the
+   * booking type is - the narrowing applies where a category is *chosen*,
+   * which is the manager's allocation dialog and nowhere on this form.
    */
-  for (const name of ["Category II", "Category III"]) {
+  for (const name of ["Category I", "Category II", "Category III"]) {
     await expect(panel.getByText(name, { exact: true })).toBeVisible();
   }
-  await expect(panel.getByText("Category I", { exact: true })).toHaveCount(0);
-  await expect(panel.getByText("₹2,000.00").first()).toBeVisible();
+  await expect(panel.getByText("₹1,500.00").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Catering timings" })).toBeVisible();
 
-  // And the panel follows the answer: Personal is Category I and nothing else.
+  // And it does not change under the booking type, which is what makes it a
+  // published tariff rather than a quote.
   await page.locator('[name="booking_type"][value="personal"]').check();
-  await expect(panel.getByText("Category I", { exact: true })).toBeVisible();
-  for (const name of ["Category II", "Category III"]) {
-    await expect(panel.getByText(name, { exact: true })).toHaveCount(0);
+  for (const name of ["Category I", "Category II", "Category III"]) {
+    await expect(panel.getByText(name, { exact: true })).toBeVisible();
   }
+  await expect(panel.getByRole("radio")).toHaveCount(0);
   const house = page.locator('select[name="guest_house_id"]');
   await house.selectOption({ label: "Hamsanandi" });
   await expect(house.locator("option:checked")).toHaveText("Hamsanandi");

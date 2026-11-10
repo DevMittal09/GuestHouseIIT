@@ -2,9 +2,9 @@
 
 ## Owner's corrections, 10 November 2026
 
-**A tariff category is only offered where it can be charged.**
+**A tariff category is only offered where it is *chosen*.**
 `tariffCategoriesFor(bookingType)` in `lib/tariff-category.ts`, read by the
-booking panel, the allocation radios and Manage:
+**allocation radios and Manage** - both the manager's:
 
 | Booking type | Categories | From the office's own words |
 | --- | --- | --- |
@@ -14,9 +14,18 @@ booking panel, the allocation radios and Manage:
 
 Alumni keep all three deliberately: hiding the one the desk turns out to need
 would leave a stay that cannot be invoiced, which costs more than one extra
-row on a panel. It is a question for the office
-([03-roadmap.md](03-roadmap.md)). Where **one** category applies the
-allocation dialog opens on it, because `allocateRooms` requires one.
+row. It is a question for the office ([03-roadmap.md](03-roadmap.md)). Where
+**one** category applies the allocation dialog opens on it, because
+`allocateRooms` requires one.
+
+**The booking page's panel is not narrowed** (the owner, same day: "the
+categories should be visible in the right hand side, but they cant choose the
+categories"). It shows the whole published sheet whatever the booking type is,
+and nothing in it is selectable. The two are different jobs: a published
+tariff tells a requester what the guest house charges, and one that changes as
+you tick a radio is not a published tariff. The requester chooses the **guest
+house and the booking type** on the form, as they always did; the category is
+the manager's at allocation.
 
 **The invoice number is set apart.** 14pt bold on the PDF - the office's
 template prints every fact in one regular weight and this is the single

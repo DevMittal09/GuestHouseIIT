@@ -4,7 +4,7 @@ import { formatINR, toPaise } from "@/lib/invoice";
 import { TariffTable } from "@/components/tariff-table";
 import { mealTimetable } from "@/lib/site-content";
 import type { TariffSheetRow } from "@/lib/tariff-category";
-import { TARIFF_CATEGORY_LABELS, tariffCategoriesFor } from "@/lib/tariff-category";
+import { TARIFF_CATEGORY_LABELS } from "@/lib/tariff-category";
 import type { TariffPreview } from "@/lib/tariffs";
 import type { BookingType, GuestHouse } from "@/lib/types";
 import type { Rules } from "@/lib/settings";
@@ -71,14 +71,22 @@ export function TariffPanel({
 }) {
   const guestHouseName = guestHouses.find((g) => g.id === guestHouseId)?.name;
   /**
-   * **Only the categories this kind of booking can be charged at** (10 Nov
-   * 2026, the owner: "category we dont need to show all categories for
-   * personal bookings and all"). Filtered here rather than on the server
-   * because the booking type is a live answer on the form - an employee
-   * switching from Official to Personal must see the panel follow.
+   * **The whole sheet, always** (10 Nov 2026, the owner: "the categories
+   * should be visible in the right hand side, but they cant choose the
+   * categories").
+   *
+   * It was briefly filtered by the booking type, from the same morning's
+   * "we dont need to show all categories for personal bookings" - which turns
+   * out to have been about the **manager's** list when they approve, not this
+   * panel. The two are different jobs: this is the office's **published
+   * tariff**, which a requester reads to know what the guest house charges,
+   * and a published tariff that changes as you tick a radio is not one.
+   * `tariffCategoriesFor` still narrows where a category is actually
+   * **chosen** - the allocation dialog and Manage, both the manager's.
+   *
+   * Nothing here is selectable; that is the other half of the same sentence.
    */
-  const applicable = tariffCategoriesFor(bookingType);
-  const rows = sheet.filter((row) => applicable.includes(row.category));
+  const rows = sheet;
   const published = rows.some((row) =>
     guestHouses.some((g) => row.rateByGuestHouse[g.id] !== null)
   );
