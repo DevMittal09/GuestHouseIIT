@@ -946,6 +946,20 @@ export function describeMealDates(doc: Pick<InvoiceDocument, "meal_dates" | "che
  *   no rooms, no infants, no primary guest - the days the kitchen cooked and
  *   the head count instead.
  */
+/**
+ * **The invoice number's own label** (10 Nov 2026, the owner: "invoice number
+ * should be more noticeable in the invoice").
+ *
+ * Exported so the PDF and the desk's preview can both pick that one row out
+ * of `invoiceFacts` and set it larger and bold, without either of them
+ * matching on a string of its own - which is how the two would drift the
+ * first time the wording changed. The office's template prints every fact in
+ * one regular weight; this is the single deliberate exception, because the
+ * number is what anybody holding the paper looks for first and what every
+ * query about it quotes.
+ */
+export const INVOICE_NUMBER_LABEL = "Invoice No.: ";
+
 export function invoiceFacts(doc: InvoiceDocument): { left: [string, string][]; right: [string, string][] } {
   const left: [string, string][] = [
     ["Booked By (Name) : ", doc.booked_by],
@@ -966,7 +980,7 @@ export function invoiceFacts(doc: InvoiceDocument): { left: [string, string][]; 
     left.push(["Tariff category: ", TARIFF_CATEGORY_LABELS[doc.tariff_category]]);
   }
   const right: [string, string][] = [
-    ["Invoice No.: ", doc.invoice_number ?? "DRAFT - not yet issued"],
+    [INVOICE_NUMBER_LABEL, doc.invoice_number ?? "DRAFT - not yet issued"],
     ["Invoice Date: ", formatInvoiceDate(doc.invoice_date)],
   ];
   if (invoiceKind(doc) === "dining") {

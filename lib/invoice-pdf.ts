@@ -12,6 +12,7 @@ import {
   gstBreakdownLines,
   GST_INCLUDED_NOTE,
   INVOICE_TITLE,
+  INVOICE_NUMBER_LABEL,
   invoiceFacts,
   invoiceTable,
   PAYMENT_MODE_LABELS,
@@ -61,6 +62,8 @@ const PAD = 1.9;
 const BAND: [number, number, number] = [0xb7, 0xb7, 0xb7];
 const HEAD: [number, number, number] = [0xd9, 0xd9, 0xd9];
 const BODY_PT = 11;
+/** The invoice number's own size - the one fact set apart (10 Nov 2026). */
+const NUMBER_PT = 14;
 const NOTE_PT = 9;
 const PT = 25.4 / 72;
 /** Where the footer's box starts, less a gap: the table stops above it. */
@@ -143,37 +146,58 @@ function details(doc: jsPDF, invoice: InvoiceDocument, top: number): number {
 
   // Each fact is "Label: value" on one paragraph, wrapping inside its column,
   // with the template's 3 pt before and after.
-  const lineH = BODY_PT * PT * 1.15;
   const para = 60 * MM_PER_TWIP;
+  /**
+   * **The invoice number is set larger and bold** (10 Nov 2026, the owner:
+   * "invoice number should be more noticeable in the invoice"). The office's
+   * template prints every fact in one regular weight, and this is the single
+   * deliberate exception: the number is what anybody holding the paper looks
+   * for first, and what every query about the bill quotes.
+   *
+   * Picked out by `INVOICE_NUMBER_LABEL` rather than by position, so adding a
+   * fact above it cannot silently promote the wrong row, and measured at its
+   * own size so the wrapping and the row height are right.
+   */
+  const isNumber = (label: string) => label === INVOICE_NUMBER_LABEL;
+  const sizeOf = (label: string) => (isNumber(label) ? NUMBER_PT : BODY_PT);
   const layout = (facts: [string, string][], w: number) =>
     facts.map(([label, value]) => {
-      font(doc, "normal");
+      font(doc, isNumber(label) ? "bold" : "normal", sizeOf(label));
       return doc.splitTextToSize(`${label}${value}`, w - PAD * 2) as string[];
     });
   const leftLines = layout(left, leftW);
   const rightLines = layout(right, rightW);
-  const heightOf = (paras: string[][]) =>
-    paras.reduce((h, lines) => h + lines.length * lineH + para * 2, 0) + 2;
-  const h = Math.max(2602.76 * MM_PER_TWIP, heightOf(leftLines), heightOf(rightLines));
+  const heightOf = (paras: string[][], facts: [string, string][]) =>
+    paras.reduce(
+      (h, lines, i) => h + lines.length * (sizeOf(facts[i][0]) * PT * 1.15) + para * 2,
+      0
+    ) + 2;
+  const h = Math.max(
+    2602.76 * MM_PER_TWIP,
+    heightOf(leftLines, left),
+    heightOf(rightLines, right)
+  );
   const y0 = top + bandH;
   doc.rect(TABLE_X, y0, leftW, h, "S");
   doc.rect(TABLE_X + leftW, y0, rightW, h, "S");
 
   // Label and value in the same regular weight, as the template has them.
-  const draw = (paras: string[][], x: number) => {
+  const draw = (paras: string[][], facts: [string, string][], x: number) => {
     let y = y0 + 1;
-    font(doc, "normal");
-    for (const lines of paras) {
+    for (const [i, lines] of paras.entries()) {
+      const label = facts[i][0];
+      const rowH = sizeOf(label) * PT * 1.15;
+      font(doc, isNumber(label) ? "bold" : "normal", sizeOf(label));
       y += para;
       for (const line of lines) {
-        doc.text(line, x + PAD, y + lineH * 0.8);
-        y += lineH;
+        doc.text(line, x + PAD, y + rowH * 0.8);
+        y += rowH;
       }
       y += para;
     }
   };
-  draw(leftLines, TABLE_X);
-  draw(rightLines, TABLE_X + leftW);
+  draw(leftLines, left, TABLE_X);
+  draw(rightLines, right, TABLE_X + leftW);
   return y0 + h;
 }
 

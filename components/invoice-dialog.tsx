@@ -263,9 +263,20 @@ export function InvoiceDialog({
           </DialogTitle>
           <DialogDescription>
             {issued
-              ? `${issued.invoice_number}, issued ${issued.issued_at ? formatDateTime(issued.issued_at) : ""}. An issued invoice cannot be changed - a correction is a cancellation and a new invoice.`
+              ? `Issued ${issued.issued_at ? formatDateTime(issued.issued_at) : ""}. An issued invoice cannot be changed - a correction is a cancellation and a new invoice.`
               : "Check the meal counts against the kitchen's tally and add any additional charges, then issue. The figures update as you type. Issuing numbers the invoice and freezes it."}
           </DialogDescription>
+          {/* **The number, set apart** (10 Nov 2026, the owner: "invoice
+              number should be more noticeable in the invoice"). It was the
+              first clause of the paragraph above, in the same muted type as
+              the warning that follows it - and it is what every query about
+              this bill quotes. The PDF sets the same fact larger and bold
+              (`INVOICE_NUMBER_LABEL`). */}
+          {issued?.invoice_number && (
+            <p className="figure-serif text-[1.375rem] leading-none font-semibold text-ink">
+              {issued.invoice_number}
+            </p>
+          )}
         </DialogHeader>
 
         {error && (
