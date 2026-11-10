@@ -804,10 +804,16 @@ export function BookingForm({
       max: limit ? toInstituteDateValue(limit) : undefined,
     };
   });
-  // The stay-length cap (Settings), applied to the check-out picker. The
-  // picker blocking it is a courtesy; the schema is the rule, on the client
-  // and again on the server. Its sentence came off the form on the same day
-  // and for the same reason as the one above.
+  /**
+   * The stay-length cap (Settings), applied to the check-out picker.
+   *
+   * **It is no longer a courtesy** (10 Nov 2026, the owner: "limit it in the
+   * checkout calender selection"). The picker is a calendar with nothing to
+   * type into, so the cap is what the control will let anybody choose; the
+   * schema still checks it on both sides, as it must for a crafted payload.
+   * Its sentence came off the form on 27 Oct 2026 and stays off - the rule's
+   * three homes are the Guidelines, the error, and now the control itself.
+   */
   const maxNights = rules.booking.max_stay_nights;
   const latestCheckOut = checkInDate
     ? latestCheckOutDate(checkInDate, maxNights)
@@ -1642,7 +1648,7 @@ export function BookingForm({
                 setValue("check_in_date", v, { shouldValidate: false, shouldDirty: true })
               }
               min={checkInLimits.min}
-              max={checkInLimits.max ?? undefined}
+              max={checkInLimits.max}
             />
             <TimeSelect
               label="Check-in"
