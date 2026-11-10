@@ -952,7 +952,9 @@ export function bookingPayloadSchema(
       const message = stayLengthError(
         instituteDate(v.check_in),
         instituteDate(v.check_out),
-        rules.booking.max_stay_nights
+        rules.booking.max_stay_nights,
+        // Only the Director's Office is exempt (10 Nov 2026).
+        context.requesterEmail
       );
       if (message) ctx.addIssue({ code: "custom", message, path: ["check_out"] });
     })

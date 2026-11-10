@@ -46,12 +46,17 @@ describe("meeting rules", () => {
    * to run longer is extended by the desk after approval
    * (`extendStayAction`), which has never consulted this rule.
    */
-  it("caps every kind of booking at the same number of nights", () => {
+  it("caps every kind of booking, and exempts the Director's Office alone", () => {
     const start = new Date("2026-11-10T12:00:00+05:30"), end = new Date("2026-12-10T12:00:00+05:30");
     expect(stayLengthError(start, end, 14)).toMatch(/30 nights/);
-    // And the picker offers the cap to everyone, rather than no limit at all.
+    // Not the role, not the booking type - the address, and only this one.
+    expect(stayLengthError(start, end, 14, "director.office@iitpkd.ac.in")).toBeNull();
+    expect(stayLengthError(start, end, 14, "  Director.Office@IITPKD.ac.in ")).toBeNull();
+    expect(stayLengthError(start, end, 14, "registrar@iitpkd.ac.in")).toMatch(/30 nights/);
+    // The picker says the same thing: a cap for everyone, none for that one.
     expect(latestCheckOutDate("2026-11-10", 14)).toBe("2026-11-24");
-    // 0 is the one way off: the office turning the cap off in Settings.
+    expect(latestCheckOutDate("2026-11-10", 14, "director.office@iitpkd.ac.in")).toBeNull();
+    // 0 is the other way off: the office turning the cap off in Settings.
     expect(latestCheckOutDate("2026-11-10", 0)).toBeNull();
   });
   it("accepts exactly 24 hours' cancellation notice and refuses one millisecond less", () => {

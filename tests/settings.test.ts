@@ -268,8 +268,9 @@ describe("rule functions follow the settings", () => {
     expect(stayLengthError(inAt, outAt, 30)).toBeNull();
     // 0 is the office turning the cap off altogether.
     expect(stayLengthError(inAt, outAt, 0)).toBeNull();
-    // **No role is exempt any more** (10 Nov 2026): `official` was, and a
-    // 19-night stay now fails for it like anybody else.
+    // **No role is exempt** (10 Nov 2026): `official` was, and a 19-night
+    // stay now fails for it like anybody else. The Director's Office is
+    // exempt by **address**, which `tests/meeting-decisions.test.ts` covers.
     expect(stayLengthError(inAt, outAt, 3)).toMatch(/maximum of 3 nights/);
   });
 

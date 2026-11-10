@@ -231,9 +231,11 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
         "Rooms are requested online by members of the institute, for themselves or for their guests",
         "Visitors from outside the institute are booked by the person hosting them",
         `Check-in must fall within ${plural(rules.booking.advance_booking_months, "month")} of the day the request is made`,
-        // One figure for everyone since 10 Nov 2026. It said "a personal stay
-        // may cover up to 14 nights" beside "official stays have no maximum
-        // duration", which is the exemption the owner withdrew.
+        // One figure for everyone since 10 Nov 2026 - it said "a personal
+        // stay may cover up to 14 nights" beside "official stays have no
+        // maximum duration". The Director's Office is the one exemption, and
+        // the page does not name it: that would be a role on the public site,
+        // which `tests/public-site.test.ts` refuses.
         ...(maxNights > 0
           ? [
               `A request may cover up to ${plural(maxNights, "night")}`,

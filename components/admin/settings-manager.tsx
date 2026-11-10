@@ -549,7 +549,7 @@ function BookingWindowSection({ current }: { current: Rules["booking"] }) {
   return (
     <SettingCard
       title="Booking window, stay length and turnaround"
-      description="How far ahead a check-in may be requested, and the longest stay - the advance window exempts Official / Dignitary bookings, the Guest House Manager and the developer; the stay cap exempts nobody (10 Nov 2026), and a longer stay is granted by the desk extending it after approval. Only new requests are checked. The turnaround buffer is the least time between one guest checking out and the next checking in to the same room, for housekeeping; changing it re-checks every allocated stay and is refused, naming them, if any two would clash."
+      description="How far ahead a check-in may be requested, and the longest stay - the advance window exempts Official / Dignitary bookings, the Guest House Manager and the developer; the stay cap exempts only the Director\u2019s Office, by address (10 Nov 2026), and any other longer stay is granted by the Guest House Manager extending it after approval. Only new requests are checked. The turnaround buffer is the least time between one guest checking out and the next checking in to the same room, for housekeeping; changing it re-checks every allocated stay and is refused, naming them, if any two would clash."
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <NumberField

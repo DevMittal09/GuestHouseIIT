@@ -21,26 +21,34 @@ import type { BookingType, GuestHouse, Role } from "./types";
  */
 export const MAX_BOOKING_NIGHTS = DEFAULT_RULES.booking.max_stay_nights;
 
-/*
- * **Nobody is exempt from the stay cap any more** (10 Nov 2026, the owner:
- * "booking period should be 14 days max for everyone so limit it in the
- * checkout calender selection").
+/**
+ * **The one account the stay cap does not apply to** (10 Nov 2026, the owner:
+ * "the 14 night limit is for everyone except the Directors Office").
  *
- * `BOOKING_DURATION_EXEMPT_ROLES` (`official`, `gh_manager`, `developer`),
- * `DIRECTOR_OFFICE_EMAILS` and `isDurationExempt` are **deleted**, and so is
- * the `official` **booking type** exemption added on 9 Nov 2026 from the
- * meeting's own list ("official bookings and GHM-created bookings: no maximum
- * duration restriction"). Both are superseded: a cap that most of the desk's
- * own accounts could ignore is not a cap, and the office asked for one figure
- * that holds for everyone and is visible in the date picker.
+ * The Director's Office books visits the institute has already committed to,
+ * on the institute's own notice, and is the one place a dignitary's three
+ * weeks is settled before the portal hears about it.
  *
- * **The escape hatch is unchanged, and it is a better one.** A stay that has
- * to run longer than the cap is extended by the desk *after* it is approved -
- * `extendStayAction`, from Manage, which has never consulted this rule and
- * still does not. So the institute can still host a three-week visit; what it
- * can no longer do is book one on a form nobody reviewed for length. That is
- * the difference between an exemption and a decision.
+ * **It is an address, not a role.** `BOOKING_DURATION_EXEMPT_ROLES`
+ * (`official`, `gh_manager`, `developer`) and `isDurationExempt` are
+ * **deleted** and are not coming back: an exemption by role let every
+ * whitelisted office, the desk's own account and the developer book any
+ * length, which is most of the accounts that matter and is not "everyone
+ * except the Director's Office". The `official` **booking type** exemption
+ * the meeting asked for on 9 Nov is gone for the same reason.
+ *
+ * **Everybody else's longer stay is granted, not assumed.** The Guest House
+ * Manager raises it from their own console - `extendStayAction`, from Manage,
+ * which has never consulted this rule and still does not. So the institute
+ * can host a three-week visit for anyone; what it cannot do is book one on a
+ * form nobody reviewed for length. That is the difference between an
+ * exemption and a decision, and it is why the list below has one entry.
  */
+export const DIRECTOR_OFFICE_EMAILS = ["director.office@iitpkd.ac.in"];
+
+export function isDurationExempt(email?: string | null): boolean {
+  return Boolean(email && DIRECTOR_OFFICE_EMAILS.includes(email.trim().toLowerCase()));
+}
 
 /**
  * Nights between two stay instants, counted the way a guest house counts them:
@@ -70,16 +78,18 @@ function dayNumber(value: string): number | null {
  * booking schema (client *and* server) and by the form's date picker, so the
  * rule and the message it shows cannot drift apart.
  *
- * It takes no role, address or booking type: since 10 Nov 2026 **the cap
- * applies to everyone**, and carrying parameters nothing reads would be an
- * exemption waiting to be reintroduced.
+ * It takes **no role and no booking type**, deliberately: the only exemption
+ * is the Director's Office, by address, and a role parameter is an exemption
+ * waiting to be reintroduced.
  */
 export function stayLengthError(
   checkIn: Date,
   checkOut: Date,
-  maxNights: number = MAX_BOOKING_NIGHTS
+  maxNights: number = MAX_BOOKING_NIGHTS,
+  /** The requester's address - only the Director's Office is exempt. */
+  email?: string | null
 ): string | null {
-  if (maxNights <= 0) return null;
+  if (maxNights <= 0 || isDurationExempt(email)) return null;
   const nights = stayNights(checkIn, checkOut);
   if (nights <= maxNights) return null;
   return `Bookings are limited to a maximum of ${maxNights} nights - this stay is ${nights} nights. ${CONTACT_FOR_LONGER_STAYS}`;
@@ -100,18 +110,19 @@ export const CONTACT_FOR_LONGER_STAYS =
 /**
  * The latest check-out the date picker may offer for a stay starting on
  * `checkInDate` ("yyyy-MM-dd"), or null only where the office has turned the
- * cap off (`max_stay_nights: 0`).
+ * cap off (`max_stay_nights: 0`), or for the Director's Office.
  *
  * **It is no longer a convenience** (10 Nov 2026): the owner asked for the
  * limit to be *in* the picker, so this is what stops the day being offered at
- * all, and `stayLengthError` is the rule behind it. Nobody is exempt - see
- * the note above `stayNights`.
+ * all, and `stayLengthError` is the rule behind it.
  */
 export function latestCheckOutDate(
   checkInDate: string,
-  maxNights: number = MAX_BOOKING_NIGHTS
+  maxNights: number = MAX_BOOKING_NIGHTS,
+  /** The requester's address - only the Director's Office is exempt. */
+  email?: string | null
 ): string | null {
-  if (maxNights <= 0) return null;
+  if (maxNights <= 0 || isDurationExempt(email)) return null;
   if (!parseDateValue(checkInDate)) return null;
   return addDaysToDateValue(checkInDate, maxNights);
 }
