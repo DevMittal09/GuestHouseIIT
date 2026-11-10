@@ -2,7 +2,7 @@
 
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import {
   isMealBookable,
   mealDeadlineNote,
@@ -100,14 +100,17 @@ export function MealDatesPicker({
                 >
                   Date
                 </label>
-                <Input
+                {/* Calendar only (10 Nov 2026). The kitchen's notice period
+                    is `minDate`, so the days that can no longer be ordered
+                    are not selectable - and with nothing to type into, that
+                    is the whole rule rather than a hint. */}
+                <DateField
                   id={`meal-date-${index}`}
-                  type="date"
-                  className="w-44"
+                  className="w-56"
                   value={date}
                   min={minDate}
                   max={maxDate}
-                  onChange={(e) => replaceDate(index, e.target.value)}
+                  onChange={(v) => replaceDate(index, v)}
                 />
               </div>
               {dates.length > 1 && (

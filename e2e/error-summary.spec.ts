@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { ACCOUNTS, localDate, signIn } from "./helpers";
+import { ACCOUNTS, localDate, pickDate, signIn } from "./helpers";
 
 /**
  * The owner, 7 Nov 2026: *"I don't want any case where an error belongs to a
@@ -40,8 +40,8 @@ test("the summary is rebuilt on every attempt", async ({ page }) => {
   await page.getByRole("button", { name: "Submit booking request" }).click();
   await expect(summary).toContainText(/check-in date/i);
 
-  await page.locator('[name="check_in_date"]').fill(localDate(3));
-  await page.locator('[name="check_out_date"]').fill(localDate(4));
+  await pickDate(page, "check_in_date", localDate(3));
+  await pickDate(page, "check_out_date", localDate(4));
   await page.getByRole("button", { name: "Submit booking request" }).click();
   // The guest is still blank, so there is still a problem - but the dates
   // are no longer one of them, and the next layer of checks has run.

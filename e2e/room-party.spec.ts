@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { ACCOUNTS, fillGuest, localDate, signIn, submittedReference } from "./helpers";
+import { ACCOUNTS, fillGuest, localDate, pickDate, signIn, submittedReference } from "./helpers";
 
 /**
  * What one room may hold, driven through the real form.
@@ -20,8 +20,8 @@ test("a student can book two guests and two infants in one room", async ({ page 
   // No room-type question any more: every room is double sharing.
   await expect(page.locator('[name="rooms.0.room_type"]')).toHaveCount(0);
 
-  await page.locator('[name="check_in_date"]').fill(localDate(3));
-  await page.locator('[name="check_out_date"]').fill(localDate(5));
+  await pickDate(page, "check_in_date", localDate(3));
+  await pickDate(page, "check_out_date", localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("Parents and the youngest two visiting");
 
   const room = page.locator("fieldset", { has: page.getByText("Room 1", { exact: true }) });

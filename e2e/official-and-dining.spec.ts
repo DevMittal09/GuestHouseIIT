@@ -10,6 +10,7 @@ import {
   settleDebitHead,
   signIn,
   submittedReference,
+  pickDate,
 } from "./helpers";
 
 /**
@@ -30,8 +31,8 @@ test("a faculty official stay waits for the HOD before the manager", async ({ pa
   await settleDebitHead(page);
 
   await chooseGuestHouse(page);
-  await page.locator('[name="check_in_date"]').fill(localDate(6));
-  await page.locator('[name="check_out_date"]').fill(localDate(8));
+  await pickDate(page, "check_in_date", localDate(6));
+  await pickDate(page, "check_out_date", localDate(8));
   await page.locator('[name="purpose_of_visit"]').fill("External examiner for a thesis defence");
 
   await page.locator('[name="rooms.0.guests.0.name"]').fill("Prof. A. Iyer");

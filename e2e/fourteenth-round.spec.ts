@@ -7,6 +7,7 @@ import {
   settleDebitHead,
   signIn,
   submittedReference,
+  pickDate,
 } from "./helpers";
 
 /**
@@ -79,8 +80,8 @@ test("the guests come before the meals, and the meals are a Yes or No", async ({
   await expect(page.getByText(/talk with caretaker/)).toHaveCount(0);
 
   // Yes opens the section - the preferences, the grid and the caretaker line.
-  await page.locator('[name="check_in_date"]').fill(localDate(4));
-  await page.locator('[name="check_out_date"]').fill(localDate(6));
+  await pickDate(page, "check_in_date", localDate(4));
+  await pickDate(page, "check_out_date", localDate(6));
   await yes.check();
   await expect(page.getByRole("button", { name: "Select all" })).toBeVisible();
   await expect(
@@ -132,7 +133,7 @@ test("the nav has a door each for rooms and meals", async ({ page }) => {
   await expect(page).toHaveURL(/\/book\/meals$/);
   await expect(page.getByRole("heading", { name: "Meals only" })).toBeVisible();
   await expect(page.locator("#meal_guest_count")).toBeVisible();
-  await expect(page.locator('[name="check_in_date"]')).toHaveCount(0);
+  await expect(page.locator("#check_in_date")).toHaveCount(0);
   await expect(tariffPanel(page).getByRole("heading", { name: "Meal rates" })).toBeVisible();
   // Exactly one door is current - the room door is `/book`, matched exactly.
   await expect(nav.getByRole("link", { name: "Meal Booking" })).toHaveAttribute(
@@ -146,7 +147,7 @@ test("the nav has a door each for rooms and meals", async ({ page }) => {
 
   await nav.getByRole("link", { name: "Room Booking" }).click();
   await expect(page).toHaveURL(/\/book$/);
-  await expect(page.locator('[name="check_in_date"]')).toBeVisible();
+  await expect(page.locator("#check_in_date")).toBeVisible();
 
   // A student cannot book meals without a room, so there is no second door.
   await signIn(page, ACCOUNTS.student);
@@ -184,8 +185,8 @@ test("a student with no hostel goes straight to the Guest House Manager", async 
   await expect(page.getByText(/accommodated at Bageshri Guest House/)).toBeVisible();
   await expect(page.locator('[name="debit_head"]')).toHaveCount(0);
 
-  await page.locator('[name="check_in_date"]').fill(localDate(3));
-  await page.locator('[name="check_out_date"]').fill(localDate(5));
+  await pickDate(page, "check_in_date", localDate(3));
+  await pickDate(page, "check_out_date", localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("Parents visiting - no hostel, no warden");
   // No academic record behind this account, so nothing is locked: the name is
   // typed, as it was for every student before 7 Oct 2026.
@@ -223,8 +224,8 @@ test("a student with no hostel goes straight to the Guest House Manager", async 
   // A student who *does* have a hostel still goes to their warden.
   await signIn(page, ACCOUNTS.student);
   await page.goto("/book");
-  await page.locator('[name="check_in_date"]').fill(localDate(3));
-  await page.locator('[name="check_out_date"]').fill(localDate(5));
+  await pickDate(page, "check_in_date", localDate(3));
+  await pickDate(page, "check_out_date", localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("Parents visiting - Malhar, so the warden");
   await fillGuest(page, 0, 0, { name: "Latha Menon", age: "52", relationship: "Mother" });
   await page.getByRole("button", { name: "Submit booking request" }).click();

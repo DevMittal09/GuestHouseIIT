@@ -8,6 +8,7 @@ import {
   signIn,
   soonCheckIn,
   submittedReference,
+  pickDate,
 } from "./helpers";
 
 /**
@@ -44,9 +45,9 @@ async function facultyStayStartingNow(page: Page): Promise<string> {
   const bageshri = await house.locator("option", { hasText: "Bageshri" }).getAttribute("value");
   await house.selectOption(bageshri!);
   const start = soonCheckIn();
-  await page.locator('[name="check_in_date"]').fill(start.date);
+  await pickDate(page, "check_in_date", start.date);
   await setTime(page, "Check-in", start);
-  await page.locator('[name="check_out_date"]').fill(localDate(2));
+  await pickDate(page, "check_out_date", localDate(2));
   await page.locator('[name="purpose_of_visit"]').fill("Family visit");
   await fillGuest(page, 0, 0, { name: "Meera Sharma", age: "60", gender: "female", relationship: "Mother" });
   await page.getByRole("button", { name: "Submit booking request" }).click();
@@ -72,8 +73,8 @@ async function facultyStayStartingNow(page: Page): Promise<string> {
 test("a student's father is filled in on request, an infant gets an infant card, and the warden sees both checked", async ({ page }) => {
   await signIn(page, ACCOUNTS.student);
   await page.goto("/book");
-  await page.locator('[name="check_in_date"]').fill(localDate(3));
-  await page.locator('[name="check_out_date"]').fill(localDate(5));
+  await pickDate(page, "check_in_date", localDate(3));
+  await pickDate(page, "check_out_date", localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("Father and my niece visiting");
 
   /**

@@ -8,6 +8,7 @@ import {
   signIn,
   submittedReference,
   unlockConsole,
+  pickDate,
 } from "./helpers";
 
 /** The secret `playwright.config.ts` starts the server with. */
@@ -255,9 +256,9 @@ test("a missed request reaches the manager's console and can be reinstated", asy
   await signIn(page, ACCOUNTS.student);
   await page.goto("/book");
   await expect(page.getByRole("heading", { name: /New Booking/i })).toBeVisible();
-  await page.locator('[name="check_in_date"]').fill(localDate(0));
+  await pickDate(page, "check_in_date", localDate(0));
   await setTime(page, "Check-in", { hour12: "12", minute: "00", period: "AM" });
-  await page.locator('[name="check_out_date"]').fill(localDate(1));
+  await pickDate(page, "check_out_date", localDate(1));
   await page.locator('[name="purpose_of_visit"]').fill("Parents visiting - nobody decides this one");
   await fillGuest(page, 0, 0, { name: "Sreeja Menon", age: "50", gender: "female", relationship: "Mother" });
   await page.getByRole("button", { name: "Submit booking request" }).click();

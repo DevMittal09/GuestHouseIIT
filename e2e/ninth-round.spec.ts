@@ -7,6 +7,7 @@ import {
   REFERENCE,
   signIn,
   unlockConsole,
+  pickDate,
 } from "./helpers";
 
 /**
@@ -68,8 +69,8 @@ test("a faculty booking asks for the declaration, and will not go without it", a
   // Fill in everything else and submit without ticking it: the server
   // refuses, and the message is attached to the declaration.
   await chooseGuestHouse(page);
-  await page.locator('[name="check_in_date"]').fill(localDate(3));
-  await page.locator('[name="check_out_date"]').fill(localDate(5));
+  await pickDate(page, "check_in_date", localDate(3));
+  await pickDate(page, "check_out_date", localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("A collaborator's visit");
   await fillGuest(page, 0, 0, { name: "Declaration Guest", age: "44" });
   await page.getByRole("button", { name: "Submit booking request" }).click();
@@ -95,8 +96,8 @@ test("Special Budget asks which fund, and the approval can be attached", async (
   await expect(page.getByLabel(/Upload approval/)).toBeVisible();
 
   await chooseGuestHouse(page);
-  await page.locator('[name="check_in_date"]').fill(localDate(3));
-  await page.locator('[name="check_out_date"]').fill(localDate(5));
+  await pickDate(page, "check_in_date", localDate(3));
+  await pickDate(page, "check_out_date", localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("A fund-backed visit");
   await fillGuest(page, 0, 0, { name: "Special Guest", age: "40" });
   await page.locator('[name="fund_declaration"]').check();

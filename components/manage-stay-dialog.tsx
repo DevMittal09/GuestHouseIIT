@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -206,12 +207,11 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
                   to have a `max` of the current check-in, which is what made
                   a later arrival unrecordable. */}
               <Label htmlFor={`from-${booking.id}`}>Move check-in</Label>
-              <Input
+              <DateField
                 id={`from-${booking.id}`}
-                type="date"
                 value={fromDate}
                 max={splitLocal(booking.check_out)[0]}
-                onChange={(e) => setFrom([e.target.value, fromTime])}
+                onChange={(v) => setFrom([v, fromTime])}
               />
               <TimeSelect label="New check-in" value={fromTime} onChange={(t) => setFrom([fromDate, t])} />
               <p className="text-xs text-muted-foreground">
@@ -231,12 +231,11 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
             </div>
             <div className="space-y-2 rounded-md border bg-muted/20 p-2">
               <Label htmlFor={`until-${booking.id}`}>Later check-out</Label>
-              <Input
+              <DateField
                 id={`until-${booking.id}`}
-                type="date"
                 value={untilDate}
                 min={splitLocal(booking.check_out)[0]}
-                onChange={(e) => setUntil([e.target.value, untilTime])}
+                onChange={(v) => setUntil([v, untilTime])}
               />
               <TimeSelect label="New check-out" value={untilTime} onChange={(t) => setUntil([untilDate, t])} />
               <p className="text-xs text-muted-foreground">Now {formatDateTime(booking.check_out)}.</p>
@@ -281,13 +280,12 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
             </div>
             <div className="space-y-2 rounded-md border bg-muted/20 p-2">
               <Label htmlFor={`shorten-${booking.id}`}>Approved check-out</Label>
-              <Input
+              <DateField
                 id={`shorten-${booking.id}`}
-                type="date"
                 value={shortDate}
                 min={splitLocal(booking.check_in)[0]}
                 max={splitLocal(booking.check_out)[0]}
-                onChange={(e) => setShort([e.target.value, shortTime])}
+                onChange={(v) => setShort([v, shortTime])}
               />
               <TimeSelect
                 label="Approved check-out"

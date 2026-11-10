@@ -200,6 +200,14 @@ function CalendarDayButton({
       variant="ghost"
       size="icon"
       data-day={day.date.toLocaleDateString(locale?.code)}
+      /*
+       * A locale-independent handle on one day (10 Nov 2026). `data-day`
+       * above is `toLocaleDateString`, so it is "13/11/2026" on one machine
+       * and "11/13/2026" on another - fine as a label, useless as a
+       * selector. The Playwright journeys address a day by `yyyy-MM-dd`
+       * through this, and so can anything else that needs to.
+       */
+      data-date={`${day.date.getFullYear()}-${String(day.date.getMonth() + 1).padStart(2, "0")}-${String(day.date.getDate()).padStart(2, "0")}`}
       data-selected-single={
         modifiers.selected &&
         !modifiers.range_start &&

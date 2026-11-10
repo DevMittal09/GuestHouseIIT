@@ -10,6 +10,7 @@ import {
   settleDebitHead,
   signIn,
   submittedReference,
+  pickDate,
 } from "./helpers";
 
 /**
@@ -53,8 +54,8 @@ test("a club's Faculty Advisor books for it from their faculty login; the club's
   await settleDebitHead(page);
   await chooseGuestHouse(page);
   const house = await selectedGuestHouseName(page);
-  await page.locator('[name="check_in_date"]').fill(localDate(4));
-  await page.locator('[name="check_out_date"]').fill(localDate(5));
+  await pickDate(page, "check_in_date", localDate(4));
+  await pickDate(page, "check_out_date", localDate(5));
   await page.locator('[name="purpose_of_visit"]').fill("Pro-show artist for the fest");
   await fillGuest(page, 0, 0, { name: "Visiting Artist", age: "31", gender: "male" });
   await page.getByRole("button", { name: "Submit booking request" }).click();

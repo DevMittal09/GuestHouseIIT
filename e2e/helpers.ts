@@ -125,6 +125,33 @@ function institutePartsAt(at: Date): { date: string; hour: number; minute: numbe
 }
 
 /** `2026-09-25`, `days` from today, in the institute's own day. */
+/**
+ * **Pick a date from the calendar** (10 Nov 2026).
+ *
+ * Every date on the booking form, the meal picker and the desk's Manage
+ * dialog is a `DateField` now - a button that opens a calendar, with no text
+ * to type into (the owner: "calender-only input for dates no typing input").
+ * So `locator('[name="check_in_date"]').fill(...)` has nothing to fill: the
+ * field is controlled through `setValue` and carries no `name` at all.
+ *
+ * The day is addressed by `data-date="yyyy-MM-dd"`, a locale-independent
+ * handle added to `CalendarDayButton` for exactly this - `data-day` beside it
+ * is `toLocaleDateString` and reads differently per machine. The month is
+ * stepped forward until the day is rendered, because a date a few days out
+ * can still be in next month.
+ */
+export async function pickDate(page: Page, id: string, value: string): Promise<void> {
+  await page.locator(`#${id}`).click();
+  const day = page.locator(`[data-date="${value}"]:not([disabled])`);
+  for (let step = 0; step < 24 && (await day.count()) === 0; step++) {
+    await page.getByRole("button", { name: /next month/i }).click();
+  }
+  await day.first().click();
+  // The popover closes on select; waiting for it keeps the next click from
+  // landing on a calendar that is still fading out.
+  await expect(day).toHaveCount(0);
+}
+
 export function localDate(days: number): string {
   return institutePartsAt(new Date(Date.now() + days * 86_400_000)).date;
 }
@@ -312,12 +339,12 @@ export async function submitRoomBooking(
 
   if (options.startingToday) {
     const start = soonCheckIn();
-    await page.locator('[name="check_in_date"]').fill(start.date);
+    await pickDate(page, "check_in_date", start.date);
     await setTime(page, "Check-in", start);
-    await page.locator('[name="check_out_date"]').fill(localDate(options.to ?? 2));
+    await pickDate(page, "check_out_date", localDate(options.to ?? 2));
   } else {
-    await page.locator('[name="check_in_date"]').fill(localDate(options.from ?? 3));
-    await page.locator('[name="check_out_date"]').fill(localDate(options.to ?? 5));
+    await pickDate(page, "check_in_date", localDate(options.from ?? 3));
+    await pickDate(page, "check_out_date", localDate(options.to ?? 5));
   }
   await page.locator('[name="purpose_of_visit"]').fill(options.purpose ?? "End-to-end test stay");
 

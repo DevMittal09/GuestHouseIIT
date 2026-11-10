@@ -8,6 +8,7 @@ import {
   settleDebitHead,
   signIn,
   submittedReference,
+  pickDate,
 } from "./helpers";
 
 /**
@@ -43,8 +44,8 @@ test("the IAR Student Cell is never asked to choose a guest house", async ({ pag
     await uploads.nth(i).setInputFiles(ID_DOCUMENT);
   }
 
-  await page.locator('[name="check_in_date"]').fill(localDate(6));
-  await page.locator('[name="check_out_date"]').fill(localDate(8));
+  await pickDate(page, "check_in_date", localDate(6));
+  await pickDate(page, "check_out_date", localDate(8));
   await page.locator('[name="purpose_of_visit"]').fill("Alumni reunion weekend");
 
   await page.locator('[name="rooms.0.guests.0.name"]').fill("R. Krishnan");
@@ -72,8 +73,8 @@ test("a student cannot enter two mothers", async ({ page }) => {
   await page.goto("/book");
   await expect(page.getByRole("heading", { name: /New Booking/i })).toBeVisible();
 
-  await page.locator('[name="check_in_date"]').fill(localDate(4));
-  await page.locator('[name="check_out_date"]').fill(localDate(6));
+  await pickDate(page, "check_in_date", localDate(4));
+  await pickDate(page, "check_out_date", localDate(6));
   await page.locator('[name="purpose_of_visit"]').fill("Parents visiting for convocation");
 
   await page.getByRole("button", { name: /Add guest/i }).first().click();

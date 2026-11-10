@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { QuantityInput } from "@/components/ui/quantity-input";
+import { DateField } from "@/components/ui/date-field";
 import { TimeSelect } from "@/components/ui/time-select";
 import { Textarea } from "@/components/ui/textarea";
 import { COUNTRIES } from "@/lib/countries";
@@ -1628,12 +1629,20 @@ export function BookingForm({
 
           <div className="space-y-2">
             <Label htmlFor="check_in_date">Check-in date &amp; time *</Label>
-            <Input
+            {/* **Calendar only** (10 Nov 2026, the owner: "calender-only
+                input for dates no typing input"). Written with `setValue`
+                like the two `TimeSelect`s beside it - the control is
+                controlled, so it is not `register`ed, and `check_in_date` is
+                already watched above. The advance window is the calendar's
+                `max`, which with nothing to type into cannot be got round. */}
+            <DateField
               id="check_in_date"
-              type="date"
+              value={checkInDate ?? ""}
+              onChange={(v) =>
+                setValue("check_in_date", v, { shouldValidate: false, shouldDirty: true })
+              }
               min={checkInLimits.min}
-              max={checkInLimits.max}
-              {...register("check_in_date")}
+              max={checkInLimits.max ?? undefined}
             />
             <TimeSelect
               label="Check-in"
@@ -1644,12 +1653,19 @@ export function BookingForm({
           </div>
           <div className="space-y-2">
             <Label htmlFor="check_out_date">Check-out date &amp; time *</Label>
-            <Input
+            {/* The stay cap is this calendar's `max` (10 Nov 2026, the owner:
+                "14 days max for everyone so limit it in the checkout calender
+                selection"), and it now applies to every role and every kind
+                of booking - `latestCheckOutDate` is null only where the
+                office has turned the cap off. */}
+            <DateField
               id="check_out_date"
-              type="date"
+              value={checkOutDate ?? ""}
+              onChange={(v) =>
+                setValue("check_out_date", v, { shouldValidate: false, shouldDirty: true })
+              }
               min={checkInDate || checkInLimits.min}
               max={latestCheckOut ?? undefined}
-              {...register("check_out_date")}
             />
             <TimeSelect
               label="Check-out"
