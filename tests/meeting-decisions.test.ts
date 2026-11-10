@@ -6,7 +6,7 @@ import { inArrivalOrder } from "@/lib/workflow";
 import { DEFAULT_RULES } from "@/lib/settings";
 import { originalDatesPatch } from "@/lib/operations";
 import { seedRooms, seedTariffs, seedGuestHouses } from "@/lib/store/seed";
-import { tariffCategorySheet } from "@/lib/tariff-category";
+import { tariffCategoriesFor, tariffCategorySheet } from "@/lib/tariff-category";
 import { resolveTariff } from "@/lib/tariffs";
 import { profile, room } from "./helpers";
 
@@ -63,6 +63,19 @@ describe("meeting rules", () => {
   it("publishes all six category rates on the mock store", () => {
     const sheet = tariffCategorySheet(seedTariffs, seedGuestHouses, "2026-11-09");
     for (const house of seedGuestHouses) expect(sheet.map((r) => r.rateByGuestHouse[house.id])).toEqual(house.name === "Bageshri" ? [1000,1500,2000] : [1500,2000,2500]);
+  });
+  it("offers only the categories a kind of booking can be charged at", () => {
+    // The office's own descriptions: Category I is "parents of students on a
+    // personal visit", II is "official duty", III is "academic visitors".
+    expect(tariffCategoriesFor("personal")).toEqual(["I"]);
+    expect(tariffCategoriesFor("official")).toEqual(["II", "III"]);
+    // Alumni keep all three: the sheet says nothing about them, and hiding
+    // the right one would leave a stay that cannot be invoiced.
+    expect(tariffCategoriesFor("alumni")).toEqual(["I", "II", "III"]);
+    // The sheet narrows with them, and is the whole sheet when unasked.
+    const narrowed = tariffCategorySheet(seedTariffs, seedGuestHouses, "2026-11-09", "personal");
+    expect(narrowed.map((r) => r.category)).toEqual(["I"]);
+    expect(tariffCategorySheet(seedTariffs, seedGuestHouses, "2026-11-09")).toHaveLength(3);
   });
   it("never substitutes an uncategorised room rate for a missing selected category", () => {
     const house = seedGuestHouses[0];

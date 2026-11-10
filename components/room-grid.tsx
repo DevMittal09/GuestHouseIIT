@@ -28,9 +28,9 @@ import { cn } from "@/lib/utils";
 import { DEFAULT_RULES, type CapacityRules } from "@/lib/settings";
 import { roomAccessError } from "@/lib/rooms-access";
 import {
-  TARIFF_CATEGORIES,
   TARIFF_CATEGORY_GUESTS,
   TARIFF_CATEGORY_LABELS,
+  tariffCategoriesFor,
   type TariffCategoryName,
 } from "@/lib/tariff-category";
 import type { BookingWithDetails, Role, Room } from "@/lib/types";
@@ -108,8 +108,18 @@ export function RoomGrid({
    * whatever the booking already has - null on a new request - so re-opening
    * the dialog to move a room does not silently re-price the stay.
    */
+  /**
+   * **Only the categories this booking's type can be charged at** (10 Nov
+   * 2026, the owner). A personal stay has exactly one rate, so offering
+   * three radios asked a question with one possible answer and two that could
+   * never be charged; an official one is a real choice between II and III.
+   */
+  const categoryOptions = tariffCategoriesFor(booking.booking_type);
   const [category, setCategory] = useState<TariffCategoryName | "">(
-    booking.tariff_category ?? ""
+    booking.tariff_category ??
+      // One option is stated, not asked - and `allocateRooms` requires a
+      // category, so it has to be the value the form opens on.
+      (categoryOptions.length === 1 ? categoryOptions[0] : "")
   );
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -321,7 +331,7 @@ export function RoomGrid({
           <RequiredFieldsNote />
           <p className="text-sm">Category *</p>
           <div className="space-y-1.5">
-            {TARIFF_CATEGORIES.map((option) => (
+            {categoryOptions.map((option) => (
               <label
                 key={option}
                 className={cn(

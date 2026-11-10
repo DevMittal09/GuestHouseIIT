@@ -4,7 +4,7 @@ import { formatINR, toPaise } from "@/lib/invoice";
 import { TariffTable } from "@/components/tariff-table";
 import { mealTimetable } from "@/lib/site-content";
 import type { TariffSheetRow } from "@/lib/tariff-category";
-import { TARIFF_CATEGORY_LABELS } from "@/lib/tariff-category";
+import { TARIFF_CATEGORY_LABELS, tariffCategoriesFor } from "@/lib/tariff-category";
 import type { TariffPreview } from "@/lib/tariffs";
 import type { BookingType, GuestHouse } from "@/lib/types";
 import type { Rules } from "@/lib/settings";
@@ -70,7 +70,16 @@ export function TariffPanel({
   servesMeals: boolean;
 }) {
   const guestHouseName = guestHouses.find((g) => g.id === guestHouseId)?.name;
-  const published = sheet.some((row) =>
+  /**
+   * **Only the categories this kind of booking can be charged at** (10 Nov
+   * 2026, the owner: "category we dont need to show all categories for
+   * personal bookings and all"). Filtered here rather than on the server
+   * because the booking type is a live answer on the form - an employee
+   * switching from Official to Personal must see the panel follow.
+   */
+  const applicable = tariffCategoriesFor(bookingType);
+  const rows = sheet.filter((row) => applicable.includes(row.category));
+  const published = rows.some((row) =>
     guestHouses.some((g) => row.rateByGuestHouse[g.id] !== null)
   );
 
@@ -109,7 +118,7 @@ export function TariffPanel({
                     </tr>
                   </thead>
                   <tbody>
-                    {sheet.map((row) => (
+                    {rows.map((row) => (
                       <tr key={row.category} className="border-b border-border last:border-0">
                         <th scope="row" className="px-2 py-2 text-left align-top font-normal">
                           <span className="block font-medium text-ink">

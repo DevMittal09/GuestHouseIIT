@@ -45,7 +45,12 @@
 
 import type { Tariff } from "./tariffs";
 import { resolveTariff } from "./tariffs";
-import { TARIFF_CATEGORIES, type GuestHouse, type TariffCategoryName } from "./types";
+import {
+  TARIFF_CATEGORIES,
+  type BookingType,
+  type GuestHouse,
+  type TariffCategoryName,
+} from "./types";
 
 export { TARIFF_CATEGORIES };
 export type { TariffCategoryName };
@@ -76,6 +81,41 @@ export function describeTariffCategory(category: TariffCategoryName): string {
   return `${TARIFF_CATEGORY_LABELS[category]} - ${TARIFF_CATEGORY_GUESTS[category]}`;
 }
 
+/**
+ * **Which categories can apply to this kind of booking** (10 Nov 2026, the
+ * owner: "category we dont need to show all categories for personal bookings
+ * and all").
+ *
+ * Read straight off the office's own descriptions, which already say who each
+ * category is for:
+ *
+ * | Category | The office's words | So |
+ * | --- | --- | --- |
+ * | I | "parents of students **on a personal visit**" | personal |
+ * | II | "institute guests **on official duty**" | official |
+ * | III | "academic visitors" | official |
+ *
+ * So a personal stay has exactly one rate and the panel states it rather than
+ * listing three, two of which could never be charged; an official one is a
+ * real choice between II and III, which is the decision the manager is
+ * actually making.
+ *
+ * **An alumni booking keeps all three.** The office's sheet says nothing
+ * about alumni - they are neither an employee's relative, nor on official
+ * duty, nor an academic visitor - and withholding a category the desk turns
+ * out to need would leave a stay that cannot be invoiced at all. Narrowing it
+ * is a question for the office (`.memories/03-roadmap.md`), and until they
+ * answer, showing one more row costs nothing while hiding the right one costs
+ * an invoice.
+ */
+export function tariffCategoriesFor(
+  bookingType: BookingType
+): readonly TariffCategoryName[] {
+  if (bookingType === "personal") return ["I"];
+  if (bookingType === "official") return ["II", "III"];
+  return TARIFF_CATEGORIES;
+}
+
 // ------------------------------------------------------------ the rate sheet
 
 export type TariffSheetRow = {
@@ -98,9 +138,16 @@ export type TariffSheetRow = {
 export function tariffCategorySheet(
   tariffs: Tariff[],
   guestHouses: Pick<GuestHouse, "id" | "name">[],
-  date: string
+  date: string,
+  /**
+   * Narrow the sheet to the categories this kind of booking can be charged at
+   * (10 Nov 2026). Omitted gives the whole published sheet, which is what the
+   * Guidelines and a report want.
+   */
+  bookingType?: BookingType
 ): TariffSheetRow[] {
-  return TARIFF_CATEGORIES.map((category) => ({
+  const shown = bookingType ? tariffCategoriesFor(bookingType) : TARIFF_CATEGORIES;
+  return shown.map((category) => ({
     category,
     guests: TARIFF_CATEGORY_GUESTS[category],
     rateByGuestHouse: Object.fromEntries(

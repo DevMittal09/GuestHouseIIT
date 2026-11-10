@@ -38,9 +38,9 @@ import {
   shortenStayError,
 } from "@/lib/operations";
 import {
-  TARIFF_CATEGORIES,
   TARIFF_CATEGORY_GUESTS,
   TARIFF_CATEGORY_LABELS,
+  tariffCategoriesFor,
   type TariffCategoryName,
 } from "@/lib/tariff-category";
 import { instituteIso } from "@/lib/tz";
@@ -337,7 +337,7 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
               onChange={(e) => setCategory(e.target.value as TariffCategoryName | "")}
             >
               <option value="" disabled>Choose a category</option>
-              {TARIFF_CATEGORIES.map((option) => (
+              {tariffCategoriesFor(booking.booking_type).map((option) => (
                 <option key={option} value={option}>
                   {TARIFF_CATEGORY_LABELS[option]} - {TARIFF_CATEGORY_GUESTS[option]}
                 </option>
