@@ -579,6 +579,49 @@ connections to Postgres (12 idle, steady, by design), not the pooler's client
 count, so it reads as healthy while clients are being refused. The symptom is
 the error; the fix is the pool.
 
+### A control swapped under the journeys: `.fill()` on a date (10 Nov 2026)
+
+`<input type="date">` became `DateField` - a button that opens a calendar -
+and **nine specs** drove those fields with `.fill()`. The failure is clear
+once seen and opaque until then:
+
+```
+locator.fill: Error: Element is not an <input>, <textarea>, <select> or
+[contenteditable] and does not have a role allowing [aria-readonly]
+```
+
+and, where a spec read the date back, `locator.inputValue: Node is not an
+<input>`.
+
+**The three seams this needs**, all in `e2e/helpers.ts` except the first:
+
+1. **`data-date="yyyy-MM-dd"` on `CalendarDayButton`.** `data-day` beside it
+   is `toLocaleDateString`, which is "13/11/2026" on one machine and
+   "11/13/2026" on another: a label, not a selector.
+2. **`pickDate(page, field, value)`** - opens the control and clicks the day,
+   stepping months until it is rendered. `field` is an **id or a `Locator`**,
+   because Manage ids each field by booking id and a spec cannot know it.
+3. **`dateFieldValue(field)`** - reads the date back off the label, for the
+   one journey that compares two rows.
+
+> **Two traps that are not about the date at all**, both found the same way.
+> A date trigger is a **button**, so its `<Label>` becomes an accessible name
+> and can collide with a real button beside it: "Move check-in" named both the
+> date field and the action, which is a strict-mode violation for Playwright
+> and genuinely ambiguous to a screen reader. The label is now "New check-in
+> date". And changing *copy* can collide too: a dialog description beginning
+> "Issued …" made `getByText(/Issued/)` match the description **and** the
+> status badge.
+
+**The method that caught all of it.** The suite was run **before** the first
+commit to get a baseline (16 failed / 37 passed, all pre-existing), and again
+after: 20 / 33. Four regressions, all in the diff, each a different kind of
+mistake - two mechanical, one an accessible-name collision, one a spec that
+was **right to fail** because the rule under it had deliberately changed. A
+suite with known failures is still worth running: what matters is the
+**delta**, and without the baseline those four would have been indistinguishable
+from the sixteen.
+
 ### The journeys could not run at all, and nothing said so (9 Nov 2026)
 
 `npm run test:e2e` had been **structurally broken for some time**, in two

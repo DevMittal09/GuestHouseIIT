@@ -107,12 +107,23 @@ and submission are untouched - the control was swapped, not the data.
 was proved in a real journey (`e2e/club-booking.spec.ts`, which picks both
 dates) against a production build before the suite was run whole.
 
-**Playwright: 16 failed / 37 passed before this round and after it** - the
-same 16, all pre-existing and none on this round's code
-([03-roadmap.md](03-roadmap.md) §2t). The baseline was taken **before** the
-first commit precisely so the seven changes could be held to it; swapping the
-date control touched nine specs, and this is what says it touched them
-correctly.
+**Playwright: 16 / 37 before, 20 / 33 after the seven changes, 16 / 37 again
+after fixing them.** The baseline was taken **before** the first commit for
+exactly this reason, and it earned its keep: without it the four regressions
+would have been indistinguishable from the sixteen pre-existing failures
+([03-roadmap.md](03-roadmap.md) §2t).
+
+The four, because each was a different kind of mistake:
+
+| What broke | Why |
+| --- | --- |
+| `getByLabel("Move check-in").fill()`, `#meal-date-0.inputValue()` | the control is a button now - mechanical, and what `pickDate` / `dateFieldValue` are for |
+| `getByRole("button", { name: "Move check-in" })` ambiguous | a date **trigger is a button**, so its `<Label>` became an accessible name and collided with the action button beside it. Genuinely ambiguous to a screen reader, not only to Playwright; the label is now "New check-in date" |
+| `getByText(/Issued/)` matched twice | **my own copy**: the dialog description began "Issued …" and so matched the status badge too |
+| the tariff sidebar expected all three categories | the spec was **right to fail** - a faculty form opens on Official, which is II or III only. It now asserts the narrowing in both directions, so it tests the rule rather than noticing its edge |
+
+The lesson, in [22-running-and-testing.md](22-running-and-testing.md): a suite
+with known failures is still worth running - what matters is the **delta**.
 
 No migration, no schema change, nothing written to the shared database.
 
