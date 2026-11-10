@@ -134,7 +134,7 @@ test("reception moves a stay's check-in, earlier and later", async ({ page }) =>
   const before = await manage.getByText(/^Now /).first().innerText();
 
   await manage.getByLabel("Reason", { exact: true }).fill("The committee arrives a day early");
-  await manage.getByLabel("Move check-in").fill(localDate(5));
+  await pickDate(page, manage.getByLabel("New check-in date"), localDate(5));
   await manage.getByRole("button", { name: "Move check-in" }).click();
   await expect(page.getByText("Check-in moved")).toBeVisible({ timeout: 30_000 });
   await expect(manage).toBeHidden();
@@ -147,7 +147,7 @@ test("reception moves a stay's check-in, earlier and later", async ({ page }) =>
   // day later than it was booked for.
   const moved = await again.getByText(/^Now /).first().innerText();
   await again.getByLabel("Reason", { exact: true }).fill("Their flight was delayed by a day");
-  await again.getByLabel("Move check-in").fill(localDate(7));
+  await pickDate(page, again.getByLabel("New check-in date"), localDate(7));
   await again.getByRole("button", { name: "Move check-in" }).click();
   await expect(page.getByText("Check-in moved")).toBeVisible({ timeout: 30_000 });
   await rowFor(page, reference).getByRole("button", { name: /Manage/ }).click();

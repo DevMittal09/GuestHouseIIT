@@ -39,10 +39,27 @@ test("the tariff sidebar is informational and includes catering times", async ({
   const panel = tariffPanel(page);
   await expect(panel.getByRole("heading", { name: "Room tariff" })).toBeVisible();
   await expect(panel.getByRole("radio")).toHaveCount(0);
-  for (const name of ["Category I", "Category II", "Category III"]) await expect(panel.getByText(name, { exact: true })).toBeVisible();
-  await expect(panel.getByText("₹1,500.00").first()).toBeVisible();
+  /**
+   * **Only the categories this booking type can be charged at** (10 Nov 2026,
+   * the owner: "category we dont need to show all categories for personal
+   * bookings and all"). A faculty form opens on **Official**, which the
+   * office's sheet prices as Category II ("official duty") or III ("academic
+   * visitors") - so Category I, which is "parents of students on a personal
+   * visit", is not offered.
+   */
+  for (const name of ["Category II", "Category III"]) {
+    await expect(panel.getByText(name, { exact: true })).toBeVisible();
+  }
+  await expect(panel.getByText("Category I", { exact: true })).toHaveCount(0);
+  await expect(panel.getByText("₹2,000.00").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Catering timings" })).toBeVisible();
+
+  // And the panel follows the answer: Personal is Category I and nothing else.
   await page.locator('[name="booking_type"][value="personal"]').check();
+  await expect(panel.getByText("Category I", { exact: true })).toBeVisible();
+  for (const name of ["Category II", "Category III"]) {
+    await expect(panel.getByText(name, { exact: true })).toHaveCount(0);
+  }
   const house = page.locator('select[name="guest_house_id"]');
   await house.selectOption({ label: "Hamsanandi" });
   await expect(house.locator("option:checked")).toHaveText("Hamsanandi");

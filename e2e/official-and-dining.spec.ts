@@ -11,6 +11,8 @@ import {
   signIn,
   submittedReference,
   pickDate,
+  dateFieldValue,
+  formatPickedDate,
 } from "./helpers";
 
 /**
@@ -106,9 +108,17 @@ test("a meals-only booking reaches the kitchen without holding a room", async ({
   // run.
   const day = page.locator("#meal-date-0");
   await expect(day).toBeVisible();
-  const firstDay = await day.inputValue();
+  /**
+   * The date is a `DateField` button now, so there is no value to read - it
+   * prints the date the way the whole portal does, "Sun 15/11/2026". The
+   * second row is still "the day after the first", which is what this
+   * asserts; it just reads it off the label.
+   */
+  const firstDay = await dateFieldValue(day);
   await page.getByRole("button", { name: "Add another date" }).click();
-  await expect(page.locator("#meal-date-1")).toHaveValue(nextDay(firstDay));
+  await expect(page.locator("#meal-date-1")).toContainText(
+    formatPickedDate(nextDay(firstDay))
+  );
   // Tomorrow's lunch and dinner are open whatever time it is now, so there is
   // always at least one meal on the booking.
   const lunch = page.getByRole("checkbox", { name: /^Lunch on/ }).last();
@@ -187,7 +197,7 @@ test("the kitchen refuses a sitting that is already full", async ({ page }) => {
     await settleDebitHead(page);
     // One sitting, far enough out that every meal is open: lunch on `day`,
     // which is ticked by default and the only meal that is.
-    await page.locator("#meal-date-0").fill(day);
+    await pickDate(page, "meal-date-0", day);
     await page.locator("#meal_guest_count").fill(people);
     await page.locator("#meal_veg_count").fill(people);
     await page.locator("#meal_non_veg_count").fill("0");

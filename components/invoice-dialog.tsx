@@ -263,7 +263,7 @@ export function InvoiceDialog({
           </DialogTitle>
           <DialogDescription>
             {issued
-              ? `Issued ${issued.issued_at ? formatDateTime(issued.issued_at) : ""}. An issued invoice cannot be changed - a correction is a cancellation and a new invoice.`
+              ? `This invoice was issued ${issued.issued_at ? formatDateTime(issued.issued_at) : ""} and cannot be changed - a correction is a cancellation and a new invoice.`
               : "Check the meal counts against the kitchen's tally and add any additional charges, then issue. The figures update as you type. Issuing numbers the invoice and freezes it."}
           </DialogDescription>
           {/* **The number, set apart** (10 Nov 2026, the owner: "invoice

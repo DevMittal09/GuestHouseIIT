@@ -1,4 +1,4 @@
-import { expect, type Cookie, type Page } from "@playwright/test";
+import { expect, type Cookie, type Locator, type Page } from "@playwright/test";
 import path from "node:path";
 
 /**
@@ -140,8 +140,15 @@ function institutePartsAt(at: Date): { date: string; hour: number; minute: numbe
  * stepped forward until the day is rendered, because a date a few days out
  * can still be in next month.
  */
-export async function pickDate(page: Page, id: string, value: string): Promise<void> {
-  await page.locator(`#${id}`).click();
+export async function pickDate(
+  page: Page,
+  field: string | Locator,
+  value: string
+): Promise<void> {
+  // An id for a field the spec knows by name, a `Locator` for one it finds by
+  // its label - the desk's Manage dialog ids each field by booking id, which
+  // a spec has no way of knowing.
+  await (typeof field === "string" ? page.locator(`#${field}`) : field).click();
   const day = page.locator(`[data-date="${value}"]:not([disabled])`);
   for (let step = 0; step < 24 && (await day.count()) === 0; step++) {
     await page.getByRole("button", { name: /next month/i }).click();
@@ -150,6 +157,27 @@ export async function pickDate(page: Page, id: string, value: string): Promise<v
   // The popover closes on select; waiting for it keeps the next click from
   // landing on a calendar that is still fading out.
   await expect(day).toHaveCount(0);
+}
+
+/**
+ * What a `DateField` is showing, back as `"yyyy-MM-dd"`.
+ *
+ * The control prints the portal's own "Sun 15/11/2026" and holds no value, so
+ * a journey that needs the date it is on has to read the label and turn it
+ * back. Kept here rather than in a spec because two specs now want it and a
+ * second copy of this parsing would be a second thing to get wrong.
+ */
+export async function dateFieldValue(field: Locator): Promise<string> {
+  const text = (await field.innerText()).trim();
+  const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(text);
+  if (!m) throw new Error(`no DD/MM/YYYY date in "${text}"`);
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+/** `"yyyy-MM-dd"` as the `DateField` prints its day and month, for a match. */
+export function formatPickedDate(value: string): string {
+  const [y, m, d] = value.split("-");
+  return `${d}/${m}/${y}`;
 }
 
 export function localDate(days: number): string {

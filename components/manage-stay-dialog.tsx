@@ -206,7 +206,12 @@ export function ManageStayDialog({ booking, isManager }: { booking: BookingWithD
                   turned up rather than when it was booked. The date box used
                   to have a `max` of the current check-in, which is what made
                   a later arrival unrecordable. */}
-              <Label htmlFor={`from-${booking.id}`}>Move check-in</Label>
+              {/* **"New check-in date", not "Move check-in"** (10 Nov 2026).
+                  The date control is a button now, so a label matching the
+                  action button below it gave two buttons with one accessible
+                  name - ambiguous to a screen reader and a strict-mode
+                  violation for the journeys. */}
+              <Label htmlFor={`from-${booking.id}`}>New check-in date</Label>
               <DateField
                 id={`from-${booking.id}`}
                 value={fromDate}
