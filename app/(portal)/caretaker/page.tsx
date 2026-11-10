@@ -6,6 +6,11 @@ import { homeForRole, SIGN_IN_PATH } from "@/lib/routes";
 import { getStore } from "@/lib/store";
 import { instituteDayBounds, toInstituteDateValue } from "@/lib/tz";
 import { LinkTabs } from "@/components/link-tabs";
+import {
+  GUEST_HOUSE_CHIP,
+  GUEST_HOUSE_TEXT,
+  guestHouseAccent,
+} from "@/lib/guest-house-accent";
 import { checksOutOn, stayPhase } from "@/lib/workflow";
 import { awaitingPayment, awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
 import { PageHeader } from "@/components/page-header";
@@ -92,6 +97,7 @@ export default async function CaretakerPage({
     <div className="space-y-6">
       <PageHeader
         caption={`${current.name} · Front desk`}
+        captionClass={GUEST_HOUSE_TEXT[guestHouseAccent(current.id, guestHouses)]}
         title="Guest House Reception"
         actions={
           // The kitchen's head count for the day, and the dining bookings to
@@ -112,6 +118,9 @@ export default async function CaretakerPage({
             label: g.name,
             detail: `${g.total_rooms} rooms`,
             active: g.id === current.id,
+            // The guest house's own colour on the chip, so the switcher says
+            // which house by more than a word (10 Nov 2026).
+            activeClass: GUEST_HOUSE_CHIP[guestHouseAccent(g.id, guestHouses)],
           }))}
         />
       )}

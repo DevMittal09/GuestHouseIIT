@@ -54,7 +54,7 @@ export interface MailConfig {
 const DEFAULT_FROM_NAME = "IIT Palakkad Guest House";
 const DEFAULT_HOST = "smtp.gmail.com";
 const DEFAULT_PORT = 465;
-const DEFAULT_BASE_URL = "https://desktop-st0q16q.tail7a64ba.ts.net";
+const DEFAULT_BASE_URL = "http://localhost:3000";
 const DEFAULT_MESSAGE_ID_DOMAIN = "guesthouse.iitpkd.ac.in";
 
 function env(name: string): string | null {

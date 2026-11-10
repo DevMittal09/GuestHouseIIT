@@ -890,6 +890,10 @@
   --color-occupy-hover: var(--occupy-hover);
   --color-vacate: var(--vacate);
   --color-vacate-hover: var(--vacate-hover);
+  --color-gh-1: var(--gh-1);
+  --color-gh-2: var(--gh-2);
+  --color-gh-3: var(--gh-3);
+  --color-gh-4: var(--gh-4);
 }
 
 /*
@@ -947,6 +951,33 @@
   --occupy-hover: #005a30;
   --vacate: #3730a3;
   --vacate-hover: #28237a;
+
+  /*
+   * **One colour per guest house, for the desk's console only** (10 Nov 2026,
+   * the owner: "try different colours for each guest house for guest house
+   * manager console").
+   *
+   * These are new tokens rather than a reuse of the palette, and that is the
+   * point: **every accent this service already has carries a meaning.**
+   * Vermilion is the brand and Reject and Full, saffron marks an official
+   * request, green is check-in, indigo check-out, violet an accepted overlap.
+   * Painting Hamsanandi green would have said "occupied" on every screen it
+   * appeared on, which is the opposite of an identity colour.
+   *
+   * So: four hues deliberately clear of all six, each carrying white text
+   * above 7:1, assigned by the guest house's position in the store's own
+   * ordered list (`lib/guest-house-accent.ts`). Four because that is a real
+   * cycle - a fifth guest house reuses the first, which is honest and
+   * bounded, rather than generating a colour nobody chose.
+   *
+   * They are identity, never state: use them on the guest-house switcher and
+   * the console's own heading, and **never on a row, a room tile or a
+   * status**, where they would compete with the six above.
+   */
+  --gh-1: #0b5566;
+  --gh-2: #7b2a4d;
+  --gh-3: #14557a;
+  --gh-4: #5b5410;
 
   --background: #ffffff;
   --foreground: #1a1a1a;

@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 /**
  * The title block at the top of every portal page.
  *
@@ -16,12 +18,21 @@
 export function PageHeader({
   title,
   caption,
+  captionClass,
   children,
   actions,
 }: {
   title: React.ReactNode;
   /** A short label over the title - the desk, the queue, the section. */
   caption?: React.ReactNode;
+  /**
+   * Colour for the caption, in place of the default vermilion - the guest
+   * house's own, on the desk's console (10 Nov 2026,
+   * `lib/guest-house-accent.ts`). The caption is where it belongs: it is
+   * already the line that says *which* guest house, and colouring it adds no
+   * rule and no new element to a heading the owner asked to keep clean.
+   */
+  captionClass?: string;
   /** The description paragraph. */
   children?: React.ReactNode;
   actions?: React.ReactNode;
@@ -30,7 +41,12 @@ export function PageHeader({
     <div className="mb-9 flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
       <div className="min-w-0">
         {caption && (
-          <p className="mb-2.5 text-[11.5px] font-semibold tracking-[0.18em] text-vermilion-deep uppercase">
+          <p
+            className={cn(
+              "mb-2.5 text-[11.5px] font-semibold tracking-[0.18em] uppercase",
+              captionClass ?? "text-vermilion-deep"
+            )}
+          >
             {caption}
           </p>
         )}

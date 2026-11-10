@@ -11,6 +11,11 @@ import { checksOutOn, stayPhase } from "@/lib/workflow";
 import { awaitingPayment, awaitingSettlement, UNSETTLED_WINDOW_DAYS } from "@/lib/invoice";
 import { PageHeader } from "@/components/page-header";
 import { LinkTabs } from "@/components/link-tabs";
+import {
+  GUEST_HOUSE_CHIP,
+  GUEST_HOUSE_TEXT,
+  guestHouseAccent,
+} from "@/lib/guest-house-accent";
 import { EmptyState } from "@/components/section-heading";
 
 /**
@@ -155,6 +160,7 @@ export default async function ManagerPage({
     <div className="space-y-6">
       <PageHeader
         caption={`${current.name} · Guest house desk`}
+        captionClass={GUEST_HOUSE_TEXT[guestHouseAccent(current.id, guestHouses)]}
         title="Guest House Manager Console"
         actions={
           <div className="flex flex-wrap gap-2">
@@ -187,6 +193,9 @@ export default async function ManagerPage({
           label: g.name,
           detail: `${g.total_rooms} rooms`,
           active: g.id === current.id,
+          // The guest house's own colour on the chip, so the switcher says
+          // which house by more than a word (10 Nov 2026).
+          activeClass: GUEST_HOUSE_CHIP[guestHouseAccent(g.id, guestHouses)],
         }))}
       />
 

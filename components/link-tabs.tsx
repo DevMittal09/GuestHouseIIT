@@ -7,6 +7,14 @@ export type LinkTab = {
   /** A small figure beside the label, e.g. "13 rooms". */
   detail?: string;
   active: boolean;
+  /**
+   * Classes for this tab when it is the selected one, in place of the default
+   * filled ink - the guest house's own colour on the desk's console (10 Nov
+   * 2026, `lib/guest-house-accent.ts`). Still a **fill**, so the one language
+   * of "whatever is selected is filled, never underlined" is kept; only the
+   * hue says which house. Omitted everywhere else.
+   */
+  activeClass?: string;
 };
 
 /**
@@ -32,7 +40,7 @@ export function LinkTabs({ label, items, className }: { label: string; items: Li
               className={cn(
                 "flex items-baseline gap-2 rounded-md px-4 py-2 font-heading text-[1.0625rem] font-semibold whitespace-nowrap transition-colors duration-150 focus-visible:-outline-offset-2",
                 item.active
-                  ? "bg-ink text-white"
+                  ? (item.activeClass ?? "bg-ink text-white")
                   : "text-muted-foreground hover:bg-band hover:text-ink"
               )}
             >
