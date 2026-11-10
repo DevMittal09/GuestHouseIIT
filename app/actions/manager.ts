@@ -102,10 +102,11 @@ export async function updateBookingStay(
       }
     }
 
-    // The manager and the Director's Office are exempt from the 14-night cap
-    // (`BOOKING_DURATION_EXEMPT_ROLES`), which is the point of doing this from
-    // the admin side: a stay the institute has committed to can be extended
-    // past a limit the booking form would refuse.
+    // **This action has never consulted the 14-night cap, and that is now the
+    // whole escape from it** (10 Nov 2026). Only the Director's Office is
+    // exempt on the form; everybody else's longer stay is the Guest House
+    // Manager increasing it here, on a booking they can see, rather than a
+    // length nobody reviewed. `BOOKING_DURATION_EXEMPT_ROLES` is deleted.
     // Refused rather than ignored, so a category the manager chose cannot be
     // silently dropped on its way to the price.
     if (input.tariff_category === null || input.tariff_category === "") {
