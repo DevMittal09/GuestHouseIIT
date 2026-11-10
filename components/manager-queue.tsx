@@ -211,7 +211,7 @@ export function ManagerQueue({
                 <TableRow>
                   <TableHead>Reference</TableHead>
                   <TableHead>Requester</TableHead>
-                  <TableHead>Category</TableHead>
+                  <TableHead>Booking type</TableHead>
                   <TableHead>Check-in</TableHead>
                   <TableHead>Check-out</TableHead>
                   <TableHead>Rooms</TableHead>
@@ -258,7 +258,7 @@ export function ManagerQueue({
                 <TableRow>
                   <TableHead>Reference</TableHead>
                   <TableHead>Requester</TableHead>
-                  <TableHead>Category</TableHead>
+                  <TableHead>Booking type</TableHead>
                   <TableHead>Days and meals</TableHead>
                   <TableHead>People</TableHead>
                   <TableHead>Preferences</TableHead>
@@ -494,13 +494,25 @@ function ManagerRow({
         </span>
         <span className="block text-xs text-muted-foreground">{booking.requester.email}</span>
       </TableCell>
-      <TableCell className="text-meta whitespace-normal">
-        {ROLE_LABELS[booking.user_role]}
-        {/* Who is paying is a different question from who asked, and the desk
-            needs both - a staff member books officially one week and privately
-            the next. */}
+      {/* **The booking type leads this cell** (10 Nov 2026, the owner: "make
+          the Type of Booking to be more visible in the Review of GHM also").
+          It was the small muted line *under* the requester's role, and it is
+          the thing the desk acts on: it decides the route the request took,
+          which budget may pay and whether the guest settles at the counter or
+          the bill goes to a department.
+
+          Made prominent by **weight and order, not a badge** - the 11 Oct
+          2026 rule stands that a badge is for a state and not a
+          classification, and `BookingDetails` opened on six pills with the
+          one that meant something lost among them. The role and what is
+          being booked drop to the detail line, which is where the row had the
+          booking type. */}
+      <TableCell className="whitespace-normal">
+        <span className="block font-semibold text-ink">
+          {BOOKING_TYPE_LABELS[booking.booking_type]}
+        </span>
         <span className="mt-0.5 block text-xs text-muted-foreground">
-          {BOOKING_TYPE_LABELS[booking.booking_type]} · {SERVICE_TYPE_LABELS[booking.service_type]}
+          {ROLE_LABELS[booking.user_role]} · {SERVICE_TYPE_LABELS[booking.service_type]}
         </span>
       </TableCell>
       <TableCell>{formatDateTime(booking.check_in)}</TableCell>
@@ -530,6 +542,16 @@ function ManagerRow({
                 <DialogDescription>
                   {booking.on_behalf_of_name ?? booking.requester.full_name} · {booking.guest_house.name}
                 </DialogDescription>
+                {/* The booking type, where the manager decides (10 Nov 2026).
+                    It sets the tariff category they are about to choose below
+                    and how the stay is settled, and it was readable only in
+                    the record further down the dialog. */}
+                <p className="pt-1 text-sm">
+                  <span className="text-muted-foreground">Type of booking: </span>
+                  <span className="font-semibold text-ink">
+                    {BOOKING_TYPE_LABELS[booking.booking_type]}
+                  </span>
+                </p>
               </DialogHeader>
               <RoomGrid
                 booking={booking}

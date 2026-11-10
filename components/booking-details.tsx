@@ -93,15 +93,27 @@ export function BookingDetails({
           </Badge>
         )}
       </div>
-      <p className="-mt-3 text-meta text-muted-foreground">
-        {[
-          ROLE_LABELS[booking.user_role],
-          BOOKING_TYPE_LABELS[booking.booking_type],
-          SERVICE_TYPE_LABELS[booking.service_type],
-          dietCounts ? describeDietCounts(dietCounts) : null,
-        ]
-          .filter(Boolean)
-          .join(" · ")}
+      {/* **The booking type is set apart from the classifications beside it**
+          (10 Nov 2026, the owner). It was one of four facts joined by middots,
+          and it is the one a reviewer acts on - it decided the route this
+          request took and it decides how the stay is settled. Weight and
+          position, not a badge: the 11 Oct 2026 rule stands, and this record
+          is the very place that opened on six pills with the one that meant
+          something lost among them. */}
+      <p className="-mt-3 text-meta">
+        <span className="font-semibold text-ink">
+          {BOOKING_TYPE_LABELS[booking.booking_type]}
+        </span>
+        <span className="text-muted-foreground">
+          {" · "}
+          {[
+            ROLE_LABELS[booking.user_role],
+            SERVICE_TYPE_LABELS[booking.service_type],
+            dietCounts ? describeDietCounts(dietCounts) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
       </p>
 
       <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
