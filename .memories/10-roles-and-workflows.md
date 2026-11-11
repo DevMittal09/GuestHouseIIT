@@ -1145,6 +1145,17 @@ backoff, and a log of errors about a mailbox nobody expected to work.
   with the reason beside it, rendered muted rather than red. That row saying
   SENT is the one dishonest corner; a `SKIPPED` status is the honest fix and
   needs a migration ([03-roadmap.md](03-roadmap.md)).
+- **A Cc that survives is sent even when the To did not** (11 Nov 2026).
+  Skipping was decided on To alone, so a demo requester's fake address took
+  the real address they typed under **Copy to** down with it. The test is now
+  "nobody left in To *or* Cc" (`hasAllowedRecipient`), and a Cc-only message
+  goes out with no To header.
+- **A row sent to fewer people than it was queued for says so**:
+  `last_error` holds *"Not delivered to x (not in MAIL_ALLOWED_RECIPIENTS)"*
+  (`droppedRecipientsNote`), muted under the subject in `/admin/mail`. Before
+  this, a dropped Copy-to address sat under "cc" on a SENT row and read as
+  delivered - which is how the owner's report of 11 Nov 2026 ("I added a mail
+  there but it wasnt sent") looked like a bug in the form.
 - **A booking whose requester has no address on file still FAILS.** That is a
   real fault and must stay visible. The dispatcher tells the two apart by
   whether anything was dropped.

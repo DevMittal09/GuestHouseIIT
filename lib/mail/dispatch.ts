@@ -1,7 +1,7 @@
 import { getStore } from "@/lib/store";
 import { mailConfig } from "./config";
 import { getMailer } from "./index";
-import { applyAllowList } from "./deliverable";
+import { applyAllowList, droppedRecipientsNote, hasAllowedRecipient } from "./deliverable";
 import { applyRedirect } from "./redirect";
 import { freshMessageId } from "./thread";
 import type { EmailMessage, MailAttachmentRef, OutboundAttachment, OutboundMessage } from "./types";
@@ -165,9 +165,11 @@ export async function dispatchOutbox(
         toOutbound(row, await opensThread(row)),
         config.allowedRecipients
       );
-      if (addressed.message.to.length === 0 && addressed.dropped.length > 0) {
-        // Every recipient is an address the deployment says does not exist.
-        // Settled, not failed: there is nothing to retry and nothing wrong.
+      if (!hasAllowedRecipient(addressed.message) && addressed.dropped.length > 0) {
+        // Every recipient - To and Cc - is an address the deployment says
+        // does not exist. Settled, not failed: there is nothing to retry and
+        // nothing wrong. A Cc that survives is still sent (below), even when
+        // the To did not: that is the requester's own "Copy to".
         await store.settleEmail(row.id, {
           ok: true,
           providerMessageId: "skipped-no-allowed-recipient",
@@ -186,7 +188,7 @@ export async function dispatchOutbox(
             `MAIL_ALLOWED_RECIPIENTS (${addressed.dropped.join(", ")})`
         );
       }
-      if (message.to.length === 0) {
+      if (!hasAllowedRecipient(message)) {
         // Nobody to send to - a profile without an address, most likely.
         // Failing it outright is right: a retry would find the same nobody.
         await store.settleEmail(row.id, {
@@ -201,7 +203,13 @@ export async function dispatchOutbox(
         const attachments = await resolveAttachments(row.attachments);
         if (attachments.length > 0) message.attachments = attachments;
         const { messageId } = await mailer.send(message);
-        await store.settleEmail(row.id, { ok: true, providerMessageId: messageId });
+        // A partly delivered message says so on its row, or the outbox lists a
+        // dropped Copy-to address as though it had been sent to.
+        await store.settleEmail(row.id, {
+          ok: true,
+          providerMessageId: messageId,
+          note: droppedRecipientsNote(addressed.dropped),
+        });
         sent++;
       } catch (error) {
         const retryAt = retryAtFor(row.attempts);

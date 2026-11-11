@@ -1,5 +1,15 @@
 # Roadmap — what is open, in priority order
 
+## Opened by the 11 November 2026 round
+
+1. **Copy to is still subject to the allow list.** An address a requester types
+   under Copy to is dropped unless it is on `MAIL_ALLOWED_RECIPIENTS`; the row
+   now says so, but the requester is never told. Deliberately not exempted -
+   the list is the only thing stopping a tester's typo reaching a stranger -
+   and it disappears in production, where the variable is unset. If testers
+   keep tripping on it, the cheap answer is an `@gmail.com` entry on the test
+   deployment, not a code path.
+
 ## Opened by the 10 November 2026 round - the owner's seven corrections
 
 1. **Does an alumni stay have a tariff category?** `tariffCategoriesFor`

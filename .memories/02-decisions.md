@@ -7892,3 +7892,36 @@ be fooled this way.
 **Not decided here:** what reconciles a laptop's copy with the shared database
 once both have been written to - nothing does, and nothing warns.
 [03-roadmap.md](03-roadmap.md) §2t.
+
+---
+
+## 11 November 2026 - Copy to under the allow list
+
+**The report:** "The copy to email feature at the bottom of new booking isnt
+working. Like i added a mail there but it wasnt sent to that person."
+
+**What the outbox showed.** Booking `IITPKD-GH-2026-6NPTY` was queued
+correctly: both requester mails carried the typed address in `cc_emails` and
+settled SENT. The address was not on `MAIL_ALLOWED_RECIPIENTS`, so the
+dispatcher dropped it at send time - as designed on 9 Nov 2026 - and nothing
+on the row said so.
+
+**Decided: keep the drop, make it visible, and stop it taking allowed
+addresses with it.**
+
+- The allow list is **not** relaxed for Copy-to addresses. They are typed by
+  hand; a typo is exactly the address the list exists to stop on a deployment
+  full of demo data. In production the variable is unset and nothing is
+  dropped.
+- A sent row now carries a note naming the dropped addresses. The outbox's
+  job is to record intent; a SENT row that lists a cc it never wrote to
+  overstated what happened.
+- **"Nobody to send to" is To and Cc together.** The 9 Nov code tested To
+  only, so a fake requester address caused an allowed Copy-to address to be
+  skipped too. This was a defect, not policy. A Cc-only message is sent with
+  no To header rather than promoting the Cc into To, because a Copy-to
+  recipient should not be addressed as though the mail were theirs.
+
+Rejected: a `SKIPPED` status in the same change - still the honest end state
+for a row with nobody delivered, still a migration ([03-roadmap.md](03-roadmap.md) §2s).
+

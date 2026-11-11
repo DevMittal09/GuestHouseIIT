@@ -90,3 +90,26 @@ export function applyAllowList(
   if (dropped.length === 0) return { message, dropped };
   return { message: { ...message, to, cc }, dropped };
 }
+
+/**
+ * Whether the allow list left anybody to write to, in To **or** Cc.
+ *
+ * Cc counts (11 Nov 2026). Most demo accounts have addresses that do not
+ * exist, so a requester's To is often dropped while the real address they
+ * typed under "Copy to" survives. Reading only To skipped the whole message
+ * and the one person who could receive it got nothing - the "copy to mail is
+ * not working" report.
+ */
+export function hasAllowedRecipient(message: OutboundMessage): boolean {
+  return message.to.length > 0 || message.cc.length > 0;
+}
+
+/**
+ * The outbox note for a message that was sent to fewer people than it was
+ * queued for. A SENT row lists its queued To and Cc, so without this a
+ * dropped Copy-to address reads as delivered.
+ */
+export function droppedRecipientsNote(dropped: string[]): string | undefined {
+  if (dropped.length === 0) return undefined;
+  return `Not delivered to ${dropped.join(", ")} (not in MAIL_ALLOWED_RECIPIENTS)`;
+}

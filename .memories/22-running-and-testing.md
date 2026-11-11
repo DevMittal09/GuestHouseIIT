@@ -1732,3 +1732,21 @@ four columns on `profiles` (`ldap_uid`, `group_id`, `login_disabled_at`,
 `create view` is the only way, and the seeder **keeps whichever of those
 columns the database actually has** rather than dropping them - a seeding
 script must not quietly narrow a schema another branch depends on.
+
+### A "Copy to" address got no mail, and the outbox said SENT (11 Nov 2026)
+
+**Symptom.** An address typed under Copy to on New Booking never receives
+anything. `/admin/mail` shows the row SENT with that address under "cc".
+
+**Cause.** `MAIL_ALLOWED_RECIPIENTS` in `.env.local`: the address is not on
+it, so the dispatcher drops it at send time. Working as designed - but the
+row gave no sign of it until this date, and a second defect sat beside it:
+when the **To** was dropped too (a demo requester's fake address), the whole
+message was skipped, Cc included.
+
+**Fix.** Put the address on the list (or unset the variable where every
+address is real). Since 11 Nov 2026 the row names who was dropped, and a
+surviving Cc is sent on its own. To check from the database, read
+`email_outbox.cc_emails` and `last_error` for the booking - the outbox
+records who the mail was *for*, never who it reached.
+

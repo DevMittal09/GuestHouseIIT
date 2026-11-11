@@ -21,6 +21,7 @@ All dates are 2026. The detail is in the dated sections of this file and in
 
 | Date | What happened |
 | --- | --- |
+| **11 Nov** | Owner's reports: a Copy-to address never received mail (the allow list dropped it silently, and dropped allowed Cc with a fake To) - fixed and made visible on the outbox row. |
 | **9 Nov, meeting continuation** | Completed interrupted implementation: scholar spouse rule, room classes and Director-only rooms, GHM tariffs, date edits, cancellation notice, FCFS, caretaker billing restrictions and portal settings. Migration 36 and focused workflow tests. Office ambiguities remain documented. |
 | **19 Aug** | First commit: five requester categories and their approval chains, config-driven forms, the manager's cinema-style room grid, the developer console, two data stores behind one interface, a persona-picker mock auth. `AGENTS.md` written for AI agents. |
 | 21-22 Aug | Pushed to GitHub. The approval log and archive search at `/history`. |
@@ -1690,6 +1691,14 @@ list drops an address out of a CC list rather than failing the message.
 > those changes** - `advance_booking_months` 6 -> 1 and a changed roll number -
 > and belong to that round, not this one.
 
+
+## 11 November 2026 - the owner's reports, one at a time
+
+Sent while work was in progress; each committed on its own.
+
+| Item | Status |
+| --- | --- |
+| "The copy to email feature at the bottom of new booking isnt working" | Done - the address was dropped by `MAIL_ALLOWED_RECIPIENTS` (config); the row now names dropped addresses, and an allowed Cc is no longer skipped when the To is dropped (code) |
 
 ## 10 November 2026 - seven corrections from the owner
 

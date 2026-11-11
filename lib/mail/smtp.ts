@@ -47,7 +47,9 @@ export class SmtpMailer implements Mailer {
     const info = await this.transporter.sendMail({
       from: this.config.from,
       replyTo: this.config.replyTo,
-      to: message.to,
+      // To can be empty when the allow list dropped it and a Copy-to
+      // address survived; the envelope is built from To and Cc together.
+      to: message.to.length > 0 ? message.to : undefined,
       cc: message.cc.length > 0 ? message.cc : undefined,
       subject: message.subject,
       html: message.html,

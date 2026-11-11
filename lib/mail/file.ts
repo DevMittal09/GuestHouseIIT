@@ -34,7 +34,7 @@ export class FileMailer implements Mailer {
       `Date: ${new Date().toUTCString()}`,
       `From: ${headerValue(config.from)}`,
       `Reply-To: ${headerValue(config.replyTo)}`,
-      `To: ${headerValue(message.to.join(", "))}`,
+      ...(message.to.length > 0 ? [`To: ${headerValue(message.to.join(", "))}`] : []),
       ...(message.cc.length > 0 ? [`Cc: ${headerValue(message.cc.join(", "))}`] : []),
       `Subject: ${headerValue(message.subject)}`,
       `Message-ID: ${headerValue(messageId)}`,

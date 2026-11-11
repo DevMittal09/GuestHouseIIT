@@ -148,3 +148,20 @@ describe("the allow list and the redirect together", () => {
     expect(out.headers?.["X-Original-Cc"]).toBeUndefined();
   });
 });
+
+describe("what is left after the allow list (11 Nov 2026)", () => {
+  it("counts a surviving Cc as somebody to send to", async () => {
+    const { hasAllowedRecipient } = await import("@/lib/mail/deliverable");
+    expect(hasAllowedRecipient(message([], ["copy@gmail.com"]))).toBe(true);
+    expect(hasAllowedRecipient(message(["a@gmail.com"], []))).toBe(true);
+    expect(hasAllowedRecipient(message([], []))).toBe(false);
+  });
+
+  it("notes the dropped addresses, and nothing when none were", async () => {
+    const { droppedRecipientsNote } = await import("@/lib/mail/deliverable");
+    expect(droppedRecipientsNote([])).toBeUndefined();
+    expect(droppedRecipientsNote(["x@gmail.com", "y@iitpkd.ac.in"])).toBe(
+      "Not delivered to x@gmail.com, y@iitpkd.ac.in (not in MAIL_ALLOWED_RECIPIENTS)"
+    );
+  });
+});
