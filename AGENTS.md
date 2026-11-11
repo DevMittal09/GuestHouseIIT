@@ -58,9 +58,13 @@ check-out, violet accepted overlap). Assigned by position in the store's
 ordered list, never by name.
 
 **The booking type leads wherever the desk reviews a request** - the queue
-cell, the allocate dialog's header and the record - by **weight and position,
-not a badge**; the 11 Oct 2026 rule stands. The queue's old "Category" column
-is "Booking type". **Issue & print and Mark paid are `variant="occupy"`**
+cell, the allocate dialog's header and the record. **On the manager's queue
+and the Review & Allocate dialog it is a solid tag** (`BookingTypeTag`,
+11 Nov 2026 - the owner asked a second time, "[Personal/Official]", and bold
+text had not been enough): Official on saffron, Personal on ink, Alumni
+outlined. **Solid, never a pale `tag-*`**, which is the status palette. The
+record (`BookingDetails`, seen by every reviewer) keeps it in bold text. The
+queue's old "Category" column is "Booking type". **Issue & print and Mark paid are `variant="occupy"`**
 (green), and **the invoice number is set apart** - 14pt bold on the PDF, its
 own serif line in the dialog, picked out by `INVOICE_NUMBER_LABEL`.
 
@@ -339,8 +343,10 @@ port 3000 before launching your own.
   a wide table, measure it against its container; the script is in
   `.memories/22-running-and-testing.md`.
 - **A badge is for a state, not a classification.** `StatusBadge` and a
-  foreign-national mark earn their colour; role, booking type, service type
-  and the diet split are a line of plain text. `BookingDetails` opened on six
+  foreign-national mark earn their colour; role, service type and the diet
+  split are a line of plain text. **One exception, asked for twice**: the
+  booking type on the manager's queue and allocate dialog is a solid
+  `BookingTypeTag` (11 Nov 2026) - solid so it cannot be read as a status. `BookingDetails` opened on six
   pills and the one that meant something was lost among them.
 
 - **No em dashes in the source.** Every `—` in `app/ components/ lib/ tests/

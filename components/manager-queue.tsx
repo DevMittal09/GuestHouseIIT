@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { approveCancellation, rejectCancellation, reviewBooking } from "@/app/actions/bookings";
 import { RejectDialog } from "@/components/review-queue";
 import { BookingDetails } from "@/components/booking-details";
+import { BookingTypeTag } from "@/components/booking-type-tag";
 import { CheckoutsToday } from "@/components/checkouts-today";
 import { DeskSummary } from "@/components/desk-summary";
 import type { CapacityRules } from "@/lib/settings";
@@ -40,7 +41,6 @@ import { formatDateTime } from "@/lib/format";
 import { inArrivalOrder, lapsedError } from "@/lib/workflow";
 import { describeDietCounts, describeMealDays, describeMeals, mealDietCounts } from "@/lib/meals";
 import {
-  BOOKING_TYPE_LABELS,
   ROLE_LABELS,
   SERVICE_TYPE_LABELS,
   type BookingWithDetails,
@@ -501,17 +501,17 @@ function ManagerRow({
           which budget may pay and whether the guest settles at the counter or
           the bill goes to a department.
 
-          Made prominent by **weight and order, not a badge** - the 11 Oct
-          2026 rule stands that a badge is for a state and not a
-          classification, and `BookingDetails` opened on six pills with the
-          one that meant something lost among them. The role and what is
-          being booked drop to the detail line, which is where the row had the
-          booking type. */}
+          On 10 Nov it was made prominent by weight and order only, under the
+          11 Oct 2026 rule that a badge is for a state. **Superseded 11 Nov
+          2026**: the owner asked again ("[Personal/Official]"), so it is a
+          solid tag here and in the dialog - see `BookingTypeTag`. The role
+          and what is being booked stay on the detail line. */}
       <TableCell className="whitespace-normal">
-        <span className="block font-semibold text-ink">
-          {BOOKING_TYPE_LABELS[booking.booking_type]}
-        </span>
-        <span className="mt-0.5 block text-xs text-muted-foreground">
+        {/* A solid tag since 11 Nov 2026 (`BookingTypeTag`): the owner asked
+            again, and bold text was not enough. Solid, so it cannot be read
+            as one of the pale status tags. */}
+        <BookingTypeTag type={booking.booking_type} />
+        <span className="mt-1 block text-xs text-muted-foreground">
           {ROLE_LABELS[booking.user_role]} · {SERVICE_TYPE_LABELS[booking.service_type]}
         </span>
       </TableCell>
@@ -546,11 +546,9 @@ function ManagerRow({
                     It sets the tariff category they are about to choose below
                     and how the stay is settled, and it was readable only in
                     the record further down the dialog. */}
-                <p className="pt-1 text-sm">
-                  <span className="text-muted-foreground">Type of booking: </span>
-                  <span className="font-semibold text-ink">
-                    {BOOKING_TYPE_LABELS[booking.booking_type]}
-                  </span>
+                <p className="flex items-center gap-2 pt-1 text-sm">
+                  <span className="text-muted-foreground">Type of booking</span>
+                  <BookingTypeTag type={booking.booking_type} size="lg" />
                 </p>
               </DialogHeader>
               <RoomGrid

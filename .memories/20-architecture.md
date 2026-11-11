@@ -870,6 +870,8 @@ for.
 - Tabs per guest house, built from the database (not hardcoded); the
   zero-guest-house case is handled explicitly.
 - Official bookings are highlighted and sorted to the top.
+- The booking type is a solid `components/booking-type-tag.tsx` on the queue
+  cell and the Review & Allocate header (11 Nov 2026).
 - Selecting a booking opens the allocation grid, which shows occupancy **for
   that booking's own dates only**, then **Confirm & Allocate** → `allocateRooms()`
   assigns rooms and flips the booking to `APPROVED` atomically, re-checking

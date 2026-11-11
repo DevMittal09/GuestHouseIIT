@@ -29,8 +29,15 @@ about. Don't reintroduce the native input on a form. `CalendarDayButton`
 carries `data-date="yyyy-MM-dd"` for addressing one day; `data-day` beside it
 is `toLocaleDateString` and is a label, not a selector.
 
-**The booking type leads wherever the desk reviews a request**, by weight and
-position - **not a badge**. The 11 Oct 2026 rule stands.
+**The booking type leads wherever the desk reviews a request.** On 10 Nov 2026
+by weight and position only; **since 11 Nov 2026, on the manager's queue and
+the Review & Allocate dialog, as a solid tag** (`components/booking-type-tag.tsx`):
+Official = saffron with ink (the desk's existing "official" colour), Personal =
+ink with white, Alumni = ink outline, short label with the full one in the
+tooltip and `aria-label`. **Solid is the point**: every status tag is a pale
+`tag-*` fill, so a solid block reads as a different kind of fact. The record
+(`BookingDetails`) keeps bold text - it is every reviewer's, and the place that
+once opened on six pills.
 
 ## Meeting decisions implemented, 9 November 2026
 

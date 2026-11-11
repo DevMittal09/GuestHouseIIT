@@ -7765,6 +7765,12 @@ and `BookingDetails` is the very place that once opened on six pills with the
 one that meant something lost among them. Promoting a classification to a
 coloured badge would have traded one unreadable screen for another.
 
+> **Superseded in part, 11 Nov 2026.** The owner asked again - "Make type of
+> booking more visible in review panel of guest house manager,
+> [Personal/Official]" - so weight was not enough. On the manager's queue and
+> the allocate dialog it is now a **solid** `BookingTypeTag`. See *11 November
+> 2026 - the booking type as a tag* below. `BookingDetails` is unchanged.
+
 **`<input type="date">` is gone from the booking flow**, and the reason is not
 only the typing. It renders in the **browser's** locale, which `lib/tz.ts` had
 already recorded as the one thing the portal could do nothing about: every
@@ -7943,4 +7949,27 @@ PostgreSQL's `42703` / `42P01` and names the column; `allocateRooms` returns
 it in place of the generic message. Not widened to every action in this
 change: one action was reported, and the hand-written versions in
 `invoices.ts` / `units.ts` already cover theirs ([03-roadmap.md](03-roadmap.md)).
+
+## 11 November 2026 - the booking type as a tag
+
+**The report:** "Make type of booking more visible in review panel of guest
+house manager, [Personal/Official]" - the same item as 10 Nov's second, asked
+again after it shipped as bold text.
+
+**Decided: a tag, on the desk's review only, and solid.** The 11 Oct rule's
+worry was real - a classification in the status palette competes with the
+status - so the tag avoids that palette entirely: every `StatusBadge` is a
+pale `tag-*` fill, and `BookingTypeTag` is a solid block. Official takes
+saffron because saffron already means "official" at the desk (the row's
+edge); Personal takes ink; Alumni is outlined so three types are three
+shapes of emphasis, not three hues to learn.
+
+**Where, and where not.** The queue cell and the Review & Allocate dialog's
+header (larger there) - the "review panel" asked about. Not `BookingDetails`:
+it is shared with every reviewer and sits in the same dialog under the header
+that now carries the tag, so a second one would be the repetition the 11 Oct
+rule was about.
+
+Rejected: a pale `tag-yellow` / `tag-blue` pair - those already mean
+"with an approver" and "with the manager".
 

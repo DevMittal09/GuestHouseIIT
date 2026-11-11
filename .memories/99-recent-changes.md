@@ -49,6 +49,23 @@ check:migrations` reported **migration 36** missing; `allocateRooms` writes
   `tests/schema-errors.test.ts`.
 - Laptops restored from the 9 Nov dump still need both steps.
 
+### 3. The booking type, more visible again
+
+"Make type of booking more visible in review panel of guest house manager,
+[Personal/Official]" - asked on 10 Nov too, answered then with bold text.
+
+- **`components/booking-type-tag.tsx`** (new): a **solid** tag - Official on
+  saffron, Personal on ink, Alumni outlined - so it cannot be mistaken for a
+  pale status tag.
+- On the manager's queue cell and, larger, in the **Review & Allocate
+  dialog's header** (`components/manager-queue.tsx`). `BookingDetails`
+  unchanged.
+- **Supersedes** 10 Nov's "weight and position, not a badge" for these two
+  places: `AGENTS.md`, [14-public-site-and-ui.md](14-public-site-and-ui.md),
+  [02-decisions.md](02-decisions.md).
+- Not checked in a browser (the owner prefers no headless sessions); it is on
+  the running dev server at `/manager`.
+
 ### Checks
 
 `npm run lint`, `npm run typecheck`, **700 tests in 43 files** clean. The
