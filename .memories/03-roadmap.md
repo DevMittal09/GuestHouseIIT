@@ -9,6 +9,11 @@
    and it disappears in production, where the variable is unset. If testers
    keep tripping on it, the cheap answer is an `@gmail.com` entry on the test
    deployment, not a code path.
+2. **Other actions still hide a schema gap behind a generic message.**
+   `schemaGapMessage` (`lib/db/schema-errors.ts`) is used by `allocateRooms`
+   only. Every server action with a "Something went wrong" catch would gain
+   from it; `app/actions/invoices.ts` and `units.ts` each have a hand-written
+   version for one column. One pass, when it next bites.
 
 ## Opened by the 10 November 2026 round - the owner's seven corrections
 
@@ -1083,7 +1088,7 @@ because the sign-in door is not something to change on the side:
    copy is remembering which `DATABASE_URL` is commented out in their
    `.env.local`. A banner naming the database the app is connected to, in
    non-production only, would cost very little.
-2. **Migration 36 now has to reach two places, and is applied in neither.**
+2. ~~**Migration 36 now has to reach two places, and is applied in neither.**~~ **Shared database done 11 Nov 2026**; every laptop restored from the dump still needs it.
    `scripts/migrations/00000000000036_room_classes_and_tariff_categories.sql`
    is in the tree; the shared database has neither `rooms.room_class` nor
    `tariffs.tariff_category`, so the dump does not either. Code expecting

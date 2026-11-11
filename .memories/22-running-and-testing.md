@@ -1750,3 +1750,18 @@ surviving Cc is sent on its own. To check from the database, read
 `email_outbox.cc_emails` and `last_error` for the booking - the outbox
 records who the mail was *for*, never who it reached.
 
+### "Something went wrong while allocating rooms" on every booking (11 Nov 2026)
+
+**Symptom.** Review & Allocate -> Allocate rooms fails for every booking on
+the shared database; the mock store is fine.
+
+**Cause.** Migration 36 was not applied: `allocateRooms` writes
+`bookings.tariff_category`, PostgreSQL refused with `42703` (undefined
+column), and the catch-all turned it into the generic message.
+
+**Fix.** `npm run check:migrations` names the gap. Apply the file over the
+**session** pooler (`psql "<5432 url>" -v ON_ERROR_STOP=1 -f
+scripts/migrations/00000000000036_...sql`), then `npm run seed:reference`
+with the same URL in `DATABASE_URL`. Since this date the allocation error
+names the missing column (`schemaGapMessage`), so the next one says what it is.
+

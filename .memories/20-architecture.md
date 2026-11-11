@@ -116,7 +116,7 @@ it:
 `DATABASE_URL` is set (`databaseConfigured()`), otherwise the mock.
 
 **The connection pool is one per process, cached on `globalThis`**
-(`lib/db/client.ts`, 9 Nov 2026) - not in a module-level `let`, because
+(`lib/db/client.ts`, 9 Nov 2026; beside it `lib/db/schema-errors.ts`, 11 Nov 2026, which turns a `42703` / `42P01` into a message naming the missing column and `npm run check:migrations`) - not in a module-level `let`, because
 Turbopack re-evaluates the module on hot reload and a `let` built a new `Pool`
 each time while the old one kept its idle connections. Against a shared
 database with a client quota that empties the quota in a morning. `max`

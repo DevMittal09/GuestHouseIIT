@@ -31,10 +31,28 @@ nothing on the row said so.
 to `MAIL_ALLOWED_RECIPIENTS` in `.env.local`** and restart the server. That is
 the owner's call and was not done for them.
 
+### 2. "Something went wrong while allocating rooms"
+
+**Cause: the shared database was behind the code.** `npm run
+check:migrations` reported **migration 36** missing; `allocateRooms` writes
+`bookings.tariff_category`, so every allocation failed with PostgreSQL
+`42703`, hidden by the action's catch-all.
+
+- **Applied to the shared database**, the owner having chosen this when
+  asked: the migration over the session pooler, then `npm run
+  seed:reference` (23 -> 26 active rooms: A1-A3 reserved, C1/C2
+  Director-only; 31 -> 37 rates). `check:migrations`: every migration
+  applied.
+- **`lib/db/schema-errors.ts`** (new): `schemaGapMessage` turns `42703` /
+  `42P01` into "The database is missing a column (bookings.tariff_category)
+  ... Run npm run check:migrations". Used by `allocateRooms`;
+  `tests/schema-errors.test.ts`.
+- Laptops restored from the 9 Nov dump still need both steps.
+
 ### Checks
 
-`npm run lint`, `npm run typecheck`, **696 tests in 42 files** clean. The
+`npm run lint`, `npm run typecheck`, **700 tests in 43 files** clean. The
 build was not run while a `next dev` held port 3000 (it would have killed it).
 
-No migration, no schema change, nothing written to the shared database (it
-was read, to find the outbox rows).
+**The shared database was changed once**, in item 2 (migration 36 and the
+reference seed), at the owner's word. Item 1 only read it.

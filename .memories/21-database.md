@@ -12,7 +12,9 @@ New installs have the same columns/constraints in `scripts/init-postgres.sql`. T
 
 Run `npm run seed:reference` after migration 36. Hamsanandi gets A1–A3 reserved and C1/C2 Director-only; the existing thirteen rooms retain their IDs. Bageshri keeps 201,202,203,204,206,302,303,305,306,307. The live configured database was read-only checked and matches those old lists. No B1–B10 renaming is inferred. A one-time `reference.room_classes.v36` setting prevents seed reruns from overwriting later console classifications. Six named-category rates are added without changing historical rates.
 
-The migration and seed were exercised twice on a disposable PostgreSQL database created from the pre-change schema. The shared database has **not** been migrated by this continuation.
+The migration and seed were exercised twice on a disposable PostgreSQL database created from the pre-change schema.
+
+**Applied to the shared database on 11 Nov 2026**, at the owner's word, over the session pooler (5432): the migration with `psql -v ON_ERROR_STOP=1`, then `npm run seed:reference` (23 -> 26 active rooms, 31 -> 37 rates; A1-A3 reserved, C1/C2 Director-only). `npm run check:migrations` then reported every migration applied. The trigger: until then **every room allocation failed** with "Something went wrong while allocating rooms", because `allocateRooms` writes `bookings.tariff_category`. Laptops restored from the 9 Nov dump still lack it - apply the same two steps there.
 
 ---
 

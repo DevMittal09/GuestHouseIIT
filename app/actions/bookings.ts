@@ -42,6 +42,7 @@ import {
 import { isWhitelistedOfficial } from "@/lib/settings";
 import { getOfficialEmails, getRules } from "@/lib/settings-server";
 import { getStore } from "@/lib/store";
+import { schemaGapMessage } from "@/lib/db/schema-errors";
 import { formatDateTime } from "@/lib/format";
 import { instituteIso } from "@/lib/tz";
 import type {
@@ -873,7 +874,9 @@ export async function allocateRooms(
   } catch (e) {
     if (e instanceof RoomClashError) return { ok: false, error: e.message };
     console.error("allocateRooms failed", e);
-    return { ok: false, error: "Something went wrong while allocating rooms" };
+    // A database behind the code is named, not hidden (11 Nov 2026: an
+    // unapplied migration 36 read as "Something went wrong" to the desk).
+    return { ok: false, error: schemaGapMessage(e) ?? "Something went wrong while allocating rooms" };
   }
 }
 

@@ -7925,3 +7925,22 @@ addresses with it.**
 Rejected: a `SKIPPED` status in the same change - still the honest end state
 for a row with nobody delivered, still a migration ([03-roadmap.md](03-roadmap.md) §2s).
 
+## 11 November 2026 - migration 36 applied to the shared database
+
+**The report:** "Something went wrong while allocating rooms" from Review &
+Allocate. `npm run check:migrations` showed migration 36 missing; allocation
+writes `bookings.tariff_category`.
+
+**Decided:** apply migration 36 **and** `npm run seed:reference` to the shared
+database - the owner chose both when asked, knowing the seed adds A1-A3
+(reserved) and marks C1/C2 Director-only for every collaborator. The
+migration is additive and one transaction; the seed only inserts, and its
+`reference.room_classes.v36` flag stops a rerun overwriting a later console
+change.
+
+**And make the next gap say what it is.** `schemaGapMessage` reads
+PostgreSQL's `42703` / `42P01` and names the column; `allocateRooms` returns
+it in place of the generic message. Not widened to every action in this
+change: one action was reported, and the hand-written versions in
+`invoices.ts` / `units.ts` already cover theirs ([03-roadmap.md](03-roadmap.md)).
+
