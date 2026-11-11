@@ -10,7 +10,7 @@ export default async function AdminUsersPage() {
   const user = await getCurrentUser();
   if (!user) redirect(SIGN_IN_PATH);
   const store = getStore();
-  const [profiles, units, imports] = await Promise.all([
+  const [profiles, units, imports, instituteHostels] = await Promise.all([
     store.listProfiles(),
     // Before migration 15 there is no units table; the form then simply
     // offers none, rather than the page failing.
@@ -20,6 +20,9 @@ export default async function AdminUsersPage() {
     // refuses loudly - an import will not run without somewhere to record
     // what it changed.
     store.listUserImports(10).catch(() => []),
+    // Before migration 35 there is no institute_hostels table; the dialog
+    // then shows hostel as read-only text rather than a select.
+    store.listInstituteHostels().catch(() => []),
   ]);
   // The manager may appoint another manager but not a developer, so the
   // dropdown matches what `createUserAction` will actually accept - an option
@@ -32,6 +35,7 @@ export default async function AdminUsersPage() {
       roles={roles}
       actorRole={user.role}
       imports={imports}
+      instituteHostels={instituteHostels}
     />
   );
 }

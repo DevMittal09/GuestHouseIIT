@@ -41,6 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ACCOUNT_STATUS_LABELS, ROLE_LABELS, type AccountStatus, type Profile, type Role } from "@/lib/types";
+import type { InstituteHostel } from "@/lib/institute/types";
 import { UNIT_CATEGORY_LABELS, type Unit } from "@/lib/units";
 import { USER_CSV_HEADER } from "@/lib/users-import";
 import { describeBatch, revertBlocker, type UserImportBatch } from "@/lib/users-import-undo";
@@ -60,6 +61,7 @@ const EMPTY: UserFormInput = {
   role: "student",
   unit_id: "",
   account_status: "active",
+  hostel: "",
 };
 
 const ALL_STATUSES = Object.keys(ACCOUNT_STATUS_LABELS) as AccountStatus[];
@@ -70,6 +72,7 @@ export function UsersManager({
   roles = ALL_ROLES,
   actorRole = "developer",
   imports = [],
+  instituteHostels = [],
 }: {
   profiles: Profile[];
   /** Departments, clubs and offices a person can be placed in. */
@@ -79,6 +82,8 @@ export function UsersManager({
   actorRole?: Role;
   /** The newest spreadsheet imports, each of them undoable (migration 32). */
   imports?: UserImportBatch[];
+  /** Institute hostels for the student hostel select (migration 35). */
+  instituteHostels?: InstituteHostel[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -131,6 +136,7 @@ export function UsersManager({
       role: p.role,
       unit_id: p.unit_id ?? "",
       account_status: p.account_status ?? "active",
+      hostel: p.hostel_name ?? "",
     });
     setNewPassword("");
     setDialogOpen(true);
@@ -605,7 +611,7 @@ export function UsersManager({
           <DialogHeader>
             <DialogTitle>{editing ? `Edit ${editing.full_name}` : "Add user"}</DialogTitle>
             <DialogDescription>
-              Hostel, department/club, roll number and staff category are resolved from institute records.
+              Department/club, roll number and staff category are resolved from institute records.
             </DialogDescription>
           </DialogHeader>
           <RequiredFieldsNote />
@@ -635,12 +641,30 @@ export function UsersManager({
                 ))}
               </NativeSelect>
             </div>
-            <div className="space-y-2">
-              <Label>Hostel</Label>
-              <p className="text-sm text-muted-foreground">
-                {editing ? (profiles.find((p) => p.id === editing.id)?.hostel_name ?? "None") : "Resolved from institute records"}
-              </p>
-            </div>
+            {values.role === "student" && instituteHostels.length > 0 ? (
+              <div className="space-y-2">
+                <Label htmlFor="user-hostel">Hostel</Label>
+                <NativeSelect
+                  id="user-hostel"
+                  value={values.hostel ?? ""}
+                  onChange={(e) => set("hostel")(e.target.value)}
+                >
+                  <option value="">No hostel</option>
+                  {instituteHostels.map((h) => (
+                    <option key={h.id} value={h.hostel_name}>
+                      {h.hostel_name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Hostel</Label>
+                <p className="text-sm text-muted-foreground">
+                  {editing ? (profiles.find((p) => p.id === editing.id)?.hostel_name ?? "None") : "Resolved from institute records"}
+                </p>
+              </div>
+            )}
             {/* The unit is what their approver is found through, so it is a
                 pick from the list rather than free text - a typo here used
                 to mean nobody could approve their bookings. */}

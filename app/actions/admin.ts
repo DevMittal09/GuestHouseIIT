@@ -403,9 +403,51 @@ const userSchema = z.object({
     .enum(Object.keys(ACCOUNT_STATUS_LABELS) as [AccountStatus, ...AccountStatus[]])
     .optional()
     .default("active"),
+  hostel: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.trim() ? v.trim() : null)),
 });
 
 export type UserFormInput = z.input<typeof userSchema>;
+
+async function syncStudentHostel(
+  email: string,
+  hostelName: string | null,
+): Promise<void> {
+  const store = getStore();
+  const existing = await store.findStudent(email);
+  const input = {
+    email,
+    batch_year: existing?.batch_year ?? null,
+    roll_number: existing?.roll_number ?? null,
+    full_name: existing?.full_name ?? null,
+    programme: existing?.programme ?? null,
+    faculty_advisor_guide_name: existing?.faculty_advisor_guide_name ?? null,
+    department: existing?.department ?? null,
+    phone: existing?.phone ?? null,
+    aadhar_number: existing?.aadhar_number ?? null,
+    father_name: existing?.father_name ?? null,
+    father_aadhar_number: existing?.father_aadhar_number ?? null,
+    father_phone_number: existing?.father_phone_number ?? null,
+    mother_name: existing?.mother_name ?? null,
+    mother_aadhar_number: existing?.mother_aadhar_number ?? null,
+    mother_phone_number: existing?.mother_phone_number ?? null,
+    spouse_name: existing?.spouse_name ?? null,
+    spouse_aadhar_number: existing?.spouse_aadhar_number ?? null,
+    spouse_phone_number: existing?.spouse_phone_number ?? null,
+    guardian_name: existing?.guardian_name ?? null,
+    guardian_aadhar_number: existing?.guardian_aadhar_number ?? null,
+    guardian_phone_number: existing?.guardian_phone_number ?? null,
+    hostel: hostelName,
+    imported_by: existing?.imported_by ?? null,
+  };
+  if (existing) {
+    await store.saveStudents([], [{ id: existing.id, input }]);
+  } else {
+    await store.saveStudents([input], []);
+  }
+}
 
 export async function createUserAction(input: UserFormInput): Promise<ActionResult> {
   try {
@@ -417,7 +459,11 @@ export async function createUserAction(input: UserFormInput): Promise<ActionResu
     // route to becoming one, and the section split would be decoration.
     const roleError = assignRoleError(actor, parsed.data.role);
     if (roleError) return { ok: false, error: roleError };
-    await getStore().createProfile(parsed.data);
+    const { hostel, ...profileData } = parsed.data;
+    await getStore().createProfile(profileData);
+    if (profileData.role === "student") {
+      await syncStudentHostel(profileData.email, hostel);
+    }
     return done();
   } catch (e) {
     return fail(e);
@@ -440,7 +486,11 @@ export async function updateUserAction(id: string, input: UserFormInput): Promis
     if (editError) return { ok: false, error: editError };
     const roleError = assignRoleError(actor, parsed.data.role);
     if (roleError) return { ok: false, error: roleError };
-    await getStore().updateProfile(id, parsed.data);
+    const { hostel, ...profileData } = parsed.data;
+    await getStore().updateProfile(id, profileData);
+    if (profileData.role === "student") {
+      await syncStudentHostel(profileData.email, hostel);
+    }
     return done();
   } catch (e) {
     return fail(e);
