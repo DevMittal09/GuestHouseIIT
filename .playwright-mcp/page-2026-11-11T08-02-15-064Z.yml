@@ -1,0 +1,167 @@
+- generic [active] [ref=f5e1]:
+  - generic [ref=f5e2]:
+    - link "Skip to content" [ref=f5e3] [cursor=pointer]:
+      - /url: "#main"
+    - banner [ref=f5e4]:
+      - generic [ref=f5e5]:
+        - link "IIT Palakkad Guest House IIT Palakkad" [ref=f5e7] [cursor=pointer]:
+          - /url: /
+          - img "IIT Palakkad" [ref=f5e8]
+          - generic [ref=f5e10]:
+            - generic [ref=f5e11]: Guest House
+            - generic [ref=f5e12]: IIT Palakkad
+        - navigation "Main" [ref=f5e13]:
+          - generic [ref=f5e14]:
+            - link "Home" [ref=f5e15] [cursor=pointer]:
+              - /url: /
+            - link "Book a Room" [ref=f5e16] [cursor=pointer]:
+              - /url: /book-room
+            - link "Book a Meal" [ref=f5e17] [cursor=pointer]:
+              - /url: /book-meal
+            - link "Guidelines" [ref=f5e18] [cursor=pointer]:
+              - /url: /guidelines
+            - link "Gallery" [ref=f5e19] [cursor=pointer]:
+              - /url: /gallery
+            - link "Contact Us" [ref=f5e20] [cursor=pointer]:
+              - /url: /contact
+        - link "Sign in" [ref=f5e22] [cursor=pointer]:
+          - /url: /sign-in
+    - main [ref=f5e23]:
+      - generic [ref=f5e25]:
+        - generic [ref=f5e26]:
+          - paragraph [ref=f5e27]: Demo build
+          - heading "Mock authentication" [level=1] [ref=f5e28]
+          - paragraph [ref=f5e29]: Choose the kind of user you want to test as. Every account below is a demo account, and no password is needed.
+        - list [ref=f5e30]:
+          - listitem [ref=f5e31]:
+            - link "Students 5 A personal stay for family, at Bageshri, with no meals. Their hostel decides where it goes first. Choose an account" [ref=f5e32] [cursor=pointer]:
+              - /url: /mock-login?kind=students
+              - generic [ref=f5e33]:
+                - generic [ref=f5e34]: Students
+                - generic [ref=f5e35]: "5"
+              - generic [ref=f5e36]: A personal stay for family, at Bageshri, with no meals. Their hostel decides where it goes first.
+              - generic [ref=f5e37]: Choose an account
+          - listitem [ref=f5e40]:
+            - link "Faculty and staff 6 Official bookings go through the HOD of their department; a personal stay goes straight to the desk. Choose an account" [ref=f5e41] [cursor=pointer]:
+              - /url: /mock-login?kind=faculty-staff
+              - generic [ref=f5e42]:
+                - generic [ref=f5e43]: Faculty and staff
+                - generic [ref=f5e44]: "6"
+              - generic [ref=f5e45]: Official bookings go through the HOD of their department; a personal stay goes straight to the desk.
+              - generic [ref=f5e46]: Choose an account
+          - listitem [ref=f5e49]:
+            - link "Institute offices 6 Whitelisted office mailboxes. Each books direct, or through its own HOD where one is appointed. Choose an account" [ref=f5e50] [cursor=pointer]:
+              - /url: /mock-login?kind=offices
+              - generic [ref=f5e51]:
+                - generic [ref=f5e52]: Institute offices
+                - generic [ref=f5e53]: "6"
+              - generic [ref=f5e54]: Whitelisted office mailboxes. Each books direct, or through its own HOD where one is appointed.
+              - generic [ref=f5e55]: Choose an account
+          - listitem [ref=f5e58]:
+            - link "Clubs and councils 2 A club account cannot submit. Its Faculty Advisor books for it, and that goes straight to the desk. Choose an account" [ref=f5e59] [cursor=pointer]:
+              - /url: /mock-login?kind=student-bodies
+              - generic [ref=f5e60]:
+                - generic [ref=f5e61]: Clubs and councils
+                - generic [ref=f5e62]: "2"
+              - generic [ref=f5e63]: A club account cannot submit. Its Faculty Advisor books for it, and that goes straight to the desk.
+              - generic [ref=f5e64]: Choose an account
+          - listitem [ref=f5e67]:
+            - link "Hostel wardens 7 The Assistant Warden decides their hostel's student requests; the Warden and Deputy Warden are copied. Choose an account" [ref=f5e68] [cursor=pointer]:
+              - /url: /mock-login?kind=hostel-wardens
+              - generic [ref=f5e69]:
+                - generic [ref=f5e70]: Hostel wardens
+                - generic [ref=f5e71]: "7"
+              - generic [ref=f5e72]: The Assistant Warden decides their hostel's student requests; the Warden and Deputy Warden are copied.
+              - generic [ref=f5e73]: Choose an account
+          - listitem [ref=f5e76]:
+            - link "The guest house desk 3 The manager allocates rooms and runs the console; the caretaker runs reception. Choose an account" [ref=f5e77] [cursor=pointer]:
+              - /url: /mock-login?kind=desk
+              - generic [ref=f5e78]:
+                - generic [ref=f5e79]: The guest house desk
+                - generic [ref=f5e80]: "3"
+              - generic [ref=f5e81]: The manager allocates rooms and runs the console; the caretaker runs reception.
+              - generic [ref=f5e82]: Choose an account
+        - link "Back to sign in" [ref=f5e86] [cursor=pointer]:
+          - /url: /sign-in
+    - contentinfo [ref=f5e87]:
+      - generic [ref=f5e88]:
+        - generic [ref=f5e89]:
+          - link "IIT Palakkad Guest House IIT Palakkad" [ref=f5e90] [cursor=pointer]:
+            - /url: /
+            - img "IIT Palakkad" [ref=f5e91]
+            - generic [ref=f5e93]:
+              - generic [ref=f5e94]: Guest House
+              - generic [ref=f5e95]: IIT Palakkad
+          - generic [ref=f5e96]:
+            - generic [ref=f5e97]: Guest House, Indian Institute of Technology Palakkad
+            - generic [ref=f5e98]: Kanjikode West | Palakkad
+            - generic [ref=f5e99]: "Keralam | Pin: 678623"
+        - generic [ref=f5e100]:
+          - paragraph [ref=f5e101]: Guest House Manager
+          - paragraph [ref=f5e102]:
+            - link "+91 491 209 2016" [ref=f5e103] [cursor=pointer]:
+              - /url: tel:+914912092016
+            - link "ghm@iitpkd.ac.in" [ref=f5e104] [cursor=pointer]:
+              - /url: mailto:ghm@iitpkd.ac.in
+        - generic [ref=f5e105]:
+          - paragraph [ref=f5e106]: Find us
+          - list [ref=f5e107]:
+            - listitem [ref=f5e108]:
+              - generic [ref=f5e109]: Hamsanandi
+              - generic [ref=f5e110]:
+                - link "Map (opens in a new tab)" [ref=f5e111] [cursor=pointer]:
+                  - /url: https://maps.app.goo.gl/GbKrfiao8TuKxgNA6
+                  - text: Map
+                  - generic [ref=f5e115]: (opens in a new tab)
+                - link "Directions (opens in a new tab)" [ref=f5e116] [cursor=pointer]:
+                  - /url: https://www.google.com/maps/dir/?api=1&destination=10.7984359,76.7299972
+                  - text: Directions
+                  - generic [ref=f5e120]: (opens in a new tab)
+            - listitem [ref=f5e121]:
+              - generic [ref=f5e122]: Bageshri
+              - generic [ref=f5e123]:
+                - link "Map (opens in a new tab)" [ref=f5e124] [cursor=pointer]:
+                  - /url: https://maps.app.goo.gl/AspNpPu7sTDLXxL2A
+                  - text: Map
+                  - generic [ref=f5e128]: (opens in a new tab)
+                - link "Directions (opens in a new tab)" [ref=f5e129] [cursor=pointer]:
+                  - /url: https://www.google.com/maps/dir/?api=1&destination=10.8063107,76.726681
+                  - text: Directions
+                  - generic [ref=f5e133]: (opens in a new tab)
+            - listitem [ref=f5e134]:
+              - link "How to reach the campus (opens in a new tab)" [ref=f5e135] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/how-reach
+                - text: How to reach the campus
+                - generic [ref=f5e139]: (opens in a new tab)
+        - generic [ref=f5e140]:
+          - paragraph [ref=f5e141]: Institute
+          - list [ref=f5e142]:
+            - listitem [ref=f5e143]:
+              - link "IIT Palakkad website (opens in a new tab)" [ref=f5e144] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in
+                - text: IIT Palakkad website
+                - generic [ref=f5e148]: (opens in a new tab)
+            - listitem [ref=f5e149]:
+              - link "Guest house on iitpkd.ac.in (opens in a new tab)" [ref=f5e150] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/guest-house-hamsanandi
+                - text: Guest house on iitpkd.ac.in
+                - generic [ref=f5e154]: (opens in a new tab)
+            - listitem [ref=f5e155]:
+              - link "How to reach the campus (opens in a new tab)" [ref=f5e156] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/how-reach
+                - text: How to reach the campus
+                - generic [ref=f5e160]: (opens in a new tab)
+            - listitem [ref=f5e161]:
+              - link "Telephone directory (opens in a new tab)" [ref=f5e162] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/TelephoneDirectory
+                - text: Telephone directory
+                - generic [ref=f5e166]: (opens in a new tab)
+      - generic [ref=f5e168]:
+        - generic [ref=f5e169]: © 2026 Indian Institute of Technology Palakkad
+        - generic [ref=f5e170]:
+          - link "Guidelines" [ref=f5e171] [cursor=pointer]:
+            - /url: /guidelines
+          - link "Contact" [ref=f5e172] [cursor=pointer]:
+            - /url: /contact
+  - region "Notifications alt+T"
+  - alert [ref=f5e173]

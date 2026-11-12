@@ -1,0 +1,13 @@
+[   30656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/book?_rsc=NKoA5U6f3ogw9Xse:1
+[   30656ms] [ERROR] Failed to fetch RSC payload for http://localhost:3100/book. Falling back to browser navigation. TypeError: Failed to fetch
+    at n (http://localhost:3100/_next/static/chunks/3v1eibgotdbtq.js:2:36226)
+    at M (http://localhost:3100/_next/static/chunks/3v1eibgotdbtq.js:1:31564)
+    at async v (http://localhost:3100/_next/static/chunks/3v1eibgotdbtq.js:1:29450)
+    at async B (http://localhost:3100/_next/static/chunks/3v1eibgotdbtq.js:1:23034) @ http://localhost:3100/_next/static/chunks/3v1eibgotdbtq.js:1
+[   30657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/dashboard?_rsc=29ODlZajrACWN0KD:1
+[   30657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/availability?_rsc=29ODlZajrACWN0KD:1
+[   30657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/history?_rsc=29ODlZajrACWN0KD:1
+[   30659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/dashboard?_rsc=_i_aeImnuN6u1u1r:1
+[   30659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/book?_rsc=_i_aeImnuN6u1u1r:1
+[   30661ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/availability?_rsc=_i_aeImnuN6u1u1r:1
+[   30661ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/history?_rsc=_i_aeImnuN6u1u1r:1

@@ -161,6 +161,87 @@ export async function planInstituteImportAction(
   }
 }
 
+export async function updateInstituteRecordAction(
+  kind: InstituteTableKind,
+  id: string,
+  data: Record<string, string | null>,
+): Promise<ActionResult> {
+  try {
+    const user = await requireAcademicConsole();
+    const store = getStore();
+    switch (kind) {
+      case "student": {
+        const existing = (await store.listStudents()).find((r) => r.id === id);
+        if (!existing) return { ok: false, error: "Record not found" };
+        const input = { ...existing, ...data, imported_by: existing.imported_by } as unknown as import("@/lib/institute/types").NewStudentInput;
+        delete (input as Record<string, unknown>)["id"];
+        delete (input as Record<string, unknown>)["created_at"];
+        delete (input as Record<string, unknown>)["updated_at"];
+        await store.saveStudents([], [{ id, input }]);
+        break;
+      }
+      case "employee": {
+        const existing = (await store.listEmployees()).find((r) => r.id === id);
+        if (!existing) return { ok: false, error: "Record not found" };
+        const input = { ...existing, ...data, imported_by: existing.imported_by } as unknown as import("@/lib/institute/types").NewEmployeeInput;
+        delete (input as Record<string, unknown>)["id"];
+        delete (input as Record<string, unknown>)["created_at"];
+        delete (input as Record<string, unknown>)["updated_at"];
+        await store.saveEmployees([], [{ id, input }]);
+        break;
+      }
+      case "office": {
+        const existing = (await store.listOffices()).find((r) => r.id === id);
+        if (!existing) return { ok: false, error: "Record not found" };
+        const input = { ...existing, ...data, imported_by: existing.imported_by } as unknown as import("@/lib/institute/types").NewOfficeInput;
+        delete (input as Record<string, unknown>)["id"];
+        delete (input as Record<string, unknown>)["created_at"];
+        delete (input as Record<string, unknown>)["updated_at"];
+        await store.saveOffices([], [{ id, input }]);
+        break;
+      }
+      case "fcc": {
+        const existing = (await store.listFCCs()).find((r) => r.id === id);
+        if (!existing) return { ok: false, error: "Record not found" };
+        const input = { ...existing, ...data, imported_by: existing.imported_by } as unknown as import("@/lib/institute/types").NewFCCInput;
+        delete (input as Record<string, unknown>)["id"];
+        delete (input as Record<string, unknown>)["created_at"];
+        delete (input as Record<string, unknown>)["updated_at"];
+        await store.saveFCCs([], [{ id, input }]);
+        break;
+      }
+      case "hostel": {
+        const existing = (await store.listInstituteHostels()).find((r) => r.id === id);
+        if (!existing) return { ok: false, error: "Record not found" };
+        const input = { ...existing, ...data } as unknown as import("@/lib/institute/types").NewHostelInput;
+        delete (input as Record<string, unknown>)["id"];
+        delete (input as Record<string, unknown>)["created_at"];
+        delete (input as Record<string, unknown>)["updated_at"];
+        await store.saveInstituteHostels([], [{ id, input }]);
+        break;
+      }
+      case "warden": {
+        const existing = (await store.listWardens()).find((r) => r.id === id);
+        if (!existing) return { ok: false, error: "Record not found" };
+        const input = { ...existing, ...data, imported_by: existing.imported_by } as unknown as import("@/lib/institute/types").NewWardenInput;
+        delete (input as Record<string, unknown>)["id"];
+        delete (input as Record<string, unknown>)["created_at"];
+        delete (input as Record<string, unknown>)["updated_at"];
+        await store.saveWardens([], [{ id, input }]);
+        break;
+      }
+    }
+    await recordAudit(user, "settings.changed", "institute_records", {
+      kind,
+      updated: id,
+    });
+    done();
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function importInstituteRecordsAction(
   kind: InstituteTableKind,
   text: string,

@@ -35,7 +35,7 @@ import { queueMessages } from "@/lib/mail/notify";
 import type { MailStatus } from "@/lib/mail/types";
 import { getStore } from "@/lib/store";
 import type { AccountStatus, BookingStatus, Profile, Role, RoomClass, RoomType } from "@/lib/types";
-import { ACCOUNT_STATUS_LABELS, REQUESTER_ROLES, ROLE_LABELS, ROOM_CLASSES } from "@/lib/types";
+import { ACCOUNT_STATUS_LABELS, isHostelWardenRole, REQUESTER_ROLES, ROLE_LABELS, ROOM_CLASSES } from "@/lib/types";
 import { occupancyNotStartedError } from "@/lib/workflow";
 import {
   assignableRoles,
@@ -449,6 +449,35 @@ async function syncStudentHostel(
   }
 }
 
+async function syncWardenHostel(
+  email: string,
+  hostelName: string | null,
+): Promise<void> {
+  const store = getStore();
+  let hostelId: string | null = null;
+  if (hostelName) {
+    const hostels = await store.listInstituteHostels();
+    const match = hostels.find(
+      (h) => h.hostel_name.toLowerCase() === hostelName.toLowerCase(),
+    );
+    hostelId = match?.hostel_id ?? null;
+  }
+  const existing = await store.findWarden(email);
+  const input = {
+    warden_email: email,
+    full_name: existing?.full_name ?? null,
+    warden_phone: existing?.warden_phone ?? null,
+    warden_role: existing?.warden_role ?? null,
+    hostel_id: hostelId,
+    imported_by: existing?.imported_by ?? null,
+  };
+  if (existing) {
+    await store.saveWardens([], [{ id: existing.id, input }]);
+  } else {
+    await store.saveWardens([input], []);
+  }
+}
+
 export async function createUserAction(input: UserFormInput): Promise<ActionResult> {
   try {
     const actor = await requireConsole("users", { stepUp: true });
@@ -463,6 +492,8 @@ export async function createUserAction(input: UserFormInput): Promise<ActionResu
     await getStore().createProfile(profileData);
     if (profileData.role === "student") {
       await syncStudentHostel(profileData.email, hostel);
+    } else if (isHostelWardenRole(profileData.role)) {
+      await syncWardenHostel(profileData.email, hostel);
     }
     return done();
   } catch (e) {
@@ -490,6 +521,8 @@ export async function updateUserAction(id: string, input: UserFormInput): Promis
     await getStore().updateProfile(id, profileData);
     if (profileData.role === "student") {
       await syncStudentHostel(profileData.email, hostel);
+    } else if (isHostelWardenRole(profileData.role)) {
+      await syncWardenHostel(profileData.email, hostel);
     }
     return done();
   } catch (e) {

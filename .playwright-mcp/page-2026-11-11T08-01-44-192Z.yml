@@ -1,0 +1,420 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - link "Skip to content" [ref=f3e3] [cursor=pointer]:
+      - /url: "#main"
+    - banner [ref=f3e4]:
+      - generic [ref=f3e5]:
+        - link "IIT Palakkad Guest House IIT Palakkad" [ref=f3e7] [cursor=pointer]:
+          - /url: /
+          - img "IIT Palakkad" [ref=f3e8]
+          - generic [ref=f3e10]:
+            - generic [ref=f3e11]: Guest House
+            - generic [ref=f3e12]: IIT Palakkad
+        - navigation "Main" [ref=f3e13]:
+          - generic [ref=f3e14]:
+            - link "Home" [ref=f3e15] [cursor=pointer]:
+              - /url: /
+            - link "Book a Room" [ref=f3e16] [cursor=pointer]:
+              - /url: /book-room
+            - link "Book a Meal" [ref=f3e17] [cursor=pointer]:
+              - /url: /book-meal
+            - link "Guidelines" [ref=f3e18] [cursor=pointer]:
+              - /url: /guidelines
+            - link "Gallery" [ref=f3e19] [cursor=pointer]:
+              - /url: /gallery
+            - link "Contact Us" [ref=f3e20] [cursor=pointer]:
+              - /url: /contact
+        - link "Sign in" [ref=f3e22] [cursor=pointer]:
+          - /url: /sign-in
+    - main [ref=f3e23]:
+      - generic [ref=f3e25]:
+        - navigation "Breadcrumb" [ref=f3e26]:
+          - list [ref=f3e27]:
+            - listitem [ref=f3e28]:
+              - link "Home" [ref=f3e29] [cursor=pointer]:
+                - /url: /
+            - listitem [aria-hidden] [ref=f3e30]: /
+            - listitem [ref=f3e31]: Guidelines
+        - generic [ref=f3e32]:
+          - heading "Guidelines" [level=1] [ref=f3e33]
+          - generic [ref=f3e34]:
+            - paragraph [ref=f3e35]: How booking works, and what to expect before and during your stay.
+            - paragraph [ref=f3e36]: Provisional edition. Sections 7 and 8 are awaiting confirmation by the Guest House Office.
+      - region "How booking works" [ref=f3e37]:
+        - generic [ref=f3e38]:
+          - generic [ref=f3e39]:
+            - paragraph [ref=f3e40]: In five steps
+            - heading "How booking works" [level=2] [ref=f3e42]
+          - list [ref=f3e44]:
+            - listitem [ref=f3e45]:
+              - generic [ref=f3e46]: "01"
+              - heading "Sign in" [level=3] [ref=f3e47]
+              - paragraph [ref=f3e48]: With your institute account.
+            - listitem [ref=f3e49]:
+              - generic [ref=f3e50]: "02"
+              - heading "Request" [level=3] [ref=f3e51]
+              - paragraph [ref=f3e52]: The dates of the stay, and each guest.
+            - listitem [ref=f3e53]:
+              - generic [ref=f3e54]: "03"
+              - heading "Approval" [level=3] [ref=f3e55]
+              - paragraph [ref=f3e56]: You hear by email at each step.
+            - listitem [ref=f3e57]:
+              - generic [ref=f3e58]: "04"
+              - heading "Arrival" [level=3] [ref=f3e59]
+              - paragraph [ref=f3e60]: Reception checks you in.
+            - listitem [ref=f3e61]:
+              - generic [ref=f3e62]: "05"
+              - heading "Departure" [level=3] [ref=f3e63]
+              - paragraph [ref=f3e64]: The invoice is settled at reception.
+      - generic [ref=f3e65]:
+        - navigation "On this page" [ref=f3e66]:
+          - generic [ref=f3e67]:
+            - paragraph [ref=f3e68]: Contents
+            - list [ref=f3e69]:
+              - listitem [ref=f3e70]:
+                - link "1 Booking a stay" [ref=f3e71] [cursor=pointer]:
+                  - /url: "#booking"
+                  - generic [ref=f3e72]: "1"
+                  - text: Booking a stay
+              - listitem [ref=f3e73]:
+                - link "2 Rooms and occupancy" [ref=f3e74] [cursor=pointer]:
+                  - /url: "#rooms"
+                  - generic [ref=f3e75]: "2"
+                  - text: Rooms and occupancy
+              - listitem [ref=f3e76]:
+                - link "3 Check-in and check-out" [ref=f3e77] [cursor=pointer]:
+                  - /url: "#arrival"
+                  - generic [ref=f3e78]: "3"
+                  - text: Check-in and check-out
+              - listitem [ref=f3e79]:
+                - link "4 Meals" [ref=f3e80] [cursor=pointer]:
+                  - /url: "#meals"
+                  - generic [ref=f3e81]: "4"
+                  - text: Meals
+              - listitem [ref=f3e82]:
+                - link "5 Charges and payment" [ref=f3e83] [cursor=pointer]:
+                  - /url: "#charges"
+                  - generic [ref=f3e84]: "5"
+                  - text: Charges and payment
+              - listitem [ref=f3e85]:
+                - link "6 Cancellation" [ref=f3e86] [cursor=pointer]:
+                  - /url: "#cancellation"
+                  - generic [ref=f3e87]: "6"
+                  - text: Cancellation
+              - listitem [ref=f3e88]:
+                - link "7 Dos and Don'ts during your stay" [ref=f3e89] [cursor=pointer]:
+                  - /url: "#conduct"
+                  - generic [ref=f3e90]: "7"
+                  - text: Dos and Don'ts during your stay
+              - listitem [ref=f3e91]:
+                - link "8 Safety and help" [ref=f3e92] [cursor=pointer]:
+                  - /url: "#safety"
+                  - generic [ref=f3e93]: "8"
+                  - text: Safety and help
+        - generic [ref=f3e94]:
+          - region "Booking a stay" [ref=f3e95]:
+            - generic [ref=f3e96]:
+              - generic [ref=f3e97]: "1"
+              - heading "Booking a stay" [level=2] [ref=f3e98]
+            - list [ref=f3e99]:
+              - listitem [ref=f3e100]:
+                - generic [ref=f3e101]: "1.1"
+                - generic [ref=f3e102]: Rooms are requested online by members of the institute, for themselves or for their guests
+              - listitem [ref=f3e103]:
+                - generic [ref=f3e104]: "1.2"
+                - generic [ref=f3e105]: Visitors from outside the institute are booked by the person hosting them
+              - listitem [ref=f3e106]:
+                - generic [ref=f3e107]: "1.3"
+                - generic [ref=f3e108]: Check-in must fall within 1 month of the day the request is made
+              - listitem [ref=f3e109]:
+                - generic [ref=f3e110]: "1.4"
+                - generic [ref=f3e111]: A request may cover up to 14 nights
+              - listitem [ref=f3e112]:
+                - generic [ref=f3e113]: "1.5"
+                - generic [ref=f3e114]: A longer stay is arranged with the Guest House Office, which extends it once the booking is approved
+              - listitem [ref=f3e115]:
+                - generic [ref=f3e116]: "1.6"
+                - generic [ref=f3e117]: MS and PhD research scholars may book for a spouse without an accompanying parent
+              - listitem [ref=f3e118]:
+                - generic [ref=f3e119]: "1.7"
+                - generic [ref=f3e120]: B.Tech and M.Tech students cannot book for a spouse
+              - listitem [ref=f3e121]:
+                - generic [ref=f3e122]: "1.8"
+                - generic [ref=f3e123]: Every request is reviewed before it is confirmed, and you are told by email at each step
+              - listitem [ref=f3e124]:
+                - generic [ref=f3e125]: "1.9"
+                - generic [ref=f3e126]: Rooms are allotted by the Guest House Office once a request is approved
+          - region "Rooms and occupancy" [ref=f3e127]:
+            - generic [ref=f3e128]:
+              - generic [ref=f3e129]: "2"
+              - heading "Rooms and occupancy" [level=2] [ref=f3e130]
+            - list [ref=f3e131]:
+              - listitem [ref=f3e132]:
+                - generic [ref=f3e133]: "2.1"
+                - generic [ref=f3e134]: Double sharing rooms for 2 guests, or 3 with an extra bed
+              - listitem [ref=f3e135]:
+                - generic [ref=f3e136]: "2.2"
+                - generic [ref=f3e137]: Maximum 4 people per room, of whom at most 3 may need a bed - infants below 5 years share a guardian's bed.
+              - listitem [ref=f3e138]:
+                - generic [ref=f3e139]: "2.3"
+                - generic [ref=f3e140]: A room is full at 3 guests + 1 infant, 2 guests + 2 infants or 1 guest + 3 infants
+              - listitem [ref=f3e141]:
+                - generic [ref=f3e142]: "2.4"
+                - generic [ref=f3e143]: Children under 5 share a guardian's bed
+              - listitem [ref=f3e144]:
+                - generic [ref=f3e145]: "2.5"
+                - generic [ref=f3e146]: An extra bed is charged as its own line on the invoice
+          - region "Check-in and check-out" [ref=f3e147]:
+            - generic [ref=f3e148]:
+              - generic [ref=f3e149]: "3"
+              - heading "Check-in and check-out" [level=2] [ref=f3e150]
+            - list [ref=f3e151]:
+              - listitem [ref=f3e152]:
+                - generic [ref=f3e153]: "3.1"
+                - generic [ref=f3e154]: Arrival and departure times are chosen on the request, and the room is held for that period
+              - listitem [ref=f3e155]:
+                - generic [ref=f3e156]: "3.2"
+                - generic [ref=f3e157]: A room stays held for 4 hours after the booked check-out, to be made ready
+              - listitem [ref=f3e158]:
+                - generic [ref=f3e159]: "3.3"
+                - generic [ref=f3e160]: Guests are checked in at reception on arrival
+              - listitem [ref=f3e161]:
+                - generic [ref=f3e162]: "3.4"
+                - generic [ref=f3e163]: Every adult guest carries a photo identity document
+              - listitem [ref=f3e164]:
+                - generic [ref=f3e165]: "3.5"
+                - generic [ref=f3e166]: To arrive earlier or stay longer, ask reception
+              - listitem [ref=f3e167]:
+                - generic [ref=f3e168]: "3.6"
+                - generic [ref=f3e169]: Room keys are collected from reception and returned there at check-out
+          - region "Meals" [ref=f3e170]:
+            - generic [ref=f3e171]:
+              - generic [ref=f3e172]: "4"
+              - heading "Meals" [level=2] [ref=f3e173]
+            - list [ref=f3e174]:
+              - listitem [ref=f3e175]:
+                - generic [ref=f3e176]: "4.1"
+                - generic [ref=f3e177]: Meals are served at Hamsanandi, at the times below
+              - listitem [ref=f3e178]:
+                - generic [ref=f3e179]: "4.2"
+                - generic [ref=f3e180]: Meals are chosen day by day on the request, with the number of vegetarian and non-vegetarian meals
+              - listitem [ref=f3e181]:
+                - generic [ref=f3e182]: "4.3"
+                - generic [ref=f3e183]: "A meal must be booked before the previous one finishes being served: lunch before breakfast ends, dinner before lunch ends, and the next morning's breakfast before dinner ends."
+              - listitem [ref=f3e184]:
+                - generic [ref=f3e185]: "4.4"
+                - generic [ref=f3e186]: The kitchen serves up to 30 people at one meal
+            - table "Meal serving times" [ref=f3e187]:
+              - caption [ref=f3e188]: Meal serving times
+              - rowgroup [ref=f3e189]:
+                - row [ref=f3e190]:
+                  - rowheader "Breakfast" [ref=f3e191]
+                  - cell "8:00 – 9:30 AM" [ref=f3e192]
+                - row [ref=f3e193]:
+                  - rowheader "Lunch" [ref=f3e194]
+                  - cell "12:30 – 2:00 PM" [ref=f3e195]
+                - row [ref=f3e196]:
+                  - rowheader "Dinner" [ref=f3e197]
+                  - cell "7:30 – 9:00 PM" [ref=f3e198]
+          - region "Charges and payment" [ref=f3e199]:
+            - generic [ref=f3e200]:
+              - generic [ref=f3e201]: "5"
+              - heading "Charges and payment" [level=2] [ref=f3e202]
+            - list [ref=f3e203]:
+              - listitem [ref=f3e204]:
+                - generic [ref=f3e205]: "5.1"
+                - generic [ref=f3e206]: Rooms are charged by the night, and never fewer than one
+              - listitem [ref=f3e207]:
+                - generic [ref=f3e208]: "5.2"
+                - generic [ref=f3e209]: The tariff includes GST - 18% on rooms and 5% on meals, shown separately on the invoice
+              - listitem [ref=f3e210]:
+                - generic [ref=f3e211]: "5.3"
+                - generic [ref=f3e212]: An extra bed and meals served are charged in addition
+              - listitem [ref=f3e213]:
+                - generic [ref=f3e214]: "5.4"
+                - generic [ref=f3e215]: Damage or loss is recovered as an additional charge
+              - listitem [ref=f3e216]:
+                - generic [ref=f3e217]: "5.5"
+                - generic [ref=f3e218]: The invoice is settled by UPI or account transfer - a personal stay at check-out, an official stay charged to the account named on the request
+          - region "Cancellation" [ref=f3e219]:
+            - generic [ref=f3e220]:
+              - generic [ref=f3e221]: "6"
+              - heading "Cancellation" [level=2] [ref=f3e222]
+            - list [ref=f3e223]:
+              - listitem [ref=f3e224]:
+                - generic [ref=f3e225]: "6.1"
+                - generic [ref=f3e226]: A booking is cancelled from My Bookings, with a reason, at least 24 hours before check-in
+              - listitem [ref=f3e227]:
+                - generic [ref=f3e228]: "6.2"
+                - generic [ref=f3e229]: Closer to the check-in than that, ask the Guest House Office
+              - listitem [ref=f3e230]:
+                - generic [ref=f3e231]: "6.3"
+                - generic [ref=f3e232]: Cancellations are made through the portal, so the room is released and the record is kept
+              - listitem [ref=f3e233]:
+                - generic [ref=f3e234]: "6.4"
+                - generic [ref=f3e235]: The Guest House Office confirms the cancellation, and the rooms are released then
+              - listitem [ref=f3e236]:
+                - generic [ref=f3e237]: "6.5"
+                - generic [ref=f3e238]: Once a guest has checked in, the stay is ended at reception instead
+          - region "Dos and Don'ts during your stay" [ref=f3e239]:
+            - generic [ref=f3e240]:
+              - generic [ref=f3e241]: "7"
+              - heading "Dos and Don'ts during your stay" [level=2] [ref=f3e242]
+              - generic [ref=f3e243]: To be confirmed
+            - generic [ref=f3e244]:
+              - generic [ref=f3e245]:
+                - heading "Please do" [level=3] [ref=f3e246]
+                - list [ref=f3e247]:
+                  - listitem [ref=f3e248]:
+                    - generic [ref=f3e249]: "7.1"
+                    - generic [ref=f3e250]: Only the guests named on the booking may occupy the room
+                  - listitem [ref=f3e251]:
+                    - generic [ref=f3e252]: "7.2"
+                    - generic [ref=f3e253]: Visitors are received in the lounge between 8:00 AM and 9:00 PM, and may not stay overnight
+                  - listitem [ref=f3e254]:
+                    - generic [ref=f3e255]: "7.3"
+                    - generic [ref=f3e256]: Switch off lights, fans and air-conditioning when leaving the room
+                  - listitem [ref=f3e257]:
+                    - generic [ref=f3e258]: "7.4"
+                    - generic [ref=f3e259]: Report a fault in the room to reception
+                  - listitem [ref=f3e260]:
+                    - generic [ref=f3e261]: "7.5"
+                    - generic [ref=f3e262]: Note the fire exits and extinguishers on your floor when you arrive
+                  - listitem [ref=f3e263]:
+                    - generic [ref=f3e264]: "7.6"
+                    - generic [ref=f3e265]: Carry your booking confirmation and identity document when entering the campus
+              - generic [ref=f3e266]:
+                - heading "Please do not" [level=3] [ref=f3e267]
+                - list [ref=f3e268]:
+                  - listitem [ref=f3e269]:
+                    - generic [ref=f3e270]: "7.7"
+                    - generic [ref=f3e271]: Smoking, alcohol and intoxicants are not permitted anywhere on the premises
+                  - listitem [ref=f3e272]:
+                    - generic [ref=f3e273]: "7.8"
+                    - generic [ref=f3e274]: Cooking, heaters, induction stoves and other high-load appliances are not permitted in the rooms
+                  - listitem [ref=f3e275]:
+                    - generic [ref=f3e276]: "7.9"
+                    - generic [ref=f3e277]: Pets are not allowed
+                  - listitem [ref=f3e278]:
+                    - generic [ref=f3e279]: "7.10"
+                    - generic [ref=f3e280]: Furniture, linen and fittings stay in the room they belong to; nothing is to be fixed to the walls
+                  - listitem [ref=f3e281]:
+                    - generic [ref=f3e282]: "7.11"
+                    - generic [ref=f3e283]: Quiet hours are 10:00 PM to 6:00 AM
+              - generic [ref=f3e284]:
+                - heading "Good to know" [level=3] [ref=f3e285]
+                - list [ref=f3e286]:
+                  - listitem [ref=f3e287]:
+                    - generic [ref=f3e288]: "7.12"
+                    - generic [ref=f3e289]: The guest house is not responsible for belongings left in rooms
+                  - listitem [ref=f3e290]:
+                    - generic [ref=f3e291]: "7.13"
+                    - generic [ref=f3e292]: Rooms are cleaned daily between 9:00 AM and 12:00 noon
+                  - listitem [ref=f3e293]:
+                    - generic [ref=f3e294]: "7.14"
+                    - generic [ref=f3e295]: Lost property is kept at reception for 30 days
+                  - listitem [ref=f3e296]:
+                    - generic [ref=f3e297]: "7.15"
+                    - generic [ref=f3e298]: The Guest House Office may end a stay that breaks these rules
+          - region "Safety and help" [ref=f3e299]:
+            - generic [ref=f3e300]:
+              - generic [ref=f3e301]: "8"
+              - heading "Safety and help" [level=2] [ref=f3e302]
+              - generic [ref=f3e303]: To be confirmed
+            - list [ref=f3e304]:
+              - listitem [ref=f3e305]:
+                - generic [ref=f3e306]: "8.1"
+                - generic [ref=f3e307]: In an emergency, call reception; they will reach the medical centre and campus security
+              - listitem [ref=f3e308]:
+                - generic [ref=f3e309]: "8.2"
+                - generic [ref=f3e310]: Reception can reach the institute's medical centre and campus security at any hour
+          - paragraph [ref=f3e311]:
+            - text: Questions about these guidelines go to the Guest House Office on
+            - link "+91 491 209 2016" [ref=f3e312] [cursor=pointer]:
+              - /url: tel:+914912092016
+            - text: or
+            - link "ghm@iitpkd.ac.in" [ref=f3e313] [cursor=pointer]:
+              - /url: mailto:ghm@iitpkd.ac.in
+            - text: .
+    - contentinfo [ref=f3e314]:
+      - generic [ref=f3e315]:
+        - generic [ref=f3e316]:
+          - link "IIT Palakkad Guest House IIT Palakkad" [ref=f3e317] [cursor=pointer]:
+            - /url: /
+            - img "IIT Palakkad" [ref=f3e318]
+            - generic [ref=f3e320]:
+              - generic [ref=f3e321]: Guest House
+              - generic [ref=f3e322]: IIT Palakkad
+          - generic [ref=f3e323]:
+            - generic [ref=f3e324]: Guest House, Indian Institute of Technology Palakkad
+            - generic [ref=f3e325]: Kanjikode West | Palakkad
+            - generic [ref=f3e326]: "Keralam | Pin: 678623"
+        - generic [ref=f3e327]:
+          - paragraph [ref=f3e328]: Guest House Manager
+          - paragraph [ref=f3e329]:
+            - link "+91 491 209 2016" [ref=f3e330] [cursor=pointer]:
+              - /url: tel:+914912092016
+            - link "ghm@iitpkd.ac.in" [ref=f3e331] [cursor=pointer]:
+              - /url: mailto:ghm@iitpkd.ac.in
+        - generic [ref=f3e332]:
+          - paragraph [ref=f3e333]: Find us
+          - list [ref=f3e334]:
+            - listitem [ref=f3e335]:
+              - generic [ref=f3e336]: Hamsanandi
+              - generic [ref=f3e337]:
+                - link "Map (opens in a new tab)" [ref=f3e338] [cursor=pointer]:
+                  - /url: https://maps.app.goo.gl/GbKrfiao8TuKxgNA6
+                  - text: Map
+                  - generic [ref=f3e342]: (opens in a new tab)
+                - link "Directions (opens in a new tab)" [ref=f3e343] [cursor=pointer]:
+                  - /url: https://www.google.com/maps/dir/?api=1&destination=10.7984359,76.7299972
+                  - text: Directions
+                  - generic [ref=f3e347]: (opens in a new tab)
+            - listitem [ref=f3e348]:
+              - generic [ref=f3e349]: Bageshri
+              - generic [ref=f3e350]:
+                - link "Map (opens in a new tab)" [ref=f3e351] [cursor=pointer]:
+                  - /url: https://maps.app.goo.gl/AspNpPu7sTDLXxL2A
+                  - text: Map
+                  - generic [ref=f3e355]: (opens in a new tab)
+                - link "Directions (opens in a new tab)" [ref=f3e356] [cursor=pointer]:
+                  - /url: https://www.google.com/maps/dir/?api=1&destination=10.8063107,76.726681
+                  - text: Directions
+                  - generic [ref=f3e360]: (opens in a new tab)
+            - listitem [ref=f3e361]:
+              - link "How to reach the campus (opens in a new tab)" [ref=f3e362] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/how-reach
+                - text: How to reach the campus
+                - generic [ref=f3e366]: (opens in a new tab)
+        - generic [ref=f3e367]:
+          - paragraph [ref=f3e368]: Institute
+          - list [ref=f3e369]:
+            - listitem [ref=f3e370]:
+              - link "IIT Palakkad website (opens in a new tab)" [ref=f3e371] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in
+                - text: IIT Palakkad website
+                - generic [ref=f3e375]: (opens in a new tab)
+            - listitem [ref=f3e376]:
+              - link "Guest house on iitpkd.ac.in (opens in a new tab)" [ref=f3e377] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/guest-house-hamsanandi
+                - text: Guest house on iitpkd.ac.in
+                - generic [ref=f3e381]: (opens in a new tab)
+            - listitem [ref=f3e382]:
+              - link "How to reach the campus (opens in a new tab)" [ref=f3e383] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/how-reach
+                - text: How to reach the campus
+                - generic [ref=f3e387]: (opens in a new tab)
+            - listitem [ref=f3e388]:
+              - link "Telephone directory (opens in a new tab)" [ref=f3e389] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/TelephoneDirectory
+                - text: Telephone directory
+                - generic [ref=f3e393]: (opens in a new tab)
+      - generic [ref=f3e395]:
+        - generic [ref=f3e396]: © 2026 Indian Institute of Technology Palakkad
+        - generic [ref=f3e397]:
+          - link "Guidelines" [ref=f3e398] [cursor=pointer]:
+            - /url: /guidelines
+          - link "Contact" [ref=f3e399] [cursor=pointer]:
+            - /url: /contact
+  - region "Notifications alt+T"
+  - alert [ref=f3e400]

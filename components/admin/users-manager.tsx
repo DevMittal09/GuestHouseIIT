@@ -40,7 +40,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ACCOUNT_STATUS_LABELS, ROLE_LABELS, type AccountStatus, type Profile, type Role } from "@/lib/types";
+import { ACCOUNT_STATUS_LABELS, isHostelWardenRole, ROLE_LABELS, type AccountStatus, type Profile, type Role } from "@/lib/types";
 import type { InstituteHostel } from "@/lib/institute/types";
 import { UNIT_CATEGORY_LABELS, type Unit } from "@/lib/units";
 import { USER_CSV_HEADER } from "@/lib/users-import";
@@ -641,7 +641,7 @@ export function UsersManager({
                 ))}
               </NativeSelect>
             </div>
-            {values.role === "student" && instituteHostels.length > 0 ? (
+            {(values.role === "student" || isHostelWardenRole(values.role as Role)) && instituteHostels.length > 0 ? (
               <div className="space-y-2">
                 <Label htmlFor="user-hostel">Hostel</Label>
                 <NativeSelect

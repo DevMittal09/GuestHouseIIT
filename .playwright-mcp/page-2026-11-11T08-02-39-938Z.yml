@@ -1,0 +1,101 @@
+- generic [active] [ref=f5e1]:
+  - generic [ref=f5e232]:
+    - banner [ref=f5e233]:
+      - generic [ref=f5e234]:
+        - link "IIT Palakkad Guest House IIT Palakkad · Booking portal" [ref=f5e235] [cursor=pointer]:
+          - /url: /dashboard
+          - img "IIT Palakkad" [ref=f5e236]
+          - generic [ref=f5e238]:
+            - generic [ref=f5e239]: Guest House
+            - generic [ref=f5e240]: IIT Palakkad · Booking portal
+        - generic [ref=f5e241]:
+          - generic [ref=f5e242]:
+            - paragraph [ref=f5e243]: Arjun Pillai
+            - paragraph [ref=f5e244]: btech.saveri@smail.iitpkd.ac.in
+          - generic [ref=f5e245]: Student
+          - button "Switch user" [ref=f5e247] [cursor=pointer]
+    - navigation "Portal" [ref=f5e248]:
+      - generic [ref=f5e249]:
+        - link "My Bookings" [ref=f5e250] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Room Booking" [ref=f5e251] [cursor=pointer]:
+          - /url: /book
+        - link "Room Availability" [ref=f5e252] [cursor=pointer]:
+          - /url: /availability
+        - link "Booking History" [ref=f5e253] [cursor=pointer]:
+          - /url: /history
+    - main [ref=f5e255]:
+      - generic [ref=f5e256]:
+        - heading "My Bookings" [level=1] [ref=f5e259]
+        - link "New room booking At Bageshri" [ref=f5e261] [cursor=pointer]:
+          - /url: /book
+          - generic [ref=f5e265]:
+            - generic [ref=f5e266]: New room booking
+            - generic [ref=f5e267]: At Bageshri
+        - generic [ref=f5e270]:
+          - generic [ref=f5e271]:
+            - heading "Current bookings 0" [level=2] [ref=f5e274]:
+              - generic [ref=f5e275]: Current bookings
+              - generic [aria-hidden] [ref=f5e276]: ":"
+              - generic [ref=f5e277]: "0"
+            - paragraph [ref=f5e278]: Nothing in progress today.
+          - generic [ref=f5e279]:
+            - heading "Upcoming bookings 1" [level=2] [ref=f5e282]:
+              - generic [ref=f5e283]: Upcoming bookings
+              - generic [aria-hidden] [ref=f5e284]: ":"
+              - generic [ref=f5e285]: "1"
+            - table [ref=f5e288]:
+              - rowgroup [ref=f5e289]:
+                - row [ref=f5e290]:
+                  - columnheader "Reference" [ref=f5e291]
+                  - columnheader "Guest House" [ref=f5e292]
+                  - columnheader "Check-in" [ref=f5e293]
+                  - columnheader "Check-out" [ref=f5e294]
+                  - columnheader "Rooms" [ref=f5e295]
+                  - columnheader "Status" [ref=f5e296]
+                  - columnheader "Details" [ref=f5e297]
+              - rowgroup [ref=f5e298]:
+                - row [ref=f5e299]:
+                  - cell "IITPKD-GH-2026-DM001" [ref=f5e300]
+                  - cell "Bageshri" [ref=f5e301]
+                  - cell "18/11/2026, 12:00 PM" [ref=f5e302]
+                  - cell "20/11/2026, 10:00 AM" [ref=f5e303]
+                  - cell "1" [ref=f5e304]
+                  - cell "Pending Assistant Warden Review" [ref=f5e305]
+                  - cell [ref=f5e307]:
+                    - button "View" [ref=f5e308] [cursor=pointer]
+          - generic [ref=f5e309]:
+            - generic [ref=f5e311]:
+              - heading "Previous bookings 0" [level=2] [ref=f5e312]:
+                - generic [ref=f5e313]: Previous bookings
+                - generic [aria-hidden] [ref=f5e314]: ":"
+                - generic [ref=f5e315]: "0"
+              - link "All booking history" [ref=f5e316] [cursor=pointer]:
+                - /url: /history
+            - paragraph [ref=f5e317]: Nothing has finished yet.
+        - generic [ref=f5e318]:
+          - button "Download my data" [ref=f5e319] [cursor=pointer]
+          - button "Ask for erasure" [ref=f5e320] [cursor=pointer]
+    - contentinfo [ref=f5e321]:
+      - generic [ref=f5e322]:
+        - generic [ref=f5e323]:
+          - generic [ref=f5e324]: © Indian Institute of Technology Palakkad
+          - generic [ref=f5e325]:
+            - generic [ref=f5e326]: Guest house office
+            - link "+91 491 209 2016" [ref=f5e327] [cursor=pointer]:
+              - /url: tel:+914912092016
+            - link "ghm@iitpkd.ac.in" [ref=f5e328] [cursor=pointer]:
+              - /url: mailto:ghm@iitpkd.ac.in
+        - generic [ref=f5e329]:
+          - link "Guest house website" [ref=f5e330] [cursor=pointer]:
+            - /url: /
+          - link "Guidelines" [ref=f5e331] [cursor=pointer]:
+            - /url: /guidelines
+          - link "Contact" [ref=f5e332] [cursor=pointer]:
+            - /url: /contact
+          - link "iitpkd.ac.in (opens in a new tab)" [ref=f5e333] [cursor=pointer]:
+            - /url: https://iitpkd.ac.in
+            - text: iitpkd.ac.in
+            - generic [ref=f5e334]: (opens in a new tab)
+  - region "Notifications alt+T"
+  - alert [ref=f5e173]: My Bookings

@@ -8,11 +8,20 @@ import {
   importInstituteRecordsAction,
   listInstituteRecordsForConsole,
   planInstituteImportAction,
+  updateInstituteRecordAction,
 } from "@/app/actions/academic";
 import { SettingCard, useRunner } from "@/components/admin/settings-manager";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
@@ -334,7 +343,33 @@ function StoredSection({
   const { isPending, run } = useRunner();
   const [deleting, setDeleting] = useState<InstituteRecord | null>(null);
   const [clearing, setClearing] = useState(false);
-  const columns = (csvColumnsFor(kind) as readonly string[]).slice(1);
+  const [editing, setEditing] = useState<InstituteRecord | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
+  const allColumns = csvColumnsFor(kind) as readonly string[];
+  const columns = allColumns.slice(1);
+
+  const openEdit = (row: InstituteRecord) => {
+    const vals: Record<string, string> = {};
+    for (const col of allColumns) {
+      vals[col] = ((row as Record<string, unknown>)[col] as string) ?? "";
+    }
+    setEditValues(vals);
+    setEditing(row);
+  };
+
+  const saveEdit = () => {
+    if (!editing) return;
+    const data: Record<string, string | null> = {};
+    for (const col of allColumns) {
+      const v = editValues[col]?.trim();
+      data[col] = v || null;
+    }
+    run(
+      () => updateInstituteRecordAction(kind, editing.id, data),
+      "Record updated",
+      () => { setEditing(null); onChanged(); },
+    );
+  };
 
   return (
     <SettingCard
@@ -380,7 +415,16 @@ function StoredSection({
                   <td className="p-2 text-xs whitespace-nowrap text-muted-foreground">
                     {row.updated_at ? formatDateTime(row.updated_at as string) : "-"}
                   </td>
-                  <td className="p-2 text-right">
+                  <td className="p-2 text-right whitespace-nowrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isPending}
+                      onClick={() => openEdit(row)}
+                      className="mr-1"
+                    >
+                      Edit
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -448,6 +492,36 @@ function StoredSection({
           )
         }
       />
+
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit record</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            {allColumns.map((col) => (
+              <div key={col} className="space-y-1">
+                <Label htmlFor={`edit-${col}`}>{columnLabel(col)}</Label>
+                <Input
+                  id={`edit-${col}`}
+                  value={editValues[col] ?? ""}
+                  onChange={(e) =>
+                    setEditValues((prev) => ({ ...prev, [col]: e.target.value }))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveEdit} disabled={isPending}>
+              {isPending ? "Saving..." : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SettingCard>
   );
 }

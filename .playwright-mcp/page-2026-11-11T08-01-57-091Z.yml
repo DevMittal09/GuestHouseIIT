@@ -1,0 +1,120 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e2]:
+    - link "Skip to content" [ref=f4e3] [cursor=pointer]:
+      - /url: "#main"
+    - banner [ref=f4e4]:
+      - generic [ref=f4e5]:
+        - link "IIT Palakkad Guest House IIT Palakkad" [ref=f4e7] [cursor=pointer]:
+          - /url: /
+          - img "IIT Palakkad" [ref=f4e8]
+          - generic [ref=f4e10]:
+            - generic [ref=f4e11]: Guest House
+            - generic [ref=f4e12]: IIT Palakkad
+        - navigation "Main" [ref=f4e13]:
+          - generic [ref=f4e14]:
+            - link "Home" [ref=f4e15] [cursor=pointer]:
+              - /url: /
+            - link "Book a Room" [ref=f4e16] [cursor=pointer]:
+              - /url: /book-room
+            - link "Book a Meal" [ref=f4e17] [cursor=pointer]:
+              - /url: /book-meal
+            - link "Guidelines" [ref=f4e18] [cursor=pointer]:
+              - /url: /guidelines
+            - link "Gallery" [ref=f4e19] [cursor=pointer]:
+              - /url: /gallery
+            - link "Contact Us" [ref=f4e20] [cursor=pointer]:
+              - /url: /contact
+        - link "Sign in" [ref=f4e22] [cursor=pointer]:
+          - /url: /sign-in
+    - main [ref=f4e23]:
+      - generic [ref=f4e28]:
+        - generic [ref=f4e29]:
+          - paragraph [ref=f4e30]: Guest house portal
+          - heading "Sign in" [level=1] [ref=f4e31]
+          - paragraph [ref=f4e32]: Sign in with your institute account to book and follow your stays.
+        - generic [ref=f4e34]:
+          - link "Sign in" [ref=f4e36] [cursor=pointer]:
+            - /url: /mock-login
+          - paragraph [ref=f4e37]: "Mock authentication is a demo door: choose a kind of user, then the account to continue as. No password is needed."
+    - contentinfo [ref=f4e38]:
+      - generic [ref=f4e39]:
+        - generic [ref=f4e40]:
+          - link "IIT Palakkad Guest House IIT Palakkad" [ref=f4e41] [cursor=pointer]:
+            - /url: /
+            - img "IIT Palakkad" [ref=f4e42]
+            - generic [ref=f4e44]:
+              - generic [ref=f4e45]: Guest House
+              - generic [ref=f4e46]: IIT Palakkad
+          - generic [ref=f4e47]:
+            - generic [ref=f4e48]: Guest House, Indian Institute of Technology Palakkad
+            - generic [ref=f4e49]: Kanjikode West | Palakkad
+            - generic [ref=f4e50]: "Keralam | Pin: 678623"
+        - generic [ref=f4e51]:
+          - paragraph [ref=f4e52]: Guest House Manager
+          - paragraph [ref=f4e53]:
+            - link "+91 491 209 2016" [ref=f4e54] [cursor=pointer]:
+              - /url: tel:+914912092016
+            - link "ghm@iitpkd.ac.in" [ref=f4e55] [cursor=pointer]:
+              - /url: mailto:ghm@iitpkd.ac.in
+        - generic [ref=f4e56]:
+          - paragraph [ref=f4e57]: Find us
+          - list [ref=f4e58]:
+            - listitem [ref=f4e59]:
+              - generic [ref=f4e60]: Hamsanandi
+              - generic [ref=f4e61]:
+                - link "Map (opens in a new tab)" [ref=f4e62] [cursor=pointer]:
+                  - /url: https://maps.app.goo.gl/GbKrfiao8TuKxgNA6
+                  - text: Map
+                  - generic [ref=f4e66]: (opens in a new tab)
+                - link "Directions (opens in a new tab)" [ref=f4e67] [cursor=pointer]:
+                  - /url: https://www.google.com/maps/dir/?api=1&destination=10.7984359,76.7299972
+                  - text: Directions
+                  - generic [ref=f4e71]: (opens in a new tab)
+            - listitem [ref=f4e72]:
+              - generic [ref=f4e73]: Bageshri
+              - generic [ref=f4e74]:
+                - link "Map (opens in a new tab)" [ref=f4e75] [cursor=pointer]:
+                  - /url: https://maps.app.goo.gl/AspNpPu7sTDLXxL2A
+                  - text: Map
+                  - generic [ref=f4e79]: (opens in a new tab)
+                - link "Directions (opens in a new tab)" [ref=f4e80] [cursor=pointer]:
+                  - /url: https://www.google.com/maps/dir/?api=1&destination=10.8063107,76.726681
+                  - text: Directions
+                  - generic [ref=f4e84]: (opens in a new tab)
+            - listitem [ref=f4e85]:
+              - link "How to reach the campus (opens in a new tab)" [ref=f4e86] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/how-reach
+                - text: How to reach the campus
+                - generic [ref=f4e90]: (opens in a new tab)
+        - generic [ref=f4e91]:
+          - paragraph [ref=f4e92]: Institute
+          - list [ref=f4e93]:
+            - listitem [ref=f4e94]:
+              - link "IIT Palakkad website (opens in a new tab)" [ref=f4e95] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in
+                - text: IIT Palakkad website
+                - generic [ref=f4e99]: (opens in a new tab)
+            - listitem [ref=f4e100]:
+              - link "Guest house on iitpkd.ac.in (opens in a new tab)" [ref=f4e101] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/guest-house-hamsanandi
+                - text: Guest house on iitpkd.ac.in
+                - generic [ref=f4e105]: (opens in a new tab)
+            - listitem [ref=f4e106]:
+              - link "How to reach the campus (opens in a new tab)" [ref=f4e107] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/how-reach
+                - text: How to reach the campus
+                - generic [ref=f4e111]: (opens in a new tab)
+            - listitem [ref=f4e112]:
+              - link "Telephone directory (opens in a new tab)" [ref=f4e113] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/TelephoneDirectory
+                - text: Telephone directory
+                - generic [ref=f4e117]: (opens in a new tab)
+      - generic [ref=f4e119]:
+        - generic [ref=f4e120]: © 2026 Indian Institute of Technology Palakkad
+        - generic [ref=f4e121]:
+          - link "Guidelines" [ref=f4e122] [cursor=pointer]:
+            - /url: /guidelines
+          - link "Contact" [ref=f4e123] [cursor=pointer]:
+            - /url: /contact
+  - region "Notifications alt+T"
+  - alert [ref=f4e124]

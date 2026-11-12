@@ -1,0 +1,225 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "Skip to content" [ref=e3] [cursor=pointer]:
+      - /url: "#main"
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link "IIT Palakkad Guest House IIT Palakkad" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img "IIT Palakkad" [ref=e8]
+          - generic [ref=e10]:
+            - generic [ref=e11]: Guest House
+            - generic [ref=e12]: IIT Palakkad
+        - link "Sign in" [ref=e14] [cursor=pointer]:
+          - /url: /sign-in
+      - navigation "Main" [ref=e17]:
+        - generic [ref=e18]:
+          - link "Home" [ref=e19] [cursor=pointer]:
+            - /url: /
+          - link "Book a Room" [ref=e20] [cursor=pointer]:
+            - /url: /book-room
+          - link "Book a Meal" [ref=e21] [cursor=pointer]:
+            - /url: /book-meal
+          - link "Guidelines" [ref=e22] [cursor=pointer]:
+            - /url: /guidelines
+          - link "Gallery" [ref=e23] [cursor=pointer]:
+            - /url: /gallery
+          - link "Contact Us" [ref=e24] [cursor=pointer]:
+            - /url: /contact
+    - main [ref=e25]:
+      - generic [ref=e26]:
+        - group "Photographs of the guest houses" [ref=e27]:
+          - generic [ref=e29]:
+            - group "1 of 2" [ref=e30]:
+              - 'img "Hamsanandi guest house: two-storey blocks along a paved courtyard" [ref=e31]'
+            - group [aria-hidden] [ref=e32]
+        - button "Pause the photographs" [ref=e35]
+        - generic:
+          - generic:
+            - paragraph:
+              - generic: Indian Institute of Technology Palakkad
+            - heading "Guest House Portal" [level=1]
+            - paragraph: An integrated booking portal for comfortable guest accommodation and convenient meal reservations at IIT Palakkad.
+            - generic:
+              - link "Book a Room" [ref=e36] [cursor=pointer]:
+                - /url: /book-room
+              - link "Book a Meal" [ref=e37] [cursor=pointer]:
+                - /url: /book-meal
+      - region "Staying on campus" [ref=e38]:
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]:
+              - paragraph [ref=e43]: Welcome
+              - heading "Staying on campus" [level=2] [ref=e45]
+            - generic [ref=e47]:
+              - paragraph [ref=e48]: Bageshri and Hamsanandi are the institute's guest houses on the campus at Palakkad.
+              - paragraph [ref=e49]: Rooms are requested through this portal, and meals where the guest house has a kitchen.
+          - img "Entrance to a guest house block, between the lawns" [ref=e52]
+      - region "Amenities" [ref=e53]:
+        - generic [ref=e54]:
+          - generic [ref=e55]:
+            - paragraph [ref=e56]: Facilities
+            - heading "Amenities" [level=2] [ref=e58]
+          - list [ref=e60]:
+            - listitem [ref=e61]:
+              - generic [ref=e75]: Air-conditioned rooms
+            - listitem [ref=e76]:
+              - generic [ref=e81]: Attached bathrooms
+            - listitem [ref=e82]:
+              - generic [ref=e87]: Wi-Fi
+            - listitem [ref=e88]:
+              - generic [ref=e92]: Television
+            - listitem [ref=e93]:
+              - generic [ref=e96]: Refrigerator
+            - listitem [ref=e97]:
+              - generic [ref=e103]: Dining
+      - region "A look inside" [ref=e104]:
+        - generic [ref=e105]:
+          - generic [ref=e106]:
+            - paragraph [ref=e107]: Gallery
+            - generic [ref=e108]:
+              - heading "A look inside" [level=2] [ref=e109]
+              - link "See the full gallery" [ref=e110] [cursor=pointer]:
+                - /url: /gallery
+          - list [ref=e114]:
+            - listitem [ref=e115]:
+              - img "Front of a guest house block, with lawn and flowering trees" [ref=e117]
+            - listitem [ref=e118]:
+              - img "Open corridor and staircase around a planted courtyard" [ref=e120]
+            - listitem [ref=e121]:
+              - img "Bedroom with a double bed, air conditioning and a writing desk" [ref=e123]
+            - listitem [ref=e124]:
+              - img "Twin-bedded room with armchairs and a bedside table" [ref=e126]
+            - listitem [ref=e127]:
+              - img "Kitchen corner with a refrigerator, kettle and sink" [ref=e129]
+            - listitem [ref=e130]:
+              - img "Living area with a sofa, armchairs and a dining table" [ref=e132]
+      - region "Our guest houses" [ref=e133]:
+        - generic [ref=e134]:
+          - generic [ref=e135]:
+            - paragraph [ref=e136]: Accommodation
+            - heading "Our guest houses" [level=2] [ref=e138]
+          - list [ref=e140]:
+            - listitem [ref=e141]:
+              - heading "Bageshri" [level=2] [ref=e142]
+              - link "Book a Room" [ref=e145] [cursor=pointer]:
+                - /url: /book-room
+            - listitem [ref=e146]:
+              - heading "Hamsanandi" [level=2] [ref=e147]
+              - generic [ref=e149]:
+                - link "Book a Room" [ref=e150] [cursor=pointer]:
+                  - /url: /book-room
+                - link "Book a Meal" [ref=e151] [cursor=pointer]:
+                  - /url: /book-meal
+      - region "Contact us" [ref=e152]:
+        - generic [ref=e153]:
+          - generic [ref=e154]:
+            - paragraph [ref=e155]: Contact
+            - heading "Contact us" [level=2] [ref=e157]
+          - list [ref=e159]:
+            - listitem [ref=e160]:
+              - paragraph [ref=e161]: Guest House Manager
+              - link "+91 491 209 2016" [ref=e162] [cursor=pointer]:
+                - /url: tel:+914912092016
+            - listitem [ref=e163]:
+              - paragraph [ref=e164]: Email
+              - link "ghm@iitpkd.ac.in" [ref=e165] [cursor=pointer]:
+                - /url: mailto:ghm@iitpkd.ac.in
+            - listitem [ref=e166]:
+              - paragraph [ref=e167]: Address
+              - generic [ref=e168]:
+                - generic [ref=e169]: Guest House, Indian Institute of Technology Palakkad
+                - generic [ref=e170]: Kanjikode West | Palakkad
+                - generic [ref=e171]: "Keralam | Pin: 678623"
+          - list [ref=e172]:
+            - listitem [ref=e173]:
+              - heading "Hamsanandi" [level=3] [ref=e174]
+              - iframe [ref=e175]
+            - listitem [ref=e176]:
+              - heading "Bageshri" [level=3] [ref=e177]
+              - iframe [ref=e178]
+          - paragraph [ref=e179]:
+            - link "Read the guidelines" [ref=e180] [cursor=pointer]:
+              - /url: /guidelines
+    - contentinfo [ref=e183]:
+      - generic [ref=e184]:
+        - generic [ref=e185]:
+          - link "IIT Palakkad Guest House IIT Palakkad" [ref=e186] [cursor=pointer]:
+            - /url: /
+            - img "IIT Palakkad" [ref=e187]
+            - generic [ref=e189]:
+              - generic [ref=e190]: Guest House
+              - generic [ref=e191]: IIT Palakkad
+          - generic [ref=e192]:
+            - generic [ref=e193]: Guest House, Indian Institute of Technology Palakkad
+            - generic [ref=e194]: Kanjikode West | Palakkad
+            - generic [ref=e195]: "Keralam | Pin: 678623"
+        - generic [ref=e196]:
+          - paragraph [ref=e197]: Guest House Manager
+          - paragraph [ref=e198]:
+            - link "+91 491 209 2016" [ref=e199] [cursor=pointer]:
+              - /url: tel:+914912092016
+            - link "ghm@iitpkd.ac.in" [ref=e200] [cursor=pointer]:
+              - /url: mailto:ghm@iitpkd.ac.in
+        - generic [ref=e201]:
+          - paragraph [ref=e202]: Find us
+          - list [ref=e203]:
+            - listitem [ref=e204]:
+              - generic [ref=e205]: Hamsanandi
+              - generic [ref=e206]:
+                - link "Map (opens in a new tab)" [ref=e207] [cursor=pointer]:
+                  - /url: https://maps.app.goo.gl/GbKrfiao8TuKxgNA6
+                  - text: Map
+                  - generic [ref=e211]: (opens in a new tab)
+                - link "Directions (opens in a new tab)" [ref=e212] [cursor=pointer]:
+                  - /url: https://www.google.com/maps/dir/?api=1&destination=10.7984359,76.7299972
+                  - text: Directions
+                  - generic [ref=e216]: (opens in a new tab)
+            - listitem [ref=e217]:
+              - generic [ref=e218]: Bageshri
+              - generic [ref=e219]:
+                - link "Map (opens in a new tab)" [ref=e220] [cursor=pointer]:
+                  - /url: https://maps.app.goo.gl/AspNpPu7sTDLXxL2A
+                  - text: Map
+                  - generic [ref=e224]: (opens in a new tab)
+                - link "Directions (opens in a new tab)" [ref=e225] [cursor=pointer]:
+                  - /url: https://www.google.com/maps/dir/?api=1&destination=10.8063107,76.726681
+                  - text: Directions
+                  - generic [ref=e229]: (opens in a new tab)
+            - listitem [ref=e230]:
+              - link "How to reach the campus (opens in a new tab)" [ref=e231] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/how-reach
+                - text: How to reach the campus
+                - generic [ref=e235]: (opens in a new tab)
+        - generic [ref=e236]:
+          - paragraph [ref=e237]: Institute
+          - list [ref=e238]:
+            - listitem [ref=e239]:
+              - link "IIT Palakkad website (opens in a new tab)" [ref=e240] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in
+                - text: IIT Palakkad website
+                - generic [ref=e244]: (opens in a new tab)
+            - listitem [ref=e245]:
+              - link "Guest house on iitpkd.ac.in (opens in a new tab)" [ref=e246] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/guest-house-hamsanandi
+                - text: Guest house on iitpkd.ac.in
+                - generic [ref=e250]: (opens in a new tab)
+            - listitem [ref=e251]:
+              - link "How to reach the campus (opens in a new tab)" [ref=e252] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/how-reach
+                - text: How to reach the campus
+                - generic [ref=e256]: (opens in a new tab)
+            - listitem [ref=e257]:
+              - link "Telephone directory (opens in a new tab)" [ref=e258] [cursor=pointer]:
+                - /url: https://iitpkd.ac.in/TelephoneDirectory
+                - text: Telephone directory
+                - generic [ref=e262]: (opens in a new tab)
+      - generic [ref=e264]:
+        - generic [ref=e265]: © 2026 Indian Institute of Technology Palakkad
+        - generic [ref=e266]:
+          - link "Guidelines" [ref=e267] [cursor=pointer]:
+            - /url: /guidelines
+          - link "Contact" [ref=e268] [cursor=pointer]:
+            - /url: /contact
+  - region "Notifications alt+T"
+  - alert [ref=e269]

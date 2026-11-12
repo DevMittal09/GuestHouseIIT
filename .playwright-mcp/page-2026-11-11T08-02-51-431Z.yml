@@ -1,0 +1,308 @@
+- generic [active] [ref=f6e1]:
+  - generic [ref=f6e2]:
+    - banner [ref=f6e3]:
+      - generic [ref=f6e4]:
+        - link "IIT Palakkad Guest House IIT Palakkad · Booking portal" [ref=f6e5] [cursor=pointer]:
+          - /url: /dashboard
+          - img "IIT Palakkad" [ref=f6e6]
+          - generic [ref=f6e8]:
+            - generic [ref=f6e9]: Guest House
+            - generic [ref=f6e10]: IIT Palakkad · Booking portal
+        - generic [ref=f6e11]:
+          - generic [ref=f6e12]:
+            - paragraph [ref=f6e13]: Arjun Pillai
+            - paragraph [ref=f6e14]: btech.saveri@smail.iitpkd.ac.in
+          - generic [ref=f6e15]: Student
+          - button "Switch user" [ref=f6e17] [cursor=pointer]
+    - navigation "Portal" [ref=f6e18]:
+      - generic [ref=f6e19]:
+        - link "My Bookings" [ref=f6e20] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Room Booking" [ref=f6e21] [cursor=pointer]:
+          - /url: /book
+        - link "Room Availability" [ref=f6e22] [cursor=pointer]:
+          - /url: /availability
+        - link "Booking History" [ref=f6e23] [cursor=pointer]:
+          - /url: /history
+    - main [ref=f6e25]:
+      - generic [ref=f6e26]:
+        - generic [ref=f6e28]:
+          - paragraph [ref=f6e29]: New request
+          - heading "New Booking Request" [level=1] [ref=f6e30]
+        - generic [ref=f6e31]:
+          - complementary [ref=f6e32]:
+            - generic [ref=f6e33]:
+              - generic [ref=f6e34]: Requester details
+              - generic [ref=f6e37]:
+                - generic [ref=f6e38]:
+                  - term [ref=f6e39]: Roll Number
+                  - definition [ref=f6e40]: "112301007"
+                - generic [ref=f6e41]:
+                  - term [ref=f6e42]: Name
+                  - definition [ref=f6e43]: Arjun Pillai
+                - generic [ref=f6e44]:
+                  - term [ref=f6e45]: Program
+                  - definition [ref=f6e46]: B.Tech
+                - generic [ref=f6e47]:
+                  - term [ref=f6e48]: Department
+                  - definition [ref=f6e49]: Computer Science and Engineering
+                - generic [ref=f6e50]:
+                  - term [ref=f6e51]: Email ID
+                  - definition [ref=f6e52]: btech.saveri@smail.iitpkd.ac.in
+                - generic [ref=f6e53]:
+                  - term [ref=f6e54]: Phone Number
+                  - definition [ref=f6e55]: Not on record
+                - generic [ref=f6e56]:
+                  - term [ref=f6e57]: Father's Name
+                  - definition [ref=f6e58]: Mohanan Pillai
+                - generic [ref=f6e59]:
+                  - term [ref=f6e60]: Mother's Name
+                  - definition [ref=f6e61]: Radhika Pillai
+                - generic [ref=f6e62]:
+                  - term [ref=f6e63]: Hostel
+                  - definition [ref=f6e64]: Saveri Boys
+                - generic [ref=f6e65]:
+                  - term [ref=f6e66]: Copy to
+                  - definition [ref=f6e67]:
+                    - list [ref=f6e68]:
+                      - listitem [ref=f6e69]:
+                        - text: Dr. Arun Prasad
+                        - generic [ref=f6e70]: "- advisor.cultural@iitpkd.ac.in"
+                      - listitem [ref=f6e71]:
+                        - text: Ms. Anu George
+                        - generic [ref=f6e72]: "- student.iitpkd01@gmail.com"
+                      - listitem [ref=f6e73]:
+                        - text: Dr. Lakshmi Devi
+                        - generic [ref=f6e74]: "- muhamed.rizwan2222@gmail.com"
+                      - listitem [ref=f6e75]:
+                        - text: Dr. Vinod Raj
+                        - generic [ref=f6e76]: "- dwarden.saveriboys@iitpkd.ac.in"
+            - generic [ref=f6e77]:
+              - region "Room tariff" [ref=f6e78]:
+                - heading "Room tariff" [level=2] [ref=f6e79]
+                - table [ref=f6e81]:
+                  - rowgroup [ref=f6e82]:
+                    - row [ref=f6e83]:
+                      - columnheader "Category" [ref=f6e84]
+                      - columnheader "Bageshri" [ref=f6e85]
+                  - rowgroup [ref=f6e86]:
+                    - row [ref=f6e87]:
+                      - rowheader "Category I Guests and relatives of employees / parents of students on a personal visit" [ref=f6e88]:
+                        - generic [ref=f6e89]: Category I
+                        - generic [ref=f6e90]: Guests and relatives of employees / parents of students on a personal visit
+                      - cell "₹1,000.00" [ref=f6e91]
+                    - row [ref=f6e92]:
+                      - rowheader "Category II Institute guests on official duty (Ministers, Directors, BOG, Selection Committee, External Examiners and Official Guests)" [ref=f6e93]:
+                        - generic [ref=f6e94]: Category II
+                        - generic [ref=f6e95]: Institute guests on official duty (Ministers, Directors, BOG, Selection Committee, External Examiners and Official Guests)
+                      - cell "₹1,500.00" [ref=f6e96]
+                    - row [ref=f6e97]:
+                      - rowheader "Category III Academic Visitors" [ref=f6e98]:
+                        - generic [ref=f6e99]: Category III
+                        - generic [ref=f6e100]: Academic Visitors
+                      - cell "₹2,000.00" [ref=f6e101]
+                - paragraph [ref=f6e102]: Per room per day.
+                - table "Rates at Bageshri, in force today" [ref=f6e105]:
+                  - caption [ref=f6e106]: Rates at Bageshri, in force today
+                  - rowgroup [ref=f6e107]:
+                    - row [ref=f6e108]:
+                      - columnheader "Charge" [ref=f6e109]
+                      - columnheader "Rate (incl. GST)" [ref=f6e110]
+                  - rowgroup [ref=f6e111]:
+                    - row [ref=f6e112]:
+                      - cell "Extra bed, per day" [ref=f6e113]
+                      - cell "Not published" [ref=f6e114]
+              - region "Catering timings" [ref=f6e115]:
+                - heading "Catering timings" [level=2] [ref=f6e116]
+                - generic [ref=f6e117]:
+                  - generic [ref=f6e118]:
+                    - term [ref=f6e119]: Breakfast
+                    - definition [ref=f6e120]: 8:00 – 9:30 AM
+                  - generic [ref=f6e121]:
+                    - term [ref=f6e122]: Lunch
+                    - definition [ref=f6e123]: 12:30 – 2:00 PM
+                  - generic [ref=f6e124]:
+                    - term [ref=f6e125]: Dinner
+                    - definition [ref=f6e126]: 7:30 – 9:00 PM
+          - generic [ref=f6e127]:
+            - paragraph [ref=f6e128]: Fields marked with * are mandatory.
+            - generic [ref=f6e129]:
+              - generic [ref=f6e130]:
+                - generic [ref=f6e131]: Type of booking
+                - generic [ref=f6e132]: A private visit - family or personal guests. Settled by you, not by the department.
+              - paragraph [ref=f6e134]: Personal
+            - paragraph [ref=f6e135]: An invoice will be generated and can be settled at the time of checkout. Multiple payment options are available at the guest house.
+            - generic [ref=f6e136]:
+              - generic [ref=f6e137]: Stay details
+              - generic [ref=f6e139]:
+                - generic [ref=f6e140]:
+                  - generic [ref=f6e141]: Number of rooms *
+                  - generic [ref=f6e142]:
+                    - button "Decrease" [disabled]: −
+                    - textbox "Number of rooms" [ref=f6e143]: "1"
+                    - button "Increase" [ref=f6e144] [cursor=pointer]: +
+                - generic [ref=f6e145]:
+                  - generic [ref=f6e146]: Check-in date & time *
+                  - button "Check-in date & time *" [ref=f6e147] [cursor=pointer]:
+                    - generic [ref=f6e148]: Choose a date
+                  - generic [ref=f6e151]:
+                    - generic [ref=f6e152]:
+                      - combobox "Check-in hour" [ref=f6e153] [cursor=pointer]:
+                        - option "12" [selected]
+                        - option "01"
+                        - option "02"
+                        - option "03"
+                        - option "04"
+                        - option "05"
+                        - option "06"
+                        - option "07"
+                        - option "08"
+                        - option "09"
+                        - option "10"
+                        - option "11"
+                      - generic [ref=f6e154]: ":"
+                      - combobox "Check-in minute" [ref=f6e155] [cursor=pointer]:
+                        - option "00" [selected]
+                        - option "05"
+                        - option "10"
+                        - option "15"
+                        - option "20"
+                        - option "25"
+                        - option "30"
+                        - option "35"
+                        - option "40"
+                        - option "45"
+                        - option "50"
+                        - option "55"
+                      - combobox "Check-in AM or PM" [ref=f6e156] [cursor=pointer]:
+                        - option "AM"
+                        - option "PM" [selected]
+                    - paragraph [ref=f6e157]: "Check-in: 12:00 PM"
+                - generic [ref=f6e158]:
+                  - generic [ref=f6e159]: Check-out date & time *
+                  - button "Check-out date & time *" [ref=f6e160] [cursor=pointer]:
+                    - generic [ref=f6e161]: Choose a date
+                  - generic [ref=f6e164]:
+                    - generic [ref=f6e165]:
+                      - combobox "Check-out hour" [ref=f6e166] [cursor=pointer]:
+                        - option "12"
+                        - option "01"
+                        - option "02"
+                        - option "03"
+                        - option "04"
+                        - option "05"
+                        - option "06"
+                        - option "07"
+                        - option "08"
+                        - option "09"
+                        - option "10" [selected]
+                        - option "11"
+                      - generic [ref=f6e167]: ":"
+                      - combobox "Check-out minute" [ref=f6e168] [cursor=pointer]:
+                        - option "00" [selected]
+                        - option "05"
+                        - option "10"
+                        - option "15"
+                        - option "20"
+                        - option "25"
+                        - option "30"
+                        - option "35"
+                        - option "40"
+                        - option "45"
+                        - option "50"
+                        - option "55"
+                      - combobox "Check-out AM or PM" [ref=f6e169] [cursor=pointer]:
+                        - option "AM" [selected]
+                        - option "PM"
+                    - paragraph [ref=f6e170]: "Check-out: 10:00 AM"
+                - generic [ref=f6e171]:
+                  - generic [ref=f6e172]: Purpose of visit *
+                  - textbox "Purpose of visit *" [ref=f6e173]
+            - generic [ref=f6e174]:
+              - generic [ref=f6e175]: Room availability
+              - paragraph [ref=f6e178]: Pick a guest house and a check-in date to see which rooms are free.
+            - generic [ref=f6e179]:
+              - generic [ref=f6e180]: Guests, room by room
+              - generic [ref=f6e182]:
+                - generic [ref=f6e183]: 1 room · 1 guest on this request.
+                - group "Room 1" [ref=f6e184]:
+                  - paragraph [ref=f6e187]: 1 guest in this room.
+                  - generic [ref=f6e189]:
+                    - paragraph [ref=f6e191]: Guest 1
+                    - generic [ref=f6e192]:
+                      - generic [ref=f6e193]:
+                        - generic [ref=f6e194]: Name *
+                        - textbox "Full name" [ref=f6e195]
+                      - generic [ref=f6e196]:
+                        - generic [ref=f6e197]: Age *
+                        - spinbutton [ref=f6e198]
+                      - generic [ref=f6e199]:
+                        - generic [ref=f6e200]: Gender *
+                        - combobox [ref=f6e201] [cursor=pointer]:
+                          - option "Select…" [selected]
+                          - option "Male"
+                          - option "Female"
+                          - option "Other"
+                      - generic [ref=f6e202]:
+                        - generic [ref=f6e203]: Relationship *
+                        - combobox [ref=f6e204] [cursor=pointer]:
+                          - option "Select…" [selected]
+                          - option "Mother"
+                          - option "Father"
+                          - option "Grandmother - needs a parent on this request" [disabled]
+                          - option "Grandfather - needs a parent on this request" [disabled]
+                          - option "Siblings - needs a parent on this request" [disabled]
+                          - option "Spouse - MS and PhD research scholars only" [disabled]
+                          - option "Self"
+                      - generic [ref=f6e205]:
+                        - generic [ref=f6e206]: Citizenship *
+                        - combobox [ref=f6e207] [cursor=pointer]:
+                          - option "Indian" [selected]
+                          - option "Other"
+                      - generic [ref=f6e208]:
+                        - generic [ref=f6e209]: Aadhaar number *
+                        - textbox "1234 5678 9012" [ref=f6e210]
+                        - paragraph [ref=f6e211]: 12 digits.
+                      - generic [ref=f6e212]:
+                        - generic [ref=f6e213]: ID document *
+                        - button "Choose File" [ref=f6e214]
+                  - generic [ref=f6e215]:
+                    - button "Add guest" [ref=f6e216] [cursor=pointer]
+                    - button "Add infant (below 5)" [ref=f6e217] [cursor=pointer]
+                - button "Add room" [ref=f6e219] [cursor=pointer]
+            - generic [ref=f6e220]:
+              - generic [ref=f6e221]:
+                - generic [ref=f6e222]: Copy to (optional)
+                - generic [ref=f6e223]: Copied on every mail you get about this booking.
+              - generic [ref=f6e224]:
+                - generic [ref=f6e226]:
+                  - generic [ref=f6e227]: Copy to address 1
+                  - textbox "Copy to address 1" [ref=f6e228]:
+                    - /placeholder: name@example.com
+                - button "Add another email" [ref=f6e229] [cursor=pointer]
+            - generic [ref=f6e230]:
+              - button "Cancel" [ref=f6e231] [cursor=pointer]
+              - button "Submit booking request" [ref=f6e232] [cursor=pointer]
+    - contentinfo [ref=f6e233]:
+      - generic [ref=f6e234]:
+        - generic [ref=f6e235]:
+          - generic [ref=f6e236]: © Indian Institute of Technology Palakkad
+          - generic [ref=f6e237]:
+            - generic [ref=f6e238]: Guest house office
+            - link "+91 491 209 2016" [ref=f6e239] [cursor=pointer]:
+              - /url: tel:+914912092016
+            - link "ghm@iitpkd.ac.in" [ref=f6e240] [cursor=pointer]:
+              - /url: mailto:ghm@iitpkd.ac.in
+        - generic [ref=f6e241]:
+          - link "Guest house website" [ref=f6e242] [cursor=pointer]:
+            - /url: /
+          - link "Guidelines" [ref=f6e243] [cursor=pointer]:
+            - /url: /guidelines
+          - link "Contact" [ref=f6e244] [cursor=pointer]:
+            - /url: /contact
+          - link "iitpkd.ac.in (opens in a new tab)" [ref=f6e245] [cursor=pointer]:
+            - /url: https://iitpkd.ac.in
+            - text: iitpkd.ac.in
+            - generic [ref=f6e246]: (opens in a new tab)
+  - region "Notifications alt+T"
+  - alert [ref=f6e247]
