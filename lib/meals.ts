@@ -106,7 +106,7 @@ export const DEFAULT_MEALS_ON: MealPreferences = {
  * section only**, and nowhere else.
  */
 export const MEAL_CHANGE_NOTICE =
-  "In any case talk with caretaker for any change in meal booking";
+  "For any changes to the meal booking, please coordinate with the caretaker";
 
 /**
  * The most days a meal plan may cover. A guard against a runaway loop on a

@@ -88,7 +88,7 @@ export default async function DashboardPage() {
               icon={UtensilsCrossed}
               tone="ink"
               title="Meal booking"
-              detail={mealHouseNames ? `At ${mealHouseNames}, no room` : "No room"}
+              detail={mealHouseNames ? `At ${mealHouseNames} (For Meal Booking Alone)` : "No Meals Available"}
             />
           )}
           {/* A faculty in-charge books for each of their clubs. */}

@@ -19,6 +19,8 @@ import { hodApproversFor } from "@/lib/units";
 import { bookingContextFor } from "@/lib/booking-context-server";
 import { academicRecordFor } from "@/lib/academic";
 import { guestNameRule, lockedNameFor } from "@/lib/academic/guest-names";
+import { isSelfRelationship } from "@/lib/self-details";
+import { selfDetailsFor } from "@/lib/self-details-server";
 import { describeProject } from "@/lib/projects";
 import { MEAL_KEYS, mealCapacityError, mealPlatesBooked } from "@/lib/meals";
 import { validateCustomValue } from "@/lib/form-config";
@@ -186,7 +188,10 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
      * `academicRecordFor` never throws and caches, so a database that cannot
      * be reached simply leaves the names editable, as it does on the form.
      */
-    const lookup = await academicRecordFor(requester);
+    const [lookup, selfDetails] = await Promise.all([
+      academicRecordFor(requester),
+      selfDetailsFor(requester),
+    ]);
     const guestNames = guestNameRule(
       lookup.status === "found" ? lookup.record : null,
       config.relationship_options,
@@ -362,6 +367,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
          */
         const recordedName = infant ? null : lockedNameFor(guestNames, g.relationship);
         const recorded = recordedName !== null;
+        const self = !infant && isSelfRelationship(g.relationship);
         const file = formData.get(`guest_doc_${roomIndex}_${guestIndex}`);
         let documentUrl: string | null = null;
         if (file instanceof File && file.size > 0) {
@@ -375,11 +381,11 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
           };
         }
         guests.push({
-          name: recordedName ?? (g.name || "Guest"),
+          name: self && selfDetails.name ? selfDetails.name : recordedName ?? (g.name || "Guest"),
           age: g.age,
-          gender: (g.gender as Gender | undefined) ?? "other",
+          gender: self && selfDetails.gender ? selfDetails.gender : (g.gender as Gender | undefined) ?? "other",
           relationship: g.relationship ?? null,
-          id_number: infant || !g.id_number ? null : aadhaarDigits(g.id_number),
+          id_number: infant || !g.id_number ? null : self && selfDetails.id_number ? selfDetails.id_number : aadhaarDigits(g.id_number),
           id_document_url: documentUrl,
           is_infant: infant,
           citizenship: g.citizenship,

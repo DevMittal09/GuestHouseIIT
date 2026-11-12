@@ -17,6 +17,7 @@ import { tariffCategorySheet } from "@/lib/tariff-category";
 import { tariffPreviews } from "@/lib/tariffs";
 import { academicRecordFor } from "@/lib/academic";
 import { guestNameRule } from "@/lib/academic/guest-names";
+import { selfDetailsFor } from "@/lib/self-details-server";
 import { toInstituteDateValue } from "@/lib/tz";
 import { PageHeader } from "@/components/page-header";
 import { AcademicDetailsCard } from "@/components/academic-details";
@@ -105,10 +106,11 @@ export async function BookingRequestPage({
   // …and the requester's academic record, which fixes a student's parents'
   // names (7 Oct 2026) - the form shows them read-only and does not offer a
   // relationship the record rules out.
-  const [config, context, lookup] = await Promise.all([
+  const [config, context, lookup, selfDetails] = await Promise.all([
     getEffectiveFormConfig(requester.role),
     bookingContextFor(requester),
     academicRecordFor(requester),
+    selfDetailsFor(requester),
   ]);
   const guestNames = guestNameRule(
     lookup.status === "found" ? lookup.record : null,
@@ -237,6 +239,7 @@ export async function BookingRequestPage({
         tariffPreviews={rates}
         tariffSheet={tariffSheet}
         guestNames={guestNames}
+        selfDetails={selfDetails}
         aside={
           /* Who is asking, from the academic database. Read-only, so it is
              rendered here and passed in. For a club's booking, that is the

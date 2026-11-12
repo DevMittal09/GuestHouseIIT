@@ -107,7 +107,7 @@ export function mailConfig(): MailConfig {
     pass,
     redirectAllTo: env("MAIL_REDIRECT_ALL_TO"),
     allowedRecipients: parseAllowedRecipients(env("MAIL_ALLOWED_RECIPIENTS")),
-    baseUrl: (env("APP_BASE_URL") ?? env("NEXT_PUBLIC_APP_URL") ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
+    baseUrl: (env("APP_BASE_URL") ?? env("APP_URL") ?? env("NEXT_PUBLIC_APP_URL") ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
     messageIdDomain: env("MAIL_MESSAGE_ID_DOMAIN") ?? DEFAULT_MESSAGE_ID_DOMAIN,
   };
 }

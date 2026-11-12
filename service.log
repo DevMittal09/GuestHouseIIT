@@ -60,3 +60,28 @@
 - Network:       http://127.0.0.1:3000
 ✓ Ready in 226ms
 ✓ Running next.config.ts took 196ms
+▲ Next.js 16.4.3
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 228ms
+✓ Running next.config.ts took 194ms
+[mail] smtp (smtp.gmail.com:465): 3 sent, 0 failed of 3 claimed
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed
+[mail] smtp (smtp.gmail.com:465): 1 sent, 0 failed of 1 claimed
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed
+[mail] smtp (smtp.gmail.com:465): 3 sent, 0 failed of 3 claimed
+[mail] smtp (smtp.gmail.com:465): 3 sent, 0 failed of 3 claimed
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed
+[mail] smtp (smtp.gmail.com:465): 3 sent, 0 failed of 3 claimed
+[mail] smtp (smtp.gmail.com:465): 3 sent, 0 failed of 3 claimed
+[mail] smtp (smtp.gmail.com:465): 3 sent, 0 failed of 3 claimed
+▲ Next.js 16.4.3
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 580ms
+✓ Running next.config.ts took 308ms
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed

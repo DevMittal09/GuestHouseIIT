@@ -102,6 +102,7 @@ import {
 import type { TariffPreview } from "@/lib/tariffs";
 import type { TariffSheetRow } from "@/lib/tariff-category";
 import { formatInstituteDateTime, instituteDate, toInstituteDateValue } from "@/lib/tz";
+import { EMPTY_SELF_DETAILS, isSelfRelationship, type SelfDetails } from "@/lib/self-details";
 import { cn } from "@/lib/utils";
 import { asksOfficeApproval, isOfficeRole, latestCheckIn } from "@/lib/workflow";
 import { RequiredFieldsNote } from "@/components/required-fields-note";
@@ -254,6 +255,7 @@ export function BookingForm({
   tariffPreviews = [],
   tariffSheet = [],
   guestNames = NO_GUEST_NAME_RULE,
+  selfDetails = EMPTY_SELF_DETAILS,
   aside = null,
 }: {
   /**
@@ -264,6 +266,12 @@ export function BookingForm({
    * well, so the form and `createBooking` apply one rule.
    */
   guestNames?: GuestNameRule;
+  /**
+   * What the portal knows about the requester themselves (12 Nov 2026), for
+   * auto-filling when "Self" is chosen as the relationship. Fields with a
+   * value are filled in and read-only; null fields stay editable.
+   */
+  selfDetails?: SelfDetails;
   /**
    * The rates for each guest house and booking type the requester may pick,
    * resolved on the server with the same function the invoice uses
@@ -1182,19 +1190,21 @@ export function BookingForm({
           `setValue`), so keeping them out leaves the form exactly the element
           it was: `numbered-sections` counts its own cards, and nothing beside
           the questions is numbered as a step. */}
-      <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 lg:col-span-4 lg:col-start-9 lg:row-start-1 lg:self-start">
-        {aside}
-        <TariffPanel
-          sheet={tariffSheet}
-          guestHouses={guestHouses}
-          previews={tariffPreviews}
-          guestHouseId={selectedGuestHouseId}
-          bookingType={bookingType}
-          pricesIncludeGst={rules.invoice.prices_include_gst}
-          rules={rules}
-          mealsOnly={mealsOnly}
-          servesMeals={servesMeals}
-        />
+      <aside className="min-w-0 lg:sticky lg:top-24 lg:col-span-4 lg:col-start-9 lg:row-start-1 lg:self-start">
+        <div className="max-h-[calc(100vh-7rem)] overflow-y-auto space-y-6 rounded-lg border border-border p-4">
+          {aside}
+          <TariffPanel
+            sheet={tariffSheet}
+            guestHouses={guestHouses}
+            previews={tariffPreviews}
+            guestHouseId={selectedGuestHouseId}
+            bookingType={bookingType}
+            pricesIncludeGst={rules.invoice.prices_include_gst}
+            rules={rules}
+            mealsOnly={mealsOnly}
+            servesMeals={servesMeals}
+          />
+        </div>
       </aside>
       <form
         onSubmit={onSubmit}
@@ -1769,6 +1779,7 @@ export function BookingForm({
                 err={err}
                 capacity={rules.capacity}
                 guestNames={guestNames}
+                selfDetails={selfDetails}
                 setValue={setValue}
                 onRemove={roomFields.length > 1 ? () => setRoomToRemove(roomIndex) : undefined}
               />
@@ -2258,6 +2269,7 @@ function RoomCard({
   err,
   capacity,
   guestNames,
+  selfDetails,
   setValue,
   onRemove,
 }: {
@@ -2273,6 +2285,7 @@ function RoomCard({
   err: (path: string) => string | undefined;
   capacity: CapacityRules;
   guestNames: GuestNameRule;
+  selfDetails: SelfDetails;
   setValue: UseFormSetValue<FormValues>;
   /** Absent on the only room: a booking always has at least one. */
   onRemove?: () => void;
@@ -2331,6 +2344,7 @@ function RoomCard({
             err={err}
             number={numberOf(guestIndex)}
             guestNames={guestNames}
+            selfDetails={selfDetails}
             setValue={setValue}
             canRemove={fields.length > 1}
             onRemove={() => {
@@ -2403,6 +2417,7 @@ function GuestRow({
   err,
   number,
   guestNames,
+  selfDetails,
   setValue,
   canRemove,
   onRemove,
@@ -2422,6 +2437,7 @@ function GuestRow({
   /** This card's number among its own kind: Guest 2, Infant 1. */
   number: number;
   guestNames: GuestNameRule;
+  selfDetails: SelfDetails;
   setValue: UseFormSetValue<FormValues>;
   canRemove: boolean;
   onRemove: () => void;
@@ -2471,6 +2487,7 @@ function GuestRow({
    * by hand exactly as before.
    */
   const lockedName = lockedNameFor(guestNames, relationship);
+  const isSelf = isSelfRelationship(relationship);
   const relationshipField = register(`${base}.relationship`);
   // Keep the box and the payload holding the record's name: the field is
   // read-only, so nothing else would ever set it. Written from the change
@@ -2478,6 +2495,15 @@ function GuestRow({
   const onRelationshipChange = (value: string) => {
     const fixed = lockedNameFor(guestNames, value);
     if (fixed && gf.name !== "hidden") setValue(`${base}.name`, fixed, set);
+    if (isSelfRelationship(value)) {
+      if (selfDetails.name && gf.name !== "hidden") setValue(`${base}.name`, selfDetails.name, set);
+      if (selfDetails.gender && gf.gender !== "hidden") setValue(`${base}.gender`, selfDetails.gender, set);
+      if (selfDetails.id_number && gf.id_number !== "hidden") setValue(`${base}.id_number`, selfDetails.id_number, set);
+    } else if (isSelfRelationship(relationship)) {
+      if (selfDetails.name && gf.name !== "hidden") setValue(`${base}.name`, "", set);
+      if (selfDetails.gender && gf.gender !== "hidden") setValue(`${base}.gender`, "", set);
+      if (selfDetails.id_number && gf.id_number !== "hidden") setValue(`${base}.id_number`, "", set);
+    }
   };
 
   return (
@@ -2522,13 +2548,16 @@ function GuestRow({
                 name regardless. */}
             <Input
               placeholder={infantCard ? "Infant's full name" : "Full name"}
-              readOnly={lockedName !== null}
-              aria-readonly={lockedName !== null || undefined}
-              className={lockedName !== null ? "bg-muted/50" : undefined}
+              readOnly={lockedName !== null || (isSelf && selfDetails.name !== null)}
+              aria-readonly={lockedName !== null || (isSelf && selfDetails.name !== null) || undefined}
+              className={lockedName !== null || (isSelf && selfDetails.name !== null) ? "bg-muted/50" : undefined}
               {...register(`${base}.name`)}
             />
             {lockedName !== null && (
               <p className="text-xs text-muted-foreground">{LOCKED_NAME_HINT}</p>
+            )}
+            {isSelf && selfDetails.name !== null && lockedName === null && (
+              <p className="text-xs text-muted-foreground">From your account.</p>
             )}
             <FieldError message={err(`${base}.name`)} />
           </div>
@@ -2567,12 +2596,26 @@ function GuestRow({
         {gf.gender !== "hidden" && (
           <div className="space-y-2">
             <Label>Gender{star(gf.gender)}</Label>
-            <NativeSelect {...register(`${base}.gender`)}>
-              <option value="">Select…</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-            </NativeSelect>
+            {isSelf && selfDetails.gender !== null ? (
+              <>
+                <Input
+                  readOnly
+                  aria-readonly
+                  value={selfDetails.gender === "male" ? "Male" : selfDetails.gender === "female" ? "Female" : "Other"}
+                  className="bg-muted/50"
+                  tabIndex={-1}
+                />
+                <input type="hidden" {...register(`${base}.gender`)} />
+                <p className="text-xs text-muted-foreground">From your account.</p>
+              </>
+            ) : (
+              <NativeSelect {...register(`${base}.gender`)}>
+                <option value="">Select…</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </NativeSelect>
+            )}
             <FieldError message={err(`${base}.gender`)} />
           </div>
         )}
@@ -2691,9 +2734,16 @@ function GuestRow({
             <Input
               inputMode="numeric"
               placeholder="1234 5678 9012"
+              readOnly={isSelf && selfDetails.id_number !== null}
+              aria-readonly={isSelf && selfDetails.id_number !== null || undefined}
+              className={isSelf && selfDetails.id_number !== null ? "bg-muted/50" : undefined}
               {...register(`${base}.id_number`)}
             />
-            <p className="text-xs text-muted-foreground">{AADHAAR_DIGITS} digits.</p>
+            {isSelf && selfDetails.id_number !== null ? (
+              <p className="text-xs text-muted-foreground">From your account.</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">{AADHAAR_DIGITS} digits.</p>
+            )}
             <FieldError message={err(`${base}.id_number`)} />
           </div>
         )}
