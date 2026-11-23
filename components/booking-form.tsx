@@ -1233,11 +1233,6 @@ export function BookingForm({
           Booking for <span className="font-medium">{forClub.name}</span> as its Faculty Advisor.
         </p>
       )}
-      {forFaculty && (
-        <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-          Booking on behalf of <span className="font-medium">{forFaculty.name}</span>.
-        </p>
-      )}
 
       {/* What the stars below mean, said once, before the first one. */}
       <RequiredFieldsNote />

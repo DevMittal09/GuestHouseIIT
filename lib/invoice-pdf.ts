@@ -62,8 +62,11 @@ const PAD = 1.9;
 const BAND: [number, number, number] = [0xb7, 0xb7, 0xb7];
 const HEAD: [number, number, number] = [0xd9, 0xd9, 0xd9];
 const BODY_PT = 11;
-/** The invoice number's own size - the one fact set apart (10 Nov 2026). */
-const NUMBER_PT = 14;
+/**
+ * The invoice number's size: the same as the other facts since 23 Nov 2026
+ * (it was 14 pt from 10 Nov), set apart by bold alone.
+ */
+const NUMBER_PT = BODY_PT;
 const NOTE_PT = 9;
 const PT = 25.4 / 72;
 /** Where the footer's box starts, less a gap: the table stops above it. */
@@ -72,6 +75,16 @@ const CONTENT_BOTTOM = 258;
 const SIGNATORY_NAME = "C Lunginlal (GHM)";
 /** The line under the footer box. */
 const E_INVOICE_NOTE = "This is a computer-generated electronic invoice and does not require a physical signature.";
+/**
+ * The header images' size. Their shape is locked at 0.8 of the template's
+ * width to 0.88 of its height (slightly taller than the original); change
+ * `HEADER_SIZE` alone to make them bigger or smaller in that same shape.
+ */
+const HEADER_SIZE = 1.06;
+/** The header images' width against the template's (1 = full size). */
+const HEADER_SCALE = 0.8 * HEADER_SIZE;
+/** Their height against the template's, in the locked ratio to the width. */
+const HEADER_HEIGHT_SCALE = 0.88 * HEADER_SIZE;
 /** Where a continuation page starts. */
 const CONTINUED_TOP = MARGIN + 4;
 
@@ -128,11 +141,25 @@ function cell(
 function header(doc: jsPDF, invoice: InvoiceDocument): number {
   // word/header1.xml: the wordmark inline (4014788 × 922190 EMU), the logo
   // anchored 5314950 EMU from the column (1190625 × 934734 EMU).
+  //
+  // **Both images are drawn at `HEADER_SCALE`** of the template's width and
+  // `HEADER_HEIGHT_SCALE` of its height (23 Nov 2026, "reduce the height of
+  // the header a little", then a little taller at the same width): the
+  // wordmark keeps its left edge, the logo its right edge, and the title
+  // follows the logo's foot.
   const emu = (n: number) => n / 36000;
-  doc.addImage(wordmarkJpg, "JPEG", MARGIN + 180 * MM_PER_TWIP, 2.6, emu(4014788), emu(922190));
-  doc.addImage(logoPng, "PNG", MARGIN + emu(5314950) - 3.2, 3.4, emu(1190625), emu(934734));
+  const s = HEADER_SCALE;
+  const sh = HEADER_HEIGHT_SCALE;
+  const markW = emu(4014788) * s;
+  const markH = emu(922190) * sh;
+  doc.addImage(wordmarkJpg, "JPEG", MARGIN + 180 * MM_PER_TWIP, 2.6, markW, markH);
+  const logoW = emu(1190625) * s;
+  const logoH = emu(934734) * sh;
+  const logoRight = MARGIN + emu(5314950) - 3.2 + emu(1190625);
+  doc.addImage(logoPng, "PNG", logoRight - logoW, 3.4, logoW, logoH);
   font(doc, "bold");
-  const y = 32;
+  // 32 mm at full size: the title's baseline 2.6 mm under the logo.
+  const y = 3.4 + logoH + 2.6;
   doc.text(INVOICE_TITLE(invoice.guest_house), PAGE_W / 2, y, { align: "center" });
   return y + 2.2;
 }
@@ -152,11 +179,13 @@ function details(doc: jsPDF, invoice: InvoiceDocument, top: number): number {
   // with the template's 3 pt before and after.
   const para = 60 * MM_PER_TWIP;
   /**
-   * **The invoice number is set larger and bold** (10 Nov 2026, the owner:
-   * "invoice number should be more noticeable in the invoice"). The office's
-   * template prints every fact in one regular weight, and this is the single
+   * **The invoice number is set in bold** (10 Nov 2026, the owner: "invoice
+   * number should be more noticeable in the invoice"). The office's template
+   * prints every fact in one regular weight, and this is the single
    * deliberate exception: the number is what anybody holding the paper looks
-   * for first, and what every query about the bill quotes.
+   * for first, and what every query about the bill quotes. It was also 14 pt
+   * until 23 Nov 2026, when the larger size was judged out of place; it now
+   * matches the other facts at 11 pt.
    *
    * Picked out by `INVOICE_NUMBER_LABEL` rather than by position, so adding a
    * fact above it cannot silently promote the wrong row, and measured at its
@@ -315,7 +344,8 @@ function signatures(doc: jsPDF, invoice: InvoiceDocument, start: number, stamp: 
    */
   const sigLineH = 4.6;
   const sigLines = ["-Sd-", SIGNATORY_NAME];
-  const sigOffset = Math.max(18, 9.5 + lines.length * 3.6 + 8);
+  // One line (4.6 mm) less space above "-Sd-" than before (23 Nov 2026).
+  const sigOffset = Math.max(18, 9.5 + lines.length * 3.6 + 8) - sigLineH;
   const at: Cursor = { y: start };
   room(doc, at, sigOffset + (sigLines.length - 1) * sigLineH + 2);
   const top = at.y;

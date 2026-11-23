@@ -1008,7 +1008,7 @@ export function invoiceTotalLabels(doc: Pick<InvoiceDocument, "kind" | "rooms" |
     : { total: "Total (A+B)", grandTotal: "Grand Total (A+B including GST)" };
 }
 
-export const INVOICE_TITLE = (guestHouse: string) => `INVOICE - IIT Palakkad ${guestHouse} Guest House`;
+export const INVOICE_TITLE = (guestHouse: string) => `Invoice - IIT Palakkad ${guestHouse} Guest House`;
 
 /** One row of the tariff table: a room, an extra bed, a meal, or an additional charge. */
 export type InvoiceTableRow = {
