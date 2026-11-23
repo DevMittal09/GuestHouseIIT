@@ -90,9 +90,9 @@ function CheckoutRow({
 
   // Past its hour and still holding the room: the row the desk has to chase.
   const overdue = booking.check_out <= nowIso;
-  // Only a guest who actually checked in can be checked out. An APPROVED stay
-  // whose guest never arrived is closed off by the manager, not from here.
-  const canVacate = booking.status === "OCCUPIED";
+  // Only a guest who actually checked in can be checked out - unless the
+  // manager is doing a direct checkout on an approved stay.
+  const canVacate = booking.status === "OCCUPIED" || (isManager && booking.status === "APPROVED");
 
   const vacate = () =>
     startTransition(async () => {

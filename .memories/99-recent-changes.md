@@ -7,69 +7,70 @@ one is written up where every round is: what was asked in
 
 ---
 
-## Round of 11 November 2026 - the owner's reports
+## Round of 23 November 2026 - chain meal booking and staff-for-faculty booking
 
-Reports sent one after another while work was in progress, each **committed
-on its own**.
+Two new features requested by the office.
 
-### 1. "Copy to" mail never arrived
+### 1. Chain booking for meals
 
-**Cause: configuration, with a defect beside it.** Read from the shared
-database's outbox, booking `IITPKD-GH-2026-6NPTY`: the typed address was in
-`cc_emails` of both requester mails, both SENT. It is not on
-`MAIL_ALLOWED_RECIPIENTS` in `.env.local`, so it was dropped at send time, and
-nothing on the row said so.
+Meal-only bookings can now add dates as a **date range** instead of one at a
+time. A collapsible "Chain booking (recurring dates)" fieldset at the top of
+the meal dates picker lets the requester pick From and To dates, with two
+checkboxes: **Include Saturdays** and **Include Sundays** (both excluded by
+default). Clicking "Add dates" generates all matching weekdays and adds them
+to the existing date list with default meal slots ticked.
 
-| Change | Where |
+**Files changed:**
+
+| File | What |
 | --- | --- |
-| Skip a message only when **nobody** is left in To *or* Cc; a fake To no longer takes an allowed Cc with it | `lib/mail/dispatch.ts`, `hasAllowedRecipient` in `lib/mail/deliverable.ts` |
-| A sent row names who was dropped: "Not delivered to x (not in MAIL_ALLOWED_RECIPIENTS)" | `droppedRecipientsNote`, shown in `/admin/mail` as it already shows notes |
-| A Cc-only message writes no empty To header | `lib/mail/smtp.ts`, `lib/mail/file.ts` |
-| Tests | `tests/mail-dispatch-copy-to.test.ts` (new, real dispatch on the mock store), `tests/mail-allowlist.test.ts` |
+| `lib/meals.ts` | Added `chainMealDates(from, to, includeSaturdays, includeSundays)` |
+| `components/meal-dates-picker.tsx` | Added chain booking UI (fieldset, DateField controls, weekend checkboxes) |
+| `tests/dining.test.ts` | 9 tests for `chainMealDates` |
 
-**To make the address in the report receive mail on this deployment, add it
-to `MAIL_ALLOWED_RECIPIENTS` in `.env.local`** and restart the server. That is
-the owner's call and was not done for them.
+No schema, database or migration changes - the chain picker is purely a UI
+convenience that produces the same `dates[]` array the existing per-day picker
+produces.
 
-### 2. "Something went wrong while allocating rooms"
+### 2. Non-teaching staff booking on behalf of faculty
 
-**Cause: the shared database was behind the code.** `npm run
-check:migrations` reported **migration 36** missing; `allocateRooms` writes
-`bookings.tariff_category`, so every allocation failed with PostgreSQL
-`42703`, hidden by the action's catch-all.
+Non-teaching staff (`employee` with `staff_category === "staff"`) can now book
+on behalf of any teaching staff (faculty) member. The pattern mirrors
+`lib/club-booking.ts`: the booking hangs off the **faculty member's** account
+(`user_id`, `user_role: "employee"`), so it is routed, debited and scoped
+exactly as a faculty booking; `created_by` names the staff member.
 
-- **Applied to the shared database**, the owner having chosen this when
-  asked: the migration over the session pooler, then `npm run
-  seed:reference` (23 -> 26 active rooms: A1-A3 reserved, C1/C2
-  Director-only; 31 -> 37 rates). `check:migrations`: every migration
-  applied.
-- **`lib/db/schema-errors.ts`** (new): `schemaGapMessage` turns `42703` /
-  `42P01` into "The database is missing a column (bookings.tariff_category)
-  ... Run npm run check:migrations". Used by `allocateRooms`;
-  `tests/schema-errors.test.ts`.
-- Laptops restored from the 9 Nov dump still need both steps.
+Any non-teaching staff may book for any faculty member - there is no
+appointment like `faculty_advisor_id`. The staff member picks a faculty member
+from a **searchable dropdown** on the booking page, the form switches to that
+faculty member's options (booking types, debitable heads, service types), and
+the faculty member receives requester mail while the staff member is CC'd as
+the creator (through the existing `requesterCopyTo` in
+`lib/mail/recipients.ts`).
 
-### 3. The booking type, more visible again
+**Files changed:**
 
-"Make type of booking more visible in review panel of guest house manager,
-[Personal/Official]" - asked on 10 Nov too, answered then with bold text.
+| File | What |
+| --- | --- |
+| `lib/staff-booking.ts` | **New.** `isNonTeachingStaff`, `isFacultyMember`, `facultyBookableBy`, `raisedByStaffForFaculty` |
+| `lib/staff-booking-server.ts` | **New.** `facultyBookableByUser` (cached, like `clubsBookableByUser`) |
+| `components/faculty-search.tsx` | **New.** Client component: searchable faculty dropdown |
+| `components/booking-request-page.tsx` | Added `forFacultyId` prop, faculty resolution, `FacultyBookingAs` component |
+| `components/booking-form.tsx` | Added `forFaculty` prop, `for_faculty` in FormData, banner |
+| `app/actions/bookings.ts` | `for_faculty` handling in `createBooking` (validation, requester switch, `created_by`) |
+| `app/(portal)/book/page.tsx` | Passes `for_faculty` search param through |
+| `app/(portal)/book/meals/page.tsx` | Passes `for_faculty` search param through |
+| `tests/staff-booking.test.ts` | **New.** 17 tests for all staff-booking functions |
 
-- **`components/booking-type-tag.tsx`** (new): a **solid** tag - Official on
-  saffron, Personal on ink, Alumni outlined - so it cannot be mistaken for a
-  pale status tag.
-- On the manager's queue cell and, larger, in the **Review & Allocate
-  dialog's header** (`components/manager-queue.tsx`). `BookingDetails`
-  unchanged.
-- **Supersedes** 10 Nov's "weight and position, not a badge" for these two
-  places: `AGENTS.md`, [14-public-site-and-ui.md](14-public-site-and-ui.md),
-  [02-decisions.md](02-decisions.md).
-- Not checked in a browser (the owner prefers no headless sessions); it is on
-  the running dev server at `/manager`.
+No migration needed - detection via `created_by !== user_id` on an employee
+booking mirrors how `raisedByFacultyInCharge` works for clubs. The existing
+`requesterCopyTo`, `actsAsRequester` and `listBookingsForUser` all handle the
+`created_by` pattern generically.
 
-### Checks
+### Verification
 
-`npm run lint`, `npm run typecheck`, **700 tests in 43 files** clean. The
-build was not run while a `next dev` held port 3000 (it would have killed it).
-
-**The shared database was changed once**, in item 2 (migration 36 and the
-reference seed), at the owner's word. Item 1 only read it.
+- `npm run lint` - clean
+- `npm run typecheck` - clean
+- `npm run build` - clean
+- `npm test` - 726 tests in 44 files, all passing
+- `npm run check:memories` - clean

@@ -25,6 +25,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { clubBookingNotice, defaultCopyToFor, mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser, facultyInChargeForClub } from "@/lib/club-booking-server";
+import { facultyBookableByUser } from "@/lib/staff-booking-server";
+import { FacultySearch } from "@/components/faculty-search";
 
 /**
  * **The New Booking page, for both doors** (17 Oct 2026).
@@ -44,9 +46,11 @@ import { clubsBookableByUser, facultyInChargeForClub } from "@/lib/club-booking-
 export async function BookingRequestPage({
   service,
   forId: forParam,
+  forFacultyId: forFacultyParam,
 }: {
   service?: string;
   forId?: string;
+  forFacultyId?: string;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect(SIGN_IN_PATH);
@@ -82,10 +86,19 @@ export async function BookingRequestPage({
   const club = forParam ? (clubs.find((c) => c.id === forParam) ?? null) : null;
   if (forParam && !club) redirect("/book");
 
+  // Non-teaching staff may book on behalf of any faculty member (23 Nov 2026).
+  // The pattern mirrors clubs: the booking hangs off the faculty member's
+  // account, the staff member is `created_by`.
+  const facultyMembers = await facultyBookableByUser(user);
+  const faculty = forFacultyParam
+    ? (facultyMembers.find((f) => f.id === forFacultyParam) ?? null)
+    : null;
+  if (forFacultyParam && !faculty) redirect("/book");
+
   // The Guest House Manager is not a requester, but they take bookings at the
   // desk for people who never open the portal - the form asks them who the
   // stay is for and records both parties.
-  const onBehalf = canBookOnBehalf(user.role) && !club;
+  const onBehalf = canBookOnBehalf(user.role) && !club && !faculty;
   const requestsForSelf = REQUESTER_ROLES.includes(user.role) || canBookOnBehalf(user.role);
   if (!club && !requestsForSelf) {
     // An old Faculty Advisor account books only for its clubs: straight to
@@ -97,9 +110,10 @@ export async function BookingRequestPage({
   if (!club && user.role === "official" && !isWhitelistedOfficial(user.email, await getOfficialEmails())) {
     redirect("/dashboard");
   }
-  // Whose form this is: the club's, when its faculty in-charge is booking for
-  // it - `createBooking` builds the same from `for_club`.
-  const requester = club ?? user;
+  // Whose form this is: the club's when its faculty in-charge is booking for
+  // it, or the faculty member's when non-teaching staff is booking for them.
+  // `createBooking` builds the same from `for_club` / `for_faculty`.
+  const requester = club ?? faculty ?? user;
 
   // The same context `createBooking` builds, so the form offers exactly what
   // the server accepts: Settings, debitable heads, projects, the HOD.
@@ -126,6 +140,8 @@ export async function BookingRequestPage({
   );
   // Booking as Faculty Advisor, Copy to starts with the council secretary's
   // mailbox; the advisor may remove it or add more.
+  // Faculty-on-behalf: no default copy-to needed; the faculty is the requester
+  // and the staff member is CC'd as the creator automatically.
   const defaultCopyTo = club ? defaultCopyToFor(club, context.units) : [];
 
   // Meals and rooms are two doors onto the same form. `?service=meals_only`
@@ -178,26 +194,28 @@ export async function BookingRequestPage({
   return (
     <div className="space-y-8">
       <PageHeader
-        caption={club ? "Faculty Advisor booking" : onBehalf ? "Guest house desk" : "New request"}
+        caption={club ? "Faculty Advisor booking" : faculty ? "On behalf of faculty" : onBehalf ? "Guest house desk" : "New request"}
         title={
           club
             ? `New Booking for ${club.full_name}`
-            : mealsOnly
-              ? SERVICE_TYPE_LABELS.meals_only
-              : onBehalf
-                ? "New Booking (on behalf of a guest)"
-                : "New Booking Request"
+            : faculty
+              ? `New Booking for ${faculty.full_name}`
+              : mealsOnly
+                ? SERVICE_TYPE_LABELS.meals_only
+                : onBehalf
+                  ? "New Booking (on behalf of a guest)"
+                  : "New Booking Request"
         }
       >
-        {/* One line, or none (8 Oct 2026): the office asked the portal to
-            stop explaining itself. */}
         {club
           ? "Booking as its Faculty Advisor. The request is the club's."
-          : mealsOnly
-            ? "Meals with no room booked."
-            : onBehalf
-              ? "For a guest who cannot use the portal themselves."
-              : null}
+          : faculty
+            ? "Booking on behalf of a faculty member. The request is theirs."
+            : mealsOnly
+              ? "Meals with no room booked."
+              : onBehalf
+                ? "For a guest who cannot use the portal themselves."
+                : null}
       </PageHeader>
       {/* A professor who is a Faculty Advisor books as themselves or as the
           advisor of a council, fest or club - the same page, a different
@@ -208,6 +226,14 @@ export async function BookingRequestPage({
           clubs={clubs}
           current={club?.id ?? null}
           service={initialServiceType}
+        />
+      )}
+      {facultyMembers.length > 0 && !club && (
+        <FacultyBookingAs
+          self={user}
+          current={faculty?.id ?? null}
+          service={initialServiceType}
+          facultyMembers={facultyMembers}
         />
       )}
       {/* **The form lays out the two columns** (17 Oct 2026). It was this
@@ -224,6 +250,7 @@ export async function BookingRequestPage({
         // Copy to) were the previous requester's.
         key={`${requester.id}:${initialServiceType ?? "room"}`}
         forClub={club ? { id: club.id, name: club.full_name } : null}
+        forFaculty={faculty ? { id: faculty.id, name: faculty.full_name } : null}
         user={requester}
         guestHouses={guestHouses}
         config={config}
@@ -251,8 +278,8 @@ export async function BookingRequestPage({
              asked for the portal to stop narrating itself. */
           <AcademicDetailsCard
             user={requester}
-            title={club ? "Club details" : "Requester details"}
-            raisedBy={club ? user : null}
+            title={club ? "Club details" : faculty ? "Faculty details" : "Requester details"}
+            raisedBy={club ? user : faculty ? user : null}
           />
         }
       />
@@ -309,6 +336,62 @@ function BookingAs({
             );
           })}
         </nav>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * "Booking as": yourself, or on behalf of a faculty member. For non-teaching
+ * staff only (23 Nov 2026). A radio picks the mode; on "On behalf of faculty"
+ * a searchable dropdown picks the faculty member, which navigates to
+ * `/book?for_faculty=<id>` and re-mounts the form as that faculty member's.
+ */
+function FacultyBookingAs({
+  self,
+  current,
+  service,
+  facultyMembers,
+}: {
+  self: { full_name: string };
+  current: string | null;
+  service?: ServiceType;
+  facultyMembers: { id: string; full_name: string; email: string }[];
+}) {
+  const href = (facultyId: string | null) => {
+    const params = new URLSearchParams();
+    if (facultyId) params.set("for_faculty", facultyId);
+    if (service) params.set("service", service);
+    const query = params.toString();
+    return query ? `/book?${query}` : "/book";
+  };
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Booking as</CardTitle>
+        <CardDescription>
+          You may book on behalf of a faculty member.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <nav aria-label="Booking as" className="flex flex-wrap gap-2">
+          <Button asChild variant={current === null ? "default" : "outline"} size="sm">
+            <Link href={href(null)} aria-current={current === null ? "page" : undefined}>
+              Yourself - {self.full_name}
+            </Link>
+          </Button>
+        </nav>
+        {current === null && facultyMembers.length > 0 && (
+          <FacultySearch facultyMembers={facultyMembers} service={service} />
+        )}
+        {current !== null && (
+          <p className="text-sm text-muted-foreground">
+            Booking for {facultyMembers.find((f) => f.id === current)?.full_name ?? "faculty member"}.{" "}
+            <Link href={href(null)} className="underline">
+              Book for yourself instead
+            </Link>
+          </p>
+        )}
       </CardContent>
     </Card>
   );

@@ -947,3 +947,492 @@ Request body exceeded 10MB for /book. Only the first 10MB will be available unle
 [form-config] ignoring the saved form_configs row for "student": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
 [csp-violation] [{"age":0,"body":{"blockedURL":"eval","columnNumber":28327,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-OWRlOWIzNjQtZGRhMC00MDJmLWEzNTUtMmY4ZTVjM2QyNGU1' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/0gh8c2bv2-o9x.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 Edg/157.0.0.0"}]
 [csp-violation] [{"age":26542,"body":{"blockedURL":"eval","columnNumber":28338,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/warden","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-MjYyODVlNGYtNjA4My00YmIxLWE0ZjktZTMxMmJkNGI0NzA2' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://desktop-st0q16q.tail7a64ba.ts.net/warden","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3zio0itej61g5.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/warden","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36"}]
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":0,"body":{"blockedURL":"eval","columnNumber":28338,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/dashboard","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-OTE5ZGQ1NDgtZDA3Yy00NjdkLThhZjYtYjk2OTY5MjAwODJk' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3zio0itej61g5.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/dashboard","user_agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"}]
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":7997,"body":{"blockedURL":"eval","columnNumber":28338,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-ODk3MzJjNDYtYzA4NS00ZTNmLWI5NDctZjczOWEyNTFlYmJm' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3zio0itej61g5.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 Edg/157.0.0.0"}]
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":6651,"body":{"blockedURL":"eval","columnNumber":28338,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-NmQ3MTQ5MmItNmMzNy00MzZiLTkzNmEtZTA3NWQ3MGRhYzQ1' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3zio0itej61g5.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":0,"body":{"blockedURL":"eval","columnNumber":28338,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-Zjg5YmFjY2EtODdhZi00ZTVjLThkNmYtZDc2ZGY0YzMyNGM2' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://www.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3zio0itej61g5.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/","user_agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"}]
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":3344,"body":{"blockedURL":"eval","columnNumber":28338,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/admin/billing","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-ZTczOTc5YzktOTE5Yy00MWM4LTljNWEtNjM0NmI0ODQ2NDQz' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3zio0itej61g5.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/admin/billing","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[csp-violation] [{"age":54601,"body":{"blockedURL":"eval","columnNumber":28338,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/admin/billing","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-ZTExNGE2MDktNjdjNi00ZDU3LTlmOTgtMTQ2MjkyNWM1OGYx' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3zio0itej61g5.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/admin/billing","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+Error: The Server Reference ID did not match the expected format. Received "x".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__1wl0vw-n8lbkn._.js:11:2753)
+[csp-violation] [{"age":24624,"body":{"blockedURL":"eval","columnNumber":28347,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/admin/users","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-MzI5ODIyYjItOTFhNS00NWI0LTk5ZmYtYjAxMzUxMGU4NWQ2' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3b-iadz0i1thm.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/admin/users","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[csp-violation] [{"age":50313,"body":{"blockedURL":"eval","columnNumber":28347,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-ZTFhYWNlMDUtNTE2Ni00ZTFlLThiZGQtNzQzMWNlYTQwMzZh' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3b-iadz0i1thm.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":26700,"body":{"blockedURL":"eval","columnNumber":28347,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/dashboard","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-ZTBjNjE2OTUtZWM4Yy00M2E1LWE5YTctZDUyMDU2Y2Y4ZTJh' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3b-iadz0i1thm.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/dashboard","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[csp-violation] [{"age":27577,"body":{"blockedURL":"eval","columnNumber":28347,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-YzZlNjRmNmEtZWY1My00YjdjLTg2MWMtYjg1NGE4Y2U0MTBm' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3b-iadz0i1thm.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[csp-violation] [{"age":7208,"body":{"blockedURL":"eval","columnNumber":28347,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/admin/billing","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-ZjVlMjA2N2UtYTdjMC00YmRiLWE0ODctZDA5NDViMjkwMTYz' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3b-iadz0i1thm.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/admin/billing","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":16491,"body":{"blockedURL":"eval","columnNumber":28347,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/dashboard","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-Y2FiOTBlNWQtZmYwMC00Mzk0LThkNDgtYWYwYTViNjYxNjhh' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3b-iadz0i1thm.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/dashboard","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":23957,"body":{"blockedURL":"eval","columnNumber":28347,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-MjgwMjZmNzYtNjBiNC00YTY3LTg3ZGMtYmM1NDY0MjlhYmJj' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3b-iadz0i1thm.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":21817,"body":{"blockedURL":"eval","columnNumber":28347,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/dashboard","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-N2QyZTZmOGMtOGMyNy00NzMyLWE2YTEtZThlY2RmZTE3NDEz' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3b-iadz0i1thm.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/dashboard","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":31050,"body":{"blockedURL":"eval","columnNumber":28347,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-ZTA3OWQzZTEtNmY5MC00ZTBhLTg0OGItNGZjOWEzOWExZGM4' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3b-iadz0i1thm.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/manager","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+[form-config] ignoring the saved form_configs row for "student": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "employee": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[form-config] ignoring the saved form_configs row for "official": it is not a form configuration for that role. Open Form Builder and save, or press Reset to spec defaults, to replace it.
+[csp-violation] [{"age":55742,"body":{"blockedURL":"eval","columnNumber":28347,"disposition":"enforce","documentURL":"https://desktop-st0q16q.tail7a64ba.ts.net/admin/users","effectiveDirective":"script-src","lineNumber":1,"originalPolicy":"default-src 'self'; script-src 'self' 'nonce-ZDJjZDQ2ZDctNTM1ZS00ZmViLThiYmMtYjc0NTZmM2NjNjFh' 'strict-dynamic' https: ; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests; report-uri /api/csp-report; report-to csp-endpoint","referrer":"https://accounts.google.com/","sample":"","sourceFile":"https://desktop-st0q16q.tail7a64ba.ts.net/_next/static/chunks/3b-iadz0i1thm.js","statusCode":200},"type":"csp-violation","url":"https://desktop-st0q16q.tail7a64ba.ts.net/admin/users","user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0"}]
+Error: The Server Reference ID did not match the expected format. Received "y".
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at Object.get (C:\apps\GuestHouseIIT\.next\server\chunks\ssr\[root-of-the-server]__0zinytf9lareg._.js:11:2753)

@@ -251,6 +251,7 @@ export function BookingForm({
   debitHeads = { room: {}, dining: {} },
   hodApprovers = [],
   forClub = null,
+  forFaculty = null,
   defaultCopyTo = [],
   tariffPreviews = [],
   tariffSheet = [],
@@ -303,6 +304,13 @@ export function BookingForm({
    * submission carries the club's id for the server to re-check.
    */
   forClub?: { id: string; name: string } | null;
+  /**
+   * Set when non-teaching staff is booking on behalf of a faculty member
+   * (23 Nov 2026). `user` and `config` are then the faculty member's, so
+   * the form offers the faculty member's options; the submission carries the
+   * faculty member's id for the server to re-check.
+   */
+  forFaculty?: { id: string; name: string } | null;
   /**
    * What Copy to starts with - the council secretary's mailbox when a
    * Faculty Advisor books (`defaultCopyToFor`). A default, not a rule: the
@@ -1118,6 +1126,7 @@ export function BookingForm({
     // The server checks again that the signed-in person is this club's
     // faculty in-charge; this only says which club.
     if (forClub) formData.set("for_club", forClub.id);
+    if (forFaculty) formData.set("for_faculty", forFaculty.id);
     if (onBehalf) {
       formData.set("on_behalf_of_name", values.on_behalf_of_name);
       formData.set("on_behalf_of_email", values.on_behalf_of_email);
@@ -1222,6 +1231,11 @@ export function BookingForm({
       {forClub && (
         <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
           Booking for <span className="font-medium">{forClub.name}</span> as its Faculty Advisor.
+        </p>
+      )}
+      {forFaculty && (
+        <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          Booking on behalf of <span className="font-medium">{forFaculty.name}</span>.
         </p>
       )}
 

@@ -1,11 +1,14 @@
 "use client";
 
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { useState } from "react";
+import { CalendarRangeIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DateField } from "@/components/ui/date-field";
 import {
+  chainMealDates,
   isMealBookable,
   mealDeadlineNote,
+  DEFAULT_MEALS_ON,
   MEAL_KEYS,
   MEAL_LABELS,
   MEAL_SERVING_WINDOWS,
@@ -76,6 +79,27 @@ export function MealDatesPicker({
     onDatesChange(dates.filter((_, i) => i !== index));
   };
 
+  // ---- chain (recurring) booking mode ----
+  const [chainMode, setChainMode] = useState(false);
+  const [chainFrom, setChainFrom] = useState(minDate ?? "");
+  const [chainTo, setChainTo] = useState("");
+  const [includeSaturdays, setIncludeSaturdays] = useState(false);
+  const [includeSundays, setIncludeSundays] = useState(false);
+
+  const applyChain = () => {
+    const generated = chainMealDates(chainFrom, chainTo, includeSaturdays, includeSundays);
+    if (generated.length === 0) return;
+    const merged = [...new Set([...dates, ...generated])].sort();
+    onDatesChange(merged);
+    const next = new Set(slots);
+    for (const date of generated) {
+      for (const meal of MEAL_KEYS) {
+        if (DEFAULT_MEALS_ON[meal]) next.add(mealSlot(date, meal));
+      }
+    }
+    onSlotsChange(next);
+  };
+
   const addDate = () => {
     // The day after the last one chosen: consecutive days are the common
     // case, and any other date is one edit away in the row's own box.
@@ -87,6 +111,86 @@ export function MealDatesPicker({
 
   return (
     <div className="space-y-3">
+      {/* Chain booking: pick a date range and generate weekdays */}
+      <fieldset className="rounded-lg border p-3 space-y-3">
+        <legend className="px-1 text-sm font-semibold">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-sm font-semibold hover:underline"
+            onClick={() => setChainMode(!chainMode)}
+            aria-expanded={chainMode}
+          >
+            <CalendarRangeIcon className="size-4" />
+            Chain booking (recurring dates)
+          </button>
+        </legend>
+        {chainMode && (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Pick a date range to add all weekdays at once. Saturdays and Sundays are excluded by default.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1.5">
+                <label htmlFor="chain-from" className="block text-xs text-muted-foreground">
+                  From
+                </label>
+                <DateField
+                  id="chain-from"
+                  className="w-48"
+                  value={chainFrom}
+                  min={minDate}
+                  max={maxDate}
+                  onChange={setChainFrom}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="chain-to" className="block text-xs text-muted-foreground">
+                  To
+                </label>
+                <DateField
+                  id="chain-to"
+                  className="w-48"
+                  value={chainTo}
+                  min={chainFrom || minDate}
+                  max={maxDate}
+                  onChange={setChainTo}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={includeSaturdays}
+                  onChange={(e) => setIncludeSaturdays(e.target.checked)}
+                />
+                Include Saturdays
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={includeSundays}
+                  onChange={(e) => setIncludeSundays(e.target.checked)}
+                />
+                Include Sundays
+              </label>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!chainFrom || !chainTo || chainFrom > chainTo}
+              onClick={applyChain}
+            >
+              <PlusIcon />
+              Add dates
+            </Button>
+          </>
+        )}
+      </fieldset>
+
       {dates.map((date, index) => {
         const bookable = MEAL_KEYS.filter((meal) => isMealBookable(date, meal, now, windows));
         return (

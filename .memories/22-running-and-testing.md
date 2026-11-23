@@ -501,7 +501,7 @@ anything in `public/invoice/` or `assets/invoice/fonts/`, run
 `node scripts/build-invoice-assets.mjs`.
 
 To run a one-off TypeScript script against the mock store (seeding a checked-in
-stay, say), `npx vite-node --config vitest.config.ts script.ts` resolves the
+stay, say), `npx vite-node --config vitest.config.mts script.ts` resolves the
 `@/` aliases; `tsx` is not installed.
 
 
@@ -1023,7 +1023,7 @@ throwaway database on the same server, load `scripts/init-postgres.sql`,
 copy `guest_houses`, `rooms` and `tariffs` across, run
 `DATABASE_URL=<scratch> npm run seed:personas`, then a Vitest file outside
 the repo (its own config with `root` set to the repo and the `@` and
-`server-only` aliases from `vitest.config.ts`) that `vi.mock`s
+`server-only` aliases from `vitest.config.mts`) that `vi.mock`s
 `@/lib/auth`, `@/lib/revalidate`, `next/cache` and `next/server`'s
 `after`, and calls `createBooking` / `reviewBooking` / `allocateRooms` as
 each persona. Set `MAIL_DRY_RUN=true`. Drop the database afterwards

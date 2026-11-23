@@ -5501,7 +5501,7 @@ archived feature has to keep them:
   `design_handoff/**` - the prototype that has sat in this repo unbuilt since
   September. Archived code records what was there; holding it to today's lint
   rules would make it rot on purpose.
-- **`vitest.config.ts` collects only `tests/**/*.test.ts`** and Playwright only
+- **`vitest.config.mts` collects only `tests/**/*.test.ts`** and Playwright only
   `e2e/`, so an archived test never runs.
 - **Never `import` from it.** The moment application code does, the archive is
   in the bundle and all three are void. A restore is a **copy back**.
@@ -7972,4 +7972,149 @@ rule was about.
 
 Rejected: a pale `tag-yellow` / `tag-blue` pair - those already mean
 "with an approver" and "with the manager".
+
+## 18 November 2026 - desk lifecycle powers widened
+
+**The report:** the developer, GHM and caretaker should be able to edit
+check-in and check-out to past dates, and the GHM and developer should be
+able to check out a room at any time.
+
+### Developer joins LIFECYCLE_ROLES
+
+**Decided:** add `developer` to `LIFECYCLE_ROLES`, the same list that already
+held `gh_manager` and `gh_caretaker`. The developer is a superadmin who could
+already force any status from the All Bookings console; this gives them the
+standard lifecycle buttons (Mark Occupied, Mark Vacated, Manage) alongside the
+desk.
+
+**Why not just `hasFullBookingAccess`?** `LIFECYCLE_ROLES` is what
+`canUpdateLifecycle` checks, and both `extendStayAction` and `moveCheckInAction`
+gate on it. Adding the developer to the existing list is the narrowest change
+that opens every desk operation to them.
+
+### GHM and developer bypass the occupancy timing check
+
+**Decided:** `occupancyNotStartedError` accepts an optional `role` and returns
+null for `gh_manager` and `developer`. The caretaker stays bound by the 2-hour
+grace window.
+
+**Why.** The office needs to record check-ins retroactively - a guest who
+arrived yesterday, a stay the desk is entering after the fact. The timing
+check exists to protect the previous guest's turnaround, which is a concern
+the desk (the manager and the developer, who runs the portal) is in a position
+to judge. The caretaker is reception staff, not the authority that waives the
+turnaround.
+
+### Direct APPROVED -> VACATED for GHM and developer
+
+**Decided:** a separate `MANAGER_EXTRA_TRANSITIONS` map in
+`app/actions/bookings.ts`, checked only for `hasFullBookingAccess` roles.
+The base `LIFECYCLE_TRANSITIONS` (APPROVED -> OCCUPIED -> VACATED) is
+unchanged for the caretaker.
+
+**Why a separate map, not widening the base.** The caretaker should still walk
+the standard path: they confirm the guest arrived (OCCUPIED) and then confirm
+the guest left (VACATED). Only the manager and the developer record a stay
+that happened entirely in the past, where both steps would be ceremony.
+
+**For a personal stay,** direct checkout routes through the existing invoice
+dialog ("Check out & settle") rather than offering a bare "Mark as Vacated"
+that would bypass payment - `vacateBlocker` / `settlesAtCheckOut` still apply.
+
+**Cost.** The transition sends no OCCUPIED-step mail; the booking log records
+APPROVED -> VACATED directly. This is acceptable because a retroactive checkout
+is a desk correction, not a live event.
+
+## 18 November 2026 (second) - official whitelist on Portal Settings
+
+**The report:** the GHM should be able to edit the `official_email_whitelist`
+table, which had no UI accessible to them - it was on the developer-only
+Settings page.
+
+**Decided:** add the whitelist to **Portal Settings** (`/admin/portal`), which
+the GHM already uses, rather than opening the full Settings page (which holds
+capacity rules, hostels, booking window and meal times - all developer-only).
+
+**Why not open Settings?** The Settings page is developer-only by design: its
+rules can lock everyone out or change the booking window, and the meeting
+deliberated which of them to split. The whitelist is operational - it says
+which accounts may submit official bookings, which is an office decision.
+Portal Settings is where the other operational decisions already live (VIP
+rooms, the availability cap, the guidelines link).
+
+**How.** `WhitelistSection` was a private component in
+`components/admin/settings-manager.tsx`; it is now exported and rendered on
+both pages. A new `requireWhitelistConsole` guard accepts both the `portal`
+and `settings` console sections, so the add and remove actions work from
+either page. The whitelist stays on the developer's Settings page too - it was
+not removed, only made accessible from Portal Settings as well.
+
+**Cost.** The whitelist now appears in two places in the console. The
+developer sees it twice (Settings and Portal Settings); the GHM sees it once
+(Portal Settings). Both pages call the same server actions, so there is no
+divergence risk.
+
+## 19 November 2026 - dependency upgrades for production
+
+**The report:** fix all npm security vulnerabilities and upgrade every package
+to its latest version, including the dev toolchain (TypeScript, ESLint, vitest).
+This is a production build.
+
+**Decided:** TypeScript 5 -> 6, ESLint 9 -> 10, vitest 3 -> 5, and all other
+dependencies to their latest. TypeScript 7 was tried and rejected (typescript-
+eslint does not support it). ESLint 10's plugin peer-dep warnings are
+suppressed with `.npmrc` `legacy-peer-deps=true` until the plugins release
+ESLint 10 declarations. `vite` added as an explicit devDependency because
+`legacy-peer-deps` skips peer-dep auto-installation.
+
+**Why TypeScript 6, not 7?** `@typescript-eslint` refuses TS 7.0 at startup.
+TypeScript 6.0.3 is the latest the toolchain accepts.
+
+**Why `.npmrc` and not pinned ESLint 9?** ESLint 9.39.5 is deprecated with a
+startup warning. ESLint 10 works - lint, typecheck, build and 700 tests all
+pass. The peer-dep declarations in `eslint-plugin-import`, `eslint-plugin-
+jsx-a11y` and `eslint-plugin-react` have not caught up; `legacy-peer-deps`
+silences the install-time warnings.
+
+**Why rename vitest configs to `.mts`?** Vite 8 warns on ESM syntax
+(`import.meta.dirname`) in a `.ts` file loaded as CJS. The `.mts` extension
+forces ESM module evaluation. `__dirname` was replaced with
+`import.meta.dirname` (available in Node 22+, which the project requires).
+
+**Cost.** `.npmrc` applies to the whole project. `legacy-peer-deps` means npm
+will not auto-install any peer dependency; vite is the only one that mattered
+and it is now explicit. The `.mts` rename required updating the `test:pg`
+script and the two `tests-pg/` comment references.
+
+---
+
+### 23 November 2026 - chain meal booking and staff-for-faculty booking
+
+**Why a chain picker instead of replacing the per-day picker?** The chain
+picker generates dates and **adds** them to the existing date list. The per-day
+rows remain visible below for fine-tuning (removing individual dates, changing
+meals). This avoids replacing a working UI and lets the two modes coexist.
+Saturdays and Sundays are excluded by default because the office's meal
+bookings are overwhelmingly for weekday working lunches.
+
+**Why mirror the club-booking pattern for staff-on-behalf-of-faculty?** The
+existing `lib/club-booking.ts` already solves "person A books, person B is the
+requester": `user_id` = beneficiary, `created_by` = the person who submitted.
+Routes, debitable heads, scoping, mail recipients and `actsAsRequester` all
+work from `user_id`, and `requesterCopyTo` already CCs the creator when
+`created_by !== user_id`. No migration needed. The only difference from clubs
+is that any non-teaching staff may book for any faculty member (no appointment
+required), and detection is `user_role === "employee"` + `created_by !==
+user_id` rather than `user_role === "club"`.
+
+**Why a separate `for_faculty` query param instead of reusing `for`?** The
+`for` param is already used for clubs (club profile ids). Using a separate
+param avoids ambiguity and makes the intent explicit in the URL. A club id
+and a faculty id are both profile ids, so without separation a `for=<id>`
+could match either.
+
+**Why no migration?** The booking row looks like a normal employee (faculty)
+booking except `created_by` is set. The existing `created_by` column and
+the generic `requesterCopyTo` / `actsAsRequester` / `listBookingsForUser`
+logic handle everything.
 

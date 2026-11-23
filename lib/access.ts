@@ -192,7 +192,7 @@ export const CONSOLE_SECTIONS: Record<
     href: "/admin/portal",
     roles: ["gh_manager", "developer"],
     blurb:
-      "Who may be allotted a VIP room, how many free rooms a general requester is shown, and the link to the full guidelines.",
+      "Who may be allotted a VIP room, how many free rooms a general requester is shown, the link to the full guidelines, and which accounts may submit official bookings.",
   },
   forms: {
     label: "Form Builder",

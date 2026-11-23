@@ -5,7 +5,7 @@
 Current overrides to the historical descriptions below:
 
 - Manager and intermediate queues use submission timestamp ascending, with ID as a stable tie-breaker; official requests no longer jump ahead.
-- Portal Settings (`/admin/portal`) is available to GHM/developer: authorised VIP email addresses, role groups, the availability display cap, and the detailed-guidelines URL. Room classifications are edited in Guest Houses & Rooms.
+- Portal Settings (`/admin/portal`) is available to GHM/developer: authorised VIP email addresses, role groups, the availability display cap, the detailed-guidelines URL, and (18 Nov 2026) the **official email whitelist** - which accounts may submit official bookings. Room classifications are edited in Guest Houses & Rooms.
 - `general` rooms are ordinary inventory; `vip` rooms require an authorised requester. `director_only` is a separate VIP class for bookings raised directly by GHM/developer, even when an online requester is on the VIP allow list. `reserved` rooms cannot be allocated until reclassified.
 - Manager date edits preserve the first requested date pair and audit the reason. Shortening an allocated stay adjusts its room holds; editing pending dates before allocation uses the existing management action. The `booking.stay_shortened.requester` event now describes a general date change, with previous/updated dates and reason, addressed to the requester plus existing Copy-to recipients. Existing extension notifications remain.
 - Requester cancellation requires 24 hours' notice; GHM cancellation bypasses the notice and releases holds immediately. Requester cancellation remains a request until the manager confirms it. No automatic waiting-list promotion exists.
@@ -240,6 +240,16 @@ raised by the office or department that is paying, which has its own list. So
 they are never asked for the funds declaration either. The category comes from
 `profiles.staff_category`; an employee with none set is treated as faculty.
 
+- **Books on behalf of faculty** (23 Nov 2026): any non-teaching staff may
+  book for any faculty member. New Booking shows a "Booking as" card with a
+  searchable faculty dropdown (`/book?for_faculty=<faculty profile id>`). The
+  booking is the **faculty member's** (`user_id`, `user_role: "employee"`),
+  with the staff member as `created_by`, so the faculty's booking types,
+  debitable heads and routes apply. The faculty is mailed as the requester;
+  the staff member is CC'd as the creator (the existing `requesterCopyTo`
+  generic logic). Both see it on My Bookings (`actsAsRequester`). No
+  appointment needed, unlike Faculty Advisors. See `lib/staff-booking.ts`.
+
 #### Faculty Advisor (a professor, by appointment)
 
 The student bodies are a hierarchy — **Faculty Advisor → student secretary
@@ -418,11 +428,13 @@ Faculty Advisor raises.
   **Upcoming stays**, **Missed requests** (nobody decided them in time; the
   last 21 days — 7 Oct 2026) and **Awaiting payment** (every issued, unpaid
   invoice, **with no cut-off** — 7 Oct 2026).
-- **Mark Occupied** (from 2 hours before check-in, never earlier) / **Mark
-  Vacated** — except a **personal** stay, whose row shows **Check out &
-  settle** instead: its check-out is the invoice (issue → pay → vacate, in one
-  dialog, 7 Oct 2026). The manager alone may close one off unpaid, with a
-  reason that goes in the log.
+- **Mark Occupied** (at any time for the GHM; the caretaker from 2 hours before
+  check-in, never earlier) / **Mark Vacated** — including **directly from
+  APPROVED** for the GHM (18 Nov 2026), bypassing the OCCUPIED step — except a
+  **personal** stay, whose row shows **Check out & settle** instead: its
+  check-out is the invoice (issue → pay → vacate, in one dialog, 7 Oct 2026).
+  The manager alone may close one off unpaid, with a reason that goes in the
+  log.
 - **Reinstate** a Missed request: it goes back to the stage it was waiting at,
   with a reason; its dates then need moving from Manage.
 - **Manage** a stay: a **later check-out**, or **Move check-in** either way
@@ -459,10 +471,13 @@ A deliberate **subset** of the manager's console — reception.
   Awaiting check-out, **Checked out — to bill**, Upcoming stays, and
   **Awaiting payment** (every issued, unpaid invoice, no cut-off — 7 Oct
   2026; a personal meal booking is settled here at the guest house).
-- **Mark Occupied / Vacated**; a **personal** stay is checked out through
-  **Check out & settle** instead (issue → pay → vacate). Reception **cannot**
-  close one off unpaid — that is the manager's. **Extend a stay** — later
-  check-out, or **Move check-in** earlier or later (1 Oct 2026).
+- **Mark Occupied** (from 2 hours before check-in, never earlier — the
+  caretaker does not bypass the timing check) / **Vacated**; a **personal**
+  stay is checked out through **Check out & settle** instead (issue → pay →
+  vacate). Reception **cannot** close one off unpaid — that is the manager's.
+  **No direct APPROVED → VACATED** — that is the manager's too.
+  **Extend a stay** — later check-out, or **Move check-in** earlier or later
+  (1 Oct 2026).
 - **Invoices:** preview, correct meal counts, **add additional charges**,
   issue & print, mark paid (UPI or transfer) — **not cancel**.
 - **Kitchen** (`/manager/meals`): a **Meal counts** button on Reception for a
@@ -481,8 +496,12 @@ A deliberate **subset** of the manager's console — reception.
   deletes.
 - **All 15 sections** — the manager's eleven plus four that are developer-only:
   **All Bookings** (force a status — audit-logged, refuses Occupied before
-  check-in — and hard delete), **Settings** (the rules, hostels, official
-  whitelist), **Audit Log**, **Console Access** (the console password).
+  check-in — and hard delete), **Settings** (the rules, hostels; the official
+  whitelist is now also on Portal Settings, 18 Nov 2026), **Audit Log**,
+  **Console Access** (the console password).
+- **Lifecycle operations** (18 Nov 2026): Mark Occupied (at any time, like the
+  GHM), Mark Vacated, **direct APPROVED → VACATED**, Manage (extend, move
+  check-in). Added to `LIFECYCLE_ROLES` alongside the desk.
 - Can assign any role, including developer; cannot delete themselves or drop
   their own developer role.
 - Issues and marks invoices paid, may cancel them; sees names on
@@ -510,6 +529,7 @@ A deliberate **subset** of the manager's console — reception.
 | Projects | `/admin/projects` | ✓ | ✓ |
 | Tariffs & Invoicing | `/admin/billing` | ✓ | ✓ |
 | Guest Houses & Rooms | `/admin/guest-houses` | ✓ | ✓ |
+| **Portal Settings** — VIP access, availability cap, guidelines link, **official email whitelist** (18 Nov 2026) | `/admin/portal` | ✓ | ✓ |
 | Form Builder | `/admin/forms` | ✓ | ✓ |
 | Email Templates | `/admin/mail-templates` | ✓ | ✓ |
 | Mail Outbox | `/admin/mail` | ✓ | ✓ |
@@ -786,7 +806,7 @@ that is what the invoice is priced from.
 | `PENDING_HOD` | With the department's head | HOD |
 | `PENDING_IAR` | With the IAR Office | IAR Office |
 | `PENDING_GH_MANAGER` | Waiting for rooms | Manager |
-| `APPROVED` | Rooms held, guest not yet in | Desk |
+| `APPROVED` | Rooms held, guest not yet in | Desk (GHM and developer may go straight to VACATED — 18 Nov 2026) |
 | `OCCUPIED` | Guest in the building | Desk |
 | `VACATED` | Guest gone, room free | Manager (the bill) |
 | `CANCELLATION_REQUESTED` | Requester asked to cancel (from any open status) | Manager |
@@ -841,7 +861,7 @@ log, as a row whose `previous_status` is MISSED.
 | May this role open this page? | `lib/access.ts`, and each page's own guard |
 | What may be charged? | `invoiceBlocker`, `buildInvoiceDocument` (`lib/invoice.ts`) |
 | How long may a stay be, how far ahead? | `lib/settings.ts` (`rules.booking`), applied by `lib/booking-schema.ts` |
-| When may the desk check someone in? | `occupancyNotStartedError` (`lib/workflow.ts`) |
+| When may the desk check someone in? | `occupancyNotStartedError` (`lib/workflow.ts`) — GHM and developer bypass it (18 Nov 2026); the caretaker is bound by the 2-hour grace window |
 | Which rooms are free? | `room_holds` and `room_blocks` in the database, `lib/availability.ts` on top |
 
 The public `/guidelines` page is rendered from the same modules

@@ -21,6 +21,8 @@ All dates are 2026. The detail is in the dated sections of this file and in
 
 | Date | What happened |
 | --- | --- |
+| **19 Nov** | **Dependency upgrades for production:** TypeScript 5 -> 6, ESLint 9 -> 10, vitest 3 -> 5, all other packages to latest. Zero npm warnings, zero vulnerabilities. Vitest configs renamed `.ts` -> `.mts` for ESM. `.npmrc` created for ESLint plugin peer-dep suppression. All 37 routes verified. |
+| **18 Nov** | Desk lifecycle powers widened: **developer added to `LIFECYCLE_ROLES`**; GHM and developer **bypass the occupancy timing check** (can check in at any time, including past dates); GHM and developer can **transition APPROVED straight to VACATED** (direct checkout). The caretaker's path unchanged. **Official email whitelist** moved to Portal Settings so the GHM can manage it without a developer. |
 | **11 Nov** | Owner's reports: a Copy-to address never received mail (the allow list dropped it silently, and dropped allowed Cc with a fake To) - fixed and made visible on the outbox row. Room allocation failed on the shared database - **migration 36 and the reference seed applied there**, and the error now names a missing column. The booking type becomes a solid tag on the manager's review. |
 | **9 Nov, meeting continuation** | Completed interrupted implementation: scholar spouse rule, room classes and Director-only rooms, GHM tariffs, date edits, cancellation notice, FCFS, caretaker billing restrictions and portal settings. Migration 36 and focused workflow tests. Office ambiguities remain documented. |
 | **19 Aug** | First commit: five requester categories and their approval chains, config-driven forms, the manager's cinema-style room grid, the developer console, two data stores behind one interface, a persona-picker mock auth. `AGENTS.md` written for AI agents. |
@@ -1766,3 +1768,22 @@ instructions for using it.
 > hosted project carries Supabase's own `auth`, `storage` and `realtime`
 > schemas that a `--schema=public` dump never touches. Scoped to `public`,
 > both sides read 49, 22, 215 functions and 118 indexes.
+
+
+---
+
+## Round of 18 November 2026 - desk lifecycle powers
+
+| # | What was asked | Status |
+| --- | --- | --- |
+| 1 | Developer, GHM and Caretaker should edit check-in and check-out to past dates | **Done.** Developer added to `LIFECYCLE_ROLES`; GHM and developer bypass `occupancyNotStartedError` (the timing check). The caretaker already had lifecycle access but stays bound by the 2-hour grace window. Past-date editing in `moveCheckInAction` and `extendStayAction` was never restricted by the operations code - the blockers were the timing check and the developer's exclusion from lifecycle roles |
+| 2 | GHM and Developer should be able to check out a room at any time | **Done.** `MANAGER_EXTRA_TRANSITIONS` allows APPROVED -> VACATED for `hasFullBookingAccess` roles (GHM and developer). The UI shows "Mark as Vacated" for official stays and "Check out & settle" (the invoice dialog) for personal stays. The caretaker's path is unchanged: APPROVED -> OCCUPIED -> VACATED only |
+
+---
+
+## Round of 23 November 2026 - chain meal booking and staff-for-faculty booking
+
+| # | What was asked | Status |
+| --- | --- | --- |
+| 1 | Chain booking for meals - pick a date range instead of adding dates one by one, with Saturday/Sunday opt-in | **Done.** `chainMealDates()` in `lib/meals.ts`, collapsible fieldset in `MealDatesPicker` |
+| 2 | Non-teaching staff booking on behalf of faculty - searchable dropdown, faculty's options, faculty CC'd | **Done.** `lib/staff-booking.ts`, `lib/staff-booking-server.ts`, `FacultySearch` component, `for_faculty` param in `createBooking` |

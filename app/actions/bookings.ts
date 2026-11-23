@@ -8,6 +8,7 @@ import {
   canBookOnBehalf,
   canOverrideGuestHousePolicy,
   canOverrideVacatePayment,
+  hasFullBookingAccess,
 } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { aadhaarDigits, bookingPayloadSchema } from "@/lib/booking-schema";
@@ -15,6 +16,8 @@ import { defaultBookingTypeFor, needsAlumniDetails } from "@/lib/booking-types";
 import { acceptsDebitDocument, needsProject, requiresFundDeclaration } from "@/lib/debit-heads";
 import { mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser } from "@/lib/club-booking-server";
+import { isNonTeachingStaff } from "@/lib/staff-booking";
+import { facultyBookableByUser } from "@/lib/staff-booking-server";
 import { hodApproversFor } from "@/lib/units";
 import { bookingContextFor } from "@/lib/booking-context-server";
 import { academicRecordFor } from "@/lib/academic";
@@ -141,15 +144,31 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
         return { ok: false, error: "This account is not whitelisted for official bookings" };
       }
     }
-    // Whose booking it is: the club's, when its faculty in-charge raises it -
-    // so it is routed, debited, scoped and reported as a club booking - and
+
+    // Non-teaching staff booking on behalf of a faculty member (23 Nov 2026).
+    // The faculty member named here is re-checked, so a crafted request
+    // cannot book in the name of someone the caller may not book for.
+    const facultyId = readText(formData, "for_faculty");
+    let faculty: Profile | null = null;
+    if (facultyId && !club) {
+      if (!isNonTeachingStaff(user)) {
+        return { ok: false, error: "Only non-teaching staff may book on behalf of faculty" };
+      }
+      faculty = (await facultyBookableByUser(user)).find((f) => f.id === facultyId) ?? null;
+      if (!faculty) {
+        return { ok: false, error: "That person is not a faculty member you can book for" };
+      }
+    }
+
+    // Whose booking it is: the club's, when its faculty in-charge raises it;
+    // the faculty member's, when non-teaching staff raises it for them; and
     // otherwise the signed-in person's.
-    const requester = club ?? user;
+    const requester = club ?? faculty ?? user;
 
     // Who the stay is actually for. Required when the manager is booking for
     // someone else, because otherwise the booking says only that the manager
     // is staying - and the desk has no way to find out who is arriving.
-    const onBehalfOf = onBehalf && !club
+    const onBehalfOf = onBehalf && !club && !faculty
       ? {
           name: readText(formData, "on_behalf_of_name"),
           email: readText(formData, "on_behalf_of_email"),
@@ -562,7 +581,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       // Both parties are recorded: the booking hangs off the manager's
       // account for referential integrity, and names the guest it is for -
       // or off the club's account, naming the faculty in-charge who raised it.
-      created_by: onBehalfOf || club ? user.id : null,
+      created_by: onBehalfOf || club || faculty ? user.id : null,
       on_behalf_of_name: onBehalfOf?.name ?? null,
       on_behalf_of_email: onBehalfOf?.email ?? null,
       on_behalf_of_phone: onBehalfOf?.phone ?? null,
@@ -968,10 +987,19 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
   }
 }
 
-/** Valid lifecycle transitions for the GH Manager. */
+/** Valid lifecycle transitions for the desk. */
 const LIFECYCLE_TRANSITIONS: Partial<Record<BookingStatus, BookingStatus>> = {
   APPROVED: "OCCUPIED",
   OCCUPIED: "VACATED",
+};
+
+/**
+ * GHM and developer may also transition APPROVED straight to VACATED -
+ * checking out a room without first marking it Occupied, for stays
+ * recorded retroactively or settled after the guest has left.
+ */
+const MANAGER_EXTRA_TRANSITIONS: Partial<Record<BookingStatus, BookingStatus[]>> = {
+  APPROVED: ["OCCUPIED", "VACATED"],
 };
 
 /** GH Manager or Caretaker: advance a booking (Approved → Occupied → Vacated). */
@@ -995,8 +1023,10 @@ export async function updateBookingLifecycle(
     const booking = await store.getBooking(bookingId);
     if (!booking) return { ok: false, error: "Booking not found" };
 
-    const expected = LIFECYCLE_TRANSITIONS[booking.status];
-    if (!expected || expected !== targetStatus) {
+    const allowed = hasFullBookingAccess(user.role)
+      ? MANAGER_EXTRA_TRANSITIONS[booking.status] ?? (LIFECYCLE_TRANSITIONS[booking.status] ? [LIFECYCLE_TRANSITIONS[booking.status]!] : [])
+      : LIFECYCLE_TRANSITIONS[booking.status] ? [LIFECYCLE_TRANSITIONS[booking.status]!] : [];
+    if (!allowed.includes(targetStatus)) {
       return { ok: false, error: `Cannot change status from ${booking.status} to ${targetStatus}` };
     }
 
@@ -1008,7 +1038,7 @@ export async function updateBookingLifecycle(
     // time and no earlier. There is no matching limit on checking *out*:
     // people leave when they leave, and the desk records it.
     if (targetStatus === "OCCUPIED") {
-      const tooEarly = occupancyNotStartedError(booking);
+      const tooEarly = occupancyNotStartedError(booking, new Date(), user.role);
       if (tooEarly) return { ok: false, error: tooEarly };
     }
 

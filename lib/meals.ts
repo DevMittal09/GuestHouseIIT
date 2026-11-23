@@ -106,7 +106,7 @@ export const DEFAULT_MEALS_ON: MealPreferences = {
  * section only**, and nowhere else.
  */
 export const MEAL_CHANGE_NOTICE =
-  "For any changes to the meal booking, please coordinate with the caretaker";
+  "In any case talk with caretaker for any change in meal booking";
 
 /**
  * The most days a meal plan may cover. A guard against a runaway loop on a
@@ -491,6 +491,41 @@ function twelveHour(time: string): [string, "AM" | "PM"] {
   const [hour, minute] = time.split(":").map(Number);
   const hour12 = hour % 12 === 0 ? 12 : hour % 12;
   return [`${hour12}:${String(minute).padStart(2, "0")}`, hour < 12 ? "AM" : "PM"];
+}
+
+// --------------------------------------------------- chain (recurring) dates
+
+/**
+ * All dates in a range, optionally excluding Saturdays and/or Sundays.
+ *
+ * Used by the "Chain booking" mode on the meal dates picker: the requester
+ * picks a from and a to date and the system fills in weekdays, with two
+ * checkboxes to opt in to weekends (excluded by default because the guest
+ * house kitchen primarily serves working-day meals).
+ *
+ * Returns sorted "yyyy-MM-dd" strings. An empty or reversed range returns [].
+ */
+export function chainMealDates(
+  from: string,
+  to: string,
+  includeSaturdays = false,
+  includeSundays = false,
+): string[] {
+  if (!from || !to || from > to) return [];
+  const dates: string[] = [];
+  for (
+    let date = from;
+    date <= to && dates.length < MAX_MEAL_DAYS;
+    date = addDaysToDateValue(date, 1)
+  ) {
+    const parsed = parseDateValue(date);
+    if (!parsed) break;
+    const dow = new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day)).getUTCDay();
+    if (dow === 0 && !includeSundays) continue;
+    if (dow === 6 && !includeSaturdays) continue;
+    dates.push(date);
+  }
+  return dates;
 }
 
 // ------------------------------------------------- each person's preference

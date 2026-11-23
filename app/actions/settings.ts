@@ -271,9 +271,46 @@ export async function removeHostelAction(name: string): Promise<ActionResult> {
 
 // -------------------------------------------------------- official whitelist
 
+export type OfficialWhitelistData = { email: string; account: string | null }[];
+
+export async function getOfficialWhitelistData(): Promise<
+  { ok: true; data: OfficialWhitelistData } | { ok: false; error: string }
+> {
+  try {
+    await requireWhitelistConsole();
+    const store = getStore();
+    const [emails, profiles] = await Promise.all([
+      store.listOfficialEmails(),
+      store.listProfiles(),
+    ]);
+    return {
+      ok: true,
+      data: emails.map((email) => ({
+        email,
+        account:
+          profiles.find((p) => p.email.toLowerCase() === email.toLowerCase())?.full_name ?? null,
+      })),
+    };
+  } catch (e) {
+    const result = fail(e);
+    return { ok: false, error: result.ok ? "Could not load whitelist" : result.error };
+  }
+}
+
+async function requireWhitelistConsole(): Promise<Profile> {
+  const user = await requireUser();
+  if (!canUseConsoleSection(user.role, "portal") && !canUseConsoleSection(user.role, "settings")) {
+    throw new Error("Only the Guest House Manager or a developer can change the official whitelist");
+  }
+  if (!(await isAdminUnlocked())) {
+    throw new Error("The console is locked - enter the console password again");
+  }
+  return user;
+}
+
 export async function addOfficialEmailAction(email: string): Promise<ActionResult> {
   try {
-    const user = await requireSettingsConsole();
+    const user = await requireWhitelistConsole();
     const parsed = officialEmailSchema.safeParse(email);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid email" };
     // Official bookings are the institute's own; an outside address has no
@@ -295,7 +332,7 @@ export async function addOfficialEmailAction(email: string): Promise<ActionResul
 /** Refused while an Official / Dignitary account uses the address. */
 export async function removeOfficialEmailAction(email: string): Promise<ActionResult> {
   try {
-    const user = await requireSettingsConsole();
+    const user = await requireWhitelistConsole();
     const blockers = whitelistRemovalBlockers(email, await getStore().listProfiles());
     if (blockers.length > 0) {
       return { ok: false, error: refusalMessage(`Removing ${email}`, blockers) };

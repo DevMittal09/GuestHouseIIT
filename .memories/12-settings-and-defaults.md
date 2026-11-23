@@ -217,7 +217,7 @@ place the narrowing happens, so adding it later is local.
 | List | Default | Notes |
 | --- | --- | --- |
 | **Hostels** | Malhar, Saveri (demo) | `profiles.hostel_name` references it: a rename moves everyone, a hostel in use cannot be removed. Wardens are scoped by it |
-| **Official email whitelist** | `admin@`, `director.office@`, `registrar@iitpkd.ac.in` (`DEFAULT_OFFICIAL_EMAILS`); both demo seeds also add `cse.office@` | Who may submit as the `official` role. Removing an address an official account uses is refused |
+| **Official email whitelist** | `admin@`, `director.office@`, `registrar@iitpkd.ac.in` (`DEFAULT_OFFICIAL_EMAILS`); both demo seeds also add `cse.office@` | Who may submit as the `official` role. Removing an address an official account uses is refused. Edited from **Settings** (developer) and **Portal Settings** (GHM and developer, 18 Nov 2026) |
 
 ---
 

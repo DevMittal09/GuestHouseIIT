@@ -1,6 +1,7 @@
-import path from "path";
 import { loadEnv } from "vite";
 import { defineConfig } from "vitest/config";
+
+const root = import.meta.dirname;
 
 /**
  * The PostgreSQL suite (`tests-pg/`), run with `npm run test:pg`.
@@ -43,8 +44,8 @@ process.env.PG_TEST_URL = url;
 export default defineConfig({
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "."),
-      "server-only": path.resolve(__dirname, "tests/stubs/server-only.ts"),
+      "@": root,
+      "server-only": `${root}/tests/stubs/server-only.ts`,
     },
   },
   test: {

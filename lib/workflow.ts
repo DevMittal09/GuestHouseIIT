@@ -663,8 +663,10 @@ export function earliestCheckIn(booking: { check_in: string }): Date {
  */
 export function occupancyNotStartedError(
   booking: { check_in: string },
-  now: Date = new Date()
+  now: Date = new Date(),
+  role?: Role
 ): string | null {
+  if (role === "gh_manager" || role === "developer") return null;
   if (now >= earliestCheckIn(booking)) return null;
   return `This stay starts on ${formatDateTime(booking.check_in)}. A guest can be checked in up to ${TURNOVER_GRACE_HOURS} hours before that, no earlier - until then the room may still have someone in it.`;
 }
@@ -910,7 +912,7 @@ export const HISTORY_ROLES: Role[] = [
  * allocation, approvals and cancellations stay with the manager, which is what
  * makes this a subset of that console rather than a second copy of it.
  */
-export const LIFECYCLE_ROLES: Role[] = ["gh_manager", "gh_caretaker"];
+export const LIFECYCLE_ROLES: Role[] = ["gh_manager", "gh_caretaker", "developer"];
 
 export function canUpdateLifecycle(role: Role): boolean {
   return LIFECYCLE_ROLES.includes(role);

@@ -10,7 +10,7 @@ import { Client } from "pg";
  * seed the 29 personas with `scripts/seed-personas.mjs` - the same script an
  * install uses, so the suite tests what is deployed rather than a fixture.
  *
- * The URL comes from `vitest.pg.config.ts`, which has already refused any
+ * The URL comes from `vitest.pg.config.mts`, which has already refused any
  * database whose name does not contain "test".
  */
 export default async function setup(): Promise<void> {

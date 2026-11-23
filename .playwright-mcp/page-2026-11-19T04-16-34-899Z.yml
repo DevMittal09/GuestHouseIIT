@@ -1,0 +1,66 @@
+- generic [ref=e1]:
+  - generic [ref=e176]:
+    - banner [ref=e177]:
+      - generic [ref=e178]:
+        - link "IIT Palakkad Guest House IIT Palakkad · Booking portal" [ref=e179] [cursor=pointer]:
+          - /url: /admin
+          - img "IIT Palakkad" [ref=e180]
+          - generic [ref=e182]:
+            - generic [ref=e183]: Guest House
+            - generic [ref=e184]: IIT Palakkad · Booking portal
+        - generic [ref=e185]:
+          - generic [ref=e186]:
+            - paragraph [ref=e187]: Developer Admin
+            - paragraph [ref=e188]: personnel@iitpkd.ac.in
+          - generic [ref=e189]: Developer (Superadmin)
+          - button "Switch user" [ref=e191] [cursor=pointer]
+    - navigation "Portal" [ref=e192]:
+      - generic [ref=e193]:
+        - link "Developer Console" [ref=e194] [cursor=pointer]:
+          - /url: /admin
+        - link "Room Availability" [ref=e195] [cursor=pointer]:
+          - /url: /availability
+        - link "Approval Log" [ref=e196] [cursor=pointer]:
+          - /url: /history
+    - main [ref=e198]:
+      - generic [ref=e199]:
+        - generic [ref=e201]:
+          - paragraph [ref=e202]: Settings and records
+          - heading "Developer Console" [level=1] [ref=e203]
+          - paragraph [ref=e204]: Full control over users, guest houses, rooms, booking forms and every booking.
+        - generic [ref=e205]:
+          - generic [ref=e206]:
+            - generic [ref=e207]:
+              - generic [ref=e208]: Developer console is locked
+              - generic [ref=e209]: Enter the console password to manage users, guest houses, forms and bookings.
+            - generic [ref=e211]:
+              - generic [ref=e212]:
+                - generic [ref=e213]: Console password
+                - textbox "Console password" [active] [ref=e214]:
+                  - /placeholder: ••••
+              - button "Unlock console" [disabled]
+          - paragraph [ref=e215]: This password only guards the developer console. It is not a substitute for signing in - the portal still uses mock authentication.
+    - contentinfo [ref=e216]:
+      - generic [ref=e217]:
+        - generic [ref=e218]:
+          - generic [ref=e219]: © Indian Institute of Technology Palakkad
+          - generic [ref=e220]:
+            - generic [ref=e221]: Guest house office
+            - link "+91 491 209 2016" [ref=e222] [cursor=pointer]:
+              - /url: tel:+914912092016
+            - link "ghm@iitpkd.ac.in" [ref=e223] [cursor=pointer]:
+              - /url: mailto:ghm@iitpkd.ac.in
+        - generic [ref=e224]:
+          - link "Guest house website" [ref=e225] [cursor=pointer]:
+            - /url: /
+          - link "Guidelines" [ref=e226] [cursor=pointer]:
+            - /url: /guidelines
+          - link "Contact" [ref=e227] [cursor=pointer]:
+            - /url: /contact
+          - link "iitpkd.ac.in (opens in a new tab)" [ref=e228] [cursor=pointer]:
+            - /url: https://iitpkd.ac.in
+            - text: iitpkd.ac.in
+            - generic [ref=e229]: (opens in a new tab)
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e171] [cursor=pointer]
+  - alert [ref=e175]: Developer Console

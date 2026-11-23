@@ -1,5 +1,6 @@
-import path from "path";
 import { defineConfig } from "vitest/config";
+
+const root = import.meta.dirname;
 
 /**
  * Unit and store tests (`tests/**`). Run with `npm test`.
@@ -12,9 +13,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "."),
-      // The package throws unless bundled for the server; tests are server code.
-      "server-only": path.resolve(__dirname, "tests/stubs/server-only.ts"),
+      "@": root,
+      "server-only": `${root}/tests/stubs/server-only.ts`,
     },
   },
   test: {

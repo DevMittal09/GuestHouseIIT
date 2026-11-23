@@ -3,6 +3,7 @@ import { serviceTypeError, serviceTypesFor } from "@/lib/booking-types";
 import { DEFAULT_DEBIT_RULES, debitHeadsByType } from "@/lib/debit-heads";
 import { buildInvoiceDocument, invoiceBlocker } from "@/lib/invoice";
 import {
+  chainMealDates,
   firstBookableMealDate,
   isKitchenConfirmed,
   isMealBookable,
@@ -231,5 +232,81 @@ describe("the kitchen's notice period", () => {
       windows
     );
     expect(noClock[0].available.dinner).toBe(true);
+  });
+});
+
+describe("chainMealDates", () => {
+  it("generates weekdays between two dates", () => {
+    // Mon 2 Nov to Fri 6 Nov 2026
+    const dates = chainMealDates("2026-11-02", "2026-11-06");
+    expect(dates).toEqual([
+      "2026-11-02",
+      "2026-11-03",
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-06",
+    ]);
+  });
+
+  it("excludes Saturday and Sunday by default", () => {
+    // Mon 2 Nov to Sun 8 Nov 2026
+    const dates = chainMealDates("2026-11-02", "2026-11-08");
+    expect(dates).toEqual([
+      "2026-11-02",
+      "2026-11-03",
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-06",
+    ]);
+  });
+
+  it("includes Saturdays when asked", () => {
+    const dates = chainMealDates("2026-11-02", "2026-11-08", true, false);
+    expect(dates).toEqual([
+      "2026-11-02",
+      "2026-11-03",
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-06",
+      "2026-11-07", // Saturday
+    ]);
+  });
+
+  it("includes Sundays when asked", () => {
+    const dates = chainMealDates("2026-11-02", "2026-11-08", false, true);
+    expect(dates).toEqual([
+      "2026-11-02",
+      "2026-11-03",
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-06",
+      "2026-11-08", // Sunday
+    ]);
+  });
+
+  it("includes both weekends when asked", () => {
+    const dates = chainMealDates("2026-11-02", "2026-11-08", true, true);
+    expect(dates).toHaveLength(7);
+  });
+
+  it("returns empty for reversed range", () => {
+    expect(chainMealDates("2026-11-06", "2026-11-02")).toEqual([]);
+  });
+
+  it("returns empty for empty strings", () => {
+    expect(chainMealDates("", "2026-11-06")).toEqual([]);
+    expect(chainMealDates("2026-11-02", "")).toEqual([]);
+  });
+
+  it("returns a single day if from equals to and it is a weekday", () => {
+    // Wednesday
+    expect(chainMealDates("2026-11-04", "2026-11-04")).toEqual(["2026-11-04"]);
+  });
+
+  it("returns empty if from equals to and it is a weekend day", () => {
+    // Saturday
+    expect(chainMealDates("2026-11-07", "2026-11-07")).toEqual([]);
+    // but included when opted in
+    expect(chainMealDates("2026-11-07", "2026-11-07", true)).toEqual(["2026-11-07"]);
   });
 });

@@ -227,7 +227,7 @@ const toInt = (raw: string): number | null => (/^\d+$/.test(raw.trim()) ? Number
 
 // ------------------------------------------------------------------ whitelist
 
-function WhitelistSection({ emails }: { emails: SettingsConsoleData["officialEmails"] }) {
+export function WhitelistSection({ emails }: { emails: SettingsConsoleData["officialEmails"] }) {
   const { isPending, run } = useRunner();
   const [email, setEmail] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);

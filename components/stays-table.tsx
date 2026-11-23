@@ -131,8 +131,10 @@ function StayRow({
   // never read as Occupied even if a forced override left it that way.
   const action = LIFECYCLE_ACTIONS[booking.status];
   // The same rule the server enforces, so the button is never offered for a
-  // click that would be refused.
-  const tooEarly = action?.nextStatus === "OCCUPIED" ? occupancyNotStartedError(booking) : null;
+  // click that would be refused. GHM and developer bypass the time restriction.
+  const tooEarly = action?.nextStatus === "OCCUPIED" && !isManager
+    ? occupancyNotStartedError(booking)
+    : null;
   const overdue = showOverdue && stayPhase(booking) === "past";
 
   // Both are "off schedule but allowed". Checking in early is bounded by
@@ -140,6 +142,11 @@ function StayRow({
   const arrivingEarly = action?.nextStatus === "OCCUPIED" && isEarlyArrival(booking);
   const leavingEarly =
     action?.nextStatus === "VACATED" && booking.check_out > new Date().toISOString();
+
+  // GHM and developer can transition APPROVED straight to VACATED, bypassing
+  // the OCCUPIED step - for stays recorded retroactively or settled after the
+  // guest has left.
+  const canDirectCheckout = isManager && booking.status === "APPROVED";
 
   /**
    * A **personal** stay's check-out goes through the invoice (7 Oct 2026):
@@ -151,12 +158,13 @@ function StayRow({
    */
   const settlesHere = action?.nextStatus === "VACATED" && settlesAtCheckOut(booking);
 
-  const handleLifecycle = () =>
+  const handleLifecycle = (targetStatus?: BookingStatus) =>
     startTransition(async () => {
-      if (!action) return;
-      const result = await updateBookingLifecycle(booking.id, action.nextStatus);
+      const status = targetStatus ?? action?.nextStatus;
+      if (!status) return;
+      const result = await updateBookingLifecycle(booking.id, status);
       if (result.ok) {
-        toast.success(`${booking.booking_reference_id} - ${STATUS_LABELS[action.nextStatus]}`);
+        toast.success(`${booking.booking_reference_id} - ${STATUS_LABELS[status]}`);
         router.refresh();
       } else {
         toast.error(result.error);
@@ -221,7 +229,7 @@ function StayRow({
               size="sm"
               variant={action.variant}
               disabled={isPending}
-              onClick={handleLifecycle}
+              onClick={() => handleLifecycle()}
             >
               <action.icon aria-hidden />
               {isPending
@@ -233,15 +241,29 @@ function StayRow({
                     : action.label}
             </Button>
           )}
+          {canDirectCheckout && !settlesAtCheckOut(booking) && (
+            <Button
+              size="sm"
+              variant="vacate"
+              disabled={isPending}
+              onClick={() => handleLifecycle("VACATED")}
+            >
+              <LogOut aria-hidden />
+              {isPending ? "Updating…" : "Mark as Vacated"}
+            </Button>
+          )}
           {/* Available from the moment a guest is in the building: the desk
               is often asked for the bill before they have formally left. For
-              a personal stay this *is* the check-out. */}
-          {(booking.status === "OCCUPIED" || booking.status === "VACATED") && (
+              a personal stay this *is* the check-out. When the manager does
+              a direct checkout on an approved personal stay, the invoice
+              dialog handles the settle-then-vacate. */}
+          {(booking.status === "OCCUPIED" || booking.status === "VACATED" ||
+            (canDirectCheckout && settlesAtCheckOut(booking))) && (
             <InvoiceDialog
               booking={booking}
               isManager={isManager}
-              label={settlesHere ? "Check out & settle" : undefined}
-              variant={settlesHere ? "vacate" : undefined}
+              label={settlesHere || (canDirectCheckout && settlesAtCheckOut(booking)) ? "Check out & settle" : undefined}
+              variant={settlesHere || (canDirectCheckout && settlesAtCheckOut(booking)) ? "vacate" : undefined}
             />
           )}
           {(booking.status === "APPROVED" || booking.status === "OCCUPIED") && (

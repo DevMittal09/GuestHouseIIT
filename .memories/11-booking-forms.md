@@ -270,6 +270,11 @@ its form is not in the Form Builder and every guest field is required.
   being served** — lunch before breakfast ends, dinner before lunch ends,
   tomorrow's breakfast before tonight's dinner ends. The dining form opens on
   today while today has a meal left, otherwise tomorrow.
+- **Chain booking** (23 Nov 2026, `components/meal-dates-picker.tsx`): a
+  collapsible "Chain booking (recurring dates)" fieldset generates all dates
+  in a range at once. Saturdays and Sundays excluded by default; two
+  checkboxes opt them in. Generated dates are merged into the existing list
+  with default meal slots. `chainMealDates()` in `lib/meals.ts`.
 
 **Who and how**
 

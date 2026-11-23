@@ -8,7 +8,7 @@ import { signedIn } from "./session";
  *
  * `after()` is run **immediately** rather than dropped, so the mail
  * dispatch that follows a notification happens inside the test; the
- * transport is the dry run (`MAIL_DRY_RUN` in `vitest.pg.config.ts`).
+ * transport is the dry run (`MAIL_DRY_RUN` in `vitest.pg.config.mts`).
  */
 vi.mock("@/lib/auth", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

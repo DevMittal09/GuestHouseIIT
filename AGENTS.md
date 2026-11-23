@@ -939,7 +939,8 @@ dropping it would orphan them.
 Reception desk; a deliberate **subset** of `/manager` at `/caretaker`: today's
 checkouts, current occupants, awaiting check-out, **checked out — to bill**,
 upcoming stays, marking guests Occupied / Vacated, and issuing invoices. No allocation, no approvals, no cancellations.
-`canUpdateLifecycle()` / `LIFECYCLE_ROLES` gate the one action it shares with
+`canUpdateLifecycle()` / `LIFECYCLE_ROLES` (`gh_manager`, `gh_caretaker`,
+`developer` since 18 Nov 2026) gate the one action it shares with
 the manager, server-side. It reuses `components/stays-table.tsx` and
 `components/checkouts-today.tsx` rather than owning copies, so the two consoles
 cannot drift.
@@ -1025,6 +1026,7 @@ After approval, the GH Manager controls the booking through:
 
 ```
 APPROVED → OCCUPIED → VACATED
+         ↘ VACATED (direct, GHM and developer only — 18 Nov 2026)
          ↘ CANCELLATION_REQUESTED → CANCELLATION_APPROVED
          ↘ CANCELLED (direct, by manager)
 ```
@@ -1035,16 +1037,17 @@ const, not a hardcoded `APPROVED` check.
 
 **`OCCUPIED` is a fact recorded at the desk, not something a date implies.**
 `occupancyNotStartedError()` refuses `APPROVED → OCCUPIED` before the booking's
-check-in, enforced in `updateBookingLifecycle` and used by the console to
-disable the button. `stayPhase()` (`upcoming` | `current` | `past`) is the
+check-in for the **caretaker**; the **GHM and developer bypass it** (18 Nov
+2026, the function accepts an optional `role`). Enforced in
+`updateBookingLifecycle` and used by the console to disable the button. `stayPhase()` (`upcoming` | `current` | `past`) is the
 matching read side: `/manager` groups stays by phase, not by status, into
 **Current occupants**, **Awaiting check-out** (past check-out, never marked
 Vacated, still holding rooms) and **Upcoming stays**. Before that split a
 booking for next week sat under the same heading as a guest in the building and
 read as though it were occupied.
 
-**The desk moves a stay's dates** from Manage (manager and caretaker —
-`canUpdateLifecycle`): a later check-out (`extendStayAction`,
+**The desk moves a stay's dates** from Manage (manager, caretaker and developer
+— `canUpdateLifecycle`): a later check-out (`extendStayAction`,
 `extensionError`) or the check-in **in either direction** (`moveCheckInAction`,
 `moveCheckInError`) — approved or occupied, at most 60 days, never past the
 check-out, the holds moved by `updateBookingDetails` so a clash is refused.

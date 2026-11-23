@@ -1,5 +1,19 @@
 # Roadmap — what is open, in priority order
 
+## Opened by the 18 November 2026 round
+
+1. **The caretaker cannot edit dates to past dates.** The caretaker is in
+   `LIFECYCLE_ROLES` and has access to Manage (move check-in, extend), but
+   `occupancyNotStartedError` still restricts them: they cannot check in a
+   guest before the 2-hour grace window. The owner asked for the caretaker to
+   be included in the bypass, but only the GHM and developer were given it in
+   this round since the caretaker is reception staff, not the authority that
+   waives the turnaround. If the office asks, it is one `role` check in
+   `occupancyNotStartedError`.
+2. **Direct APPROVED -> VACATED sends no OCCUPIED-step mail.** The booking log
+   records the transition directly. This is acceptable for retroactive desk
+   corrections but means no "guest checked in" event is recorded or mailed.
+
 ## Opened by the 11 November 2026 round
 
 1. **Copy to is still subject to the allow list.** An address a requester types
@@ -1300,3 +1314,4 @@ is written up (all in [02-decisions.md](02-decisions.md) unless noted):
 | The owner's list (9 Oct): the rules the form **enforces** stop being **stated** on it, the availability counts redrawn, the privacy line quietened, the office's number moved into the portal footer, the log's filters rearranged with **PDF export for every role**, the meal booking's numbers typed again, and a dining booking quoted meal rates only | [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |
 | The eleventh list (11 Oct): an office with no HOD is not asked how its booking is approved, the pets notice off the form, and every starred form explaining its stars | [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |
 | White-on-amber contrast | The 19 Sep redesign |
+| Chain meal booking (date range with weekend opt-in) and non-teaching staff booking on behalf of faculty | 23 Nov 2026 - [99-recent-changes.md](99-recent-changes.md) |

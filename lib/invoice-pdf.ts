@@ -68,6 +68,10 @@ const NOTE_PT = 9;
 const PT = 25.4 / 72;
 /** Where the footer's box starts, less a gap: the table stops above it. */
 const CONTENT_BOTTOM = 258;
+/** The officer whose "-sd-" the invoice carries, printed as the signatory. */
+const SIGNATORY_NAME = "C Lunginlal (GHM)";
+/** The line under the footer box. */
+const E_INVOICE_NOTE = "This is a computer-generated electronic invoice and does not require a physical signature.";
 /** Where a continuation page starts. */
 const CONTINUED_TOP = MARGIN + 4;
 
@@ -303,17 +307,27 @@ function signatures(doc: jsPDF, invoice: InvoiceDocument, start: number, stamp: 
   const lines = printsTaxLines(invoice)
     ? [...gstBreakdownLines(invoice), ...(invoice.prices_include_gst ? [GST_INCLUDED_NOTE] : [])]
     : [];
+  /**
+   * **The GHM's "-sd-"** (23 Nov 2026): the invoice is electronic and carries
+   * no ink signature, so the right-hand column reads "-sd-" over the signing
+   * officer's name, a line apart in bold 10 pt. The guest's signature line and
+   * the "Authorised signatory" label were removed the same day.
+   */
+  const sigLineH = 4.6;
+  const sigLines = ["-Sd-", SIGNATORY_NAME];
+  const sigOffset = Math.max(18, 9.5 + lines.length * 3.6 + 8);
   const at: Cursor = { y: start };
-  room(doc, at, Math.max(18, 9.5 + lines.length * 3.6 + 8) + 2);
+  room(doc, at, sigOffset + (sigLines.length - 1) * sigLineH + 2);
   const top = at.y;
   font(doc, "bold", 10);
   doc.text(`GSTIN No.:${invoice.gstin}`, MARGIN + 1.3, top + 5);
   font(doc, "normal", 8);
   lines.forEach((line, i) => doc.text(line, MARGIN + 1.3, top + 9.5 + i * 3.6));
-  const sigY = Math.max(top + 18, top + 9.5 + lines.length * 3.6 + 8);
+  const sigY = top + sigOffset;
   font(doc, "bold", 10);
-  doc.text("Signature of the guest", MARGIN + 1.3, sigY);
-  doc.text("Authorised signatory", PAGE_W - MARGIN - 1.3, sigY, { align: "right" });
+  sigLines.forEach((line, i) =>
+    doc.text(line, PAGE_W - MARGIN - 1.3, sigY + i * sigLineH, { align: "right" })
+  );
 
   if (stamp?.status === "paid" && stamp.payment_mode) {
     doc.setTextColor(0x1b, 0x6b, 0x2f);
@@ -381,6 +395,15 @@ function footer(doc: jsPDF, invoice: InvoiceDocument) {
   doc.text(sep, cx, baseline);
   cx += sepW;
   doc.text(tail, cx, baseline);
+
+  // The electronic-invoice note, centred just under the box. It used to start
+  // at the left 10 mm below the address line - 1.3 mm from the bottom edge,
+  // where printers and some viewers cut it off.
+  font(doc, "normal", 8);
+  doc.text(E_INVOICE_NOTE, x + w / 2, top + bankH + addressH + 3.6, {
+    align: "center",
+    maxWidth: w - PAD * 2,
+  });
 }
 
 function watermark(doc: jsPDF, text: string, color: [number, number, number]) {
