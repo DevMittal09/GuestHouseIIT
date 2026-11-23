@@ -778,6 +778,16 @@ export function BookingForm({
     setMealChoices((prev) => choicesFromMealSlots(mealDays, next, prev));
   };
 
+  /** Chain booking applies dates and slots together; compute choices against the new dates. */
+  const onMealBatchChange = (nextDates: string[], nextSlots: Set<string>) => {
+    setMealDates(nextDates);
+    const days = nextDates.map((date) => ({
+      date,
+      available: bookableMealsOn(date, now, rules.meals.windows),
+    }));
+    setMealChoices((prev) => choicesFromMealSlots(days, nextSlots, prev));
+  };
+
   /*
    * **The tariff panel no longer asks anything** (9 Nov 2026, the meeting:
    * "users must not be allowed to select their tariff category"; "the tariff
@@ -1921,6 +1931,7 @@ export function BookingForm({
                     slots={mealSlots}
                     onSlotsChange={onMealSlotsChange}
                     onDatesChange={setMealDates}
+                    onBatchChange={onMealBatchChange}
                     now={now}
                     windows={rules.meals.windows}
                     minDate={checkInLimits.min}

@@ -38,6 +38,7 @@ export function MealDatesPicker({
   slots,
   onSlotsChange,
   onDatesChange,
+  onBatchChange,
   now,
   windows = MEAL_SERVING_WINDOWS,
   minDate,
@@ -49,6 +50,8 @@ export function MealDatesPicker({
   slots: ReadonlySet<string>;
   onSlotsChange: (next: Set<string>) => void;
   onDatesChange: (next: string[]) => void;
+  /** Chain booking applies dates and slots together so choices are computed against the new dates. */
+  onBatchChange?: (dates: string[], slots: Set<string>) => void;
   /** The clock the notice period is measured against. */
   now: Date;
   /** The kitchen's serving times (Settings). */
@@ -84,19 +87,28 @@ export function MealDatesPicker({
   const [chainTo, setChainTo] = useState("");
   const [includeSaturdays, setIncludeSaturdays] = useState(false);
   const [includeSundays, setIncludeSundays] = useState(false);
+  const [chainMeals, setChainMeals] = useState<Record<string, boolean>>({
+    breakfast: DEFAULT_MEALS_ON.breakfast,
+    lunch: DEFAULT_MEALS_ON.lunch,
+    dinner: DEFAULT_MEALS_ON.dinner,
+  });
 
   const applyChain = () => {
     const generated = chainMealDates(chainFrom, chainTo, includeSaturdays, includeSundays);
     if (generated.length === 0) return;
     const merged = [...new Set([...dates, ...generated])].sort();
-    onDatesChange(merged);
     const next = new Set(slots);
     for (const date of generated) {
       for (const meal of MEAL_KEYS) {
-        if (DEFAULT_MEALS_ON[meal]) next.add(mealSlot(date, meal));
+        if (chainMeals[meal]) next.add(mealSlot(date, meal));
       }
     }
-    onSlotsChange(next);
+    if (onBatchChange) {
+      onBatchChange(merged, next);
+    } else {
+      onDatesChange(merged);
+      onSlotsChange(next);
+    }
   };
 
   const addDate = () => {
@@ -262,6 +274,19 @@ export function MealDatesPicker({
                 Include Sundays
               </label>
             </div>
+            <div className="flex flex-wrap items-center gap-4">
+              {MEAL_KEYS.map((meal) => (
+                <label key={meal} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={!!chainMeals[meal]}
+                    onChange={(e) => setChainMeals((prev) => ({ ...prev, [meal]: e.target.checked }))}
+                  />
+                  {MEAL_LABELS[meal]}
+                </label>
+              ))}
+            </div>
             <Button
               type="button"
               variant="outline"
@@ -273,7 +298,6 @@ export function MealDatesPicker({
               Add dates
             </Button>
           </div>
-          {dates.length > 0 && dateRows}
         </>
       ) : (
         <>
