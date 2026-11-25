@@ -490,10 +490,6 @@ function certificationPage(doc: jsPDF, invoice: InvoiceDocument) {
   doc.text("To:", innerLeft, y);
   y += lineH * 2;
 
-  // Guest House Manager (below To:)
-  font(doc, "normal", BODY_PT);
-  doc.text(SIGNATORY_DESIGNATION, innerLeft, y);
-  y += lineH * 3.5;
 
   // PAYMENT NOTE (centered, bold)
   font(doc, "bold", 13);
