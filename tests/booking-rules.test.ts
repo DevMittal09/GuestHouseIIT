@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bookingPayloadSchema } from "@/lib/booking-schema";
+import { bookingTypesForUser, onBehalfBookingTypes } from "@/lib/booking-types";
 import {
   buildDefaultFormConfig,
   duplicateRelationshipError,
@@ -290,5 +291,48 @@ describe("what each role is asked for", () => {
   it("still demands an ID document from a student's guests", () => {
     expect(studentConfig.guest_fields.id_document).toBe("required");
     expect(studentConfig.guest_fields.id_number).toBe("required");
+  });
+
+  it("limits non-teaching self and on-behalf bookings to Personal, keeping faculty Official-only", () => {
+    const employee = sanitizeFormConfig(buildDefaultFormConfig("employee", HOUSES), HOUSES);
+    const staffTypes = bookingTypesForUser({ role: "employee", staff_category: "staff" });
+    const staffTargetTypes = onBehalfBookingTypes({ role: "employee", staff_category: "staff" });
+    const facultyTypes = onBehalfBookingTypes({ role: "employee", staff_category: "faculty" });
+    const staffSchema = bookingPayloadSchema(employee, {
+      mealsAvailable: false,
+      allowedBookingTypes: staffTypes,
+    });
+    const staffTargetSchema = bookingPayloadSchema(employee, {
+      mealsAvailable: false,
+      allowedBookingTypes: staffTargetTypes,
+    });
+    const facultySchema = bookingPayloadSchema(employee, {
+      mealsAvailable: false,
+      allowedBookingTypes: facultyTypes,
+    });
+    const officialPayload = {
+      ...studentBooking([[{ age: 40, relationship: "Colleague" }]]),
+      booking_type: "official" as const,
+      debit_head: "department_budget",
+      fund_declaration: true,
+    };
+    const personalPayload = {
+      ...officialPayload,
+      booking_type: "personal" as const,
+      debit_head: "personal_funds",
+      fund_declaration: undefined,
+    };
+
+    expect(staffTypes).toEqual(["personal"]);
+    expect(staffSchema.safeParse(officialPayload).error?.issues).toContainEqual(
+      expect.objectContaining({ path: ["booking_type"] })
+    );
+    expect(staffTargetTypes).toEqual(["personal"]);
+    expect(staffTargetSchema.safeParse(officialPayload).error?.issues).toContainEqual(
+      expect.objectContaining({ path: ["booking_type"] })
+    );
+    expect(staffTargetSchema.safeParse(personalPayload).success).toBe(true);
+    expect(facultyTypes).toEqual(["official"]);
+    expect(facultySchema.safeParse(officialPayload).success).toBe(true);
   });
 });

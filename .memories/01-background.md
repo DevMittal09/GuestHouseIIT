@@ -21,6 +21,9 @@ All dates are 2026. The detail is in the dated sections of this file and in
 
 | Date | What happened |
 | --- | --- |
+| **25 Nov** | **Non-teaching staff self-booking type restriction aligned end to end:** the form and client/server schema use the profile-aware allowed types; all on-behalf booking types remain unchanged. |
+| **25 Nov, later** | **Non-teaching staff on-behalf targets made Personal-only too:** the target-based rule reaches the search label, debit-head context, form and server validation; faculty targets remain Official-only. |
+| **23 Nov** | **Chain meal booking** (date ranges with weekend opt-in), **staff-for-faculty booking** (any non-teaching staff for any faculty), **non-teaching staff restricted to personal-only** for self-booking, **configurable on-behalf booking** (console section, `on_behalf_config` table, `for_staff` param), **invoice PDF layout** branches on `booking_type`. |
 | **19 Nov** | **Dependency upgrades for production:** TypeScript 5 -> 6, ESLint 9 -> 10, vitest 3 -> 5, all other packages to latest. Zero npm warnings, zero vulnerabilities. Vitest configs renamed `.ts` -> `.mts` for ESM. `.npmrc` created for ESLint plugin peer-dep suppression. All 37 routes verified. |
 | **18 Nov** | Desk lifecycle powers widened: **developer added to `LIFECYCLE_ROLES`**; GHM and developer **bypass the occupancy timing check** (can check in at any time, including past dates); GHM and developer can **transition APPROVED straight to VACATED** (direct checkout). The caretaker's path unchanged. **Official email whitelist** moved to Portal Settings so the GHM can manage it without a developer. |
 | **11 Nov** | Owner's reports: a Copy-to address never received mail (the allow list dropped it silently, and dropped allowed Cc with a fake To) - fixed and made visible on the outbox row. Room allocation failed on the shared database - **migration 36 and the reference seed applied there**, and the error now names a missing column. The booking type becomes a solid tag on the manager's review. |
@@ -1781,9 +1784,26 @@ instructions for using it.
 
 ---
 
-## Round of 23 November 2026 - chain meal booking and staff-for-faculty booking
+## Round of 23 November 2026 - chain meal booking, staff-for-faculty, on-behalf config, invoice layout
 
 | # | What was asked | Status |
 | --- | --- | --- |
 | 1 | Chain booking for meals - pick a date range instead of adding dates one by one, with Saturday/Sunday opt-in | **Done.** `chainMealDates()` in `lib/meals.ts`, collapsible fieldset in `MealDatesPicker` |
 | 2 | Non-teaching staff booking on behalf of faculty - searchable dropdown, faculty's options, faculty CC'd | **Done.** `lib/staff-booking.ts`, `lib/staff-booking-server.ts`, `FacultySearch` component, `for_faculty` param in `createBooking` |
+| 3 | Remove official booking type from non-teaching staff self-booking | **Done.** `bookingTypesForUser()` in `lib/booking-types.ts` returns `["personal"]` for non-teaching staff |
+| 4 | Configurable on-behalf booking: GHM picks which non-teaching staff can be booked on behalf of, and who may do it | **Done.** `on_behalf_config` table, `lib/on-behalf-config-server.ts`, console section at `/admin/on-behalf`, `for_staff` param in booking flow. **Migration 37 not yet written.** |
+| 5 | Invoice PDF layout: non-personal bookings use a different column order and section headings | **Done.** `booking_type` added to `buildInvoiceDocument` snapshot; `lib/invoice-pdf.ts` layout branches on it |
+| 6 | Add Special Lunch as a fourth meal type | **Done.** `MealKey` expanded to include `"special_lunch"`, `MEAL_KEYS` now 4, shares Lunch's serving window, `BASE_MEAL_KEYS` stays at 3 for Settings. Migration 37 widens the `tariffs.item` CHECK constraint. All 726 tests updated and passing |
+| 7 | Meal Booking Logs page for the desk to view and invoice dining bookings by week or month | **Done.** `/manager/meal-logs` - approved and vacated meals-only bookings filtered by last meal date in a week/month window, with invoice status and Invoice button. Linked from both consoles |
+
+## Round of 25 November 2026 - enforce profile-aware self-booking types
+
+| # | What was asked | Status |
+| --- | --- | --- |
+| 1 | Remove Official booking from a non-teaching employee's own profile while preserving every existing on-behalf case | **Done.** The profile-aware booking-type list is passed to the form and the shared client/server schema context. A non-teaching employee cannot submit Official for their own profile; faculty booking on behalf of faculty remains Official-only, and configured staff-target options remain unchanged. |
+
+## Round of 25 November 2026 (later) - restrict non-teaching on-behalf targets
+
+| # | What was asked | Status |
+| --- | --- | --- |
+| 1 | Allow only Personal when booking on behalf of a non-teaching employee | **Done.** `onBehalfBookingTypes(target)` now returns `["personal"]` for non-teaching staff targets. The same target-specific list drives the picker label, form, debit-head context and server validation. Faculty targets remain Official-only, including when a non-teaching employee is the booker. |

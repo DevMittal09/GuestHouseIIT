@@ -572,7 +572,7 @@ alter table public.bookings
 create table public.tariffs (
   id             uuid primary key default gen_random_uuid(),
   guest_house_id uuid references public.guest_houses (id) on delete cascade,
-  item           text not null check (item in ('room', 'extra_bed', 'breakfast', 'lunch', 'dinner')),
+  item           text not null check (item in ('room', 'extra_bed', 'breakfast', 'lunch', 'special_lunch', 'dinner')),
   room_type      text check (room_type in ('single', 'double_sharing')),
   booking_type   text check (booking_type in ('official', 'personal', 'alumni')),
   requester_role text check (requester_role in (
@@ -1715,6 +1715,20 @@ alter table public.profiles
 alter table public.profiles
   add constraint profiles_full_name_present
   check (length(btrim(full_name)) >= 2) not valid;
+
+-- ------------------------------ on_behalf_config (migration 37) -----------
+-- Which non-teaching staff may be booked on behalf of, and by whom.
+create table public.on_behalf_config (
+  id                 uuid primary key default gen_random_uuid(),
+  target_profile_id  uuid not null references public.profiles (id) on delete cascade,
+  booker_profile_id  uuid not null references public.profiles (id) on delete cascade,
+  created_at         timestamptz not null default now(),
+  created_by         uuid references public.profiles (id) on delete set null,
+  unique (target_profile_id, booker_profile_id)
+);
+alter table public.on_behalf_config enable row level security;
+
+create index on_behalf_config_booker_idx on public.on_behalf_config (booker_profile_id);
 
 -- ========================== SEED DATA =====================================
 

@@ -1,5 +1,22 @@
 # Architecture and code map
 
+## Update, 23 November 2026
+
+New modules for the on-behalf config system:
+
+- **`lib/on-behalf-config-server.ts`** - cached server readers for
+  `on_behalf_config`: `getOnBehalfConfig()` and `getOnBehalfTargetIds(bookerId)`.
+- **`app/actions/on-behalf.ts`** - server actions for the console section,
+  gated by `requireConsole("on_behalf")`.
+- **`components/admin/on-behalf-settings.tsx`** - console UI with profile
+  search dropdowns and a table of configured pairs.
+- **`app/(portal)/admin/on-behalf/page.tsx`** - console page.
+
+`lib/booking-types.ts` gained `bookingTypesForUser` (profile-aware) and
+`onBehalfBookingTypes` (what types are allowed when booking on behalf of a
+target). `lib/booking-context-server.ts` accepts an optional
+`bookingTypesOverride` parameter.
+
 ## Owner's corrections, 10 November 2026
 
 Two new modules, both pure or presentational:
@@ -75,6 +92,7 @@ app/
     availability/          read-only room availability grid (every role)
     history/               booking history (requesters) / approval log (staff)
     manager/  manager/meals/   allocation console and the kitchen's day
+              manager/meal-logs/ meal booking logs (period view, 23 Nov 2026)
     caretaker/             reception
     admin/                 the console (13 sections; manager 9, developer all)
   actions/                 all mutations (server actions)

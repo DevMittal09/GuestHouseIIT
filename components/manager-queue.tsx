@@ -111,248 +111,236 @@ export function ManagerQueue({
   // allocate; it was reading as a stay with every cell dashed out.
   const pendingRooms = pending.filter((b) => b.service_type !== "meals_only");
   const pendingMeals = pending.filter((b) => b.service_type === "meals_only");
-  // **A list with nothing in it is not drawn** (27 Oct 2026, the owner: the
-  // console "feels cluttered and unnecessarily complicated"). Four sections
-  // used to render a heading and a grey line to say they were empty, and on
-  // an ordinary morning the manager scrolled past all four - and past four
-  // more zeros in the index above them - to reach the one list with work in
-  // it. Nothing is lost: the index at the top still names every list and
-  // still prints its figure, and it is where a zero is now reported.
-  const quiet =
-    [
-      checkoutsToday,
-      cancellationRequests,
-      pendingRooms,
-      pendingMeals,
-      current,
-      overdue,
-      toBill,
-      upcoming,
-      missed,
-      awaitingPayment,
-    ].every((list) => list.length === 0);
+
+  const [activeSection, setActiveSection] = useState("incoming");
+
+  const figures: import("@/components/desk-summary").DeskFigure[] = [
+    { label: "Incoming room requests", count: pendingRooms.length, anchor: "incoming" },
+    ...(pendingMeals.length > 0
+      ? [{ label: "Incoming meal bookings", count: pendingMeals.length, anchor: "incoming-meals" }]
+      : []),
+    { label: "Checking out today", count: checkoutsToday.length, anchor: "checkouts" },
+    { label: "Cancellation requests", count: cancellationRequests.length, anchor: "cancellations", alert: true },
+    { label: "In house now", count: current.length, anchor: "in-house" },
+    { label: "Awaiting check-out", count: overdue.length, anchor: "awaiting", alert: true },
+    { label: "To bill", count: toBill.length, anchor: "to-bill" },
+    { label: "Upcoming stays", count: upcoming.length, anchor: "upcoming" },
+    ...(missed.length > 0
+      ? [{ label: "Missed requests", count: missed.length, anchor: "missed", alert: true }]
+      : []),
+    ...(awaitingPayment.length > 0
+      ? [{ label: "Awaiting payment", count: awaitingPayment.length, anchor: "awaiting-payment" }]
+      : []),
+  ];
+
   return (
     <div className="space-y-8">
       <DeskSummary
-        figures={[
-          { label: "Checking out today", count: checkoutsToday.length, anchor: "checkouts" },
-          { label: "Cancellation requests", count: cancellationRequests.length, anchor: "cancellations", alert: true },
-          { label: "Incoming room requests", count: pendingRooms.length, anchor: "incoming" },
-          ...(pendingMeals.length > 0
-            ? [{ label: "Incoming meal bookings", count: pendingMeals.length, anchor: "incoming-meals" }]
-            : []),
-          { label: "In house now", count: current.length, anchor: "in-house" },
-          { label: "Awaiting check-out", count: overdue.length, anchor: "awaiting", alert: true },
-          { label: "To bill", count: toBill.length, anchor: "to-bill" },
-          { label: "Upcoming stays", count: upcoming.length, anchor: "upcoming" },
-          ...(missed.length > 0
-            ? [{ label: "Missed requests", count: missed.length, anchor: "missed", alert: true }]
-            : []),
-          ...(awaitingPayment.length > 0
-            ? [{ label: "Awaiting payment", count: awaitingPayment.length, anchor: "awaiting-payment" }]
-            : []),
-        ]}
+        figures={figures}
+        active={activeSection}
+        onSelect={setActiveSection}
       />
 
-      {quiet && (
-        <EmptyState>Nothing needs the desk at this guest house right now.</EmptyState>
-      )}
-
-      {/* What the desk needs first thing: which rooms come back today. */}
-      {checkoutsToday.length > 0 && (
-        <div id="checkouts" className="scroll-mt-20">
+      {activeSection === "checkouts" && (
+        checkoutsToday.length > 0 ? (
           <CheckoutsToday bookings={checkoutsToday} nowIso={nowIso} isManager />
-        </div>
+        ) : (
+          <EmptyState>No check-outs today.</EmptyState>
+        )
       )}
 
-      {/* Cancellation Requests Section */}
-      {cancellationRequests.length > 0 && (
-        <section id="cancellations" className="scroll-mt-20">
-          <SectionHeading
-            title="Cancellation requests"
-            count={cancellationRequests.length}
-            tone="alert"
-          />
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Requester</TableHead>
-                  <TableHead>Check-in</TableHead>
-                  <TableHead>Check-out</TableHead>
-                  <TableHead>Rooms</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cancellationRequests.map((b) => (
-                  <CancellationRow key={b.id} booking={b} />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </section>
+      {activeSection === "cancellations" && (
+        cancellationRequests.length > 0 ? (
+          <section>
+            <SectionHeading
+              title="Cancellation requests"
+              count={cancellationRequests.length}
+              tone="alert"
+            />
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Reference</TableHead>
+                    <TableHead>Requester</TableHead>
+                    <TableHead>Check-in</TableHead>
+                    <TableHead>Check-out</TableHead>
+                    <TableHead>Rooms</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cancellationRequests.map((b) => (
+                    <CancellationRow key={b.id} booking={b} />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        ) : (
+          <EmptyState>No cancellation requests.</EmptyState>
+        )
       )}
 
-      {/* Incoming room requests. A meal booking is not one of them - see
-          below. */}
-      {pendingRooms.length > 0 && (
-        <section id="incoming" className="scroll-mt-20">
-          <SectionHeading
-            title="Incoming room requests"
-            count={pendingRooms.length}
-            description="Allocating rooms is what approves the request."
-          />
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Requester</TableHead>
-                  <TableHead>Booking type</TableHead>
-                  <TableHead>Check-in</TableHead>
-                  <TableHead>Check-out</TableHead>
-                  <TableHead>Rooms</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {deskQueueOrder(pendingRooms).map((b) => (
-                  <ManagerRow
-                    key={b.id}
-                    booking={b}
-                    rooms={rooms}
-                    occupancyVersion={occupancyVersion}
-                    capacity={capacity}
-                    bufferMinutes={bufferMinutes}
-                    vipAccess={vipAccess}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </section>
+      {activeSection === "incoming" && (
+        pendingRooms.length > 0 ? (
+          <section>
+            <SectionHeading
+              title="Incoming room requests"
+              count={pendingRooms.length}
+              description="Allocating rooms is what approves the request."
+            />
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Reference</TableHead>
+                    <TableHead>Requester</TableHead>
+                    <TableHead>Booking type</TableHead>
+                    <TableHead>Check-in</TableHead>
+                    <TableHead>Check-out</TableHead>
+                    <TableHead>Rooms</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deskQueueOrder(pendingRooms).map((b) => (
+                    <ManagerRow
+                      key={b.id}
+                      booking={b}
+                      rooms={rooms}
+                      occupancyVersion={occupancyVersion}
+                      capacity={capacity}
+                      bufferMinutes={bufferMinutes}
+                      vipAccess={vipAccess}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        ) : (
+          <EmptyState>No incoming room requests.</EmptyState>
+        )
       )}
 
-      {/* Meal bookings waiting for approval, in their own section (1 Oct
-          2026, the office's request).
-          
-          They were in the list above, under headings that are all about
-          rooms - check-in, check-out, rooms, "Review & Allocate" - with a
-          dash in most of the cells. Nobody arrives on a meal booking and
-          there is nothing to allocate: what the manager needs to see is the
-          day, the sitting, the head count and the split, which is what this
-          table shows. */}
-      {pendingMeals.length > 0 && (
-        <section id="incoming-meals" className="scroll-mt-20">
-          <SectionHeading
-            title="Incoming meal bookings"
-            count={pendingMeals.length}
-            description="No room is held and nobody checks in."
-          />
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Requester</TableHead>
-                  <TableHead>Booking type</TableHead>
-                  <TableHead>Days and meals</TableHead>
-                  <TableHead>People</TableHead>
-                  <TableHead>Preferences</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {deskQueueOrder(pendingMeals).map((b) => (
-                  <MealRequestRow key={b.id} booking={b} />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </section>
+      {activeSection === "incoming-meals" && (
+        pendingMeals.length > 0 ? (
+          <section>
+            <SectionHeading
+              title="Incoming meal bookings"
+              count={pendingMeals.length}
+              description="No room is held and nobody checks in."
+            />
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Reference</TableHead>
+                    <TableHead>Requester</TableHead>
+                    <TableHead>Booking type</TableHead>
+                    <TableHead>Days and meals</TableHead>
+                    <TableHead>People</TableHead>
+                    <TableHead>Preferences</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deskQueueOrder(pendingMeals).map((b) => (
+                    <MealRequestRow key={b.id} booking={b} />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        ) : (
+          <EmptyState>No incoming meal bookings.</EmptyState>
+        )
       )}
 
-      {/* Current occupants - guests physically in the building now */}
-      {current.length > 0 && (
-        <section id="in-house" className="scroll-mt-20">
-          <SectionHeading title="Current occupants" count={current.length} />
-          <StaysTable bookings={current} isManager />
-        </section>
+      {activeSection === "in-house" && (
+        current.length > 0 ? (
+          <section>
+            <SectionHeading title="Current occupants" count={current.length} />
+            <StaysTable bookings={current} isManager />
+          </section>
+        ) : (
+          <EmptyState>No guests in house right now.</EmptyState>
+        )
       )}
 
-      {/* Past check-out but never closed off. Their own section, because
-          counting them as "current occupants" would be the same kind of lie
-          this split exists to remove. */}
-      {overdue.length > 0 && (
-        <section id="awaiting" className="scroll-mt-20">
-          <SectionHeading
-            title="Awaiting check-out"
-            count={overdue.length}
-            tone="alert"
-            description="Past check-out, never marked Vacated - still holding their rooms."
-          />
-          <StaysTable bookings={overdue} showOverdue isManager />
-        </section>
+      {activeSection === "awaiting" && (
+        overdue.length > 0 ? (
+          <section>
+            <SectionHeading
+              title="Awaiting check-out"
+              count={overdue.length}
+              tone="alert"
+              description="Past check-out, never marked Vacated - still holding their rooms."
+            />
+            <StaysTable bookings={overdue} showOverdue isManager />
+          </section>
+        ) : (
+          <EmptyState>No stays awaiting check-out.</EmptyState>
+        )
       )}
 
-      {/* Checked out and still owing. Without this the bill vanished with the
-          guest: a Vacated stay appeared on no screen the manager has. */}
-      {toBill.length > 0 && (
-        <section id="to-bill" className="scroll-mt-20">
-          <SectionHeading
-            title="Checked out - to bill"
-            count={toBill.length}
-            description="Left, and not yet settled."
-          />
-          <StaysTable bookings={toBill} isManager />
-        </section>
+      {activeSection === "to-bill" && (
+        toBill.length > 0 ? (
+          <section>
+            <SectionHeading
+              title="Checked out - to bill"
+              count={toBill.length}
+              description="Left, and not yet settled."
+            />
+            <StaysTable bookings={toBill} isManager />
+          </section>
+        ) : (
+          <EmptyState>Nothing to bill.</EmptyState>
+        )
       )}
 
-      {/* Upcoming - allocated, not started */}
-      {upcoming.length > 0 && (
-        <section id="upcoming" className="scroll-mt-20">
-          <SectionHeading title="Upcoming stays" count={upcoming.length} />
-          <StaysTable bookings={upcoming} isManager />
-        </section>
+      {activeSection === "upcoming" && (
+        upcoming.length > 0 ? (
+          <section>
+            <SectionHeading title="Upcoming stays" count={upcoming.length} />
+            <StaysTable bookings={upcoming} isManager />
+          </section>
+        ) : (
+          <EmptyState>No upcoming stays.</EmptyState>
+        )
       )}
 
-      {/* **Missed** - requests nobody decided before their check-in
-          (migration 29, 7 Oct 2026). They used to sit in a queue for ever
-          with a "lapsed" badge, waiting to be rejected by hand; the nightly
-          sweep now closes them and tells the requester. The manager can put
-          one back where it was waiting, and then move its dates and
-          allocate. */}
-      {missed.length > 0 && (
-        <section id="missed" className="scroll-mt-20">
-          <SectionHeading
-            title="Missed requests"
-            count={missed.length}
-            tone="alert"
-            description="Nobody decided these in time. The requester has been told."
-          />
-          <MissedTable bookings={missed} />
-        </section>
+      {activeSection === "missed" && (
+        missed.length > 0 ? (
+          <section>
+            <SectionHeading
+              title="Missed requests"
+              count={missed.length}
+              tone="alert"
+              description="Nobody decided these in time. The requester has been told."
+            />
+            <MissedTable bookings={missed} />
+          </section>
+        ) : (
+          <EmptyState>No missed requests.</EmptyState>
+        )
       )}
 
-      {/* **Awaiting payment** - the last section, and the only one with no
-          date window (7 Oct 2026). "Checked out - to bill" above is the
-          desk's daily list of stays nobody has invoiced yet, and is bounded
-          to a few weeks. This is the other half: the invoice has gone out
-          and the money has not come in. An official stay's bill can sit with
-          a department for months, and a dining booking never checks out at
-          all, so neither would ever appear above. */}
-      {awaitingPayment.length > 0 && (
-        <section id="awaiting-payment" className="scroll-mt-20">
-          <SectionHeading
-            title="Awaiting payment"
-            count={awaitingPayment.length}
-            description="Invoice issued, not yet paid. No date cut-off."
-          />
-          <AwaitingPaymentTable rows={awaitingPayment} isManager />
-        </section>
+      {activeSection === "awaiting-payment" && (
+        awaitingPayment.length > 0 ? (
+          <section>
+            <SectionHeading
+              title="Awaiting payment"
+              count={awaitingPayment.length}
+              description="Invoice issued, not yet paid. No date cut-off."
+            />
+            <AwaitingPaymentTable rows={awaitingPayment} isManager />
+          </section>
+        ) : (
+          <EmptyState>No invoices awaiting payment.</EmptyState>
+        )
       )}
     </div>
   );

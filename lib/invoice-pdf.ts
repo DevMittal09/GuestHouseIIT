@@ -72,21 +72,24 @@ const PT = 25.4 / 72;
 /** Where the footer's box starts, less a gap: the table stops above it. */
 const CONTENT_BOTTOM = 258;
 /** The officer whose "-sd-" the invoice carries, printed as the signatory. */
-const SIGNATORY_NAME = "C Lunginlal (GHM)";
+const SIGNATORY_NAME = "C Lunginlal";
+const SIGNATORY_DESIGNATION = "Guest House Manager";
 /** The line under the footer box. */
 const E_INVOICE_NOTE = "This is a computer-generated electronic invoice and does not require a physical signature.";
 /**
- * The header images' size. Their shape is locked at 0.8 of the template's
- * width to 0.88 of its height (slightly taller than the original); change
- * `HEADER_SIZE` alone to make them bigger or smaller in that same shape.
+ * The header logo's height in mm. Its width is worked out from the PNG's own
+ * pixel size, so it always matches: change `LOGO_H` alone to make the logo
+ * bigger or smaller. Until 23 Nov 2026 it was 24.2 mm tall and scaled 0.848
+ * across by 0.933 down, which squeezed it slightly.
  */
-const HEADER_SIZE = 1.06;
-/** The header images' width against the template's (1 = full size). */
-const HEADER_SCALE = 0.8 * HEADER_SIZE;
-/** Their height against the template's, in the locked ratio to the width. */
-const HEADER_HEIGHT_SCALE = 0.88 * HEADER_SIZE;
+const LOGO_H = 30;
 /** Where a continuation page starts. */
 const CONTINUED_TOP = MARGIN + 4;
+
+/** Legacy snapshots have no `booking_type`; treat them as personal. */
+function isPersonalInvoice(invoice: InvoiceDocument): boolean {
+  return !invoice.booking_type || invoice.booking_type === "personal";
+}
 
 type Stamp = Pick<InvoiceRecord, "status" | "payment_mode" | "payment_reference" | "paid_at" | "cancel_reason" | "cancelled_at">;
 
@@ -142,21 +145,16 @@ function header(doc: jsPDF, invoice: InvoiceDocument): number {
   // word/header1.xml: the wordmark inline (4014788 × 922190 EMU), the logo
   // anchored 5314950 EMU from the column (1190625 × 934734 EMU).
   //
-  // **Both images are drawn at `HEADER_SCALE`** of the template's width and
-  // `HEADER_HEIGHT_SCALE` of its height (23 Nov 2026, "reduce the height of
-  // the header a little", then a little taller at the same width): the
-  // wordmark keeps its left edge, the logo its right edge, and the title
-  // follows the logo's foot.
-  const emu = (n: number) => n / 36000;
-  const s = HEADER_SCALE;
-  const sh = HEADER_HEIGHT_SCALE;
-  const markW = emu(4014788) * s;
-  const markH = emu(922190) * sh;
-  doc.addImage(wordmarkJpg, "JPEG", MARGIN + 180 * MM_PER_TWIP, 2.6, markW, markH);
-  const logoW = emu(1190625) * s;
-  const logoH = emu(934734) * sh;
-  const logoRight = MARGIN + emu(5314950) - 3.2 + emu(1190625);
-  doc.addImage(logoPng, "PNG", logoRight - logoW, 3.4, logoW, logoH);
+  // **The logo is centred on the page** at `LOGO_H` tall, its width taken
+  // from the PNG's own pixel size (23 Nov 2026) rather than the template's
+  // box, which is a different shape; the title follows its foot. The
+  // wordmark is not drawn; to bring it back, size it the same way.
+  //const emu = (n: number) => n / 36000;
+  //doc.addImage(wordmarkJpg, "JPEG", MARGIN + 180 * MM_PER_TWIP, 2.6, emu(4014788), emu(922190));
+  const logoPx = doc.getImageProperties(logoPng);
+  const logoH = LOGO_H;
+  const logoW = logoH * (logoPx.width / logoPx.height);
+  doc.addImage(logoPng, "PNG", (PAGE_W - logoW) / 2, 3.4, logoW, logoH);
   font(doc, "bold");
   // 32 mm at full size: the title's baseline 2.6 mm under the logo.
   const y = 3.4 + logoH + 2.6;
@@ -336,30 +334,49 @@ function signatures(doc: jsPDF, invoice: InvoiceDocument, start: number, stamp: 
   const lines = printsTaxLines(invoice)
     ? [...gstBreakdownLines(invoice), ...(invoice.prices_include_gst ? [GST_INCLUDED_NOTE] : [])]
     : [];
-  /**
-   * **The GHM's "-sd-"** (23 Nov 2026): the invoice is electronic and carries
-   * no ink signature, so the right-hand column reads "-sd-" over the signing
-   * officer's name, a line apart in bold 10 pt. The guest's signature line and
-   * the "Authorised signatory" label were removed the same day.
-   */
+  const personal = isPersonalInvoice(invoice);
   const sigLineH = 4.6;
-  const sigLines = ["-Sd-", SIGNATORY_NAME];
-  // One line (4.6 mm) less space above "-Sd-" than before (23 Nov 2026).
-  const sigOffset = Math.max(18, 9.5 + lines.length * 3.6 + 8) - sigLineH;
   const at: Cursor = { y: start };
-  room(doc, at, sigOffset + (sigLines.length - 1) * sigLineH + 2);
-  const top = at.y;
-  font(doc, "bold", 10);
-  doc.text(`GSTIN No.:${invoice.gstin}`, MARGIN + 1.3, top + 5);
-  font(doc, "normal", 8);
-  lines.forEach((line, i) => doc.text(line, MARGIN + 1.3, top + 9.5 + i * 3.6));
-  const sigY = top + sigOffset;
-  font(doc, "bold", 10);
-  sigLines.forEach((line, i) =>
-    doc.text(line, PAGE_W - MARGIN - 1.3, sigY + i * sigLineH, { align: "right" })
-  );
+
+  if (personal) {
+    const sigLines = ["-Sd-", SIGNATORY_NAME, SIGNATORY_DESIGNATION];
+    const sigOffset = Math.max(18, 9.5 + lines.length * 3.6 + 8) - sigLineH;
+    room(doc, at, sigOffset + (sigLines.length - 1) * sigLineH + 2);
+    const top = at.y;
+    font(doc, "bold", 10);
+    doc.text(`GSTIN No.:${invoice.gstin}`, MARGIN + 1.3, top + 5);
+    font(doc, "normal", 8);
+    lines.forEach((line, i) => doc.text(line, MARGIN + 1.3, top + 9.5 + i * 3.6));
+    const sigY = top + sigOffset;
+    font(doc, "bold", 10);
+    sigLines.forEach((line, i) =>
+      doc.text(line, PAGE_W - MARGIN - 1.3, sigY + i * sigLineH, { align: "right" })
+    );
+  } else {
+    // Non-personal: GSTIN, blank signing space, then left-side GHM
+    // name/designation, right-side "Faculty-in-charge" / "Guest House".
+    const leftLines = [SIGNATORY_NAME, SIGNATORY_DESIGNATION];
+    const rightLines = ["Faculty-in-charge", "Guest House"];
+    const signGap = 6;
+    const sigOffset = Math.max(18, 9.5 + lines.length * 3.6 + 8) + signGap;
+    room(doc, at, sigOffset + leftLines.length * sigLineH + 2);
+    const top = at.y;
+    font(doc, "bold", 10);
+    doc.text(`GSTIN No.:${invoice.gstin}`, MARGIN + 1.3, top + 5);
+    font(doc, "normal", 8);
+    lines.forEach((line, i) => doc.text(line, MARGIN + 1.3, top + 9.5 + i * 3.6));
+    const sigY = top + sigOffset;
+    font(doc, "bold", 10);
+    leftLines.forEach((line, i) =>
+      doc.text(line, MARGIN + 1.3, sigY + i * sigLineH)
+    );
+    rightLines.forEach((line, i) =>
+      doc.text(line, PAGE_W - MARGIN - 1.3, sigY + i * sigLineH, { align: "right" })
+    );
+  }
 
   if (stamp?.status === "paid" && stamp.payment_mode) {
+    const top = at.y;
     doc.setTextColor(0x1b, 0x6b, 0x2f);
     font(doc, "bold", 9);
     const ref = stamp.payment_reference ? ` · Ref ${stamp.payment_reference}` : "";
@@ -373,7 +390,7 @@ function signatures(doc: jsPDF, invoice: InvoiceDocument, start: number, stamp: 
   }
 }
 
-function footer(doc: jsPDF, invoice: InvoiceDocument) {
+function footer(doc: jsPDF, invoice: InvoiceDocument, pageLabel?: string) {
   // word/footer1.xml: a ruled box, bank details over the address line.
   const x = MARGIN - 0.45;
   const w = TABLE_W;
@@ -426,14 +443,105 @@ function footer(doc: jsPDF, invoice: InvoiceDocument) {
   cx += sepW;
   doc.text(tail, cx, baseline);
 
-  // The electronic-invoice note, centred just under the box. It used to start
-  // at the left 10 mm below the address line - 1.3 mm from the bottom edge,
-  // where printers and some viewers cut it off.
-  font(doc, "normal", 8);
-  doc.text(E_INVOICE_NOTE, x + w / 2, top + bankH + addressH + 3.6, {
+  // Below the box: either the e-invoice note (personal) or a page label
+  // (non-personal, which has a certification second page).
+  font(doc, pageLabel ? "bold" : "normal", 8);
+  const footNote = pageLabel ?? E_INVOICE_NOTE;
+  doc.text(footNote, x + w / 2, top + bankH + addressH + 3.6, {
     align: "center",
     maxWidth: w - PAD * 2,
   });
+}
+
+/**
+ * Page 2 for non-personal invoices: the payment note, forwarding and approval
+ * fields that the office fills in by hand after the invoice is printed.
+ *
+ * Layout: "FOR OFFICIAL USE ONLY" centered at top, then one bordered box
+ * containing To / Guest House Manager / PAYMENT NOTE / the approval line /
+ * Approved by / Forwarded to / Guest House Manager, then a centered page
+ * label at the foot.
+ */
+function certificationPage(doc: jsPDF, invoice: InvoiceDocument) {
+  doc.addPage();
+  const lineH = 6;
+  const pad = 8;
+  const boxLeft = MARGIN + 1.3;
+  const boxRight = PAGE_W - MARGIN - 1.3;
+  const boxW = boxRight - boxLeft;
+  const innerLeft = boxLeft + pad;
+  const innerRight = boxRight - pad;
+  const innerW = innerRight - innerLeft;
+  const mid = boxLeft + boxW / 2;
+
+  // --- heading above the box ---
+  let y = MARGIN + 14;
+  font(doc, "bold", 13);
+  doc.text("FOR OFFICIAL USE ONLY", mid, y, { align: "center" });
+  y += lineH * 2.5;
+
+  const boxTop = y;
+
+  // --- content inside the box ---
+  y += pad;
+
+  // To: (upper-left)
+  font(doc, "bold", BODY_PT);
+  doc.text("To:", innerLeft, y);
+  y += lineH * 2;
+
+  // Guest House Manager (below To:)
+  font(doc, "normal", BODY_PT);
+  doc.text(SIGNATORY_DESIGNATION, innerLeft, y);
+  y += lineH * 3.5;
+
+  // PAYMENT NOTE (centered, bold)
+  font(doc, "bold", 13);
+  doc.text("PAYMENT NOTE", mid, y, { align: "center" });
+  y += lineH * 2;
+
+  // Build the fund source description from the invoice's debitable head.
+  const fundParts: string[] = [invoice.debit_head_label];
+  if (invoice.project_title) fundParts.push(`- ${invoice.project_title}`);
+  if (invoice.project_number) fundParts.push(`(${invoice.project_number})`);
+  if (invoice.project_subhead) fundParts.push(`/ ${invoice.project_subhead}`);
+  if (invoice.special_fund) fundParts.push(`- ${invoice.special_fund}`);
+  const fundSource = fundParts.join(" ");
+  const fundSuffix = /\bFunds?\b/i.test(fundSource) ? "" : " Fund";
+
+  // Approval statement
+  font(doc, "normal", BODY_PT);
+  const certText =
+    `Approval may be granted for an amount of Rs. ____________________ from the ${fundSource}${fundSuffix}.`;
+  const certLines = doc.splitTextToSize(certText, innerW) as string[];
+  const certLineH = BODY_PT * PT * 1.4;
+  for (const line of certLines) {
+    doc.text(line, innerLeft, y);
+    y += certLineH;
+  }
+  y += lineH * 2.5;
+
+  // Approved by
+  font(doc, "bold", BODY_PT);
+  doc.text("Approved by", innerLeft, y);
+  y += lineH * 5;
+
+  // Forwarded to: (lower portion)
+  font(doc, "bold", BODY_PT);
+  doc.text("Forwarded to:", innerLeft, y);
+  y += lineH * 1.2;
+
+  // Guest House Manager (indented below Forwarded to:)
+  font(doc, "normal", BODY_PT);
+  doc.text(SIGNATORY_DESIGNATION, innerLeft + 8, y);
+  y += pad;
+
+  const boxBottom = y;
+
+  // --- draw the border ---
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.3);
+  doc.rect(boxLeft, boxTop, boxW, boxBottom - boxTop, "S");
 }
 
 function watermark(doc: jsPDF, text: string, color: [number, number, number]) {
@@ -464,15 +572,33 @@ export function renderInvoicePdf(invoice: InvoiceDocument, stamp: Stamp | null =
   y = tariffTables(doc, invoice, y);
   signatures(doc, invoice, y, stamp);
 
-  // The bank details and any watermark on every page, once the table has
-  // decided how many there are.
-  const pages = doc.getNumberOfPages();
-  for (let page = 1; page <= pages; page++) {
+  const personal = isPersonalInvoice(invoice);
+
+  // Count the tariff/invoice pages before adding the certification page.
+  const invoicePages = doc.getNumberOfPages();
+
+  // Non-personal invoices get a second page with certification and forwarding.
+  if (!personal) {
+    certificationPage(doc, invoice);
+  }
+
+  const totalPages = doc.getNumberOfPages();
+
+  // The bank details and any watermark on every tariff page.
+  for (let page = 1; page <= invoicePages; page++) {
     doc.setPage(page);
-    footer(doc, invoice);
-    if (pages > 1) {
-      font(doc, "normal", 8);
-      doc.text(`Page ${page} of ${pages}`, PAGE_W - MARGIN, PAGE_H - 4, { align: "right" });
+    if (personal) {
+      footer(doc, invoice);
+      if (invoicePages > 1) {
+        font(doc, "normal", 8);
+        doc.text(`Page ${page} of ${invoicePages}`, PAGE_W - MARGIN, PAGE_H - 4, { align: "right" });
+      }
+    } else {
+      footer(doc, invoice, `Page ${page} of ${totalPages}`);
+      if (page < totalPages) {
+        font(doc, "bold", 8);
+        doc.text("Please Turn Over", PAGE_W - MARGIN - 1.3, PAGE_H - 4, { align: "right" });
+      }
     }
     if (!invoice.invoice_number) watermark(doc, "DRAFT", [0x80, 0x80, 0x80]);
     if (stamp?.status === "cancelled") {
@@ -487,6 +613,14 @@ export function renderInvoicePdf(invoice: InvoiceDocument, stamp: Stamp | null =
       );
       doc.setTextColor(0, 0, 0);
     }
+  }
+  // Certification page: centered page label (no bank-details box) and watermarks.
+  if (!personal) {
+    doc.setPage(totalPages);
+    font(doc, "bold", 8);
+    doc.text(`Page ${totalPages} of ${totalPages}`, PAGE_W / 2, PAGE_H - 10, { align: "center" });
+    if (!invoice.invoice_number) watermark(doc, "DRAFT", [0x80, 0x80, 0x80]);
+    if (stamp?.status === "cancelled") watermark(doc, "CANCELLED", [0xb0, 0x00, 0x00]);
   }
   return new Uint8Array(doc.output("arraybuffer"));
 }

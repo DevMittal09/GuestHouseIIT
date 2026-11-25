@@ -55,6 +55,7 @@ import type {
   DataStore,
   NewLogInput,
   NewProfileInput,
+  OnBehalfEntry,
   SeededProfileInput,
   StatusUpdate,
 } from "./types";
@@ -158,6 +159,8 @@ interface Db {
   institute_wardens?: InstituteWarden[];
   /** Email+password login (for testing). Keyed by lower(email). */
   password_hashes?: Record<string, string>;
+  /** Migration 37: on-behalf booking config (target, booker) pairs. */
+  on_behalf_config?: OnBehalfEntry[];
 }
 
 // `MOCK_DB_PATH` lets the test suite run against a throwaway file instead of
@@ -2372,6 +2375,44 @@ export class MockStore implements DataStore {
     mail.last_error = null;
     mail.scheduled_for = new Date().toISOString();
     mail.updated_at = mail.scheduled_for;
+    saveDb(db);
+  }
+
+  // ---- on-behalf config (migration 37) ----------------------------------
+
+  async listOnBehalfConfig(): Promise<OnBehalfEntry[]> {
+    return loadDb().on_behalf_config ?? [];
+  }
+
+  async onBehalfTargetIds(bookerProfileId: string): Promise<string[]> {
+    return (loadDb().on_behalf_config ?? [])
+      .filter((e) => e.booker_profile_id === bookerProfileId)
+      .map((e) => e.target_profile_id);
+  }
+
+  async addOnBehalfEntry(
+    targetProfileId: string,
+    bookerProfileId: string,
+    createdBy: string,
+  ): Promise<OnBehalfEntry> {
+    const db = loadDb();
+    const rows = db.on_behalf_config ?? (db.on_behalf_config = []);
+    const entry: OnBehalfEntry = {
+      id: randomUUID(),
+      target_profile_id: targetProfileId,
+      booker_profile_id: bookerProfileId,
+      created_at: new Date().toISOString(),
+      created_by: createdBy,
+    };
+    rows.push(entry);
+    saveDb(db);
+    return entry;
+  }
+
+  async removeOnBehalfEntry(id: string): Promise<void> {
+    const db = loadDb();
+    const rows = db.on_behalf_config ?? [];
+    db.on_behalf_config = rows.filter((e) => e.id !== id);
     saveDb(db);
   }
 }

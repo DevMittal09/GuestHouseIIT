@@ -103,9 +103,14 @@ export default async function CaretakerPage({
           // The kitchen's head count for the day, and the dining bookings to
           // bill - open to reception, and until now reachable only by URL.
           current.serves_meals ? (
-            <Button asChild variant="outline">
-              <Link href={`/manager/meals?gh=${encodeURIComponent(current.name)}`}>Meal counts</Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline">
+                <Link href={`/manager/meals?gh=${encodeURIComponent(current.name)}`}>Meal counts</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href={`/manager/meal-logs?gh=${encodeURIComponent(current.name)}`}>Meal logs</Link>
+              </Button>
+            </div>
           ) : undefined
         }
       />

@@ -92,9 +92,15 @@ export async function checkAdminPassword(password: string): Promise<boolean> {
   const record = await storedRecord();
   if (record === null) {
     // No record yet: compare against the default in constant time.
+    // Pad both to the same length so the comparison never short-circuits.
     const a = Buffer.from(password);
     const b = Buffer.from(DEFAULT_ADMIN_PASSWORD);
-    return a.length === b.length && timingSafeEqual(a, b);
+    const len = Math.max(a.length, b.length);
+    const padA = Buffer.alloc(len);
+    const padB = Buffer.alloc(len);
+    a.copy(padA);
+    b.copy(padB);
+    return a.length === b.length && timingSafeEqual(padA, padB);
   }
   return verifyAgainstRecord(password, record);
 }
@@ -182,7 +188,7 @@ export async function throttleCheck(
     const result = await getStore().hitRateLimit(who, limit, windowSeconds);
     return { allowed: result.allowed, retryInSeconds: result.retryAfter };
   } catch (e) {
-    console.warn("[security] Rate-limit check failed — allowing request through. Has migration 21 been applied?", e);
+    console.error("[security] Rate-limit check failed — allowing request through. Has migration 21 been applied?", e);
     return { allowed: true, retryInSeconds: 0 };
   }
 }

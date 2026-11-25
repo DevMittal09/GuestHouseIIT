@@ -152,7 +152,7 @@ export const BOOKING_TYPE_LABELS: Record<BookingType, string> = {
 };
 
 /** Meals the guest house can lay on for a booking. See `lib/meals.ts`. */
-export type MealKey = "breakfast" | "lunch" | "dinner";
+export type MealKey = "breakfast" | "lunch" | "special_lunch" | "dinner";
 export type MealPreferences = Record<MealKey, boolean>;
 /** The meals asked for on one institute calendar day ("yyyy-MM-dd") of a stay. */
 export type MealDay = { date: string } & MealPreferences;

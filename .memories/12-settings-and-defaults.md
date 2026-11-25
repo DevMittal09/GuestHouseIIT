@@ -25,7 +25,7 @@ consulted this rule. `0` turns the cap off for everybody at once.
 | `general_visible_rooms` | 14 | Maximum published free count for the queried guest house; configurable from 1 to 14 |
 | `guidelines_url` | empty | HTTPS detailed-guidelines document link; hidden until supplied |
 
-Booking rules revision 2 changes saved advance windows to one month once and adds `cancellation_notice_hours` (24 by default). `max_stay_nights` stays 14; official booking types are exempt. Meal rules revision 1 supplies the meeting timetable; see [13-billing-and-dining.md](13-billing-and-dining.md). The existing developer Settings controls remain available for future policy edits.
+Booking rules revision 2 changes saved advance windows to one month once and adds `cancellation_notice_hours` (24 by default). `max_stay_nights` stays 14; official booking types are exempt. Meal rules revision 2 adds the fourth meal type (special lunch, 23 Nov 2026); see [13-billing-and-dining.md](13-billing-and-dining.md). The existing developer Settings controls remain available for future policy edits.
 
 Room class, reservation note and optional reservation end date persist on each room. An end date is descriptive, not automatic release: the office must confirm dates and explicitly reclassify a reserved room.
 
@@ -95,15 +95,18 @@ aged under 5 (code constant). Both guest houses are all double sharing.
 
 ### Meal serving windows — `rules.meals`
 
+Four meal types since 23 Nov 2026: `MEAL_KEYS` = `["breakfast", "lunch", "special_lunch", "dinner"]`. Settings exposes three independently configurable windows (`BASE_MEAL_KEYS`); **Special Lunch shares Lunch's window** and is not independently configurable. Revision 2 (`upgradeMealRules`) adds `special_lunch_label` (default "Special Lunch") to saved rows.
+
 | Meal | Default window | Decides |
 | --- | --- | --- |
 | Breakfast | 07:30–09:30 | Which days offer it; lunch can be booked until it ends |
-| Lunch | 12:30–14:00 | …; dinner can be booked until it ends |
+| Lunch | 12:30–14:00 | …; dinner can be booked until it ends. **Special Lunch shares this window** |
 | Dinner | 19:30–21:00 | …; tomorrow's breakfast can be booked until it ends |
 
 | Value | Default | Decides |
 | --- | --- | --- |
 | People per sitting (`max_diners_per_meal`) | **30** | The most people the kitchen will serve at one meal, **counting everyone already booked for it**; checked per day and per meal in `createBooking`, and one booking's head count is capped at it. 0 turns it off |
+| Special lunch label (`special_lunch_label`) | **Special Lunch** | Display label for the fourth meal type. Revision 2 |
 
 Which guest houses serve meals at all is a guest-house switch (below), not a
 Setting.

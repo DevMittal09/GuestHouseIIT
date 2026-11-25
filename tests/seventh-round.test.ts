@@ -95,7 +95,7 @@ describe("each person's own meal preference", () => {
 
   it("gives the kitchen plates per kind, legacy rows included", () => {
     const day = "2030-03-05";
-    const plan = [{ date: day, breakfast: false, lunch: true, dinner: false }];
+    const plan = [{ date: day, breakfast: false, lunch: true, special_lunch: false, dinner: false }];
     const split = booking({
       service_type: "meals_only",
       status: "APPROVED",
@@ -144,7 +144,7 @@ describe("each person's own meal preference", () => {
 
 describe("the kitchen's limit per sitting", () => {
   const day = "2030-04-10";
-  const plan = [{ date: day, breakfast: false, lunch: true, dinner: true }];
+  const plan = [{ date: day, breakfast: false, lunch: true, special_lunch: false, dinner: true }];
 
   it("is 30 by default, and a Setting", () => {
     expect(DEFAULT_RULES.meals.max_diners_per_meal).toBe(30);
@@ -159,7 +159,7 @@ describe("the kitchen's limit per sitting", () => {
     const onlyLunchFull = (_date: string, meal: string) => (meal === "lunch" ? 30 : 0);
     expect(mealCapacityError(plan, 5, onlyLunchFull, 30)).toMatch(/Lunch/);
     expect(
-      mealCapacityError([{ date: day, breakfast: false, lunch: false, dinner: true }], 5, onlyLunchFull, 30)
+      mealCapacityError([{ date: day, breakfast: false, lunch: false, special_lunch: false, dinner: true }], 5, onlyLunchFull, 30)
     ).toBeNull();
     // 0 turns it off.
     expect(mealCapacityError(plan, 500, () => 500, 0)).toBeNull();
@@ -204,7 +204,7 @@ describe("the kitchen's limit per sitting", () => {
       rooms: [],
       meal_guest_count: String(people),
       meal_diet_counts: { veg: people, non_veg: 0 },
-      meals: [{ date: addDaysToDateValue(today, 1), breakfast: false, lunch: true, dinner: false }],
+      meals: [{ date: addDaysToDateValue(today, 1), breakfast: false, lunch: true, special_lunch: false, dinner: false }],
     });
     expect(schema.safeParse(dining(30)).success).toBe(true);
     const over = schema.safeParse(dining(31));
@@ -217,11 +217,11 @@ describe("the kitchen's limit per sitting", () => {
 
 describe("lunch is ticked by default", () => {
   it("is the only meal on by default", () => {
-    expect(DEFAULT_MEALS_ON).toEqual({ breakfast: false, lunch: true, dinner: false });
+    expect(DEFAULT_MEALS_ON).toEqual({ breakfast: false, lunch: true, special_lunch: false, dinner: false });
   });
 
   it("is not applied to a stay, where meals are an extra that is charged", () => {
-    const days = [{ date: "2030-05-01", available: { breakfast: true, lunch: true, dinner: true } }];
+    const days = [{ date: "2030-05-01", available: { breakfast: true, lunch: true, special_lunch: true, dinner: true } }];
     // A room booking passes NO_MEALS: nothing is ticked until the requester
     // ticks it, so no stay picks up dining charges nobody asked for.
     expect([...mealSlotsFromChoices(days, new Map(), NO_MEALS)]).toEqual([]);
@@ -230,8 +230,8 @@ describe("lunch is ticked by default", () => {
 
   it("ticks lunch on a day nobody has decided about, and keeps every decision", () => {
     const days = [
-      { date: "2030-05-01", available: { breakfast: true, lunch: true, dinner: true } },
-      { date: "2030-05-02", available: { breakfast: true, lunch: true, dinner: true } },
+      { date: "2030-05-01", available: { breakfast: true, lunch: true, special_lunch: true, dinner: true } },
+      { date: "2030-05-02", available: { breakfast: true, lunch: true, special_lunch: true, dinner: true } },
     ];
     expect([...mealSlotsFromChoices(days, new Map())].sort()).toEqual([
       "2030-05-01|lunch",
@@ -251,7 +251,7 @@ describe("lunch is ticked by default", () => {
     // A meal the stay does not cover is never ticked, whatever was decided -
     // and a decision about lunch does not leak into dinner, which is off by
     // default. A day whose lunch is closed therefore arrives with nothing.
-    const closed = [{ date: "2030-05-03", available: { breakfast: false, lunch: false, dinner: true } }];
+    const closed = [{ date: "2030-05-03", available: { breakfast: false, lunch: false, special_lunch: false, dinner: true } }];
     expect([...mealSlotsFromChoices(closed, new Map([[mealSlot("2030-05-03", "lunch"), true]]))]).toEqual([]);
     expect([
       ...mealSlotsFromChoices(closed, new Map([[mealSlot("2030-05-03", "dinner"), true]])),
@@ -564,7 +564,7 @@ describe("the store keeps each person's split", () => {
       alumni_roll_number: null,
       alumni_id_url: null,
       custom_fields: null,
-      meals: [{ date: "2031-03-10", breakfast: false, lunch: true, dinner: false }],
+      meals: [{ date: "2031-03-10", breakfast: false, lunch: true, special_lunch: false, dinner: false }],
       rooms: [],
       submission_remarks: null,
       created_by: null,
@@ -601,7 +601,7 @@ describe("Remarks on a dining booking, Purpose on a stay", () => {
     rooms: [],
     meal_guest_count: "4",
     meal_diet_counts: { veg: 4, non_veg: 0 },
-    meals: [{ date: addDaysToDateValue(today, 1), breakfast: false, lunch: true, dinner: false }],
+    meals: [{ date: addDaysToDateValue(today, 1), breakfast: false, lunch: true, special_lunch: false, dinner: false }],
   });
 
   const stay = (purpose: string) => ({

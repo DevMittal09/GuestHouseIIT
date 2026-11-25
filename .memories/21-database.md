@@ -1,5 +1,28 @@
 # Database
 
+## `on_behalf_config` table (23 November 2026, no migration yet)
+
+Added to `scripts/init-postgres.sql` for fresh installs. Each row is a
+`(target_profile_id, booker_profile_id)` pair with a unique constraint, both
+FK to `profiles` with cascade on delete. RLS enabled, no `authenticated`
+policy. Index on `booker_profile_id` for the lookup on `/book`.
+
+**Migration 37 for `on_behalf_config` is not yet written.** Existing databases
+need a one-file migration to create this table before the on-behalf config
+console section works against them.
+
+## Migration 37 - special lunch tariff (23 November 2026)
+
+New file:
+[`scripts/migrations/00000000000037_special_lunch_tariff.sql`](../scripts/migrations/00000000000037_special_lunch_tariff.sql).
+Widens the `tariffs_item_check` CHECK constraint to include `'special_lunch'`.
+Additive and safe to re-run (uses `DROP CONSTRAINT IF EXISTS`). Until it is
+applied, inserting a `special_lunch` tariff row against PostgreSQL fails with a
+CHECK violation. **Not yet applied to the hosted database.**
+
+Note: migration 37 is used for the tariff constraint. The `on_behalf_config`
+table migration (also needed) will be a separate numbered file.
+
 ## Migration 36 - room classes and manager tariff categories
 
 New file: [`scripts/migrations/00000000000036_room_classes_and_tariff_categories.sql`](../scripts/migrations/00000000000036_room_classes_and_tariff_categories.sql). Apply before running the updated application. It adds:

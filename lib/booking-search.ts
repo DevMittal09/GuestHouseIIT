@@ -8,7 +8,7 @@ import {
 } from "@/lib/types";
 import { BOOKING_CATEGORY_ROLES, type MealKey } from "@/lib/types";
 import { MEAL_KEYS } from "@/lib/meals";
-import { instituteParts } from "@/lib/tz";
+import { addDaysToDateValue, instituteParts, instituteIso } from "@/lib/tz";
 
 /**
  * Keyword + filter search over the booking archive.
@@ -662,13 +662,14 @@ export function parseHistoryParams(
   };
 }
 
-/** Local midnight / end-of-day, matching how `formatDateTime` renders dates. */
+/** Institute midnight, matching how `formatDateTime` renders dates. */
 export function dayStartIso(day: string): string {
-  return new Date(`${day}T00:00:00`).toISOString();
+  return instituteIso(`${day}T00:00:00`);
 }
 
+/** Exclusive upper bound: institute midnight of the following day. */
 export function dayEndIso(day: string): string {
-  return new Date(`${day}T23:59:59.999`).toISOString();
+  return instituteIso(`${addDaysToDateValue(day, 1)}T00:00:00`);
 }
 
 /**

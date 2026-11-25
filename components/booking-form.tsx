@@ -252,6 +252,8 @@ export function BookingForm({
   hodApprovers = [],
   forClub = null,
   forFaculty = null,
+  forStaff = null,
+  allowedBookingTypes,
   defaultCopyTo = [],
   tariffPreviews = [],
   tariffSheet = [],
@@ -311,6 +313,18 @@ export function BookingForm({
    * faculty member's id for the server to re-check.
    */
   forFaculty?: { id: string; name: string } | null;
+  /**
+   * Set when non-teaching staff is booking on behalf of a configured
+   * non-teaching staff target (23 Nov 2026). The submission carries
+   * the target's id for the server to re-check.
+   */
+  forStaff?: { id: string; name: string } | null;
+  /**
+   * Override the role-based booking types. When present, the form offers
+   * these instead of `bookingTypesFor(config.role)`. Used for on-behalf
+   * bookings where the allowed types differ from the requester's own.
+   */
+  allowedBookingTypes?: BookingType[];
   /**
    * What Copy to starts with - the council secretary's mailbox when a
    * Faculty Advisor books (`defaultCopyToFor`). A default, not a rule: the
@@ -439,7 +453,7 @@ export function BookingForm({
         ? guestHouses
         : guestHousesForBookingType(
             guestHouses,
-            defaultBookingTypeFor(config.role) ?? "official",
+            allowedBookingTypes?.[0] ?? defaultBookingTypeFor(config.role) ?? "official",
             config.role
           )
     ).filter((g) => !mealsOnly || g.serves_meals);
@@ -450,7 +464,7 @@ export function BookingForm({
     defaultValues: {
       // "Official" for staff, because that is the common case; a role with one
       // option is never shown the question at all.
-      booking_type: defaultBookingTypeFor(config.role) ?? "official",
+      booking_type: (allowedBookingTypes?.[0] ?? defaultBookingTypeFor(config.role)) ?? "official",
       debit_head: "",
       debit_details: "",
       fund_declaration: false,
@@ -503,7 +517,7 @@ export function BookingForm({
   const debitDetailsText = useWatch({ control, name: "debit_details" }) ?? "";
   // Which booking types this role may pick, and whether the question is worth
   // asking - a club only ever books officially.
-  const [bookingTypeOptions] = useState(() => bookingTypesFor(config.role));
+  const [bookingTypeOptions] = useState(() => allowedBookingTypes ?? bookingTypesFor(config.role));
   const forAlumnus = needsAlumniDetails(bookingType);
   // Payment follows the kind of booking: one fixed head for a student or a
   // personal stay, a choice otherwise. Derived, so a change of booking type
@@ -1025,6 +1039,7 @@ export function BookingForm({
       mealsAvailable,
       requesterEmail: user.email,
       rules,
+      allowedBookingTypes: bookingTypeOptions,
       // So the client does not demand a route the form did not offer.
       hasHodApprover: hodApprovers.length > 0,
       // The names the academic record fixes, so the form applies the same
@@ -1137,6 +1152,7 @@ export function BookingForm({
     // faculty in-charge; this only says which club.
     if (forClub) formData.set("for_club", forClub.id);
     if (forFaculty) formData.set("for_faculty", forFaculty.id);
+    if (forStaff) formData.set("for_staff", forStaff.id);
     if (onBehalf) {
       formData.set("on_behalf_of_name", values.on_behalf_of_name);
       formData.set("on_behalf_of_email", values.on_behalf_of_email);

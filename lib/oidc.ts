@@ -68,14 +68,28 @@ export function startGoogleSignIn(
 
 type Jwk = { kid: string; n: string; e: string; alg?: string; kty: string };
 let jwksCache: { keys: Jwk[]; fetchedAt: number } | null = null;
+let jwksFailedAt = 0;
 
 async function googleKeys(): Promise<Jwk[]> {
   if (jwksCache && Date.now() - jwksCache.fetchedAt < 60 * 60_000) return jwksCache.keys;
-  const response = await fetch(JWKS_URL, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Could not read Google's signing keys (${response.status})`);
-  const body = (await response.json()) as { keys: Jwk[] };
-  jwksCache = { keys: body.keys, fetchedAt: Date.now() };
-  return body.keys;
+  // Avoid hammering Google on repeated failures: wait 30s before retrying,
+  // falling back to stale keys if we have them.
+  if (jwksFailedAt && Date.now() - jwksFailedAt < 30_000) {
+    if (jwksCache) return jwksCache.keys;
+    throw new Error("Google's signing keys are unavailable (recent fetch failed)");
+  }
+  try {
+    const response = await fetch(JWKS_URL, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Could not read Google's signing keys (${response.status})`);
+    const body = (await response.json()) as { keys: Jwk[] };
+    jwksCache = { keys: body.keys, fetchedAt: Date.now() };
+    jwksFailedAt = 0;
+    return body.keys;
+  } catch (e) {
+    jwksFailedAt = Date.now();
+    if (jwksCache) return jwksCache.keys;
+    throw e;
+  }
 }
 
 function verifyRs256(token: string, jwk: Jwk): boolean {

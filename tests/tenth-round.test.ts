@@ -22,13 +22,14 @@ const TODAY = "2026-10-09";
 
 describe("a dining booking is quoted meals and nothing else", () => {
   it("previewItemsFor drops the room and the extra bed", () => {
-    expect(previewItemsFor(true, "meals_only")).toEqual(["breakfast", "lunch", "dinner"]);
+    expect(previewItemsFor(true, "meals_only")).toEqual(["breakfast", "lunch", "special_lunch", "dinner"]);
     // A stay is unchanged, and so is the default.
     expect(previewItemsFor(true, "room")).toEqual([
       "room",
       "extra_bed",
       "breakfast",
       "lunch",
+      "special_lunch",
       "dinner",
     ]);
     expect(previewItemsFor(true)).toEqual(previewItemsFor(true, "room"));
@@ -51,7 +52,7 @@ describe("a dining booking is quoted meals and nothing else", () => {
       date: TODAY,
       service: "meals_only",
     });
-    expect(lines.map((l) => l.item)).toEqual(["breakfast", "lunch", "dinner"]);
+    expect(lines.map((l) => l.item)).toEqual(["breakfast", "lunch", "special_lunch", "dinner"]);
 
     const previews = tariffPreviews(
       [],
@@ -62,7 +63,7 @@ describe("a dining booking is quoted meals and nothing else", () => {
       "double_sharing",
       "meals_only"
     );
-    expect(previews[0].lines.map((l) => l.item)).toEqual(["breakfast", "lunch", "dinner"]);
+    expect(previews[0].lines.map((l) => l.item)).toEqual(["breakfast", "lunch", "special_lunch", "dinner"]);
   });
 });
 

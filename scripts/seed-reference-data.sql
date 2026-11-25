@@ -129,15 +129,18 @@ from (
   values
     -- Meals, per head. No guest house: only a kitchen can sell them, and the
     -- invoice prints no dining section where there is none.
-    (null::uuid, 'breakfast', null::text, null::text,  80::numeric, date '2024-01-01', 'Tariff sheet: per head'),
-    (null,       'lunch',     null,       null,       120,          date '2024-01-01', 'Tariff sheet: per head'),
-    (null,       'dinner',    null,       null,       100,          date '2024-01-01', 'Tariff sheet: per head'),
-    (null,       'breakfast', null,       'student',    0,          date '2024-01-01', 'Tariff sheet: meals free to students'),
-    (null,       'lunch',     null,       'student',    0,          date '2024-01-01', 'Tariff sheet: meals free to students'),
-    (null,       'dinner',    null,       'student',    0,          date '2024-01-01', 'Tariff sheet: meals free to students'),
-    (null,       'breakfast', 'alumni',   null,         0,          date '2024-01-01', 'Tariff sheet: meals free to alumni'),
-    (null,       'lunch',     'alumni',   null,         0,          date '2024-01-01', 'Tariff sheet: meals free to alumni'),
-    (null,       'dinner',    'alumni',   null,         0,          date '2024-01-01', 'Tariff sheet: meals free to alumni'),
+    (null::uuid, 'breakfast',      null::text, null::text,  80::numeric, date '2024-01-01', 'Tariff sheet: per head'),
+    (null,       'lunch',          null,       null,       120,          date '2024-01-01', 'Tariff sheet: per head'),
+    (null,       'special_lunch',  null,       null,       100,          date '2024-01-01', 'Tariff sheet: per head'),
+    (null,       'dinner',         null,       null,       100,          date '2024-01-01', 'Tariff sheet: per head'),
+    (null,       'breakfast',      null,       'student',    0,          date '2024-01-01', 'Tariff sheet: meals free to students'),
+    (null,       'lunch',          null,       'student',    0,          date '2024-01-01', 'Tariff sheet: meals free to students'),
+    (null,       'special_lunch',  null,       'student',    0,          date '2024-01-01', 'Tariff sheet: meals free to students'),
+    (null,       'dinner',         null,       'student',    0,          date '2024-01-01', 'Tariff sheet: meals free to students'),
+    (null,       'breakfast',      'alumni',   null,         0,          date '2024-01-01', 'Tariff sheet: meals free to alumni'),
+    (null,       'lunch',          'alumni',   null,         0,          date '2024-01-01', 'Tariff sheet: meals free to alumni'),
+    (null,       'special_lunch',  'alumni',   null,         0,          date '2024-01-01', 'Tariff sheet: meals free to alumni'),
+    (null,       'dinner',         'alumni',   null,         0,          date '2024-01-01', 'Tariff sheet: meals free to alumni'),
 
     -- The room rates the portal was built with, superseded below but kept.
     ('22222222-2222-2222-2222-222222222201', 'room', null, null,       750,  date '2024-01-01', 'Tariff sheet: Bageshri, per room per day'),

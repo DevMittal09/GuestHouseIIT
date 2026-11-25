@@ -320,6 +320,7 @@ export const DEFAULT_RULES: Rules = {
     windows: {
       breakfast: { start: "08:00", end: "09:30" },
       lunch: { start: "12:30", end: "14:00" },
+      special_lunch: { start: "12:30", end: "14:00" },
       dinner: { start: "19:30", end: "21:00" },
     },
     // The office's figure: one kitchen serving a guest house, not a canteen.
@@ -484,6 +485,7 @@ export const mealRulesSchema = z
     windows: z.object({
       breakfast: windowSchema("Breakfast"),
       lunch: windowSchema("Lunch"),
+      special_lunch: windowSchema("Special Lunch"),
       dinner: windowSchema("Dinner"),
     }),
     max_diners_per_meal: whole("People per sitting", 0, 1000),
@@ -613,8 +615,21 @@ function upgradeStoredGroup(
   if (group === "approval") return upgradeApprovalRules(stored);
   if (group === "invoice") return upgradeInvoiceRules(stored);
   if (group === "booking") return upgradeBookingRules(stored);
-  if (group === "meals" && !stored.revision) {
-    return { ...stored, revision: 1, windows: DEFAULT_RULES.meals.windows };
+  if (group === "meals") {
+    let meal = { ...stored };
+    if (!meal.revision) {
+      meal = { ...meal, revision: 2, windows: DEFAULT_RULES.meals.windows };
+    }
+    if ((meal.revision as number) < 2) {
+      const w = meal.windows as Record<string, MealWindow> | undefined;
+      const lunchWindow = w?.lunch ?? DEFAULT_RULES.meals.windows.lunch;
+      meal = {
+        ...meal,
+        revision: 2,
+        windows: { ...w, special_lunch: lunchWindow },
+      };
+    }
+    return meal;
   }
   if (group !== "capacity" || "max_occupants_per_room" in stored) return stored;
   const rest = { ...stored };

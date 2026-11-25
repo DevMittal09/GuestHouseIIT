@@ -1,5 +1,22 @@
 # Booking forms — what each requester is asked, and where the answers come from
 
+## Update, 25 November 2026
+
+- **Non-teaching staff self-booking** now offers only `["personal"]`.
+  `bookingTypesForUser(profile)` in `lib/booking-types.ts` checks
+  `staff_category`; `BookingContext.bookingTypes` supplies that same list to
+  the form and to client/server schema validation. An Official self-booking is
+  rejected server-side as well as omitted from the form.
+- **On-behalf of non-teaching staff targets** (configured in the console):
+  `onBehalfBookingTypes(target)` returns `["personal"]` for a non-teaching
+  staff target and `["official"]` for a faculty target. The
+  `allowedBookingTypes` override flows through `bookingContextFor`, the form
+  and validation unchanged.
+- **A non-teaching employee booking on behalf of a faculty member** retains the
+  faculty requester's Official-only booking type.
+- **`for_staff` query param** on `/book` and `/book/meals` selects a configured
+  non-teaching staff target. Mirrors `for_faculty` and `for` (clubs).
+
 ## Owner's corrections, 10 November 2026
 
 **Dates are picked from a calendar.** `components/ui/date-field.tsx`
@@ -204,7 +221,7 @@ its form is not in the Form Builder and every guest field is required.
 | 11 | **Purpose of visit** — labelled **Remarks** on a meal booking | Everyone | **Yes**, ≥ 5 characters, on a stay; **optional** on a meal booking (1 Oct 2026) |
 | 12 | **Rooms** — room cards, each with its guests | Room bookings | **At least 1 room, at most 10** |
 | 12a | **"Do you require meals?"** — Yes / No, **No by default** (17 Oct 2026). The meal section below is rendered **only on Yes**; on No nothing is submitted at all - the service type stays `room`, no diet split is sent and no meal rule can fire. The ticks are kept while it is off, so Yes restores them. **Not asked on a dining booking**, where the meals are the booking | A stay at a guest house that serves meals, where the booking may have meals at all (never a student or an alumni booking) | It is answered by its default |
-| 13 | **Meals** — days × breakfast / lunch / dinner grid, **nothing ticked by default on a stay** (they are charged), plus **how many vegetarian and how many not**. Asked **after the guests** (17 Oct 2026). Closed by the caretaker line below | Room + Meals, on Yes | **At least one meal**, and a split adding up to the guests needing a bed |
+| 13 | **Meals** — days × breakfast / lunch / special lunch / dinner grid (four meal types since 23 Nov 2026), **nothing ticked by default on a stay** (they are charged), plus **how many vegetarian and how many not**. Asked **after the guests** (17 Oct 2026). Closed by the caretaker line below | Room + Meals, on Yes | **At least one meal**, and a split adding up to the guests needing a bed |
 | 14 | **Meals only** — a list of dates, each with its meals ("Add another date", **lunch ticked**), the number of people as a **typed box with − / + steppers** (`QuantityInput`, 9 Oct 2026 — it was a 1…30 dropdown from 1 Oct), and the vegetarian / non-vegetarian split in two boxes of the same kind | Meals only | Count **1–30** (the kitchen's limit per sitting, a Setting — the stepper's max, the schema's max, and `createBooking`'s check of the sitting), at least one meal, a split adding up to the count |
 | 14a | **"In any case talk with caretaker for any change in meal booking"** (`MEAL_CHANGE_NOTICE`, 17 Oct 2026, the owner's words exactly) — at the foot of the meal section, on both doors | Wherever the meal section is shown | Read-only |
 | 15 | **Additional information** (custom fields) | Whatever the Form Builder added for the role | As configured |

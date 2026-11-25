@@ -1,5 +1,6 @@
 import { cache } from "react";
-import { bookingTypesFor } from "./booking-types";
+import { bookingTypesForUser } from "./booking-types";
+import type { BookingType } from "./types";
 import { debitHeadsByType, type DebitHeadsByType } from "./debit-heads";
 import { describeProject, type Project } from "./projects";
 import { getRules } from "./settings-server";
@@ -21,6 +22,8 @@ import { hodApproversFor, type Unit } from "./units";
 export type BookingContext = {
   rules: Rules;
   units: Unit[];
+  /** The request's allowed types, also used to derive its debit-head lists. */
+  bookingTypes: BookingType[];
   debitHeads: { room: DebitHeadsByType; dining: DebitHeadsByType };
   /** Active projects, for the Project head. */
   projects: { id: string; label: string }[];
@@ -44,7 +47,10 @@ export type BookingContext = {
   tariffs: Tariff[];
 };
 
-export const bookingContextFor = cache(async (user: Profile): Promise<BookingContext> => {
+export const bookingContextFor = cache(async (
+  user: Profile,
+  bookingTypesOverride?: BookingType[],
+): Promise<BookingContext> => {
   const store = getStore();
   const [rules, units, allProjects, profiles, tariffs] = await Promise.all([
     getRules(),
@@ -53,11 +59,12 @@ export const bookingContextFor = cache(async (user: Profile): Promise<BookingCon
     store.listProfiles().catch(() => [] as Profile[]),
     store.listTariffs().catch(() => [] as Tariff[]),
   ]);
-  const types = bookingTypesFor(user.role);
+  const types = bookingTypesOverride ?? bookingTypesForUser(user);
   const byId = new Map(profiles.map((p) => [p.id, p]));
   return {
     rules,
     units,
+    bookingTypes: types,
     debitHeads: {
       room: debitHeadsByType(user.role, types, user, units, rules.debit, "room"),
       dining: debitHeadsByType(user.role, types, user, units, rules.debit, "dining"),

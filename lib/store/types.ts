@@ -541,4 +541,21 @@ export interface DataStore {
   saveMailTemplate(override: MailTemplateOverride): Promise<void>;
   /** Drop the override, restoring the built-in wording for that event. */
   resetMailTemplate(key: MailEventKey): Promise<void>;
+
+  // ---- on-behalf config (migration 37) --------------------------------
+
+  /** Every (target, booker) pair configured. */
+  listOnBehalfConfig(): Promise<OnBehalfEntry[]>;
+  /** The profile ids of the non-teaching staff this booker may book for. */
+  onBehalfTargetIds(bookerProfileId: string): Promise<string[]>;
+  addOnBehalfEntry(targetProfileId: string, bookerProfileId: string, createdBy: string): Promise<OnBehalfEntry>;
+  removeOnBehalfEntry(id: string): Promise<void>;
+}
+
+export interface OnBehalfEntry {
+  id: string;
+  target_profile_id: string;
+  booker_profile_id: string;
+  created_at: string;
+  created_by: string | null;
 }

@@ -94,6 +94,7 @@ const TARIFFS: Tariff[] = [
   t({ item: "extra_bed", rate: 500 }),
   t({ item: "breakfast", rate: 80 }),
   t({ item: "lunch", rate: 120 }),
+  t({ item: "special_lunch", rate: 100 }),
   t({ item: "dinner", rate: 100 }),
 ];
 
@@ -152,8 +153,8 @@ describe("a guest house with no kitchen has no dining section on its invoice", (
   });
 
   it("charges nothing for meals even when the desk's counts say otherwise", () => {
-    const typed = price(bageshri, { mealCounts: { breakfast: 9, lunch: 9, dinner: 9 } });
-    expect(typed.meal_lines.map((l) => l.count)).toEqual([0, 0, 0]);
+    const typed = price(bageshri, { mealCounts: { breakfast: 9, lunch: 9, special_lunch: 9, dinner: 9 } });
+    expect(typed.meal_lines.map((l) => l.count)).toEqual([0, 0, 0, 0]);
     expect(typed.subtotal_dining).toBe(0);
     expect(typed.gst_dining).toBe(0);
     expect(typed.grand_total).toBe(doc.grand_total);
@@ -186,7 +187,7 @@ describe("a guest house with no kitchen has no dining section on its invoice", (
 });
 
 describe("a guest house with a kitchen is unchanged", () => {
-  const doc = price(hamsanandi, { mealCounts: { breakfast: 2, lunch: 0, dinner: 2 } });
+  const doc = price(hamsanandi, { mealCounts: { breakfast: 2, lunch: 0, special_lunch: 0, dinner: 2 } });
 
   it("still prints the dining section, lettered C and D", () => {
     expect(doc.serves_meals).toBe(true);
@@ -226,7 +227,7 @@ describe("an invoice issued before this change", () => {
     expect(invoicePrintsDining(issued)).toBe(true);
     const table = invoiceTable(issued);
     expect(table.sections.map((s) => s.key)).toEqual(["rooms", "dining"]);
-    expect(table.sections[1].rows.map((r) => r.qty)).toEqual([0, 0, 0]);
+    expect(table.sections[1].rows.map((r) => r.qty)).toEqual([0, 0, 0, 0]);
     expect(table.closing).toEqual([{ label: "Grand Total (A+B+C+D):", amount: issued.grand_total }]);
   });
 });

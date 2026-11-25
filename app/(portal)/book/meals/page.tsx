@@ -19,8 +19,8 @@ import { MEALS_ONLY_SERVICE } from "@/lib/routes";
 export default async function MealBookingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ for?: string; for_faculty?: string }>;
+  searchParams: Promise<{ for?: string; for_faculty?: string; for_staff?: string }>;
 }) {
-  const { for: forParam, for_faculty: forFacultyParam } = await searchParams;
-  return <BookingRequestPage service={MEALS_ONLY_SERVICE} forId={forParam} forFacultyId={forFacultyParam} />;
+  const { for: forParam, for_faculty: forFacultyParam, for_staff: forStaffParam } = await searchParams;
+  return <BookingRequestPage service={MEALS_ONLY_SERVICE} forId={forParam} forFacultyId={forFacultyParam} forStaffId={forStaffParam} />;
 }

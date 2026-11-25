@@ -296,7 +296,7 @@ describe("clubs are booked by their Faculty Advisor", () => {
 
 // ------------------------------------------------------------------ invoices
 
-const TARIFFS: Tariff[] = (["room", "breakfast", "lunch", "dinner"] as const).map((item) => ({
+const TARIFFS: Tariff[] = (["room", "breakfast", "lunch", "special_lunch", "dinner"] as const).map((item) => ({
   id: item,
   guest_house_id: null,
   item,
@@ -320,8 +320,8 @@ describe("invoices", () => {
         meal_guest_count: 12,
         debit_head: "department_budget",
         meals: [
-          { date: "2026-09-20", breakfast: false, lunch: true, dinner: false },
-          { date: "2026-09-21", breakfast: false, lunch: true, dinner: false },
+          { date: "2026-09-20", breakfast: false, lunch: true, special_lunch: false, dinner: false },
+          { date: "2026-09-21", breakfast: false, lunch: true, special_lunch: false, dinner: false },
         ],
       },
       []

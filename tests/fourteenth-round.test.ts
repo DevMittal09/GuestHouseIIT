@@ -163,7 +163,7 @@ describe("the tariff categories a requester may choose", () => {
     const faculty = categoriesFor("employee", [BAGESHRI, HAMSANANDI], "meals_only");
     expect(faculty.map((c) => c.guest_house_id)).toEqual([HAMSANANDI.id, HAMSANANDI.id]);
     // Meals and nothing else: there is no room on a dining booking to charge.
-    expect(faculty[0].lines.map((l) => l.item)).toEqual(["breakfast", "lunch", "dinner"]);
+    expect(faculty[0].lines.map((l) => l.item)).toEqual(["breakfast", "lunch", "special_lunch", "dinner"]);
     expect(faculty[0].headline).toBeNull();
     // A student and an alumni booking get no meals at all (7 Oct 2026).
     expect(categoriesFor("student", [BAGESHRI, HAMSANANDI], "meals_only")).toEqual([]);

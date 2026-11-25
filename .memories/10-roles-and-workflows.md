@@ -1,5 +1,23 @@
 # Roles, workflows and notifications — the life of a request
 
+## Update, 25 November 2026
+
+- **Non-teaching staff** (`employee` with `staff_category === "staff"`) can now
+  only book **personal** for themselves (`bookingTypesForUser` in
+  `lib/booking-types.ts`). The same profile-aware list now reaches the form and
+  server-side schema validation. The role-only `bookingTypesFor("employee")`
+  remains unchanged.
+- **Configurable on-behalf booking** for non-teaching staff: a new console
+  section **Booking on Behalf** (`/admin/on-behalf`, manager and developer) lets
+  the desk configure `(target, booker)` pairs in `on_behalf_config`. A booker
+  picks a configured target from the search dropdown and the booking hangs off
+  the target's account. `onBehalfBookingTypes`: faculty target = official only;
+  non-teaching staff target = personal only.
+- The search dropdown on `/book` now shows **two sections**: "Faculty (official
+  booking only)" and "Non-teaching staff (personal booking only)".
+- **On-behalf booking is unchanged:** a non-teaching employee booking for
+  faculty keeps the faculty member's Official-only type.
+
 ## Meeting decisions implemented, 9 November 2026
 
 Current overrides to the historical descriptions below:
@@ -50,7 +68,7 @@ file is a bug.
 | Role (`profiles.role`) | Label in the portal | Lands on | Books? | Approves? | Desk | Console |
 | --- | --- | --- | --- | --- | --- | --- |
 | `student` | Student | `/dashboard` | Personal stays for family | — | — | — |
-| `employee` | Employee (Faculty & Staff) | `/dashboard` | Official or personal; meals only; **as Faculty Advisor** when named on a council | As **HOD** / club head if appointed | — | — |
+| `employee` | Employee (Faculty & Staff) | `/dashboard` | Faculty: official or personal; non-teaching staff: personal for self, plus existing on-behalf options; meals only; **as Faculty Advisor** when named on a council | As **HOD** / club head if appointed | — | — |
 | `official` | Official / Dignitary | `/dashboard` | Official only, if whitelisted; meals only | — | — | — |
 | `club` | Club / Fest Council | `/dashboard` | **No** — its Faculty Advisor books for it | — | — | — |
 | `iar_student_cell` | IAR Student Cell | `/dashboard` | On behalf of an alumnus only | — | — | — |
@@ -239,6 +257,7 @@ dining) since the office's list of 8 Oct 2026 - their official hosting is
 raised by the office or department that is paying, which has its own list. So
 they are never asked for the funds declaration either. The category comes from
 `profiles.staff_category`; an employee with none set is treated as faculty.
+Self-booking offers Personal only and rejects Official on the server.
 
 - **Books on behalf of faculty** (23 Nov 2026): any non-teaching staff may
   book for any faculty member. New Booking shows a "Booking as" card with a
@@ -453,6 +472,9 @@ Faculty Advisor raises.
   required), **cancel** (the manager and developer only).
 - **Kitchen** (`/manager/meals`): plates per meal per day, confirmed and
   pending dining, "Dining to invoice".
+- **Meal logs** (`/manager/meal-logs`, 23 Nov 2026): approved and vacated
+  meals-only bookings by week or month, with invoice status and Invoice
+  button per booking.
 - **Console** ("Settings" in the menu → `/admin/users`), behind the console
   password: Users & Roles (cannot create or edit a developer), Departments &
   Clubs (incl. Faculty Advisors), **Approval Workflow** (who forwards whose
@@ -483,6 +505,8 @@ A deliberate **subset** of the manager's console — reception.
 - **Kitchen** (`/manager/meals`): a **Meal counts** button on Reception for a
   guest house that serves meals; the kitchen page's back link returns to
   Reception.
+- **Meal logs** (`/manager/meal-logs`, 23 Nov 2026): a **Meal logs** button
+  beside Meal counts on Reception.
 - Approval Log over everything; collections CSV.
 - **No** allocation, approvals, cancellations, bookings or console.
 - **Menu:** Reception · Room Availability · Approval Log.

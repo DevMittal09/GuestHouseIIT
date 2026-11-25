@@ -944,7 +944,7 @@ function couldDecide(
   void rule;
   switch (approver.kind) {
     case "warden":
-      return reviewer.role === "warden" && hasHostel(reviewer);
+      return isHostelWardenRole(reviewer.role) && hasHostel(reviewer);
     case "hod":
       return units.some(
         (u) => u.head_id === reviewer.id || u.acting_head_id === reviewer.id

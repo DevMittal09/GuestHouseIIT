@@ -344,7 +344,7 @@ describe("the nightly sweep", () => {
         meal_guest_count: 4,
         check_in: "2026-10-07T00:00:00.000Z",
         check_out: "2026-10-07T18:29:00.000Z",
-        meals: [{ date: "2026-10-07", breakfast: false, lunch: true, dinner: false }],
+        meals: [{ date: "2026-10-07", breakfast: false, lunch: true, special_lunch: false, dinner: false }],
       })
     );
     const over = await store.createBooking(
@@ -355,7 +355,7 @@ describe("the nightly sweep", () => {
         meal_guest_count: 4,
         check_in: "2026-10-01T00:00:00.000Z",
         check_out: "2026-10-01T18:29:00.000Z",
-        meals: [{ date: "2026-10-01", breakfast: false, lunch: true, dinner: false }],
+        meals: [{ date: "2026-10-01", breakfast: false, lunch: true, special_lunch: false, dinner: false }],
       })
     );
     const now = new Date("2026-10-07T02:30:00.000Z");

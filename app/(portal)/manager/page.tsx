@@ -170,11 +170,18 @@ export default async function ManagerPage({
               <Link href="/book">New booking for a guest</Link>
             </Button>
             {current.serves_meals && (
-              <Button asChild variant="outline">
-                <Link href={`/manager/meals?gh=${encodeURIComponent(current.name)}`}>
-                  Meal counts
-                </Link>
-              </Button>
+              <>
+                <Button asChild variant="outline">
+                  <Link href={`/manager/meals?gh=${encodeURIComponent(current.name)}`}>
+                    Meal counts
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href={`/manager/meal-logs?gh=${encodeURIComponent(current.name)}`}>
+                    Meal logs
+                  </Link>
+                </Button>
+              </>
             )}
             {/* Rooms, accounts, booking forms and the wording of the automatic
                 emails - all of it the manager's to change. */}

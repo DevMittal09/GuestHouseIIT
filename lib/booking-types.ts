@@ -4,7 +4,9 @@ import {
   type BookingType,
   type Role,
   type ServiceType,
+  type StaffCategory,
 } from "./types";
+import { isNonTeachingStaff, isFacultyMember } from "./staff-booking";
 
 /**
  * Which booking types a role may choose, and which is selected by default.
@@ -74,8 +76,12 @@ export function offersBookingTypeChoice(role: Role): boolean {
 }
 
 /** Why this role may not book that way, or null when it may. */
-export function bookingTypeError(role: Role, type: BookingType): string | null {
-  const allowed = bookingTypesFor(role);
+export function bookingTypeError(
+  role: Role,
+  type: BookingType,
+  allowedBookingTypes: readonly BookingType[] = bookingTypesFor(role)
+): string | null {
+  const allowed = allowedBookingTypes;
   if (allowed.length === 0) return "Your role cannot submit booking requests";
   if (allowed.includes(type)) return null;
   const readable = role.replace(/_/g, " ");
@@ -112,6 +118,41 @@ export function describeBookingType(role: Role, type: BookingType): string {
     ? "Institute business for the IAR office."
     : "Institute business - a visitor, collaborator or committee hosted by " +
       "the institute.";
+}
+
+// ------------------------------------------------- profile-aware overrides
+
+type StaffProfile = { role: Role; staff_category?: StaffCategory | null };
+
+/**
+ * Profile-aware booking types: non-teaching staff may only book personal
+ * for themselves (23 Nov 2026). Use wherever the full profile is available;
+ * the role-only {@link bookingTypesFor} is for backward compat where only
+ * a role is known (stored bookings, mail).
+ */
+export function bookingTypesForUser(profile: StaffProfile): BookingType[] {
+  if (isNonTeachingStaff(profile)) return ["personal"];
+  return bookingTypesFor(profile.role);
+}
+
+export function defaultBookingTypeForUser(profile: StaffProfile): BookingType | null {
+  return bookingTypesForUser(profile)[0] ?? null;
+}
+
+// ------------------------------------------- on-behalf booking type rules
+
+/**
+ * Booking types when someone books **on behalf of** a target.
+ *
+ * - On behalf of **teaching staff (faculty)**: official only - a personal
+ *   booking is raised by the faculty member themselves.
+ * - On behalf of **non-teaching staff** (configured targets): personal only.
+ * - On behalf of anyone else: the target's own types.
+ */
+export function onBehalfBookingTypes(target: StaffProfile): BookingType[] {
+  if (isFacultyMember(target)) return ["official"];
+  if (isNonTeachingStaff(target)) return ["personal"];
+  return bookingTypesFor(target.role);
 }
 
 // ------------------------------------------------------------ service type

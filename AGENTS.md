@@ -908,7 +908,12 @@ checked against it.
 **request**, not the requester. `bookingTypesFor(role)` is the single source of
 truth for which a role may pick, and a role with one option is **never asked** —
 the form records the value silently. Employee is the only role with a real
-choice (`official` default, `personal`); club and official are official-only.
+choice (`official` default, `personal`) at the role level. A non-teaching
+employee's own profile is Personal-only; the profile-aware list is used by
+both the form and server validation. A non-teaching staff target is also
+Personal-only when booked on behalf of; a faculty target remains Official-only,
+including when a non-teaching employee raises it. Club and official are
+official-only.
 **The GH Manager has no `personal`** (23 Sep 2026): the desk account is the
 guest house, not a person, and staff in that post book their own family from an
 ordinary institute account. It is `["official", "alumni"]`.
@@ -997,10 +1002,9 @@ office: "allow users to make bookings more than 30 days in advance"; it was
 one month) — a Setting (`rules.booking.advance_booking_months`, 1-24, zero
 refused), passed as `latestCheckIn(role, from, months)`; the 14-night maximum stay is `rules.booking.max_stay_nights` (0 = no
 limit). `latestCheckIn` in `lib/workflow.ts` is the single source of truth; `isAdvanceWindowExempt()`
-exempts **`official`, `gh_manager` and `developer`**, because dignitary visits
-are arranged on the institute's own notice and the desk books what the
-institute has already committed to. The same three (plus
-`director.office@`) are exempt from the stay cap (`lib/policy.ts`). The limit applies to `check_in` only — a stay that
+exempts **`gh_manager` and `developer`**, because the desk books what the
+institute has already committed to. The same two roles (plus the Director's
+Office by address) are exempt from the stay cap (`lib/policy.ts`). The limit applies to `check_in` only — a stay that
 starts inside the window may run past it.
 
 `bookingPayloadSchema` applies it on client *and* server, so the `max` on the

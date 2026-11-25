@@ -8118,3 +8118,116 @@ booking except `created_by` is set. The existing `created_by` column and
 the generic `requesterCopyTo` / `actsAsRequester` / `listBookingsForUser`
 logic handle everything.
 
+---
+
+### 23 November 2026 (continued) - on-behalf config, non-teaching staff types, invoice layout
+
+**Why remove the official booking type from non-teaching staff self-booking?**
+The office asked: non-teaching staff booking for themselves should only have
+personal funds. `bookingTypesForUser(profile)` checks `staff_category` and
+returns `["personal"]` for non-teaching staff. The role-only `bookingTypesFor`
+is untouched so stored bookings, mail templates and anywhere only a role string
+is known still work.
+
+**Why a configurable `on_behalf_config` table instead of allowing any
+non-teaching staff to book for any other?** The office wants explicit control
+over which pairs are allowed. The GHM configures each `(target, booker)` pair
+from the console. This avoids opening on-behalf booking to every staff member
+and gives the desk an audited record of who was authorised.
+
+**Why `on_behalf_config` in the schema file but no migration 37?** The table is
+needed for fresh installs and the schema file is the right place. A migration
+file for existing databases is deferred because the hosted database has not been
+touched in this round. It is one `CREATE TABLE` and one index.
+
+**Why `onBehalfBookingTypes` returns official+personal for non-teaching staff
+targets but official-only for faculty?** A personal booking for a faculty
+member is raised by the faculty member themselves (they have a login and the
+form). A non-teaching staff target may need someone to book personal for them
+because they were restricted to personal-only for self-booking and may need
+official when booked on behalf of.
+
+> **Superseded later on 25 November 2026.** The owner asked for bookings
+> raised on behalf of non-teaching staff to be Personal-only as well. The
+> target's allowed types now apply consistently whether the target submits
+> personally or a configured booker raises the request; faculty targets remain
+> Official-only.
+
+**Why include `booking_type` in `buildInvoiceDocument`?** The PDF layout
+differs for official and personal invoices (column order, section headings).
+Without it in the snapshot the layout would be recomputed from the booking at
+print time, which violates the "issued invoices are snapshots" rule.
+
+### Special Lunch as a fourth meal type (23 Nov 2026)
+
+**Why add `special_lunch` to `MealKey` rather than letting the office define
+meal types from Settings?** The meal serving windows, tariff items, invoice
+lines, schema fields and form grid cells are all keyed by `MealKey`. Making
+them fully dynamic would require a migration (the `tariffs.item` CHECK
+constraint names the values), changes to every stored `MealDay` object, and
+a Settings UI for defining meal types. A fourth hardcoded value is the
+proportionate change: one union member, one label, one tariff item, one
+schema field, carried by the same `MEAL_KEYS` array that already drives the
+grid, the invoice and the kitchen view.
+
+**Why share Lunch's serving window?** Special Lunch is served between lunch
+and dinner, overlapping with the lunch window. Making it independently
+configurable would add a fourth row to the Settings form and a fourth
+`mealBookingDeadline` check that is in practice always set to the same times
+as lunch. `BASE_MEAL_KEYS` (breakfast, lunch, dinner) stays at three for the
+Settings form; `MEAL_KEYS` (four) drives everything else. The revision-2
+upgrade of `rules.meals` syncs `special_lunch` from `lunch` on any saved row,
+so an existing Settings row gains the window on first read.
+
+**Why migration 37 for the CHECK constraint?** The PostgreSQL CHECK on
+`tariffs.item` is an enum-like list of valid values. Without widening it, an
+`INSERT` of a `special_lunch` tariff row is refused with a constraint
+violation. The migration drops and re-adds the constraint idempotently.
+
+### Meal Booking Logs page (23 Nov 2026)
+
+**Why a separate page instead of expanding the "Dining to invoice" section on
+`/manager/meals`?** The kitchen page is a **daily** view: plates per meal for
+one date, who is eating today. The logs page is a **period** view: every
+dining booking whose last meal date falls in a week or month, with invoice
+status. They answer different questions and merging them would make the daily
+view scroll past a table of bookings from across the week.
+
+**Why filter by last meal date?** A dining booking's check-out is derived from
+its last day of meals. Filtering by that date groups bookings by when they
+finish, which is when the desk invoices them. Filtering by first meal date
+would miss a booking that started last week and ends this week.
+
+**Why week/month toggle, not the date presets from `/history`?** The presets
+are a filter over an archive with many states. This page has two states
+(approved, vacated) and one purpose (invoice each booking). A simple
+prev/next navigator with a week or month window is the right amount of
+control.
+
+**Why not add it as a console section?** Console sections in
+`CONSOLE_SECTIONS` are tabs on the `/admin` page, behind the console
+password. The meal logs page is a desk tool, alongside the kitchen view, and
+linked from the manager's and caretaker's action buttons. It follows the
+pattern of `/manager/meals`, not `/admin/mail`.
+
+### Profile-aware self-booking types (25 November 2026)
+
+**Why pass allowed booking types through the booking context and schema?**
+The employee role still includes faculty and staff, so its role-only booking
+types must retain both Official and Personal for faculty and for existing
+role-only callers. A non-teaching employee's own request uses the
+profile-aware Personal-only list; the form and server schema must use the same
+list or the visible choices and accepted payloads can disagree.
+
+**Why not restrict by the signed-in booker for every request?** On-behalf
+requests belong to their target. A non-teaching employee booking for faculty
+must keep the faculty target's Official-only option, and configured staff
+targets retain their existing Official and Personal options. The context's
+explicit on-behalf override therefore takes precedence over the target's
+self-booking list.
+
+> **Superseded later on 25 November 2026.** Configured non-teaching staff
+> targets are Personal-only when booked on behalf of, matching their
+> self-booking rule. A non-teaching employee booking for a faculty target still
+> uses the faculty member's Official-only list.
+

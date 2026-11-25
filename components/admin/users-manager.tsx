@@ -280,9 +280,9 @@ export function UsersManager({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-auto rounded-lg border max-h-[70vh]">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="w-10">
                 <input

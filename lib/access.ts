@@ -118,6 +118,7 @@ export type ConsoleSection =
   | "billing"
   | "guest_houses"
   | "portal"
+  | "on_behalf"
   | "forms"
   | "mail_templates"
   | "mail_outbox"
@@ -193,6 +194,13 @@ export const CONSOLE_SECTIONS: Record<
     roles: ["gh_manager", "developer"],
     blurb:
       "Who may be allotted a VIP room, how many free rooms a general requester is shown, the link to the full guidelines, and which accounts may submit official bookings.",
+  },
+  on_behalf: {
+    label: "Booking on Behalf",
+    href: "/admin/on-behalf",
+    roles: ["gh_manager", "developer"],
+    blurb:
+      "Which non-teaching staff may be booked on behalf of, and who is allowed to do it.",
   },
   forms: {
     label: "Form Builder",

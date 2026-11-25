@@ -352,7 +352,7 @@ describe("the booking form's rate table", () => {
       "gh-b:official",
       "gh-b:personal",
     ]);
-    expect(previews[0].lines).toHaveLength(5);
+    expect(previews[0].lines).toHaveLength(6);
     expect(previews[2].lines).toHaveLength(2);
   });
 

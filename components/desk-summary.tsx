@@ -1,3 +1,5 @@
+"use client";
+
 import { cn } from "@/lib/utils";
 
 export type DeskFigure = {
@@ -10,39 +12,71 @@ export type DeskFigure = {
 };
 
 /**
- * The desk at a glance: one ruled index at the top of the manager's console
- * and of reception, each figure a jump link to its list further down.
+ * The desk at a glance: one ruled strip of buttons at the top of the manager's
+ * console and of reception, each button showing or hiding its section below.
  *
- * Redrawn 11 Oct 2026. It was seven tiles 110px tall, each with its label
- * over a 32px figure, and on an ordinary morning every one of them read 0 -
- * the shape of a dashboard rather than of a desk. Now a cell is one baseline:
- * the label, a leader rule, the figure. A count of zero is set small and grey
- * and a count that is not is set in the serif at display size, so the eye
- * lands on the two lists that have work in them without reading the other
- * five.
- *
- * The order is the one the caller declares and does not re-sort on the count.
- * This is read all day by the same two people; a figure that moves because
- * somebody checked out is a figure they have to look for again.
- *
- * **A zero is not a link** (27 Oct 2026). Since the console stopped drawing
- * a section with nothing in it, a zero row has nothing to jump to - and this
- * strip became the one place a zero is reported. The row stays exactly where
- * it was, in the same order, so the index still reads as the whole desk.
+ * When `active` and `onSelect` are provided the strip works as a tab bar:
+ * clicking a button calls `onSelect(anchor)` and the caller renders only the
+ * matching section. Without them it falls back to anchor-link navigation for
+ * backwards compatibility.
  */
-export function DeskSummary({ figures, label = "At a glance" }: { figures: DeskFigure[]; label?: string }) {
+export function DeskSummary({
+  figures,
+  label = "At a glance",
+  active,
+  onSelect,
+}: {
+  figures: DeskFigure[];
+  label?: string;
+  active?: string;
+  onSelect?: (anchor: string) => void;
+}) {
+  const isTabbed = !!onSelect;
   return (
     <nav aria-label={label} className="border-y border-border-strong">
-      {/* The last row's hairline is pulled onto the strip's own closing rule
-          (`-mb-px`), so a short last row leaves no double line. */}
-      <ul className="-mb-px grid grid-cols-1 gap-x-8 sm:grid-cols-2 xl:grid-cols-3">
+      <ul className="-mb-px grid grid-cols-2 gap-x-1 gap-y-1 p-1 sm:grid-cols-3 xl:grid-cols-4">
         {figures.map((f) => {
           const hot = f.alert && f.count > 0;
           const live = f.count > 0;
-          // A fixed row height with the three parts centred in it. The
-          // figure changes size with the count, so aligning on the baseline
-          // put the one cell with work in it a few pixels below its
-          // neighbours.
+          const selected = isTabbed && active === f.anchor;
+
+          if (isTabbed) {
+            return (
+              <li key={f.anchor}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(f.anchor)}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-2 rounded-md px-3 py-2.5",
+                    "text-left text-[13.5px] font-semibold leading-tight transition-colors duration-150",
+                    "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-vermilion-deep",
+                    selected
+                      ? "bg-ink text-white"
+                      : live
+                        ? "bg-band hover:bg-ink/10 text-ink"
+                        : "bg-band/60 text-muted-foreground"
+                  )}
+                  aria-current={selected ? "true" : undefined}
+                >
+                  <span className="min-w-0 truncate">{f.label}</span>
+                  <span
+                    className={cn(
+                      "shrink-0 tabular-nums",
+                      selected
+                        ? cn("figure-serif text-lg", hot ? "text-vermilion" : "text-white")
+                        : live
+                          ? cn("figure-serif text-lg", hot ? "text-vermilion-deep" : "text-ink")
+                          : "text-[13.5px] text-muted-foreground/70"
+                    )}
+                  >
+                    {f.count}
+                  </span>
+                </button>
+              </li>
+            );
+          }
+
+          // Fallback: anchor-link mode (no onSelect).
           const Row = live ? "a" : "div";
           return (
             <li key={f.anchor} className="border-b border-border">
@@ -58,8 +92,6 @@ export function DeskSummary({ figures, label = "At a glance" }: { figures: DeskF
                 >
                   {f.label}
                 </span>
-                {/* A leader rule, as a contents page has, so the label and its
-                    figure stay joined across a wide column. */}
                 <span aria-hidden className="h-px min-w-4 flex-1 bg-border" />
                 <span
                   className={cn(

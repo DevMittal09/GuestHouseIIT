@@ -12,7 +12,7 @@ import { canBookOnBehalf } from "@/lib/access";
 
 import { REQUESTER_ROLES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/types";
 import { firstBookableMealDate } from "@/lib/meals";
-import { bookingTypesFor, serviceTypesFor } from "@/lib/booking-types";
+import { bookingTypesFor, onBehalfBookingTypes, serviceTypesFor } from "@/lib/booking-types";
 import { tariffCategorySheet } from "@/lib/tariff-category";
 import { tariffPreviews } from "@/lib/tariffs";
 import { academicRecordFor } from "@/lib/academic";
@@ -27,6 +27,8 @@ import { clubBookingNotice, defaultCopyToFor, mustBookThroughFacultyInCharge } f
 import { clubsBookableByUser, facultyInChargeForClub } from "@/lib/club-booking-server";
 import { facultyBookableByUser } from "@/lib/staff-booking-server";
 import { FacultyBookingToggle } from "@/components/faculty-search";
+import { getOnBehalfTargetIds } from "@/lib/on-behalf-config-server";
+import { isNonTeachingStaff } from "@/lib/staff-booking";
 
 /**
  * **The New Booking page, for both doors** (17 Oct 2026).
@@ -47,10 +49,12 @@ export async function BookingRequestPage({
   service,
   forId: forParam,
   forFacultyId: forFacultyParam,
+  forStaffId: forStaffParam,
 }: {
   service?: string;
   forId?: string;
   forFacultyId?: string;
+  forStaffId?: string;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect(SIGN_IN_PATH);
@@ -95,10 +99,24 @@ export async function BookingRequestPage({
     : null;
   if (forFacultyParam && !faculty) redirect("/book");
 
+  // On-behalf-of non-teaching staff (23 Nov 2026): configured pairs from the
+  // console. The booking hangs off the target staff's account.
+  const onBehalfTargetIds = isNonTeachingStaff(user)
+    ? await getOnBehalfTargetIds(user.id)
+    : [];
+  const store = getStore();
+  const onBehalfStaffProfiles = onBehalfTargetIds.length > 0
+    ? (await store.listProfiles()).filter((p) => onBehalfTargetIds.includes(p.id))
+    : [];
+  const staffTarget = forStaffParam
+    ? (onBehalfStaffProfiles.find((s) => s.id === forStaffParam) ?? null)
+    : null;
+  if (forStaffParam && !staffTarget) redirect("/book");
+
   // The Guest House Manager is not a requester, but they take bookings at the
   // desk for people who never open the portal - the form asks them who the
   // stay is for and records both parties.
-  const onBehalf = canBookOnBehalf(user.role) && !club && !faculty;
+  const onBehalf = canBookOnBehalf(user.role) && !club && !faculty && !staffTarget;
   const requestsForSelf = REQUESTER_ROLES.includes(user.role) || canBookOnBehalf(user.role);
   if (!club && !requestsForSelf) {
     // An old Faculty Advisor account books only for its clubs: straight to
@@ -111,18 +129,26 @@ export async function BookingRequestPage({
     redirect("/dashboard");
   }
   // Whose form this is: the club's when its faculty in-charge is booking for
-  // it, or the faculty member's when non-teaching staff is booking for them.
-  // `createBooking` builds the same from `for_club` / `for_faculty`.
-  const requester = club ?? faculty ?? user;
+  // it, the faculty member's when non-teaching staff is booking for them, or
+  // the staff target's when booking on behalf of non-teaching staff.
+  // `createBooking` builds the same from `for_club` / `for_faculty` / `for_staff`.
+  const requester = club ?? faculty ?? staffTarget ?? user;
 
   // The same context `createBooking` builds, so the form offers exactly what
   // the server accepts: Settings, debitable heads, projects, the HOD.
   // …and the requester's academic record, which fixes a student's parents'
   // names (7 Oct 2026) - the form shows them read-only and does not offer a
   // relationship the record rules out.
+  // When booking on behalf of someone, the allowed booking types come from
+  // onBehalfBookingTypes: official-only for faculty and personal-only for
+  // non-teaching staff. This override flows into the context (debit heads)
+  // and the form.
+  const bookingTypesOverride = (faculty || staffTarget)
+    ? onBehalfBookingTypes(requester)
+    : undefined;
   const [config, context, lookup, selfDetails] = await Promise.all([
     getEffectiveFormConfig(requester.role),
-    bookingContextFor(requester),
+    bookingContextFor(requester, bookingTypesOverride),
     academicRecordFor(requester),
     selfDetailsFor(requester),
   ]);
@@ -196,6 +222,8 @@ export async function BookingRequestPage({
       key={`${requester.id}:${initialServiceType ?? "room"}`}
       forClub={club ? { id: club.id, name: club.full_name } : null}
       forFaculty={faculty ? { id: faculty.id, name: faculty.full_name } : null}
+      forStaff={staffTarget ? { id: staffTarget.id, name: staffTarget.full_name } : null}
+      allowedBookingTypes={context.bookingTypes}
       user={requester}
       guestHouses={guestHouses}
       config={config}
@@ -222,28 +250,38 @@ export async function BookingRequestPage({
   return (
     <div className="space-y-8">
       <PageHeader
-        caption={club ? "Faculty Advisor booking" : faculty ? "On behalf of faculty" : onBehalf ? "Guest house desk" : "New request"}
+        caption={
+          club ? "Faculty Advisor booking"
+            : faculty ? "On behalf of faculty"
+            : staffTarget ? "On behalf of staff"
+            : onBehalf ? "Guest house desk"
+            : "New request"
+        }
         title={
           club
             ? `New Booking for ${club.full_name}`
             : faculty
               ? `New Booking for ${faculty.full_name}`
-              : mealsOnly
-                ? SERVICE_TYPE_LABELS.meals_only
-                : onBehalf
-                  ? "New Booking (on behalf of a guest)"
-                  : "New Booking Request"
+              : staffTarget
+                ? `New Booking for ${staffTarget.full_name}`
+                : mealsOnly
+                  ? SERVICE_TYPE_LABELS.meals_only
+                  : onBehalf
+                    ? "New Booking (on behalf of a guest)"
+                    : "New Booking Request"
         }
       >
         {club
           ? "Booking as its Faculty Advisor. The request is the club's."
           : faculty
             ? "Booking on behalf of a faculty member. The request is theirs."
-            : mealsOnly
-              ? "Meals with no room booked."
-              : onBehalf
-                ? "For a guest who cannot use the portal themselves."
-                : null}
+            : staffTarget
+              ? "Booking on behalf of a non-teaching staff member. The request is theirs."
+              : mealsOnly
+                ? "Meals with no room booked."
+                : onBehalf
+                  ? "For a guest who cannot use the portal themselves."
+                  : null}
       </PageHeader>
       {clubs.length > 0 && (
         <BookingAs
@@ -253,11 +291,13 @@ export async function BookingRequestPage({
           service={initialServiceType}
         />
       )}
-      {facultyMembers.length > 0 && !club ? (
+      {(facultyMembers.length > 0 || onBehalfStaffProfiles.length > 0) && !club ? (
         <FacultyBookingToggle
-          current={faculty?.id ?? null}
+          current={faculty?.id ?? staffTarget?.id ?? null}
+          currentKind={staffTarget ? "staff" : "faculty"}
           service={initialServiceType}
           facultyMembers={facultyMembers}
+          staffTargets={onBehalfStaffProfiles.map((p) => ({ id: p.id, full_name: p.full_name, email: p.email }))}
         >
           {bookingFormElement}
         </FacultyBookingToggle>

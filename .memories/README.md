@@ -61,7 +61,7 @@ Tailwind v4 · shadcn/ui · zod 4 · react-hook-form · PostgreSQL (direct via
 **Node 22 or newer**; see the root [`setup.md`](../setup.md) for runtime and
 deployment requirements.
 
-**Latest, 19 Nov 2026:** dependency upgrades for production: TypeScript 6, ESLint 10, vitest 5, all packages to latest. Zero warnings, zero vulnerabilities. Vitest configs renamed `.mts` for ESM. All 37 routes verified. See [99-recent-changes.md](99-recent-changes.md).
+**Latest, 25 Nov 2026:** non-teaching staff self-booking and bookings raised on their behalf are Personal-only; faculty targets remain Official-only. The form and server validation use the same target-aware list. See [99-recent-changes.md](99-recent-changes.md).
 
 **Status, 8 Nov 2026 (historical).** The current round found what the move off Supabase
 had left behind: `guesthouse_dev` held nine meal rates and **no room rate at
@@ -158,9 +158,10 @@ of Google's account chooser.
 **Numbers.** 13 roles (12 active) ·
 13 booking statuses · 9 debitable heads, mapped across **34 office mailboxes** ·
 **29 demo accounts** · 6 demo bookings · 23 real rooms · **25 photographs** ·
-**661 unit tests** · **39 PostgreSQL checks** · 50 end-to-end journeys ·
-15 console sections · **5 invoice layout versions** · **31 tariff rows** (the
-office's Category I / II / III sheet, in force from 5 Nov 2026).
+**726 unit tests** · **39 PostgreSQL checks** · 50 end-to-end journeys ·
+15 console sections · **5 invoice layout versions** · **34 tariff rows** (the
+office's Category I / II / III sheet plus special lunch, in force from 5 Nov
+2026) · **4 meal types** (breakfast, lunch, special lunch, dinner).
 
 ---
 

@@ -8,8 +8,8 @@ import { BookingRequestPage } from "@/components/booking-request-page";
 export default async function BookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ service?: string; for?: string; for_faculty?: string }>;
+  searchParams: Promise<{ service?: string; for?: string; for_faculty?: string; for_staff?: string }>;
 }) {
-  const { service, for: forParam, for_faculty: forFacultyParam } = await searchParams;
-  return <BookingRequestPage service={service} forId={forParam} forFacultyId={forFacultyParam} />;
+  const { service, for: forParam, for_faculty: forFacultyParam, for_staff: forStaffParam } = await searchParams;
+  return <BookingRequestPage service={service} forId={forParam} forFacultyId={forFacultyParam} forStaffId={forStaffParam} />;
 }

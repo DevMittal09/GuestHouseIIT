@@ -1,5 +1,12 @@
 # Billing — tariffs, invoices, payments and dining
 
+## Update, 23 November 2026
+
+**`buildInvoiceDocument` now includes `booking_type`** in the snapshot. The PDF
+layout for non-personal bookings (official, alumni) uses a different column
+order and section headings in `lib/invoice-pdf.ts`. The snapshot preserves the
+type as issued, so reprinting an old invoice keeps its original layout.
+
 ## Owner's corrections, 10 November 2026
 
 **A tariff category is only offered where it is *chosen*.**
@@ -393,9 +400,27 @@ booking** tile on My Bookings and the public `/book-meal` card, all pointing
 at **`/book/meals`** (`MEAL_BOOKING_PATH`, 17 Oct 2026; `?service=meals_only`
 still works). **Meals on a stay** are a separate thing and are asked for with
 a **Yes / No** on the room form, No by default, with the caretaker line
-(`MEAL_CHANGE_NOTICE`) at the foot of the section. `/manager/meals` is the kitchen's day
-(manager and caretaker): plates per meal from `kitchenHeadCount`, confirmed and
-pending bookings, and **Dining to invoice** — approved dining bookings whose
-meals have begun and have no invoice. The daily desk report carries the same
-plates and the day's dining bookings.
+(`MEAL_CHANGE_NOTICE`) at the foot of the section.
+
+**Four meal types** (23 Nov 2026): `MEAL_KEYS` = `["breakfast", "lunch",
+"special_lunch", "dinner"]`. Special Lunch shares Lunch's serving window and
+is not independently configurable - `BASE_MEAL_KEYS` (breakfast, lunch,
+dinner) is the Settings form's list; `MEAL_KEYS` drives the grid, the
+invoice, the kitchen view and the tariff. `rules.meals` revision 2 syncs
+`special_lunch` from `lunch` on any saved row. Migration 37 widens the
+`tariffs.item` CHECK constraint to admit `'special_lunch'`.
+
+**Two desk pages for meals:**
+
+- **`/manager/meals`** is the kitchen's day (manager and caretaker): plates
+  per meal from `kitchenHeadCount`, confirmed and pending bookings, and
+  **Dining to invoice** - approved dining bookings whose meals have begun and
+  have no invoice. The daily desk report carries the same plates and the day's
+  dining bookings.
+- **`/manager/meal-logs`** (23 Nov 2026) is the **period view** (manager,
+  caretaker and developer): all approved and vacated meals-only bookings whose
+  **last meal date** falls within a week or month, with invoice status and an
+  Invoice button per booking. Default: current week. Week/month toggle with
+  prev/next navigation. Linked from both consoles as "Meal logs" beside
+  "Meal counts".
 

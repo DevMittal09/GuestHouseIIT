@@ -79,6 +79,7 @@ import type {
   DataStore,
   NewLogInput,
   NewProfileInput,
+  OnBehalfEntry,
   SeededProfileInput,
   StatusUpdate,
 } from "./types";
@@ -2307,5 +2308,50 @@ export class PostgresStore implements DataStore {
 
   async resetMailTemplate(key: MailEventKey): Promise<void> {
     await this.pool.query("DELETE FROM mail_templates WHERE event_key = $1", [key]);
+  }
+
+  // ---- on-behalf config (migration 37) ----------------------------------
+
+  async listOnBehalfConfig(): Promise<OnBehalfEntry[]> {
+    try {
+      const { rows } = await this.pool.query(
+        "SELECT id, target_profile_id, booker_profile_id, created_at, created_by FROM on_behalf_config ORDER BY created_at",
+      );
+      return rows as OnBehalfEntry[];
+    } catch (e: unknown) {
+      if ((e as { code?: string }).code === "42P01") return [];
+      throw e;
+    }
+  }
+
+  async onBehalfTargetIds(bookerProfileId: string): Promise<string[]> {
+    try {
+      const { rows } = await this.pool.query(
+        "SELECT target_profile_id FROM on_behalf_config WHERE booker_profile_id = $1",
+        [bookerProfileId],
+      );
+      return rows.map((r: { target_profile_id: string }) => r.target_profile_id);
+    } catch (e: unknown) {
+      if ((e as { code?: string }).code === "42P01") return [];
+      throw e;
+    }
+  }
+
+  async addOnBehalfEntry(
+    targetProfileId: string,
+    bookerProfileId: string,
+    createdBy: string,
+  ): Promise<OnBehalfEntry> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO on_behalf_config (target_profile_id, booker_profile_id, created_by)
+       VALUES ($1, $2, $3)
+       RETURNING id, target_profile_id, booker_profile_id, created_at, created_by`,
+      [targetProfileId, bookerProfileId, createdBy],
+    );
+    return rows[0] as OnBehalfEntry;
+  }
+
+  async removeOnBehalfEntry(id: string): Promise<void> {
+    await this.pool.query("DELETE FROM on_behalf_config WHERE id = $1", [id]);
   }
 }

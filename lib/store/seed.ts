@@ -282,8 +282,9 @@ export const seedTariffs: Tariff[] = [
   tariff("tariff-hamsanandi-official", GH_HAMSANANDI, "room", 4000, { requester_role: "official" }, "Tariff sheet: Hamsanandi type 3, government officers"),
   tariff("tariff-breakfast", null, "breakfast", 80, {}, "Tariff sheet: per head"),
   tariff("tariff-lunch", null, "lunch", 120, {}, "Tariff sheet: per head"),
+  tariff("tariff-special-lunch", null, "special_lunch", 100, {}, "Tariff sheet: per head"),
   tariff("tariff-dinner", null, "dinner", 100, {}, "Tariff sheet: per head"),
-  ...(["breakfast", "lunch", "dinner"] as const).flatMap((meal) => [
+  ...(["breakfast", "lunch", "special_lunch", "dinner"] as const).flatMap((meal) => [
     tariff(`tariff-${meal}-student`, null, meal, 0, { requester_role: "student" }, "Tariff sheet: meals free to students"),
     tariff(`tariff-${meal}-alumni`, null, meal, 0, { booking_type: "alumni" }, "Tariff sheet: meals free to alumni"),
   ]),

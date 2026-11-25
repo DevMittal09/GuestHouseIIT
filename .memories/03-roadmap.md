@@ -1,5 +1,25 @@
 # Roadmap — what is open, in priority order
 
+## Opened by the 23 November 2026 round (continued)
+
+1. **Migration 37 for `on_behalf_config`.** The table is in
+   `scripts/init-postgres.sql` for fresh installs but existing databases need a
+   migration file in `supabase/migrations/`. One `CREATE TABLE`, one index,
+   RLS enabled with no `authenticated` policy.
+2. **Tests for the on-behalf config system.** The store methods, server actions
+   and booking-flow validation (`for_staff` param, `onBehalfBookingTypes`) have
+   no test coverage yet.
+3. **Unused `wordmarkJpg` import in `lib/invoice-pdf.ts`.** Lint warning; the
+   import was part of the invoice layout changes and is no longer referenced.
+4. **Migration 37 (`special_lunch_tariff`)** exists in `scripts/migrations/`
+   but is **not applied** to the hosted database. Until it is applied,
+   inserting a `special_lunch` tariff row against PostgreSQL fails with a
+   CHECK violation.
+5. **No tests for the meal-logs page.** It is a server component; an e2e
+   journey or a Playwright test would cover it.
+6. **Tariff row count now 34** (was 31): 3 special_lunch rows added to both
+   `lib/store/seed.ts` and `scripts/seed-reference-data.sql`.
+
 ## Opened by the 18 November 2026 round
 
 1. **The caretaker cannot edit dates to past dates.** The caretaker is in
@@ -1315,3 +1335,4 @@ is written up (all in [02-decisions.md](02-decisions.md) unless noted):
 | The eleventh list (11 Oct): an office with no HOD is not asked how its booking is approved, the pets notice off the form, and every starred form explaining its stars | [01-background.md](01-background.md), [02-decisions.md](02-decisions.md) |
 | White-on-amber contrast | The 19 Sep redesign |
 | Chain meal booking (date range with weekend opt-in) and non-teaching staff booking on behalf of faculty | 23 Nov 2026 - [99-recent-changes.md](99-recent-changes.md) |
+| Non-teaching staff self-booking and on-behalf target types are Personal-only; faculty targets remain Official-only | 25 Nov 2026 - [99-recent-changes.md](99-recent-changes.md) |

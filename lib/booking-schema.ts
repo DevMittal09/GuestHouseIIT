@@ -49,7 +49,7 @@ import {
   instituteDayBounds,
   toInstituteDateValue,
 } from "./tz";
-import { includesMeals, needsRooms } from "./types";
+import { includesMeals, needsRooms, type BookingType } from "./types";
 import { latestCheckIn } from "./workflow";
 
 /** The most people one booking may ask the kitchen to cook for at a sitting. */
@@ -296,6 +296,8 @@ function countField(opts: {
 export interface BookingSchemaContext {
   /** Whether any guest house this role may book serves meals at all. */
   mealsAvailable: boolean;
+  /** Booking types allowed for this request, including profile and on-behalf rules. */
+  allowedBookingTypes?: BookingType[];
   /** The requester's address, for the duration exemptions in `lib/policy.ts`. */
   requesterEmail?: string | null;
   /**
@@ -457,6 +459,7 @@ export function bookingPayloadSchema(
             date: z.string(),
             breakfast: z.boolean().optional(),
             lunch: z.boolean().optional(),
+            special_lunch: z.boolean().optional(),
             dinner: z.boolean().optional(),
           })
         )
@@ -493,7 +496,7 @@ export function bookingPayloadSchema(
       if (message) ctx.addIssue({ code: "custom", message, path: ["service_type"] });
     })
     .superRefine((v, ctx) => {
-      const message = bookingTypeError(config.role, v.booking_type);
+      const message = bookingTypeError(config.role, v.booking_type, context.allowedBookingTypes);
       if (message) ctx.addIssue({ code: "custom", message, path: ["booking_type"] });
     })
     .superRefine((v, ctx) => {

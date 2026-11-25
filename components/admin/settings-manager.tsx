@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QuantityInput } from "@/components/ui/quantity-input";
 import { TimeSelect } from "@/components/ui/time-select";
-import { MEAL_KEYS, MEAL_LABELS } from "@/lib/meals";
+import { BASE_MEAL_KEYS, MEAL_LABELS } from "@/lib/meals";
 import { ROOM_TYPE_LABELS } from "@/lib/occupancy";
 import {
   DEFAULT_RULES,
@@ -624,18 +624,26 @@ function MealWindowsSection({ current }: { current: Rules["meals"] }) {
       description="When each meal is served. A meal can be booked on a day only if the stay covers part of its serving time, so these decide which cells of the meal grid are offered. A change that would put meals already booked outside their stay is refused."
     >
       <div className="grid gap-4 sm:grid-cols-3">
-        {MEAL_KEYS.map((meal) => (
+        {BASE_MEAL_KEYS.map((meal) => (
           <fieldset key={meal} className="space-y-3 rounded-md border p-3">
             <legend className="px-1 text-sm font-medium">{MEAL_LABELS[meal]}</legend>
             <TimeSelect
               label="From"
               value={windows[meal].start}
-              onChange={(v) => setWindows({ ...windows, [meal]: { ...windows[meal], start: v } })}
+              onChange={(v) => setWindows({
+                ...windows,
+                [meal]: { ...windows[meal], start: v },
+                ...(meal === "lunch" ? { special_lunch: { ...windows[meal], start: v } } : {}),
+              })}
             />
             <TimeSelect
               label="Until"
               value={windows[meal].end}
-              onChange={(v) => setWindows({ ...windows, [meal]: { ...windows[meal], end: v } })}
+              onChange={(v) => setWindows({
+                ...windows,
+                [meal]: { ...windows[meal], end: v },
+                ...(meal === "lunch" ? { special_lunch: { ...windows[meal], end: v } } : {}),
+              })}
             />
           </fieldset>
         ))}

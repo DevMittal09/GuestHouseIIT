@@ -98,6 +98,7 @@ const MARKERS = [
       "AND indexname = 'tariffs_one_per_scope_and_date' AND indexdef LIKE '%tariff_category%'",
     check: (row) => row.c === 1,
   },
+  { n: 38, kind: "table", table: "on_behalf_config", what: "the on-behalf booking config" },
 ];
 
 function env() {

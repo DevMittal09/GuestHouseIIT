@@ -36,7 +36,7 @@ const meal = (item: Tariff["item"], rate: number): Tariff => ({
   created_at: "2024-01-01T00:00:00.000Z",
   created_by: null,
 });
-const TARIFFS = [meal("breakfast", 80), meal("lunch", 120), meal("dinner", 100)];
+const TARIFFS = [meal("breakfast", 80), meal("lunch", 120), meal("special_lunch", 100), meal("dinner", 100)];
 
 function dining(patch: Parameters<typeof booking>[0] = {}) {
   return booking(
@@ -46,7 +46,7 @@ function dining(patch: Parameters<typeof booking>[0] = {}) {
       meal_preference: "veg",
       status: "APPROVED",
       debit_head: "department_budget",
-      meals: [{ date: "2026-09-20", breakfast: false, lunch: true, dinner: false }],
+      meals: [{ date: "2026-09-20", breakfast: false, lunch: true, special_lunch: false, dinner: false }],
       ...patch,
     },
     []
@@ -82,7 +82,7 @@ describe("who may book meals without a room", () => {
 describe("the kitchen's head count", () => {
   it("adds stays' bed guests and dining head counts, by preference", () => {
     const stay = booking(
-      { status: "OCCUPIED", meal_preference: "non_veg", meals: [{ date: "2026-09-20", breakfast: true, lunch: true, dinner: false }] },
+      { status: "OCCUPIED", meal_preference: "non_veg", meals: [{ date: "2026-09-20", breakfast: true, lunch: true, special_lunch: false, dinner: false }] },
       [{ guests: [guest(), guest(), guest({ is_infant: true, age: 1 })] }]
     );
     const lunch = kitchenHeadCount([stay, dining()], "2026-09-20", "lunch");
@@ -105,7 +105,7 @@ describe("dining invoices", () => {
     const doc = buildInvoiceDocument(dining(), { tariffs: TARIFFS, rules, capacity: cap });
     expect(doc.room_lines).toEqual([]);
     expect([doc.rooms, doc.guests, doc.infants]).toEqual([0, 25, 0]);
-    expect(doc.meal_lines.map((l) => l.count)).toEqual([0, 25, 0]);
+    expect(doc.meal_lines.map((l) => l.count)).toEqual([0, 25, 0, 0]);
     expect(doc.grand_total).toBe(25 * 12_000); // rates include GST
     expect(doc.gst_breakdown.map((g) => g.label)).toEqual(["Food"]);
   });
@@ -201,7 +201,7 @@ describe("the kitchen's notice period", () => {
   });
 
   it("refuses a plan whose deadline has passed, naming it", () => {
-    const plan = [{ date: "2026-10-01", breakfast: false, lunch: true, dinner: false }];
+    const plan = [{ date: "2026-10-01", breakfast: false, lunch: true, special_lunch: false, dinner: false }];
     expect(mealLeadTimeError(plan, at("2026-10-01T02:30:00.000Z"), windows)).toBeNull();
     const late = mealLeadTimeError(plan, at("2026-10-01T04:01:00.000Z"), windows);
     expect(late).toMatch(/Lunch on .* has to be booked before breakfast ends, at 9:30 AM/);
@@ -221,9 +221,9 @@ describe("the kitchen's notice period", () => {
     expect(days.map((d) => d.date)).toEqual(["2026-10-01", "2026-10-02"]);
     // Day 1: breakfast and lunch are before check-in, and dinner - which the
     // stay does cover - is past its deadline.
-    expect(days[0].available).toEqual({ breakfast: false, lunch: false, dinner: false });
+    expect(days[0].available).toEqual({ breakfast: false, lunch: false, special_lunch: false, dinner: false });
     // Day 2: breakfast and lunch are open; dinner is after the 15:00 check-out.
-    expect(days[1].available).toEqual({ breakfast: true, lunch: true, dinner: false });
+    expect(days[1].available).toEqual({ breakfast: true, lunch: true, special_lunch: true, dinner: false });
     // Without a clock it is purely "does the stay cover the meal" - the shape
     // `normalizeMeals` needs when re-reading a plan that was stored long ago.
     const noClock = stayMealDays(

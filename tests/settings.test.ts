@@ -278,12 +278,12 @@ describe("rule functions follow the settings", () => {
     const inAt = instituteDate("2030-01-01T12:00");
     const outAt = instituteDate("2030-01-02T10:00");
     const byDefault = stayMealDays(inAt, outAt);
-    expect(byDefault[0].available).toEqual({ breakfast: false, lunch: true, dinner: true });
+    expect(byDefault[0].available).toEqual({ breakfast: false, lunch: true, special_lunch: true, dinner: true });
     // A kitchen that serves lunch from 11:00 to 11:45 closes before a noon arrival.
     const early = structuredClone(DEFAULT_RULES.meals.windows);
     early.lunch = { start: "11:00", end: "11:45" };
     expect(stayMealDays(inAt, outAt, early)[0].available.lunch).toBe(false);
-    const plan = [{ date: "2030-01-01", breakfast: false, lunch: true, dinner: false }];
+    const plan = [{ date: "2030-01-01", breakfast: false, lunch: true, special_lunch: false, dinner: false }];
     expect(mealPlanError(plan, inAt, outAt)).toBeNull();
     expect(mealPlanError(plan, inAt, outAt, early)).toMatch(/Lunch .* before you check in/);
     expect(mealTimes(early).lunch).toBe("11:00 – 11:45 AM");
@@ -297,8 +297,8 @@ describe("rule functions follow the settings", () => {
       { check_in: "2030-01-01T06:30:00.000Z", check_out: "2030-01-02T04:30:00.000Z" }
     );
     expect(plan).toEqual([
-      { date: "2030-01-01", breakfast: false, lunch: true, dinner: false },
-      { date: "2030-01-02", breakfast: true, lunch: false, dinner: false },
+      { date: "2030-01-01", breakfast: false, lunch: true, special_lunch: false, dinner: false },
+      { date: "2030-01-02", breakfast: true, lunch: false, special_lunch: false, dinner: false },
     ]);
   });
 });
@@ -382,7 +382,7 @@ describe("a change that would break stored data is refused", () => {
     const withLunch = booking({
       check_in: "2030-01-01T06:30:00.000Z",
       check_out: "2030-01-02T04:30:00.000Z",
-      meals: [{ date: "2030-01-01", breakfast: false, lunch: true, dinner: false }],
+      meals: [{ date: "2030-01-01", breakfast: false, lunch: true, special_lunch: false, dinner: false }],
     });
     const early = structuredClone(DEFAULT_RULES.meals);
     early.windows.lunch = { start: "11:00", end: "11:45" };

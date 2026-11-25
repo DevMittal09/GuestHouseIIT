@@ -27,11 +27,19 @@ import {
  * `{breakfast, lunch, dinner}` answer for the whole stay; `normalizeMeals`
  * still reads that shape.
  */
-export const MEAL_KEYS: MealKey[] = ["breakfast", "lunch", "dinner"];
+export const MEAL_KEYS: MealKey[] = ["breakfast", "lunch", "special_lunch", "dinner"];
+
+/**
+ * The three base meals whose serving windows are independently configurable in
+ * Settings. Special Lunch shares Lunch's window and is excluded from the
+ * settings form and the ordering validation.
+ */
+export const BASE_MEAL_KEYS: MealKey[] = ["breakfast", "lunch", "dinner"];
 
 export const MEAL_LABELS: Record<MealKey, string> = {
   breakfast: "Breakfast",
   lunch: "Lunch",
+  special_lunch: "Special Lunch",
   dinner: "Dinner",
 };
 
@@ -57,22 +65,21 @@ export const MEAL_SERVING_WINDOWS: MealWindows = DEFAULT_RULES.meals.windows;
 const LEGACY_CONVERSION_WINDOWS: MealWindows = {
   breakfast: { start: "07:30", end: "09:30" },
   lunch: { start: "12:30", end: "14:00" },
+  special_lunch: { start: "12:30", end: "14:00" },
   dinner: { start: "19:30", end: "21:00" },
 };
 
 /** "7:30 – 9:30 AM" per meal, derived from the windows so the label cannot drift from the rule. */
 export function mealTimes(windows: MealWindows = MEAL_SERVING_WINDOWS): Record<MealKey, string> {
-  return {
-    breakfast: formatWindow(windows.breakfast),
-    lunch: formatWindow(windows.lunch),
-    dinner: formatWindow(windows.dinner),
-  };
+  const result = {} as Record<MealKey, string>;
+  for (const meal of MEAL_KEYS) result[meal] = formatWindow(windows[meal]);
+  return result;
 }
 
 /** The labels under the default windows. */
 export const MEAL_TIMES: Record<MealKey, string> = mealTimes();
 
-export const NO_MEALS: MealPreferences = { breakfast: false, lunch: false, dinner: false };
+export const NO_MEALS: MealPreferences = { breakfast: false, lunch: false, special_lunch: false, dinner: false };
 
 /**
  * Which meals a day of a **meal booking** arrives already ticked (1 Oct 2026).
@@ -91,6 +98,7 @@ export const NO_MEALS: MealPreferences = { breakfast: false, lunch: false, dinne
 export const DEFAULT_MEALS_ON: MealPreferences = {
   breakfast: false,
   lunch: true,
+  special_lunch: false,
   dinner: false,
 };
 
@@ -170,8 +178,12 @@ export function stayMealDays(
  */
 export function previousMealSlot(date: string, meal: MealKey): { date: string; meal: MealKey } {
   const index = MEAL_KEYS.indexOf(meal);
-  return index > 0
-    ? { date, meal: MEAL_KEYS[index - 1] }
+  // special_lunch shares lunch's service window (12:30-14:00), so its
+  // predecessor is breakfast — the same as lunch's — not lunch itself,
+  // which would give zero notice time.
+  const effectiveIndex = meal === "special_lunch" ? MEAL_KEYS.indexOf("lunch") : index;
+  return effectiveIndex > 0
+    ? { date, meal: MEAL_KEYS[effectiveIndex - 1] }
     : { date: addDaysToDateValue(date, -1), meal: MEAL_KEYS[MEAL_KEYS.length - 1] };
 }
 
@@ -315,12 +327,13 @@ export function normalizeMeals(
   if (value && typeof value === "object" && stay) {
     const legacy = value as Record<string, unknown>;
     return stayMealDays(new Date(stay.check_in), new Date(stay.check_out), LEGACY_CONVERSION_WINDOWS)
-      .map(({ date, available }) => ({
-        date,
-        breakfast: legacy.breakfast === true && available.breakfast,
-        lunch: legacy.lunch === true && available.lunch,
-        dinner: legacy.dinner === true && available.dinner,
-      }))
+      .map(({ date, available }) => {
+        const day: MealDay = { date, ...NO_MEALS };
+        for (const meal of MEAL_KEYS) {
+          day[meal] = legacy[meal] === true && available[meal];
+        }
+        return day;
+      })
       .filter(hasAnyMeal);
   }
 
@@ -372,12 +385,13 @@ export function mealSlot(date: string, meal: MealKey): string {
  */
 export function mealPlanFromSlots(slots: ReadonlySet<string>, days: StayMealDay[]): MealPlan {
   return days
-    .map(({ date, available }) => ({
-      date,
-      breakfast: available.breakfast && slots.has(mealSlot(date, "breakfast")),
-      lunch: available.lunch && slots.has(mealSlot(date, "lunch")),
-      dinner: available.dinner && slots.has(mealSlot(date, "dinner")),
-    }))
+    .map(({ date, available }) => {
+      const day: MealDay = { date, ...NO_MEALS };
+      for (const meal of MEAL_KEYS) {
+        day[meal] = available[meal] && slots.has(mealSlot(date, meal));
+      }
+      return day;
+    })
     .filter(hasAnyMeal);
 }
 
@@ -438,7 +452,7 @@ export function choicesFromMealSlots(
 
 /** On how many days each meal was asked for. */
 export function mealDayCounts(plan: MealPlan): Record<MealKey, number> {
-  const counts: Record<MealKey, number> = { breakfast: 0, lunch: 0, dinner: 0 };
+  const counts: Record<MealKey, number> = { breakfast: 0, lunch: 0, special_lunch: 0, dinner: 0 };
   for (const day of plan) {
     for (const meal of MEAL_KEYS) {
       if (day[meal]) counts[meal]++;

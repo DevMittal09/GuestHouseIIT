@@ -49,6 +49,7 @@ const TARIFFS: Tariff[] = [
   t({ item: "extra_bed", rate: 500 }),
   t({ item: "breakfast", rate: 80 }),
   t({ item: "lunch", rate: 120 }),
+  t({ item: "special_lunch", rate: 100 }),
   t({ item: "dinner", rate: 100 }),
   t({ item: "breakfast", requester_role: "student", rate: 0 }),
 ];
@@ -180,13 +181,13 @@ describe("what the stay used", () => {
   it("counts meal covers as ticks × diners, infants not counted", () => {
     const b = booking({
       meals: [
-        { date: "2030-01-10", breakfast: false, lunch: true, dinner: true },
-        { date: "2030-01-11", breakfast: true, lunch: true, dinner: false },
+        { date: "2030-01-10", breakfast: false, lunch: true, special_lunch: false, dinner: true },
+        { date: "2030-01-11", breakfast: true, lunch: true, special_lunch: false, dinner: false },
       ],
     }, [{ guests: [guest(), guest(), guest({ is_infant: true, age: 1 })] }]);
-    expect(mealCovers(b)).toEqual({ breakfast: 2, lunch: 4, dinner: 2 });
-    const dining = booking({ service_type: "meals_only", meal_guest_count: 25, meals: [{ date: "2030-01-10", breakfast: false, lunch: true, dinner: false }] }, []);
-    expect(mealCovers(dining)).toEqual({ breakfast: 0, lunch: 25, dinner: 0 });
+    expect(mealCovers(b)).toEqual({ breakfast: 2, lunch: 4, special_lunch: 0, dinner: 2 });
+    const dining = booking({ service_type: "meals_only", meal_guest_count: 25, meals: [{ date: "2030-01-10", breakfast: false, lunch: true, special_lunch: false, dinner: false }] }, []);
+    expect(mealCovers(dining)).toEqual({ breakfast: 0, lunch: 25, special_lunch: 0, dinner: 0 });
   });
 
   it("finds extra beds per room from who was put in it", () => {
@@ -222,9 +223,9 @@ describe("the invoice document", () => {
       // 14:00 IST 1 Oct → 10:00 IST 3 Oct: two nights.
       logs: [log("OCCUPIED", "2026-10-01T08:30:00.000Z"), log("VACATED", "2026-10-03T04:30:00.000Z")],
       meals: [
-        { date: "2026-10-01", breakfast: false, lunch: false, dinner: true },
-        { date: "2026-10-02", breakfast: true, lunch: true, dinner: true },
-        { date: "2026-10-03", breakfast: true, lunch: false, dinner: false },
+        { date: "2026-10-01", breakfast: false, lunch: false, special_lunch: false, dinner: true },
+        { date: "2026-10-02", breakfast: true, lunch: true, special_lunch: false, dinner: true },
+        { date: "2026-10-03", breakfast: true, lunch: false, special_lunch: false, dinner: false },
       ],
     },
     [
@@ -252,6 +253,7 @@ describe("the invoice document", () => {
     expect(doc.meal_lines.map((l) => [l.meal, l.count, l.rate, l.amount_incl])).toEqual([
       ["breakfast", 8, 7_619, 64_000],
       ["lunch", 4, 11_429, 48_000],
+      ["special_lunch", 0, 9_524, 0],
       ["dinner", 8, 9_524, 80_000],
     ]);
     // The grand total is exactly the prices: ₹9,000 of rooms + ₹1,920 of meals.
@@ -272,9 +274,9 @@ describe("the invoice document", () => {
       tariffs: TARIFFS,
       rules: RULES,
       capacity: CAP,
-      mealCounts: { breakfast: 6, lunch: 4, dinner: 7 },
+      mealCounts: { breakfast: 6, lunch: 4, special_lunch: 0, dinner: 7 },
     });
-    expect(doc.meal_lines.map((l) => l.count)).toEqual([6, 4, 7]);
+    expect(doc.meal_lines.map((l) => l.count)).toEqual([6, 4, 0, 7]);
     expect(doc.meal_lines.reduce((n, l) => n + l.amount_incl, 0)).toBe(6 * 8000 + 4 * 12000 + 7 * 10000);
   });
 

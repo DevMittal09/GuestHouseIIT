@@ -117,3 +117,64 @@
 - Network:       http://127.0.0.1:3000
 ✓ Ready in 209ms
 ✓ Running next.config.ts took 186ms
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 404ms
+✓ Running next.config.ts took 431ms
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 312ms
+✓ Running next.config.ts took 481ms
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 194ms
+✓ Running next.config.ts took 185ms
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed
+[mail] smtp (smtp.gmail.com:465): 3 sent, 0 failed of 3 claimed
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 184ms
+✓ Running next.config.ts took 194ms
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed
+[mail] smtp (smtp.gmail.com:465): 2 sent, 0 failed of 2 claimed
+[mail] smtp (smtp.gmail.com:465): 1 sent, 0 failed of 1 claimed
+[mail] smtp (smtp.gmail.com:465): 3 sent, 0 failed of 3 claimed
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 188ms
+✓ Running next.config.ts took 183ms
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 186ms
+✓ Running next.config.ts took 181ms
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 201ms
+✓ Running next.config.ts took 186ms
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 203ms
+✓ Running next.config.ts took 178ms
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 186ms
+✓ Running next.config.ts took 180ms
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 191ms
+✓ Running next.config.ts took 179ms
+▲ Next.js 16.4.6
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 190ms
+✓ Running next.config.ts took 181ms

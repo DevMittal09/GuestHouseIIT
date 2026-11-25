@@ -18,6 +18,8 @@ import { mustBookThroughFacultyInCharge } from "@/lib/club-booking";
 import { clubsBookableByUser } from "@/lib/club-booking-server";
 import { isNonTeachingStaff } from "@/lib/staff-booking";
 import { facultyBookableByUser } from "@/lib/staff-booking-server";
+import { onBehalfBookingTypes } from "@/lib/booking-types";
+import { getOnBehalfTargetIds } from "@/lib/on-behalf-config-server";
 import { hodApproversFor } from "@/lib/units";
 import { bookingContextFor } from "@/lib/booking-context-server";
 import { academicRecordFor } from "@/lib/academic";
@@ -160,15 +162,34 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       }
     }
 
+    // On behalf of a configured non-teaching staff target (23 Nov 2026).
+    const staffId = readText(formData, "for_staff");
+    let staffTarget: Profile | null = null;
+    if (staffId && !club && !faculty) {
+      if (!isNonTeachingStaff(user)) {
+        return { ok: false, error: "Only non-teaching staff may book on behalf of configured targets" };
+      }
+      const targetIds = await getOnBehalfTargetIds(user.id);
+      if (!targetIds.includes(staffId)) {
+        return { ok: false, error: "You are not configured to book on behalf of that person" };
+      }
+      const store = getStore();
+      staffTarget = await store.getProfile(staffId);
+      if (!staffTarget) {
+        return { ok: false, error: "The target account was not found" };
+      }
+    }
+
     // Whose booking it is: the club's, when its faculty in-charge raises it;
-    // the faculty member's, when non-teaching staff raises it for them; and
+    // the faculty member's, when non-teaching staff raises it for them; the
+    // staff target's when booking on behalf of non-teaching staff; and
     // otherwise the signed-in person's.
-    const requester = club ?? faculty ?? user;
+    const requester = club ?? faculty ?? staffTarget ?? user;
 
     // Who the stay is actually for. Required when the manager is booking for
     // someone else, because otherwise the booking says only that the manager
     // is staying - and the desk has no way to find out who is arriving.
-    const onBehalfOf = onBehalf && !club && !faculty
+    const onBehalfOf = onBehalf && !club && !faculty && !staffTarget
       ? {
           name: readText(formData, "on_behalf_of_name"),
           email: readText(formData, "on_behalf_of_email"),
@@ -196,7 +217,10 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
     if (typeof rawPayload !== "string") return { ok: false, error: "Malformed submission" };
     // The same Settings, debitable heads and projects the page handed the
     // form, from the same computation, so the two validate alike.
-    const bookingContext = await bookingContextFor(requester);
+    const bookingTypesOverride = (faculty || staffTarget)
+      ? onBehalfBookingTypes(requester)
+      : undefined;
+    const bookingContext = await bookingContextFor(requester, bookingTypesOverride);
     /**
      * What the requester's academic record fixes about their guests (7 Oct
      * 2026): a student's father's and mother's names, and the relationships
@@ -230,6 +254,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       mealsAvailable,
       requesterEmail: requester.email,
       rules: bookingContext.rules,
+      allowedBookingTypes: bookingContext.bookingTypes,
       debitHeads: bookingContext.debitHeads,
       projectIds: bookingContext.projects.map((p) => p.id),
       guestNames,
@@ -581,7 +606,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult> {
       // Both parties are recorded: the booking hangs off the manager's
       // account for referential integrity, and names the guest it is for -
       // or off the club's account, naming the faculty in-charge who raised it.
-      created_by: onBehalfOf || club || faculty ? user.id : null,
+      created_by: onBehalfOf || club || faculty || staffTarget ? user.id : null,
       on_behalf_of_name: onBehalfOf?.name ?? null,
       on_behalf_of_email: onBehalfOf?.email ?? null,
       on_behalf_of_phone: onBehalfOf?.phone ?? null,

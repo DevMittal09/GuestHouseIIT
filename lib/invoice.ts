@@ -12,7 +12,7 @@ import {
   toInstituteDateValue,
 } from "./tz";
 import type { CapacityRules, InvoiceRules } from "./settings";
-import type { BookingWithDetails, DebitHead, MealKey, Room } from "./types";
+import type { BookingType, BookingWithDetails, DebitHead, MealKey, Room } from "./types";
 
 /**
  * The guest house invoice (Phase 5), as pure functions.
@@ -392,11 +392,9 @@ export function mealCovers(
   const diners =
     booking.service_type === "meals_only" ? (booking.meal_guest_count ?? 0) : countBedGuests(booking.guests);
   const ticks = mealDayCounts(booking.meals);
-  return {
-    breakfast: ticks.breakfast * diners,
-    lunch: ticks.lunch * diners,
-    dinner: ticks.dinner * diners,
-  };
+  const result = {} as MealCounts;
+  for (const key of MEAL_KEYS) result[key] = ticks[key] * diners;
+  return result;
 }
 
 /**
@@ -584,6 +582,8 @@ export type InvoiceDocument = {
    */
   tariff_category?: TariffCategoryName | null;
   booked_by: string;
+  /** Absent on snapshots issued before 23 Nov 2026; treat as personal. */
+  booking_type?: BookingType | null;
   unit: string;
   debit_head: DebitHead | null;
   debit_head_label: string;
@@ -660,6 +660,7 @@ const RATE_NOUN: Record<TariffItem, string> = {
   extra_bed: "extra-bed",
   breakfast: "breakfast",
   lunch: "lunch",
+  special_lunch: "special lunch",
   dinner: "dinner",
 };
 
@@ -749,7 +750,7 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
   // booking's debitable head - so a crafted request cannot put a meal charge
   // into a section the invoice does not even print.
   const servesMeals = mealsOnly || booking.guest_house?.serves_meals !== false;
-  const counts = servesMeals ? (ctx.mealCounts ?? mealCovers(booking)) : { breakfast: 0, lunch: 0, dinner: 0 };
+  const counts = servesMeals ? (ctx.mealCounts ?? mealCovers(booking)) : { breakfast: 0, lunch: 0, special_lunch: 0, dinner: 0 };
   const mealDate = toInstituteDateValue(stay.checkIn);
   const mealLines: InvoiceMealLine[] = MEAL_KEYS.map((meal) => {
     const count = Math.max(0, Math.floor(counts[meal] ?? 0));
@@ -837,6 +838,7 @@ export function buildInvoiceDocument(booking: BookingWithDetails, ctx: InvoiceCo
     // overwritten rather than refused, like the dining counts above it.
     tariff_category: mealsOnly ? null : (booking.tariff_category ?? null),
     booked_by: booking.on_behalf_of_name ?? requester?.full_name ?? "",
+    booking_type: booking.booking_type ?? null,
     unit: booking.on_behalf_of_name
       ? booking.booking_type === "official"
         ? "Institute"
@@ -1008,7 +1010,7 @@ export function invoiceTotalLabels(doc: Pick<InvoiceDocument, "kind" | "rooms" |
     : { total: "Total (A+B)", grandTotal: "Grand Total (A+B including GST)" };
 }
 
-export const INVOICE_TITLE = (guestHouse: string) => `Invoice - IIT Palakkad ${guestHouse} Guest House`;
+export const INVOICE_TITLE = (guestHouse: string) => `Invoice - ${guestHouse} Guest House`;
 
 /** One row of the tariff table: a room, an extra bed, a meal, or an additional charge. */
 export type InvoiceTableRow = {

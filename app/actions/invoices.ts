@@ -81,7 +81,7 @@ function cleanCounts(counts: MealCounts | null | undefined): MealCounts | null {
     if (!Number.isFinite(x) || x < 0 || x > 10_000) throw new InvoiceStateError("Meal counts must be whole numbers from 0");
     return x;
   };
-  return { breakfast: n(counts.breakfast), lunch: n(counts.lunch), dinner: n(counts.dinner) };
+  return { breakfast: n(counts.breakfast), lunch: n(counts.lunch), special_lunch: n(counts.special_lunch), dinner: n(counts.dinner) };
 }
 
 /** What this booking's invoice charges under: its kind, and whether there is a kitchen. */
@@ -328,7 +328,7 @@ export async function markInvoicePaidAction(
     const store = getStore();
     const invoice = await store.getInvoice(invoiceId);
     if (!invoice) return { ok: false, error: "Invoice not found" };
-    if (invoice.issued_at && paidAt < invoice.issued_at.slice(0, 10)) {
+    if (invoice.issued_at && toInstituteDateValue(new Date(paidAt)) < toInstituteDateValue(new Date(invoice.issued_at))) {
       return { ok: false, error: "The payment date is before the invoice was issued" };
     }
     await store.markInvoicePaid(invoiceId, { mode, reference: reference?.trim() || null, paidAt, paidBy: user.id });

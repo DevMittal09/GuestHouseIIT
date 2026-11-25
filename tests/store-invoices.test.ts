@@ -131,7 +131,7 @@ describe("invoices in the mock store", () => {
   it("keeps issued invoices immutable: pay once, cancel with a reason, never after", async () => {
     const a = await store.createBooking(bookingInput());
     const inv = await issue(a.id);
-    await expect(store.saveInvoiceDraft(a.id, { breakfast: 1, lunch: 0, dinner: 0 }, "gh-manager")).rejects.toThrow(/already has invoice/);
+    await expect(store.saveInvoiceDraft(a.id, { breakfast: 1, lunch: 0, special_lunch: 0, dinner: 0 }, "gh-manager")).rejects.toThrow(/already has invoice/);
     await expect(
       store.markInvoicePaid(inv.id, { mode: "upi", reference: "", paidAt: "2026-09-22T07:00:00.000Z", paidBy: "gh-manager" })
     ).rejects.toThrow(/reference/);
@@ -154,7 +154,7 @@ describe("invoices in the mock store", () => {
 
   it("promotes the draft in place, and a draft goes with its booking", async () => {
     const a = await store.createBooking(bookingInput());
-    const draft = await store.saveInvoiceDraft(a.id, { breakfast: 2, lunch: 1, dinner: 0 }, "gh-manager");
+    const draft = await store.saveInvoiceDraft(a.id, { breakfast: 2, lunch: 1, special_lunch: 0, dinner: 0 }, "gh-manager");
     expect(draft.status).toBe("draft");
     const issued = await issue(a.id);
     expect(issued.id).toBe(draft.id);

@@ -176,6 +176,7 @@ const TARIFFS: Tariff[] = [
   t({ item: "extra_bed", rate: 500 }),
   t({ item: "breakfast", rate: 80 }),
   t({ item: "lunch", rate: 120 }),
+  t({ item: "special_lunch", rate: 100 }),
   t({ item: "dinner", rate: 100 }),
 ];
 
@@ -205,10 +206,10 @@ describe("meals the desk adds are charged", () => {
       tariffs: TARIFFS,
       rules: RULES,
       capacity: CAP,
-      mealCounts: { breakfast: 2, lunch: 0, dinner: 2 },
+      mealCounts: { breakfast: 2, lunch: 0, special_lunch: 0, dinner: 2 },
     });
-    expect(none.meal_lines.map((l) => l.count)).toEqual([0, 0, 0]);
-    expect(added.meal_lines.map((l) => l.count)).toEqual([2, 0, 2]);
+    expect(none.meal_lines.map((l) => l.count)).toEqual([0, 0, 0, 0]);
+    expect(added.meal_lines.map((l) => l.count)).toEqual([2, 0, 0, 2]);
     // ₹80 × 2 + ₹100 × 2, GST-inclusive.
     expect(added.grand_total - none.grand_total).toBe(2 * 8_000 + 2 * 10_000);
     expect(invoiceBlocker(stay, added)).toBeNull();
@@ -220,7 +221,7 @@ describe("the invoice, per-section GST and additional charges", () => {
     tariffs: TARIFFS,
     rules: RULES,
     capacity: CAP,
-    mealCounts: { breakfast: 2, lunch: 0, dinner: 2 },
+    mealCounts: { breakfast: 2, lunch: 0, special_lunch: 0, dinner: 2 },
     extraCharges: CHARGES,
   });
 
@@ -252,7 +253,7 @@ describe("the invoice, per-section GST and additional charges", () => {
 
   it("adds GST on each subtotal when the rates exclude it", () => {
     const rules = { ...RULES, prices_include_gst: false };
-    const ex = buildInvoiceDocument(stay, { tariffs: TARIFFS, rules, capacity: CAP, mealCounts: { breakfast: 2, lunch: 0, dinner: 2 }, extraCharges: CHARGES });
+    const ex = buildInvoiceDocument(stay, { tariffs: TARIFFS, rules, capacity: CAP, mealCounts: { breakfast: 2, lunch: 0, special_lunch: 0, dinner: 2 }, extraCharges: CHARGES });
     expect(ex.subtotal_rooms).toBe(450_000);
     expect(ex.gst_rooms).toBe(gstPaise(450_000, 18));
     expect(ex.subtotal_dining).toBe(66_000);
@@ -281,7 +282,7 @@ describe("the invoice, per-section GST and additional charges", () => {
     expect(figures.reduce((n, a) => n + a, 0)).toBe(doc.grand_total);
     // Additional charges sit in their section, the comment under the description.
     expect(table.sections[0].rows.at(-1)).toMatchObject({ label: "Extra bed at the desk", qty: 1 });
-    expect(table.sections[1].rows.map((r) => r.label)).toEqual(["Breakfast", "Lunch", "Dinner", "Birthday cake"]);
+    expect(table.sections[1].rows.map((r) => r.label)).toEqual(["Breakfast", "Lunch", "Special Lunch", "Dinner", "Birthday cake"]);
     expect(table.sections[2].rows[0]).toMatchObject({ label: "Broken vase", note: "B-204, 2 Oct" });
     // No other charges, no Other Charges table.
     const plain = buildInvoiceDocument(stay, { tariffs: TARIFFS, rules: RULES, capacity: CAP });
@@ -332,7 +333,7 @@ describe("the invoice, per-section GST and additional charges", () => {
   });
 
   it("a dining invoice letters from its own subtotal and takes no room charges", () => {
-    const dining = booking({ service_type: "meals_only", status: "APPROVED", meal_guest_count: 10, meals: [{ date: "2026-10-01", breakfast: false, lunch: true, dinner: false }] }, []);
+    const dining = booking({ service_type: "meals_only", status: "APPROVED", meal_guest_count: 10, meals: [{ date: "2026-10-01", breakfast: false, lunch: true, special_lunch: false, dinner: false }] }, []);
     const d = buildInvoiceDocument(dining, { tariffs: TARIFFS, rules: RULES, capacity: CAP, extraCharges: [CHARGES[2]] });
     const table = invoiceTable(d);
     expect(table.sections.map((s) => s.key)).toEqual(["dining", "other"]);
@@ -363,7 +364,11 @@ describe("the invoice, per-section GST and additional charges", () => {
     expect(pdf.startsWith("%PDF-")).toBe(true);
     const pages = Number(/\/Type \/Pages[\s\S]*?\/Count (\d+)/.exec(pdf)?.[1] ?? 0);
     expect(pages).toBeGreaterThanOrEqual(2);
-    const one = Buffer.from(renderInvoicePdf(buildInvoiceDocument(stay, { tariffs: TARIFFS, rules: RULES, capacity: CAP }), null)).toString("latin1");
+    const personalStay = booking(
+      { ...stay, booking_type: "personal" },
+      [{ guests: [guest({ name: "Prof. A" }), guest({ name: "Dr. B" })], assigned: room({ id: "r-d", room_number: "B-204" }) }]
+    );
+    const one = Buffer.from(renderInvoicePdf(buildInvoiceDocument(personalStay, { tariffs: TARIFFS, rules: RULES, capacity: CAP }), null)).toString("latin1");
     expect(Number(/\/Type \/Pages[\s\S]*?\/Count (\d+)/.exec(one)?.[1] ?? 0)).toBe(1);
   });
 });
@@ -569,13 +574,13 @@ describe("the store", () => {
 
   it("keeps the desk's additional charges on the draft, and on the issued invoice", async () => {
     const b = await store.createBooking(input("2031-08-10T08:30:00.000Z", "2031-08-12T05:30:00.000Z", { status: "VACATED" }));
-    await store.saveInvoiceDraft(b.id, { breakfast: 1, lunch: 0, dinner: 0 }, "gh-caretaker", CHARGES);
+    await store.saveInvoiceDraft(b.id, { breakfast: 1, lunch: 0, special_lunch: 0, dinner: 0 }, "gh-caretaker", CHARGES);
     expect((await store.listInvoices({ bookingId: b.id }))[0].extra_charges).toEqual(CHARGES);
     // Saving counts alone leaves the charges as they are.
-    await store.saveInvoiceDraft(b.id, { breakfast: 2, lunch: 0, dinner: 0 }, "gh-caretaker");
+    await store.saveInvoiceDraft(b.id, { breakfast: 2, lunch: 0, special_lunch: 0, dinner: 0 }, "gh-caretaker");
     const draft = (await store.listInvoices({ bookingId: b.id }))[0];
     expect(draft.extra_charges).toEqual(CHARGES);
-    expect(draft.meal_counts).toEqual({ breakfast: 2, lunch: 0, dinner: 0 });
+    expect(draft.meal_counts).toEqual({ breakfast: 2, lunch: 0, special_lunch: 0, dinner: 0 });
     const document = buildInvoiceDocument((await store.getBooking(b.id))!, {
       tariffs: await store.listTariffs(),
       rules: RULES,

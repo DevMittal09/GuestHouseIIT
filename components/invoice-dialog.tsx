@@ -85,15 +85,17 @@ const newCharge = (section: ExtraChargeSection): ChargeRow => ({
   amount: "",
 });
 
-const countRowsOf = (doc: InvoiceDocument): CountRows => ({
-  breakfast: String(doc.meal_lines[0].count),
-  lunch: String(doc.meal_lines[1].count),
-  dinner: String(doc.meal_lines[2].count),
-});
+const countRowsOf = (doc: InvoiceDocument): CountRows => {
+  const result = {} as CountRows;
+  for (const line of doc.meal_lines) result[line.meal] = String(line.count);
+  return result;
+};
 
 const parseCounts = (counts: CountRows): MealCounts => {
   const n = (v: string) => Math.max(0, Math.floor(Number(v) || 0));
-  return { breakfast: n(counts.breakfast), lunch: n(counts.lunch), dinner: n(counts.dinner) };
+  const result = {} as MealCounts;
+  for (const key of Object.keys(counts) as (keyof MealCounts)[]) result[key] = n(counts[key]);
+  return result;
 };
 
 /** The charges as the server takes them - the row keys stay here. */
@@ -322,7 +324,9 @@ export function InvoiceDialog({
                   disabled={isPending}
                   onClick={() => {
                     const c = panel.computedCounts;
-                    setCounts({ breakfast: String(c.breakfast), lunch: String(c.lunch), dinner: String(c.dinner) });
+                    const r = {} as Record<string, string>;
+                    for (const k of Object.keys(c)) r[k] = String((c as Record<string, number>)[k]);
+                    setCounts(r as CountRows);
                   }}
                 >
                   Reset counts

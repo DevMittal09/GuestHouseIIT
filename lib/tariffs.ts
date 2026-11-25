@@ -36,16 +36,17 @@ import {
 
 export type TariffItem = "room" | "extra_bed" | MealKey;
 
-export const TARIFF_ITEMS: TariffItem[] = ["room", "extra_bed", "breakfast", "lunch", "dinner"];
+export const TARIFF_ITEMS: TariffItem[] = ["room", "extra_bed", "breakfast", "lunch", "special_lunch", "dinner"];
 
 /** The charges on a dining booking, which holds no room. */
-export const MEAL_TARIFF_ITEMS: TariffItem[] = ["breakfast", "lunch", "dinner"];
+export const MEAL_TARIFF_ITEMS: TariffItem[] = ["breakfast", "lunch", "special_lunch", "dinner"];
 
 export const TARIFF_ITEM_LABELS: Record<TariffItem, string> = {
   room: "Room, per day",
   extra_bed: "Extra bed, per day",
   breakfast: "Breakfast, per head",
   lunch: "Lunch, per head",
+  special_lunch: "Special Lunch, per head",
   dinner: "Dinner, per head",
 };
 
@@ -212,7 +213,7 @@ const money = z.coerce
 export const tariffInputSchema = z
   .object({
     guest_house_id: z.string().min(1).nullable(),
-    item: z.enum(["room", "extra_bed", "breakfast", "lunch", "dinner"]),
+    item: z.enum(["room", "extra_bed", "breakfast", "lunch", "special_lunch", "dinner"]),
     room_type: z.enum(["single", "double_sharing"]).nullable(),
     booking_type: z.enum(["official", "personal", "alumni"]).nullable(),
     requester_role: z

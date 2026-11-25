@@ -292,7 +292,7 @@ describe("guidelines", () => {
 
   it("gives the meal times from Settings where a guest house serves meals, and none where none does", () => {
     expect(byId.meals.items[0]).toMatch(/^Meals are served at Hamsanandi/);
-    expect(byId.meals.timetable?.map((r) => r.meal)).toEqual(["Breakfast", "Lunch", "Dinner"]);
+    expect(byId.meals.timetable?.map((r) => r.meal)).toEqual(["Breakfast", "Lunch", "Special Lunch", "Dinner"]);
     expect(byId.meals.timetable?.[0].time).toBe("8:00 – 9:30 AM");
 
     const noKitchen = guidelineSections([BAGESHRI]).find((s) => s.id === "meals");
