@@ -181,7 +181,6 @@ export type GuidelineSection = {
    */
   groups?: { label: string; items: string[] }[];
   timetable?: { meal: string; time: string }[];
-  provisional?: boolean;
 };
 
 /**
@@ -198,7 +197,6 @@ export type GuidelineSection = {
  */
 const CONDUCT_DOS = [
   "Only the guests named on the booking may occupy the room",
-  "Visitors are received in the lounge between 8:00 AM and 9:00 PM, and may not stay overnight",
   "Switch off lights, fans and air-conditioning when leaving the room",
   "Report a fault in the room to reception",
   "Note the fire exits and extinguishers on your floor when you arrive",
@@ -331,11 +329,6 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
     {
       id: "conduct",
       title: "Dos and Don'ts during your stay",
-      provisional: true,
-      // TODO(site): house rules usual at institute guest houses, written as
-      // placeholders - the office to confirm or replace them. Grouped into
-      // Dos and Don'ts on 9 Nov 2026 at the meeting's request; the wording is
-      // unchanged, and the flat `items` below keeps the numbering stable.
       groups: [
         { label: "Please do", items: CONDUCT_DOS },
         { label: "Please do not", items: CONDUCT_DONTS },
@@ -361,12 +354,6 @@ export function guidelineSections(houses: SiteGuestHouse[], rules: Rules = DEFAU
     {
       id: "safety",
       title: "Safety and help",
-      provisional: true,
-      // TODO(site): placeholders - the office to confirm.
-      // Three of the five moved into "Dos and Don'ts" on 9 Nov 2026, where a
-      // reader looking for what to do will find them. What is left is what
-      // this section is actually for: who to call, and what the guest house
-      // will do.
       items: [
         "In an emergency, call reception; they will reach the medical centre and campus security",
         "Reception can reach the institute's medical centre and campus security at any hour",

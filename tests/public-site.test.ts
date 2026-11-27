@@ -261,8 +261,8 @@ describe("guidelines", () => {
     ]);
   });
 
-  it("marks only the house rules as provisional", () => {
-    expect(sections.filter((s) => s.provisional).map((s) => s.id)).toEqual(["conduct", "safety"]);
+  it("does not mark any section as provisional", () => {
+    expect(sections.filter((s) => "provisional" in s)).toEqual([]);
   });
 
   it("states the portal's rules from Settings", () => {

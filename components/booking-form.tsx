@@ -1523,72 +1523,7 @@ export function BookingForm({
         </Card>
       )}
 
-      {/* A dining booking is not a stay: no guest house to choose (only a
-          kitchen can take it, and there is one), no check-in, no check-out.
-          What it needs is a head count, a reason, and the days - which are
-          picked in the Meals card below, beside the meals themselves. */}
-      {mealsOnly ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Meal booking</CardTitle>
-            <CardDescription>
-              {offeredGuestHouses.length === 1
-                ? `From the ${offeredGuestHouses[0].name} kitchen.`
-                : "Choose the kitchen."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            {offeredGuestHouses.length > 1 && (
-              <div className="space-y-2">
-                <Label htmlFor="guest_house_id">Kitchen *</Label>
-                <NativeSelect id="guest_house_id" {...register("guest_house_id")}>
-                  <option value="">Select guest house…</option>
-                  {offeredGuestHouses.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </NativeSelect>
-                <FieldError message={err("guest_house_id")} />
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="meal_guest_count">Number of people *</Label>
-              {/* Typed, with steppers either side (9 Oct 2026). It was a
-                  1…30 dropdown from 1 Oct, which hid the number the requester
-                  had chosen behind a list they had to scroll; the box takes
-                  "24" in two keystrokes. Capped at the kitchen's own limit per
-                  sitting, which the schema and `createBooking` check again. */}
-              <QuantityInput
-                id="meal_guest_count"
-                aria-label="Number of people"
-                min={1}
-                max={mealPartyMax}
-                value={mealGuestCount}
-                onChange={(raw) => setValue("meal_guest_count", raw, { shouldValidate: false })}
-              />
-              <FieldError message={err("meal_guest_count")} />
-            </div>
-
-            <div className="space-y-2 sm:col-span-2">
-              {/* "Purpose" renamed and made optional (1 Oct 2026): a meal
-                  order needs no justification, and the box is for anything
-                  the kitchen should know. */}
-              <Label htmlFor="purpose_of_visit">Remarks (optional)</Label>
-              <Textarea
-                id="purpose_of_visit"
-                rows={3}
-                placeholder="Anything the kitchen should know - a guest who cannot eat wheat, a sitting time, where to serve"
-                {...register("purpose_of_visit")}
-              />
-              <FieldError message={err("purpose_of_visit")} />
-            </div>
-            <FieldError message={err("check_in")} />
-            <FieldError message={err("check_out")} />
-          </CardContent>
-        </Card>
-      ) : (
+      {mealsOnly ? null : (
       <Card>
         <CardHeader>
           <CardTitle>Stay details</CardTitle>
@@ -1842,14 +1777,37 @@ export function BookingForm({
       {mealsPossible && (
         <Card id="meals-section">
           <CardHeader>
-            <CardTitle>{mealsOnly ? "Days and meals" : "Meals"}</CardTitle>
+            <CardTitle>{mealsOnly ? "Meal booking" : "Meals"}</CardTitle>
+            {mealsOnly && (
+              <CardDescription>
+                {offeredGuestHouses.length === 1
+                  ? `From the ${offeredGuestHouses[0].name} kitchen.`
+                  : "Choose the kitchen."}
+              </CardDescription>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* **Yes or no, before anything else** (17 Oct 2026). A stay at a
-                guest house with a kitchen used to open on an empty meal grid
-                headed "Meals (optional)", which a requester had to read and
-                ignore. A dining booking is not asked: the meals are the
-                booking. */}
+            {mealsOnly && (
+              <>
+                {offeredGuestHouses.length > 1 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="guest_house_id">Kitchen *</Label>
+                    <NativeSelect id="guest_house_id" {...register("guest_house_id")}>
+                      <option value="">Select guest house…</option>
+                      {offeredGuestHouses.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                    <FieldError message={err("guest_house_id")} />
+                  </div>
+                )}
+                <FieldError message={err("check_in")} />
+                <FieldError message={err("check_out")} />
+              </>
+            )}
+
             {!mealsOnly && (
               <fieldset className="space-y-2">
                 <legend className="text-sm font-medium">Do you require meals?</legend>
@@ -1869,9 +1827,6 @@ export function BookingForm({
                         checked={wantsMeals === option.value}
                         onChange={() => {
                           setWantsMeals(option.value);
-                          // Nothing is wrong with a section that is no longer
-                          // on screen: a message left from the last attempt
-                          // would sit under a question nobody is being asked.
                           if (!option.value) setMealsError(null);
                         }}
                         className="size-4 accent-[var(--ink)]"
@@ -1885,24 +1840,24 @@ export function BookingForm({
 
             {offerMeals && (
               <>
-              {/* Each person's own preference (1 Oct 2026). It used to be one
-                  radio for the whole party, so a group of thirty with two
-                  vegetarians was booked as non-vegetarian and the kitchen
-                  cooked thirty non-vegetarian plates. Counts rather than a row
-                  per person: a dining booking has no guest list at all, only a
-                  head count, and the kitchen cooks to numbers. */}
-              {mealPlan.length > 0 && (
+              {(mealsOnly || mealPlan.length > 0) && (
                 <fieldset className="space-y-2 rounded-md border border-border-strong bg-band/40 p-3">
                   <legend className="px-1.5 text-sm font-medium">Meal preferences *</legend>
-                  {/* Answering one box fills the other with the rest (7 Oct
-                      2026, the office's eighth list). The two always have to
-                      add up to the head count, so the second question only
-                      ever has one right answer - asking it twice was asking
-                      the requester to do the subtraction, and the commonest
-                      way to get "the two have to add up to N" was to answer
-                      one box and stop. Either box fills the other, so a
-                      correction to the first still works. */}
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {mealsOnly && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="meal_guest_count">No. of people *</Label>
+                        <QuantityInput
+                          id="meal_guest_count"
+                          aria-label="Number of people"
+                          min={1}
+                          max={mealPartyMax}
+                          value={mealGuestCount}
+                          onChange={(raw) => setValue("meal_guest_count", raw, { shouldValidate: false })}
+                        />
+                        <FieldError message={err("meal_guest_count")} />
+                      </div>
+                    )}
                     <div className="space-y-1.5">
                       <Label htmlFor="meal_veg_count">{MEAL_PREFERENCE_LABELS.veg}</Label>
                       <QuantityInput
@@ -1932,10 +1887,8 @@ export function BookingForm({
                       />
                     </div>
                   </div>
-                  {dietChosen && (
-                    <p className={cn("text-xs", dietProblem ? "text-destructive" : "text-muted-foreground")}>
-                      {dietProblem ?? `${describeDietCounts(dietCounts)} - ${dietTotal(dietCounts)} of ${mealHeadCount}.`}
-                    </p>
+                  {dietChosen && dietProblem && (
+                    <p className="text-xs text-destructive">{dietProblem}</p>
                   )}
                 </fieldset>
               )}
@@ -1999,9 +1952,20 @@ export function BookingForm({
                 </>
               )}
               <FieldError message={mealsError ?? undefined} />
-              {/* The owner's sentence, word for word (17 Oct 2026). The form
-                  cannot change a meal order once it is in - the desk does - so
-                  this is where the requester is told who can. */}
+
+              {mealsOnly && (
+                <div className="space-y-2">
+                  <Label htmlFor="purpose_of_visit">Remarks (optional)</Label>
+                  <Textarea
+                    id="purpose_of_visit"
+                    rows={3}
+                    placeholder="Anything the kitchen should know - a guest who cannot eat wheat, a sitting time, where to serve"
+                    {...register("purpose_of_visit")}
+                  />
+                  <FieldError message={err("purpose_of_visit")} />
+                </div>
+              )}
+
               <p className="border-l-4 border-saffron bg-notice px-3 py-2 text-sm text-ink">
                 {MEAL_CHANGE_NOTICE}
               </p>

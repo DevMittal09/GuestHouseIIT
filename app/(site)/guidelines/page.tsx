@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { ArrowUpRight } from "lucide-react";
 import { Container, PageMasthead, SectionHead, siteButton } from "@/components/site/site-ui";
-import { GUEST_HOUSE_CONTACT, GUIDELINES_PROVISIONAL } from "@/lib/site";
-import { BOOKING_STEPS, guidelineSections, joinNames, type GuidelineSection } from "@/lib/site-content";
+import { GUEST_HOUSE_CONTACT } from "@/lib/site";
+import { BOOKING_STEPS, guidelineSections, type GuidelineSection } from "@/lib/site-content";
 import { getSiteGuestHouses } from "@/lib/site-data";
 import { getRules } from "@/lib/settings-server";
 import { cn } from "@/lib/utils";
@@ -25,31 +25,18 @@ export const metadata: Metadata = { title: "Guidelines" };
  * the portal's business. Where a rule is stated (the advance window, the stay
  * cap, capacity, meal times, the kitchen's notice, charges) it comes from
  * `lib/` and Settings via `guidelineSections()`, so it cannot promise what the
- * booking form does not apply. The house rules (the last two sections) are
- * placeholders until the office confirms them (`GUIDELINES_PROVISIONAL`).
+ * booking form does not apply.
  */
 export default async function GuidelinesPage() {
   const [houses, rules] = await Promise.all([getSiteGuestHouses(), getRules()]);
   const sections = guidelineSections(houses, rules);
   const guidelinesUrl = rules.portal.guidelines_url.trim();
-  const provisional = sections
-    .map((section, i) => ({ section, number: i + 1 }))
-    .filter(({ section }) => section.provisional);
 
   return (
     <>
       <PageMasthead
         title="Guidelines"
         intro="How booking works, and what to expect before and during your stay."
-        note={
-          GUIDELINES_PROVISIONAL && provisional.length > 0 ? (
-            <>
-              <span className="font-semibold">Provisional edition.</span> Sections{" "}
-              {joinNames(provisional.map(({ number }) => String(number)))} are awaiting confirmation
-              by the Guest House Office.
-            </>
-          ) : undefined
-        }
         aside={
           /* **The office's full guidelines document** (9 Nov 2026, the
              meeting). The address is a Setting the Guest House Manager
@@ -156,11 +143,6 @@ function GuidelineBlock({ section, number }: { section: GuidelineSection; number
         <h2 id={headingId} className="text-[clamp(24px,2.6vw,30px)] leading-tight font-semibold text-ink">
           {section.title}
         </h2>
-        {section.provisional && (
-          <span className="tag-yellow rounded-xs px-2 py-0.5 text-[12px] font-semibold">
-            To be confirmed
-          </span>
-        )}
       </div>
 
       {/* A section with its items grouped - Dos and Don'ts (9 Nov 2026) -

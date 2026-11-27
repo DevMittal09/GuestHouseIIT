@@ -248,7 +248,7 @@ describe("the meal section", () => {
   it("asks the guests before the meals", () => {
     const form = fs.readFileSync("components/booking-form.tsx", "utf8");
     const guests = form.indexOf("Guests, room by room");
-    const meals = form.indexOf('{mealsOnly ? "Days and meals" : "Meals"}');
+    const meals = form.indexOf('{mealsOnly ? "Meal booking" : "Meals"}');
     expect(guests).toBeGreaterThan(0);
     expect(meals).toBeGreaterThan(0);
     expect(guests).toBeLessThan(meals);

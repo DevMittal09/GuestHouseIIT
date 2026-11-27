@@ -36,6 +36,16 @@ export const MEAL_KEYS: MealKey[] = ["breakfast", "lunch", "special_lunch", "din
  */
 export const BASE_MEAL_KEYS: MealKey[] = ["breakfast", "lunch", "dinner"];
 
+/**
+ * Meals that cannot be selected together on the same day.
+ * Special Lunch is a Lunch with special items, so picking one excludes the other.
+ */
+export function exclusiveMealOf(meal: MealKey): MealKey | null {
+  if (meal === "lunch") return "special_lunch";
+  if (meal === "special_lunch") return "lunch";
+  return null;
+}
+
 export const MEAL_LABELS: Record<MealKey, string> = {
   breakfast: "Breakfast",
   lunch: "Lunch",

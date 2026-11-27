@@ -53,13 +53,6 @@ export function safeNextPath(next: string | null | undefined): string | null {
  * a dead one, which is what `null` did here.
  */
 
-/**
- * The Guidelines page's house rules (conduct, safety) are placeholders written
- * from what guest houses usually ask of guests, until the office sends its
- * own. While this is true the page says it is a provisional edition.
- * TODO(site): set to false once the office has confirmed the rules.
- */
-export const GUIDELINES_PROVISIONAL = true;
 
 export const INSTITUTE_WEBSITE = "https://iitpkd.ac.in";
 

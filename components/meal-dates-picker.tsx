@@ -5,7 +5,16 @@ import { PlusIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DateField } from "@/components/ui/date-field";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   chainMealDates,
+  exclusiveMealOf,
   isMealBookable,
   mealDeadlineNote,
   DEFAULT_MEALS_ON,
@@ -16,22 +25,15 @@ import {
   mealTimes,
   type MealWindows,
 } from "@/lib/meals";
+import type { MealKey } from "@/lib/types";
 import { addDaysToDateValue, formatDateValue } from "@/lib/tz";
 
 /**
  * The days a **meals-only** booking asks the kitchen to cook on.
  *
- * A dining booking is not a stay, so it has no check-in and no check-out: it
- * is a set of dates, each with its own breakfast / lunch / dinner. The form
- * therefore asks for the dates one at a time - it opens on the first day that
- * still has a meal to offer, and "Add another date" adds the next - rather
- * than for a range with two date boxes, which made someone booking a single
- * lunch fill in a first and a last day that were the same.
- *
- * A meal that has passed its notice period (`isMealBookable`: it has to be
- * booked before the previous meal finishes being served) is shown disabled
- * with the deadline that was missed, rather than hidden - otherwise a row can
- * appear with nothing in it and no reason given.
+ * Two modes: individual dates (one at a time, with "Add another date") and
+ * chain booking (a date range that generates a table of days x meals, updated
+ * live as the range or weekend toggles change).
  */
 export function MealDatesPicker({
   dates,
@@ -44,19 +46,13 @@ export function MealDatesPicker({
   minDate,
   maxDate,
 }: {
-  /** Institute calendar dates ("yyyy-MM-dd"), in order. */
   dates: string[];
-  /** Ticked `mealSlot` keys, owned by the booking form. */
   slots: ReadonlySet<string>;
   onSlotsChange: (next: Set<string>) => void;
   onDatesChange: (next: string[]) => void;
-  /** Chain booking applies dates and slots together so choices are computed against the new dates. */
   onBatchChange?: (dates: string[], slots: Set<string>) => void;
-  /** The clock the notice period is measured against. */
   now: Date;
-  /** The kitchen's serving times (Settings). */
   windows?: MealWindows;
-  /** The earliest and latest date the office allows to be booked. */
   minDate?: string;
   maxDate?: string;
 }) {
@@ -65,13 +61,18 @@ export function MealDatesPicker({
   const setSlots = (keys: string[], on: boolean) => {
     const next = new Set(slots);
     for (const key of keys) {
-      if (on) next.add(key);
-      else next.delete(key);
+      if (on) {
+        next.add(key);
+        const [date, meal] = key.split("|") as [string, MealKey];
+        const excl = exclusiveMealOf(meal);
+        if (excl) next.delete(mealSlot(date, excl));
+      } else {
+        next.delete(key);
+      }
     }
     onSlotsChange(next);
   };
 
-  /** Dates stay sorted and unique, so two rows can never mean the same day. */
   const replaceDate = (index: number, value: string) => {
     if (!value) return;
     const next = dates.map((d, i) => (i === index ? value : d));
@@ -87,39 +88,44 @@ export function MealDatesPicker({
   const [chainTo, setChainTo] = useState("");
   const [includeSaturdays, setIncludeSaturdays] = useState(false);
   const [includeSundays, setIncludeSundays] = useState(false);
-  const [chainMeals, setChainMeals] = useState<Record<string, boolean>>({
-    breakfast: DEFAULT_MEALS_ON.breakfast,
-    lunch: DEFAULT_MEALS_ON.lunch,
-    dinner: DEFAULT_MEALS_ON.dinner,
-  });
 
-  const applyChain = () => {
-    const generated = chainMealDates(chainFrom, chainTo, includeSaturdays, includeSundays);
-    if (generated.length === 0) return;
-    const merged = [...new Set([...dates, ...generated])].sort();
-    const next = new Set(slots);
+  const syncChain = (from: string, to: string, sat: boolean, sun: boolean) => {
+    if (!from || !to || from > to) return;
+    const generated = chainMealDates(from, to, sat, sun);
+    const prevSet = new Set(dates);
+    const next = new Set<string>();
+
+    for (const s of slots) {
+      const [d] = s.split("|");
+      if (generated.includes(d)) next.add(s);
+    }
+
     for (const date of generated) {
-      for (const meal of MEAL_KEYS) {
-        if (chainMeals[meal]) next.add(mealSlot(date, meal));
+      if (!prevSet.has(date)) {
+        for (const meal of MEAL_KEYS) {
+          if (DEFAULT_MEALS_ON[meal] && isMealBookable(date, meal, now, windows)) {
+            next.add(mealSlot(date, meal));
+          }
+        }
       }
     }
+
     if (onBatchChange) {
-      onBatchChange(merged, next);
+      onBatchChange(generated, next);
     } else {
-      onDatesChange(merged);
+      onDatesChange(generated);
       onSlotsChange(next);
     }
   };
 
   const addDate = () => {
-    // The day after the last one chosen: consecutive days are the common
-    // case, and any other date is one edit away in the row's own box.
     const last = dates[dates.length - 1];
     const candidate = last ? addDaysToDateValue(last, 1) : (minDate ?? "");
     if (!candidate || dates.includes(candidate)) return;
     onDatesChange([...dates, candidate].sort());
   };
 
+  // --- Non-chain: per-day fieldsets ---
   const dateRows = dates.map((date, index) => {
     const bookable = MEAL_KEYS.filter((meal) => isMealBookable(date, meal, now, windows));
     return (
@@ -157,33 +163,39 @@ export function MealDatesPicker({
           )}
         </div>
 
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {MEAL_KEYS.map((meal) => {
             const key = mealSlot(date, meal);
             const open = bookable.includes(meal);
+            const excl = exclusiveMealOf(meal);
+            const blocked = open && excl ? slots.has(mealSlot(date, excl)) : false;
+            const disabled = !open || blocked;
+            const hint = !open
+              ? "Too late - the kitchen has already ordered for it"
+              : blocked
+                ? `${MEAL_LABELS[excl!]} is already selected`
+                : times[meal];
             return (
               <label
                 key={meal}
-                title={open ? undefined : `${mealDeadlineNote(date, meal, windows)} - that has passed.`}
+                title={!open ? `${mealDeadlineNote(date, meal, windows)} - that has passed.` : blocked ? hint : undefined}
                 className={
-                  open
-                    ? "flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 text-sm transition-colors has-checked:border-primary has-checked:bg-primary/5"
-                    : "flex items-start gap-2.5 rounded-md border border-dashed p-2.5 text-sm text-muted-foreground"
+                  disabled
+                    ? "flex items-start gap-2.5 rounded-md border border-dashed p-2.5 text-sm text-muted-foreground"
+                    : "flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 text-sm transition-colors has-checked:border-primary has-checked:bg-primary/5"
                 }
               >
                 <input
                   type="checkbox"
                   className="mt-0.5 size-4 shrink-0 accent-primary"
-                  disabled={!open}
-                  checked={open && slots.has(key)}
+                  disabled={disabled}
+                  checked={open && !blocked && slots.has(key)}
                   aria-label={`${MEAL_LABELS[meal]} on ${formatDateValue(date, { year: true })}`}
                   onChange={(e) => setSlots([key], e.target.checked)}
                 />
                 <span className="min-w-0">
                   <span className="block font-medium">{MEAL_LABELS[meal]}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {open ? times[meal] : "Too late - the kitchen has already ordered for it"}
-                  </span>
+                  <span className="block text-xs text-muted-foreground">{hint}</span>
                 </span>
               </label>
             );
@@ -221,84 +233,158 @@ export function MealDatesPicker({
       </div>
 
       {chainMode ? (
-        <>
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Pick a date range to add all weekdays at once. Saturdays and Sundays are excluded by default.
-            </p>
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="space-y-1.5">
-                <label htmlFor="chain-from" className="block text-xs text-muted-foreground">
-                  From
-                </label>
-                <DateField
-                  id="chain-from"
-                  className="w-48"
-                  value={chainFrom}
-                  min={minDate}
-                  max={maxDate}
-                  onChange={setChainFrom}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="chain-to" className="block text-xs text-muted-foreground">
-                  To
-                </label>
-                <DateField
-                  id="chain-to"
-                  className="w-48"
-                  value={chainTo}
-                  min={chainFrom || minDate}
-                  max={maxDate}
-                  onChange={setChainTo}
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="size-4 accent-primary"
-                  checked={includeSaturdays}
-                  onChange={(e) => setIncludeSaturdays(e.target.checked)}
-                />
-                Include Saturdays
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Pick a date range. Saturdays and Sundays are excluded by default.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1.5">
+              <label htmlFor="chain-from" className="block text-xs text-muted-foreground">
+                From
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="size-4 accent-primary"
-                  checked={includeSundays}
-                  onChange={(e) => setIncludeSundays(e.target.checked)}
-                />
-                Include Sundays
+              <DateField
+                id="chain-from"
+                className="w-48"
+                value={chainFrom}
+                min={minDate}
+                max={maxDate}
+                onChange={(v) => {
+                  setChainFrom(v);
+                  syncChain(v, chainTo, includeSaturdays, includeSundays);
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="chain-to" className="block text-xs text-muted-foreground">
+                To
               </label>
+              <DateField
+                id="chain-to"
+                className="w-48"
+                value={chainTo}
+                min={chainFrom || minDate}
+                max={maxDate}
+                onChange={(v) => {
+                  setChainTo(v);
+                  syncChain(chainFrom, v, includeSaturdays, includeSundays);
+                }}
+              />
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              {MEAL_KEYS.map((meal) => (
-                <label key={meal} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-primary"
-                    checked={!!chainMeals[meal]}
-                    onChange={(e) => setChainMeals((prev) => ({ ...prev, [meal]: e.target.checked }))}
-                  />
-                  {MEAL_LABELS[meal]}
-                </label>
-              ))}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!chainFrom || !chainTo || chainFrom > chainTo}
-              onClick={applyChain}
-            >
-              <PlusIcon />
-              Add dates
-            </Button>
           </div>
-        </>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={includeSaturdays}
+                onChange={(e) => {
+                  setIncludeSaturdays(e.target.checked);
+                  syncChain(chainFrom, chainTo, e.target.checked, includeSundays);
+                }}
+              />
+              Include Saturdays
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={includeSundays}
+                onChange={(e) => {
+                  setIncludeSundays(e.target.checked);
+                  syncChain(chainFrom, chainTo, includeSaturdays, e.target.checked);
+                }}
+              />
+              Include Sundays
+            </label>
+          </div>
+
+          {/* Live table of generated dates */}
+          {dates.length > 0 && (
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="align-bottom">Day</TableHead>
+                    {MEAL_KEYS.map((meal) => {
+                      const served = dates
+                        .filter((d) => isMealBookable(d, meal, now, windows))
+                        .map((d) => mealSlot(d, meal));
+                      const ticked = served.filter((key) => slots.has(key)).length;
+                      const everyDay = served.length > 0 && ticked === served.length;
+                      return (
+                        <TableHead key={meal} className="h-auto py-2 text-center align-bottom">
+                          <span className="block text-foreground">{MEAL_LABELS[meal]}</span>
+                          <span className="block text-xs font-normal text-muted-foreground">
+                            {times[meal]}
+                          </span>
+                          <label className="mt-1 inline-flex cursor-pointer items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              className="size-3.5 accent-primary"
+                              checked={everyDay}
+                              disabled={served.length === 0}
+                              ref={(el) => {
+                                if (el) el.indeterminate = ticked > 0 && !everyDay;
+                              }}
+                              onChange={(e) => setSlots(served, e.target.checked)}
+                            />
+                          </label>
+                        </TableHead>
+                      );
+                    })}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dates.map((date) => (
+                    <TableRow key={date}>
+                      <TableCell className="font-medium whitespace-nowrap">
+                        {formatDateValue(date)}
+                      </TableCell>
+                      {MEAL_KEYS.map((meal) => {
+                        const bookable = isMealBookable(date, meal, now, windows);
+                        if (!bookable) {
+                          const reason = `Too late - ${mealDeadlineNote(date, meal, windows)}`;
+                          return (
+                            <TableCell
+                              key={meal}
+                              className="p-0 text-center text-muted-foreground"
+                              title={reason}
+                            >
+                              <div className="flex items-center justify-center p-2.5">
+                                <span aria-hidden>-</span>
+                                <span className="sr-only">{reason}</span>
+                              </div>
+                            </TableCell>
+                          );
+                        }
+                        const key = mealSlot(date, meal);
+                        const excl = exclusiveMealOf(meal);
+                        const blocked = excl ? slots.has(mealSlot(date, excl)) : false;
+                        return (
+                          <TableCell key={meal} className="p-0 text-center">
+                            <label
+                              className={blocked ? "flex justify-center p-2.5 text-muted-foreground" : "flex cursor-pointer justify-center p-2.5"}
+                              title={blocked ? `${MEAL_LABELS[excl!]} is already selected for this day` : undefined}
+                            >
+                              <input
+                                type="checkbox"
+                                className="size-4 accent-primary"
+                                aria-label={`${MEAL_LABELS[meal]} on ${formatDateValue(date, { year: true })}`}
+                                checked={slots.has(key)}
+                                disabled={blocked}
+                                onChange={(e) => setSlots([key], e.target.checked)}
+                              />
+                            </label>
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
       ) : (
         <>
           {dateRows}

@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  exclusiveMealOf,
   mealDeadlineNote,
   MEAL_KEYS,
   MEAL_LABELS,
@@ -19,6 +20,7 @@ import {
   type MealWindows,
   type StayMealDay,
 } from "@/lib/meals";
+import type { MealKey } from "@/lib/types";
 import { formatDateValue } from "@/lib/tz";
 
 /**
@@ -56,8 +58,14 @@ export function MealPlanGrid({
   const update = (keys: string[], on: boolean) => {
     const next = new Set(slots);
     for (const key of keys) {
-      if (on) next.add(key);
-      else next.delete(key);
+      if (on) {
+        next.add(key);
+        const [date, meal] = key.split("|") as [string, MealKey];
+        const excl = exclusiveMealOf(meal);
+        if (excl) next.delete(mealSlot(date, excl));
+      } else {
+        next.delete(key);
+      }
     }
     onChange(next);
   };
@@ -91,7 +99,6 @@ export function MealPlanGrid({
                       }}
                       onChange={(e) => update(served, e.target.checked)}
                     />
-                    Every day
                   </label>
                 </TableHead>
               );
@@ -125,9 +132,14 @@ export function MealPlanGrid({
                   );
                 }
                 const key = mealSlot(day.date, meal);
+                const excl = exclusiveMealOf(meal);
+                const blocked = excl ? slots.has(mealSlot(day.date, excl)) : false;
                 return (
                   <TableCell key={meal} className="p-0 text-center">
-                    <label className="flex cursor-pointer justify-center p-2.5">
+                    <label
+                      className={blocked ? "flex justify-center p-2.5 text-muted-foreground" : "flex cursor-pointer justify-center p-2.5"}
+                      title={blocked ? `${MEAL_LABELS[excl!]} is already selected for this day` : undefined}
+                    >
                       <input
                         type="checkbox"
                         className="size-4 accent-primary"
@@ -135,6 +147,7 @@ export function MealPlanGrid({
                           year: true,
                         })}`}
                         checked={slots.has(key)}
+                        disabled={blocked}
                         onChange={(e) => update([key], e.target.checked)}
                       />
                     </label>

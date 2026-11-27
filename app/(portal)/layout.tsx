@@ -90,6 +90,7 @@ export default async function PortalLayout({ children }: { children: React.React
     ...(user.role === "gh_caretaker" ? [{ href: "/caretaker", label: "Reception" }] : []),
     ...(user.role === "developer" ? [{ href: "/admin", label: "Developer Console" }] : []),
     { href: "/availability", label: "Room Availability" },
+    { href: "/portal-guidelines", label: "Guidelines" },
     { href: "/history", label: readsOwnHistory ? "Booking History" : "Approval Log" },
   ];
 
@@ -162,7 +163,7 @@ export default async function PortalLayout({ children }: { children: React.React
             <Link href="/" className="text-on-ink hover:text-white">
               Guest house website
             </Link>
-            <Link href="/guidelines" className="text-on-ink hover:text-white">
+            <Link href="/portal-guidelines" className="text-on-ink hover:text-white">
               Guidelines
             </Link>
             <Link href="/contact" className="text-on-ink hover:text-white">
