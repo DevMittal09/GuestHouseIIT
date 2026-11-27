@@ -63,7 +63,7 @@ export const TARIFF_CATEGORY_LABELS: Record<TariffCategoryName, string> = {
 
 /** The office's own description of who each category is for, kept verbatim. */
 export const TARIFF_CATEGORY_GUESTS: Record<TariffCategoryName, string> = {
-  I: "Guests and relatives of employees / parents of students on a personal visit",
+  I: "Guests and relatives of employees / parents of students on a personal visit / Alumni of the Institute",
   II: "Institute guests on official duty (Ministers, Directors, BOG, Selection Committee, External Examiners and Official Guests)",
   III: "Academic Visitors",
 };
