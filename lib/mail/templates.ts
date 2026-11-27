@@ -17,7 +17,6 @@ import {
   mealsOn,
 } from "@/lib/meals";
 import { describeParty } from "@/lib/occupancy";
-import { PETS_POLICY_NOTICE } from "@/lib/policy";
 import { describeDebit } from "@/lib/debit-heads";
 import {
   BOOKING_TYPE_LABELS,
@@ -101,7 +100,6 @@ export function bookingFacts(booking: BookingWithDetails): Block {
   }
   // Repeated on every booking mail rather than only the confirmation: it is
   // the one rule a guest can breach before anyone at the desk can stop them.
-  rows.push(["Pets", PETS_POLICY_NOTICE]);
   return { kind: "facts", rows };
 }
 
